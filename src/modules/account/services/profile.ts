@@ -4,6 +4,7 @@
  * to `./email-change`, the password to `./password`.
  */
 
+import type { ClientSession } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import { mailRecipientRefusal } from '../mail-budget';
 import { resendCooldownRemaining } from './verification';
@@ -29,6 +30,8 @@ import {
     type EmailChangeOutcome
 } from './email-change';
 import { withOwnAccount } from './caller';
+import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
+import { ACCOUNT_ANALYTICS_CONSENT_WITHDRAWN } from '../events';
 
 /**
  * Read the caller's own profile.
@@ -90,13 +93,31 @@ const saveProfile = (
             ? mailRecipientRefusal(user.pendingEmail, context)
             : Promise.resolve(undefined);
 
+    // Judged before the write assigns onto the document. Only a stored `true` has anything captured
+    // under it: `undefined` never opted in, and `false → false` withdrew already.
+    const withdrawing = user.analyticsConsent === true && fields.analyticsConsent === false;
+
     return budget.then((refusal) => {
         if (refusal) return refusal;
 
-        return userService.updateOwnProfile(user, fields, context).then((result) => {
-            if (!result.success || !emailOutcome.requested) return result;
-            return notifyEmailChangeRequested(result.data, context).then(() => result);
-        });
+        // The outbox row commits with the save, so it exists exactly when the withdrawal does.
+        const announceWithdrawal = withdrawing
+            ? (session: ClientSession) =>
+                  enqueueOutboxEvent(
+                      ACCOUNT_ANALYTICS_CONSENT_WITHDRAWN,
+                      { userId: user.id },
+                      user.id,
+                      session
+                  )
+            : undefined;
+
+        return userService
+            .updateOwnProfile(user, fields, context, announceWithdrawal)
+            .then((result) => {
+                if (withdrawing && result.success) nudgeOutbox();
+                if (!result.success || !emailOutcome.requested) return result;
+                return notifyEmailChangeRequested(result.data, context).then(() => result);
+            });
     });
 };
 

@@ -194,13 +194,14 @@ sequenceDiagram
     P-->>O: 2xx = published, anything else = retry with backoff
 ```
 
-| Question                       | Answer                                                                                                                                   |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Which paths?                   | All three: the scheduled purge, the admin hard delete and the inactivity reaper. They share one `erase()`                                |
-| What if PostHog is down?       | The erasure still commits. The outbox retries with backoff, then parks the row `dead`, which fires `outbox_events_dead_total`; replay it |
-| What if the knobs are missing? | Capture keeps working and the deletion is a no-op: no boot warning, no refusal. **Erasure in PostHog needs all three erasure knobs**     |
-| How fast?                      | PostHog removes the person within minutes; the events go in its weekend batch, inside Art. 12(3)'s month                                 |
-| Replays                        | `persons_found: 0` resolves, so a replayed row is harmless                                                                               |
+| Question                       | Answer                                                                                                                                                                                                                                                                                                       |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Which paths?                   | All three: the scheduled purge, the admin hard delete and the inactivity reaper. They share one `erase()`                                                                                                                                                                                                    |
+| What if PostHog is down?       | The erasure still commits. The outbox retries with backoff, then parks the row `dead`, which fires `outbox_events_dead_total`; replay it                                                                                                                                                                     |
+| What if the knobs are missing? | Capture keeps working and the deletion is a no-op: no boot warning, no refusal. **Erasure in PostHog needs all three erasure knobs**                                                                                                                                                                         |
+| How fast?                      | PostHog removes the person within minutes; the events go in its weekend batch, inside Art. 12(3)'s month                                                                                                                                                                                                     |
+| Replays                        | `persons_found: 0` resolves, so a replayed row is harmless                                                                                                                                                                                                                                                   |
+| Withdrawing consent            | Deletes it too: `PATCH /account` flipping `analyticsConsent` `true → false` writes `account.analytics_consent_withdrawn` in the same transaction, and the `account` subscriber calls the same `forget`. `undefined → false` and `false → false` write nothing; turning consent back on starts a fresh person |
 
 ::: warning The management host is not the ingestion host
 Capture goes to `eu.i.posthog.com`; the persons API lives on `eu.posthog.com`, so
