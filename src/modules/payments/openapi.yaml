@@ -157,7 +157,7 @@ paths:
                         ConfirmPayment:
                             operationId: confirmPayment
                             parameters:
-                                id: '$response.body#/data/id'
+                                id: '$response.body#/id'
                 '200':
                     description: The order already had an intent; it was refreshed and is ready to confirm
                     content:
@@ -168,7 +168,7 @@ paths:
                         ConfirmPayment:
                             operationId: confirmPayment
                             parameters:
-                                id: '$response.body#/data/id'
+                                id: '$response.body#/id'
                             description: The intent's id is confirmed here to complete the charge.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
@@ -442,11 +442,13 @@ paths:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             responses:
                 '200':
-                    description: The payment, with that refund `succeeded` and `settledByHand` set
+                    description: >-
+                        The refund as it now stands (`succeeded`, `settledByHand` set).
+                        `GET /payments/{id}` for the totals and the actions.
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/Payment'
+                                $ref: '#/components/schemas/Refund'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # The payment, or a refund with that id on it, does not exist.
@@ -581,17 +583,17 @@ paths:
                         SyncPayment:
                             operationId: syncPayment
                             parameters:
-                                id: '$response.body#/data/id'
+                                id: '$response.body#/id'
                             description: An in-flight payment is resolved by re-reading the provider here.
                         RefundPayment:
                             operationId: createRefund
                             parameters:
-                                orderId: '$response.body#/data/orderId'
+                                orderId: '$response.body#/orderId'
                             description: A succeeded payment can be refunded without touching the order status.
                         CancelOrder:
                             operationId: cancelOrderById
                             parameters:
-                                id: '$response.body#/data/orderId'
+                                id: '$response.body#/orderId'
                             description: A paid order can still be cancelled, which refunds it too.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }

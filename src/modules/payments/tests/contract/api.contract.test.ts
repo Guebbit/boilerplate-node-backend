@@ -905,10 +905,15 @@ describe('POST /payments/{id}/refunds/{refundId}/settle', () => {
             .set('Authorization', adminBearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.refunds[0].settledByHand).toBe(true);
-        expect(response.body.refunds[0].status).toBe('succeeded');
-        expect(response.body.displayStatus).toBe('refunded');
-        expect(response.body.actions.settleByHand).toEqual([]);
+        // The answer is the refund it settled; totals and actions are the payment's own read.
+        expect(response.body).toMatchObject({
+            id: refunded.refunds[0].id,
+            status: 'succeeded',
+            settledByHand: true
+        });
+        const reread = await api().get(`/payments/${paymentId}`).set('Authorization', adminBearer);
+        expect(reread.body.displayStatus).toBe('refunded');
+        expect(reread.body.actions.settleByHand).toEqual([]);
     });
 
     it('answers 409 PAYMENT_REFUND_NOT_OPEN to the second operator', async () => {

@@ -350,7 +350,7 @@ spot, whoever asked: goods arriving or a buyer withdrawing is not cash going bac
 fresh-session tier as recording a payment) is the only door that sets `settledByHand: true` (on the refund, never on the payment: one hand-settled refund says nothing about the next). It
 names one record, so a payment carrying several open refunds (a cancelled remainder and two
 returns) settles each separately, and a return stays `received` until its own money is confirmed
-back. It audits `admin.payment.refund_settled_by_hand`; the `payment.refunded` event is the same as
+back. It answers the refund it settled (`GET /payments/{id}` has the totals and the actions). It audits `admin.payment.refund_settled_by_hand`; the `payment.refunded` event is the same as
 for a provider refund. `PaymentActions.settleByHand` lists the ids a caller may settle. A refund two
 operators settle at once settles once; the loser answers 409 `PAYMENT_REFUND_NOT_OPEN`. A cancelled hand-paid order therefore shows
 `succeeded` until an operator confirms it, not "refunded" for money nobody actually moved.
