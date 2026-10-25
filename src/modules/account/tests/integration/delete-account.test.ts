@@ -47,7 +47,7 @@ const authenticate = async (email = 'doomed@example.com') => {
 
     return {
         user,
-        bearer: `Bearer ${login.body.data.token as string}` as const,
+        bearer: `Bearer ${login.body.token as string}` as const,
         cookie: cookieHeader(login, '__Host-session')
     };
 };
@@ -66,7 +66,7 @@ describe('DELETE /account', () => {
         const response = await api().delete('/account').set('Authorization', bearer).send();
 
         expect(response.status).toBe(202);
-        const { requestedAt, purgeAt } = response.body.data as {
+        const { requestedAt, purgeAt } = response.body as {
             requestedAt: string;
             purgeAt: string;
         };
@@ -92,7 +92,7 @@ describe('DELETE /account', () => {
             .post('/account/login')
             .send({ email: user.email, password: PLAIN_PASSWORD });
         // Signing in offers the restore and issues nothing.
-        expect(login.body.data.deletionPending).toBe(true);
+        expect(login.body.deletionPending).toBe(true);
         expect(setCookie(login, '__Host-session')).toBeUndefined();
     });
 
@@ -137,7 +137,7 @@ describe('POST /account/restore', () => {
 
         const response = await api().post('/account/restore').send({ token });
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(response.get('Set-Cookie')).toBeUndefined();
         const stored = await userRepository.findById(user.id);
         expect(stored?.deletedAt).toBeUndefined();

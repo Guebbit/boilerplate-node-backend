@@ -82,7 +82,7 @@ const signIn = async (email: string, mode: (typeof MODES)[number]): Promise<Sign
     const cookie = cookieHeader(response, '__Host-session');
     const headers: Record<string, string> =
         mode === 'jwt'
-            ? { Authorization: `Bearer ${response.body.data.token as string}`, Cookie: cookie }
+            ? { Authorization: `Bearer ${response.body.token as string}`, Cookie: cookie }
             : { Cookie: cookie };
     return { response, headers, cookie };
 };
@@ -148,7 +148,7 @@ const eventually = async <T>(read: () => Promise<T | undefined>): Promise<T> => 
 const sessionsOf = async (headers: Record<string, string>) => {
     const response = await api().get('/account/sessions').set(headers);
     expect(response.status).toBe(200);
-    return response.body.data.sessions as { id: string; current: boolean; createdAt: string }[];
+    return response.body.sessions as { id: string; current: boolean; createdAt: string }[];
 };
 
 /** Use the session the way each mode keeps one alive; answers the headers to use after. */
@@ -167,7 +167,7 @@ const keepAlive = async (
         .set('Cookie', session.cookie);
     expect(refreshed.status).toBe(200);
     return {
-        Authorization: `Bearer ${refreshed.body.data.token as string}`,
+        Authorization: `Bearer ${refreshed.body.token as string}`,
         Cookie: cookieHeader(refreshed, '__Host-session')
     };
 };
@@ -201,7 +201,7 @@ const armTotp = async (headers: Record<string, string>) => {
         .set('Origin', FRONTEND)
         .send();
     expect(setup.status).toBe(200);
-    const { secret } = setup.body.data as { secret: string };
+    const { secret } = setup.body as { secret: string };
     const confirm = await api()
         .post('/account/2fa/methods/totp/confirm')
         .set(headers)
@@ -243,7 +243,7 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
         const response = await api().get('/account/session-config');
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toEqual({
+        expect(response.body).toEqual({
             mode,
             lifetimeSeconds: { short: 86_400, medium: 604_800, long: 2_592_000 },
             staffLifetimeSeconds: 86_400
@@ -297,7 +297,7 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
             .set('Origin', FRONTEND)
             .set('Cookie', session.cookie);
 
-        expect(out.status).toBe(200);
+        expect(out.status).toBe(204);
         expect(await sessionsOf(other.headers)).toHaveLength(1);
         expect(await sessionRowsOf(user.id)).toHaveLength(1);
         expect(await statusOfSession(session, mode)).toBe(401);
@@ -310,7 +310,7 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
 
         const out = await api().delete('/account/sessions').set(session.headers);
 
-        expect(out.status).toBe(200);
+        expect(out.status).toBe(204);
         expect(await sessionRowsOf(user.id)).toEqual([]);
         expect(await statusOfSession(session, mode)).toBe(401);
         expect(await statusOfSession(other, mode)).toBe(401);
@@ -323,7 +323,7 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
 
         const revoked = await api().delete(`/account/sessions/${otherId}`).set(session.headers);
 
-        expect(revoked.status).toBe(200);
+        expect(revoked.status).toBe(204);
         const remaining = await sessionsOf(session.headers);
         expect(remaining.map((entry) => entry.id)).not.toContain(otherId);
         expect(remaining).toHaveLength(1);
@@ -365,7 +365,7 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
             mode === 'jwt'
                 ? await api()
                       .get('/account')
-                      .set('Authorization', `Bearer ${changed.body.data.token as string}`)
+                      .set('Authorization', `Bearer ${changed.body.token as string}`)
                 : await api().get('/account').set('Cookie', renewed);
         expect(stillIn.status).toBe(200);
         expect(await statusOfSession(session, mode)).toBe(401);
@@ -401,7 +401,7 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
         const cookie = cookieHeader(login, '__Host-session');
         const headers =
             mode === 'jwt'
-                ? { Authorization: `Bearer ${login.body.data.token as string}`, Cookie: cookie }
+                ? { Authorization: `Bearer ${login.body.token as string}`, Cookie: cookie }
                 : { Cookie: cookie };
 
         const changed = await api()
@@ -456,11 +456,11 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
             expect(reauth.status).toBe(200);
             const renewed =
                 mode === 'jwt'
-                    ? { Authorization: `Bearer ${reauth.body.data.token as string}` }
+                    ? { Authorization: `Bearer ${reauth.body.token as string}` }
                     : { Cookie: cookieHeader(reauth, '__Host-session') };
             const sensitive = await api().delete('/account/sessions').set(renewed);
 
-            expect(sensitive.status).toBe(200);
+            expect(sensitive.status).toBe(204);
         });
     });
 
@@ -571,7 +571,7 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
             passwordConfirm: REPLACEMENT_PASSWORD
         });
 
-        expect(reset.status).toBe(200);
+        expect(reset.status).toBe(204);
         expect(clears(setCookie(reset, '__Host-session'))).toBe(true);
         expect(await sessionRowsOf(user.id)).toEqual([]);
         expect(await statusOfSession(session, mode)).toBe(401);
@@ -591,7 +591,7 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
             .post('/account/email-change/confirm')
             .send({ token: 'confirm-link' });
 
-        expect(confirm.status).toBe(200);
+        expect(confirm.status).toBe(204);
         expect(await sessionRowsOf(user.id)).toEqual([]);
         expect(await statusOfSession(session, mode)).toBe(401);
         expect(await statusOfSession(other, mode)).toBe(401);
@@ -608,7 +608,7 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
 
         const undo = await api().post('/account/email-change/undo').send({ token: 'undo-link' });
 
-        expect(undo.status).toBe(200);
+        expect(undo.status).toBe(204);
         expect(await sessionRowsOf(user.id)).toEqual([]);
         expect(await statusOfSession(session, mode)).toBe(401);
         expect(await statusOfSession(other, mode)).toBe(401);
@@ -623,7 +623,7 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
         const finished = await api()
             .post('/account/login/2fa')
             .set('Origin', FRONTEND)
-            .send({ challenge: challenge.body.data.challenge, code: await codeFor(secret, 1) });
+            .send({ challenge: challenge.body.challenge, code: await codeFor(secret, 1) });
 
         expect(finished.status).toBe(200);
         const cookie = cookieHeader(finished, '__Host-session');
@@ -669,7 +669,7 @@ describe('cookie mode only', () => {
         const response = await logIn('browser@example.com');
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toEqual({});
+        expect(response.body).toEqual({});
         const header = setCookie(response, '__Host-session') ?? '';
         expect(header).toMatch(/;\s*HttpOnly/i);
         expect(header).toMatch(/;\s*Secure/i);
@@ -685,24 +685,24 @@ describe('cookie mode only', () => {
         const response = await logIn('script@example.com', { transport: 'bearer' });
 
         expect(setCookie(response, '__Host-session')).toBeUndefined();
-        expect(response.body.data.sessionToken).toMatch(/^ses_[\w-]{43}$/);
+        expect(response.body.sessionToken).toMatch(/^ses_[\w-]{43}$/);
         const authed = await api()
             .get('/account/sessions')
-            .set('Authorization', `Bearer ${response.body.data.sessionToken as string}`);
+            .set('Authorization', `Bearer ${response.body.sessionToken as string}`);
         expect(authed.status).toBe(200);
-        expect(
-            authed.body.data.sessions.map((entry: { current: boolean }) => entry.current)
-        ).toEqual([true]);
+        expect(authed.body.sessions.map((entry: { current: boolean }) => entry.current)).toEqual([
+            true
+        ]);
     });
 
     it('hands a bearer client a replacement `ses_` id when it arms and disables a second factor', async () => {
         await createUser({ email: 'factor@example.com', verifiedAt: new Date() });
         const login = await logIn('factor@example.com', { transport: 'bearer' });
-        const first = login.body.data.sessionToken as string;
+        const first = login.body.sessionToken as string;
 
         const { confirm, secret } = await armTotp({ Authorization: `Bearer ${first}` });
 
-        const second = confirm.body.data.sessionToken as string;
+        const second = confirm.body.sessionToken as string;
         expect(second).toMatch(/^ses_[\w-]{43}$/);
         expect(second).not.toBe(first);
         expect(setCookie(confirm, '__Host-session')).toBeUndefined();
@@ -716,7 +716,7 @@ describe('cookie mode only', () => {
             .send({ code: await codeFor(secret, 1) });
 
         expect(disabled.status).toBe(200);
-        const third = disabled.body.data.sessionToken as string;
+        const third = disabled.body.sessionToken as string;
         expect(await statusOfBearer(second)).toBe(401);
         expect(await statusOfBearer(third)).toBe(200);
     });
@@ -724,9 +724,9 @@ describe('cookie mode only', () => {
     it('hands a bearer client a replacement `ses_` id when it removes one factor through its own door', async () => {
         await createUser({ email: 'peel@example.com', verifiedAt: new Date() });
         const login = await logIn('peel@example.com', { transport: 'bearer' });
-        const first = login.body.data.sessionToken as string;
+        const first = login.body.sessionToken as string;
         const { confirm, secret } = await armTotp({ Authorization: `Bearer ${first}` });
-        const second = confirm.body.data.sessionToken as string;
+        const second = confirm.body.sessionToken as string;
 
         const removed = await api()
             .post('/account/2fa/methods/totp/remove')
@@ -735,7 +735,7 @@ describe('cookie mode only', () => {
             .send({ code: await codeFor(secret, 1) });
 
         expect(removed.status).toBe(200);
-        const third = removed.body.data.sessionToken as string;
+        const third = removed.body.sessionToken as string;
         expect(third).toMatch(/^ses_[\w-]{43}$/);
         expect(third).not.toBe(second);
         expect(await statusOfBearer(second)).toBe(401);
@@ -800,7 +800,7 @@ describe('cookie mode only', () => {
         );
 
         const [listed] = await sessionsOf({
-            Authorization: `Bearer ${login.body.data.sessionToken as string}`
+            Authorization: `Bearer ${login.body.sessionToken as string}`
         });
 
         expect(listed).not.toHaveProperty('device');
@@ -839,7 +839,7 @@ describe('cookie mode only', () => {
             .set('Origin', FRONTEND);
         const noOrigin = await api().delete('/account/sessions').set('Cookie', second.cookie);
 
-        expect(fromFrontend.status).toBe(200);
+        expect(fromFrontend.status).toBe(204);
         // The first call ended every session, the second signed-in one included.
         expect(noOrigin.status).toBe(401);
     });
@@ -850,10 +850,10 @@ describe('cookie mode only', () => {
 
         const response = await api()
             .delete('/account/sessions')
-            .set('Authorization', `Bearer ${login.body.data.sessionToken as string}`)
+            .set('Authorization', `Bearer ${login.body.sessionToken as string}`)
             .set('Origin', 'https://evil.example');
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
     });
 
     it('hands a bearer client its re-proof and its password change in the body, never as a cookie', async () => {
@@ -862,13 +862,13 @@ describe('cookie mode only', () => {
             verifiedAt: new Date()
         });
         const login = await logIn(user.email, { transport: 'bearer' });
-        const first = login.body.data.sessionToken as string;
+        const first = login.body.sessionToken as string;
 
         const reauth = await api()
             .post('/account/reauth')
             .set('Authorization', `Bearer ${first}`)
             .send({ method: 'password', password: PLAIN_PASSWORD });
-        const second = reauth.body.data.sessionToken as string;
+        const second = reauth.body.sessionToken as string;
         const changed = await api()
             .post('/account/password')
             .set('Authorization', `Bearer ${second}`)
@@ -877,7 +877,7 @@ describe('cookie mode only', () => {
                 password: REPLACEMENT_PASSWORD,
                 passwordConfirm: REPLACEMENT_PASSWORD
             });
-        const third = changed.body.data.sessionToken as string;
+        const third = changed.body.sessionToken as string;
 
         expect(reauth.status).toBe(200);
         expect(changed.status).toBe(200);
@@ -893,11 +893,11 @@ describe('cookie mode only', () => {
     it('logs a bearer client out by its header, leaving the browser beside it signed in', async () => {
         const { user, session } = await account('cookie', 'two-clients@example.com');
         const script = await logIn(user.email, { transport: 'bearer' });
-        const id = script.body.data.sessionToken as string;
+        const id = script.body.sessionToken as string;
 
         const out = await api().post('/account/logout').set('Authorization', `Bearer ${id}`);
 
-        expect(out.status).toBe(200);
+        expect(out.status).toBe(204);
         expect(await statusOfBearer(id)).toBe(401);
         expect(await statusOfCookie(session.cookie)).toBe(200);
         expect(await sessionRowsOf(user.id)).toHaveLength(1);
@@ -911,17 +911,17 @@ describe('cookie mode only', () => {
         const finished = await api()
             .post('/account/login/2fa')
             .send({
-                challenge: challenge.body.data.challenge,
+                challenge: challenge.body.challenge,
                 code: await codeFor(secret, 1),
                 transport: 'bearer'
             });
 
         expect(finished.status).toBe(200);
         expect(setCookie(finished, '__Host-session')).toBeUndefined();
-        expect(finished.body.data.sessionToken).toMatch(/^ses_[\w-]{43}$/);
+        expect(finished.body.sessionToken).toMatch(/^ses_[\w-]{43}$/);
         const authed = await api()
             .get('/account')
-            .set('Authorization', `Bearer ${finished.body.data.sessionToken as string}`);
+            .set('Authorization', `Bearer ${finished.body.sessionToken as string}`);
         expect(authed.status).toBe(200);
     });
 
@@ -1019,8 +1019,8 @@ describe('jwt mode only', () => {
 
         const response = await logIn('classic@example.com');
 
-        expect(response.body.data.token).toEqual(expect.any(String));
-        expect(response.body.data.sessionToken).toBeUndefined();
+        expect(response.body.token).toEqual(expect.any(String));
+        expect(response.body.sessionToken).toBeUndefined();
         expect(setCookie(response, '__Host-session')).toBeDefined();
     });
 
@@ -1029,7 +1029,7 @@ describe('jwt mode only', () => {
 
         const response = await logIn('ignore@example.com', { transport: 'bearer' });
 
-        expect(response.body.data.token).toEqual(expect.any(String));
+        expect(response.body.token).toEqual(expect.any(String));
         expect(setCookie(response, '__Host-session')).toBeDefined();
     });
 
@@ -1041,7 +1041,7 @@ describe('jwt mode only', () => {
         );
 
         const [listed] = await sessionsOf({
-            Authorization: `Bearer ${login.body.data.token as string}`,
+            Authorization: `Bearer ${login.body.token as string}`,
             Cookie: cookieHeader(login, '__Host-session')
         });
 
@@ -1070,7 +1070,7 @@ describe('jwt mode only', () => {
         'answers a bearer re-signed with the access key and %s',
         async (_name, overrides, status) => {
             const { session } = await account('jwt');
-            const claims = decodeJwt(session.response.body.data.token as string);
+            const claims = decodeJwt(session.response.body.token as string);
             const [secret = ''] = getAccessTokenRing();
             // jose: the same claims re-signed under the real access key, one registered claim swapped.
             // https://github.com/panva/jose/blob/main/docs/jwt/sign/classes/SignJWT.md
@@ -1155,7 +1155,7 @@ describe.each(MODES)('ending a session on purpose in %s mode', (mode) => {
 
         const revoked = await api().delete(`/account/sessions/${own}`).set(session.headers);
 
-        expect(revoked.status).toBe(200);
+        expect(revoked.status).toBe(204);
         expect(clears(setCookie(revoked, '__Host-session'))).toBe(true);
         expect(clears(setCookie(revoked, 'isAuth'))).toBe(true);
     });
@@ -1167,7 +1167,7 @@ describe.each(MODES)('ending a session on purpose in %s mode', (mode) => {
 
         const revoked = await api().delete(`/account/sessions/${otherId}`).set(session.headers);
 
-        expect(revoked.status).toBe(200);
+        expect(revoked.status).toBe(204);
         expect(setCookie(revoked, '__Host-session')).toBeUndefined();
         expect(await statusOfSession(session, mode)).toBe(200);
     });
@@ -1222,7 +1222,7 @@ describe('an access token and the session it belongs to (jwt mode)', () => {
         const other = await signIn(user.email, 'jwt');
         const otherId = await ownSessionId(other.headers);
 
-        await api().delete(`/account/sessions/${otherId}`).set(session.headers).expect(200);
+        await api().delete(`/account/sessions/${otherId}`).set(session.headers).expect(204);
 
         expect(await statusWithBearer(other.headers)).toBe(401);
         expect(await statusWithBearer(session.headers)).toBe(200);
@@ -1235,7 +1235,7 @@ describe('an access token and the session it belongs to (jwt mode)', () => {
             .post('/account/logout')
             .set('Origin', FRONTEND)
             .set('Cookie', session.cookie)
-            .expect(200);
+            .expect(204);
 
         expect(await statusWithBearer(session.headers)).toBe(401);
     });

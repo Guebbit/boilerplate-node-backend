@@ -322,10 +322,9 @@ What this buys:
 - **The layout is one every tool already understands** — no section-order file, no indentation
   contract between files.
 
-**No YAML anchors.** An anchor cannot cross a file, so the success-envelope preamble is shared as
-named schemas — `EnvelopeSuccess`, `EnvelopeStatus`, `EnvelopeMessage` — which a `$ref` can reach.
-`additionalProperties: false` is unaffected: it constrains property *names*, so a `$ref` at a
-property's value position is not the `allOf` problem the anchors would bring.
+**No YAML anchors.** An anchor cannot cross a file, so a shape two fragments share is a named schema
+a `$ref` can reach. A success response references its payload schema directly: there is no wrapper
+schema ([Success Responses](./responses.md)).
 
 No bundle is built by concatenating text slices: the REST and AsyncAPI contracts are whole
 documents, and the client collections are generated whole.
@@ -339,10 +338,10 @@ file (`../orders/openapi.yaml#/components/schemas/Order`). Only what has no sing
 | Kind | Examples | Why shared |
 | ---- | -------- | ---------- |
 | Scalars | `Id`, `Email`, `Locale`, `Page`, `PageSize`, `Text`, `ImageUrl` | referenced everywhere |
-| Envelope machinery | `EnvelopeSuccess`, `EnvelopeStatus`, `EnvelopeMessage`, `PaginationMeta`, `MessageResponse`, `ErrorItem`, `Problem` | every operation's success and failure shape |
-| The user record | `User`, `UserEnvelope`, `UserActions` | `account` authenticates the record `users` administers: the repo's one shared kernel |
+| Response machinery | `PaginationMeta`, `ErrorItem`, `Problem`, the `NoContent` response | every operation's success and failure shape |
+| The user record | `User`, `UserActions` | `account` authenticates the record `users` administers: the repo's one shared kernel |
 | Cross-domain requests | `RequiredIdempotencyKeyHeader` | belongs to a middleware in `infrastructure` |
-| The shell's own | `HealthPing`, `HealthPingEnvelope`, the `System` tag | `GET /` belongs to no module, so neither does its answer |
+| The shell's own | `HealthPing`, the `System` tag | `GET /` belongs to no module, so neither does its answer |
 
 The root file is the authority for the exact set. Everything else is owned: `Product` and its tax
 fields by `products`, the order schemas by `orders`, `CartItem` by `cart`, the password fields by

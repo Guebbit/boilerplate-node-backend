@@ -33,7 +33,7 @@ export const loginWithCookie = async (overrides: Parameters<typeof createUser>[0
 
     return {
         user,
-        bearer: `Bearer ${(response.body.data.token as string | undefined) ?? cookieValue(jwtCookie)}` as const,
+        bearer: `Bearer ${(response.body.token as string | undefined) ?? cookieValue(jwtCookie)}` as const,
         jwtCookie
     };
 };
@@ -44,8 +44,8 @@ export const loginWithCookie = async (overrides: Parameters<typeof createUser>[0
  *
  * @param response - a login, re-proof or password-change response
  */
-export const bearerIn = (response: { body: { data: { token?: string; sessionToken?: string } } }) =>
-    `Bearer ${response.body.data.token ?? response.body.data.sessionToken ?? ''}` as const;
+export const bearerIn = (response: { body: { token?: string; sessionToken?: string } }) =>
+    `Bearer ${response.body.token ?? response.body.sessionToken ?? ''}` as const;
 
 /**
  * What the session a response opened says its holder proved (`amr`): the claim inside the access
@@ -56,11 +56,11 @@ export const bearerIn = (response: { body: { data: { token?: string; sessionToke
  * @param userId - the account, for the row lookup
  */
 export const claimedAmr = async (
-    response: { body: { data: { token?: string } } },
+    response: { body: { token?: string } },
     userId: string
 ): Promise<string[]> => {
     if (getSessionMode() === 'jwt')
-        return (decodeJwt(response.body.data.token ?? '') as { amr: string[] }).amr;
+        return (decodeJwt(response.body.token ?? '') as { amr: string[] }).amr;
     const rows = await sessionRowsOf(userId);
     return rows.at(-1)?.amr ?? [];
 };

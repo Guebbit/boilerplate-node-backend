@@ -26,7 +26,7 @@ const loginAs = (email: string): Promise<string> =>
     api()
         .post('/account/login')
         .send({ email, password: PLAIN_PASSWORD })
-        .then((response) => `Bearer ${response.body.data.token as string}`);
+        .then((response) => `Bearer ${response.body.token as string}`);
 
 /** `GET /account` with a bearer: 200 while the token is live, 401 once it is not. */
 const statusWith = (bearer: string): Promise<number> =>

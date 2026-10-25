@@ -54,7 +54,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CartResponseEnvelope'
+                                $ref: '#/components/schemas/CartResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -85,7 +85,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CartResponseEnvelope'
+                                $ref: '#/components/schemas/CartResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # Well-formed product id that matches no product. 422 covers the malformed case.
@@ -105,7 +105,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CartResponseEnvelope'
+                                $ref: '#/components/schemas/CartResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -135,7 +135,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CartResponseEnvelope'
+                                $ref: '#/components/schemas/CartResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -157,7 +157,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CartResponseEnvelope'
+                                $ref: '#/components/schemas/CartResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # Well-formed product id that matches no cart line. A malformed id is the same 404.
@@ -184,7 +184,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CartResponseEnvelope'
+                                $ref: '#/components/schemas/CartResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # A named method that matches none of `GET /delivery/methods`'.
@@ -210,7 +210,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CartSummaryResponseEnvelope'
+                                $ref: '#/components/schemas/CartSummaryResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -219,7 +219,7 @@ paths:
         post:
             tags: [Orders]
             summary: Checkout (place order from cart)
-            description: Converts the authenticated user's current cart into a new order. Needs a critically fresh session (`401 REAUTH_REQUIRED`), asked after the verified-address key, so a caller who can never pass is refused first. The cart is cleared upon success. The request names the total the buyer was shown (`expectedTotal`); a checkout that would charge anything else is refused with 409 `CART_TOTAL_CHANGED` and the new total, before any stock is held. Optional order notes can be supplied in the request body. Answers 201 with the created order itself as `data` — the same shape `POST /orders` answers — and its `Location`. The order's email is always the authenticated caller's own — checkout is account-bound; a future guest checkout would bring an `email` field back.
+            description: Converts the authenticated user's current cart into a new order. Needs a critically fresh session (`401 REAUTH_REQUIRED`), asked after the verified-address key, so a caller who can never pass is refused first. The cart is cleared upon success. The request names the total the buyer was shown (`expectedTotal`); a checkout that would charge anything else is refused with 409 `CART_TOTAL_CHANGED` and the new total, before any stock is held. Optional order notes can be supplied in the request body. Answers 201 with the created order itself as the body — the same shape `POST /orders` answers — and its `Location`. The order's email is always the authenticated caller's own — checkout is account-bound; a future guest checkout would bring an `email` field back.
             operationId: checkout
             security:
                 - bearerAuth: []
@@ -239,7 +239,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CheckoutResponseEnvelope'
+                                $ref: '../orders/openapi.yaml#/components/schemas/Order'
                     links:
                         PayOrder:
                             operationId: createPayment
@@ -324,7 +324,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/MergeCartResponseEnvelope'
+                                $ref: '#/components/schemas/MergeCartResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # `IDEMPOTENCY_IN_FLIGHT`: another request with this key is still running.
@@ -350,7 +350,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ReorderResponseEnvelope'
+                                $ref: '#/components/schemas/ReorderResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # Well-formed order id that matches none of the caller's own orders.
@@ -363,48 +363,6 @@ paths:
 components:
     schemas:
         # ---------- cart — the schemas only this module's paths reference. ----------
-        CartResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/CartResponse'
-
-        CartSummaryResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/CartSummaryResponse'
-
-        CheckoutResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '../orders/openapi.yaml#/components/schemas/Order'
-
         CartQuantity:
             type: integer
             minimum: 1
@@ -516,20 +474,6 @@ components:
                     items:
                         $ref: '#/components/schemas/MergeLineResult'
 
-        MergeCartResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/MergeCartResponse'
-
         ReorderResponse:
             type: object
             additionalProperties: false
@@ -542,20 +486,6 @@ components:
                     description: One result per order line, in the order's own order.
                     items:
                         $ref: '#/components/schemas/MergeLineResult'
-
-        ReorderResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/ReorderResponse'
 
         UpdateCartItemByIdRequest:
             type: object

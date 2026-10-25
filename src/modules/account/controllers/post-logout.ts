@@ -4,8 +4,7 @@
  */
 
 import type { Request, Response } from 'express';
-import { t } from '@infrastructure/i18n';
-import { successResponse } from '@infrastructure/http/response';
+import { noContentResponse } from '@infrastructure/http/response';
 import { destroySessionCookie } from '../session/cookies';
 import { accountService } from '../services';
 import { sessionCredentialOf } from '../session/session';
@@ -26,7 +25,7 @@ export const postLogout = (request: Request, response: Response) => {
         .then(() => {
             destroySessionCookie(response);
 
-            successResponse(response, undefined, 200, t('account.logout.success'));
+            noContentResponse(response);
         })
         .catch(catchAs(response, 'postLogout'));
 };

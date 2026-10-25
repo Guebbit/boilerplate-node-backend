@@ -57,7 +57,7 @@ describe('GET /products/:id with an api key', () => {
 /** The titles a search answers, however the response wraps them. */
 const titlesAt = async (secret: string): Promise<string[]> => {
     const response = await api().get('/products').set('Authorization', bearerOf(secret));
-    const { items } = (response.body as { data: { items: { title: string }[] } }).data;
+    const { items } = response.body as { items: { title: string }[] };
 
     return items.map(({ title }) => title).toSorted();
 };

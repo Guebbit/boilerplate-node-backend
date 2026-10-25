@@ -11,7 +11,6 @@ import { parseBody, refused, catchAs } from '@infrastructure/http/controller';
 import { twoFactorService } from '../services';
 import { remintSession, sessionSnapshotOf } from '../session/session';
 import { authTwoFactorDisableTotal } from '../metrics';
-import { t } from '@infrastructure/i18n';
 import { callerContextOf } from '@infrastructure/http/request';
 import { AMR, withProofs } from '../domain/session-proof';
 
@@ -51,12 +50,7 @@ export const post2faDisable = (
                         withProofs(amr, AMR.otp),
                         snapshot
                     ).then((issued) => {
-                        successResponse<AuthTokens | undefined>(
-                            response,
-                            issued.sessionToken ? issued : undefined,
-                            200,
-                            t('account.two-factor.disabled')
-                        );
+                        successResponse<AuthTokens>(response, issued, 200);
                     });
                 })
         )

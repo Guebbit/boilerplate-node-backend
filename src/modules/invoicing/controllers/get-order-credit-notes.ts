@@ -22,9 +22,9 @@ export const getOrderCreditNotes = (request: Request<{ id?: string }>, response:
         .creditNotesForCaller(id, request.authContext, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse<CreditNoteSummary[]>(
+            successResponse<{ items: CreditNoteSummary[] }>(
                 response,
-                result.data.map((note) => presentCreditNoteSummary(note)),
+                { items: result.data.map((note) => presentCreditNoteSummary(note)) },
                 200
             );
         })

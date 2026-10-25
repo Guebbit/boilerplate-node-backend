@@ -39,7 +39,7 @@ const nextSecond = (): Promise<void> =>
 const loginAs = async (email: string) => {
     const response = await api().post('/account/login').send({ email, password: PLAIN_PASSWORD });
     return {
-        bearer: `Bearer ${response.body.data.token as string}`,
+        bearer: `Bearer ${response.body.token as string}`,
         cookie: cookieHeader(response, '__Host-session')
     };
 };
@@ -105,7 +105,7 @@ describe('the events that move the epoch', () => {
         expect(await statusWith(other.bearer)).toBe(401);
         // The caller's own old access token died with the epoch; the re-minted session works.
         expect(await statusWith(caller.bearer)).toBe(401);
-        expect(await statusWith(`Bearer ${change.body.data.token as string}`)).toBe(200);
+        expect(await statusWith(`Bearer ${change.body.token as string}`)).toBe(200);
         const refresh = await api()
             .post('/account/refresh')
             .set('Cookie', cookieHeader(change, '__Host-session'));
@@ -122,7 +122,7 @@ describe('the events that move the epoch', () => {
             .set('Authorization', caller.bearer)
             .set('Cookie', caller.cookie);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(await statusWith(caller.bearer)).toBe(401);
         expect(response.headers['set-cookie']).toEqual(
             expect.arrayContaining([expect.stringMatching(/^__Host-session=;/)])
@@ -178,7 +178,7 @@ describe('the events that move the epoch', () => {
         const confirm = await api()
             .post('/account/2fa/methods/totp/confirm')
             .set('Authorization', caller.bearer)
-            .send({ code: await codeFor(setup.body.data.secret as string, 0) });
+            .send({ code: await codeFor(setup.body.secret as string, 0) });
 
         expect(confirm.status).toBe(200);
         expect(await statusWith(other.bearer)).toBe(401);
@@ -202,7 +202,7 @@ describe('the events that move the epoch', () => {
             passwordConfirm: REPLACEMENT_PASSWORD
         });
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         const stored = await userRepository.findByIdWithCredentials(user.id);
         expect(await tokenRowsOf(user.id)).toEqual([]);
         expect(await sessionRowsOf(user.id)).toEqual([]);
@@ -291,7 +291,7 @@ describe('a credential change moves the epoch in its own write', () => {
             .post('/account/email-change/confirm')
             .send({ token: 'confirm-me' });
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(await statusWith(other.bearer)).toBe(401);
     });
 
@@ -308,7 +308,7 @@ describe('a credential change moves the epoch in its own write', () => {
         const confirm = await api()
             .post('/account/2fa/methods/totp/confirm')
             .set('Authorization', caller.bearer)
-            .send({ code: await codeFor(setup.body.data.secret as string, 0) });
+            .send({ code: await codeFor(setup.body.secret as string, 0) });
 
         expect(confirm.status).toBe(200);
         expect(await statusWith(other.bearer)).toBe(401);

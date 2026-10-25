@@ -41,7 +41,7 @@ const armedAccount = async () => {
         .post('/account/2fa/methods/totp/setup')
         .set('Authorization', bearer)
         .send();
-    const { secret } = setup.body.data as { secret: string };
+    const { secret } = setup.body as { secret: string };
     await api()
         .post('/account/2fa/methods/totp/confirm')
         .set('Authorization', bearer)
@@ -62,7 +62,7 @@ describe('the proofs a re-minted session claims', () => {
         const confirm = await api()
             .post('/account/2fa/methods/totp/confirm')
             .set('Authorization', bearer)
-            .send({ code: await codeFor((setup.body.data as { secret: string }).secret, 0) });
+            .send({ code: await codeFor((setup.body as { secret: string }).secret, 0) });
 
         expect(amrOfCookie(confirm)).toEqual(['pwd', 'otp']);
     });

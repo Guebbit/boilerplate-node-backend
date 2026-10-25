@@ -70,7 +70,7 @@ describe('a language that exists only as database rows', () => {
         const response = await api().get(`/products/${id}`).set('Accept-Language', 'es');
 
         expect(response.status).toBe(200);
-        expect(response.body.data.title).toBe('Lámpara');
+        expect(response.body.title).toBe('Lámpara');
     });
 
     it('labels the answer with the language it is written for', async () => {
@@ -104,7 +104,7 @@ describe('a language that exists only as database rows', () => {
             .set('Accept-Language', 'es');
 
         expect(response.status).toBe(200);
-        expect((response.body.data.items as { id: string }[]).map((item) => item.id)).toEqual([id]);
+        expect((response.body.items as { id: string }[]).map((item) => item.id)).toEqual([id]);
     });
 
     it('is the language a signup saves for the new account', async () => {
@@ -130,9 +130,9 @@ describe('a language that exists only as database rows', () => {
         const spanish = await api().get(`/products/${id}`).set('Accept-Language', 'es');
         const again = await api().get(`/products/${id}`).set('Accept-Language', 'en');
 
-        expect(english.body.data.title).toBe('Lamp');
-        expect(spanish.body.data.title).toBe('Lámpara');
-        expect(again.body.data.title).toBe('Lamp');
+        expect(english.body.title).toBe('Lamp');
+        expect(spanish.body.title).toBe('Lámpara');
+        expect(again.body.title).toBe('Lamp');
     });
 
     it('stops being picked the moment an admin switches it off', async () => {
@@ -144,7 +144,7 @@ describe('a language that exists only as database rows', () => {
 
         expect(off.status).toBe(200);
         expect(response.headers['content-language']).toBe('en');
-        expect(response.body.data.title).toBe('Lamp');
+        expect(response.body.title).toBe('Lamp');
     });
 
     it('is picked again the moment an admin switches it back on', async () => {
@@ -156,7 +156,7 @@ describe('a language that exists only as database rows', () => {
         const response = await api().get(`/products/${id}`).set('Accept-Language', 'es');
 
         expect(response.headers['content-language']).toBe('es');
-        expect(response.body.data.title).toBe('Lámpara');
+        expect(response.body.title).toBe('Lámpara');
     });
 
     it('is picked as soon as an admin registers it switched on, without a wait for the timer', async () => {
@@ -199,9 +199,9 @@ describe('a language with a deployed file that an admin switches off', () => {
             .get(`/products/${String(product._id)}`)
             .set('Accept-Language', 'it');
 
-        expect(before.body.data.title).toBe('Cuccia');
+        expect(before.body.title).toBe('Cuccia');
         expect(before.headers['content-language']).toBe('it');
-        expect(after.body.data.title).toBe('Dog Bed');
+        expect(after.body.title).toBe('Dog Bed');
         expect(after.headers['content-language']).toBe('en');
     });
 

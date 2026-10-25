@@ -24,7 +24,7 @@ export const getApiKey = (request: Request<{ id: string }>, response: Response) 
         .getApiKey(id, tenantCallerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse<ApiKey>(response, result.data, 200, result.message);
+            successResponse<ApiKey>(response, result.data, 200);
         })
         .catch(catchAs(response, 'getApiKey'));
 };

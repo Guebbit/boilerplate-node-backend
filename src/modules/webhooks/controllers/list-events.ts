@@ -13,6 +13,6 @@ import { webhooksService } from '../services';
  * Every event a subscription may filter on, served straight from `../asyncapi.yaml`.
  */
 export const listWebhookEvents = (_request: Request, response: Response) =>
-    successResponse<WebhookEventCatalogueEntry[]>(response, [
-        ...webhooksService.listWebhookEventCatalogue()
-    ]);
+    successResponse<{ items: WebhookEventCatalogueEntry[] }>(response, {
+        items: [...webhooksService.listWebhookEventCatalogue()]
+    });

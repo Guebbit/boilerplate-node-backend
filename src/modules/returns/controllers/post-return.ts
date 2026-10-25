@@ -27,7 +27,7 @@ export const postReturn = (request: Request, response: Response) => {
         .then((result) => {
             if (refused(response, result)) return;
             const created = returnService.withActions(result.data, authContext);
-            createdResponse<Return>(response, created, `/returns/${created.id}`, result.message);
+            createdResponse<Return>(response, created, `/returns/${created.id}`);
         })
         .catch(catchAs(response, 'postReturn'));
 };

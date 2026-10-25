@@ -36,7 +36,7 @@ describe('hard-deleting an account', () => {
             .delete(`/users/${target.id}?hardDelete=true`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(await accessService.membershipsOf(target.id)).toEqual([]);
         expect(await userRepository.findById(target.id)).toBeNull();
     });

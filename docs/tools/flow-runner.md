@@ -25,7 +25,7 @@ flows/loopback.ts` is what makes that possible: `withLoopbackServer` starts a th
 `scenarios/apply.ts` reaches for the same helper for a different reason: it has no server at all.
 
 `scenarios/flows/client.ts` is what the flows call through — one base URL, one bearer token per
-signed-in `Caller`, and envelope-unwrapping every call would otherwise repeat. It runs on a
+signed-in `Caller`, and reading every call's status and body would otherwise repeat. It runs on a
 container boot (`npm run db:bootstrap` → `scenario:apply`), where devDependencies may not be
 installed, so it uses the runtime's own `fetch` rather than `supertest`. A call the flow expected
 to succeed but did not throws `ScenarioFlowError`, which names the actor, the request and the

@@ -41,9 +41,7 @@ describe('GET /orders — the filters it now publishes', () => {
 
         const byStatus = await api().get('/orders?status=paid').set('Authorization', bearer);
         expect(byStatus.status).toBe(200);
-        expect(byStatus.body.data.items.map((o: { id: string }) => o.id)).toEqual([
-            String(paid._id)
-        ]);
+        expect(byStatus.body.items.map((o: { id: string }) => o.id)).toEqual([String(paid._id)]);
     });
 
     /*
@@ -64,9 +62,7 @@ describe('GET /orders — the filters it now publishes', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items.map((o: { id: string }) => o.id)).toEqual([
-            String(orderA._id)
-        ]);
+        expect(response.body.items.map((o: { id: string }) => o.id)).toEqual([String(orderA._id)]);
     });
 
     // `id` is a batch filter now — Tier A. `userId`/`productId` were deliberately left scalar, so
@@ -81,7 +77,7 @@ describe('GET /orders — the filters it now publishes', () => {
             .get(`/orders?id=${String(target._id)}`)
             .set('Authorization', bearer);
         expect(byId.status).toBe(200);
-        expect(byId.body.data.items.map((o: { id: string }) => o.id)).toEqual([String(target._id)]);
+        expect(byId.body.items.map((o: { id: string }) => o.id)).toEqual([String(target._id)]);
 
         const repeatedUserId = await api()
             .get('/orders?userId=a&userId=b')
@@ -109,10 +105,8 @@ describe('GET /orders', () => {
         const response = await api().get('/orders').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items.map((o: { id: string }) => o.id)).toEqual([
-            String(own._id)
-        ]);
-        expect(response.body.data.meta.totalItems).toBe(1);
+        expect(response.body.items.map((o: { id: string }) => o.id)).toEqual([String(own._id)]);
+        expect(response.body.meta.totalItems).toBe(1);
     });
 
     // `deleted=true` is a staff view: if the flag outlived the caller's scope, a customer would be
@@ -129,14 +123,14 @@ describe('GET /orders', () => {
         const response = await api().get('/orders?deleted=true').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toEqual([]);
+        expect(response.body.items).toEqual([]);
     });
 
     it('reports the three order totals rather than a single collapsed total', async () => {
         const { bearer, user } = await authenticateAs('admin');
         await seedOrderFor(user);
         const response = await api().get('/orders').set('Authorization', bearer);
-        const [order] = response.body.data.items;
+        const [order] = response.body.items;
 
         expect(order.totalItems).toBe(1);
         expect(order.totalQuantity).toBe(2);
@@ -198,7 +192,7 @@ describe('POST /orders/{id}/cancel', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.status).toBe('cancelled');
+        expect(response.body.status).toBe('cancelled');
     });
 
     it("lets an unrestricted caller cancel someone else's pending order", async () => {
@@ -211,7 +205,7 @@ describe('POST /orders/{id}/cancel', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.status).toBe('cancelled');
+        expect(response.body.status).toBe('cancelled');
     });
 
     it('lets an operator cancel an equal’s order, holding the key is the whole rule', async () => {
@@ -224,7 +218,7 @@ describe('POST /orders/{id}/cancel', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.status).toBe('cancelled');
+        expect(response.body.status).toBe('cancelled');
     });
 
     // An operator's cancel can refund or keep a paid order's money, so it asks a fresh session; the
@@ -339,8 +333,8 @@ describe('POST /orders/{id}/status-override', () => {
             .send({ to: 'processing', reason: 'paid offline, forcing it forward' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.status).toBe('processing');
-        expect(response.body.data.statusOverrides).toBeUndefined();
+        expect(response.body.status).toBe('processing');
+        expect(response.body.statusOverrides).toBeUndefined();
     });
 });
 
@@ -387,9 +381,10 @@ describe('POST /orders/{id}/restore', () => {
         const list = await api().get('/orders').set('Authorization', bearer);
 
         const rows = new Map(
-            (list.body.data.items as { id: string; actions: Record<string, boolean> }[]).map(
-                (row) => [row.id, row.actions]
-            )
+            (list.body.items as { id: string; actions: Record<string, boolean> }[]).map((row) => [
+                row.id,
+                row.actions
+            ])
         );
         expect(rows.get(String(hidden._id))).toMatchObject({ restore: true, delete: false });
         expect(rows.get(String(live._id))).toMatchObject({ restore: false, delete: true });
@@ -409,9 +404,7 @@ describe('POST /orders/search', () => {
             .send({ page: 1, pageSize: 10 });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items.map((o: { id: string }) => o.id)).toEqual([
-            String(own._id)
-        ]);
+        expect(response.body.items.map((o: { id: string }) => o.id)).toEqual([String(own._id)]);
     });
 });
 
@@ -430,7 +423,7 @@ describe('PUT /orders/{id}', () => {
             .send({ email: 'billing@example.com' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.email).toBe('billing@example.com');
+        expect(response.body.email).toBe('billing@example.com');
     });
 
     // `items`/`userId` are legal on `POST /orders` (create) but not here — rewriting frozen,
@@ -485,7 +478,7 @@ describe('PATCH /orders/{id}', () => {
             .send({ email: 'billing@example.com' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.email).toBe('billing@example.com');
+        expect(response.body.email).toBe('billing@example.com');
     });
 
     // Merges: an empty body changes nothing, unlike PUT's whole-resource replace above.
@@ -499,7 +492,7 @@ describe('PATCH /orders/{id}', () => {
             .send({});
 
         expect(response.status).toBe(200);
-        expect(response.body.data.email).toBe(order.email);
+        expect(response.body.email).toBe(order.email);
     });
 
     it.each(['items', 'userId', 'status'])('rejects a body carrying `%s`', async (field) => {
@@ -532,7 +525,7 @@ describe('DELETE /orders and DELETE /orders/{id}/hard', () => {
             .set('Authorization', bearer)
             .send({ id: String(order._id) });
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         const stored = await orderRepository.findById(String(order._id));
         expect(stored?.deletedAt).toBeInstanceOf(Date);
     });
@@ -545,7 +538,7 @@ describe('DELETE /orders and DELETE /orders/{id}/hard', () => {
             .delete(`/orders/${String(order._id)}/hard`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         await expect(orderRepository.findById(String(order._id))).resolves.toBeNull();
     });
 
@@ -585,11 +578,11 @@ describe('GET /orders — sort', () => {
         const down = await api().get('/orders?sort=-status').set('Authorization', bearer);
         const refused = await api().get('/orders?sort=totalPrice').set('Authorization', bearer);
 
-        expect(up.body.data.items.map((order: { status: string }) => order.status)).toEqual([
+        expect(up.body.items.map((order: { status: string }) => order.status)).toEqual([
             'pending',
             'shipped'
         ]);
-        expect(down.body.data.items.map((order: { status: string }) => order.status)).toEqual([
+        expect(down.body.items.map((order: { status: string }) => order.status)).toEqual([
             'shipped',
             'pending'
         ]);
@@ -618,7 +611,9 @@ describe('GET /orders/{id}/timeline', () => {
 
         expect(asStaff.status).toBe(200);
         expect(
-            (asStaff.body.data as { type: string }[]).filter((row) => row.type !== 'invoice_issued')
+            (asStaff.body.items as { type: string }[]).filter(
+                (row) => row.type !== 'invoice_issued'
+            )
         ).toMatchObject([
             { type: 'paid', data: { method: 'card' } },
             {
@@ -630,12 +625,12 @@ describe('GET /orders/{id}/timeline', () => {
         expect(asBuyer.status).toBe(200);
         // The invoice row is buyer-visible and lands whenever the async invoice listener finishes,
         // so the buyer's list is "paid, maybe the invoice", never the staff-only override.
-        const buyerRows = (asBuyer.body.data as { type: string }[]).filter(
+        const buyerRows = (asBuyer.body.items as { type: string }[]).filter(
             (row) => row.type !== 'invoice_issued'
         );
         expect(buyerRows).toHaveLength(1);
         expect(buyerRows[0]).toMatchObject({ type: 'paid' });
-        for (const row of asBuyer.body.data as object[]) expect(row).not.toHaveProperty('actor');
+        for (const row of asBuyer.body.items as object[]) expect(row).not.toHaveProperty('actor');
     });
 
     it('answers another buyer with the same 404 as an order that does not exist', async () => {

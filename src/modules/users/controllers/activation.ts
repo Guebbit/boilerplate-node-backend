@@ -31,7 +31,7 @@ const switchHandler = (name: string, move: typeof userService.activate) =>
                 if (refused(response, result)) return;
 
                 return userService.toUserContract(result.data, context.caller).then((user) => {
-                    successResponse(response, user, 200, result.message);
+                    successResponse(response, user, 200);
                 });
             })
             .catch(catchAs(response, name));

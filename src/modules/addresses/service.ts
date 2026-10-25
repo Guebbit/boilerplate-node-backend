@@ -62,7 +62,7 @@ const create = (
             ]);
         // `addEntry` appends, so the entry just written is the last one — never absent.
         const added = book.items.at(-1)!;
-        return generateSuccess(presentAddress(added), 201, t('addresses.added'));
+        return generateSuccess(presentAddress(added), 201);
     });
 
 /**
@@ -77,7 +77,7 @@ const update = (
     addressBookRepository.updateEntry(userId, addressId, changes).then((book) => {
         const address = presentAddressOf(book, addressId);
         if (!address) return generateReject(404, [t('addresses.not-found')]);
-        return generateSuccess(address, 200, t('addresses.updated'));
+        return generateSuccess(address, 200);
     });
 
 /**
@@ -91,7 +91,7 @@ const setDefault = (
     addressBookRepository.setDefault(userId, addressId).then((book) => {
         const address = presentAddressOf(book, addressId);
         if (!address) return generateReject(404, [t('addresses.not-found')]);
-        return generateSuccess(address, 200, t('addresses.default-set'));
+        return generateSuccess(address, 200);
     });
 
 /** Remove one entry; the repository keeps the one-default invariant. */
@@ -101,7 +101,7 @@ const remove = (
 ): Promise<ResponseSuccess<AddressesView> | ResponseReject> =>
     addressBookRepository.removeEntry(userId, addressId).then((book) => {
         if (!book) return generateReject(404, [t('addresses.not-found')]);
-        return generateSuccess(presentAddresses(book), 200, t('addresses.removed'));
+        return generateSuccess(presentAddresses(book), 200);
     });
 
 /**

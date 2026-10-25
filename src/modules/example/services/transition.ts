@@ -139,7 +139,7 @@ export const transitionById = (
                     metadata: { from, to }
                 });
                 return presentForCaller(saved, context).then((shaped) =>
-                    generateSuccess(shaped, 200, t('example.status-changed', { to }))
+                    generateSuccess(shaped, 200)
                 );
             });
         });

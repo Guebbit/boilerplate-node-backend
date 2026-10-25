@@ -11,7 +11,6 @@
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
-import { t } from '@infrastructure/i18n';
 import { inventoryService } from '../services';
 import { catchAs } from '@infrastructure/http/controller';
 import type { ReservationSweepResponse } from '@types';
@@ -21,11 +20,6 @@ export const postReservationsSweep = (request: Request, response: Response) =>
     inventoryService
         .runReservationSweep(callerContextOf(request))
         .then((expired) => {
-            successResponse<ReservationSweepResponse>(
-                response,
-                { expired },
-                200,
-                t('inventory.sweep-success')
-            );
+            successResponse<ReservationSweepResponse>(response, { expired }, 200);
         })
         .catch(catchAs(response, 'postReservationsSweep'));

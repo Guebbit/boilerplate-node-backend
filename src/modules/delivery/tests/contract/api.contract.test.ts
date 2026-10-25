@@ -66,7 +66,7 @@ describe('GET /delivery/methods', () => {
         const response = await api().get('/delivery/methods');
 
         expect(response.status).toBe(200);
-        expect(response.body.data.methods.length).toBeGreaterThan(0);
+        expect(response.body.methods.length).toBeGreaterThan(0);
     });
 
     it('lists every method regardless of a query string trying to filter it', async () => {
@@ -75,7 +75,7 @@ describe('GET /delivery/methods', () => {
         const response = await api().get('/delivery/methods').query({ weight: 10_000 });
 
         expect(response.status).toBe(200);
-        const ids = (response.body.data.methods as { id: string }[]).map(({ id }) => id);
+        const ids = (response.body.methods as { id: string }[]).map(({ id }) => id);
         expect(ids).toContain('standard');
         expect(ids).toContain('express');
     });
@@ -85,7 +85,7 @@ describe('GET /delivery/methods', () => {
     it('stamps every method with the shop currency', async () => {
         const response = await api().get('/delivery/methods');
 
-        const currencies = (response.body.data.methods as { currency: string }[]).map(
+        const currencies = (response.body.methods as { currency: string }[]).map(
             ({ currency }) => currency
         );
         expect(currencies.every((currency) => currency === 'EUR')).toBe(true);
@@ -101,20 +101,20 @@ describe('GET /delivery/orders/{orderId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.fulfillmentOrders).toHaveLength(1);
-        expect(response.body.data.fulfillmentOrders[0]).toMatchObject({
+        expect(response.body.fulfillmentOrders).toHaveLength(1);
+        expect(response.body.fulfillmentOrders[0]).toMatchObject({
             number: 1,
             kind: 'physical',
             status: 'closed'
         });
-        expect(response.body.data.shipments).toHaveLength(1);
-        expect(response.body.data.shipments[0]).toMatchObject({
+        expect(response.body.shipments).toHaveLength(1);
+        expect(response.body.shipments[0]).toMatchObject({
             number: 1,
             status: 'shipped',
             trackingCode: 'TRK-CONTRACT1'
         });
         // The buyer sees their goods, and nothing they could act on as staff.
-        expect(response.body.data.shipments[0].actions).toEqual({
+        expect(response.body.shipments[0].actions).toEqual({
             deliver: false,
             forceDeliver: false,
             update: false
@@ -131,7 +131,7 @@ describe('GET /delivery/orders/{orderId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toEqual({ fulfillmentOrders: [], shipments: [] });
+        expect(response.body).toEqual({ fulfillmentOrders: [], shipments: [] });
     });
 
     it('serves staff the actions they may take, and the hold note only to them', async () => {
@@ -145,7 +145,7 @@ describe('GET /delivery/orders/{orderId}', () => {
             .get(`/delivery/orders/${orderId}`)
             .set('Authorization', bearer);
 
-        expect(response.body.data.fulfillmentOrders[0]).toMatchObject({
+        expect(response.body.fulfillmentOrders[0]).toMatchObject({
             status: 'on_hold',
             holdReason: 'high_risk',
             holdNote: 'call first',
@@ -170,8 +170,8 @@ describe('GET /delivery/orders/{orderId}', () => {
             .set('Authorization', customer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.fulfillmentOrders[0].status).toBe('on_hold');
-        expect(response.body.data.fulfillmentOrders[0]).not.toHaveProperty('holdNote');
+        expect(response.body.fulfillmentOrders[0].status).toBe('on_hold');
+        expect(response.body.fulfillmentOrders[0]).not.toHaveProperty('holdNote');
     });
 
     it('answers 404 for another customer’s order', async () => {
@@ -199,7 +199,7 @@ describe('POST /delivery/orders/{orderId}/start', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.status).toBe('processing');
+        expect(response.body.status).toBe('processing');
         // Starting made the fulfillment orders too: the warehouse can ship straight away.
         expect(await fulfillmentOrdersOf(String(order._id))).toHaveLength(1);
     });
@@ -229,7 +229,7 @@ describe('POST /delivery/fulfillment-orders/{id}/shipments', () => {
 
         expect(response.status).toBe(201);
         expect(response.headers.location).toBe(`/delivery/orders/${orderId}`);
-        expect(response.body.data).toMatchObject({
+        expect(response.body).toMatchObject({
             number: 1,
             status: 'shipped',
             trackingCode: 'TRK-SHIPDOOR1',
@@ -247,12 +247,10 @@ describe('POST /delivery/fulfillment-orders/{id}/shipments', () => {
             .send({ lines: [{ productId, quantity: 1 }] });
 
         expect(response.status).toBe(201);
-        expect(response.body.data.lines).toEqual([
-            expect.objectContaining({ productId, quantity: 1 })
-        ]);
+        expect(response.body.lines).toEqual([expect.objectContaining({ productId, quantity: 1 })]);
         expect(await readOrder(orderId).then((one) => one?.status)).toBe(OrderStatus.processing);
         const read = await api().get(`/orders/${orderId}`).set('Authorization', bearer);
-        expect(read.body.data.fulfillmentStatus).toBe('partially_fulfilled');
+        expect(read.body.fulfillmentStatus).toBe('partially_fulfilled');
     });
 
     it('matches the error contract when a tracked method has no code', async () => {
@@ -327,7 +325,7 @@ describe('POST /delivery/fulfillment-orders/{id}/fulfill', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({ status: 'delivered', number: 1 });
+        expect(response.body).toMatchObject({ status: 'delivered', number: 1 });
         expect(await readOrder(String(order._id)).then((one) => one?.status)).toBe(
             OrderStatus.delivered
         );
@@ -384,14 +382,14 @@ describe('POST /delivery/fulfillment-orders/{id}/hold and /release', () => {
         const releasedAgain = await release();
 
         expect(held.status).toBe(200);
-        expect(held.body.data).toMatchObject({
+        expect(held.body).toMatchObject({
             status: 'on_hold',
             holdReason: 'incorrect_address'
         });
         expect(heldAgain.status).toBe(409);
         expect(heldAgain.body.errors[0].code).toBe('DELIVERY_NOT_HOLDABLE');
         expect(released.status).toBe(200);
-        expect(released.body.data.status).toBe('open');
+        expect(released.body.status).toBe('open');
         expect(releasedAgain.status).toBe(409);
         expect(releasedAgain.body.errors[0].code).toBe('DELIVERY_NOT_RELEASABLE');
     });
@@ -418,7 +416,7 @@ describe('GET /delivery/shipments/{id}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({
+        expect(response.body).toMatchObject({
             id: String(shipment._id),
             trackingCode: 'TRK-CONTRACT1'
         });
@@ -478,7 +476,7 @@ describe('GET /delivery/fulfillment-orders/{id}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({ id: String(fulfillmentOrder._id) });
+        expect(response.body).toMatchObject({ id: String(fulfillmentOrder._id) });
     });
 
     it('lets staff holding display:Order read any fulfillment order', async () => {
@@ -546,7 +544,7 @@ describe('PATCH /delivery/shipments/{id}', () => {
 
         expect(json.status).toBe(200);
         expect(merge.status).toBe(200);
-        expect(own.body.data.shipments[0].trackingCode).toBe('TRK-FIXED002');
+        expect(own.body.shipments[0].trackingCode).toBe('TRK-FIXED002');
     });
 
     it('answers 409 once the shipment arrived, and 422 for an empty code', async () => {
@@ -582,7 +580,7 @@ describe('POST /delivery/shipments/{id}/deliver', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.status).toBe('delivered');
+        expect(response.body.status).toBe('delivered');
         expect(await readOrder(String(order._id)).then((one) => one?.status)).toBe(
             OrderStatus.delivered
         );
@@ -706,8 +704,8 @@ describe('GET /delivery/fulfillment-orders — the preorder board', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(1);
-        expect(response.body.data.items[0]).toMatchObject({
+        expect(response.body.items).toHaveLength(1);
+        expect(response.body.items[0]).toMatchObject({
             orderId,
             number: 1,
             status: 'on_hold',
@@ -717,7 +715,7 @@ describe('GET /delivery/fulfillment-orders — the preorder board', () => {
             slippedDays: 0,
             buyer: { email: user.email, userId: String(user._id) }
         });
-        expect(response.body.data.meta).toMatchObject({ totalItems: 1 });
+        expect(response.body.meta).toMatchObject({ totalItems: 1 });
     });
 
     it('filters by state, product, late and dueWithin', async () => {
@@ -732,12 +730,12 @@ describe('GET /delivery/fulfillment-orders — the preorder board', () => {
         const soon = await ask('dueWithin=7');
         const within60 = await ask('dueWithin=60');
 
-        expect(waiting.body.data.items).toHaveLength(1);
-        expect(allocated.body.data.items).toHaveLength(0);
-        expect(byProduct.body.data.items).toHaveLength(1);
-        expect(late.body.data.items).toHaveLength(0);
-        expect(soon.body.data.items).toHaveLength(0);
-        expect(within60.body.data.items).toHaveLength(1);
+        expect(waiting.body.items).toHaveLength(1);
+        expect(allocated.body.items).toHaveLength(0);
+        expect(byProduct.body.items).toHaveLength(1);
+        expect(late.body.items).toHaveLength(0);
+        expect(soon.body.items).toHaveLength(0);
+        expect(within60.body.items).toHaveLength(1);
     });
 
     it('rejects a state it does not know and a dueWithin it cannot count', async () => {
@@ -770,8 +768,8 @@ describe('GET /delivery/fulfillment-orders — the preorder board', () => {
             .get('/delivery/fulfillment-orders')
             .set('Authorization', adminBearer);
 
-        expect(mine.body.data.items).toHaveLength(1);
-        expect(all.body.data.items).toHaveLength(2);
+        expect(mine.body.items).toHaveLength(1);
+        expect(all.body.items).toHaveLength(2);
     });
 });
 
@@ -790,7 +788,7 @@ describe('GET /delivery/fulfillment-orders/summary', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toEqual([
+        expect(response.body.items).toEqual([
             {
                 productId: productIds[0],
                 title: expect.any(String),
@@ -821,7 +819,7 @@ describe('GET /delivery/fulfillment-orders/summary', () => {
             .get(`/delivery/fulfillment-orders/summary?productId=${productIds[1]}`)
             .set('Authorization', bearer);
 
-        expect(response.body.data.items).toMatchObject([{ productId: productIds[1], paid: 2 }]);
+        expect(response.body.items).toMatchObject([{ productId: productIds[1], paid: 2 }]);
     });
 });
 
@@ -849,7 +847,7 @@ describe('GET /delivery/fulfillment-orders/release-date-impact', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toEqual({ notify: 1 });
+        expect(response.body).toEqual({ notify: 1 });
     });
 
     it('matches the contract: an earlier date emails nobody', async () => {
@@ -861,7 +859,7 @@ describe('GET /delivery/fulfillment-orders/release-date-impact', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toEqual({ notify: 0 });
+        expect(response.body).toEqual({ notify: 0 });
     });
 
     it.each([
@@ -878,7 +876,7 @@ describe('GET /delivery/fulfillment-orders/release-date-impact', () => {
                 .set('Authorization', bearer);
 
             expect(response.status).toBe(200);
-            expect(response.body.data).toEqual({ notify: 1 });
+            expect(response.body).toEqual({ notify: 1 });
         }
     );
 
@@ -931,6 +929,6 @@ describe('GET /delivery/fulfillment-orders/restock-date-impact', () => {
         const response = await api().get(url).query({ productId }).set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toEqual({ notify: 1 });
+        expect(response.body).toEqual({ notify: 1 });
     });
 });

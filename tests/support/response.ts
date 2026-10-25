@@ -1,5 +1,5 @@
 /**
- * Narrowing a service's response envelope in a test, without an inline cast per assertion.
+ * Narrowing a service's result in a test, without an inline cast per assertion.
  *
  * A service returns `ResponseSuccess<T> | ResponseReject`, so `response.data` does not type-check
  * until the union is narrowed. Doing that with `as` at the call site says nothing when it is

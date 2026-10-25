@@ -38,7 +38,7 @@ describe('GET /products/:id resolves to the caller’s language', () => {
             .set('Accept-Language', 'it');
 
         expect(response.status).toBe(200);
-        expect(response.body.data.title).toBe('Cuccia');
+        expect(response.body.title).toBe('Cuccia');
     });
 
     it('falls back to the source title rather than blanking when untranslated', async () => {
@@ -49,7 +49,7 @@ describe('GET /products/:id resolves to the caller’s language', () => {
             .set('Accept-Language', 'it');
 
         expect(response.status).toBe(200);
-        expect(response.body.data.title).toBe('Dog Bed');
+        expect(response.body.title).toBe('Dog Bed');
     });
 
     it('resolves a region tag to its base language', async () => {
@@ -61,7 +61,7 @@ describe('GET /products/:id resolves to the caller’s language', () => {
             .get(`/products/${String(product._id)}`)
             .set('Accept-Language', 'it-CH');
 
-        expect(response.body.data.title).toBe('Cuccia');
+        expect(response.body.title).toBe('Cuccia');
     });
 });
 
@@ -76,7 +76,7 @@ describe('GET /products resolves a whole page in one batched query', () => {
         const response = await api().get('/products').set('Accept-Language', 'it');
 
         expect(response.status).toBe(200);
-        const titles = (response.body.data.items as { title: string }[])
+        const titles = (response.body.items as { title: string }[])
             .map(({ title }) => title)
             .toSorted();
         expect(titles).toEqual(['Ciotola', 'Cuccia']);
@@ -91,7 +91,7 @@ describe('GET /products resolves a whole page in one batched query', () => {
         const response = await api().get('/products').set('Accept-Language', 'it');
 
         const byId = new Map(
-            (response.body.data.items as { id: string; title: string }[]).map((item) => [
+            (response.body.items as { id: string; title: string }[]).map((item) => [
                 item.id,
                 item.title
             ])
@@ -113,8 +113,8 @@ describe('free-text search follows the caller’s locale', () => {
             .set('Accept-Language', 'it');
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(1);
-        expect(response.body.data.items[0].id).toBe(String(product._id));
+        expect(response.body.items).toHaveLength(1);
+        expect(response.body.items[0].id).toBe(String(product._id));
     });
 
     it('still reaches a product through its own column when it has no translation row', async () => {
@@ -125,8 +125,8 @@ describe('free-text search follows the caller’s locale', () => {
             .query({ text: 'Dog Bed' })
             .set('Accept-Language', 'it');
 
-        expect(response.body.data.items).toHaveLength(1);
-        expect(response.body.data.items[0].id).toBe(String(product._id));
+        expect(response.body.items).toHaveLength(1);
+        expect(response.body.items[0].id).toBe(String(product._id));
     });
 
     it('unions rather than intersects: an own-column match and a translated match both return', async () => {
@@ -140,7 +140,7 @@ describe('free-text search follows the caller’s locale', () => {
             .query({ text: 'Cuccia' })
             .set('Accept-Language', 'it');
 
-        const ids = (response.body.data.items as { id: string }[]).map(({ id }) => id).toSorted();
+        const ids = (response.body.items as { id: string }[]).map(({ id }) => id).toSorted();
         expect(ids).toEqual([String(bySourceColumn._id), String(byTranslation._id)].toSorted());
     });
 
@@ -156,7 +156,7 @@ describe('free-text search follows the caller’s locale', () => {
             .query({ text: 'cuccia' })
             .set('Accept-Language', 'it');
 
-        const ids = (response.body.data.items as { id: string }[]).map(({ id }) => id);
+        const ids = (response.body.items as { id: string }[]).map(({ id }) => id);
         expect(ids).toEqual([String(match._id)]);
     });
 
@@ -170,7 +170,7 @@ describe('free-text search follows the caller’s locale', () => {
             .query({ title: 'cuccia' })
             .set('Accept-Language', 'it');
 
-        expect(response.body.data.items).toHaveLength(1);
-        expect(response.body.data.items[0].id).toBe(String(product._id));
+        expect(response.body.items).toHaveLength(1);
+        expect(response.body.items[0].id).toBe(String(product._id));
     });
 });

@@ -45,7 +45,7 @@ describe('CORS', () => {
         const response = await api().get('/').set('Origin', DISALLOWED_ORIGIN);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.status).toBe('ok');
+        expect(response.body.status).toBe('ok');
         expect(response.headers['access-control-allow-origin']).toBeUndefined();
     });
 
@@ -100,7 +100,7 @@ describe('CORS', () => {
         const response = await api().get('/');
 
         expect(response.status).toBe(200);
-        expect(response.body.data.status).toBe('ok');
+        expect(response.body.status).toBe('ok');
         expect(response.headers['access-control-allow-origin']).toBeUndefined();
     });
 

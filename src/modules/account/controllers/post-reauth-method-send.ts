@@ -10,7 +10,6 @@ import type { TwoFactorDelivery } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { parseBody, refused, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
-import { t } from '@infrastructure/i18n';
 import { accountService } from '../services';
 
 /**
@@ -28,12 +27,7 @@ export const postReauthMethodSend = (request: Request<{ method: string }>, respo
         .sendReauthCode(id, pathParameters.method, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse<TwoFactorDelivery>(
-                response,
-                result.data,
-                200,
-                t('account.two-factor.code-sent')
-            );
+            successResponse<TwoFactorDelivery>(response, result.data, 200);
         })
         .catch(catchAs(response, 'postReauthMethodSend'));
 };

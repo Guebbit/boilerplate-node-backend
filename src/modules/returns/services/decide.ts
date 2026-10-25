@@ -146,13 +146,7 @@ const settleDecision = (
             });
             return syncReturnStatus(String(decided.orderId));
         })
-        .then(() =>
-            generateSuccess(
-                decided,
-                200,
-                t(to === 'approved' ? 'returns.approved' : 'returns.declined')
-            )
-        );
+        .then(() => generateSuccess(decided, 200));
 };
 
 /**

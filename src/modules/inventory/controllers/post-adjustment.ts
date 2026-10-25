@@ -39,7 +39,7 @@ export const postAdjustment = (request: Request<{ productId?: string }>, respons
         .adjust(productId, delta, note, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse<InventoryLevel>(response, result.data, 200, result.message);
+            successResponse<InventoryLevel>(response, result.data, 200);
         })
         .catch(catchAs(response, 'postAdjustment'));
 };

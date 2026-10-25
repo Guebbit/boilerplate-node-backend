@@ -31,7 +31,7 @@ export const postMoveToCart = (request: Request<{ productId: string }>, response
         .then((result) => {
             if (refused(response, result)) return;
 
-            successResponse<WishlistResponse>(response, result.data, 200, result.message);
+            successResponse<WishlistResponse>(response, result.data, 200);
         })
         .catch(catchAs(response, 'postMoveToCart'));
 };

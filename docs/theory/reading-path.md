@@ -121,8 +121,9 @@ key → Mongo path — so `$regex`, `$elemMatch` and `ObjectId` never leak up in
 
 ### 9 · `src/infrastructure/http/response.ts` — what every answer looks like
 
-Every endpoint answers `{ success, status, message, data | errors }`. This is the contract the
-generated client and the paired frontend both depend on.
+A success answers the resource itself, a list answers `{ items, meta }`, and a result with nothing
+to say answers 204. A failure answers RFC 9457 problem details. This is the contract the generated
+client and the paired frontend both depend on: [Success Responses](../api/responses.md).
 
 **Take away:** `rejectResponse` does **not** throw. Controllers must `return` it.
 

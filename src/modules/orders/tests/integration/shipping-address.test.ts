@@ -55,7 +55,7 @@ describe('PUT /orders/{id}/shipping-address', () => {
             .send(AFTER);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.shippingAddress).toMatchObject(AFTER);
+        expect(response.body.shippingAddress).toMatchObject(AFTER);
         const raw = JSON.stringify(await orderModel.collection.findOne({ _id: order._id }));
         expect(raw).not.toContain('14 Analytical');
         const timeline = await api()
@@ -98,7 +98,7 @@ describe('PUT /orders/{id}/shipping-address', () => {
             .get(`/orders/${String(order._id)}/timeline`)
             .set('Authorization', buyer);
 
-        expect(read.body.data.shippingAddress).toMatchObject(AFTER);
+        expect(read.body.shippingAddress).toMatchObject(AFTER);
         expect(JSON.stringify(timeline.body)).not.toContain('address_corrected');
     });
 
@@ -109,7 +109,7 @@ describe('PUT /orders/{id}/shipping-address', () => {
             api()
                 .get(`/orders/${String(order._id)}`)
                 .set('Authorization', bearer)
-                .then((response) => response.body.data.actions.correctAddress as boolean);
+                .then((response) => response.body.actions.correctAddress as boolean);
 
         expect(await read()).toBe(true);
 

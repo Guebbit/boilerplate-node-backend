@@ -23,7 +23,7 @@ describe('System routes', () => {
 
         expect(response.status).toBe(200);
         expect(response.headers['x-request-id']).toBeTruthy();
-        expect(response.body.data.status).toBe('ok');
+        expect(response.body.status).toBe('ok');
     });
 
     it('returns 404 for unknown routes', async () => {

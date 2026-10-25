@@ -113,6 +113,6 @@ describe('the editor', () => {
         const response = await api().get(`/products/${id}/admin`).set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.translations.fr).toMatchObject({ title: DRAFT_TITLE });
+        expect(response.body.translations.fr).toMatchObject({ title: DRAFT_TITLE });
     });
 });

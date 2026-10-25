@@ -34,7 +34,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/SalesStatsEnvelope'
+                                $ref: '#/components/schemas/SalesStats'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -65,7 +65,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ProductStatsEnvelope'
+                                $ref: '#/components/schemas/ProductStats'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -97,7 +97,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ProductSeriesEnvelope'
+                                $ref: '#/components/schemas/ProductSeries'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -124,7 +124,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CategoryStatsEnvelope'
+                                $ref: '#/components/schemas/CategoryStats'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -149,7 +149,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/PaymentMixEnvelope'
+                                $ref: '#/components/schemas/PaymentMix'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -175,7 +175,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/OperationsStatsEnvelope'
+                                $ref: '#/components/schemas/OperationsStats'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -201,7 +201,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CustomerStatsEnvelope'
+                                $ref: '#/components/schemas/CustomerStats'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -223,7 +223,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/PipelineStatsEnvelope'
+                                $ref: '#/components/schemas/PipelineStats'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -245,7 +245,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/StatsLimitsEnvelope'
+                                $ref: '#/components/schemas/StatsLimits'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -559,104 +559,6 @@ components:
                     type: integer
                     description: Orders `paid` or `processing`, so not yet handed to a carrier.
 
-        SalesStatsEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/SalesStats'
-
-        ProductStatsEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/ProductStats'
-
-        ProductSeriesEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/ProductSeries'
-
-        CategoryStatsEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/CategoryStats'
-
-        PaymentMixEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/PaymentMix'
-
-        OperationsStatsEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/OperationsStats'
-
-        CustomerStatsEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/CustomerStats'
-
         StatsLimits:
             type: object
             additionalProperties: false
@@ -669,30 +571,3 @@ components:
                     type: integer
                     description: The most buckets one series may hold, the first possibly starting before `from`.
 
-        StatsLimitsEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/StatsLimits'
-
-        PipelineStatsEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/PipelineStats'

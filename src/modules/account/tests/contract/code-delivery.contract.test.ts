@@ -70,7 +70,7 @@ describe('a deployment whose mail reaches no person', () => {
             .set('Authorization', bearer)
             .send();
 
-        expect(methods.body.data).toEqual({ methods: [] });
+        expect(methods.body).toEqual({ methods: [] });
         expect(send.status).toBe(422);
     });
 });

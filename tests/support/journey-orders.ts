@@ -69,7 +69,7 @@ export const placeOrder = async (
         .set('Authorization', bearer)
         .send({ shippingMethodId: 'standard' });
 
-    return bodyOf(await checkoutAs(bearer, body), Checkout201Response).data;
+    return bodyOf(await checkoutAs(bearer, body), Checkout201Response);
 };
 
 /**
@@ -83,7 +83,7 @@ export const openIntent = async (bearer: string, orderId: string) =>
     bodyOf(
         await api().post('/payments').set('Authorization', bearer).send({ orderId }),
         CreatePayment201Response
-    ).data;
+    );
 
 /**
  * Confirms an open payment with a card handle.
@@ -109,7 +109,7 @@ export const confirmCard = (bearer: string, paymentId: string, paymentMethodRef 
 export const payByCard = async (bearer: string, orderId: string) => {
     const intent = await openIntent(bearer, orderId);
 
-    return bodyOf(await confirmCard(bearer, intent.id), ConfirmPayment200Response).data;
+    return bodyOf(await confirmCard(bearer, intent.id), ConfirmPayment200Response);
 };
 
 /**
@@ -122,7 +122,7 @@ export const orderOf = async (bearer: string, orderId: string) =>
     bodyOf(
         await api().get(`/orders/${orderId}`).set('Authorization', bearer),
         GetOrderById200Response
-    ).data;
+    );
 
 /**
  * An order's payment as staff read it.
@@ -134,7 +134,7 @@ export const paymentOf = async (bearer: string, orderId: string) =>
     bodyOf(
         await api().get(`/payments/orders/${orderId}`).set('Authorization', bearer),
         GetPaymentByOrder200Response
-    ).data;
+    );
 
 /**
  * A product's counters as staff read them.
@@ -146,7 +146,7 @@ export const stockOf = async (bearer: string, productId: string) => {
     const { onHand, reserved } = bodyOf(
         await api().get(`/products/${productId}/admin`).set('Authorization', bearer),
         GetProductAdmin200Response
-    ).data;
+    );
 
     return { onHand, reserved };
 };
@@ -161,4 +161,4 @@ export const ledgerOf = async (bearer: string, productId: string) =>
     bodyOf(
         await api().get('/inventory/movements').query({ productId }).set('Authorization', bearer),
         ListStockMovements200Response
-    ).data.items.map(({ reason }) => reason);
+    ).items.map(({ reason }) => reason);

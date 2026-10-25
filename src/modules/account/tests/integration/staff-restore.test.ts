@@ -75,10 +75,8 @@ describe('POST /users/{id}/restore on an owner-scheduled account', () => {
 
         const rows = await api().get('/users?pageSize=50').set('Authorization', bearer);
 
-        const {
-            data: { items }
-        } = rows.body as {
-            data: { items: { email: string; purgeAt?: string; actions: { restore: boolean } }[] };
+        const { items } = rows.body as {
+            items: { email: string; purgeAt?: string; actions: { restore: boolean } }[];
         };
         const byEmail = new Map(items.map((row) => [row.email, row]));
         expect(byEmail.get(inside.email)?.purgeAt).toBe(inside.purgeAt?.toISOString());

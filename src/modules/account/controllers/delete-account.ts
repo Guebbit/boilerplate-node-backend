@@ -6,7 +6,6 @@
  */
 
 import type { Request, Response } from 'express';
-import { t } from '@infrastructure/i18n';
 import { userService } from '@modules/users';
 import { accountService } from '../services';
 import { destroySessionCookie } from '../session/cookies';
@@ -43,8 +42,7 @@ export const deleteAccount = (request: Request, response: Response) => {
                             requestedAt: schedule.requestedAt.toISOString(),
                             purgeAt: schedule.purgeAt.toISOString()
                         },
-                        202,
-                        t('account.delete.scheduled')
+                        202
                     );
                 });
         })

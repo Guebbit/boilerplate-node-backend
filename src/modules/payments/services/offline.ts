@@ -136,5 +136,5 @@ export const recordOfflinePayment = async (
     });
 
     // 201 only when the row is new; recording over an unpaid card intent converts that row.
-    return generateSuccess(settled, created ? 201 : 200, t('payments.offline-recorded'));
+    return generateSuccess(settled, created ? 201 : 200);
 };

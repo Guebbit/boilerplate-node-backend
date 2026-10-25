@@ -5,7 +5,6 @@
  */
 
 import type { Request, Response } from 'express';
-import { t } from '@infrastructure/i18n';
 import { ReauthBody } from '@api/schemas.zod';
 import { successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
@@ -55,7 +54,7 @@ export const postReauth = (
             return reissueSession(request, response, id, { amr: result.data.amr }).then(
                 (issued) => {
                     authReauthTotal.inc({ status: 'success' });
-                    successResponse<AuthTokens>(response, issued, 200, t('account.reauth.success'));
+                    successResponse<AuthTokens>(response, issued, 200);
                 }
             );
         })

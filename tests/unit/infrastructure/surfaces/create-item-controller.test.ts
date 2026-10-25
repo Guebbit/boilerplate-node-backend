@@ -76,9 +76,7 @@ describe('createItemController — found/not-found round trip, unaffected by han
         await handler(makeRequest(OBJECT_ID), response);
 
         expect(response.status).toHaveBeenCalledWith(200);
-        expect(response.json).toHaveBeenCalledWith(
-            expect.objectContaining({ success: true, data: { id: OBJECT_ID } })
-        );
+        expect(response.json).toHaveBeenCalledWith({ id: OBJECT_ID });
     });
 
     it('answers 404 when fetch resolves to nothing', async () => {

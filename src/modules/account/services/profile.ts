@@ -195,5 +195,5 @@ export const updateProfile = (
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error))
         .then((result) => {
             if (!result.success) return result;
-            return generateSuccess(result.data, 200, t('account.update.success'));
+            return generateSuccess(result.data, 200);
         });

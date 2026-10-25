@@ -58,7 +58,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ObservabilityHealthResponseEnvelope'
+                                $ref: '#/components/schemas/ObservabilityHealth'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -121,7 +121,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ObservabilityMetricsSummaryResponseEnvelope'
+                                $ref: '#/components/schemas/ObservabilityMetricsSummary'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -173,7 +173,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AuditLogsResponseEnvelope'
+                                $ref: '#/components/schemas/AuditLogsResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -182,48 +182,6 @@ paths:
 components:
     schemas:
         # ---------- observability — the schemas only this module's paths reference. ----------
-        ObservabilityHealthResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/ObservabilityHealth'
-
-        ObservabilityMetricsSummaryResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/ObservabilityMetricsSummary'
-
-        AuditLogsResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/AuditLogsResponse'
-
         ObservabilityHealthTelemetry:
             type: object
             additionalProperties: false

@@ -37,7 +37,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/InventoryLevelsResponseEnvelope'
+                                $ref: '#/components/schemas/InventoryLevelsResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -64,7 +64,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/PreorderLevelsResponseEnvelope'
+                                $ref: '#/components/schemas/PreorderLevelsResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -91,7 +91,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/InventoryLevelEnvelope'
+                                $ref: '#/components/schemas/InventoryLevel'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -127,7 +127,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/InventoryLevelEnvelope'
+                                $ref: '#/components/schemas/InventoryLevel'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -164,7 +164,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/StockMovementsResponseEnvelope'
+                                $ref: '#/components/schemas/StockMovementsResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -199,7 +199,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/InventoryLevelEnvelope'
+                                $ref: '#/components/schemas/InventoryLevel'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -237,7 +237,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/InventoryLevelEnvelope'
+                                $ref: '#/components/schemas/InventoryLevel'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -268,7 +268,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ReservationSweepEnvelope'
+                                $ref: '#/components/schemas/ReservationSweepResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -346,20 +346,6 @@ components:
                 meta:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
 
-        StockMovementsResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/StockMovementsResponse'
-
         # One product's stock, as the admin board shows it. `available` is repeated from the
         # product rather than left to be computed by the client, for the same reason it is
         # derived server-side there: two subtractions in two codebases is one too many.
@@ -391,20 +377,6 @@ components:
                     minimum: 0
                     description: Preorder units outstanding against the limit, paid or not, until stock arrives and is allocated to them.
 
-        InventoryLevelEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/InventoryLevel'
-
         InventoryLevelsResponse:
             type: object
             additionalProperties: false
@@ -416,20 +388,6 @@ components:
                         $ref: '#/components/schemas/InventoryLevel'
                 meta:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
-
-        InventoryLevelsResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/InventoryLevelsResponse'
 
         ReceiptRequest:
             type: object
@@ -472,20 +430,6 @@ components:
                     type: integer
                     minimum: 0
                     description: How many holds this run released.
-
-        ReservationSweepEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/ReservationSweepResponse'
 
         PreorderLevel:
             type: object
@@ -534,20 +478,6 @@ components:
                         $ref: '#/components/schemas/PreorderLevel'
                 meta:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
-
-        PreorderLevelsResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/PreorderLevelsResponse'
 
         BackorderLimitRequest:
             type: object

@@ -8,7 +8,7 @@ It makes repeated reads cheaper without becoming required for the API to work.
 The repo uses the official [`redis`](https://github.com/redis/node-redis) Node client. The work is
 split in two: `src/infrastructure/adapters/cache.ts` is a **byte store with tags** — get, set,
 invalidate by tag, clear — and `src/infrastructure/http/middlewares/cache.ts` is what makes those
-bytes an HTTP response, owning the key, the stored envelope, the TTL policy and the size limit. A
+bytes an HTTP response, owning the key, the stored entry, the TTL policy and the size limit. A
 project that wants to cache something that is not a response uses the adapter directly and inherits
 none of the response rules.
 

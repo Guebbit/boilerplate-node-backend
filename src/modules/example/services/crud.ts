@@ -99,7 +99,7 @@ export const create = (
             });
             return presentForCaller(created, context);
         })
-        .then((example) => generateSuccess(example, 201, t('example.created')));
+        .then((example) => generateSuccess(example, 201));
 };
 
 /**
@@ -187,9 +187,7 @@ const applyUpdate = (
             targetId: String(saved._id),
             metadata
         });
-        return presentForCaller(saved, context).then((shaped) =>
-            generateSuccess(shaped, 200, t('example.updated'))
-        );
+        return presentForCaller(saved, context).then((shaped) => generateSuccess(shaped, 200));
     });
 };
 
@@ -239,7 +237,7 @@ const deleteLoaded = (
                 targetType: 'example',
                 targetId: String(example._id)
             });
-            return generateSuccess(undefined, 200, t('example.deleted'));
+            return generateSuccess(undefined, 200);
         });
 
 /**

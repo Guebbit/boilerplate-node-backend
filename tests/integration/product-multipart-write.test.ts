@@ -89,8 +89,8 @@ describe('writing a product through a multipart body', () => {
         expect(response.status).toBe(201);
         // A number, not the string it arrived as: a 200 storing `'101.5'` would be the same bug
         // with a friendlier status.
-        expect(response.body.data.price).toBe(101.5);
-        expect(response.body.data.imageUrl).toMatch(/^\/images\/.+\.png$/);
+        expect(response.body.price).toBe(101.5);
+        expect(response.body.imageUrl).toMatch(/^\/images\/.+\.png$/);
     });
 
     it('updates a product, decoding the string-transported price', async () => {
@@ -102,7 +102,7 @@ describe('writing a product through a multipart body', () => {
             .send({ price: 10, translations: { en: { title: 'Starts as JSON' } } });
 
         const response = await api()
-            .patch(`/products/${created.body.data.id}`)
+            .patch(`/products/${created.body.id}`)
             .set('Authorization', bearer)
             .field('translations', JSON.stringify({ en: { title: 'Updated through a form' } }))
             .field('price', '42')
@@ -112,7 +112,7 @@ describe('writing a product through a multipart body', () => {
             });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.price).toBe(42);
+        expect(response.body.price).toBe(42);
     });
 
     it('decodes the boolean alongside the number', async () => {
@@ -132,7 +132,7 @@ describe('writing a product through a multipart body', () => {
             });
 
         expect(response.status).toBe(201);
-        expect(response.body.data.active).toBe(false);
+        expect(response.body.active).toBe(false);
     });
 
     it('decodes requiresShipping alongside active', async () => {
@@ -152,7 +152,7 @@ describe('writing a product through a multipart body', () => {
             });
 
         expect(response.status).toBe(201);
-        expect(response.body.data.requiresShipping).toBe(false);
+        expect(response.body.requiresShipping).toBe(false);
     });
 
     it('decodes allowBackorder on a create and on an update', async () => {
@@ -166,14 +166,14 @@ describe('writing a product through a multipart body', () => {
             // The string 'false' is truthy, and an edit form sends this field on every save.
             .field('allowBackorder', 'true');
         const updated = await api()
-            .patch(`/products/${created.body.data.id}`)
+            .patch(`/products/${created.body.id}`)
             .set('Authorization', bearer)
             .field('allowBackorder', 'false');
 
         expect(created.status).toBe(201);
-        expect(created.body.data.allowBackorder).toBe(true);
+        expect(created.body.allowBackorder).toBe(true);
         expect(updated.status).toBe(200);
-        expect(updated.body.data.allowBackorder).toBe(false);
+        expect(updated.body.allowBackorder).toBe(false);
     });
 
     it('defaults active to true when the form omits it', async () => {
@@ -190,7 +190,7 @@ describe('writing a product through a multipart body', () => {
             });
 
         expect(response.status).toBe(201);
-        expect(response.body.data.active).toBe(true);
+        expect(response.body.active).toBe(true);
     });
 
     it('still rejects a price that is not a number at all', async () => {

@@ -73,7 +73,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/${names.plural}ResponseEnvelope'
+                                $ref: '#/components/schemas/${names.plural}Response'
 ${KEYED_ERRORS}
         post:
             tags: [${names.entity}]
@@ -97,7 +97,7 @@ ${KEYED_ERRORS}
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/${names.entity}Envelope'
+                                $ref: '#/components/schemas/${names.entity}'
 ${KEYED_ERRORS}
 
     ${names.basePath}/{id}:
@@ -123,7 +123,7 @@ ${KEYED_ERRORS}
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/${names.entity}Envelope'
+                                $ref: '#/components/schemas/${names.entity}'
 ${KEYED_ERRORS_WITH_NOT_FOUND}
         patch:
             tags: [${names.entity}]
@@ -150,7 +150,7 @@ ${KEYED_ERRORS_WITH_NOT_FOUND}
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/${names.entity}Envelope'
+                                $ref: '#/components/schemas/${names.entity}'
 ${KEYED_ERRORS_WITH_NOT_FOUND}
         delete:
             tags: [${names.entity}]
@@ -163,39 +163,11 @@ ${KEYED_ERRORS_WITH_NOT_FOUND}
             parameters:
                 - $ref: '${ROOT}#/components/parameters/IdPathParam'
             responses:
-                '200': { $ref: '${ROOT}#/components/responses/Success' }
+                '204': { $ref: '${ROOT}#/components/responses/NoContent' }
 ${PATH_ONLY_ERRORS}
 
 components:
     schemas:
-        ${names.entity}Envelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '${ROOT}#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '${ROOT}#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '${ROOT}#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/${names.entity}'
-
-        ${names.plural}ResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '${ROOT}#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '${ROOT}#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '${ROOT}#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/${names.plural}Response'
-
         ${names.plural}Response:
             type: object
             additionalProperties: false

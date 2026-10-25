@@ -44,14 +44,7 @@ export const postCancelOrder = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            return respondWithOrder(
-                response,
-                result.data,
-                authContext,
-                'postCancelOrder',
-                200,
-                result.message
-            );
+            return respondWithOrder(response, result.data, authContext, 'postCancelOrder');
         })
         .catch(catchAs(response, 'postCancelOrder'));
 };

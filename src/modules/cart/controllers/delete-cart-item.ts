@@ -5,7 +5,6 @@
  */
 
 import type { Request, Response } from 'express';
-import { t } from '@infrastructure/i18n';
 import { cartService } from '../services';
 import { successResponse } from '@infrastructure/http/response';
 import type { CartResponse } from '@types';
@@ -33,7 +32,7 @@ export const deleteCartItem = (request: Request<{ productId?: string }>, respons
         .removeItemById(userId, productId, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse<CartResponse>(response, result.data, 200, t('cart.product-removed'));
+            successResponse<CartResponse>(response, result.data, 200);
         })
         .catch(catchAs(response, 'deleteCartItem'));
 };

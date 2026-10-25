@@ -97,7 +97,7 @@ describe('createSearchController — the module overlay', () => {
 });
 
 describe('createSearchController — the answer', () => {
-    it('answers 200 with the search result in a success envelope', async () => {
+    it('answers 200 with the search result as the body', async () => {
         const response = makeResponse();
 
         await createSearchController({
@@ -107,9 +107,7 @@ describe('createSearchController — the answer', () => {
         })(makeRequest({}), response);
 
         expect(response.status).toHaveBeenCalledWith(200);
-        expect(response.json).toHaveBeenCalledWith(
-            expect.objectContaining({ success: true, data: { items: ['a'] } })
-        );
+        expect(response.json).toHaveBeenCalledWith({ items: ['a'] });
     });
 });
 
