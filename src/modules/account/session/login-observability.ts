@@ -11,6 +11,7 @@
 import type { Request } from 'express';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { userService } from '@modules/users';
 import { callerContextOf } from '@infrastructure/http/request';
 import { pseudonymise } from '@infrastructure/security/pseudonymise';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
@@ -56,21 +57,27 @@ export const recordLoginSuccess = (
     userId: string,
     metadata?: Record<string, unknown>
 ): Promise<void> =>
-    isUnrestrictedCaller(userId).then((unrestricted) => {
-        const role = unrestricted ? 'admin' : 'user';
-        const context = callerContextOf(request);
-        authLoginTotal.inc({ status: 'success' });
-        recordAudit(context, {
-            action: accountAuditActions.AUTH_LOGIN,
-            actorUserId: userId,
-            actorRole: role,
-            outcome: 'success',
-            ...(metadata ? { metadata } : {})
-        });
-        emitAnalyticsEvent({
-            ...buildAnalyticsBase(context),
-            distinctId: userId,
-            event: accountAnalyticsEvents.USER_LOGGED_IN,
-            properties: { role }
-        });
-    });
+    Promise.all([isUnrestrictedCaller(userId), userService.findAuthenticatableById(userId)]).then(
+        ([unrestricted, user]) => {
+            const role = unrestricted ? 'admin' : 'user';
+            const context = callerContextOf(request);
+            authLoginTotal.inc({ status: 'success' });
+            recordAudit(context, {
+                action: accountAuditActions.AUTH_LOGIN,
+                actorUserId: userId,
+                actorRole: role,
+                outcome: 'success',
+                ...(metadata ? { metadata } : {})
+            });
+            emitAnalyticsEvent({
+                ...buildAnalyticsBase(context),
+                distinctId: userId,
+                // A login route carries no token, so the context holds the banner header only. The
+                // account's stored answer, yes or no, wins over it (GDPR Art. 7(3)); the header
+                // counts only for an account that never answered.
+                analyticsConsent: user?.analyticsConsent ?? context.analyticsConsent,
+                event: accountAnalyticsEvents.USER_LOGGED_IN,
+                properties: { role }
+            });
+        }
+    );
