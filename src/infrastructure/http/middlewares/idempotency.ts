@@ -103,8 +103,34 @@ const callerKeyOf = (request: Request): string =>
 /** Everything the outcomes below need out of a stored record. */
 type StoredRecord = Pick<
     IdempotencyRecordDocument,
-    'state' | 'fingerprint' | 'status' | 'body' | 'location' | 'updatedAt'
+    | 'state'
+    | 'fingerprint'
+    | 'status'
+    | 'body'
+    | 'location'
+    | 'contentType'
+    | 'headers'
+    | 'updatedAt'
 >;
+
+/**
+ * The headers an answer carries that a retry must see too: the challenge of a 401, the wait of a
+ * 429 or 503, the allowed methods of a 405. Without them a replayed refusal is a bare status.
+ */
+const REPLAYED_HEADERS = ['Retry-After', 'WWW-Authenticate', 'Allow'] as const;
+
+/**
+ * The replayable headers the handler set on this response, by name.
+ *
+ * @param response - the response about to be sent
+ */
+const replayedHeadersOf = (response: Response): Record<string, string> =>
+    Object.fromEntries(
+        REPLAYED_HEADERS.flatMap((name) => {
+            const value = response.getHeader(name);
+            return value === undefined ? [] : [[name, value.toString()]];
+        })
+    );
 
 /**
  * How long an 'in-flight' record holds its key. Past this, the attempt that claimed it is taken
@@ -184,7 +210,10 @@ const armOutcomeCapture = (response: Response, key: string, caller: string): voi
                         status: response.statusCode,
                         body,
                         // Set by `createdResponse` before it calls `json`; absent on every non-201.
-                        location: response.getHeader('location')?.toString()
+                        location: response.getHeader('location')?.toString(),
+                        // Set by `rejectResponse` (problem+json); absent where Express defaults it.
+                        contentType: response.getHeader('content-type')?.toString(),
+                        headers: replayedHeadersOf(response)
                     }
                 }
             )
@@ -238,6 +267,8 @@ const respondToCollision = (
     // Same key, same request: replay verbatim instead of running the handler a second time.
     response.set('Idempotent-Replay', 'true');
     if (existing.location) response.location(existing.location);
+    if (existing.contentType) response.type(existing.contentType);
+    for (const [name, value] of Object.entries(existing.headers ?? {})) response.set(name, value);
     return response.status(existing.status ?? 200).json(existing.body);
 };
 

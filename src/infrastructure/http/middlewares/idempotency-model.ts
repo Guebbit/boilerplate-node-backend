@@ -33,6 +33,10 @@ export interface IdempotencyRecordDocument extends Document {
     body?: unknown;
     /** The `Location` header a 201 sent, replayed with the body so a retry looks like the original. */
     location?: string;
+    /** The `Content-Type` the handler set before answering; absent when Express's JSON default applied. */
+    contentType?: string;
+    /** The replayable headers an answer carried (`Retry-After`, `WWW-Authenticate`, `Allow`), by name. */
+    headers?: Record<string, string>;
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -80,6 +84,13 @@ const idempotencyRecordSchema = new Schema<IdempotencyRecordDocument, Idempotenc
         },
         location: {
             type: String
+        },
+        contentType: {
+            type: String
+        },
+        // Header name -> value; the names come from a fixed list, so `Mixed` holds a flat string map.
+        headers: {
+            type: Schema.Types.Mixed
         }
     },
     {

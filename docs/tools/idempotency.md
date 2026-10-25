@@ -107,6 +107,9 @@ Every finished attempt is stored, a server fault (5xx) included, and replayed fo
 [retention](#retention) window with `Idempotent-Replay: true`. So a retry under the same key
 re-sends the failure without running the handler again; only a new key runs it.
 
+The replay carries the stored status, body, `Content-Type` and the `Location`, `Retry-After`,
+`WWW-Authenticate` and `Allow` headers the original answer had.
+
 This is Stripe's v1 rule. The alternative, dropping the record on a 5xx so the same key retries
 for real, is safe only when every handler is atomic. They are not: a stock receipt commits and
 then a read fails with a 500, so a rerun counts the delivery twice; a partial refund refused
