@@ -18,6 +18,13 @@ import { accessibleFilterFor } from '@kernel/access/query';
 import { deriveBaseLanguage, type LocaleDocument } from '../model';
 import { localeEntryRepository, localeRepository } from '../repository';
 import { backendApp, frontendApp } from '../apps';
+import {
+    NO_ACTIONS,
+    NO_STANDING,
+    languageActions,
+    standingOnRead,
+    type LanguageStanding
+} from './actions';
 
 /**
  * Base languages written right to left, consulted only for STATIC languages — a registered
@@ -77,7 +84,9 @@ export const staticCapability = (tag: string, active = true): LocaleCapability =
     apps: [backendApp()],
     source: LocaleSource.static,
     entryCount: 0,
-    revision: 0
+    revision: 0,
+    // No registered row to switch, edit or delete.
+    actions: NO_ACTIONS
 });
 
 /** How the manifest describes a language that exists as rows. */
@@ -86,7 +95,8 @@ export const dynamicCapability = (
         LocaleDocument,
         'tag' | 'name' | 'nativeName' | 'direction' | 'active' | 'revision'
     >,
-    entryCount: number
+    entryCount: number,
+    standing: LanguageStanding = NO_STANDING
 ): LocaleCapability => ({
     tag: language.tag,
     name: language.name,
@@ -96,7 +106,8 @@ export const dynamicCapability = (
     apps: [frontendApp()],
     source: LocaleSource.dynamic,
     entryCount,
-    revision: language.revision
+    revision: language.revision,
+    actions: languageActions(language, standing)
 });
 
 /**
@@ -108,14 +119,15 @@ export const mergeCapabilities = (
     staticTags: readonly string[],
     dynamicLanguages: readonly LocaleDocument[],
     entryCounts: ReadonlyMap<string, number>,
-    inactiveTags: ReadonlySet<string> = new Set()
+    inactiveTags: ReadonlySet<string> = new Set(),
+    standing: LanguageStanding = NO_STANDING
 ): LocaleCapability[] => {
     const rows = new Map<string, LocaleCapability>();
 
     for (const tag of staticTags) rows.set(tag, staticCapability(tag, !inactiveTags.has(tag)));
 
     for (const language of dynamicLanguages) {
-        const dynamic = dynamicCapability(language, entryCounts.get(language.tag) ?? 0);
+        const dynamic = dynamicCapability(language, entryCounts.get(language.tag) ?? 0, standing);
         rows.set(
             language.tag,
             rows.has(language.tag)
@@ -177,19 +189,38 @@ export const readDynamicTier = (
 export const callerScope = (caller?: Caller) => accessibleFilterFor(caller, 'Locale');
 
 /**
+ * The standing a manifest read may carry for this caller — none unless they are answered outside
+ * the cache every guest shares.
+ *
+ * @param caller - `request.caller`, or `undefined` for an anonymous request
+ */
+export const readStanding = (caller?: Caller): LanguageStanding =>
+    standingOnRead(callerScope, caller);
+
+/**
  * Every language this deployment offers, and what each of them can do.
  *
  * @param scope - which rows this caller may read ({@link callerScope}); inactive languages are
  *   only in reach of the admin surface
+ * @param standing - what the caller may do to a registered language ({@link readStanding})
  */
-export const listCapabilities = (scope?: Record<string, unknown>): Promise<LocaleCapabilities> =>
+export const listCapabilities = (
+    scope?: Record<string, unknown>,
+    standing: LanguageStanding = NO_STANDING
+): Promise<LocaleCapabilities> =>
     readDynamicTier(scope).then(({ languages, entryCounts, inactiveTags }) => ({
         // A language with a deployed dictionary file is always in `listSupportedLocales()`; a
         // visitor's scoped read drops its switched-off row, so the flags come from the unscoped
         // set. It stays in the list as `active: false` rather than vanishing: the frontend bundles
         // its own copy of the language, and only this row tells it to stop offering it. A failed
         // read of the flags is an empty set, and the files are served as before.
-        locales: mergeCapabilities(listSupportedLocales(), languages, entryCounts, inactiveTags),
+        locales: mergeCapabilities(
+            listSupportedLocales(),
+            languages,
+            entryCounts,
+            inactiveTags,
+            standing
+        ),
         default: getDefaultLocale(),
         fallback: getFallbackLocale()
     }));

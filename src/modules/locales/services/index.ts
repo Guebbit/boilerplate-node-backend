@@ -27,10 +27,18 @@ import {
     mergeCapabilities,
     readDynamicTier,
     callerScope,
+    readStanding,
     listCapabilities
 } from './capabilities';
+import { standingOn, languageActions } from './actions';
 import { listApps } from '../apps';
-import { createLanguage, updateLanguage, removeLanguage } from './languages';
+import {
+    createLanguage,
+    updateLanguage,
+    activateLanguage,
+    deactivateLanguage,
+    removeLanguage
+} from './languages';
 import {
     searchEntries,
     getEntry,
@@ -57,7 +65,10 @@ export const localeService = {
     mergeCapabilities,
     readDynamicTier,
     callerScope,
+    readStanding,
     listCapabilities,
+    standingOn,
+    languageActions,
     listApps,
     buildMessageTree,
     findUnsafeKeySegment,
@@ -69,6 +80,8 @@ export const localeService = {
     readLocaleOverlay,
     createLanguage,
     updateLanguage,
+    activateLanguage,
+    deactivateLanguage,
     removeLanguage,
     searchEntries,
     getEntry,

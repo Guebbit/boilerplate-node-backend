@@ -41,7 +41,10 @@ export const createLocale = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            const language = presentLocale(result.data);
+            const language = presentLocale(
+                result.data,
+                localeService.languageActions(result.data, localeService.standingOn(request.caller))
+            );
             return createdResponse<Language>(response, language, `/locales/${language.tag}`);
         })
         .catch(catchAs(response, 'createLocale'));

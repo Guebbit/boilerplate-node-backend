@@ -10,6 +10,8 @@
 export const localeAuditActions = {
     ADMIN_LOCALE_CREATED: 'admin.locale.created',
     ADMIN_LOCALE_UPDATED: 'admin.locale.updated',
+    ADMIN_LOCALE_ACTIVATED: 'admin.locale.activated',
+    ADMIN_LOCALE_DEACTIVATED: 'admin.locale.deactivated',
     ADMIN_LOCALE_DELETED: 'admin.locale.deleted',
     ADMIN_LOCALE_ENTRY_CREATED: 'admin.locale_entry.created',
     ADMIN_LOCALE_ENTRY_UPDATED: 'admin.locale_entry.updated',

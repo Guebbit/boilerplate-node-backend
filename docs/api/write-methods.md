@@ -297,6 +297,11 @@ A create body declares no `'null'` type — there is nothing to clear yet, so `n
 | 415 | a body in a type the operation does not declare |
 | 422 | the body breaks the contract or a domain rule |
 
+An action endpoint (`POST …/activate`) whose target state is already reached is refused, not
+answered with a silent 200: **409** with `<RESOURCE>_ALREADY_<STATE>` and a plain message, as
+Google AIP-216 asks for a state that cannot be moved to, kept at 409 because RFC 9110 §15.5.10
+defines it as a conflict with the current state. `DELETE` stays idempotent (RFC 9110 §9.2.2).
+
 The app-wide ones (400, 413, 429, 503) come from `x-app-level-responses` — see
 [Regenerating](./regenerating.md).
 
@@ -421,7 +426,7 @@ anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` 
 | `POST /account/signup` | a refused address still gets a 201 and the same `Location: /account`, and nothing is created | antibot: the refusal must look like a success |
 | `PUT /cart/shipping-method`, `PUT /locales/{locale}/apps/{app}/entries/{entryId}`, `PUT /account/addresses/{id}/default` | no PATCH | one field, or none; a PATCH would say exactly what the PUT says |
 | `POST /payments`, `POST /payments/orders/{id}/offline` | 200 when they refresh or convert the order's one payment row | one payment per order is a database fact |
-| `PUT`/`PATCH /locales/{locale}/apps/{app}/entries` | the app is a path segment | a PUT replaces exactly what the GET on the same URI lists |
+| `PUT`/`PATCH /locales/{locale}/apps/{app}/entries` | the app is a path segment; the body is `{ entries: { <key>: text } }`, and under PATCH a `null` deletes its key | a PUT replaces exactly what the GET on the same URI lists; the map is a real merge patch (RFC 7396) |
 
 ## How it is kept true
 

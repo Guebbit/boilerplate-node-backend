@@ -203,7 +203,8 @@ describe('mergeCapabilities', () => {
                 apps: [FRONTEND],
                 source: LocaleSource.dynamic,
                 entryCount: 12,
-                revision: 3
+                revision: 3,
+                actions: { update: false, activate: false, deactivate: false, delete: false }
             }
         ]);
     });

@@ -139,10 +139,7 @@ describe('a language that exists only as database rows', () => {
         const id = await givenSpanishProduct('Lamp', 'Lámpara');
         const { bearer } = await authenticateAs('admin');
 
-        const off = await api()
-            .patch('/locales/es')
-            .set('Authorization', bearer)
-            .send({ active: false });
+        const off = await api().post('/locales/es/deactivate').set('Authorization', bearer);
         const response = await api().get(`/products/${id}`).set('Accept-Language', 'es');
 
         expect(off.status).toBe(200);
@@ -153,9 +150,9 @@ describe('a language that exists only as database rows', () => {
     it('is picked again the moment an admin switches it back on', async () => {
         const id = await givenSpanishProduct('Lamp', 'Lámpara');
         const { bearer } = await authenticateAs('admin');
-        await api().patch('/locales/es').set('Authorization', bearer).send({ active: false });
+        await api().post('/locales/es/deactivate').set('Authorization', bearer);
 
-        await api().patch('/locales/es').set('Authorization', bearer).send({ active: true });
+        await api().post('/locales/es/activate').set('Authorization', bearer);
         const response = await api().get(`/products/${id}`).set('Accept-Language', 'es');
 
         expect(response.headers['content-language']).toBe('es');
@@ -197,7 +194,7 @@ describe('a language with a deployed file that an admin switches off', () => {
         const before = await api()
             .get(`/products/${String(product._id)}`)
             .set('Accept-Language', 'it');
-        await api().patch('/locales/it').set('Authorization', bearer).send({ active: false });
+        await api().post('/locales/it/deactivate').set('Authorization', bearer);
         const after = await api()
             .get(`/products/${String(product._id)}`)
             .set('Accept-Language', 'it');
