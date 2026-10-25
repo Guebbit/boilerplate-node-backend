@@ -6,7 +6,7 @@
  * together over the real app: for every role × order status × act, the flag is `true` exactly when
  * the door answers a success.
  *
- * Acts: cancel, start, override, withdraw, pay, recordPayment, delete, hardDelete. Each case gets its own order,
+ * Acts: cancel, process, override, withdraw, pay, recordPayment, delete, hardDelete. Each case gets its own order,
  * because the door writes. The withdrawal is also swept over the kinds of order that differ in what
  * it takes: ordinary, mixed with a made-to-order line, and made only of made-to-order goods.
  *
@@ -135,10 +135,10 @@ const ACTS: Act[] = [
             api().post(`/orders/${orderId}/cancel`).set('Authorization', caller.bearer).send({})
     },
     {
-        name: 'start',
-        flag: (actions) => actions.start,
+        name: 'process',
+        flag: (actions) => actions.process,
         door: (caller, orderId) =>
-            api().post(`/delivery/orders/${orderId}/start`).set('Authorization', caller.bearer)
+            api().post(`/orders/${orderId}/process`).set('Authorization', caller.bearer)
     },
     {
         name: 'withdraw',

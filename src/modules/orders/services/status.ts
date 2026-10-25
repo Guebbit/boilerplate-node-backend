@@ -33,7 +33,7 @@ import {
 import { withdrawalPeriodDays } from '../config';
 
 /** The timeline row each system move leaves. */
-const MOVE_ROW = { start: 'processing', ship: 'shipped' } as const;
+const MOVE_ROW = { process: 'processing', ship: 'shipped' } as const;
 
 /**
  * Write a move and announce it: inside the caller's transaction when it has one (the caller wakes
@@ -67,7 +67,7 @@ const announceMove = (
  */
 const markSystemMove = (
     orderId: string,
-    event: 'start' | 'ship',
+    event: 'process' | 'ship',
     session?: ClientSession,
     actor?: string | null
 ): Promise<OrderDocument | null> => {
@@ -162,7 +162,7 @@ export const markPaid = (
 
 /**
  * Report that fulfilment started on a paid order. `delivery`'s own door for this move —
- * `POST /delivery/orders/{id}/start` — is the one caller; the admin override
+ * `POST /orders/{id}/process` — is the one caller; the admin override
  * (`orders/services/override.ts`'s `overrideStatus`) reaches `processing` too, but does not call
  * this function — `applyOverride` writes that move itself.
  * @param orderId - the order fulfilment started on
@@ -175,7 +175,7 @@ export const markProcessing = (
     orderId: string,
     session?: ClientSession,
     actor?: string | null
-): Promise<OrderDocument | null> => markSystemMove(orderId, 'start', session, actor);
+): Promise<OrderDocument | null> => markSystemMove(orderId, 'process', session, actor);
 
 /**
  * Report that the last unit left: nothing remains to ship anywhere. `delivery`'s shipping act

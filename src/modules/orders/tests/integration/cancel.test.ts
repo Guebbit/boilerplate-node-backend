@@ -721,7 +721,7 @@ describe('withActions', () => {
             pay: true,
             recordPayment: false,
             correctAddress: false,
-            start: false,
+            process: false,
             override: [],
             invoice: false,
             withdraw: true,
@@ -744,7 +744,7 @@ describe('withActions', () => {
             pay: false,
             recordPayment: false,
             correctAddress: false,
-            start: false,
+            process: false,
             override: [],
             invoice: false,
             withdraw: false,
@@ -765,23 +765,23 @@ describe('withActions', () => {
         expect(admin.actions?.pay).toBe(false);
     });
 
-    it("gives the warehouse `start` on a paid order, without `update:Order`'s admin column", async () => {
+    it("gives the warehouse `process` on a paid order, without `update:Order`'s admin column", async () => {
         // Holds `start:Shipment` but not `update:Order` — `actorOf` alone would read
-        // this caller as a plain customer, which must not decide `start`.
+        // this caller as a plain customer, which must not decide `process`.
         const user = await createUser();
         const order = await seedOrder(user);
         const paid = await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'paid');
 
         const body = await orderService.withActions(paid!, asWarehouse());
 
-        expect(body.actions.start).toBe(true);
+        expect(body.actions.process).toBe(true);
         expect(body.actions.override).toEqual([]);
     });
 
-    it("never offers `start` once already `processing` — an echo write isn't a fresh offer", async () => {
+    it("never offers `process` once already `processing` — an echo write isn't a fresh offer", async () => {
         // The regression a raw `canTransition(status, target, 'system')` would reintroduce: that
         // check answers true for a write onto the SAME status (legal for everything but `paid`),
-        // which would keep `start` true forever once first reached.
+        // which would keep `process` true forever once first reached.
         const user = await createUser();
         const order = await seedOrder(user);
         const processing = await orderRepository.updateStatusIfIn(
@@ -792,7 +792,7 @@ describe('withActions', () => {
 
         const body = await orderService.withActions(processing!, asWarehouse());
 
-        expect(body.actions.start).toBe(false);
+        expect(body.actions.process).toBe(false);
     });
 
     it('withdraws the cancel once anything has shipped, but keeps the withdrawal', async () => {

@@ -50,7 +50,7 @@ The **set** of statuses is not its business. `OrderStatus` is generated from `op
 `@api/models`, so the six values are contract-first and single-sourced. What the enum cannot carry
 is the **edges** between them, and the **actor** each edge belongs to.
 
-The table is keyed by **event**, not by status: `pay`, `start`, `ship`, `deliver`,
+The table is keyed by **event**, not by status: `pay`, `process`, `ship`, `deliver`,
 `fulfilmentComplete` (the digital `processing -> delivered` edge, also a remainder cancel that
 completes the order), `expire`, `cancel` and `cancelInFulfilment`. Each entry carries its `from`
 set, its `to` and its actors, so a service names the event and the conditional write is handed the
@@ -149,7 +149,7 @@ actor into a second table would let the two disagree, so it rides on the edge it
 `system` is not a privilege level above `admin`. It is **narrower**: the moves an operator may never
 make by hand, because something outside the application has to have happened first. Money landing
 is one; fulfilment starting (`paid → processing`) is the other, recorded through `delivery`'s own
-start action (`POST /delivery/orders/{orderId}/start`) — see "Action endpoints execute" below.
+start action (`POST /orders/{id}/process`) — see "Action endpoints execute" below.
 
 ### What the table prevents
 
@@ -187,7 +187,7 @@ lifecycle edge of its own, they all ask.
 | `orders/services/cancel.ts` — the cancel doors                                          | `statusesLeadingTo(cancelled, cause.by)`                                                                                                        |
 | `orders/services/status.ts` — `markPaid`/`markProcessing`/`markShipped`/`markDelivered` | the named event's own `from` and `to` (`ORDER_EVENTS.ship`, ...), read off the table rather than restated as a literal                          |
 | `payments/services/intent.ts`/`offline.ts`/`settlement.ts`/`view.ts`                    | `isPayable(status)` — asks `orders` the one question every payment door needs, never the table directly (see "One function, three doors" below) |
-| `delivery/services/*`, `returns/services/{cancel-right,withdraw}.ts`                    | `canStartFulfilment`, `canShip`, `canRecordArrival`, `isAwaitingGoods`, `hasShopStarted`                                                        |
+| `delivery/services/*`, `returns/services/{cancel-right,withdraw}.ts`                    | `canProcessOrder`, `canShip`, `canRecordArrival`, `isAwaitingGoods`, `hasShopStarted`                                                           |
 | `orders/services/override.ts`                                                           | `canOverrideTo(from, to)` — its OWN rule, deliberately not `canTransition`: an override exists to skip the gate the ordinary table enforces     |
 
 Every cancel door asks as its cause's actor, because the table answers differently for each: a customer

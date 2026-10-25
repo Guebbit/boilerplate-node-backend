@@ -80,23 +80,24 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /delivery/orders/{orderId}/start:
+    /orders/{id}/process:
         post:
             tags: [Delivery]
-            summary: Begin fulfilling a paid order
+            summary: Process a paid order
             description: >-
-                Reports that fulfilment has started — the order moves `paid → processing`. No
+                Reports that fulfilment has started — the order moves `paid → processing`. The verb names
+                the status it reaches, as `cancel` does; the module behind it is `delivery`'s. No
                 shipment exists yet at this point; that comes later, at
                 `POST /delivery/fulfillment-orders/{id}/shipments`. Narrower than `update:Order` on
                 purpose — `start:Shipment` lets the warehouse begin work on an order without
                 being handed the run of the order record. Refuses an order that is not `paid`
                 with a named 409.
-            operationId: startFulfilment
+            operationId: processOrder
             security:
                 - bearerAuth: []
             parameters:
-                - $ref: '../orders/openapi.yaml#/components/parameters/OrderIdPathParam'
-                  description: The order to start fulfilling
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                  description: The order to process
             responses:
                 '200':
                     description: The order, now `processing`

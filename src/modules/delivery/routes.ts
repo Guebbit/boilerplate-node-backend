@@ -17,7 +17,6 @@ import {
 import { noStore } from '@infrastructure/http/middlewares/cache';
 import { getShippingMethods } from './controllers/get-shipping-methods';
 import { getOrderFulfillment } from './controllers/get-order-fulfillment';
-import { postStartOrder } from './controllers/post-start-order';
 import { postShipFulfillmentOrder } from './controllers/post-ship-fulfillment-order';
 import { postDeliverShipment } from './controllers/post-deliver-shipment';
 import { postFulfillFulfillmentOrder } from './controllers/post-fulfill-fulfillment-order';
@@ -103,16 +102,6 @@ router.get(
     isAuth,
     requirePermission('read', 'Order'),
     getFulfillmentOrder
-);
-
-// POST /delivery/orders/:orderId/start — begins fulfilment; moves the order paid -> processing.
-// No `forced` variant, so no step-up guard: the admin override is the other reachable path here.
-router.post(
-    '/orders/:orderId/start',
-    getAuth,
-    isAuth,
-    requirePermission('start', 'Shipment'),
-    postStartOrder
 );
 
 // POST /delivery/fulfillment-orders/:id/shipments — cuts a shipment; the order moves processing ->

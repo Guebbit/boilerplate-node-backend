@@ -30,7 +30,7 @@ import {
     ReceiveReturn200Response,
     ShipFulfillmentOrder201Response,
     Signup201Response,
-    StartFulfilment200Response
+    ProcessOrder200Response
 } from '@api/schemas.zod';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs, authenticateAsRole, loginBearer } from '@tests/http';
@@ -129,8 +129,8 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
 
     // Staff start, ship and deliver the whole order.
     bodyOf(
-        await api().post(`/delivery/orders/${order.id}/start`).set('Authorization', staff),
-        StartFulfilment200Response
+        await api().post(`/orders/${order.id}/process`).set('Authorization', staff),
+        ProcessOrder200Response
     );
     const [fulfillmentOrder] = bodyOf(
         await api().get(`/delivery/orders/${order.id}`).set('Authorization', staff),

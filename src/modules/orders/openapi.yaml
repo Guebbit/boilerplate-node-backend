@@ -1223,7 +1223,7 @@ components:
                     cancel,
                     pay,
                     recordPayment,
-                    start,
+                    process,
                     override,
                     correctAddress,
                     invoice,
@@ -1261,10 +1261,10 @@ components:
                         caller: an operator recording money that arrived another way. True while
                         the order is still awaiting payment and the caller holds the key that records
                         one. A buyer's own step is `pay`; a buyer who is staff may also record.
-                start:
+                process:
                     type: boolean
                     description: >-
-                        Whether `POST /delivery/orders/{id}/start` would be accepted for this
+                        Whether `POST /orders/{id}/process` would be accepted for this
                         caller. `paid → processing` is `system`-only in the lifecycle, reached
                         only by reporting the fact through `delivery`'s own door.
                 override:

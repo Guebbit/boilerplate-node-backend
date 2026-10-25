@@ -120,7 +120,7 @@ const actionsFor = (orderId: string, role: string, callerId: string) =>
             cancel: actions?.cancel,
             pay: actions?.pay,
             recordPayment: actions?.recordPayment,
-            start: actions?.start,
+            process: actions?.process,
             override: actions?.override
         }));
 
@@ -168,7 +168,7 @@ describe('what an order offers each caller — what a client renders', () => {
             actionsFor(String(staffs._id), 'manager', STAFF_ID)
         ]);
 
-        expect([onCustomer.start, onStaff.start]).toEqual([true, true]);
+        expect([onCustomer.process, onStaff.process]).toEqual([true, true]);
     });
 
     // The operator's "record money by hand" door: pay is the buyer's, this one is not.

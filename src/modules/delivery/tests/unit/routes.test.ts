@@ -8,6 +8,7 @@
 
 import { routeSignatures, routeTable, guardsOn } from '@tests/routes';
 import { router } from '@modules/delivery/routes';
+import { orderRouter } from '@modules/delivery/order-routes';
 
 /** Every door that writes a fulfillment order or a shipment. */
 const WRITES = [
@@ -29,7 +30,6 @@ describe('delivery routes', () => {
             'GET /fulfillment-orders/release-date-impact',
             'GET /fulfillment-orders/restock-date-impact',
             'GET /fulfillment-orders/:id',
-            'POST /orders/:orderId/start',
             'POST /fulfillment-orders/:id/shipments',
             'POST /fulfillment-orders/:id/fulfill',
             'POST /fulfillment-orders/:id/hold',
@@ -56,8 +56,9 @@ describe('delivery routes', () => {
         expect(guards).not.toContain('requirePermissionGuard');
     });
 
-    it('restricts starting fulfilment to an operator holding start:Shipment', () => {
-        expect(guardsOn(router, 'POST /orders/:orderId/start')).toContain('requirePermissionGuard');
+    it('mounts the process door under /orders, restricted to an operator holding start:Shipment', () => {
+        expect(routeSignatures(orderRouter)).toEqual(['POST /:id/process']);
+        expect(guardsOn(orderRouter, 'POST /:id/process')).toContain('requirePermissionGuard');
     });
 
     it.each(WRITES)('restricts %s to an operator', (signature) => {

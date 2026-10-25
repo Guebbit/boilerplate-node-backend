@@ -28,6 +28,7 @@ import { PREORDER_ALLOCATED } from '@modules/inventory';
 import { PRODUCT_RELEASE_DATE_CHANGED, PRODUCT_RESTOCK_DATE_CHANGED } from '@modules/products';
 import { OrderStatus } from '@types';
 import { router } from './routes';
+import { orderRouter } from './order-routes';
 import { deliveryConfig } from './config';
 import { deliveryService } from './services';
 import { presentExportFulfillmentOrder, presentExportShipment } from './presenter';
@@ -77,7 +78,11 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
 /** This module's manifest entry: routes, the export sections, event wiring and locales. */
 export default {
     name: 'delivery',
-    mounts: [{ basePath: '/delivery', routes: router }],
+    mounts: [
+        { basePath: '/delivery', routes: router },
+        // `POST /orders/{id}/process`: the order's own URL, delivery's own key.
+        { basePath: '/orders', routes: orderRouter }
+    ],
     jobs: deliveryJobs,
     config: [deliveryConfig.slice],
     publicEvents,

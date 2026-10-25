@@ -89,7 +89,7 @@ it('delivers every event once, signed, in causal order', async () => {
     steps.push(await arrivals());
 
     // Shipped and delivered by staff.
-    await api().post(`/delivery/orders/${order.id}/start`).set('Authorization', admin).expect(200);
+    await api().post(`/orders/${order.id}/process`).set('Authorization', admin).expect(200);
     const [fulfillmentOrder] = bodyOf(
         await api().get(`/delivery/orders/${order.id}`).set('Authorization', admin),
         GetFulfillmentByOrder200Response

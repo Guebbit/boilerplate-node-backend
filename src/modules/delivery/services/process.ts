@@ -12,7 +12,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { canStartFulfilment, orderService } from '@modules/orders';
+import { canProcessOrder, orderService } from '@modules/orders';
 import type { AuthContext, CallerContext, Order, ShippingMethodsResponse } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { deliveryAuditActions } from '../audit';
@@ -37,7 +37,7 @@ export const listMethods = (): ResponseSuccess<ShippingMethodsResponse> => {
     });
 };
 
-/** The refusal {@link startFulfilment} answers when the order is not `paid`. */
+/** The refusal {@link processOrder} answers when the order is not `paid`. */
 const notPaid = (): ResponseReject =>
     generateReject(409, [{ code: ERROR_CODES.ORDER_NOT_PAID, message: t('delivery.not-paid') }]);
 
@@ -52,7 +52,7 @@ const notPaid = (): ResponseReject =>
  * @param context - the caller, for the audit entry — a narrower, already-resolved shape than
  *   `authContext`, which is why both travel here rather than one being derived from the other
  */
-export const startFulfilment = (
+export const processOrder = (
     orderId: string,
     authContext: AuthContext | undefined,
     context: CallerContext
@@ -60,7 +60,7 @@ export const startFulfilment = (
     orderService.getById(orderId).then((order) => {
         if (!order) return generateReject(404, [t('delivery.order-not-found')]);
 
-        if (!canStartFulfilment(order.status)) return notPaid();
+        if (!canProcessOrder(order.status)) return notPaid();
 
         // The caller's id lands on the timeline row, so it names the operator and not the system.
         return ensureFulfillmentOrders(orderId)

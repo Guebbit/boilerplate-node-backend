@@ -186,7 +186,7 @@ describe('GET /delivery/orders/{orderId}', () => {
     });
 });
 
-describe('POST /delivery/orders/{orderId}/start', () => {
+describe('POST /orders/{orderId}/process', () => {
     it('matches the contract and moves a paid order to processing', async () => {
         const { user, bearer } = await authenticateAs('admin');
         const product = await createProduct();
@@ -195,7 +195,7 @@ describe('POST /delivery/orders/{orderId}/start', () => {
         });
 
         const response = await api()
-            .post(`/delivery/orders/${String(order._id)}/start`)
+            .post(`/orders/${String(order._id)}/process`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
@@ -210,7 +210,7 @@ describe('POST /delivery/orders/{orderId}/start', () => {
         const order = await createOrder(user, [toOrderItem(product, 1)]);
 
         const response = await api()
-            .post(`/delivery/orders/${String(order._id)}/start`)
+            .post(`/orders/${String(order._id)}/process`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(409);

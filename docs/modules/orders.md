@@ -274,7 +274,7 @@ module announcing and a sibling reacting.
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
     P["pending<br/><i>created · units held</i>"] -->|"payments confirms<br/>(system)"| PA["paid<br/><i>units committed</i>"]
-    PA -->|"system, via<br/>delivery's start door"| PR["processing"]
+    PA -->|"system, via<br/>delivery's process door"| PR["processing"]
     PR -->|"system: the shipment that leaves<br/>nothing remaining"| SH["shipped"]
     SH -->|"system: the last shipment arrives"| DE["delivered"]
     PR -->|"system: a digital fulfilment, or a<br/>remainder cancelled after every<br/>shipment arrived — both moves at once"| DE
@@ -302,7 +302,7 @@ override all ASK for a move, never assign the field themselves. See
 | Move                                        | Who asks                                                                         | Through                                                                                                                                                              |
 | ------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pending` → `paid`                          | `system`                                                                         | `payments`' settlement, on confirm                                                                                                                                   |
-| `paid` → `processing`                       | `system`                                                                         | `POST /delivery/orders/{id}/start`, `start:Shipment` — or `POST /orders/{id}/status-override`, `override:Order`                                                      |
+| `paid` → `processing`                       | `system`                                                                         | `POST /orders/{id}/process`, `start:Shipment` — or `POST /orders/{id}/status-override`, `override:Order`                                                             |
 | `processing` → `shipped`                    | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/shipments` — only the shipment that leaves **nothing** remaining                                                             |
 | `shipped` → `delivered`                     | `system`                                                                         | `POST /delivery/shipments/{id}/deliver` — only the last arrival, with nothing left to ship                                                                           |
 | `processing` → `delivered`                  | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/fulfill` (digital), or a remainder cancel after every shipment arrived — `markFulfilmentComplete`, the one named double move |
@@ -378,7 +378,7 @@ name. Two modes, both requiring a `reason`, both writing a `status_overridden` r
 [timeline](#the-timeline) (who, when, from → to, mode, reason):
 
 - **Forced** — `delivery`'s ship and deliver doors accept `forced: true`. The regular operation still
-  runs; the order skips a step (ship from `paid` without `start`, deliver without a carrier
+  runs; the order skips a step (ship from `paid` without `process`, deliver without a carrier
   confirmation) and leaves a history row through `recordForcedFulfilment` — a row **without** a move of
   its own. It never lands on `paid` (that stays `system`-only, absolute), and never ships from `on_hold`.
 - **Status-only** — `POST /orders/{id}/status-override` with `{ to, reason }` moves the status
