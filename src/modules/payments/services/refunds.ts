@@ -50,11 +50,18 @@ import { holds } from '@kernel/ability';
 import { auditForbidden } from '@infrastructure/observability/forbidden';
 import { ownOrderFlag } from '@modules/access';
 import { paymentsAuditActions } from '../audit';
-import { PaymentProviderError, providerNamed } from '../providers';
+import { PaymentProviderError } from '../providers';
+import { paymentProviderRegistry } from '../providers/registry';
+import { paymentEffectRetryMinutes } from '../config';
 import { paymentRepository } from '../repository';
 import { PAYMENT_REFUNDED } from '../events';
 import type { PaymentDocument, RefundLine, RefundRecord, RefundSettlement } from '../model';
-import { isHandRecorded, OPEN_REFUND_STATUSES, REFUNDABLE_PAYMENT_STATUS } from '../domain';
+import {
+    isHandRecorded,
+    nextRefundAttemptAt,
+    OPEN_REFUND_STATUSES,
+    REFUNDABLE_PAYMENT_STATUS
+} from '../domain';
 import { callerScope } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
 import { paymentNotFound, RefundLeftOpenError } from './errors';
@@ -117,12 +124,19 @@ const MAX_ERROR_LENGTH = 500;
  * @param refund - the record that failed, for the log line
  */
 const failureReasonOf = (error: unknown, refund: RefundRecord): RefundFailureReason => {
+    const reason = error instanceof PaymentProviderError ? error.code : RefundFailureReason.unknown;
+    // A timeout or a 5xx is no answer about THIS refund: the wording must not say it was refused.
+    const unclear =
+        reason === RefundFailureReason.unknown ||
+        reason === RefundFailureReason.provider_unavailable;
     logger.warn({
-        message: 'The provider refused a refund.',
+        message: unclear
+            ? 'No answer from the provider for a refund.'
+            : 'The provider refused a refund.',
         refundId: String(refund._id),
         error: extractErrorMessage(error, String(error)).slice(0, MAX_ERROR_LENGTH)
     });
-    return error instanceof PaymentProviderError ? error.code : RefundFailureReason.unknown;
+    return reason;
 };
 
 /**
@@ -248,12 +262,20 @@ export const openRefund = (
         amount: toDecimalAmount(amount, currency),
         currency,
         status: 'pending' as const,
+        // Stamped here, not left to mongoose: this exact object is what the caller sends to the
+        // provider, and the port reads `createdAt` to decide whether a key has expired.
+        createdAt: new Date(),
         reason: request.reason,
         ...(request.returnId ? { returnId: request.returnId } : {}),
         ...(request.lines ? { lines: request.lines, shipping: request.shipping ?? 0 } : {}),
         // One key per RECORD, not per payment: two different partial refunds must not be taken
         // for one by the provider, while a retry of this one must be.
-        idempotencyKey: `refund:${String(paymentId)}:${String(refundId)}`
+        idempotencyKey: `refund:${String(paymentId)}:${String(refundId)}`,
+        // The fence token of the first attempt, when this request sends the record itself: a
+        // settle or a failure only lands while the record still carries it, so a claim by the
+        // sweep supersedes this attempt. A record opened inside a caller's transaction is sent
+        // after it commits, through a claim, and carries none until then.
+        ...(session ? {} : { attemptedAt: new Date() })
     };
     const newTotal = addMoney(toMinorUnits(amountRefunded, currency), amount);
 
@@ -283,9 +305,7 @@ export const openRefund = (
             );
 
     return (session ? write(session) : withTransaction(write)).then((updated) => {
-        // `createdAt` is stamped by mongoose on insert; the record this write appended is
-        // otherwise exactly `refund` — one cast for the one field the compiler cannot see.
-        if (updated) return { payment: updated, refund: refund as RefundRecord };
+        if (updated) return { payment: updated, refund };
         // Inside a caller's transaction the payment is the one that caller just wrote: a miss is
         // final, and a re-read outside the transaction would see something older.
         if (session) return null;
@@ -501,8 +521,8 @@ const isNewFailure = (refund: RefundRecord, failureReason: RefundFailureReason):
 /**
  * Record that the provider refused a refund: the record goes `failed` (counting the attempt) and,
  * when the refusal is news ({@link isNewFailure}), the order's timeline says so, in one
- * transaction. Only an open record can fail, so a late error never walks back a refund that
- * already succeeded, and writes no row.
+ * transaction. Only the current attempt can fail it, so a late error never walks back a refund
+ * that already succeeded or overwrites a newer attempt, and writes no row.
  *
  * @param payment - the payment
  * @param refund - the record the provider refused, as it was read
@@ -512,10 +532,26 @@ const recordRefundFailure = (
     payment: PaymentDocument,
     refund: RefundRecord,
     failureReason: RefundFailureReason
-): Promise<void> =>
-    withTransaction((session) =>
+): Promise<void> => {
+    const attempts = (refund.attempts ?? 0) + 1;
+    return withTransaction((session) =>
         paymentRepository
-            .failRefund(String(payment._id), String(refund._id), failureReason, session)
+            .failRefund(
+                String(payment._id),
+                String(refund._id),
+                {
+                    reason: failureReason,
+                    // `attemptedAt` is always there on a record this code opened or claimed.
+                    attempt: refund.attemptedAt!,
+                    nextAttemptAt: nextRefundAttemptAt(
+                        failureReason,
+                        attempts,
+                        paymentEffectRetryMinutes(),
+                        new Date()
+                    )
+                },
+                session
+            )
             .then((failed) =>
                 failed && isNewFailure(refund, failureReason)
                     ? orderService.appendTimeline(
@@ -529,6 +565,7 @@ const recordRefundFailure = (
                     : undefined
             )
     );
+};
 
 /**
  * Ask the provider to return one refund's money, and record its answer. A refusal marks the record
@@ -545,21 +582,50 @@ const sendToProvider = (
     refund: RefundRecord,
     providerRef: string,
     context: CallerContext | undefined
-): Promise<PaymentDocument | null> =>
-    providerNamed(payment.provider)
-        .refund(
-            providerRef,
-            { amount: refund.amount, currency: refund.currency },
-            { idempotencyKey: refund.idempotencyKey }
+): Promise<PaymentDocument | null> => {
+    const refuse = (error: unknown, reason: RefundFailureReason): Promise<never> =>
+        recordRefundFailure(payment, refund, reason).then(() => {
+            throw new RefundLeftOpenError(error);
+        });
+
+    // The adapter code may be gone (a provider retired from the deployment): nothing was asked,
+    // so the money provably did not move, and asking again will not change that.
+    const provider = paymentProviderRegistry.resolve(payment.provider);
+    if (!provider) {
+        logger.warn({
+            message: `No payment provider "${payment.provider}" is registered; a refund on it cannot be sent.`,
+            refundId: String(refund._id)
+        });
+        return refuse(
+            new Error(`Unknown payment provider: ${payment.provider}`),
+            RefundFailureReason.provider_removed
+        );
+    }
+
+    // Inside a chain: an adapter that throws before returning a promise is still a refusal.
+    return Promise.resolve()
+        .then(() =>
+            provider.refund(
+                providerRef,
+                { amount: refund.amount, currency: refund.currency },
+                {
+                    idempotencyKey: refund.idempotencyKey,
+                    refundId: String(refund._id),
+                    createdAt: refund.createdAt
+                }
+            )
         )
         .then(
             ({ refundRef }) =>
-                settleRefund(payment, refund, { providerRefundRef: refundRef }, context),
-            (error: unknown) =>
-                recordRefundFailure(payment, refund, failureReasonOf(error, refund)).then(() => {
-                    throw new RefundLeftOpenError(error);
-                })
+                settleRefund(
+                    payment,
+                    refund,
+                    { providerRefundRef: refundRef, attempt: refund.attemptedAt },
+                    context
+                ),
+            (error: unknown) => refuse(error, failureReasonOf(error, refund))
         );
+};
 
 /**
  * Carry one open refund to its end: log the impossible row, or ask the provider. A hand-paid
@@ -589,14 +655,16 @@ const attemptRefund = (
             orderId: String(payment.orderId)
         });
         // Stryker restore all
-        return settleRefund(payment, refund, {}, context, 'failure');
+        return settleRefund(payment, refund, { attempt: refund.attemptedAt }, context, 'failure');
     }
 
     return sendToProvider(payment, refund, payment.providerRef, context);
 };
 
 /**
- * Carry one record through, treating the provider's refusal as that record's own business: it is
+ * Take a record for sending and send it. The claim is one conditional write: it fails for a record
+ * that is final, still waiting out its retry delay, or already in the hands of a live attempt, so
+ * two callers never send the same record at once. A refusal is the record's own business: it is
  * already `failed` and open for the sweep, so it must not stop the records behind it.
  *
  * @param payment - the payment as the previous record left it
@@ -608,11 +676,25 @@ const attemptKeepingGoing = (
     payment: PaymentDocument,
     refund: RefundRecord,
     context: CallerContext | undefined
-): Promise<PaymentDocument | null> =>
-    attemptRefund(payment, refund, context).catch((error: unknown) => {
-        if (error instanceof RefundLeftOpenError) return null;
-        throw error;
-    });
+): Promise<PaymentDocument | null> => {
+    // Money recorded by hand has no provider to ask, and nothing here may declare it returned.
+    if (isHandRecorded(payment)) return Promise.resolve(null);
+
+    const now = new Date();
+    return paymentRepository
+        .claimRefund(String(payment._id), String(refund._id), {
+            now,
+            staleBefore: new Date(now.getTime() - paymentEffectRetryMinutes() * 60_000)
+        })
+        .then((claimed) => {
+            const taken = claimed?.refunds.find(({ _id }) => String(_id) === String(refund._id));
+            return claimed && taken ? attemptRefund(claimed, taken, context) : null;
+        })
+        .catch((error: unknown) => {
+            if (error instanceof RefundLeftOpenError) return null;
+            throw error;
+        });
+};
 
 /**
  * Finish the refunds a payment still has open — the same records, the same idempotency keys, so a
@@ -1046,14 +1128,13 @@ export const sendOpenedRefund = (
             const refund = payment?.refunds.find((record) => String(record._id) === refundId);
             if (!payment || !refund) return 'open';
             if (refund.status === RefundStatus.succeeded) return 'settled';
-            if (refund.status !== RefundStatus.pending) return 'open';
 
             auditRefundRequested(payment, refund, context);
             if (isHandRecorded(payment)) {
                 recordOwedByHand(payment, refund, context);
                 return 'open';
             }
-            return attemptRefund(payment, refund, context)
+            return attemptKeepingGoing(payment, refund, context)
                 .then((after) => after ?? settledElsewhere(orderId, refund))
                 .then((settled) => (settled ? 'settled' : 'open'));
         })

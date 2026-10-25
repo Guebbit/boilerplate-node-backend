@@ -16,7 +16,7 @@
  * See: docs/theory/tactical-ddd.md
  */
 
-import { RefundStatus, type PaymentStatus } from '@types';
+import { RefundFailureReason, RefundStatus, type PaymentStatus } from '@types';
 
 /**
  * The statuses `confirmPayment` may run from — a fresh intent, or one the provider previously
@@ -109,3 +109,54 @@ export const OPEN_REFUND_STATUSES: readonly RefundStatus[] = [
     RefundStatus.pending,
     RefundStatus.failed
 ];
+
+/**
+ * Refusals that end the retrying: the provider (or the lack of one) gave a definite answer about
+ * THIS refund, and asking again will not change it. They show on the attention list at once and
+ * are never sent again; the shop pays back another way.
+ */
+export const FINAL_REFUND_FAILURES: readonly RefundFailureReason[] = [
+    RefundFailureReason.declined,
+    RefundFailureReason.expired_or_canceled_card,
+    RefundFailureReason.lost_or_stolen_card,
+    RefundFailureReason.provider_removed
+];
+
+/**
+ * Refusals after which the money provably did not move, so an operator may report it returned by
+ * hand. Not the same set as {@link FINAL_REFUND_FAILURES}: `insufficient_funds` is still retried
+ * (the shop may top up its provider balance) yet nothing went out. The unclear `provider_unavailable`
+ * and `unknown` are absent on purpose: the refund may have gone through.
+ */
+export const MONEY_DID_NOT_MOVE_FAILURES: readonly RefundFailureReason[] = [
+    ...FINAL_REFUND_FAILURES,
+    RefundFailureReason.insufficient_funds
+];
+
+/** The longest wait the growing retry delay reaches: a day. */
+const MAX_RETRY_DELAY_MS = 24 * 60 * 60_000;
+
+/**
+ * When a refund the provider just refused may be sent again: the base wait doubling with every
+ * refusal, capped at a day. `undefined` for a final refusal, which is never sent again.
+ *
+ * @param failureReason - the closed code for the refusal
+ * @param attempts - how many refusals the record has now, this one included
+ * @param baseMinutes - the first wait, in minutes
+ * @param now - the instant of the refusal
+ */
+export const nextRefundAttemptAt = (
+    failureReason: RefundFailureReason,
+    attempts: number,
+    baseMinutes: number,
+    now: Date
+): Date | undefined =>
+    FINAL_REFUND_FAILURES.includes(failureReason)
+        ? undefined
+        : new Date(
+              now.getTime() +
+                  Math.min(
+                      baseMinutes * 60_000 * 2 ** Math.max(attempts - 1, 0),
+                      MAX_RETRY_DELAY_MS
+                  )
+          );

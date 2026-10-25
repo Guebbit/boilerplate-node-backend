@@ -14,6 +14,7 @@
 import { createHmac } from 'node:crypto';
 import { logger } from '@infrastructure/adapters/logger';
 import type { RefundFailureReason } from '@types';
+import { FINAL_REFUND_FAILURES } from '@modules/payments/domain';
 import {
     PaymentInFlightError,
     PaymentProviderError,
@@ -138,6 +139,51 @@ export const setFakeRefundFailure = (
     else refundFailures.delete(providerRef);
 };
 
+/** Intents whose next refund runs at the provider but whose answer is lost (a timeout). */
+const refundTimeouts = new Set<string>();
+
+/**
+ * Test lever: the next refund on this intent EXECUTES at the provider, but the answer never comes
+ * back (`provider_unavailable`) — the case that makes "the provider refused it" unsafe to assume.
+ * One shot: the flag clears itself.
+ *
+ * @param providerRef - the intent
+ * @param on - `true` to arm, `false` to clear
+ */
+export const setFakeRefundTimeout = (providerRef: string, on: boolean): void => {
+    if (on) refundTimeouts.add(providerRef);
+    else refundTimeouts.delete(providerRef);
+};
+
+/** How long the fake remembers an idempotency key, as Stripe does: a day from its FIRST use. */
+const KEY_WINDOW_MS = 24 * 60 * 60_000;
+
+/** What a key first produced: the refund it made, or the definite error it got. */
+interface KeyedAnswer {
+    at: number;
+    refundRef?: string;
+    failure?: RefundFailureReason;
+}
+
+/** Answers by idempotency key, replayed within {@link KEY_WINDOW_MS}. */
+const keyedAnswers = new Map<string, KeyedAnswer>();
+
+/** Refunds the fake made, by the record id the caller stamped on them (Stripe's `metadata`). */
+const refundsByRecord = new Map<string, string>();
+
+/**
+ * Test lever: make every remembered idempotency key `ms` older, as if that much time had passed
+ * since each was first used. Pushes a key past the 24-hour window without waiting.
+ *
+ * @param ms - how much older to make them
+ */
+export const ageFakeRefundKeys = (ms: number): void => {
+    for (const answer of keyedAnswers.values()) answer.at -= ms;
+};
+
+/** How many refunds the fake has really made (replays and refusals excluded). */
+export const fakeRefundsMade = (): number => refundsByRecord.size;
+
 /**
  * `providerRef`s this stub has already cancelled — so a second `cancel` of the same one is the
  * provider's own idempotent success, never a repeat refusal.
@@ -207,22 +253,59 @@ export const fakePaymentProvider: PaymentProvider = {
         return Promise.resolve(withReceipt(providerRef, state));
     },
 
-    // This fake never leaves the process, so there is no second network attempt to deduplicate —
-    // a real provider's own client sends `idempotencyKey` as a request header instead.
-    refund: (providerRef, charge, { idempotencyKey }) => {
+    // Behaves like Stripe's idempotency: within a day of a key's first use the same answer is
+    // replayed (a definite refusal included); after that the key is forgotten, and only the
+    // adapter's own lookup by `refundId` (for a record older than a day) prevents a second refund.
+    refund: (providerRef, charge, { idempotencyKey, refundId, createdAt }) => {
+        const known = keyedAnswers.get(idempotencyKey);
+        if (known && Date.now() - known.at < KEY_WINDOW_MS) {
+            if (known.failure)
+                return Promise.reject(
+                    new PaymentProviderError(
+                        known.failure,
+                        `[fake-psp] replayed refusal: ${known.failure}`
+                    )
+                );
+            if (known.refundRef) return Promise.resolve({ refundRef: known.refundRef });
+        }
+
+        // The adapter duty past the key window: adopt the refund this record already made.
+        const made = refundsByRecord.get(refundId);
+        if (made && Date.now() - createdAt.getTime() >= KEY_WINDOW_MS)
+            return Promise.resolve({ refundRef: made });
+
         const failure = refundFailures.get(providerRef);
-        if (failure)
+        if (failure) {
+            // Only a definite refusal is the provider's answer to this key; an unclear one is a
+            // transport problem that never reached it.
+            if (FINAL_REFUND_FAILURES.includes(failure))
+                keyedAnswers.set(idempotencyKey, { at: Date.now(), failure });
             return Promise.reject(
                 new PaymentProviderError(failure, `[fake-psp] simulated refund failure: ${failure}`)
             );
+        }
+
         // The intent keeps its settled outcome: a real provider records a refund as its own object.
         // Stryker disable next-line all
         logger.info(
             `[fake-psp] refund ${charge.amount} ${charge.currency} on ${providerRef} (${idempotencyKey})`
         );
         // Derived from the key, like a real provider's idempotent replay: the same key answers
-        // the same refund id.
-        return Promise.resolve({ refundRef: `re_fake_${idempotencyKey}` });
+        // the same refund id. A key forgotten after its window makes a different one.
+        const refundRef = known
+            ? `re_fake_${idempotencyKey}_${String(refundsByRecord.size)}`
+            : `re_fake_${idempotencyKey}`;
+        refundsByRecord.set(refundId, refundRef);
+        keyedAnswers.set(idempotencyKey, { at: Date.now(), refundRef });
+
+        if (refundTimeouts.delete(providerRef))
+            return Promise.reject(
+                new PaymentProviderError(
+                    'provider_unavailable',
+                    '[fake-psp] simulated timeout: the refund ran, the answer was lost'
+                )
+            );
+        return Promise.resolve({ refundRef });
     },
 
     cancel: (providerRef, { reason }) => {

@@ -405,10 +405,10 @@ sequenceDiagram
   or `refunded`) is stamped in the settlement's own transaction. No later refund exists to repair a
   missed stamp after the last one, so a failing stamp settles nothing and the sweep retries.
 - **A refusal stays open.** The record is `failed`, with a closed `failureReason` (staff only; see
-  [the staff Payments page](#the-staff-payments-page)), and keeps its share of `amountRefunded`, so nothing is opened beside it. Only `retryOpenRefunds` (run by
-  `npm run job sweep:payment-effects`) re-sends it. A later cancel, return or operator call sends
-  only records it opened itself (or found `pending`), so one stuck refund never blocks the next:
-  the request opens its own record and the sweep keeps retrying the old one.
+  [the staff Payments page](#the-staff-payments-page)), and keeps its share of `amountRefunded`, so nothing is opened beside it. What happens next
+  is [the claim](#sending-a-refund-the-claim-the-fence-the-delay) below. A later cancel, return or
+  operator call sends only records it opened itself (or found never attempted), so one stuck refund
+  never blocks the next: the request opens its own record and the sweep keeps retrying the old one.
 - **The default is everything left.** `POST /payments/{id}/refunds` with no body returns
   all that is still refundable; with an `amount` it returns that part. An `amount` over what is
   left, nothing left included, is a 422 (`PAYMENT_REFUND_EXCEEDS_REMAINING`); with no `amount`,
@@ -429,6 +429,45 @@ sequenceDiagram
   records the goods it pays back (`lines`: product and quantity, plus the `shipping` inside the
   amount, Shopify's `refund_line_items`) and announces them as `goods`, so the credit note
   credits each line at its own VAT rate. Neither field is published on the wire.
+
+### Sending a refund: the claim, the fence, the delay {#sending-a-refund-the-claim-the-fence-the-delay}
+
+Two callers can reach the same open record (the request that opened it, the sweep every few
+minutes). Three rules keep them from sending it twice or overwriting each other:
+
+| Rule      | What it does                                                                                                                                                                                                                                                                                  |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The claim | One conditional write moves a sendable record to `pending` and stamps `attemptedAt`. Sendable is: `failed` and not final and past its delay, or `pending` with an attempt old enough to be taken for dead. A record opened in a caller's transaction carries no stamp and is claimed at once. |
+| The fence | The provider's answer settles, and its refusal fails, only a `pending` record that still carries the SAME `attemptedAt`. A slow old attempt that comes back after a newer claim finds nothing to write.                                                                                       |
+| The delay | After a refusal the record waits `NODE_PAYMENT_REFUND_RETRY_MINUTES`, doubling with each refusal and capped at a day (`nextAttemptAt`). A definite refusal has no next attempt at all.                                                                                                        |
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: opened (attemptedAt stamped when the request sends it)
+    pending --> succeeded: the provider answers, same attemptedAt
+    pending --> failed: the provider refuses, same attemptedAt
+    failed --> pending: claimed (retryable, delay passed)
+    pending --> pending: claimed again (attempt looks dead)
+    failed --> [*]: final refusal, never claimed
+    succeeded --> [*]
+```
+
+A refusal is **final** when the provider (or the lack of one) gave a definite answer about this
+refund: `declined`, `expired_or_canceled_card`, `lost_or_stolen_card`, `provider_removed`. Asking
+again will not change it, so the sweep never does; the shop pays back another way. `insufficient_funds`
+(the shop's own provider balance is short), `provider_unavailable` and `unknown` are retried.
+The domain sets are `FINAL_REFUND_FAILURES` and `MONEY_DID_NOT_MOVE_FAILURES`
+(`payments/domain/lifecycle.ts`).
+
+**A provider the deployment no longer carries.** A payment keeps the name of the provider that took
+it. If that adapter is gone from this process, nothing can be asked: the refund fails once as
+`provider_removed` (final), and the reconcile sweep skips such payments instead of stopping on
+them. See [Retiring a provider](./payments-provider-port.md#retiring-a-provider).
+
+**The provider's key expires.** A provider remembers an idempotency key for a day from its first
+use (Stripe). Past that a reused key makes a NEW refund, so the adapter must adopt the refund the
+record already made ([the port](./payments-provider-port.md#a-key-the-provider-forgot)). The age
+is measured from the record's `createdAt`, never from the last attempt.
 
 Every other refund dispatches to the provider named on the payment's own `provider` field — never
 the deployment's currently configured one — so a refund of an older payment still reaches the

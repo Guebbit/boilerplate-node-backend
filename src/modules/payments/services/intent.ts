@@ -156,7 +156,11 @@ export const createIntent = async (
  */
 export const cancelOpenIntent = (payment: PaymentDocument, reason: string): Promise<void> => {
     if (!payment.providerRef || isHandRecorded(payment)) return Promise.resolve();
-    return providerNamed(payment.provider).cancel(payment.providerRef, { reason });
+    const { providerRef } = payment;
+    // Inside a chain, so a provider this process no longer has rejects instead of throwing at once.
+    return Promise.resolve().then(() =>
+        providerNamed(payment.provider).cancel(providerRef, { reason })
+    );
 };
 
 /**

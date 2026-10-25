@@ -11,6 +11,8 @@ import {
     fakePaymentProvider,
     setFakeOutcome,
     setFakeRefundFailure,
+    setFakeRefundTimeout,
+    ageFakeRefundKeys,
     setFakeReceipt
 } from '@scenarios/support/doubles/payments/fake';
 import {
@@ -119,20 +121,23 @@ describe('fakePaymentProvider.retrieve', () => {
     });
 });
 
+/** The third argument of `refund`: a key, and the record behind it. */
+const keyed = (idempotencyKey: string, createdAt = new Date()) => ({
+    idempotencyKey,
+    refundId: `record-${idempotencyKey}`,
+    createdAt
+});
+
 describe('fakePaymentProvider.refund', () => {
     it('always succeeds — there is no outside ledger to disagree', async () => {
         await expect(
-            fakePaymentProvider.refund('fake_pi_h', charge, { idempotencyKey: 'refund:payment-1' })
+            fakePaymentProvider.refund('fake_pi_h', charge, keyed('refund:payment-1'))
         ).resolves.toEqual({ refundRef: 're_fake_refund:payment-1' });
     });
 
     it('answers the same refund id for the same idempotency key', async () => {
-        const first = await fakePaymentProvider.refund('fake_pi_h', charge, {
-            idempotencyKey: 'k'
-        });
-        const second = await fakePaymentProvider.refund('fake_pi_h', charge, {
-            idempotencyKey: 'k'
-        });
+        const first = await fakePaymentProvider.refund('fake_pi_h', charge, keyed('k'));
+        const second = await fakePaymentProvider.refund('fake_pi_h', charge, keyed('k'));
 
         expect(second).toEqual(first);
     });
@@ -144,7 +149,7 @@ describe('fakePaymentProvider.refund and the settled outcome', () => {
         await fakePaymentProvider.refund(
             'fake_pi_refunded',
             { amount: 250, currency: 'eur' },
-            { idempotencyKey: 'partial' }
+            keyed('partial')
         );
 
         await expect(fakePaymentProvider.retrieve('fake_pi_refunded')).resolves.toMatchObject({
@@ -155,13 +160,62 @@ describe('fakePaymentProvider.refund and the settled outcome', () => {
     it('succeeds on retry with the same key once the failure lever is cleared', async () => {
         setFakeRefundFailure('fake_pi_retry', 'provider_unavailable');
         await expect(
-            fakePaymentProvider.refund('fake_pi_retry', charge, { idempotencyKey: 'again' })
+            fakePaymentProvider.refund('fake_pi_retry', charge, keyed('again'))
         ).rejects.toThrow();
         setFakeRefundFailure('fake_pi_retry', undefined);
 
         await expect(
-            fakePaymentProvider.refund('fake_pi_retry', charge, { idempotencyKey: 'again' })
+            fakePaymentProvider.refund('fake_pi_retry', charge, keyed('again'))
         ).resolves.toEqual({ refundRef: 're_fake_again' });
+    });
+});
+
+describe('fakePaymentProvider.refund idempotency, as Stripe has it', () => {
+    it('replays a definite refusal for the same key, even after the lever is cleared', async () => {
+        setFakeRefundFailure('fake_pi_final', 'declined');
+        await expect(
+            fakePaymentProvider.refund('fake_pi_final', charge, keyed('final-key'))
+        ).rejects.toMatchObject({ code: 'declined' });
+        setFakeRefundFailure('fake_pi_final', undefined);
+
+        await expect(
+            fakePaymentProvider.refund('fake_pi_final', charge, keyed('final-key'))
+        ).rejects.toMatchObject({ code: 'declined' });
+    });
+
+    it('forgets a key after a day: the same key then makes a new refund', async () => {
+        const first = await fakePaymentProvider.refund('fake_pi_age', charge, keyed('age-key'));
+        ageFakeRefundKeys(25 * 60 * 60_000);
+
+        const second = await fakePaymentProvider.refund('fake_pi_age', charge, keyed('age-key'));
+
+        expect(second.refundRef).not.toBe(first.refundRef);
+    });
+
+    it('adopts the refund a record already made once the record is a day old', async () => {
+        const old = new Date(Date.now() - 25 * 60 * 60_000);
+        const first = await fakePaymentProvider.refund('fake_pi_lookup', charge, keyed('look-key'));
+        ageFakeRefundKeys(25 * 60 * 60_000);
+
+        const again = await fakePaymentProvider.refund(
+            'fake_pi_lookup',
+            charge,
+            keyed('look-key', old)
+        );
+
+        expect(again).toEqual(first);
+    });
+
+    it('can run a refund and lose the answer, once', async () => {
+        setFakeRefundTimeout('fake_pi_timeout', true);
+        await expect(
+            fakePaymentProvider.refund('fake_pi_timeout', charge, keyed('timeout-key'))
+        ).rejects.toMatchObject({ code: 'provider_unavailable' });
+
+        // The same key now replays the refund that did run.
+        await expect(
+            fakePaymentProvider.refund('fake_pi_timeout', charge, keyed('timeout-key'))
+        ).resolves.toEqual({ refundRef: 're_fake_timeout-key' });
     });
 });
 

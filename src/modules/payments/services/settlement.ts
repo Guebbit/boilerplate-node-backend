@@ -617,9 +617,13 @@ export const confirmPayment = (
             // The payment itself, narrowed to prove `providerRef`, so the call reaches the provider
             // named on THIS payment rather than the deployment's currently configured one.
             (confirmable) =>
-                providerNamed(confirmable.provider).confirm(
-                    confirmable.providerRef,
-                    paymentMethodRef
+                // Inside a chain: `providerNamed` throws at once for a provider this process no
+                // longer has, and a synchronous throw would skip every `.catch` upstream.
+                Promise.resolve().then(() =>
+                    providerNamed(confirmable.provider).confirm(
+                        confirmable.providerRef,
+                        paymentMethodRef
+                    )
                 ),
             context,
             {
@@ -657,7 +661,10 @@ export const syncPayment = (
         return settleFound(
             payment,
             SETTLEABLE_PAYMENT_STATUSES,
-            (found) => providerNamed(found.provider).retrieve(found.providerRef),
+            (found) =>
+                Promise.resolve().then(() =>
+                    providerNamed(found.provider).retrieve(found.providerRef)
+                ),
             context
         );
     });
@@ -730,8 +737,11 @@ export const settleFromProvider = (payment: PaymentDocument): Promise<Settlement
     if (!SUCCESS_SETTLEABLE_PAYMENT_STATUSES.includes(payment.status) || !payment.providerRef)
         return Promise.resolve(null);
 
-    return providerNamed(payment.provider)
-        .retrieve(payment.providerRef)
+    const { providerRef } = payment;
+    // Inside a chain: a provider this process no longer has throws at once, and that throw must
+    // reject this promise (the sweep's `.catch` handles it) instead of escaping the whole sweep.
+    return Promise.resolve()
+        .then(() => providerNamed(payment.provider).retrieve(providerRef))
         .then((state) => settlePayment(payment, state));
 };
 

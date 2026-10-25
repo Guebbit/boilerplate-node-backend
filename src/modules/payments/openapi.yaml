@@ -907,11 +907,21 @@ components:
         # Stripe's `failure_reason` shape: a closed list, so the page can translate it.
         RefundFailureReason:
             type: string
-            enum: [declined, insufficient_funds, expired_or_canceled_card, lost_or_stolen_card, provider_unavailable, unknown]
+            enum: [declined, insufficient_funds, expired_or_canceled_card, lost_or_stolen_card, provider_removed, provider_unavailable, unknown]
             description: >-
                 Why the provider last refused a refund, as a closed code. Staff only
                 (`display:Payment`). `unknown` is anything the provider's adapter did not
                 classify; the raw wording stays in the logs.
+
+                Money did NOT move for `declined`, `insufficient_funds`,
+                `expired_or_canceled_card`, `lost_or_stolen_card` and `provider_removed` (the
+                payment's provider is no longer installed, so nothing was asked): the refund may be
+                marked returned by hand once the money went back another way. `declined`,
+                `expired_or_canceled_card`, `lost_or_stolen_card` and `provider_removed` are final
+                and are not retried; `insufficient_funds` (the shop's own provider balance is
+                short) and the unclear `provider_unavailable` and `unknown` are retried with a
+                growing delay. An unclear refusal may have gone through, so it is never offered for
+                hand settlement.
 
         RefundStatus:
             type: string

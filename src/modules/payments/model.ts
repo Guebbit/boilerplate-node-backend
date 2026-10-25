@@ -76,6 +76,17 @@ export interface RefundRecord {
      * is news (the first, or a new reason) or a repeat of the last, and is never published.
      */
     attempts?: number;
+    /**
+     * When the current attempt was claimed (or the record opened). Internal: it is the fence token
+     * of that attempt. A settle or a failure only lands on a `pending` record still carrying the
+     * same value, so a slow old attempt cannot overwrite a newer one.
+     */
+    attemptedAt?: Date;
+    /**
+     * When the sweep may send this `failed` record again (growing delay). Absent on a final
+     * refusal, which is never sent again. Internal.
+     */
+    nextAttemptAt?: Date;
     /** When the money was confirmed back, or (for a hand-paid one) reported back. */
     settledAt?: Date;
     createdAt: Date;
@@ -88,6 +99,8 @@ export interface RefundRecord {
 export interface RefundSettlement {
     providerRefundRef?: string;
     refundedByHand?: true;
+    /** The fence token of the attempt that got the provider's answer; absent for a hand settle. */
+    attempt?: Date;
 }
 
 /**
@@ -186,6 +199,8 @@ const refundSchema = new Schema<RefundRecord>(
         providerRefundRef: { type: String },
         failureReason: { type: String, enum: Object.values(RefundFailureReason) },
         attempts: { type: Number, min: 0 },
+        attemptedAt: { type: Date },
+        nextAttemptAt: { type: Date },
         settledAt: { type: Date }
     },
     { timestamps: { createdAt: true, updatedAt: false } }
@@ -293,6 +308,8 @@ const REFUND_INTERNAL_KEYS = [
     'idempotencyKey',
     'failureReason',
     'attempts',
+    'attemptedAt',
+    'nextAttemptAt',
     'lines',
     'shipping'
 ] as const;

@@ -8,15 +8,17 @@
 
 import type { ClientSession, PipelineStage, Types } from 'mongoose';
 import { paymentModel, applyPaymentTransform } from './model';
-import { PaymentStatus, PaymentMethod } from '@types';
+import { PaymentStatus, PaymentMethod, RefundStatus } from '@types';
 import { reviveDecimals } from '@infrastructure/persistence/money-field';
 import type { ReportWindow } from '@infrastructure/persistence/report';
-import type { RefundFailureReason, RefundReason, RefundStatus } from '@types';
+import type { RefundFailureReason, RefundReason } from '@types';
+import { paymentProviderRegistry } from './providers/registry';
 import type { PaymentDocument, RefundRecord, RefundSettlement } from './model';
 import {
     CONFIRMABLE_PAYMENT_STATUSES,
     MANUAL_PROVIDER,
     OPEN_REFUND_STATUSES,
+    FINAL_REFUND_FAILURES,
     REFUNDABLE_PAYMENT_STATUS,
     SETTLEABLE_PAYMENT_STATUSES,
     REAPABLE_PAYMENT_STATUSES
@@ -119,6 +121,28 @@ const refundMatch = (filters: RefundFilters): Record<string, unknown> => ({
  */
 const aggregatePayments = <T>(pipeline: PipelineStage[]): Promise<T[]> =>
     paymentModel.aggregate<T>(pipeline).exec();
+
+/**
+ * The shape of a refund record the sweep (or a request) may send now, as an `$elemMatch` body:
+ * a `failed` one that is not final and whose retry delay has passed, or a `pending` one whose
+ * attempt is old enough to be taken for dead (or never stamped).
+ *
+ * @param now - the instant of the question
+ * @param staleBefore - a `pending` attempt older than this is taken to have died
+ */
+const claimableRefund = (now: Date, staleBefore: Date): Record<string, unknown> => ({
+    $or: [
+        {
+            status: RefundStatus.failed,
+            failureReason: { $nin: [...FINAL_REFUND_FAILURES] },
+            $or: [{ nextAttemptAt: { $exists: false } }, { nextAttemptAt: { $lte: now } }]
+        },
+        {
+            status: RefundStatus.pending,
+            $or: [{ attemptedAt: { $exists: false } }, { attemptedAt: { $lte: staleBefore } }]
+        }
+    ]
+});
 
 /** The shape every refund read projects out of the `$unwind`. */
 const REFUND_ROW_PROJECTION: PipelineStage = {
@@ -278,7 +302,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         newRefunded: number,
         refund: Omit<
             RefundRecord,
-            'createdAt' | 'providerRefundRef' | 'failureReason' | 'settledAt'
+            'createdAt' | 'providerRefundRef' | 'failureReason' | 'settledAt' | 'nextAttemptAt'
         >,
         session?: ClientSession
     ) => Promise<PaymentDocument | null>;
@@ -291,8 +315,13 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
     failRefund: (
         paymentId: string,
         refundId: string,
-        failureReason: RefundFailureReason,
+        failure: { reason: RefundFailureReason; attempt: Date; nextAttemptAt?: Date },
         session?: ClientSession
+    ) => Promise<PaymentDocument | null>;
+    claimRefund: (
+        paymentId: string,
+        refundId: string,
+        window: { now: Date; staleBefore: Date }
     ) => Promise<PaymentDocument | null>;
     searchStaff: (
         filters: object,
@@ -554,7 +583,11 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                     refunds: {
                         $elemMatch: {
                             _id: toObjectId(refundId),
-                            status: { $in: OPEN_REFUND_STATUSES }
+                            // The provider's answer must come from the attempt that is still
+                            // current; an operator's report (no attempt) takes any open record.
+                            ...(fields.attempt
+                                ? { status: RefundStatus.pending, attemptedAt: fields.attempt }
+                                : { status: { $in: OPEN_REFUND_STATUSES } })
                         }
                     }
                 },
@@ -567,23 +600,25 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                             : { 'refunds.$.providerRefundRef': fields.providerRefundRef }),
                         ...(fields.refundedByHand ? { refundedByHand: true } : {})
                     },
-                    $unset: { 'refunds.$.failureReason': 1 }
+                    $unset: { 'refunds.$.failureReason': 1, 'refunds.$.nextAttemptAt': 1 }
                 },
                 { returnDocument: 'after', ...(session ? { session } : {}) }
             )
             .exec(),
 
     /**
-     * Record that the provider refused a refund, keeping it open for the sweep. Only an open one
-     * can fail — a refund that already succeeded is never walked back by a late error.
+     * Record that the provider refused a refund, keeping it open. Only the attempt that is still
+     * current can fail it (`pending`, same `attemptedAt`): a slow old attempt's late error never
+     * overwrites a newer attempt, and never walks back a refund that already succeeded.
      *
      * @param paymentId - the payment
      * @param refundId - the refund record inside it
-     * @param failureReason - the closed code for what the provider said
+     * @param failure - the closed code for what the provider said, the attempt that got it, and
+     *   when the sweep may send again (absent for a final refusal)
      * @param session - the caller's transaction, when the timeline row must commit with it
-     * @returns the payment as it now stands, or `null` if that refund was not open
+     * @returns the payment as it now stands, or `null` if that attempt was no longer current
      */
-    failRefund: (paymentId, refundId, failureReason, session) =>
+    failRefund: (paymentId, refundId, { reason, attempt, nextAttemptAt }, session) =>
         paymentModel
             .findOneAndUpdate(
                 {
@@ -591,18 +626,53 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                     refunds: {
                         $elemMatch: {
                             _id: toObjectId(refundId),
-                            status: { $in: OPEN_REFUND_STATUSES }
+                            status: RefundStatus.pending,
+                            attemptedAt: attempt
                         }
                     }
                 },
                 {
                     $set: {
                         'refunds.$.status': 'failed',
-                        'refunds.$.failureReason': failureReason
+                        'refunds.$.failureReason': reason,
+                        ...(nextAttemptAt ? { 'refunds.$.nextAttemptAt': nextAttemptAt } : {})
                     },
+                    ...(nextAttemptAt ? {} : { $unset: { 'refunds.$.nextAttemptAt': 1 } }),
                     $inc: { 'refunds.$.attempts': 1 }
                 },
                 { returnDocument: 'after', ...(session ? { session } : {}) }
+            )
+            .exec(),
+
+    /**
+     * Take a refund for sending: one conditional write moves a sendable record to `pending`
+     * stamped with a fresh `attemptedAt`, which is the fence token of the attempt that follows.
+     * Sendable is {@link claimableRefund}. A `null` answer means the record is not due, is final,
+     * or another caller claimed it first.
+     *
+     * @param paymentId - the payment
+     * @param refundId - the refund record inside it
+     * @param window - the instant of the claim, and the age past which a `pending` attempt is
+     *   taken to have died
+     * @returns the payment with the record claimed, or `null`
+     */
+    claimRefund: (paymentId, refundId, { now, staleBefore }) =>
+        paymentModel
+            .findOneAndUpdate(
+                {
+                    _id: toObjectId(paymentId),
+                    refunds: {
+                        $elemMatch: {
+                            _id: toObjectId(refundId),
+                            ...claimableRefund(now, staleBefore)
+                        }
+                    }
+                },
+                {
+                    $set: { 'refunds.$.status': 'pending', 'refunds.$.attemptedAt': now },
+                    $unset: { 'refunds.$.nextAttemptAt': 1 }
+                },
+                { returnDocument: 'after' }
             )
             .exec(),
 
@@ -727,7 +797,9 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                 // A hand-paid refund has no provider to resend to; left in, 200 of them would
                 // fill the batch and no card refund would ever be retried.
                 provider: { $ne: MANUAL_PROVIDER },
-                refunds: { $elemMatch: { status: { $in: OPEN_REFUND_STATUSES } } },
+                // Only records the sweep may actually send: a final refusal, a refund still
+                // waiting out its retry delay, and an attempt in flight must not fill the batch.
+                refunds: { $elemMatch: claimableRefund(new Date(), updatedBefore) },
                 updatedAt: { $lte: updatedBefore }
             })
             .sort({ updatedAt: 1 })
@@ -749,7 +821,9 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
             .find({
                 status: { $in: [...SETTLEABLE_PAYMENT_STATUSES] },
                 providerRef: { $exists: true, $ne: null },
-                provider: { $ne: MANUAL_PROVIDER },
+                // A provider this process no longer has cannot be asked; left in, its payments
+                // would sit at the head of the line forever.
+                provider: { $in: paymentProviderRegistry.names(), $ne: MANUAL_PROVIDER },
                 updatedAt: { $lte: updatedBefore }
             })
             .sort({ updatedAt: 1 })

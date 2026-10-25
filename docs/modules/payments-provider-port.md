@@ -61,15 +61,15 @@ flowchart TD
     class X future;
 ```
 
-| Member                                            | Contract                                                                                                                                                                                                                                                                                                                           |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`                                            | Persisted on every payment document, so a row says who handled it.                                                                                                                                                                                                                                                                 |
-| `prepare(charge, metadata, existingProviderRef?)` | Opens an intent for an amount this application already froze. Returns `providerRef` (persisted) and `clientSecret` (handed to the browser, never stored). **Idempotent on `metadata.paymentId`** — the double-click case must not open a second intent.                                                                            |
-| `confirm(providerRef, methodRef)`                 | Attaches the browser's tokenised method and asks for the money. Returns one of five states; **a decline is an answer, not an error** — only transport failures throw.                                                                                                                                                              |
-| `retrieve(providerRef)`                           | Reads the authoritative state back. The reconciliation path, and what a finished challenge settles against.                                                                                                                                                                                                                        |
-| `refund(providerRef, charge, { idempotencyKey })` | Idempotent on the key (`refund:{paymentId}:{refundId}`, one per refund record) — a real PSP refunds once per key, so a retry cannot return the money twice. The caller guards its own side by only calling this on a `succeeded` payment, and only once it has confirmed.                                                          |
-| `cancel(providerRef, { reason })`                 | Closes an intent that has not succeeded yet — an abandoned card flow, or money recorded another way instead. **Idempotent**: an already-cancelled intent answers success. Throws `PaymentInFlightError` when the intent already succeeded or is still mid-flight — there is money to refund instead, not an intent left to cancel. |
-| `parseWebhook(rawBody, signature)`                | Verifies the delivery and translates the provider's own event shape into this module's. Takes the **unparsed** body — a signature covers exact bytes. Parses after the signature and before any lookup, against the contract's schema.                                                                                             |
+| Member                                                                 | Contract                                                                                                                                                                                                                                                                                                                                                             |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                                                                 | Persisted on every payment document, so a row says who handled it.                                                                                                                                                                                                                                                                                                   |
+| `prepare(charge, metadata, existingProviderRef?)`                      | Opens an intent for an amount this application already froze. Returns `providerRef` (persisted) and `clientSecret` (handed to the browser, never stored). **Idempotent on `metadata.paymentId`** — the double-click case must not open a second intent.                                                                                                              |
+| `confirm(providerRef, methodRef)`                                      | Attaches the browser's tokenised method and asks for the money. Returns one of five states; **a decline is an answer, not an error** — only transport failures throw.                                                                                                                                                                                                |
+| `retrieve(providerRef)`                                                | Reads the authoritative state back. The reconciliation path, and what a finished challenge settles against.                                                                                                                                                                                                                                                          |
+| `refund(providerRef, charge, { idempotencyKey, refundId, createdAt })` | Idempotent on the key (`refund:{paymentId}:{refundId}`, one per refund record) — a real PSP refunds once per key, so a retry cannot return the money twice. Beyond the provider's key window the adapter stays idempotent itself, see [a key the provider forgot](#a-key-the-provider-forgot). Refusals are classified, see [reading a refusal](#reading-a-refusal). |
+| `cancel(providerRef, { reason })`                                      | Closes an intent that has not succeeded yet — an abandoned card flow, or money recorded another way instead. **Idempotent**: an already-cancelled intent answers success. Throws `PaymentInFlightError` when the intent already succeeded or is still mid-flight — there is money to refund instead, not an intent left to cancel.                                   |
+| `parseWebhook(rawBody, signature)`                                     | Verifies the delivery and translates the provider's own event shape into this module's. Takes the **unparsed** body — a signature covers exact bytes. Parses after the signature and before any lookup, against the contract's schema.                                                                                                                               |
 
 ::: warning A typo'd env value fails loudly
 `resolvePaymentProvider` throws when the environment names a provider this process does not carry.
@@ -141,6 +141,50 @@ Nothing here ships a PSP adapter; Stripe is the worked example.
 
 The frontend swaps its method widget for the vendor's, which is the point of the exercise — the app
 stops touching card data. The service and the contract's shape stay as they are; settlement stays too, with one added input: the adapter reports `amountReceived`, `currency` and `paymentId` with every `succeeded`, converted from its minor units, and echoes the `metadata.paymentId` it was given at `prepare`. A success that disagrees with the frozen payment is refused, see [the final write](./payments.md#the-pre-check-and-the-final-write).
+
+## Reading a refusal
+
+`refund` rejects with a `PaymentProviderError` carrying a closed `RefundFailureReason`. The class
+decides what the application does next, so an adapter throws a definite code only when the provider
+answered about THIS refund.
+
+| The provider said                                                                  | Throw                                                         | Then                                                 |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------- |
+| A 4xx on the create, or a refund object `failed`/`canceled`, naming a card problem | `declined`, `expired_or_canceled_card`, `lost_or_stolen_card` | final: never retried, the shop pays back another way |
+| A refund `failed` because the shop's balance is short                              | `insufficient_funds`                                          | retried with a growing delay; money did not move     |
+| Stripe's own `failure_reason: unknown` (a definite answer)                         | `declined` (not `unknown`, which means unclear here)          | final                                                |
+| A network error, a timeout, a 5xx, a 429, Adyen `transient-error`                  | `provider_unavailable`                                        | retried; never offered for hand settlement           |
+| Anything else                                                                      | `unknown`, or throw any other error                           | retried; never offered for hand settlement           |
+
+The two retried-and-unclear codes are never offered for hand settlement because the refund may have
+gone through: the sweep resends under the same key, and a timeout then gets the real answer.
+
+## A key the provider forgot
+
+A provider remembers an idempotency key for a limited time (Stripe: a day from its FIRST use; reuse
+does not extend it). After that, resending a refund under the same key creates a second one, which
+for a partial refund pays the buyer twice. So the adapter must not rely on the key alone:
+
+- stamp `refundId` on the provider's refund (Stripe: `metadata.refund_record`);
+- when `createdAt` is more than a day old, list the payment's refunds first and adopt the one
+  carrying `refundId`; create a new one only if there is none.
+
+The fake behaves this way: it replays an answer (a definite refusal too) for a day, forgets the key
+after, and adopts by `refundId` for an old record. Its levers (`scenarios/support/doubles/payments/fake.ts`):
+`setFakeRefundFailure`, `setFakeRefundTimeout` (the refund runs, the answer is lost) and
+`ageFakeRefundKeys`.
+
+## Retiring a provider
+
+1. Unset `NODE_PAYMENT_PROVIDER` to stop new checkouts. Payments already made keep working: they
+   dispatch on their own `provider` name.
+2. Keep the adapter registered and keyed until its payments are settled and the refund and chargeback
+   window has passed.
+3. Delete the webhook endpoint in the vendor's dashboard.
+
+Removing the adapter earlier is allowed, not guarded. Each open refund on it then fails once as
+`provider_removed`, which is final and can be marked returned by hand once the money went back
+another way. The reconcile sweep skips payments whose provider is not registered.
 
 ## Related pages
 
