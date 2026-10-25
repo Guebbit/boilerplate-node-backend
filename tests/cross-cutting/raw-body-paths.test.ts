@@ -1,7 +1,7 @@
 /**
  * Every module's `rawBodyPaths` must resolve to a route actually mounted on that module's own
  * router. `app/security.ts` composes these into the JSON parser's raw-body allowlist by string
- * concatenation with `basePath` alone — a typo here silently disables signature verification for
+ * concatenation with the first mount's `basePath` alone — a typo here silently disables signature verification for
  * that route, with no error anywhere: the path just never matches, `express.json()` re-encodes the
  * body before the module ever sees it, and every signature check downstream fails against bytes
  * that are no longer the ones the caller signed.
@@ -30,7 +30,7 @@ describe('rawBodyPaths', () => {
             if (paths.length === 0) return [];
 
             const mounted = new Set(
-                (appModule.routes ? routeSignatures(appModule.routes) : []).map(
+                (appModule.mounts?.[0] ? routeSignatures(appModule.mounts[0].routes) : []).map(
                     (signature) => signature.split(' ', 2)[1]
                 )
             );

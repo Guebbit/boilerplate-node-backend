@@ -46,8 +46,7 @@ const onRegistered = (modules: readonly AppModule[]): void => {
 /** This module's manifest entry. */
 export default {
     name: 'webhooks',
-    basePath: '/webhooks',
-    routes: router,
+    mounts: [{ basePath: '/webhooks', routes: router }],
     jobs: webhooksJobs,
     locales: path.join(__dirname, 'locales'),
     templates: path.join(__dirname, 'templates'),

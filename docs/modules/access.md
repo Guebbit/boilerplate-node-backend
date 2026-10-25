@@ -63,7 +63,7 @@ What makes it a module rather than kernel code anyway: it is an identity-and-acc
 real collections and real write invariants, consumed by several sibling modules — several unrelated
 modules sharing one domain is reason enough for its own module, the same reasoning
 [`addresses`](./addresses.md) is split out of `account` for. A routeless module is not a special
-case here: `basePath`/`routes` are both optional on the manifest (see
+case here: `mounts` is optional on the manifest (see
 [Module lifecycle](../theory/module-lifecycle.md)), and `access` is this repo's one module that
 omits both.
 

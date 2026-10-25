@@ -26,8 +26,7 @@ const onRegistered = (modules: readonly AppModule[]): void => {
 /** This module's manifest entry: one public route, no persistence, no locales. */
 export default {
     name: 'analytics',
-    basePath: '/analytics',
-    routes: router,
+    mounts: [{ basePath: '/analytics', routes: router }],
     onRegistered,
     // Stateless: an event is forwarded to the provider and kept nowhere in this app.
     personalData: 'none'

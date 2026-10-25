@@ -24,8 +24,7 @@ import { cartRateLimits } from './rate-limits';
 /** This module's manifest entry: routes, event subscriptions, and locales. */
 export default {
     name: 'cart',
-    basePath: '/cart',
-    routes: router,
+    mounts: [{ basePath: '/cart', routes: router }],
     config: [cartConfig.slice],
     rateLimits: cartRateLimits,
     personalData: [

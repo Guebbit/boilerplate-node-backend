@@ -61,8 +61,7 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
 /** This module's manifest entry: routes, its export section, budgets, public events and locales. */
 export default {
     name: 'returns',
-    basePath: '/returns',
-    routes: router,
+    mounts: [{ basePath: '/returns', routes: router }],
     jobs: returnsJobs,
     config: [returnsConfig.slice],
     rateLimits: returnsRateLimits,

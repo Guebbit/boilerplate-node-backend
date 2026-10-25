@@ -193,7 +193,7 @@ hit them first:
   `Invoicing` rather than `Orders`, since download-a-frozen-document is a different concern from
   the order resource itself — fragmenting by `basePath` still splits the two files correctly.
 - **`access` has no HTTP surface of its own** — headless by design, the one module whose manifest
-  declares neither `basePath` nor `routes`. Its `openapi.yaml` is components only (`paths: {}`):
+  declares no `mounts`. Its `openapi.yaml` is components only (`paths: {}`):
   the abilities schemas `GET /account/abilities` returns, and the `roles` section of the data
   export. A components-only fragment owns no folder in the client collections.
 
@@ -219,7 +219,7 @@ and nothing but a careful reading catches it.
 
 ```
 src/modules/products/
-├── module.ts        name, basePath '/products', routes, locales
+├── module.ts        name, mounts [{ basePath '/products', routes }], locales
 ├── routes.ts        the express router
 ├── controllers/     request handling
 ├── services/        business rules

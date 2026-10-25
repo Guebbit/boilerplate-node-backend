@@ -42,8 +42,7 @@ const onRegistered = (modules: readonly AppModule[]): void => {
 /** This module's manifest entry: routes, locales, and the image writeback target. */
 export default {
     name: 'users',
-    basePath: '/users',
-    routes: router,
+    mounts: [{ basePath: '/users', routes: router }],
     onRegistered,
     locales: path.join(__dirname, 'locales'),
     templates: path.join(__dirname, 'templates'),

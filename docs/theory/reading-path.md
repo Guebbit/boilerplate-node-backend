@@ -68,7 +68,7 @@ The thesis of the repository. A module is a **typed object**, not a folder conve
 its name, routes, locales, scenario guarantees and event subscriptions, and the registry calls what
 it declares.
 
-**Take away:** every field on `AppModule` is read by something — `basePath` and `routes` by
+**Take away:** every field on `AppModule` is read by something — `mounts` by
 `app/routes.ts`, `locales` by i18next, `subscribe` by `registerModules`, `scenario` by
 `scenarios/check.ts`'s guarantee comparison. A field nothing reads is a comment with extra syntax.
 

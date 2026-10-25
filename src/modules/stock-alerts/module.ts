@@ -20,8 +20,7 @@ import { stockAlertService } from './service';
 /** This module's manifest entry: routes, event subscriptions, personal data, locales, templates. */
 export default {
     name: 'stock-alerts',
-    basePath: '/stock-alerts',
-    routes: router,
+    mounts: [{ basePath: '/stock-alerts', routes: router }],
     jobs: stockAlertsJobs,
     personalData: [
         {

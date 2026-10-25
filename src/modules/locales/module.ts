@@ -67,8 +67,7 @@ const onRegistered = (modules: readonly AppModule[]): void => {
 /** This module's manifest entry: routes and its own locales. */
 export default {
     name: 'locales',
-    basePath: '/locales',
-    routes: router,
+    mounts: [{ basePath: '/locales', routes: router }],
     config: [localesConfig.slice],
     onRegistered,
     /*

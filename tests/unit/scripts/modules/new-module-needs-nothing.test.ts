@@ -118,7 +118,10 @@ describe('a module folder alone is enough', () => {
 
         expect(
             Object.keys(
-                routedModulesOf([{ name: 'widgets', routes: router }, { name: 'headless' }])
+                routedModulesOf([
+                    { name: 'widgets', mounts: [{ basePath: '/widgets', routes: router }] },
+                    { name: 'headless' }
+                ])
             )
         ).toEqual(['widgets']);
     });

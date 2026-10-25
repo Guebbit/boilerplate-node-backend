@@ -13,8 +13,7 @@ import { router } from './routes';
 /** This module's manifest entry: its routes and its settings. */
 export default {
     name: 'sitemap',
-    basePath: '/sitemap',
-    routes: router,
+    mounts: [{ basePath: '/sitemap', routes: router }],
     config: [sitemapConfig.slice],
     // Owns no collection: it publishes addresses that are already public.
     personalData: 'none'

@@ -30,8 +30,7 @@ import { refreshStockCacheForProducts } from './services/transition';
 /** This module's manifest entry: routes, the two domain gauges, and locales. */
 export default {
     name: 'inventory',
-    basePath: '/inventory',
-    routes: router,
+    mounts: [{ basePath: '/inventory', routes: router }],
     jobs: inventoryJobs,
     config: [inventoryConfig.slice],
     /*

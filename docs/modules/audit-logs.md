@@ -52,7 +52,7 @@ They do not, even though the module has a router. Every
 `recordAudit` / `emitAuditEvent` call in the app talks to `@infrastructure/observability/audit`, which knows only
 that a sink _may_ exist. **This module installs that sink itself, from its own `onRegistered`
 hook** — run once every enabled module is known, not merely on import, the same way it hands
-`basePath`/`routes` to the app tier for the read side.
+`mounts` to the app tier for the read side.
 
 Registering a function is not a database call: `record` is fire-and-forget and only touches Mongo
 when an entry actually fires, which cannot happen before the app serves a request. Doing it here

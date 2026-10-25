@@ -23,8 +23,7 @@ import { addressesConfig } from './config';
 /** This module's manifest entry: routes, event subscriptions, and locales. */
 export default {
     name: 'addresses',
-    basePath: '/account',
-    routes: router,
+    mounts: [{ basePath: '/account', routes: router }],
     config: [addressesConfig.slice],
     personalData: [
         {

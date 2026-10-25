@@ -454,13 +454,12 @@ section on its own page — why this library, what was rejected — the same sha
 ```ts
 export default {
     name: 'orders',
-    basePath: '/orders',
-    routes: router,
+    mounts: [{ basePath: '/orders', routes: router }],
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;
 ```
 
-Every field is read by something: the router is mounted at `basePath`, `locales` is handed to
+Every field is read by something: each router in `mounts` is mounted at its `basePath`, `locales` is handed to
 i18next, `subscribe` attaches the module's event handlers, `onRegistered` runs once every module is
 known — installing a kernel port, or resolving a cross-module lookup like `locales`'
 `translatables`. That is the bar for a field being here at all. The subdomain and the `dependsOn` graph live next to
@@ -469,25 +468,27 @@ as the enforced allow-list behind `npm run check`, not by the app at runtime —
 [Strategic DDD](./strategic-ddd.md) §2 and §4. Demo data is not on the manifest either:
 `scenarios/<module>.ts` reads a module's repository and factories directly.
 
-`basePath` and `routes` are both optional, so a domain that owns data but no URL is an ordinary
-entry rather than a special case — `access` declares neither and `app/routes.ts` mounts only
-the modules that declare both:
+`mounts` is optional, so a domain that owns data but no URL is an ordinary
+entry rather than a special case — `access` declares none and `app/routes.ts` mounts only
+what a module lists. A mount is a pair, `{ basePath, routes }`, and a module may list several:
+`delivery` serves `/delivery` and also `POST /orders/{id}/process` at `/orders`; `payments` serves
+`/payments` and also `POST /orders/{id}/payments`:
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 50}}}%%
 flowchart LR
     IAM["AppModule"]
-    R["<b>routed</b><br/>basePath + routes<br/><i>every other module</i>"]
-    H["<b>headless</b><br/>no basePath, no routes<br/><i>access</i>"]
+    R["<b>routed</b><br/>mounts: basePath + routes<br/><i>every other module</i>"]
+    H["<b>headless</b><br/>no mounts<br/><i>access</i>"]
     IAM --> R
     IAM --> H
     classDef t fill:#dbeafe,stroke:#2563eb,color:#111827;
     class IAM,R,H t;
 ```
 
-`AppModule` is a plain interface with both fields optional; the guard is at runtime, not in the type.
-`app/routes.ts` mounts a module only when it has both (`if (basePath && routes)`), so a router with
-no mount point, or a mount point with nothing to mount, is skipped rather than an error.
+`AppModule` is a plain interface with `mounts` optional. A mount carries its `basePath` and its
+router together, so a router with no mount point cannot be written; a module with no mounts is
+skipped by `app/routes.ts` rather than reported.
 
 **Keep it small.** A field only one module fills does not belong here — that module should do the
 thing itself. `subscribe` passes the bar: several modules fill it.
@@ -594,7 +595,7 @@ flowchart TD
     CQ --> L["registerLocaleDirectories&lpar;&rpar;<br/><i>from each manifest</i>"]
     L --> I["i18next.init&lpar;&rpar;<br/><i>reads the merged result</i>"]
     I --> S["listen"]
-    RM["registerModules&lpar;&rpar;<br/><i>validate config · subscribe · onRegistered</i>"] --> MNT["mount routers by basePath"]
+    RM["registerModules&lpar;&rpar;<br/><i>validate config · subscribe · onRegistered</i>"] --> MNT["mount routers by mounts"]
     MNT --> H404["404 catch-all"]
 
     classDef boot fill:#fef3c7,stroke:#d97706,color:#111827;

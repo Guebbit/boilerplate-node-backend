@@ -46,11 +46,10 @@ export const installRoutes = (app: Express): void => {
      * A module without a router is skipped rather than treated as an error: `access` owns the
      * membership/role assignment data and no URL of its own — every route that touches it goes
      * through `account`, `api-keys` or `users` instead. `basePath` and `routes` are meaningless
-     * apart, so both are required here — a manifest carrying one without the other serves nothing,
-     * which is what a router with no mount point was always going to do.
+     * apart, so a mount carries both — a router with no mount point serves nothing.
      */
-    for (const { basePath, routes } of enabledModules)
-        if (basePath && routes) app.use(basePath, routes);
+    for (const { mounts = [] } of enabledModules)
+        for (const { basePath, routes } of mounts) app.use(basePath, routes);
 
     /**
      * REST API routes — domain-driven routing.

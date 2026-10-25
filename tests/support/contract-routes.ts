@@ -5,7 +5,6 @@
  * `enabledModules` pulls in every module's event subscriptions and demo seeding, a cost the
  * per-module route unit tests have no reason to pay.
  */
-import type { Router } from 'express';
 import { effectiveRouteTable } from '@tests/routes';
 import type { PermissionAsk } from '@tests/routes';
 import { enabledModules } from '../../src/modules';
@@ -31,16 +30,12 @@ export interface MountedRoute {
  */
 export const everyMountedRoute = (): MountedRoute[] =>
     enabledModules
-        .filter((appModule): appModule is typeof appModule & { basePath: string; routes: Router } =>
-            Boolean(appModule.basePath && appModule.routes)
-        )
-        .flatMap((appModule) =>
-            effectiveRouteTable(appModule.routes).map(
-                ({ method, path, applies, chain, permissions }) => ({
-                    method,
-                    path: `${appModule.basePath}${path}`,
-                    guards: [...applies, ...chain],
-                    permissions
-                })
-            )
+        .flatMap(({ mounts = [] }) => mounts)
+        .flatMap(({ basePath, routes }) =>
+            effectiveRouteTable(routes).map(({ method, path, applies, chain, permissions }) => ({
+                method,
+                path: `${basePath}${path}`,
+                guards: [...applies, ...chain],
+                permissions
+            }))
         );

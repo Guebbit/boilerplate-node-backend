@@ -25,8 +25,7 @@ import { notificationsService } from './services';
 /** This module's manifest entry: routes, event subscriptions, config, and locales. */
 export default {
     name: 'notifications',
-    basePath: '/notifications',
-    routes: router,
+    mounts: [{ basePath: '/notifications', routes: router }],
     config: [notificationsConfig.slice],
     personalData: [
         {

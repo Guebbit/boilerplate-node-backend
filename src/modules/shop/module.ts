@@ -14,8 +14,7 @@ import { shopConfig } from './config';
 /** This module's manifest entry: one public route, the identity config gate, no persistence. */
 export default {
     name: 'shop',
-    basePath: '/shop',
-    routes: router,
+    mounts: [{ basePath: '/shop', routes: router }],
     config: [shopConfig.slice],
     // No collection: everything here is the deployer's own configuration.
     personalData: 'none'

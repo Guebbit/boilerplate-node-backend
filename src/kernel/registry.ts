@@ -352,6 +352,17 @@ export type PersonalDataEraser = (
 ) => Promise<AfterErase | undefined> | Promise<void>;
 
 /**
+ * One router and the URL prefix it is served under.
+ */
+export interface RouteMount {
+    /** Mount point, e.g. `/products`; `/` mounts at the root. */
+    basePath: string;
+
+    /** The express router, mounted at `basePath`. */
+    routes: Router;
+}
+
+/**
  * Everything a module declares about itself.
  *
  * Keep this small: a field only one module ever fills belongs behind that module's own barrel, and
@@ -366,14 +377,16 @@ export interface AppModule {
     name: string;
 
     /**
-     * Mount point for `routes`, e.g. `/products`. Absent on a module that owns a collection but no
-     * URL of its own — a domain reachable only through another module's endpoints, or through no
-     * endpoint at all.
+     * The routers this module serves, each under its own base path, e.g.
+     * `[{ basePath: '/products', routes: router }]`. Absent on a module that owns a collection but
+     * no URL of its own — a domain reachable only through another module's endpoints, or through
+     * no endpoint at all.
+     *
+     * Several entries when one module owns operations that sit under another resource's URL (the
+     * order's `process` action is `delivery`'s, mounted at `/orders`). The first entry is the
+     * module's own; `rawBodyPaths` is relative to it.
      */
-    basePath?: string;
-
-    /** The domain's express router, mounted at `basePath`. */
-    routes?: Router;
+    mounts?: readonly RouteMount[];
 
     /**
      * Attach this module's domain-event handlers. Called once at boot, after every module is known,
@@ -455,7 +468,7 @@ export interface AppModule {
 
     /**
      * Paths whose callers SIGN the request body, so the JSON parser must keep the bytes verbatim.
-     * Relative to `basePath`, the same way `routes` is.
+     * Relative to the first of {@link mounts}.
      *
      * Declared here rather than in `app/security.ts` because the body is consumed once, by the
      * parser the app tier installs — long before this module's own router runs. Every entry costs

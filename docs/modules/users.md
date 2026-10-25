@@ -68,7 +68,7 @@ runtime value stay inside even so: every read or write, `account`'s included, go
 `userService`, never the collection directly.
 
 ::: tip Why two modules and not one
-`/users` and `/account` are different mounts, and a manifest carries one `basePath`. Merging them
+`/users` and `/account` are different mounts. Merging them
 would collapse two URL surfaces into one module for no gain — and the cost of keeping them apart is
 visible on the map as an `account → users` arrow, which this page labels `shared-kernel`, rather than hidden inside a barrel.
 :::

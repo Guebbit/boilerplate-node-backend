@@ -77,8 +77,7 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
 /** This module's manifest entry: routes, the export sections, event wiring and locales. */
 export default {
     name: 'delivery',
-    basePath: '/delivery',
-    routes: router,
+    mounts: [{ basePath: '/delivery', routes: router }],
     jobs: deliveryJobs,
     config: [deliveryConfig.slice],
     publicEvents,

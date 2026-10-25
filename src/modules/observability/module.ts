@@ -27,8 +27,7 @@ import './metrics';
 /** This module's manifest entry: routes and locales — no event subscriptions, no seeds. */
 export default {
     name: 'observability',
-    basePath: '/observability',
-    routes: router,
+    mounts: [{ basePath: '/observability', routes: router }],
     // The scrape token's placeholder gate and the telemetry sinks: see `./config`.
     config: [observabilityConfig.slice],
     locales: path.join(__dirname, 'locales'),

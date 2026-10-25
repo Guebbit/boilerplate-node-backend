@@ -63,13 +63,12 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
 /** This module's manifest entry: routes, the cancel-refund subscription, and locales. */
 export default {
     name: 'payments',
-    basePath: '/payments',
-    routes: router,
+    mounts: [{ basePath: '/payments', routes: router }],
     jobs: paymentsJobs,
     publicEvents,
     /** The webhook and card-testing budgets — see `./rate-limits.ts`. */
     rateLimits: paymentsRateLimits,
-    // The provider signs over the exact bytes it sent — relative to `basePath`, composed by the
+    // The provider signs over the exact bytes it sent — relative to the first mount's `basePath`, composed by the
     // app tier, so the mount point is stated once and the two cannot drift.
     rawBodyPaths: ['/webhook'],
     // The webhook secret and the bank-transfer values: see `./config`. The

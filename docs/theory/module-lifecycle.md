@@ -206,8 +206,7 @@ import { router } from './routes';
  */
 export default {
     name: 'feedback',
-    basePath: '/feedback',
-    routes: router,
+    mounts: [{ basePath: '/feedback', routes: router }],
     // REQUIRED, not optional — a module cannot compile without answering this. 'none' is the
     // explicit, reviewed answer for a module with nothing personal to export.
     personalData: [
@@ -224,9 +223,9 @@ the boundary: the question is easiest to answer now and hardest once the module 
 See [Strategic DDD](./strategic-ddd.md) for the four kinds of relationship worth naming in it.
 
 ::: tip A domain with no URL is a first-class module
-Omit `basePath` and `routes` entirely and you get a headless module — `access` is one.
-`AppModule` is a plain interface, and `app/routes.ts` mounts a module only when it has both, so a
-router with no mount point is skipped rather than reported.
+Omit `mounts` entirely and you get a headless module — `access` is one.
+`AppModule` is a plain interface, and `app/routes.ts` mounts only what a module lists in `mounts`, so a
+module with none is skipped rather than reported.
 :::
 
 ### 2 · The registration

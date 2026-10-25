@@ -33,8 +33,7 @@ const onRegistered = (): void => {
 /** This module's manifest entry. */
 export default {
     name: 'audit-logs',
-    basePath: '/audit',
-    routes: router,
+    mounts: [{ basePath: '/audit', routes: router }],
     config: [auditLogsConfig.slice],
     onRegistered,
     locales: path.join(__dirname, 'locales'),

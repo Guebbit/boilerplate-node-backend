@@ -64,8 +64,7 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
 /** This module's manifest entry: routes, the order config gate, event subscriptions, and locales. */
 export default {
     name: 'orders',
-    basePath: '/orders',
-    routes: router,
+    mounts: [{ basePath: '/orders', routes: router }],
     jobs: ordersJobs,
     publicEvents,
     // Bank transfer, the order rules and the order link: see `./config`.
