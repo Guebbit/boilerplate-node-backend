@@ -61,7 +61,7 @@ const login = () => {
         { headers: { 'Content-Type': 'application/json' } }
     );
     check(response, { 'login answers 200': (r) => r.status === 200 });
-    return response.json('data.accessToken');
+    return response.json('data.token');
 };
 
 export default function () {
