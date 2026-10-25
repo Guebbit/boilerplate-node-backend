@@ -266,9 +266,7 @@ describe('POST /account/reauth with a mailed code', () => {
         advanceDate((reauthWindowSeconds('sensitive') + 1) * 1000);
         const staleBearer = await bearerForCookie(jwtCookie);
 
-        const response = await api()
-            .get(`/account/export/${'0'.repeat(24)}`)
-            .set('Authorization', staleBearer);
+        const response = await api().get('/account/export').set('Authorization', staleBearer);
 
         expect(response.status).toBe(401);
     });

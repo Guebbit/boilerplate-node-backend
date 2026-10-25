@@ -317,9 +317,10 @@ router.post('/email-change/undo', credentialLimiters, postEmailChangeUndo);
 // body.
 router.post('/export', isAuth, requireFreshAuth('sensitive'), postAccountExport);
 
-// GET /account/export/:id — download the finished export. Same tier as the request: the mailed
-// link only opens a page, and the data leaves only for a session that is fresh.
-router.get('/export/:id', isAuth, requireFreshAuth('sensitive'), getAccountExport);
+// GET /account/export — download the caller's finished export (one per account, so no id). Same
+// tier as the request: the mailed link only opens a page, and the data leaves only for a session
+// that is fresh.
+router.get('/export', isAuth, requireFreshAuth('sensitive'), getAccountExport);
 
 // POST /account/login/2fa/send — mail a login code. Registered ABOVE `/login/2fa` so the more
 // specific path is matched first. Public like /login, and limited twice over: this is the only

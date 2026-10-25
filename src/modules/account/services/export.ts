@@ -1,6 +1,6 @@
 /**
  * @module
- * `POST /account/export` and `GET /account/export/{id}` — "give me my data" (Art. 15, 20), as a job
+ * `POST /account/export` and `GET /account/export` — "give me my data" (Art. 15, 20), as a job
  * rather than a request: asking records a row and queues the build, the worker (`./export-job.ts`)
  * writes the file, and a mailed link downloads it. Its own file, beside the other
  * account services: it is neither proving identity (that's `requireFreshAuth`'s job, mounted on
@@ -217,21 +217,19 @@ export const requestExport = (
     );
 
 /**
- * Open the caller's finished export for download. The ownership check is the query, so another
- * account's export, a `building` or `failed` one, one past its retention and one that is simply
+ * Open the caller's finished export for download. An account has one live export, found by its
+ * owner, so a `building` or `failed` one, one past its retention and one that is simply
  * gone are all the same `undefined`.
  *
  * @param userId - the authenticated caller
- * @param exportId - the export's id, already checked to be one of this backend's own
  * @param context - for the audit event: the moment the data actually leaves
  * @returns the file as a stream, or `undefined` when there is nothing to send
  */
 export const openOwnExport = (
     userId: string,
-    exportId: string,
     context: CallerContext
 ): Promise<Readable | undefined> =>
-    accountExportRepository.findOwned(userId, exportId).then((row) => {
+    accountExportRepository.findByUserId(userId).then((row) => {
         if (row?.status !== 'ready' || row.expiresAt.getTime() <= Date.now()) return undefined;
 
         return openExport(row.file).then((stream) => {
@@ -241,7 +239,7 @@ export const openOwnExport = (
                 action: accountAuditActions.AUTH_DATA_EXPORT_DOWNLOADED,
                 outcome: 'success',
                 targetType: 'account_export',
-                targetId: exportId
+                targetId: String(row._id)
             });
             return stream;
         });

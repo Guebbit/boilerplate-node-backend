@@ -1,6 +1,6 @@
 /**
  * @module
- * `GET /account/export/{id}` controller — streams a finished export to its owner. The page the
+ * `GET /account/export` controller — streams the caller's finished export to its owner. The page the
  * mailed link opens calls this with the visitor's own session; `requireFreshAuth` (mounted on the
  * route) is the identity proof, and the service's ownership query is the authorization.
  */
@@ -10,27 +10,23 @@ import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { rejectResponse } from '@infrastructure/http/response';
-import { requireId } from '@infrastructure/http/ids';
 import { catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { openOwnExport } from '../services/export';
 
 /**
- * GET /account/export/:id — the caller's own export as a JSON attachment, or `404`.
+ * GET /account/export — the caller's own export as a JSON attachment, or `404`. An account has
+ * one live export, so there is no id to name.
  *
  * Streamed, never read into memory: the file is whatever the build wrote, and that is the whole
  * reason the build is a job. Not wrapped in the response envelope: the body IS the document
  * `AccountExportResponse` describes, so a saved file is the export and nothing else.
  */
-export const getAccountExport = (request: Request<{ id?: string }>, response: Response) => {
-    // A malformed id answers as the unknown export it is, before the query.
-    const exportId = requireId(request, response, { notFound: 'account.export.not-found' });
-    if (!exportId) return;
-
+export const getAccountExport = (request: Request, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
     const { id: userId } = request.authContext!;
 
-    return openOwnExport(userId, exportId, callerContextOf(request))
+    return openOwnExport(userId, callerContextOf(request))
         .then((stream) => {
             if (!stream) {
                 rejectResponse(response, 404, [t('account.export.not-found')]);

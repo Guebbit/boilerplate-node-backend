@@ -185,13 +185,9 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
     advanceDate(60_000);
     const exporter = await signIn(ACCOUNT.movedTo, ACCOUNT.replacement, await codeFor(secret, 0));
     const exporterBearer = await bearerForCookie(exporter.cookie);
-    const requested = await api()
-        .post('/account/export')
-        .set('Authorization', exporterBearer)
-        .send()
-        .expect(202);
+    await api().post('/account/export').set('Authorization', exporterBearer).send().expect(202);
     await settleInlineExports();
-    const exportPath = `/account/export/${String(requested.body.id)}`;
+    const exportPath = '/account/export';
     expect(mailsTo(ACCOUNT.movedTo, 'account.export-ready')).toHaveLength(1);
     await api().get(exportPath).set('Authorization', exporterBearer).expect(200);
     advanceDate(8 * DAY_MS + 60_000);

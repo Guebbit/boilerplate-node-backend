@@ -1249,7 +1249,7 @@ paths:
                 something of the caller's — profile, address book, orders, payments, shipments, cart,
                 wishlist, live sessions (metadata only, never a token value), and their own audit
                 trail — and a LINK to it is mailed to the account's address when it is ready, never
-                the data itself. Fetch it with `GET /account/export/{id}`.
+                the data itself. Fetch it with `GET /account/export`.
 
 
                 One live export per account. Asking while one is `building` returns that one; asking
@@ -1276,22 +1276,19 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
-
-    /account/export/{id}:
         get:
             tags: [Auth]
             summary: Download an export of the caller's own data
             description: >-
                 Streams the finished export — the JSON document `AccountExportResponse` describes — as
-                an attachment. This is the page the mailed link opens. Owner only, and a FRESH session
-                (`requireFreshAuth`), same as the request. `404` for an export that is not the
-                caller's, is still `building`, `failed`, or is already gone (past its retention, or
-                replaced by a newer request): the caller cannot tell these apart, by design.
+                an attachment. This is the page the mailed link opens. An account has one live export, so
+                there is no id to name: the caller's own is the one served. A FRESH session
+                (`requireFreshAuth`), same as the request. `404` when the caller has none, it is still
+                `building`, `failed`, or already gone (past its retention): the caller cannot tell
+                these apart, by design.
             operationId: downloadAccountExport
             security:
                 - bearerAuth: []
-            parameters:
-                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
                 '200':
                     description: The caller's own data

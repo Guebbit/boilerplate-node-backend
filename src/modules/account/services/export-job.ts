@@ -102,14 +102,13 @@ const mailRequester = (
     });
 
 /**
- * Mail the link for a row that has just become `ready`.
+ * Mail the link for an export that has just become `ready`.
  *
  * @param job - the job, for the address and the language
- * @param row - the settled row
  */
-const mailLink = (job: AccountExportJobPayload, row: AccountExportRow): Promise<void> => {
+const mailLink = (job: AccountExportJobPayload): Promise<void> => {
     const days = Math.round(exportRetentionMs() / DAY_MS);
-    return mailRequester(job, (name) => exportReadyEmail(job.locale, name, String(row._id), days));
+    return mailRequester(job, (name) => exportReadyEmail(job.locale, name, days));
 };
 
 /**
@@ -163,7 +162,7 @@ const afterBuild = (
 ): Promise<void> => {
     if (!settled) return removeFileIfRowGone(row);
 
-    return mailLink(job, settled).catch((error: unknown) => {
+    return mailLink(job).catch((error: unknown) => {
         logger.error({
             message: 'account export mail not queued',
             exportId: String(row._id),

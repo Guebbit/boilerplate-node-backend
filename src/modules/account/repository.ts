@@ -43,19 +43,6 @@ const findById = (id: string): Promise<AccountExportRow | null> =>
     accountExportModel.findById(toObjectId(id)).lean<AccountExportRow | null>().exec();
 
 /**
- * One row, only if it belongs to this account. The ownership check IS the query: a row that is
- * someone else's is indistinguishable from one that does not exist.
- *
- * @param userId - the caller
- * @param id - the row's id
- */
-const findOwned = (userId: string, id: string): Promise<AccountExportRow | null> =>
-    accountExportModel
-        .findOne({ _id: toObjectId(id), userId: toObjectId(userId) })
-        .lean<AccountExportRow | null>()
-        .exec();
-
-/**
  * Insert a fresh row. Rejects with a duplicate-key error (`11000`) when the account already has
  * one — the unique index on `userId` is what makes "one live export" true under a race.
  *
@@ -137,7 +124,6 @@ const findExpired = (now: Date, limit: number): Promise<AccountExportRow[]> =>
 export const accountExportRepository: {
     findByUserId: typeof findByUserId;
     findById: typeof findById;
-    findOwned: typeof findOwned;
     insert: typeof insert;
     settleBuilding: typeof settleBuilding;
     deleteById: typeof deleteById;
@@ -146,7 +132,6 @@ export const accountExportRepository: {
 } = {
     findByUserId,
     findById,
-    findOwned,
     insert,
     settleBuilding,
     deleteById,

@@ -179,30 +179,28 @@ describe('account emails — the copy', () => {
 });
 
 describe('account emails — the data export link', () => {
-    const EXPORT_ID = '64b0c0ffee64b0c0ffee64b0';
-
     it('renders its own template', () => {
-        expect(exportReadyEmail('en', NAME, EXPORT_ID, 7).template).toBe('account.export-ready');
+        expect(exportReadyEmail('en', NAME, 7).template).toBe('account.export-ready');
     });
 
     it('links to the frontend page for that export, in the recipient’s language', () => {
-        const { data } = exportReadyEmail('it', NAME, EXPORT_ID, 7);
+        const { data } = exportReadyEmail('it', NAME, 7);
 
-        expect(data.linkUrl).toBe(accountExportLink('it', EXPORT_ID));
-        expect(new URL(data.linkUrl as string).pathname).toBe(`/it/account-export/${EXPORT_ID}`);
+        expect(data.linkUrl).toBe(accountExportLink('it'));
+        expect(new URL(data.linkUrl as string).pathname).toBe('/it/account-export');
     });
 
     it('says how many days the file is kept', () => {
-        expect(exportReadyEmail('en', NAME, EXPORT_ID, 7).data.expiry).toContain('7');
+        expect(exportReadyEmail('en', NAME, 7).data.expiry).toContain('7');
     });
 
     it('greets by name when it has one and plainly when it has not', () => {
-        expect(exportReadyEmail('en', NAME, EXPORT_ID, 7).data.greeting).toContain(NAME);
-        expect(exportReadyEmail('en', '', EXPORT_ID, 7).data.greeting).toBe('Hello!');
+        expect(exportReadyEmail('en', NAME, 7).data.greeting).toContain(NAME);
+        expect(exportReadyEmail('en', '', 7).data.greeting).toBe('Hello!');
     });
 
     it.each(['en', 'it'])('resolves every slot to real copy in %s', (locale) => {
-        for (const [, value] of copySlots(exportReadyEmail(locale, NAME, EXPORT_ID, 7))) {
+        for (const [, value] of copySlots(exportReadyEmail(locale, NAME, 7))) {
             expect(typeof value).toBe('string');
             expect(value).not.toBe('');
             expect(value).not.toMatch(/^account\.email\./);

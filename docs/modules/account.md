@@ -289,7 +289,7 @@ flowchart LR
     I --> B
     B --> F["file in the private store"]
     F --> M["mail: a link"]
-    M --> D["GET /account/export/{id}<br/><i>owner · fresh session</i>"]
+    M --> D["GET /account/export<br/><i>owner · fresh session</i>"]
     B -. "throws" .-> X["row: failed<br/><i>logged, counted, a notice mailed</i>"]
 
     classDef entry fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -336,7 +336,7 @@ Decisions rather than mechanics:
   Asking again replaces it. Two runs of one job (a broker redelivery) are safe: only a row
   still `building` is built, and only the run that settles it mails the link.
 - **The download asks for a fresh session, like the request.** The mailed link opens a frontend page
-  that calls `GET /account/export/{id}`; a forwarded mail hands nobody the file. A row that is not
+  that calls `GET /account/export`; a forwarded mail hands nobody the file. A row that is not
   yours, not ready, past its retention or already gone are the same `404`.
 - **Kept `NODE_ACCOUNT_EXPORT_TTL_DAYS` days (7), then gone.** The nightly `reap:account-exports`
   deletes file and row, and sweeps files no row points at by age. A hard account delete (and so
