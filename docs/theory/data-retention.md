@@ -160,6 +160,10 @@ Three ways back, all conditional on `purgeAt > now`: the mailed link, signing in
 (`POST /users/{id}/restore`, the same `delete:User` key as any restore, with a confirm in the admin).
 The purge's first write is a claim on `purgeAt <= now`, so a restore and a purge can never both match.
 
+**Third parties.** Every hard erasure, the purge included, also asks the PostHog provider (when it is
+configured for erasure) to delete the person and its events:
+[Erasure in PostHog](../tools/analytics.md#erasure-in-posthog).
+
 **Backups.** A snapshot restore must re-apply `auth.account_delete.scheduled` and `.cancelled` since
 the snapshot, or the purge erases an account the person restored:
 [Erasures after a restore](../tools/backups.md#erasures-after-a-restore).
