@@ -23,7 +23,9 @@ const run = (origin: string | undefined) => {
     const response = asStub<Response>({
         status: jest.fn().mockReturnThis(),
         json: jest.fn().mockReturnThis(),
-        setHeader: jest.fn()
+        setHeader: jest.fn(),
+        getHeader: jest.fn(),
+        removeHeader: jest.fn()
     });
     const request = asStub<Request>({
         get: (name: string) => (name === 'Origin' ? origin : undefined),

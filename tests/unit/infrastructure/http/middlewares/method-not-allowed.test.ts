@@ -46,6 +46,8 @@ const run = (method: string, path: string): Outcome => {
         setHeader: (name: string, value: string) => {
             if (name === 'Allow') outcome.allow = value;
         },
+        getHeader: () => undefined,
+        removeHeader: () => undefined,
         status: (code: number) => {
             outcome.status = code;
             return response;

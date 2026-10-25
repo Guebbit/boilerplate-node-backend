@@ -20,7 +20,13 @@ const run = (body: unknown, contentType: string | false) => {
     const status = jest.fn().mockReturnThis();
     const json = jest.fn();
     const next = jest.fn();
-    const response = asStub<Response>({ status, json });
+    const response = asStub<Response>({
+        status,
+        json,
+        setHeader: jest.fn(),
+        getHeader: jest.fn(),
+        removeHeader: jest.fn()
+    });
     limitJsonDepth(
         asStub<Request>({ body, is: jest.fn(() => contentType) }),
         response,
