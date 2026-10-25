@@ -40,7 +40,6 @@ describe('payment routes', () => {
             'GET /refunds',
             'GET /attention',
             'POST /',
-            'GET /orders/:orderId',
             'POST /:id/refunds',
             'GET /:id',
             'GET /:id/refunds/:refundId',
@@ -142,7 +141,12 @@ describe('payment routes', () => {
     });
 
     it('mounts the order payment door under /orders, admin-guarded and idempotent', () => {
-        expect(routeSignatures(orderRouter)).toEqual(['POST /:id/payments']);
+        expect(routeSignatures(orderRouter)).toEqual(['GET /:id/payments', 'POST /:id/payments']);
+        expect(guardsOn(orderRouter, 'GET /:id/payments')).toEqual([
+            'getAuth',
+            'isAuth',
+            'getOrderPayments'
+        ]);
         expect(guardsOn(orderRouter, 'POST /:id/payments')).toEqual([
             'getAuth',
             'isAuth',

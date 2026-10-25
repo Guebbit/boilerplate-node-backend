@@ -9,7 +9,7 @@ import {
     ConfirmPayment200Response,
     CreatePayment201Response,
     GetOrderById200Response,
-    GetPaymentByOrder200Response,
+    ListOrderPayments200Response,
     GetProductAdmin200Response,
     ListStockMovements200Response
 } from '@api/schemas.zod';
@@ -132,9 +132,9 @@ export const orderOf = async (bearer: string, orderId: string) =>
  */
 export const paymentOf = async (bearer: string, orderId: string) =>
     bodyOf(
-        await api().get(`/payments/orders/${orderId}`).set('Authorization', bearer),
-        GetPaymentByOrder200Response
-    );
+        await api().get(`/orders/${orderId}/payments`).set('Authorization', bearer),
+        ListOrderPayments200Response
+    ).items[0];
 
 /**
  * A product's counters as staff read them.

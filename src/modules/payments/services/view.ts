@@ -4,14 +4,22 @@
  * what it sees, the same shape `orders`' `OrderActions` publishes.
  */
 
+import { t } from '@infrastructure/i18n';
 import { callerForSubject } from '@kernel/permissions';
 import { holds } from '@kernel/ability';
 import {
+    generateReject,
     generateSuccess,
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { RefundStatus, type Payment, type Refund, type AuthContext } from '@types';
+import {
+    RefundStatus,
+    type OrderPaymentsResponse,
+    type Payment,
+    type Refund,
+    type AuthContext
+} from '@types';
 import { orderService, isPayable } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { paymentRepository } from '../repository';
@@ -46,6 +54,30 @@ export const getForOrder = (
                 ? presentWithActions(payment, authContext).then((wire) => generateSuccess(wire))
                 : paymentNotFound()
         );
+
+/**
+ * The payments of an order, as `GET /orders/{id}/payments` lists them: unpaged, none or one (an
+ * order has one payment row). The order is read first, so a caller who cannot see it gets the 404
+ * and one who can gets `[]` for an order nobody has started paying.
+ *
+ * @param orderId - the order
+ * @param authContext - the caller; sees only their own, `display:Payment` sees anyone's
+ * @returns the list, or the 404 for an order the caller cannot see
+ */
+export const listForOrder = (
+    orderId: string,
+    authContext?: AuthContext
+): Promise<ResponseSuccess<OrderPaymentsResponse> | ResponseReject> =>
+    orderService.getForCaller(orderId, authContext).then((order) => {
+        if (!order) return generateReject(404, [t('orders.not-found')]);
+
+        return paymentRepository
+            .findByOrderId(orderId, callerScope(authContext))
+            .then((payment) =>
+                payment ? presentWithActions(payment, authContext).then((wire) => [wire]) : []
+            )
+            .then((items) => generateSuccess({ items }));
+    });
 
 /**
  * One payment by its own id — the address `Location` names after `POST /payments`.

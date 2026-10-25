@@ -279,28 +279,6 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /payments/orders/{orderId}:
-        get:
-            tags: [Payments]
-            summary: Get the payment behind an order
-            description: The payment record for one of the caller's orders, so a reload mid-flow finds the intent and its status again. A caller holding `display:Payment` reads anyone's. No intent yet is a 404 — absence is an answer, the client starts the flow with `POST /payments`.
-            operationId: getPaymentByOrder
-            security:
-                - bearerAuth: []
-            parameters:
-                - $ref: '../orders/openapi.yaml#/components/parameters/OrderIdPathParam'
-                  description: One of the caller's own orders
-            responses:
-                '200':
-                    description: The payment
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/Payment'
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
-
     /payments/{id}/refunds:
         post:
             tags: [Payments]
@@ -443,6 +421,32 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /orders/{id}/payments:
+        get:
+            tags: [Payments]
+            summary: List the payments of an order
+            description: >-
+                The payment record of one of the caller's orders, so a reload mid-flow finds the intent
+                and its status again. Unpaged: an order has one payment row, so `items` holds none or
+                one, like `GET /orders/{id}/credit-notes`. No payment started yet is `{ "items": [] }`,
+                not a 404: absence is an answer, and the client starts the flow with `POST /payments`.
+                `404` only for an order the caller cannot see. A caller holding `display:Payment` reads
+                anyone's.
+            operationId: listOrderPayments
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                  description: The order
+            responses:
+                '200':
+                    description: The order's payments
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OrderPaymentsResponse'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         post:
             tags: [Payments]
             summary: Record a payment on an order
@@ -723,6 +727,16 @@ components:
                     type: string
                     format: date-time
                     description: When the order's stock hold ends. Past it, with no money received, the order is cancelled.
+
+        OrderPaymentsResponse:
+            type: object
+            additionalProperties: false
+            required: [items]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Payment'
 
         Payment:
             type: object

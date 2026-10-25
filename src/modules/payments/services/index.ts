@@ -30,6 +30,7 @@ import { callerScope, payerScope, buyerOrderScope, readsAllPayments } from './sc
 import {
     getById,
     getForOrder,
+    listForOrder,
     getRefund,
     newestRefund,
     presentWithActions,
@@ -66,6 +67,7 @@ export const paymentService = {
     applyWebhookSettlement,
     getById,
     getForOrder,
+    listForOrder,
     getRefund,
     newestRefund,
     refundPayment,

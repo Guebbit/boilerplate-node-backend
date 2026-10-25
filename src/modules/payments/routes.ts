@@ -48,7 +48,6 @@ import { postPaymentSync } from './controllers/post-payment-sync';
 import { postPaymentWebhook } from './controllers/post-payment-webhook';
 import { getPayment } from './controllers/get-payment';
 import { getRefund } from './controllers/get-refund';
-import { getPaymentByOrder } from './controllers/get-payment-by-order';
 import { postPaymentRefund } from './controllers/post-payment-refund';
 import { postPaymentRefundSettle } from './controllers/post-payment-refund-settle';
 import { getPaymentMethods } from './controllers/get-payment-methods';
@@ -94,9 +93,6 @@ router.post(
     paymentIntentLimiter,
     postPayment
 );
-
-// GET /payments/orders/:orderId — the payment behind an order
-router.get('/orders/:orderId', getPaymentByOrder);
 
 // POST /payments/:id/refunds — the operator returns the money, order untouched. The key
 // is REQUIRED: a retried refund would otherwise return the money twice.

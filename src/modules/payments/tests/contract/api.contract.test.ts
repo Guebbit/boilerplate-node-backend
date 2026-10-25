@@ -190,13 +190,13 @@ describe('POST /payments', () => {
             .set('Authorization', bearer)
             .send({ orderId: String(order._id) });
         const readBack = await api()
-            .get(`/payments/orders/${String(order._id)}`)
+            .get(`/orders/${String(order._id)}/payments`)
             .set('Authorization', bearer);
 
         expect(intent.body).not.toHaveProperty('providerRef');
         expect(intent.body.clientSecret).toEqual(expect.any(String));
-        expect(readBack.body).not.toHaveProperty('providerRef');
-        expect(readBack.body).not.toHaveProperty('clientSecret');
+        expect(readBack.body.items[0]).not.toHaveProperty('providerRef');
+        expect(readBack.body.items[0]).not.toHaveProperty('clientSecret');
     });
 
     it('matches the error contract for an order that does not exist', async () => {
@@ -531,16 +531,17 @@ describe('POST /payments/webhook', () => {
     });
 });
 
-describe('GET /payments/orders/{orderId}', () => {
+describe('GET /orders/{id}/payments', () => {
     it('matches the contract for the caller`s own payment', async () => {
         const { bearer, order } = await authenticateWithIntent();
 
         const response = await api()
-            .get(`/payments/orders/${String(order._id)}`)
+            .get(`/orders/${String(order._id)}/payments`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.orderId).toBe(String(order._id));
+        expect(response.body.items).toHaveLength(1);
+        expect(response.body.items[0].orderId).toBe(String(order._id));
     });
 
     // The instructions of a bank transfer are the payment's own, served to its buyer while it waits.
@@ -548,25 +549,37 @@ describe('GET /payments/orders/{orderId}', () => {
         const { order, reference, customerBearer } = await transferOrderOf();
 
         const response = await api()
-            .get(`/payments/orders/${String(order._id)}`)
+            .get(`/orders/${String(order._id)}/payments`)
             .set('Authorization', customerBearer);
 
         expect(response.status).toBe(200);
-        expect(response.body).toMatchObject({
+        expect(response.body.items[0]).toMatchObject({
             status: 'requires_action',
             method: 'bank_transfer',
             nextAction: { type: 'bank_transfer', reference }
         });
-        expect(response.body).not.toHaveProperty('transferReference');
-        expect(response.body).not.toHaveProperty('payBy');
+        expect(response.body.items[0]).not.toHaveProperty('transferReference');
+        expect(response.body.items[0]).not.toHaveProperty('payBy');
     });
 
-    it('matches the error contract when no intent exists yet', async () => {
+    it('answers an empty list, not a 404, when no payment exists yet', async () => {
         const { bearer, order } = await authenticateWithOrder();
 
         const response = await api()
-            .get(`/payments/orders/${String(order._id)}`)
+            .get(`/orders/${String(order._id)}/payments`)
             .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({ items: [] });
+    });
+
+    it('answers 404 for an order the caller cannot see', async () => {
+        const { order } = await authenticateWithOrder();
+        const { bearer: stranger } = await authenticateAsRole('editor');
+
+        const response = await api()
+            .get(`/orders/${String(order._id)}/payments`)
+            .set('Authorization', stranger);
 
         expect(response.status).toBe(404);
     });

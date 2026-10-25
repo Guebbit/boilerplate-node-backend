@@ -1020,10 +1020,10 @@ describe('POST /cart/checkout', () => {
                     expect(response.body.payBy).toEqual(expect.any(String));
                     expect(response.body).not.toHaveProperty('transferInstructions');
                     const payment = await api()
-                        .get(`/payments/orders/${String(response.body.id)}`)
+                        .get(`/orders/${String(response.body.id)}/payments`)
                         .set('Authorization', bearer);
                     expect(payment.status).toBe(200);
-                    expect(payment.body.nextAction).toEqual({
+                    expect(payment.body.items[0].nextAction).toEqual({
                         type: 'bank_transfer',
                         beneficiary: 'Guebbit Shop',
                         // Grouped into 4s for display — see `bankTransferIbanFriendly`.

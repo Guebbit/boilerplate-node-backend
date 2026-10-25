@@ -318,7 +318,7 @@ flowchart LR
     REQ["GET /orders, GET /orders/{id}<br/><i>caller: customer | admin</i>"] --> L["domain/lifecycle.ts<br/>orderActionsFor(status, actor)"]
     L --> C["services/actions.ts<br/>the caller half: keys, buyer"]
     C --> A["actions: { cancel, pay, delete, hardDelete, restore, … }"]
-    REQ2["GET /payments/orders/{orderId}"] --> PA["actions: { pay, refund }"]
+    REQ2["GET /orders/{id}/payments"] --> PA["actions: { pay, refund }"]
     A --> UI["client renders controls"]
     PA --> UI
 
