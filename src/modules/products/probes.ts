@@ -34,7 +34,7 @@ export const probes: Probe[] = [
         name: 'Probe: the optional filters, all at once',
         why: `Generated requests carry only REQUIRED query parameters, so the filters — the half worth testing — appear nowhere. This exercises paging, price bounds and the active flag together, which is also the combination most likely to expose a bad index.`,
         method: 'GET',
-        path: '/products?page=1&pageSize=5&minPrice=1&maxPrice=100&active=true'
+        path: '/products?page=1&pageSize=5&priceMin=1&priceMax=100&active=true'
     },
     {
         name: 'Probe: the soft-deleted product, anonymously',

@@ -167,14 +167,15 @@ describe('userSchema — a linked OAuth identity', () => {
 });
 
 describe('userSchema — indexes', () => {
-    it('declares exactly the three documented indexes', () => {
+    it('declares exactly the four documented indexes', () => {
         // `users_oauth_identity` is the OAuth callback's equivalent, keyed on (provider, providerId).
         // `users_pending_email` is the swap-time half of the `PUT /account` collision check — see
-        // its own comment on the schema.
+        // its own comment on the schema. `users_purge_at` serves the purge job's due read.
         expect(indexSpecs(userSchema)).toEqual([
             'users_email: email+1',
             'users_oauth_identity: oauthAccounts.provider+1, oauthAccounts.providerId+1',
-            'users_pending_email: pendingEmail+1'
+            'users_pending_email: pendingEmail+1',
+            'users_purge_at: purgeAt+1'
         ]);
     });
 
@@ -186,7 +187,8 @@ describe('userSchema — indexes', () => {
         expect(indexOptionSpecs(userSchema)).toEqual([
             'users_email: unique=true',
             'users_oauth_identity: partialFilterExpression={"oauthAccounts.0":{"$exists":true}}, unique=true',
-            'users_pending_email: partialFilterExpression={"pendingEmail":{"$exists":true}}, unique=true'
+            'users_pending_email: partialFilterExpression={"pendingEmail":{"$exists":true}}, unique=true',
+            'users_purge_at: partialFilterExpression={"purgeAt":{"$exists":true}}'
         ]);
     });
 });

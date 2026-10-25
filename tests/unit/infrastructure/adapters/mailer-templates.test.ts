@@ -22,8 +22,9 @@ import {
     setupRequestEmail,
     resetConfirmEmail,
     passwordChangedEmail,
-    deleteRequestEmail,
-    deleteConfirmEmail,
+    deletionScheduledEmail,
+    accountRestoredEmail,
+    accountDeletedEmail,
     inactivityWarningEmail,
     twoFactorCodeEmail,
     reauthCodeEmail,
@@ -72,8 +73,9 @@ describe('the template collection', () => {
 
     it.each([
         'orders.order-confirm',
-        'account.delete-confirm',
-        'account.delete-request',
+        'account.deleted',
+        'account.deletion-scheduled',
+        'account.restored',
         'feedback.contact'
     ])('resolves %s to a real file', (name) => {
         expect(() => templateFile(name)).not.toThrow();
@@ -103,8 +105,14 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
     'account.setup-request': setupRequestEmail(locale, 'Ada', 'a-token'),
     'account.reset-confirm': resetConfirmEmail(locale, 'Ada'),
     'account.password-changed': passwordChangedEmail(locale, 'Ada'),
-    'account.delete-request': deleteRequestEmail(locale, 'Ada', 'a-token'),
-    'account.delete-confirm': deleteConfirmEmail(locale, 'Ada'),
+    'account.deletion-scheduled': deletionScheduledEmail(
+        locale,
+        'Ada',
+        'a-token',
+        new Date('2026-11-05T00:00:00Z')
+    ),
+    'account.restored': accountRestoredEmail(locale, 'Ada', true),
+    'account.deleted': accountDeletedEmail(locale, 'Ada'),
     'account.inactivity-warning': inactivityWarningEmail(locale, 'Ada', 30),
     'account.two-factor-code': twoFactorCodeEmail(locale, 'Ada', '492013', 10),
     'account.reauth-code': reauthCodeEmail(locale, 'Ada', '492013', 10),

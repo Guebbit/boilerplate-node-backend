@@ -27,6 +27,7 @@ import {
 } from '@infrastructure/http/response';
 import { t } from '@infrastructure/i18n';
 import { recordAudit } from '@infrastructure/observability/audit';
+import { auditChanges } from '@infrastructure/observability/audit-changes';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { toObjectId } from '@infrastructure/persistence/create-repository';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
@@ -168,6 +169,13 @@ const applyUpdate = (
     changes: UpdateExampleRequest,
     context: CallerContext
 ): Promise<ExampleResult> => {
+    // Read before the assignments below; the text is free: by name only.
+    const metadata = auditChanges(
+        example,
+        { title: changes.title?.trim(), body: changes.body?.trim() },
+        { valued: [], named: ['title', 'body'] }
+    );
+
     if (changes.title !== undefined) example.title = changes.title.trim();
     if (changes.body !== undefined) example.body = changes.body.trim();
 
@@ -176,7 +184,8 @@ const applyUpdate = (
             action: exampleAuditActions.EXAMPLE_UPDATED,
             outcome: 'success',
             targetType: 'example',
-            targetId: String(saved._id)
+            targetId: String(saved._id),
+            metadata
         });
         return presentForCaller(saved, context).then((shaped) =>
             generateSuccess(shaped, 200, t('example.updated'))

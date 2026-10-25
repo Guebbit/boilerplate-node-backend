@@ -328,14 +328,14 @@ export const callerContextOf = (request: {
     headers?: {
         'user-agent'?: string | string[];
         host?: string;
-        'x-analytics-consent'?: string | string[];
+        'analytics-consent'?: string | string[];
     };
     requestId?: string;
     clientRequestId?: string;
     locale?: string;
 }): CallerContext => {
     const rawUserAgent = request.headers?.['user-agent'];
-    const rawConsentHeader = request.headers?.['x-analytics-consent'];
+    const rawConsentHeader = request.headers?.['analytics-consent'];
     const consentHeader = Array.isArray(rawConsentHeader) ? rawConsentHeader[0] : rawConsentHeader;
     return {
         caller: request.caller ?? STRANGER,

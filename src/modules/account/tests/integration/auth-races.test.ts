@@ -183,7 +183,7 @@ describe('R4 — concurrent logins for one account', () => {
             .find((response) => response?.status === 200)?.body?.data?.token;
 
         const results = await raceN(3, () =>
-            api().post('/account/logout-all').set('Authorization', `Bearer ${token}`)
+            api().delete('/account/sessions').set('Authorization', `Bearer ${token}`)
         );
 
         expectNoServerErrors(results);
@@ -301,7 +301,7 @@ describe('one-time tokens under contention', () => {
         await plantToken(user.id, 'password', 'one-time-reset-token', { ttlMs: 60 * 60 * 1000 });
 
         const results = await raceN(2, () =>
-            api().post('/account/reset-confirm').send({
+            api().post('/account/password/reset/confirm').send({
                 token: 'one-time-reset-token',
                 password: REPLACEMENT_PASSWORD,
                 passwordConfirm: REPLACEMENT_PASSWORD

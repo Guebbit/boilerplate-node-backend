@@ -45,7 +45,7 @@ describe('POST /analytics/events', () => {
     it('captures a product view once the visitor has consented', async () => {
         const response = await api()
             .post('/analytics/events')
-            .set('X-Analytics-Consent', 'true')
+            .set('Analytics-Consent', 'true')
             .send(VIEW);
 
         expect(response.status).toBe(204);
@@ -61,7 +61,7 @@ describe('POST /analytics/events', () => {
     it('captures a search with its term, page and result count', async () => {
         await api()
             .post('/analytics/events')
-            .set('X-Analytics-Consent', 'true')
+            .set('Analytics-Consent', 'true')
             .send({ event: 'products_searched', text: 'lamp', resultCount: 3, page: 2 });
 
         expect(capture).toHaveBeenCalledWith(
@@ -75,7 +75,7 @@ describe('POST /analytics/events', () => {
     it('refuses an event name outside the closed set, consent or not', async () => {
         const response = await api()
             .post('/analytics/events')
-            .set('X-Analytics-Consent', 'true')
+            .set('Analytics-Consent', 'true')
             .send({ event: 'order_created' });
 
         expect(response.status).toBe(422);
@@ -85,7 +85,7 @@ describe('POST /analytics/events', () => {
     it('refuses an event with an unknown extra field', async () => {
         const response = await api()
             .post('/analytics/events')
-            .set('X-Analytics-Consent', 'true')
+            .set('Analytics-Consent', 'true')
             .send({ ...VIEW, email: 'ada@example.com' });
 
         expect(response.status).toBe(422);
@@ -97,7 +97,7 @@ describe('POST /analytics/events', () => {
     ])('refuses %s instead of relaying it', async (_label, body) => {
         const response = await api()
             .post('/analytics/events')
-            .set('X-Analytics-Consent', 'true')
+            .set('Analytics-Consent', 'true')
             .send(body);
 
         expect(response.status).toBe(422);

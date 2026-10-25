@@ -9,7 +9,7 @@
 
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api, authenticateAs } from '@tests/http';
+import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { credentialHolding } from '@tests/credentials';
 import { listSupportedLocales, getDefaultLocale, getFallbackLocale } from '@infrastructure/i18n';
 import { translator } from '@infrastructure/i18n';
@@ -799,6 +799,56 @@ describe('POST /locales/:locale/apps/:app/entries', () => {
             .send({ key: 'cart.title', value: 'x' });
 
         expect(response.status).toBe(404);
+    });
+});
+
+describe('GET /locales/:locale/apps/:app/entries/:entryId', () => {
+    it('matches the contract for the translator who may edit the slice', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+        const entryId = await createEntry(bearer, 'pt', 'cart.title', 'Carrinho');
+
+        const response = await api()
+            .get(`/locales/pt/apps/demo-fe/entries/${entryId}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toMatchObject({
+            id: entryId,
+            key: 'cart.title',
+            value: 'Carrinho'
+        });
+    });
+
+    it('answers 404 for an unknown entry, a malformed id and an entry of another app', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+        const entryId = await createEntry(bearer, 'pt', 'cart.title', 'Carrinho', 'demo-fe');
+
+        const unknown = await api()
+            .get(`/locales/pt/apps/demo-fe/entries/${MISSING_ID}`)
+            .set('Authorization', bearer);
+        const malformed = await api()
+            .get('/locales/pt/apps/demo-fe/entries/not-an-id')
+            .set('Authorization', bearer);
+        const otherApp = await api()
+            .get(`/locales/pt/apps/demo-be/entries/${entryId}`)
+            .set('Authorization', bearer);
+
+        expect([unknown.status, malformed.status, otherApp.status]).toEqual([404, 404, 404]);
+    });
+
+    it('refuses a caller without update:Locale with 403', async () => {
+        const { bearer: adminBearer } = await authenticateAs('admin');
+        await createLanguage(adminBearer);
+        const entryId = await createEntry(adminBearer, 'pt', 'cart.title', 'Carrinho');
+        const { bearer } = await authenticateAsRole('customer');
+
+        const response = await api()
+            .get(`/locales/pt/apps/demo-fe/entries/${entryId}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(403);
     });
 });
 

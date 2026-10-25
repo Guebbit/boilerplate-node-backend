@@ -17,7 +17,7 @@ import paymentsModule from '@modules/payments/module';
 import invoicingModule from '@modules/invoicing/module';
 import { yearInZone } from '@modules/orders';
 import { paymentService } from '@modules/payments';
-import { refundForOrder } from '@modules/payments/tests/factories';
+import { refundForOrder, refundOrderPayment } from '@modules/payments/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createOrder, timelineOf, toOrderItem } from '@modules/orders/tests/factories';
@@ -115,7 +115,7 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
             }
         });
 
-        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'));
+        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'));
         const [note] = await waitForNotes(orderId, 1);
 
         expect(note.billingAddress?.fullName).not.toBe('Ada Lovelace');
@@ -129,7 +129,7 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
     it('mirrors the invoice for a full refund', async () => {
         const { orderId, invoice } = await paidAndInvoiced();
 
-        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'));
+        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'));
         const notes = await waitForNotes(orderId, 1);
 
         expect(notes[0].lines).toHaveLength(invoice.lines.length);
@@ -141,10 +141,10 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
     it('issues one credit note per partial refund, each for its own amount', async () => {
         const { orderId, invoice } = await paidAndInvoiced();
 
-        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'), {
+        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
             amount: 20
         });
-        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'), {
+        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
             amount: 5
         });
         const notes = await waitForNotes(orderId, 2);
@@ -163,7 +163,7 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
 
     it('is idempotent on the refund — a redelivered event issues nothing twice', async () => {
         const { orderId } = await paidAndInvoiced();
-        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'), {
+        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
             amount: 20
         });
         const [note] = await waitForNotes(orderId, 1);

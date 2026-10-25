@@ -10,9 +10,18 @@ import { createRepository, type Repository } from '@infrastructure/persistence/c
 import { apiKeyModel, applyApiKeyTransform, type ApiKeyDocument } from './model';
 import type { ApiKey } from '@types';
 
-/** The shared factory's CRUD, scoped to `apikeys`. No `searchable`: the admin list has no free-text filter. */
-const base = createRepository<ApiKeyDocument, ApiKey>(apiKeyModel, {
-    transform: applyApiKeyTransform
+/**
+ * A stored credential as the wire carries it, minus `status`: whether the minter can still sign
+ * in is a fact about ANOTHER collection, so `services/api-keys.ts` adds it to a row after the read.
+ */
+export type StoredApiKey = Omit<ApiKey, 'status'>;
+
+/** The shared factory's CRUD, scoped to `apikeys`. The admin list has no free-text filter, only an order. */
+const base = createRepository<ApiKeyDocument, StoredApiKey>(apiKeyModel, {
+    transform: applyApiKeyTransform,
+    searchable: {
+        sortable: { createdAt: 'createdAt', expiresAt: 'expiresAt', lastUsedAt: 'lastUsedAt' }
+    }
 });
 
 /**
@@ -96,14 +105,28 @@ const revokeMany = (ids: readonly string[], at: Date): Promise<void> =>
         .exec()
         .then(() => undefined);
 
+/**
+ * Who minted each of these credentials. The wire shape leaves `createdByUserId` out, so the list
+ * asks for it here when it needs to know which minters can still sign in.
+ *
+ * @param ids - credential ids
+ * @returns credential id → minter's user id
+ */
+const mintersOf = (ids: readonly string[]): Promise<Map<string, string>> =>
+    apiKeyModel
+        .find({ _id: { $in: ids } }, { createdByUserId: 1 })
+        .exec()
+        .then((rows) => new Map(rows.map((row) => [String(row._id), row.createdByUserId])));
+
 /** Explicit annotation: same TS7056 reason as every other module's repository — see `webhooks/repository.ts`. */
-export const apiKeyRepository: Repository<ApiKeyDocument, ApiKey> & {
+export const apiKeyRepository: Repository<ApiKeyDocument, StoredApiKey> & {
     findActiveByPrefix: typeof findActiveByPrefix;
     findAnyByPrefix: typeof findAnyByPrefix;
     touchLastUsed: typeof touchLastUsed;
     deleteByUserId: typeof deleteByUserId;
     findActiveByMinter: typeof findActiveByMinter;
     revokeMany: typeof revokeMany;
+    mintersOf: typeof mintersOf;
 } = {
     ...base,
     findActiveByPrefix,
@@ -111,5 +134,6 @@ export const apiKeyRepository: Repository<ApiKeyDocument, ApiKey> & {
     touchLastUsed,
     deleteByUserId,
     findActiveByMinter,
-    revokeMany
+    revokeMany,
+    mintersOf
 };

@@ -15,22 +15,24 @@ describe('inventory routes', () => {
     it('mounts exactly the documented endpoints, in the documented order', () => {
         expect(routeSignatures(router)).toEqual([
             'GET /levels',
+            'GET /levels/:productId',
             'GET /preorders',
             'PUT /levels/:productId/backorder-limit',
             'GET /movements',
-            'POST /receipts',
-            'POST /adjustments',
+            'POST /levels/:productId/receive',
+            'POST /levels/:productId/adjust',
             'POST /reservations/sweep'
         ]);
     });
 
     it.each([
         'GET /levels',
+        'GET /levels/:productId',
         'GET /preorders',
         'PUT /levels/:productId/backorder-limit',
         'GET /movements',
-        'POST /receipts',
-        'POST /adjustments',
+        'POST /levels/:productId/receive',
+        'POST /levels/:productId/adjust',
         'POST /reservations/sweep'
     ])('%s is reachable only by an authenticated admin', (signature) => {
         const guards = guardsOn(router, signature);

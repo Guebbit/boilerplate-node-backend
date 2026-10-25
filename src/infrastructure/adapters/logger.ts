@@ -70,7 +70,7 @@ export const SENSITIVE_FIELDS = new Set([
     'cookie',
     'set-cookie',
     'x-api-key',
-    'x-antibot-challenge-token',
+    'antibot-challenge-token',
     'otp',
     'jwt',
     '__Host-session',

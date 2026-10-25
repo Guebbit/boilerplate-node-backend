@@ -15,7 +15,11 @@ export const accountAuditActions = {
     AUTH_PASSWORD_RESET_REQUESTED: 'auth.password_reset.requested',
     AUTH_PASSWORD_RESET_COMPLETED: 'auth.password_reset.completed',
     AUTH_PASSWORD_CHANGED: 'auth.password.changed',
-    AUTH_ACCOUNT_DELETE_REQUESTED: 'auth.account_delete.requested',
+    /** `DELETE /account` locked the account and scheduled its erasure at `purgeAt`. */
+    AUTH_ACCOUNT_DELETE_SCHEDULED: 'auth.account_delete.scheduled',
+    /** A scheduled deletion was cancelled — `metadata.via` is `link`, `sign-in` or `staff`. */
+    AUTH_ACCOUNT_DELETE_CANCELLED: 'auth.account_delete.cancelled',
+    /** The purge job erased the account once its grace ran out. */
     AUTH_ACCOUNT_DELETE_COMPLETED: 'auth.account_delete.completed',
     AUTH_EMAIL_VERIFY_REQUESTED: 'auth.email_verify.requested',
     AUTH_EMAIL_VERIFY_COMPLETED: 'auth.email_verify.completed',
@@ -23,11 +27,11 @@ export const accountAuditActions = {
     AUTH_EMAIL_CHANGE_REQUESTED: 'auth.email_change.requested',
     /** `pendingEmail` swapped into `email` and every refresh token revoked. */
     AUTH_EMAIL_CHANGE_COMPLETED: 'auth.email_change.completed',
-    /** `DELETE /account/pending-email` discarded a pending change without proving it. */
+    /** `DELETE /account/email-change` discarded a pending change without proving it. */
     AUTH_EMAIL_CHANGE_CANCELLED: 'auth.email_change.cancelled',
-    /** `POST /account/email-change-undo` reverted (or cancelled) a change from the old address's link. */
+    /** `POST /account/email-change/undo` reverted (or cancelled) a change from the old address's link. */
     AUTH_EMAIL_CHANGE_UNDONE: 'auth.email_change.undone',
-    /** `POST /account/pending-email/resend` mailed the pending address a fresh link. */
+    /** `POST /account/email-change/resend` mailed the pending address a fresh link. */
     AUTH_EMAIL_CHANGE_RESENT: 'auth.email_change.resent',
     AUTH_TOKEN_REFRESHED: 'auth.token.refreshed',
     /*
@@ -42,7 +46,7 @@ export const accountAuditActions = {
     /** A step-up code was mailed to an account with no password. */
     AUTH_REAUTH_CODE_SENT: 'auth.reauth.code_sent',
     /**
-     * A one-time link token (reset, verify, email change, account delete) was unknown, expired or
+     * A one-time link token (reset, verify, email change, account restore) was unknown, expired or
      * already used — `metadata.flow` names which. Unknown and expired read alike on purpose.
      */
     AUTH_ONE_TIME_TOKEN_REJECTED: 'auth.one_time_token.rejected',

@@ -159,7 +159,7 @@ fallback locale.
 | `fields`       | `Record<string, string>` — `{ title, description }` for a product.                                                                                                                                                                      |
 | `sourceDigest` | Hash of the fallback row's `fields` at the moment THIS row was translated. Absent on the fallback row itself — it can't be stale relative to its own content. A mismatch means the source changed since; nothing recomputes it on read. |
 | `origin`       | `machine` or `human` — what a reviewer would prioritise. No workflow gate behind either: a write is live immediately.                                                                                                                   |
-| `translatedBy` | Whoever last wrote the row, for the audit trail.                                                                                                                                                                                        |
+| `translatedBy` | Whoever last wrote the row, for the audit trail. Unset when that account is erased: the text stays, the person goes.                                                                                                                    |
 
 `src/modules/locales/services/translations.ts` owns the write path: `planTranslationWrites`
 validates a whole PATCH-shaped batch — the locale exists (active or not: a draft language is where

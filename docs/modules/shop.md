@@ -3,9 +3,10 @@
 ::: tip At a glance
 **Owns** — the shop itself: who the seller is (legal name, address, email, phone, VAT number), the
 country VAT is charged in, the time zone its days follow, the one currency it trades in, the
-countries it ships to, and where returned goods go and who pays the postage. One public read,
-`GET /shop`.
-**Depends on** — nothing. Eight modules read it: `orders`, `products`, `cart`, `delivery`,
+countries it ships to, where returned goods go and who pays the postage, the version of the Terms in
+force and the backorder promise in days. One public read, `GET /shop`.
+**Depends on** — `account`, for the Terms version `GET /shop` prints (the shop group reaches the
+foundation, never the reverse). Eight modules read it: `orders`, `products`, `cart`, `delivery`,
 `invoicing`, `payments`, `returns` and `stats`.
 **Breaks if you change** — the `Shop` wire shape, which the paired frontend reads once into its
 shop store: price inputs, the address form's country list and the legal pages all draw on it.
@@ -22,6 +23,7 @@ graph cannot see._
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
 flowchart LR
     shop["shop<br/><i>this module</i>"]
+    account["account"]
     cart["cart"]
     delivery["delivery"]
     invoicing["invoicing"]
@@ -39,6 +41,7 @@ flowchart LR
     products --> shop
     returns --> shop
     stats --> shop
+    shop --> account
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -46,6 +49,7 @@ flowchart LR
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders,products core;
     class delivery,invoicing,payments,returns,stats supporting;
+    class account generic;
     class shop centre;
 ```
 

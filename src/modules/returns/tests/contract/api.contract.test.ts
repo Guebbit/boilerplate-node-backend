@@ -176,6 +176,18 @@ describe('GET /returns and GET /returns/{id}', () => {
         expect(one.body.data.note).toBe('Cracked');
     });
 
+    it('takes a comma-separated sort and refuses a field outside the enum', async () => {
+        const { bearer } = await customerWithOrder(OrderStatus.delivered);
+
+        const sorted = await api()
+            .get('/returns?sort=-createdAt,status')
+            .set('Authorization', bearer);
+        const refused = await api().get('/returns?sort=note').set('Authorization', bearer);
+
+        expect(sorted.status).toBe(200);
+        expect(refused.status).toBe(422);
+    });
+
     it('404s a return on someone else’s order', async () => {
         const { bearer, orderId } = await customerWithOrder(OrderStatus.delivered);
         const created = await api()

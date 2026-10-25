@@ -107,6 +107,29 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /notifications/{id}:
+        get:
+            tags: [Notifications]
+            summary: Get a notification
+            description: >-
+                One of the caller's own notifications, the same shape the list carries. Someone
+                else's, an unknown id and a malformed one are the same 404, so a probe cannot tell
+                them apart.
+            operationId: getNotificationById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The notification
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/NotificationEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
             tags: [Notifications]
             summary: Delete a notification
@@ -389,6 +412,20 @@ components:
                     description: Newest first.
                     items:
                         $ref: '#/components/schemas/Notification'
+
+        NotificationEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/Notification'
 
         NotificationsResponseEnvelope:
             type: object

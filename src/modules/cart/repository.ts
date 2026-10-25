@@ -20,8 +20,11 @@ import {
     type Wire
 } from '@infrastructure/persistence/create-repository';
 
-/** How {@link upsertLine} treats a quantity for a line already in the cart. */
-export type CartLineMode = 'set' | 'add';
+/**
+ * How {@link upsertLine} treats a quantity for a line already in the cart.
+ * `'update'` is `'set'` for a line the cart must already hold: it never creates one.
+ */
+export type CartLineMode = 'set' | 'add' | 'update';
 
 /** A line write's outcome: the cart after it, and whether it created the line rather than changing one. */
 export interface LineWrite {
@@ -34,6 +37,9 @@ export interface LineWrite {
  * `cartLineMax()` — there is nothing to return, since nothing was written.
  */
 export const QUANTITY_LIMIT = 'quantity-limit';
+
+/** What {@link upsertLine} resolves to in `'update'` mode when the cart holds no such line. */
+export const NO_LINE = 'no-line';
 
 /**
  * Pushes a brand-new line onto the cart, creating the cart document itself if none exists yet.
@@ -75,8 +81,27 @@ const unchangedOrPushed = (
             unchanged ? { cart: unchanged, created: false } : pushNewLine(owner, line, quantity)
         );
 
-/** What {@link resolveAddMiss} answers when room has reappeared: try the whole add again. */
+/** What a miss answers when a concurrent write moved the line: try the whole call again. */
 const RETRY = Symbol('retry');
+
+/**
+ * The `'update'` miss: the line already holds exactly `quantity` (a no-op, the cart comes back
+ * untouched), or it is not there (`NO_LINE`). A line a concurrent write changed between the
+ * two reads is `RETRY`.
+ */
+const unchangedOrMissing = (
+    owner: QueryFilter<CartDocument>,
+    line: Types.ObjectId,
+    quantity: number
+): Promise<LineWrite | typeof NO_LINE | typeof RETRY> =>
+    cartModel
+        .findOne({ ...owner, 'items.productId': line })
+        .exec()
+        .then((existing) => {
+            const current = existing?.items.find((item) => item.productId.equals(line));
+            if (!existing || !current) return NO_LINE;
+            return current.quantity === quantity ? { cart: existing, created: false } : RETRY;
+        });
 
 /**
  * The `'add'` miss: the atomic increment matched nothing, which is ambiguous — no such line yet,
@@ -138,7 +163,7 @@ const upsertLine = (
     quantity: number,
     mode: CartLineMode,
     attemptsLeft = 3
-): Promise<LineWrite | typeof QUANTITY_LIMIT> => {
+): Promise<LineWrite | typeof QUANTITY_LIMIT | typeof NO_LINE> => {
     const owner = { userId: toObjectId(userId) };
     const line = toObjectId(productId);
     // Read once per call: the filter and the retry decision below must agree on one ceiling.
@@ -150,18 +175,25 @@ const upsertLine = (
     // whichever the FIRST one found. Silent on a passing case (any two-line cart still updates
     // SOME line), so it only ever showed up as `q` landing on the wrong product.
     // https://www.mongodb.com/docs/manual/reference/operator/update/positional/#--em-multiple--em--array-conditions
-    // `'set'` matches only a line whose quantity DIFFERS: an identical PUT must not bump `__v`,
+    // `'set'` matches only a line whose quantity DIFFERS: an identical set must not bump `__v`,
     // or repeating it mid-checkout fails that checkout with CART_CHANGED (RFC 9110 §9.2.2 —
     // the same PUT twice leaves the same state).
     const matchExistingLine: QueryFilter<CartDocument> =
-        mode === 'set'
-            ? { ...owner, items: { $elemMatch: { productId: line, quantity: { $ne: quantity } } } }
-            : {
+        mode === 'add'
+            ? {
                   ...owner,
                   items: {
                       $elemMatch: { productId: line, quantity: { $lte: lineMax - quantity } }
                   }
-              };
+              }
+            : { ...owner, items: { $elemMatch: { productId: line, quantity: { $ne: quantity } } } };
+
+    // The same call again, one attempt poorer, when a concurrent write moved the line under us.
+    const retried = () => {
+        if (attemptsLeft <= 1)
+            throw new Error('cart: exhausted retries resolving a contended write');
+        return upsertLine(userId, productId, quantity, mode, attemptsLeft - 1);
+    };
 
     return (
         cartModel
@@ -169,25 +201,26 @@ const upsertLine = (
             // same reasoning as `pushNewLine`.
             .findOneAndUpdate(
                 matchExistingLine,
-                mode === 'set'
-                    ? { $set: { 'items.$.quantity': quantity }, $inc: { __v: 1 } }
-                    : { $inc: { 'items.$.quantity': quantity, __v: 1 } },
+                mode === 'add'
+                    ? { $inc: { 'items.$.quantity': quantity, __v: 1 } }
+                    : { $set: { 'items.$.quantity': quantity }, $inc: { __v: 1 } },
                 { returnDocument: 'after' }
             )
             .exec()
             // Explicit generic: without it, TS infers this callback's return type from the OUTER
             // function's declared return rather than its own body, and drops the `QUANTITY_LIMIT`
             // branch below.
-            .then<LineWrite | typeof QUANTITY_LIMIT>((cart) => {
+            .then<LineWrite | typeof QUANTITY_LIMIT | typeof NO_LINE>((cart) => {
                 if (cart) return { cart, created: false };
                 if (mode === 'set') return unchangedOrPushed(owner, line, quantity);
+                if (mode === 'update')
+                    return unchangedOrMissing(owner, line, quantity).then((resolved) =>
+                        resolved === RETRY ? retried() : resolved
+                    );
 
-                return resolveAddMiss(owner, line, quantity, lineMax).then((resolved) => {
-                    if (resolved !== RETRY) return resolved;
-                    if (attemptsLeft <= 1)
-                        throw new Error('cart: exhausted retries resolving a contended add');
-                    return upsertLine(userId, productId, quantity, mode, attemptsLeft - 1);
-                });
+                return resolveAddMiss(owner, line, quantity, lineMax).then((resolved) =>
+                    resolved === RETRY ? retried() : resolved
+                );
             })
             .catch((error: unknown) => {
                 if (attemptsLeft <= 1 || !isDuplicateKey(error)) throw error;
@@ -209,7 +242,7 @@ export const cartRepository: Repository<CartDocument, Wire<CartDocument>> & {
         productId: string,
         quantity: number,
         mode: CartLineMode
-    ) => Promise<LineWrite | typeof QUANTITY_LIMIT>;
+    ) => Promise<LineWrite | typeof QUANTITY_LIMIT | typeof NO_LINE>;
     removeLine: (userId: string, productId: string) => Promise<CartDocument | null>;
     clearLines: (userId: string) => Promise<CartDocument | null>;
     clearLinesIfUnchanged: (
@@ -234,7 +267,7 @@ export const cartRepository: Repository<CartDocument, Wire<CartDocument>> & {
      */
     findByUserId: (userId: string) => cartModel.findOne({ userId: toObjectId(userId) }).exec(),
 
-    /** Set or increment a line's quantity, creating the cart and the line as needed; says which. */
+    /** Set or increment a line's quantity (creating the cart and line, except in `'update'`); says which. */
     upsertLine,
 
     /**

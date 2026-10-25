@@ -55,7 +55,6 @@ const createCatchAllSubscription = () => {
         tenant: 'shop',
         url: 'https://example.test/inbox',
         eventTypes: ['*'],
-        enabled: true,
         consecutiveFailures: 0,
         secrets: [entry]
     });

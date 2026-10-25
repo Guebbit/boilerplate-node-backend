@@ -18,6 +18,8 @@ per endpoint. This page is the *why* around both.
 
 A minimal root endpoint used to verify the process is alive.
 
+An unknown path answers 404. A path the contract knows, asked with a method it does not give it, answers 405 with an `Allow` header ([why and how](./write-methods.md#a-known-path-with-the-wrong-method)).
+
 ## Observability
 
 > The domain behind these routes: [`observability`](../modules/observability.md) · routes and middleware: `src/modules/observability/routes.ts`
@@ -41,19 +43,19 @@ has lapsed. There is no endpoint for it: a manual run is `npm run job reap:previ
 
 Standard CRUD for the product catalogue. Read endpoints are public and Redis-cached. Write endpoints need `create:Product`, `update:Product` or `delete:Product` respectively, and invalidate the cache on change. Both single-item and bulk operations are supported.
 
-Stock is read-only on this surface. `onHand`, `reserved` and `available` are serialized on every product, and no product body accepts a counter: an absolute stock write on a form overwrites whatever sold while it was open, so a product's stock, an opening count included, is `POST /inventory/receipts` or `POST /inventory/adjustments`, both signed and both audited.
+Stock is read-only on this surface. `onHand`, `reserved` and `available` are serialized on every product, and no product body accepts a counter: an absolute stock write on a form overwrites whatever sold while it was open, so a product's stock, an opening count included, is `POST /inventory/levels/{productId}/receive` or `POST /inventory/levels/{productId}/adjust`, both signed and both audited.
 
 ## Cart
 
 > The domain behind these routes: [`cart`](../modules/cart.md) · routes and middleware: `src/modules/cart/routes.ts`
 
-Per-user, server-side cart. Items are scoped to the authenticated user. `POST /cart` is "add to cart": a new product gets a line (201), one already there grows (200). `PUT /cart/{productId}` sets a quantity. `POST /cart/checkout` converts the cart into an order, clears the cart, records the `cartCheckoutTotal` metric and emits a `checkout_completed` analytics event.
+Per-user, server-side cart. Items are scoped to the authenticated user. A line is written through the cart's `/items` collection and every write answers 200 with the whole cart: `POST /cart/items` is "add to cart" (a new product gets a line, one already there grows), `PATCH /cart/items/{productId}` sets a quantity of a line the cart holds (404 otherwise), `DELETE /cart/items/{productId}` removes one and `DELETE /cart/items` empties the cart. `POST /cart/checkout` converts the cart into an order, clears the cart, records the `cartCheckoutTotal` metric and emits a `checkout_completed` analytics event.
 
 ## Wishlist
 
 > The domain behind these routes: [`wishlist`](../modules/wishlist.md) · routes and middleware: `src/modules/wishlist/routes.ts`
 
-Per-user saved products — ids only, joined client-side like the cart's lines. `PUT /wishlist/:productId` saves one (idempotent, no body) and `DELETE` on the same URI removes it. `POST /wishlist/:productId/move-to-cart` is the exit: the saved line becomes a cart line (quantity 1, incremented if already present) and leaves the wishlist.
+Per-user saved products — ids only, joined client-side like the cart's lines. `POST /wishlist/items {productId}` saves one (idempotent: saving what is saved is the same 200) and `DELETE /wishlist/items/:productId` removes it. `POST /wishlist/items/:productId/move-to-cart` is the exit: the saved line becomes a cart line (quantity 1, incremented if already present) and leaves the wishlist.
 
 ## Orders
 
@@ -73,7 +75,7 @@ An order's money, behind a provider port (`NODE_PAYMENT_PROVIDER`, no default: u
 
 > The domain behind these routes: [`delivery`](../modules/delivery.md) · routes and middleware: `src/modules/delivery/routes.ts`
 
-Shipping rates as pure domain rules (flat rates, free-above thresholds), priced authoritatively at checkout via `POST /cart/checkout`'s `shippingMethodId`. There is no courier simulation: `POST /delivery/fulfillment-orders/{id}/shipments` and `POST /delivery/shipments/{id}/deliver` are staff recording a real handover and a real arrival, one shipment at a time, each door then reporting the move to `orders` in the same transaction — never the other way around. An order ships in as many shipments as it takes, and `GET /delivery/order/{orderId}` answers its fulfillment orders and shipments, each with its own `actions`. A tracked method's shipment call refuses with a named 422 unless it carries a `trackingCode`. What has not shipped is held (`…/hold`, `…/release`) or cancelled through [`returns`](../modules/returns.md#cancelling-what-has-not-shipped).
+Shipping rates as pure domain rules (flat rates, free-above thresholds), priced authoritatively at checkout via `POST /cart/checkout`'s `shippingMethodId`. There is no courier simulation: `POST /delivery/fulfillment-orders/{id}/shipments` and `POST /delivery/shipments/{id}/deliver` are staff recording a real handover and a real arrival, one shipment at a time, each door then reporting the move to `orders` in the same transaction — never the other way around. An order ships in as many shipments as it takes, and `GET /delivery/orders/{orderId}` answers its fulfillment orders and shipments, each with its own `actions`. A tracked method's shipment call refuses with a named 422 unless it carries a `trackingCode`. What has not shipped is held (`…/hold`, `…/release`) or cancelled through [`returns`](../modules/returns.md#cancelling-what-has-not-shipped).
 
 ## Inventory
 
@@ -197,13 +199,13 @@ Public sitemap files for search engines: `GET /sitemap/index.xml`, `GET /sitemap
 
 > The domain behind these routes: [`stats`](../modules/stats.md) · routes and middleware: `src/modules/stats/routes.ts`
 
-Staff-only sales numbers (`read:Stats`), never cached: `GET /stats/sales`, `/products`, `/products/{productId}`, `/categories`, `/payments`, `/operations`, `/customers` and `/pipeline`.
+Staff-only sales numbers (`read:Stats`), never cached: `GET /stats/sales`, `/products`, `/products/{productId}`, `/categories`, `/payments`, `/operations`, `/customers`, `/pipeline` and `/limits` (the two ceilings a period may not pass).
 
 ## Stock alerts
 
 > The domain behind these routes: [`stock-alerts`](../modules/stock-alerts.md) · routes and middleware: `src/modules/stock-alerts/routes.ts`
 
-A signed-in caller asks to be told once when a product they cannot order can be again: `GET /stock-alerts` lists their requests, `POST /stock-alerts/{productId}` makes one, `DELETE /stock-alerts/{productId}` cancels it.
+A signed-in caller asks to be told once when a product they cannot order can be again: `GET /stock-alerts` lists their requests, `POST /stock-alerts {productId}` makes one, `DELETE /stock-alerts/{productId}` cancels it.
 
 ## Realtime
 

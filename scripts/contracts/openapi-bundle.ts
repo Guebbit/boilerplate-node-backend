@@ -143,7 +143,7 @@ const OPERATION_METHODS = ['get', 'put', 'post', 'patch', 'delete', 'head', 'opt
 /** One entry of the root's `x-app-level-responses` map — see the comment beside it there. */
 interface AppLevelResponse {
     response: string;
-    appliesTo: 'all' | 'requestBody';
+    appliesTo: 'all' | 'requestBody' | 'requestBodyOrDelete';
 }
 
 /** As much of an OpenAPI operation as this step reads. */
@@ -183,10 +183,19 @@ const isOperation = (value: unknown): value is Operation =>
 const isBundledDocument = (value: unknown): value is BundledDocument =>
     typeof value === 'object' && value !== null;
 
+/** An operation with the method it sits under, which only some app-level answers depend on. */
+interface MethodOperation {
+    method: string;
+    operation: Operation;
+}
+
 /** Every operation the bundle holds, flattened out of its paths. */
-const operationsOf = (document_: BundledDocument): Operation[] =>
+const operationsOf = (document_: BundledDocument): MethodOperation[] =>
     Object.values(document_.paths ?? {}).flatMap((pathItem) =>
-        OPERATION_METHODS.map((method) => pathItem[method]).filter((entry) => isOperation(entry))
+        OPERATION_METHODS.flatMap((method) => {
+            const entry = pathItem[method];
+            return isOperation(entry) ? [{ method, operation: entry }] : [];
+        })
     );
 
 /**
@@ -195,9 +204,17 @@ const operationsOf = (document_: BundledDocument): Operation[] =>
  * `requestBody` is not a guess at the method: a `DELETE` that accepts a body can be refused for
  * its size exactly as a `POST` can, and a `GET` that accepts none cannot. The operation's own
  * declaration is the only thing that knows.
+ *
+ * `requestBodyOrDelete` adds every `DELETE`: one that declares no body still refuses one with a
+ * 415, so the guard's answer is part of its contract.
  */
-const appliesToOperation = (entry: AppLevelResponse, operation: Operation): boolean =>
-    entry.appliesTo === 'all' || 'requestBody' in operation;
+const appliesToOperation = (
+    entry: AppLevelResponse,
+    { method, operation }: MethodOperation
+): boolean =>
+    entry.appliesTo === 'all' ||
+    'requestBody' in operation ||
+    (entry.appliesTo === 'requestBodyOrDelete' && method === 'delete');
 
 /**
  * This operation's responses, plus every app-level one it does not already answer for itself.
@@ -207,13 +224,13 @@ const appliesToOperation = (entry: AppLevelResponse, operation: Operation): bool
  * this step fills gaps rather than flattening deliberate answers.
  */
 const withDefaults = (
-    operation: Operation,
+    target: MethodOperation,
     appLevel: Record<string, AppLevelResponse>
 ): Record<string, unknown> => {
-    const responses: Record<string, unknown> = { ...operation.responses };
+    const responses: Record<string, unknown> = { ...target.operation.responses };
 
     for (const [status, entry] of Object.entries(appLevel))
-        if (!(status in responses) && appliesToOperation(entry, operation))
+        if (!(status in responses) && appliesToOperation(entry, target))
             responses[status] = { $ref: `#/components/responses/${entry.response}` };
 
     return responses;
@@ -241,8 +258,8 @@ export const withAppLevelResponses = (bundled: string): string => {
 
     if (!appLevel) throw new Error('[openapi] the root declares no `x-app-level-responses`.');
 
-    for (const operation of operationsOf(document_))
-        operation.responses = withDefaults(operation, appLevel);
+    for (const target of operationsOf(document_))
+        target.operation.responses = withDefaults(target, appLevel);
 
     // Deleted once it has been spent: it is an instruction to this script, and a consumer reading
     // the published contract has no use for a key describing how the contract was assembled.

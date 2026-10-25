@@ -46,13 +46,13 @@ const authenticateWithOrder = async () => {
 const authenticateWithIntent = async () => {
     const { bearer, order } = await authenticateWithOrder();
     const response = await api()
-        .post('/payments/intent')
+        .post('/payments')
         .set('Authorization', bearer)
         .send({ orderId: String(order._id) });
 
     if (response.status !== 201)
         throw new Error(
-            `payments setup failed: POST /payments/intent returned ${response.status} — ${JSON.stringify(response.body)}`
+            `payments setup failed: POST /payments returned ${response.status} — ${JSON.stringify(response.body)}`
         );
 
     return { bearer, order, paymentId: String(response.body.data.id) };
@@ -114,11 +114,11 @@ describe('with no card payment provider configured', () => {
         );
     });
 
-    it('POST /payments/intent answers 409 PAYMENT_CARD_NOT_AVAILABLE and opens nothing', async () => {
+    it('POST /payments answers 409 PAYMENT_CARD_NOT_AVAILABLE and opens nothing', async () => {
         const { bearer, order } = await authenticateWithOrder();
 
         const response = await api()
-            .post('/payments/intent')
+            .post('/payments')
             .set('Authorization', bearer)
             .send({ orderId: String(order._id) });
 
@@ -140,18 +140,25 @@ describe('with no card payment provider configured', () => {
     });
 });
 
-describe('POST /payments/intent', () => {
+describe('POST /payments', () => {
     it('matches the contract for a fresh intent', async () => {
         const { bearer, order } = await authenticateWithOrder();
 
         const response = await api()
-            .post('/payments/intent')
+            .post('/payments')
             .set('Authorization', bearer)
             .send({ orderId: String(order._id) });
 
         expect(response.status).toBe(201);
         expect(response.body.data.amount).toBe(20);
         expect(response.body.data.status).toBe('requires_confirmation');
+        // The answer is what the payment form keeps: it must say the next step is `pay`.
+        expect(response.body.data.actions).toEqual({
+            pay: true,
+            sync: false,
+            refund: false,
+            settleByHand: []
+        });
     });
 
     // A 201 says a payment was created (RFC 9110 §15.3.2). Asking again refreshes the one
@@ -160,7 +167,7 @@ describe('POST /payments/intent', () => {
         const { bearer, order } = await authenticateWithOrder();
         const ask = () =>
             api()
-                .post('/payments/intent')
+                .post('/payments')
                 .set('Authorization', bearer)
                 .send({ orderId: String(order._id) });
 
@@ -181,11 +188,11 @@ describe('POST /payments/intent', () => {
         const { bearer, order } = await authenticateWithOrder();
 
         const intent = await api()
-            .post('/payments/intent')
+            .post('/payments')
             .set('Authorization', bearer)
             .send({ orderId: String(order._id) });
         const readBack = await api()
-            .get(`/payments/order/${String(order._id)}`)
+            .get(`/payments/orders/${String(order._id)}`)
             .set('Authorization', bearer);
 
         expect(intent.body.data).not.toHaveProperty('providerRef');
@@ -198,7 +205,7 @@ describe('POST /payments/intent', () => {
         const { bearer } = await authenticateAs('user');
 
         const response = await api()
-            .post('/payments/intent')
+            .post('/payments')
             .set('Authorization', bearer)
             .send({ orderId: MISSING_ID });
 
@@ -208,7 +215,7 @@ describe('POST /payments/intent', () => {
     it('matches the error contract for an invalid body', async () => {
         const { bearer } = await authenticateAs('user');
 
-        const response = await api().post('/payments/intent').set('Authorization', bearer).send({});
+        const response = await api().post('/payments').set('Authorization', bearer).send({});
 
         expect(response.status).toBe(422);
     });
@@ -225,6 +232,12 @@ describe('POST /payments/{id}/confirm', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('succeeded');
+        expect(response.body.data.actions).toEqual({
+            pay: false,
+            sync: false,
+            refund: false,
+            settleByHand: []
+        });
     });
 
     it('matches the error contract for a declined card', async () => {
@@ -291,6 +304,8 @@ describe('POST /payments/{id}/confirm', () => {
         // answer the challenge.
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('requires_action');
+        // The answer replaces the stored payment: without `sync` the Finish button would vanish.
+        expect(response.body.data.actions).toMatchObject({ pay: false, sync: true });
     });
 });
 
@@ -308,6 +323,7 @@ describe('POST /payments/{id}/sync', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('succeeded');
+        expect(response.body.data.actions).toMatchObject({ pay: false, sync: false });
     });
 
     it('answers an already-succeeded payment as it stands, without asking the provider again', async () => {
@@ -366,7 +382,7 @@ const preparedPayment = async () => {
  */
 describe('the card steps — who may pay', () => {
     it.each([
-        ['POST /payments/intent', '/payments/intent'],
+        ['POST /payments', '/payments'],
         ['POST /payments/{id}/confirm', `/payments/${MISSING_ID}/confirm`],
         ['POST /payments/{id}/sync', `/payments/${MISSING_ID}/sync`]
     ])('%s refuses an unverified account with EMAIL_NOT_VERIFIED', async (_step, url) => {
@@ -383,7 +399,7 @@ describe('the card steps — who may pay', () => {
         afterEach(() => jest.useRealTimers());
 
         it.each([
-            ['POST /payments/intent', '/payments/intent'],
+            ['POST /payments', '/payments'],
             ['POST /payments/{id}/confirm', `/payments/${MISSING_ID}/confirm`],
             ['POST /payments/{id}/sync', `/payments/${MISSING_ID}/sync`]
         ])('%s still answers an unverified account 403 EMAIL_NOT_VERIFIED', async (_step, url) => {
@@ -518,12 +534,12 @@ describe('POST /payments/webhook', () => {
     });
 });
 
-describe('GET /payments/order/{orderId}', () => {
+describe('GET /payments/orders/{orderId}', () => {
     it('matches the contract for the caller`s own payment', async () => {
         const { bearer, order } = await authenticateWithIntent();
 
         const response = await api()
-            .get(`/payments/order/${String(order._id)}`)
+            .get(`/payments/orders/${String(order._id)}`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
@@ -535,7 +551,7 @@ describe('GET /payments/order/{orderId}', () => {
         const { order, reference, customerBearer } = await transferOrderOf();
 
         const response = await api()
-            .get(`/payments/order/${String(order._id)}`)
+            .get(`/payments/orders/${String(order._id)}`)
             .set('Authorization', customerBearer);
 
         expect(response.status).toBe(200);
@@ -552,8 +568,55 @@ describe('GET /payments/order/{orderId}', () => {
         const { bearer, order } = await authenticateWithOrder();
 
         const response = await api()
-            .get(`/payments/order/${String(order._id)}`)
+            .get(`/payments/orders/${String(order._id)}`)
             .set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+    });
+});
+
+describe('GET /payments/{id}', () => {
+    it('matches the contract for the payer, and never carries the clientSecret', async () => {
+        const { bearer, paymentId } = await authenticateWithIntent();
+
+        const response = await api().get(`/payments/${paymentId}`).set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.id).toBe(paymentId);
+        expect(response.body.data).not.toHaveProperty('clientSecret');
+    });
+
+    it('hides another shopper`s payment behind the same 404 as a missing one', async () => {
+        const { paymentId } = await authenticateWithIntent();
+        const stranger = await authenticateAsRole('customer');
+
+        const response = await api()
+            .get(`/payments/${paymentId}`)
+            .set('Authorization', stranger.bearer);
+        const missing = await api()
+            .get(`/payments/${MISSING_ID}`)
+            .set('Authorization', stranger.bearer);
+
+        expect(response.status).toBe(404);
+        expect(missing.status).toBe(404);
+    });
+
+    it('lets a caller holding display:Payment read anyone`s', async () => {
+        const { paymentId } = await authenticateWithIntent();
+        const admin = await authenticateAs('admin');
+
+        const response = await api()
+            .get(`/payments/${paymentId}`)
+            .set('Authorization', admin.bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.id).toBe(paymentId);
+    });
+
+    it('answers 404 for an id that is not one', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api().get('/payments/not-an-id').set('Authorization', bearer);
 
         expect(response.status).toBe(404);
     });
@@ -562,15 +625,15 @@ describe('GET /payments/order/{orderId}', () => {
 /** A fresh `Idempotency-Key` — the refund route refuses a request without one. */
 const freshKey = (): string => randomUUID();
 
-describe('POST /payments/order/{orderId}/refund', () => {
+describe('POST /payments/{id}/refunds', () => {
     it('refuses the order`s own owner — the refund is staff-only', async () => {
         // "Own order" matters here specifically: a mis-ordered guard that checked ownership before
         // admin status would let exactly this caller through, and a stranger's order would not
         // have caught it.
-        const { bearer, order, paymentId } = await paidOrder();
+        const { bearer, paymentId } = await paidOrder();
 
         const response = await api()
-            .post(`/payments/order/${String(order._id)}/refund`)
+            .post(`/payments/${paymentId}/refunds`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(403);
@@ -581,46 +644,70 @@ describe('POST /payments/order/{orderId}/refund', () => {
     });
 });
 
-describe('POST /payments/order/{orderId}/refund — the operator', () => {
-    it('matches the contract, and the payment reads refunded', async () => {
-        const { order, paymentId } = await paidOrder();
+describe('POST /payments/{id}/refunds — the operator', () => {
+    it('answers 201 with the refund record and where it lives, and the payment reads refunded', async () => {
+        const { paymentId } = await paidOrder();
         const { bearer: adminBearer } = await authenticateAs('admin');
 
         const response = await api()
-            .post(`/payments/order/${String(order._id)}/refund`)
+            .post(`/payments/${paymentId}/refunds`)
             .set('Authorization', adminBearer)
             .set('Idempotency-Key', freshKey());
 
-        expect(response.status).toBe(200);
-        // `status` stays `succeeded` after a refund; `displayStatus` and `amountRefunded` say it.
-        expect(response.body.data.status).toBe('succeeded');
-        expect(response.body.data.displayStatus).toBe('refunded');
+        expect(response.status).toBe(201);
+        expect(response.body.data).toMatchObject({ status: 'succeeded', reason: 'goodwill' });
+        expect(response.headers.location).toBe(
+            `/payments/${paymentId}/refunds/${String(response.body.data.id)}`
+        );
+        // The payment is read again for the running totals: `status` stays `succeeded` after a
+        // refund; `displayStatus` and `amountRefunded` say how much went back.
+        const reread = await api().get(`/payments/${paymentId}`).set('Authorization', adminBearer);
+        expect(reread.body.data.status).toBe('succeeded');
+        expect(reread.body.data.displayStatus).toBe('refunded');
         const payment = await paymentRepository.findById(paymentId);
         expect(payment!.amountRefunded).toBe(payment!.amount);
         expect(payment!.refunds).toHaveLength(1);
+        expect(reread.body.data.actions).toEqual({
+            pay: false,
+            sync: false,
+            refund: false,
+            settleByHand: []
+        });
+    });
+
+    it('is gone at the old order-keyed address', async () => {
+        const { order } = await paidOrder();
+        const { bearer: adminBearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .post(`/payments/orders/${String(order._id)}/refund`)
+            .set('Authorization', adminBearer)
+            .set('Idempotency-Key', freshKey());
+
+        expect(response.status).toBe(404);
     });
 
     it('matches the error contract for a second refund — money comes back once', async () => {
-        const { order } = await paidOrder();
+        const { paymentId } = await paidOrder();
         const { bearer: adminBearer } = await authenticateAs('admin');
         await api()
-            .post(`/payments/order/${String(order._id)}/refund`)
+            .post(`/payments/${paymentId}/refunds`)
             .set('Authorization', adminBearer)
             .set('Idempotency-Key', freshKey());
 
         const response = await api()
-            .post(`/payments/order/${String(order._id)}/refund`)
+            .post(`/payments/${paymentId}/refunds`)
             .set('Authorization', adminBearer)
             .set('Idempotency-Key', freshKey());
 
         expect(response.status).toBe(409);
     });
 
-    it('matches the error contract for an order with no payment', async () => {
+    it('matches the error contract for a payment nobody holds', async () => {
         const { bearer } = await authenticateAs('admin');
 
         const response = await api()
-            .post(`/payments/order/${MISSING_ID}/refund`)
+            .post(`/payments/${MISSING_ID}/refunds`)
             .set('Authorization', bearer)
             .set('Idempotency-Key', freshKey());
 
@@ -628,11 +715,11 @@ describe('POST /payments/order/{orderId}/refund — the operator', () => {
     });
 
     it('refuses a refund with no Idempotency-Key, and returns nothing', async () => {
-        const { order, paymentId } = await paidOrder();
+        const { paymentId } = await paidOrder();
         const { bearer: adminBearer } = await authenticateAs('admin');
 
         const response = await api()
-            .post(`/payments/order/${String(order._id)}/refund`)
+            .post(`/payments/${paymentId}/refunds`)
             .set('Authorization', adminBearer);
 
         expect(response.status).toBe(400);
@@ -643,12 +730,12 @@ describe('POST /payments/order/{orderId}/refund — the operator', () => {
     });
 
     it('replays the first answer for the same key instead of refunding twice', async () => {
-        const { order, paymentId } = await paidOrder();
+        const { paymentId } = await paidOrder();
         const { bearer: adminBearer } = await authenticateAs('admin');
         const key = freshKey();
         const refund = () =>
             api()
-                .post(`/payments/order/${String(order._id)}/refund`)
+                .post(`/payments/${paymentId}/refunds`)
                 .set('Authorization', adminBearer)
                 .set('Idempotency-Key', key)
                 .send({ amount: 5 });
@@ -656,12 +743,69 @@ describe('POST /payments/order/{orderId}/refund — the operator', () => {
         const first = await refund();
         const second = await refund();
 
-        expect(first.status).toBe(200);
-        expect(second.status).toBe(200);
+        expect(first.status).toBe(201);
+        expect(second.status).toBe(201);
         expect(second.headers['idempotent-replay']).toBe('true');
         const payment = await paymentRepository.findById(paymentId);
         expect(payment!.refunds).toHaveLength(1);
         expect(payment!.amountRefunded).toBe(5);
+    });
+});
+
+/** An operator's refund of a paid order, with the buyer's and the operator's sessions. */
+const refundedPayment = async () => {
+    const { bearer: buyerBearer, paymentId } = await paidOrder();
+    const { bearer: adminBearer } = await authenticateAs('admin');
+    const created = await api()
+        .post(`/payments/${paymentId}/refunds`)
+        .set('Authorization', adminBearer)
+        .set('Idempotency-Key', freshKey());
+    return { buyerBearer, adminBearer, paymentId, refundId: String(created.body.data.id) };
+};
+
+describe('GET /payments/{id}/refunds/{refundId}', () => {
+    it('matches the contract for the payer and for display:Payment', async () => {
+        const { buyerBearer, adminBearer, paymentId, refundId } = await refundedPayment();
+
+        const own = await api()
+            .get(`/payments/${paymentId}/refunds/${refundId}`)
+            .set('Authorization', buyerBearer);
+        const staff = await api()
+            .get(`/payments/${paymentId}/refunds/${refundId}`)
+            .set('Authorization', adminBearer);
+
+        expect(own.status).toBe(200);
+        expect(own.body.data).toMatchObject({ id: refundId, status: 'succeeded' });
+        expect(own.body.data).not.toHaveProperty('providerRefundRef');
+        expect(staff.status).toBe(200);
+        expect(staff.body.data).toHaveProperty('providerRefundRef');
+    });
+
+    it('answers the same 404 for another shopper, an unknown refund and an unknown payment', async () => {
+        const { paymentId, refundId } = await refundedPayment();
+        const stranger = await authenticateAsRole('customer');
+
+        const other = await api()
+            .get(`/payments/${paymentId}/refunds/${refundId}`)
+            .set('Authorization', stranger.bearer);
+        const unknownRefund = await api()
+            .get(`/payments/${paymentId}/refunds/${MISSING_ID}`)
+            .set('Authorization', stranger.bearer);
+        const unknownPayment = await api()
+            .get(`/payments/${MISSING_ID}/refunds/${refundId}`)
+            .set('Authorization', stranger.bearer);
+
+        expect([other.status, unknownRefund.status, unknownPayment.status]).toEqual([
+            404, 404, 404
+        ]);
+    });
+
+    it('answers 401 without a session', async () => {
+        const { paymentId, refundId } = await refundedPayment();
+
+        const response = await api().get(`/payments/${paymentId}/refunds/${refundId}`);
+
+        expect(response.status).toBe(401);
     });
 });
 
@@ -670,18 +814,107 @@ describe('POST /payments/order/{orderId}/refund — the operator', () => {
  * kernel's, not the route's: it is only seen by sending a stale-but-usable session through the
  * real mount. A stolen access token is what this stops.
  */
+/** A cash-paid order with its refund opened by an operator and left `pending`. */
+const cashRefundOwed = async () => {
+    const { bearer: adminBearer, user: admin } = await authenticateAs('admin');
+    const { bearer: buyerBearer, order } = await authenticateWithOrder();
+    const recorded = await api()
+        .post(`/payments/orders/${String(order._id)}/offline`)
+        .set('Authorization', adminBearer)
+        .send({ method: 'cash', reference: 'till-settle' });
+    const paymentId = String(recorded.body.data.id);
+    await api()
+        .post(`/payments/${paymentId}/refunds`)
+        .set('Authorization', adminBearer)
+        .set('Idempotency-Key', freshKey());
+    // The refund answers with its own record; the payment is read for what the tests pin on it.
+    const refunded = await api().get(`/payments/${paymentId}`).set('Authorization', adminBearer);
+    return { admin, adminBearer, buyerBearer, order, paymentId, refunded: refunded.body.data };
+};
+
+describe('POST /payments/{id}/refunds/{refundId}/settle', () => {
+    it('leaves the refund pending and offers it to settle, then confirms it by hand', async () => {
+        const { adminBearer, paymentId, refunded } = await cashRefundOwed();
+
+        // The operator refund of a cash payment only opens the record.
+        expect(refunded.refundedByHand).toBeUndefined();
+        expect(refunded.refunds[0].status).toBe('pending');
+        expect(refunded.actions).toMatchObject({ refund: false });
+        expect(refunded.actions.settleByHand).toEqual([refunded.refunds[0].id]);
+
+        const response = await api()
+            .post(`/payments/${paymentId}/refunds/${String(refunded.refunds[0].id)}/settle`)
+            .set('Authorization', adminBearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.refundedByHand).toBe(true);
+        expect(response.body.data.refunds[0].status).toBe('succeeded');
+        expect(response.body.data.displayStatus).toBe('refunded');
+        expect(response.body.data.actions.settleByHand).toEqual([]);
+    });
+
+    it('answers 409 PAYMENT_REFUND_NOT_OPEN to the second operator', async () => {
+        const { adminBearer, paymentId, refunded } = await cashRefundOwed();
+        const path = `/payments/${paymentId}/refunds/${String(refunded.refunds[0].id)}/settle`;
+        await api().post(path).set('Authorization', adminBearer);
+
+        const response = await api().post(path).set('Authorization', adminBearer);
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('PAYMENT_REFUND_NOT_OPEN');
+    });
+
+    it('answers 404 for a refund the payment does not carry, and for a payment that does not exist', async () => {
+        const { adminBearer, paymentId } = await cashRefundOwed();
+
+        const noRefund = await api()
+            .post(`/payments/${paymentId}/refunds/${MISSING_ID}/settle`)
+            .set('Authorization', adminBearer);
+        const noPayment = await api()
+            .post(`/payments/${MISSING_ID}/refunds/${MISSING_ID}/settle`)
+            .set('Authorization', adminBearer);
+
+        expect(noRefund.status).toBe(404);
+        expect(noPayment.status).toBe(404);
+    });
+
+    it('refuses the buyer: only an operator holding create:Refund may say money went back', async () => {
+        const { paymentId, refunded, buyerBearer } = await cashRefundOwed();
+
+        const response = await api()
+            .post(`/payments/${paymentId}/refunds/${String(refunded.refunds[0].id)}/settle`)
+            .set('Authorization', buyerBearer);
+
+        expect(response.status).toBe(403);
+    });
+
+    it('answers a stale session 401 REAUTH_REQUIRED and settles nothing', async () => {
+        const { admin, paymentId, refunded } = await cashRefundOwed();
+        const bearer = await staleBearerFor(admin, 'critical');
+
+        const response = await api()
+            .post(`/payments/${paymentId}/refunds/${String(refunded.refunds[0].id)}/settle`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(401);
+        expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
+        const payment = await paymentRepository.findById(paymentId);
+        expect(payment!.refunds[0].status).toBe('pending');
+    });
+});
+
 describe('the money doors ask a fresh session of an operator', () => {
     afterEach(() => jest.useRealTimers());
 
     it('answers a stale refund 401 REAUTH_REQUIRED and returns nothing', async () => {
-        const { order, paymentId } = await paidOrder();
+        const { paymentId } = await paidOrder();
         const bearer = await staleBearerFor(
             await createAdminUser({ verifiedAt: new Date() }),
             'critical'
         );
 
         const response = await api()
-            .post(`/payments/order/${String(order._id)}/refund`)
+            .post(`/payments/${paymentId}/refunds`)
             .set('Authorization', bearer)
             .set('Idempotency-Key', freshKey());
 
@@ -699,7 +932,7 @@ describe('the money doors ask a fresh session of an operator', () => {
         );
 
         const response = await api()
-            .post(`/payments/order/${String(order._id)}/offline`)
+            .post(`/payments/orders/${String(order._id)}/offline`)
             .set('Authorization', bearer)
             .send({ method: 'cash', reference: 'stale-till' });
 
@@ -709,13 +942,13 @@ describe('the money doors ask a fresh session of an operator', () => {
     });
 });
 
-describe('POST /payments/order/{orderId}/offline', () => {
+describe('POST /payments/orders/{orderId}/offline', () => {
     it('matches the contract for recording money by hand', async () => {
         const { bearer: adminBearer } = await authenticateAs('admin');
         const { order } = await authenticateWithOrder();
 
         const response = await api()
-            .post(`/payments/order/${String(order._id)}/offline`)
+            .post(`/payments/orders/${String(order._id)}/offline`)
             .set('Authorization', adminBearer)
             .send({ method: 'cash', reference: 'till-1' });
 
@@ -724,6 +957,13 @@ describe('POST /payments/order/{orderId}/offline', () => {
         expect(response.body.data.status).toBe('succeeded');
         expect(response.body.data.provider).toBe('manual');
         expect(response.body.data.method).toBe('cash');
+        // A succeeded payment answers `actions` without an order read: `pay` is false regardless.
+        expect(response.body.data.actions).toEqual({
+            pay: false,
+            sync: false,
+            refund: true,
+            settleByHand: []
+        });
     });
 
     // The row of a card intent nobody paid is converted, not inserted, so nothing was created.
@@ -731,12 +971,12 @@ describe('POST /payments/order/{orderId}/offline', () => {
         const { bearer: adminBearer } = await authenticateAs('admin');
         const { bearer, order } = await authenticateWithOrder();
         await api()
-            .post('/payments/intent')
+            .post('/payments')
             .set('Authorization', bearer)
             .send({ orderId: String(order._id) });
 
         const response = await api()
-            .post(`/payments/order/${String(order._id)}/offline`)
+            .post(`/payments/orders/${String(order._id)}/offline`)
             .set('Authorization', adminBearer)
             .send({ method: 'cash', reference: 'till-2' });
 
@@ -750,7 +990,7 @@ describe('POST /payments/order/{orderId}/offline', () => {
         const { bearer } = await authenticateAs('admin');
 
         const response = await api()
-            .post(`/payments/order/${MISSING_ID}/offline`)
+            .post(`/payments/orders/${MISSING_ID}/offline`)
             .set('Authorization', bearer)
             .send({ method: 'cash' });
 
@@ -762,7 +1002,7 @@ describe('POST /payments/order/{orderId}/offline', () => {
         const { order } = await authenticateWithOrder();
 
         const response = await api()
-            .post(`/payments/order/${String(order._id)}/offline`)
+            .post(`/payments/orders/${String(order._id)}/offline`)
             .set('Authorization', bearer)
             .send({ method: 'crypto' });
 
@@ -773,12 +1013,12 @@ describe('POST /payments/order/{orderId}/offline', () => {
         const { bearer } = await authenticateAs('admin');
         const { order } = await authenticateWithOrder();
         await api()
-            .post(`/payments/order/${String(order._id)}/offline`)
+            .post(`/payments/orders/${String(order._id)}/offline`)
             .set('Authorization', bearer)
             .send({ method: 'cash' });
 
         const response = await api()
-            .post(`/payments/order/${String(order._id)}/offline`)
+            .post(`/payments/orders/${String(order._id)}/offline`)
             .set('Authorization', bearer)
             .send({ method: 'cash' });
 
@@ -787,42 +1027,76 @@ describe('POST /payments/order/{orderId}/offline', () => {
     });
 });
 
-describe('GET /payments/order-by-reference', () => {
-    it('matches the contract for the order a reference names', async () => {
+describe('GET /payments?transferReference=', () => {
+    it('matches the contract for the payment a reference names, spaced and lowercase included', async () => {
         const { bearer } = await authenticateAs('admin');
         const { order, reference } = await transferOrderOf();
+        const typed = reference.replaceAll(/(.{4})/g, '$1 ').toLowerCase();
 
         const response = await api()
-            .get('/payments/order-by-reference')
-            .query({ ref: reference })
+            .get('/payments')
+            .query({ transferReference: typed })
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.id).toBe(String(order._id));
+        expect(response.body.data.items.map((row: { orderId: string }) => row.orderId)).toEqual([
+            String(order._id)
+        ]);
     });
 
-    it('matches the error contract for a reference that fails its check digits', async () => {
+    it('answers an empty list for a reference that fails its check digits', async () => {
         const { bearer } = await authenticateAs('admin');
         const { reference } = await transferOrderOf();
         const lastChar = reference.at(-1)!;
         const typo = `${reference.slice(0, -1)}${lastChar === '0' ? '1' : '0'}`;
 
         const response = await api()
-            .get('/payments/order-by-reference')
-            .query({ ref: typo })
+            .get('/payments')
+            .query({ transferReference: typo })
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(404);
+        expect(response.status).toBe(200);
+        expect(response.body.data.items).toEqual([]);
     });
 
-    it('matches the error contract for a request that names no reference at all', async () => {
+    it('answers the same for POST /payments/search', async () => {
         const { bearer } = await authenticateAs('admin');
+        const { order, reference } = await transferOrderOf();
+
+        const response = await api()
+            .post('/payments/search')
+            .set('Authorization', bearer)
+            .send({ transferReference: reference });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items.map((row: { orderId: string }) => row.orderId)).toEqual([
+            String(order._id)
+        ]);
+    });
+
+    it('refuses a caller without display:Payment', async () => {
+        const { reference } = await transferOrderOf();
+        const { bearer } = await authenticateAsRole('customer');
+
+        const response = await api()
+            .get('/payments')
+            .query({ transferReference: reference })
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(403);
+    });
+
+    it('is gone at the old lookup address', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const { reference } = await transferOrderOf();
 
         const response = await api()
             .get('/payments/order-by-reference')
+            .query({ ref: reference })
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(422);
+        // `/payments/{id}` now answers the segment, as a payment id that is not one.
+        expect(response.status).toBe(404);
     });
 });
 
@@ -905,10 +1179,10 @@ describe('the staff Payments page', () => {
     });
 
     it('GET /payments/refunds lists a refund once an operator has made one', async () => {
-        const { order } = await paidOrder();
+        const { order, paymentId } = await paidOrder();
         const { bearer: adminBearer } = await authenticateAs('admin');
         await api()
-            .post(`/payments/order/${String(order._id)}/refund`)
+            .post(`/payments/${paymentId}/refunds`)
             .set('Authorization', adminBearer)
             .set('Idempotency-Key', freshKey());
 

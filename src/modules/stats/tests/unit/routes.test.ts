@@ -22,7 +22,8 @@ describe('stats routes', () => {
             'GET /payments',
             'GET /operations',
             'GET /customers',
-            'GET /pipeline'
+            'GET /pipeline',
+            'GET /limits'
         ]);
     });
 
@@ -35,6 +36,6 @@ describe('stats routes', () => {
             routeTable(router).map(({ permissions }) =>
                 permissions.map(({ action, subject }) => `${action}:${subject}`).join(',')
             )
-        ).toEqual(Array.from({ length: 8 }, () => 'read:Stats'));
+        ).toEqual(Array.from({ length: 9 }, () => 'read:Stats'));
     });
 });

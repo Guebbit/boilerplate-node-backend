@@ -145,13 +145,17 @@ describe('liftPurchaseHold', () => {
         );
     });
 
-    it('is safe to repeat, and audits a lift only when a hold was in force', async () => {
+    it('refuses an account with no hold and no review flag, and audits nothing', async () => {
         const recorded = observePort(auditPort.emitAuditEvent);
         const buyer = await createUser();
 
         const result = await userService.liftPurchaseHold(buyer.id, callerContextAs('moderator'));
 
-        expect(result.success).toBe(true);
+        expect(result).toMatchObject({
+            success: false,
+            status: 409,
+            errors: [{ code: 'USER_PURCHASE_HOLD_NOT_SET' }]
+        });
         expect(recorded).not.toHaveBeenCalledWith(
             auditedAction(usersAuditActions.ADMIN_USER_PURCHASE_HOLD_LIFTED)
         );
@@ -211,13 +215,15 @@ describe('liftPurchaseHold', () => {
         );
     });
 
-    it('clears the review flag, and a repeat then writes no second row', async () => {
+    it('clears the review flag, and a repeat is refused with no second row', async () => {
         const recorded = observePort(auditPort.emitAuditEvent);
         const buyer = await createUser({ purchaseHoldFlaggedAt: inDays(-1) });
 
-        await userService.liftPurchaseHold(buyer.id, callerContextAs('moderator'));
-        await userService.liftPurchaseHold(buyer.id, callerContextAs('moderator'));
+        const first = await userService.liftPurchaseHold(buyer.id, callerContextAs('moderator'));
+        const repeat = await userService.liftPurchaseHold(buyer.id, callerContextAs('moderator'));
 
+        expect(first.success).toBe(true);
+        expect(repeat).toMatchObject({ success: false, status: 409 });
         const stored = await userRepository.findById(buyer.id);
         expect(stored?.purchaseHoldFlaggedAt).toBeUndefined();
         expect(
@@ -327,15 +333,14 @@ describe('the review flag', () => {
         const buyer = await createUser({ purchaseHoldFlaggedAt: inDays(-1) });
         const stored = await userRepository.findById(buyer.id);
 
-        const staffView = userService.toUser(stored!, null, {
-            update: true,
-            ban: true,
-            delete: true
-        });
-        const ownView = userService.toUser(stored!, null);
+        const staffView = await userService.toUserContract(
+            stored!,
+            callerContextAs('moderator').caller
+        );
+        const ownView = userService.toAccount(stored!, null);
 
         expect(staffView.purchaseHoldFlaggedAt).toBe(stored?.purchaseHoldFlaggedAt?.toISOString());
-        expect(ownView.purchaseHoldFlaggedAt).toBeUndefined();
+        expect(ownView).not.toHaveProperty('purchaseHoldFlaggedAt');
     });
 
     it('is carried by the data export with the rest of the profile', async () => {
@@ -442,7 +447,7 @@ describe('what the wire shows', () => {
         );
         const stored = await userRepository.findById(buyer.id);
 
-        const wire = userService.toUser(stored!, null);
+        const wire = userService.toAccount(stored!, null);
 
         expect(wire.purchaseHold).toMatchObject({ reason: 'staff', note: 'Please contact us.' });
         expect(JSON.stringify(wire)).not.toContain('staff-9');
@@ -454,7 +459,7 @@ describe('what the wire shows', () => {
         });
         const stored = await userRepository.findById(buyer.id);
 
-        expect(userService.toUser(stored!, null).purchaseHold).toBeUndefined();
+        expect(userService.toAccount(stored!, null).purchaseHold).toBeUndefined();
     });
 });
 

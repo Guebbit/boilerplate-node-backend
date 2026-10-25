@@ -1,6 +1,6 @@
 /**
  * @module
- * POST /inventory/adjustments
+ * POST /inventory/levels/:productId/adjust
  * A stocktake correction. THE audited endpoint of this module: an unexplained stock correction is
  * precisely what shrinkage looks like from the outside, so the row records the admin, the signed
  * delta and the reason they typed.
@@ -11,16 +11,23 @@ import { fieldError, successResponse, rejectResponse } from '@infrastructure/htt
 import { callerContextOf } from '@infrastructure/http/request';
 import { t } from '@infrastructure/i18n';
 import { AdjustStockBody } from '@api/schemas.zod';
+import { requireId } from '@infrastructure/http/ids';
 import { inventoryService } from '../services';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import type { InventoryLevel } from '@types';
 
-/** Handles `POST /inventory/adjustments`. */
-export const postAdjustment = (request: Request, response: Response) => {
-    const body = parseBody(AdjustStockBody, request.body, response);
-    if (!body) return;
+/** Handles `POST /inventory/levels/:productId/adjust`. */
+export const postAdjustment = (request: Request<{ productId?: string }>, response: Response) => {
+    const productId = requireId(request, response, {
+        name: 'productId',
+        notFound: 'inventory.product-not-found'
+    });
+    if (!productId) return Promise.resolve();
 
-    const { productId, delta, note } = body;
+    const body = parseBody(AdjustStockBody, request.body, response);
+    if (!body) return Promise.resolve();
+
+    const { delta, note } = body;
     // Zero can't be expressed as a schema constraint, so it's checked here.
     // Refused rather than silently accepted — a no-op would write a meaningless ledger row.
     if (delta === 0) {

@@ -30,7 +30,7 @@ const subscribe = (eventTypes: string[], enabled: boolean) =>
         tenant: TEST_TENANT_ID,
         url: 'https://example.invalid/hook',
         eventTypes,
-        enabled,
+        ...(enabled ? {} : { disabledAt: new Date() }),
         consecutiveFailures: 0,
         secrets: [mintRingSecret().entry]
     });

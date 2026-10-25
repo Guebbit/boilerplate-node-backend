@@ -4,7 +4,7 @@
  * two counters and lookups `payments` and checkout lean on. Writes live in `./crud` and `./remove`.
  */
 
-import type { SearchOrdersRequest, Order, CallerContext, AuthContext } from '@types';
+import type { SearchOrdersRequest, Order, ExportOrder, CallerContext, AuthContext } from '@types';
 import type { OrderDocument, OrderReference } from '../model';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import {
@@ -51,7 +51,7 @@ export const search = (
     scope?: Record<string, unknown>,
     context?: CallerContext
 ): Promise<{
-    items: Order[];
+    items: ExportOrder[];
     meta: PaginatedMeta;
 }> =>
     orderRepository.search(...withFulfillmentFilter(search, scope)).then((result) =>
@@ -133,7 +133,7 @@ export const orderBriefsByIds = (orderIds: readonly string[]): Promise<Map<strin
  *
  * @param userId - the caller's own id
  */
-export const findOwnOrders = (userId: string): Promise<Order[]> =>
+export const findOwnOrders = (userId: string): Promise<ExportOrder[]> =>
     readAll(
         (page) =>
             search({ page, pageSize: MAX_CONFIGURED_PAGE_SIZE }, ownerScope(userId)).then(

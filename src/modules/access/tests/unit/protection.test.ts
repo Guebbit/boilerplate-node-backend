@@ -9,7 +9,7 @@
 import { callerContextAs, testCallerContext } from '@tests/callers';
 import { systemCallerContext } from '@kernel/permissions';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
-import { accessService, ownOrderFlag } from '../../services';
+import { accessService, mayChangeAccount, ownOrderFlag } from '../../services';
 
 /** One membership row, as the repository returns it. */
 interface Row {
@@ -91,6 +91,35 @@ describe('staffHoldersAmong', () => {
         expect(await accessService.staffHoldersAmong(['staff', 'operator', 'customer'])).toEqual(
             new Set(['staff', 'operator'])
         );
+    });
+});
+
+describe('mayChangeAccount', () => {
+    // [account holds a staff role, caller is the account, caller holds assign:Role, expected]
+    it.each([
+        [false, false, false, true],
+        [true, false, false, false],
+        [true, true, false, true],
+        [true, false, true, true]
+    ])(
+        'staff account %s, own account %s, assign:Role %s: %s',
+        (holdsStaffRole, own, holdsAssignRole, expected) => {
+            expect(
+                mayChangeAccount(
+                    { id: own ? 'owner' : 'caller', holdsAssignRole },
+                    { id: 'owner', holdsStaffRole }
+                )
+            ).toBe(expected);
+        }
+    );
+
+    it('never lets an anonymous caller change a staff account', () => {
+        expect(
+            mayChangeAccount(
+                { id: null, holdsAssignRole: false },
+                { id: 'owner', holdsStaffRole: true }
+            )
+        ).toBe(false);
     });
 });
 

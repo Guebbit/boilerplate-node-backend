@@ -41,24 +41,27 @@ paths:
                                 $ref: '#/components/schemas/StockAlertsResponseEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
-
-    /stock-alerts/{productId}:
         post:
             tags: [StockAlerts]
             summary: Ask to be told when a product is back
             description: >-
                 Records that the authenticated user wants one mail, and one inbox message, when the
-                product can be ordered again (shelf units, an open backorder, a preorder with
+                product named in the body can be ordered again (shelf units, an open backorder, a preorder with
                 allowance left, or back on sale). The
                 click is the consent for that single mail, so nothing else is ever sent on it and the
                 request is deleted when it is answered. Asking twice is the same request and answers
-                the same 200. Refused with `409 STOCK_ALERT_PRODUCT_BUYABLE` while the product can be
+                the same 200; the answer is always the whole list (the list is the parent, a request has no
+                URL of its own). Refused with `409 STOCK_ALERT_PRODUCT_BUYABLE` while the product can be
                 ordered now; a hidden or deleted product answers 404.
             operationId: createStockAlert
             security:
                 - bearerAuth: []
-            parameters:
-                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/ProductIdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateStockAlertRequest'
             responses:
                 '200':
                     description: The caller's open requests, including this one
@@ -69,7 +72,11 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                # A missing or malformed `productId` in the body.
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /stock-alerts/{productId}:
         delete:
             tags: [StockAlerts]
             summary: Cancel a back-in-stock request
@@ -94,6 +101,14 @@ paths:
 
 components:
     schemas:
+        CreateStockAlertRequest:
+            type: object
+            additionalProperties: false
+            required: [productId]
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+
         # One open request: who asked is the caller, so only the product and when.
         StockAlert:
             type: object

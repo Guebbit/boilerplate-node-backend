@@ -1,6 +1,6 @@
 /**
  * @module
- * `POST /account/verify-request` controller — thin HTTP adapter over
+ * `POST /account/email-verification/resend` controller — thin HTTP adapter over
  * `accountService.requestEmailVerificationFor`.
  */
 
@@ -11,7 +11,7 @@ import { catchAs, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
- * POST /account/verify-request — re-sends the verification link (signup already sent one; this
+ * POST /account/email-verification/resend — re-sends the verification link (signup already sent one; this
  * covers mail that never arrived). Which states can't be verified is the service's call, so a
  * second caller can't bypass it; see `services/verification.ts`.
  */

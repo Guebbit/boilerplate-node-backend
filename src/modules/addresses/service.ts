@@ -15,7 +15,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import type { Address, AddressInput, UpdateAddressRequest } from '@types';
-import { addressBookRepository, ADDRESS_BOOK_FULL } from './repository';
+import { addressBookRepository, ADDRESS_BOOK_LIMIT_REACHED } from './repository';
 import { ERROR_CODES } from '@api/error-codes';
 import type { AddressItem } from './model';
 import {
@@ -32,17 +32,33 @@ const list = (userId: string): Promise<AddressesView> =>
     addressBookRepository.findByUserId(userId).then((book) => presentAddresses(book));
 
 /**
+ * One entry of the caller's own book; someone else's id is the same 404 as a bogus one.
+ *
+ * @param userId - the caller
+ * @param addressId - the entry
+ * @returns the entry on the wire, or the 404
+ */
+const get = (
+    userId: string,
+    addressId: string
+): Promise<ResponseSuccess<Address> | ResponseReject> =>
+    addressBookRepository.findByUserId(userId).then((book) => {
+        const address = presentAddressOf(book, addressId);
+        return address ? generateSuccess(address) : generateReject(404, [t('addresses.not-found')]);
+    });
+
+/**
  * Add an entry. The repository decides the default slot — see `addEntry`. Answers the entry it
- * created, 201, or 409 `ADDRESS_BOOK_FULL` once the book holds `NODE_ADDRESS_BOOK_MAX`.
+ * created, 201, or 409 `ADDRESS_BOOK_LIMIT_REACHED` once the book holds `NODE_ADDRESS_BOOK_MAX`.
  */
 const create = (
     userId: string,
     entry: AddressInput
 ): Promise<ResponseSuccess<Address> | ResponseReject> =>
     addressBookRepository.addEntry(userId, entry).then((book) => {
-        if (book === ADDRESS_BOOK_FULL)
+        if (book === ADDRESS_BOOK_LIMIT_REACHED)
             return generateReject(409, [
-                { code: ERROR_CODES.ADDRESS_BOOK_FULL, message: t('addresses.book-full') }
+                { code: ERROR_CODES.ADDRESS_BOOK_LIMIT_REACHED, message: t('addresses.book-full') }
             ]);
         // `addEntry` appends, so the entry just written is the last one — never absent.
         const added = book.items.at(-1)!;
@@ -120,6 +136,7 @@ const minimise = (userId: string): Promise<void> => addressBookRepository.delete
 /** The module's one door — every controller and sibling reads and writes the address book through this. */
 export const addressService = {
     list,
+    get,
     create,
     update,
     setDefault,

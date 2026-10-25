@@ -63,7 +63,7 @@ const linksOf = (userId: string): Promise<string[]> =>
 
 /** Reset a password through the real route. */
 const resetFor = (token: string) =>
-    api().post('/account/reset-confirm').send({
+    api().post('/account/password/reset/confirm').send({
         token,
         password: REPLACEMENT_PASSWORD,
         passwordConfirm: REPLACEMENT_PASSWORD

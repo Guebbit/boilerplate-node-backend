@@ -1,7 +1,7 @@
 /**
  * @module
  * Contract tests for the account-lifecycle operations `api.contract.test.ts` does not reach: the
- * two-step deletion, the password-reset request, logging out everywhere, the breach check while
+ * scheduled deletion and its restore, the password-reset request, logging out everywhere, the breach check while
  * typing, and the expired-token sweep. Each success is driven for real — the mailed token read
  * back out of the queue — so the body checked against the spec is the one a client receives.
  */
@@ -29,7 +29,7 @@ beforeEach(() => {
 });
 
 /**
- * Wait until a mail of this template is queued: `POST /account/reset` answers before it is, on
+ * Wait until a mail of this template is queued: `POST /account/password/reset` answers before it is, on
  * purpose, so the response time cannot tell a registered address from a stranger's.
  *
  * @param template - the mail template the flow sends
@@ -55,36 +55,37 @@ const mailedToken = (template: string): string => {
     return decodeURIComponent(token);
 };
 
-describe('DELETE /account and DELETE /account/delete-confirm', () => {
-    it('matches the contract for the request, then for the confirm, which removes the account', async () => {
+describe('DELETE /account and POST /account/restore', () => {
+    it('matches the contract for the request, then for the restore, which cancels the deletion', async () => {
         const { user, bearer } = await authenticateAs('user');
 
         const request = await api().delete('/account').set('Authorization', bearer);
 
-        expect(request.status).toBe(200);
+        expect(request.status).toBe(202);
+        const locked = await userRepository.findById(String(user._id));
+        expect(locked?.deletedBy).toBe('owner');
 
-        const confirm = await api()
-            .delete('/account/delete-confirm')
-            .send({ token: mailedToken('account.delete-request') });
+        const restore = await api()
+            .post('/account/restore')
+            .send({ token: mailedToken('account.deletion-scheduled') });
 
-        expect(confirm.status).toBe(200);
-        await expect(userRepository.findById(String(user._id))).resolves.toBeNull();
+        expect(restore.status).toBe(200);
+        const restored = await userRepository.findById(String(user._id));
+        expect(restored?.deletedAt).toBeUndefined();
     });
 
     it('matches the error contract for a token nobody was sent', async () => {
-        const response = await api()
-            .delete('/account/delete-confirm')
-            .send({ token: 'never-issued' });
+        const response = await api().post('/account/restore').send({ token: 'never-issued' });
 
         expect(response.status).toBe(422);
     });
 });
 
-describe('POST /account/reset', () => {
+describe('POST /account/password/reset', () => {
     it('matches the contract for a known address, and mails the link', async () => {
         const user = await createUser({ email: 'forgetful@example.com' });
 
-        const response = await api().post('/account/reset').send({ email: user.email });
+        const response = await api().post('/account/password/reset').send({ email: user.email });
         await queued('account.reset-request');
 
         expect(response.status).toBe(200);
@@ -93,11 +94,13 @@ describe('POST /account/reset', () => {
 
     it('answers an unknown address exactly like a known one — no account enumeration', async () => {
         const user = await createUser({ email: 'known-reset@example.com' });
-        const known = await api().post('/account/reset').send({ email: user.email });
+        const known = await api().post('/account/password/reset').send({ email: user.email });
         await queued('account.reset-request');
         (mailerPort.enqueueEmail as jest.Mock).mockClear();
 
-        const unknown = await api().post('/account/reset').send({ email: 'nobody@example.com' });
+        const unknown = await api()
+            .post('/account/password/reset')
+            .send({ email: 'nobody@example.com' });
         // Detached work: give it its whole window, so "nothing was queued" is a finding, not a race.
         await eventually(() => false, 200);
 
@@ -110,7 +113,9 @@ describe('POST /account/reset', () => {
     });
 
     it('matches the error contract for a body that is not an address', async () => {
-        const response = await api().post('/account/reset').send({ email: 'not-an-email' });
+        const response = await api()
+            .post('/account/password/reset')
+            .send({ email: 'not-an-email' });
 
         expect(response.status).toBe(422);
     });
@@ -139,7 +144,7 @@ describe('the name in a mailed greeting', () => {
             verifiedAt: new Date()
         });
 
-        await api().post('/account/reset').send({ email: user.email });
+        await api().post('/account/password/reset').send({ email: user.email });
         await queued('account.reset-request');
 
         expect(mailedGreeting('account.reset-request')).toContain('Ada Proven');
@@ -152,7 +157,7 @@ describe('the name in a mailed greeting', () => {
             verifiedAt: undefined
         });
 
-        await api().post('/account/reset').send({ email: user.email });
+        await api().post('/account/password/reset').send({ email: user.email });
         await queued('account.reset-request');
 
         expect(mailedGreeting('account.reset-request')).toBe('Hello!');
@@ -171,11 +176,11 @@ describe('the name in a mailed greeting', () => {
     });
 });
 
-describe('POST /account/logout-all', () => {
+describe('DELETE /account/sessions', () => {
     it('matches the contract, and ends every session the account had', async () => {
         const { user, bearer } = await authenticateAs('user');
 
-        const response = await api().post('/account/logout-all').set('Authorization', bearer);
+        const response = await api().delete('/account/sessions').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
         expect(await sessionRowsOf(String(user._id))).toEqual([]);

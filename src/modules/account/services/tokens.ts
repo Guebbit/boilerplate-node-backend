@@ -155,7 +155,7 @@ export type OneTimeTokenFlow =
     | 'email_verify'
     | 'email_change'
     | 'email_change_undo'
-    | 'account_delete';
+    | 'account_restore';
 
 /**
  * Count and audit one refused link token. `auth.` not `security.`: a customer with a stale or

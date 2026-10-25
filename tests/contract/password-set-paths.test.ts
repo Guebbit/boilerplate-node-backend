@@ -86,13 +86,13 @@ const changePath: PasswordSetPath = {
     }
 };
 
-/** `POST /account/reset-confirm` — the one-time-token change, no session required. */
+/** `POST /account/password/reset/confirm` — the one-time-token change, no session required. */
 const resetPath: PasswordSetPath = {
     name: 'reset',
     attempt: async () => {
         const user = await createUser({ email: 'breach-reset@example.com' });
         await plantToken(user.id, 'password', 'breach-reset-token', { ttlMs: 60 * 60 * 1000 });
-        const response = await api().post('/account/reset-confirm').send({
+        const response = await api().post('/account/password/reset/confirm').send({
             token: 'breach-reset-token',
             password: BREACHED_PASSWORD,
             passwordConfirm: BREACHED_PASSWORD
@@ -170,7 +170,7 @@ describe('the routes that can set a password', () => {
     it('are exactly signup, the owner’s own change and the reset or setup link', () => {
         expect(operationsThatSetAPassword()).toEqual([
             'POST /account/password',
-            'POST /account/reset-confirm',
+            'POST /account/password/reset/confirm',
             'POST /account/signup'
         ]);
     });

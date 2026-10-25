@@ -13,7 +13,8 @@ import { Router } from 'express';
 import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
 import { postFeedbackContact } from './controllers/post-feedback-contact';
 import { getFeedback } from './controllers/get-feedback';
-import { replaceFeedbackStatus, updateFeedbackStatus } from './controllers/update-feedback-status';
+import { getFeedbackById } from './controllers/get-feedback-by-id';
+import { updateFeedbackStatus } from './controllers/update-feedback-status';
 import { deleteFeedback } from './controllers/delete-feedback';
 import { noStore, privateNoCache } from '@infrastructure/http/middlewares/cache';
 import { contactLimiters } from './rate-limits';
@@ -59,8 +60,8 @@ router.post('/search', requirePermission('read', 'Feedback'), noStore, getFeedba
 // `privateNoCache`: the browser may keep its own copy, revalidated every time.
 router.get('/', requirePermission('read', 'Feedback'), privateNoCache, getFeedback);
 
-// PUT /feedback/:id — replace the entry's status
-router.put('/:id', requirePermission('update', 'Feedback'), replaceFeedbackStatus);
+// GET /feedback/:id — one ticket. After `/` and `/search`, so neither matches as an id.
+router.get('/:id', requirePermission('read', 'Feedback'), privateNoCache, getFeedbackById);
 
 // PATCH /feedback/:id — merge the fields sent
 router.patch('/:id', requirePermission('update', 'Feedback'), updateFeedbackStatus);

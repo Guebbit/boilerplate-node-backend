@@ -1,6 +1,6 @@
 /**
  * @module
- * GET /delivery/order/:orderId
+ * GET /delivery/orders/:orderId
  * Where an order's goods stand: its fulfillment orders and the shipments cut from them. The order
  * page's shipping panel reads this once the order is paid; before that both lists are empty.
  */
@@ -12,7 +12,7 @@ import { deliveryService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
 import type { OrderFulfillment } from '@types';
 
-/** Handles `GET /delivery/order/:orderId`. */
+/** Handles `GET /delivery/orders/:orderId`. */
 export const getOrderFulfillment = (request: Request<{ orderId?: string }>, response: Response) => {
     const orderId = requireId(request, response, {
         notFound: 'delivery.order-not-found',

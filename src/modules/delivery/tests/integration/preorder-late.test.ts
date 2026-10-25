@@ -279,15 +279,41 @@ describe('the daily sweep', () => {
         expect([waiting.status, waiting.cancelReason]).toEqual(['on_hold', undefined]);
     });
 
-    it('waits for the date to pass: never before it', async () => {
+    it('tells the buyer the day before the date, not earlier', async () => {
         const { orderId } = await preorder(30);
         await waitingOf(orderId);
 
-        const before = await deliveryService.runPreorderSweep(inDays(29));
-        const after = await deliveryService.runPreorderSweep(inDays(30.5));
+        const before = await deliveryService.runPreorderSweep(inDays(28));
+        const after = await deliveryService.runPreorderSweep(inDays(29.5));
         await settleOutboxNudges();
 
         expect([before, after]).toEqual([{ notified: 0 }, { notified: 1 }]);
+        const told = await waitingOf(orderId);
+        expect(told.dueNoticeFor).toEqual(told.expectedAt);
+    });
+
+    it('sends nothing on a second sweep after the buyer was told ahead of the date', async () => {
+        await preorder(30);
+        await deliveryService.runPreorderSweep(inDays(29.5));
+
+        const again = await deliveryService.runPreorderSweep(inDays(30.5));
+        const later = await deliveryService.runPreorderSweep(inDays(45));
+        await settleOutboxNudges();
+
+        expect([again, later]).toEqual([{ notified: 0 }, { notified: 0 }]);
+        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+    });
+
+    it('tells again when the date moved later after the buyer was told', async () => {
+        const { productIds } = await preorder(30);
+        await deliveryService.runPreorderSweep(inDays(29.5));
+        await moveDate(productIds[0], inDays(60));
+
+        const stillAhead = await deliveryService.runPreorderSweep(inDays(45));
+        const dueAgain = await deliveryService.runPreorderSweep(inDays(59.5));
+        await settleOutboxNudges();
+
+        expect([stillAhead, dueAgain]).toEqual([{ notified: 0 }, { notified: 1 }]);
     });
 
     it('leaves a date still ahead alone', async () => {

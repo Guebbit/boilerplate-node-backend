@@ -149,7 +149,7 @@ actor into a second table would let the two disagree, so it rides on the edge it
 `system` is not a privilege level above `admin`. It is **narrower**: the moves an operator may never
 make by hand, because something outside the application has to have happened first. Money landing
 is one; fulfilment starting (`paid → processing`) is the other, recorded through `delivery`'s own
-start action (`POST /delivery/order/{orderId}/start`) — see "Action endpoints execute" below.
+start action (`POST /delivery/orders/{orderId}/start`) — see "Action endpoints execute" below.
 
 ### What the table prevents
 
@@ -236,7 +236,7 @@ flowchart LR
 A refusal to a move the table does not have answers **409**: `ORDER_NOT_CANCELLABLE` from
 a cancel door with no further detail, `ORDER_OVERRIDE_NOT_ALLOWED` from `overrideStatus` carrying
 `details: { from, to }`. Neither lists which moves ARE still open — a client wanting that reads
-`orderActionsFor`'s own `transitions` field on the order instead. Every guard runs before any field
+`Order.actions` on the order instead: the flags (`cancel`, `override`, …) name the doors open to the caller. Every guard runs before any field
 is assigned, so a refused request is never a partial write.
 
 ### Compensation is policy, and it travels with the fact
@@ -278,7 +278,7 @@ trusted. An operator can cancel without refunding, which is the replacement-goin
 compensated; suppressing it for the no-refund case would make `order.cancelled` mean "cancelled and
 refunded", which is not what it says.
 
-Returning money on its own is a separate route, `POST /payments/order/{orderId}/refund`, because it
+Returning money on its own is a separate route, `POST /payments/{id}/refunds`, because it
 is a separate act: a goodwill refund leaves the order where it is. It lives in `payments` rather
 than `orders` for a structural reason — `payments` already depends on `orders`, so an order module
 reaching back for a refund would close a cycle `npm run check` refuses.
@@ -305,16 +305,20 @@ re-implementing the rules — a status dropdown listing every enum value, a canc
 deployed codebase, with nothing able to notice when they drift.
 
 So the server sends the answer. `Order.actions` and `PaymentActions` are computed per REQUEST, not
-stored. `example` is the minimal worked case: `Example.actions` is `{ transitions, update, delete }`,
+stored. `example` is the minimal worked case: `Example.actions` is `{ transitions, update, delete }` (a target-taking endpoint, so an array is right),
 the moves from the domain's table and the two keys asked of the kernel per row (`permitsOnRows`), so
-the own-rows condition in `authorization.yaml` stays its only encoding:
+the own-rows condition in `authorization.yaml` stays its only encoding. `User.actions` is the
+account-side case: one flag per endpoint (`activate`, `restore`, `setPurchaseHold`…), assembled in
+`users/services/actions.ts` from the caller's keys, `access`'s pure `mayChangeAccount` and the row's
+own state, and only mapped by the presenter ([users](../modules/users.md#actions)):
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%
 flowchart LR
-    REQ["GET /orders/{id}<br/><i>caller: customer | admin</i>"] --> L["domain/lifecycle.ts<br/>orderActionsFor(status, actor)"]
-    L --> A["actions: { transitions, cancel, pay }"]
-    REQ2["GET /payments/order/{orderId}"] --> PA["actions: { pay, refund }"]
+    REQ["GET /orders, GET /orders/{id}<br/><i>caller: customer | admin</i>"] --> L["domain/lifecycle.ts<br/>orderActionsFor(status, actor)"]
+    L --> C["services/actions.ts<br/>the caller half: keys, buyer"]
+    C --> A["actions: { cancel, pay, delete, hardDelete, restore, … }"]
+    REQ2["GET /payments/orders/{orderId}"] --> PA["actions: { pay, refund }"]
     A --> UI["client renders controls"]
     PA --> UI
 
@@ -338,9 +342,14 @@ payment record yet. `PaymentActions.pay` is "this specific intent can be confirm
 folds the order's status in — so once a payment exists, its own answer is the one that counts, and
 the panel flips the instant a charge lands rather than waiting for the order to be re-read.
 
-**Why `paid` is never in `transitions`.** No request may make that move; it follows a confirmed
-charge. Publishing it as a capability while withholding it as a transition is the distinction
-between "you may see this is possible" and "you may do this".
+**Why there is no `paid` move.** No request may make it; it follows a confirmed charge. `pay` says
+"the card form may be offered", and no flag says "you may write the status `paid`".
+
+**Two halves.** The state half ("can this order do X in its status") is a pure predicate in
+`domain/` that the write path's guard asks too, so the flag and the refusal cannot disagree
+(`softDeletable`, `hardDeletable`, `canWithdraw`). The caller half (keys, ownership) is combined in
+`services/actions.ts`, one pure function per order, so a list can ask it once per row after ONE
+`$in` read for the page.
 
 **One function, three doors.** `domain/lifecycle.ts`'s `isPayable(status)` is the single answer to
 "can this order still be paid" — `pending` only, the one status with a `system` edge into `paid`.

@@ -1,6 +1,6 @@
 /**
  * @module
- * `DELETE /account/pending-email` controller — thin HTTP adapter over
+ * `DELETE /account/email-change` controller — thin HTTP adapter over
  * `accountService.cancelPendingEmailChange`.
  */
 
@@ -12,7 +12,7 @@ import { t } from '@infrastructure/i18n';
 import { accountService } from '../services';
 
 /**
- * DELETE /account/pending-email — the explicit action that cancels a pending email change.
+ * DELETE /account/email-change — the explicit action that cancels a pending email change.
  * Resending the current address on `PUT`/`PATCH /account` is a no-op, not an implicit cancel — see
  * docs/modules/account.md#proving-an-address.
  */

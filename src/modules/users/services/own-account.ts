@@ -1,8 +1,9 @@
 /**
  * @module
- * The doors `account` reaches the user record through for the four things it does that the admin
- * doors (`updateById`, `removeById`) cannot serve: the owner editing their own profile, the owner
- * erasing their own account, and the inactivity reaper's two deletes.
+ * The doors `account` reaches the user record through for what the admin doors (`updateById`,
+ * `removeById`) cannot serve: the owner editing their own profile, the owner's scheduled deletion
+ * (lock, restore, and the purge once its grace has run out), and the inactivity reaper's two
+ * deletes.
  *
  * Each door narrows the raw `update` / `remove` it wraps. Those two skip the ban check and the
  * staff protection the admin doors enforce, so they stay `@internal` and only these reach them.
@@ -18,7 +19,9 @@ import type { CallerContext } from '@types';
 import { accessService } from '@modules/access';
 import type { UserDocument } from '../model';
 import { update } from './update';
-import { remove } from './remove';
+import { remove, erase } from './remove';
+import { userRepository } from '../repository';
+import { markSessionsEnded } from './credentials';
 
 /**
  * What the owner may write on their own profile: everything an admin edit carries except `active`.
@@ -39,40 +42,6 @@ export const updateOwnProfile = (
     data: OwnProfileData,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => update(user, data, context);
-
-/** Marks a {@link RedeemedOwner}. Never exported: the type is how a signature asks for the proof. */
-declare const redeemedOwnership: unique symbol;
-
-/**
- * An account whose owner has just proved they hold it, by spending the one-time deletion link. The
- * route that erases an account is anonymous, so this spent link is the only thing that says the
- * person asking is the person it belongs to; a signature that takes this type, and not a bare
- * document, makes a caller say so out loud.
- */
-export type RedeemedOwner = UserDocument & { readonly [redeemedOwnership]: true };
-
-/**
- * Vouch that the owner of `user` redeemed their deletion link in this request. Call it right after
- * the link is spent and nowhere else: it checks nothing, it only names what the caller is claiming,
- * so a test fixture and a reviewer can both see the claim.
- *
- * @param user - the account the spent link belonged to
- */
-export const redeemedOwner = (user: UserDocument): RedeemedOwner =>
-    // The brand exists only in the type system: the document is the same object at run time.
-    user as RedeemedOwner;
-
-/**
- * Hard-delete the caller's own account. The route is anonymous (a one-time emailed token proves
- * ownership), so no rank check can apply: a staff member erasing themselves is allowed.
- *
- * @param owner - the account, vouched for by its spent deletion link ({@link redeemedOwner})
- * @param context - who did this; absent when no request is behind it
- */
-export const eraseOwnAccount = (
-    owner: RedeemedOwner,
-    context?: CallerContext
-): ReturnType<typeof remove> => remove(owner, true, context);
 
 /**
  * Soft-delete an account the inactivity reaper found idle past its warning. The reaper hands a
@@ -117,3 +86,63 @@ export const eraseInactive = (
     user.deletedBy === 'reaper'
         ? remove(user, true, context)
         : Promise.resolve(generateReject(409, [t('users.not-reaper-deleted')]));
+
+/**
+ * Lock the caller's own account and promise its erasure at `purgeAt`: one save that stamps
+ * `deletedAt`, `deletedBy: 'owner'` and `purgeAt` and moves the session epoch, so every token the
+ * account holds dies with it. It does not go through {@link remove}, which would audit an admin
+ * action; the account's caller records the owner's own.
+ *
+ * @param user - the loaded account, the caller's own
+ * @param requestedAt - when the owner asked; becomes `deletedAt`
+ * @param purgeAt - when the erasure falls due, decided by the caller (the grace rule is `account`'s)
+ */
+export const scheduleOwnDeletion = (
+    user: UserDocument,
+    requestedAt: Date,
+    purgeAt: Date
+): Promise<UserDocument> => {
+    user.deletedAt = requestedAt;
+    user.deletedBy = 'owner';
+    user.purgeAt = purgeAt;
+    markSessionsEnded(user, requestedAt);
+    return userRepository.save(user);
+};
+
+/**
+ * Bring back an account whose owner scheduled its deletion, if the grace has not run out. The
+ * state itself is the proof: callers hold it through a spent link or a passed sign-in. Sessions
+ * stay dead; the owner signs in afresh.
+ *
+ * @param user - the account to restore
+ * @param now - the moment to judge `purgeAt` against
+ * @returns whether THIS call restored it; `false` once the purge is due, or if another restore won
+ */
+export const restoreOwnAccount = (user: UserDocument, now: Date = new Date()): Promise<boolean> =>
+    userRepository.restoreScheduledDeletion(user.id, now);
+
+/**
+ * Hard-delete an account whose owner-scheduled grace has run out: the purge job's door. The first
+ * write of the transaction is a claim on `purgeAt <= now`, so a restore that got there first
+ * wins and this refuses with 409. The context is the job's system one, so the trail says
+ * `SYSTEM_USER_ERASED`, not an admin erase.
+ *
+ * @param user - an account the due read returned
+ * @param context - the purge job's system context
+ * @param now - the moment `purgeAt` is judged against; app time, never the database's clock
+ */
+export const eraseScheduledDeletion = (
+    user: UserDocument,
+    context: CallerContext,
+    now: Date = new Date()
+): ReturnType<typeof erase> =>
+    erase(user, context, (session) => userRepository.claimScheduledErasure(user.id, now, session));
+
+/**
+ * Every owner-scheduled account whose grace has run out: the purge job's list. The repository is
+ * not published, so the job reads through here.
+ *
+ * @param now - the moment `purgeAt` is judged against
+ */
+export const findDueScheduledDeletions = (now: Date = new Date()): Promise<UserDocument[]> =>
+    userRepository.findScheduledDeletionsDue(now);

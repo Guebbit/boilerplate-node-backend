@@ -1,6 +1,6 @@
 /**
  * @module
- * GET /payments/order/:orderId
+ * GET /payments/orders/:orderId
  * The payment behind an order — the order page's payment panel reads this on load, so a reload
  * mid-flow finds the intent (and its status) again instead of starting over.
  */
@@ -12,7 +12,7 @@ import { requireId } from '@infrastructure/http/ids';
 import { paymentService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
 
-/** Handles `GET /payments/order/:orderId`. */
+/** Handles `GET /payments/orders/:orderId`. */
 export const getPaymentByOrder = (request: Request<{ orderId?: string }>, response: Response) => {
     const orderId = requireId(request, response, {
         notFound: 'payments.not-found',

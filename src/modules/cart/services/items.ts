@@ -23,9 +23,10 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { cartAnalyticsEvents } from '../analytics';
 import { cartAuditActions } from '../audit';
 import { basketWeight, needsShipping } from '../domain';
-import { cartRepository, QUANTITY_LIMIT } from '../repository';
+import { cartRepository, QUANTITY_LIMIT, NO_LINE } from '../repository';
 import { cartLineMax } from '../config';
-import { readCartLines, toCartView, isJoined, type CartLine, type CartView } from './view';
+import { readCartLines, toCartView, isJoined, type CartLine } from './view';
+import type { CartView } from '../presenter';
 import { ERROR_CODES } from '@api/error-codes';
 import { shippingMethodNotFound } from './errors';
 
@@ -67,13 +68,16 @@ const quantityLimit = (): ResponseReject =>
  * Shared logic for adding/setting a cart item quantity.
  *
  * The catalogue gate — may this product be in a cart — lives here, not in a controller, so every
- * single-product caller (`POST /cart`, `PUT /cart/{productId}`, wishlist move-to-cart) inherits it
- * via `findPublicById`. `./reorder` applies the same predicate itself because it SKIPS unavailable
- * lines rather than refusing. Stock is deliberately excluded here — checked only at checkout,
+ * single-product caller (`POST /cart/items`, `PATCH /cart/items/{productId}`, wishlist move-to-cart) inherits it
+ * via `findPublicById`. `./reorder` goes through the merge's rule instead, because it reports an unavailable
+ * line rather than refusing. Stock is deliberately excluded here — checked only at checkout,
  * where units are actually held.
  *
- * The envelope's status says whether a line was created (201) or an existing one written (200), so
- * the controller answers the RFC 9110 §9.3.4 status without a second read.
+ * The envelope's status is the SERVICE's signal, not the route's: 201 says this write made the
+ * line (it picks the analytics event), 200 that one already there changed. Every route answers 200:
+ * a line is written through its parent, which has no `Location` to give.
+ *
+ * `'update'` is `'set'` that never creates: a cart without the line answers 404.
  *
  * The per-line ceiling (`cartLineMax()`, `NODE_CART_LINE_MAX`) is enforced here for `'set'` — the
  * contract only bounds a request to its hard 999, so a shop's lower number is checked before
@@ -84,14 +88,15 @@ const upsertCartItem = (
     userId: string,
     id: string,
     quantity: number,
-    mode: 'set' | 'add'
+    mode: 'set' | 'add' | 'update'
 ): Promise<ResponseSuccess<CartView> | ResponseReject> =>
     productService.findPublicById(id).then((product) => {
         if (!product) return generateReject(404, [t('products.not-found')]);
-        if (mode === 'set' && quantity > cartLineMax()) return quantityLimit();
+        if (mode !== 'add' && quantity > cartLineMax()) return quantityLimit();
 
         return cartRepository.upsertLine(userId, id, quantity, mode).then((result) => {
             if (result === QUANTITY_LIMIT) return quantityLimit();
+            if (result === NO_LINE) return generateReject(404, [t('cart.item-not-found')]);
 
             // 201 says a line was created; 200 that one already there changed or was left as it was.
             return toCartView(result.cart).then((view) =>
@@ -104,7 +109,7 @@ const upsertCartItem = (
  * Set quantity of target product in cart (by ID).
  *
  * The envelope carries no message: what to call a successful write is the caller's to say, and
- * `POST /cart` and `PUT /cart/{productId}` say different things about the same operation.
+ * `POST /cart/items` and `PATCH /cart/items/{productId}` say different things about the same operation.
  */
 export const cartItemSetById = (
     userId: string,
@@ -137,7 +142,7 @@ export const trackLineWrite = (
     });
 
 /**
- * Announce a cart-line write that succeeded: `201` made the line, anything else changed one
+ * Announce a cart-line write that succeeded: the service's `201` made the line, anything else changed one
  * already there. A refusal emits nothing.
  * @param context - the caller, for the analytics base
  * @param result - what the write answered
@@ -156,9 +161,9 @@ const emitItemWritten = (
 };
 
 /**
- * `POST /cart` — "add to cart": a product not in the cart gets a line, one already there GROWS by
- * `quantity` (Shopify's `/cart/add`, commercetools' `addLineItem`). `PUT /cart/{productId}` is the
- * door that sets. Wraps `cartItemAddById` rather than folding the emit into it, so callers with no
+ * `POST /cart/items` — "add to cart": a product not in the cart gets a line, one already there GROWS by
+ * `quantity` (Shopify's `/cart/add`, commercetools' `addLineItem`). `PATCH /cart/items/{productId}` is
+ * the door that sets. Wraps `cartItemAddById` rather than folding the emit into it, so callers with no
  * `CallerContext` (tests, wishlist's move-to-cart) stay free of one.
  *
  * `CART_ITEM_ADDED` fires only when a line was created; growing one is a quantity change, which
@@ -175,8 +180,8 @@ export const cartItemAdd = (
     );
 
 /**
- * `PUT /cart/{productId}` — set the quantity of a specific cart item: 201 when it creates the
- * line, 200 when it writes one already there (RFC 9110 §9.3.4). See {@link cartItemAdd}.
+ * `PATCH /cart/items/{productId}` — set the quantity of a line the cart holds; 404 for one it
+ * does not, since a change never creates. See {@link cartItemAdd}.
  */
 export const cartItemUpdateQuantity = (
     userId: string,
@@ -184,7 +189,7 @@ export const cartItemUpdateQuantity = (
     quantity: number,
     context: CallerContext
 ): Promise<ResponseSuccess<CartView> | ResponseReject> =>
-    cartItemSetById(userId, id, quantity).then((result) =>
+    upsertCartItem(userId, id, quantity, 'update').then((result) =>
         emitItemWritten(context, result, id, quantity)
     );
 

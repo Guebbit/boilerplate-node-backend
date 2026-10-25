@@ -3,6 +3,13 @@ info:
     title: users — module contract
     version: '0.1.0'
 
+x-error-codes:
+    USER_NOT_DELETED: { status: 409, description: 'The account is not soft-deleted, so there is nothing to restore.' }
+    USER_ERASURE_DUE: { status: 409, description: 'The account owner asked for its deletion and the grace has run out, so it is erased by the next purge run and can no longer be restored.' }
+    USER_ALREADY_ACTIVE: { status: 409, description: 'The account is active already: `POST /users/{id}/activate` has nothing to do.' }
+    USER_ALREADY_INACTIVE: { status: 409, description: 'The account is deactivated already: `POST /users/{id}/deactivate` has nothing to do.' }
+    USER_PURCHASE_HOLD_NOT_SET: { status: 409, description: 'The account has no purchase hold and no review flag, so there is nothing to lift.' }
+
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Users
@@ -132,8 +139,9 @@ paths:
             security:
                 - bearerAuth: []
             # The flag is readable from the query here too, exactly as it is on the `{id}` form:
-            # one controller serves both, and `surface: 'delete'` reads params, query and body on
-            # whichever route it is mounted on. Declared rather than merely tolerated.
+            # one controller serves both, and the flag is read from the path flag, the query and
+            # the body on whichever route it is mounted on. The id is the body's alone here, and the
+            # path's alone on the `{id}` form. Declared rather than merely tolerated.
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/HardDeleteParam'
             requestBody:
@@ -259,12 +267,6 @@ paths:
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/HardDeleteParam'
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/HardDeleteRequest'
             responses:
                 '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
@@ -314,10 +316,9 @@ paths:
             description: >-
                 Ends the hold now and restarts the count of cancellations from this moment, so the
                 cancellations that caused an automatic hold never trigger another. A staff review
-                is exactly this call, and it clears the account's review flag. Safe to repeat:
-                lifting no hold answers 200 with the user. Audited as
-                `admin.user.purchase_hold_lifted` when a hold or a review flag was there to clear
-                (`inForce` says which); a repeat that finds neither writes no row.
+                is exactly this call, and it clears the account's review flag. An account with neither
+                a hold nor a review flag answers 409 `USER_PURCHASE_HOLD_NOT_SET`. Audited as
+                `admin.user.purchase_hold_lifted` (`inForce` says whether the hold was still running).
             operationId: liftUserPurchaseHold
             security:
                 - bearerAuth: []
@@ -334,6 +335,62 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /users/{id}/activate:
+        post:
+            tags: [Users]
+            summary: Activate user
+            description: >-
+                Lets a deactivated account sign in again. Answers 409 `USER_ALREADY_ACTIVE` when it
+                is active already. Needs `ban:User`, the key deactivating takes. Audited as
+                `admin.user.unbanned`.
+            operationId: activateUserById
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The user, now active
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /users/{id}/deactivate:
+        post:
+            tags: [Users]
+            summary: Deactivate user
+            description: >-
+                Locks the account out and ends every session it holds in the same save, so
+                activating it later does not bring the old tokens back. Answers 409
+                `USER_ALREADY_INACTIVE` when it is deactivated already. Needs `ban:User`. Audited as
+                `admin.user.banned`.
+            operationId: deactivateUserById
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The user, now deactivated
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     # Undoes a soft delete. A separate verb because DELETE must be safe to repeat (RFC 9110
@@ -342,7 +399,7 @@ paths:
         post:
             tags: [Users]
             summary: Restore user
-            description: Undoes the soft delete of the user identified by `{id}`. Answers 409 when the user is not soft-deleted, so a restore can never be mistaken for an ordinary read.
+            description: Undoes the soft delete of the user identified by `{id}`, which includes an account whose owner asked to delete it and whose `purgeAt` has not passed (the owner is told by mail; the account is then no longer scheduled for erasure). Answers 409 `USER_NOT_DELETED` when the user is not soft-deleted, so a restore can never be mistaken for an ordinary read, and 409 `USER_ERASURE_DUE` past `purgeAt`.
             operationId: restoreUserById
             security:
                 - bearerAuth: []
@@ -622,8 +679,6 @@ components:
                     type: [string, 'null']
                     maxLength: 64
                     minLength: 1
-                active:
-                    type: boolean
                 # `null` removes the image. Omitted leaves it unchanged; `''` is
                 # invalid (`ImageUrl`'s own `minLength: 1`), never a third spelling of "no image".
                 imageUrl:
@@ -655,8 +710,6 @@ components:
                     type: string
                     maxLength: 64
                     minLength: 1
-                active:
-                    type: boolean
                 imageUpload:
                     # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
@@ -681,7 +734,7 @@ components:
         ReplaceUserByIdRequest:
             type: object
             additionalProperties: false
-            required: [username, role, active]
+            required: [username, role]
             properties:
                 username:
                     type: string
@@ -693,8 +746,6 @@ components:
                     type: [string, 'null']
                     maxLength: 64
                     minLength: 1
-                active:
-                    type: boolean
                 imageUrl:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageRemoval'
                 locale:
@@ -714,7 +765,7 @@ components:
         ReplaceUserByIdRequestMultipart:
             type: object
             additionalProperties: false
-            required: [username, role, active]
+            required: [username, role]
             properties:
                 username:
                     type: string
@@ -724,8 +775,6 @@ components:
                     type: string
                     maxLength: 64
                     minLength: 1
-                active:
-                    type: boolean
                 imageUpload:
                     # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string

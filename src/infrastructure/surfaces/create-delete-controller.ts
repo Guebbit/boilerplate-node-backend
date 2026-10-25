@@ -52,16 +52,21 @@ export const createDeleteController = ({ entity, remove, notFoundKey }: DeleteCo
     const operation = operationName('delete', entity);
 
     return namedHandler(operation, (request: Request, response: Response) => {
-        // Reads `id` off the route, query or body. A malformed one is the same 404 an unknown id
-        // gets when it came in the path, and a 422 naming `id` when it came any other way.
-        const id = requireId(request, response, { notFound: notFoundKey, surface: 'delete' });
+        // `DELETE /x/{id}` takes the id from the path alone; `DELETE /x` takes it from the body
+        // alone. A stray `?id=` must never outvote the body's id: it names a different record.
+        // A malformed one is the same 404 an unknown id gets when it came in the path, and a 422
+        // naming `id` when it came in the body.
+        const id = requireId(request, response, {
+            notFound: notFoundKey,
+            surface: Object.hasOwn(request.params, 'id') ? 'path' : 'create'
+        });
         if (!id) return Promise.resolve();
 
-        // `hardDelete` arrives three ways (path segment via `routeFlag`, query, or body) and
-        // is OR'd across sources rather than following surface precedence: any true wins, all
-        // false/absent defaults to false, any undecodable value 422s. OR avoids `false`
-        // (the default, what nobody types) ever outvoting a `true` someone deliberately sent
-        // on a different transport.
+        // `hardDelete` arrives three ways (path segment via `routeFlag`, query, or the collection
+        // route's body) and is OR'd across sources rather than following surface precedence: any
+        // true wins, all false/absent defaults to false, any undecodable value 422s. OR avoids
+        // `false` (the default, what nobody types) ever outvoting a `true` someone deliberately
+        // sent on a different transport.
         const input = readInput(request, { surface: 'delete', anyTrue: ['hardDelete'] });
         // Validates the merged `hardDelete` value against its schema; 422s and returns
         // undefined on failure (a valid `false` is not `undefined`).

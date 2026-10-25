@@ -24,10 +24,10 @@ import { sessionRepository } from '../repository';
 import { removeTokens } from './tokens';
 import {
     PASSWORD_RESET_TOKEN_TYPE,
-    ACCOUNT_DELETE_TOKEN_TYPE,
     EMAIL_VERIFY_TOKEN_TYPE,
     EMAIL_CHANGE_TOKEN_TYPE,
     MFA_CHALLENGE_TOKEN_TYPE,
+    DELETION_RESTORE_TOKEN_TYPE,
     type VerificationTokenType
 } from '../token-types';
 
@@ -55,8 +55,8 @@ const PENDING_TOKEN_TYPES: readonly VerificationTokenType[] = [
     PASSWORD_RESET_TOKEN_TYPE,
     EMAIL_VERIFY_TOKEN_TYPE,
     EMAIL_CHANGE_TOKEN_TYPE,
-    ACCOUNT_DELETE_TOKEN_TYPE,
-    MFA_CHALLENGE_TOKEN_TYPE
+    MFA_CHALLENGE_TOKEN_TYPE,
+    DELETION_RESTORE_TOKEN_TYPE
 ];
 
 /**

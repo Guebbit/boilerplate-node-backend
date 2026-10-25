@@ -17,7 +17,11 @@ import {
 import { rotateWebhookSubscriptionSecret } from './controllers/rotate-subscription-secret';
 import { removeWebhookSubscriptionSecret } from './controllers/remove-subscription-secret';
 import { deleteWebhookSubscription } from './controllers/delete-subscription';
+import { getWebhookSubscription } from './controllers/get-subscription';
+import { enableWebhookSubscription } from './controllers/enable-subscription';
+import { disableWebhookSubscription } from './controllers/disable-subscription';
 import { listWebhookDeliveries } from './controllers/list-deliveries';
+import { getWebhookDelivery } from './controllers/get-delivery';
 import { replayWebhookDelivery } from './controllers/replay-delivery';
 import { listWebhookEvents } from './controllers/list-events';
 
@@ -43,6 +47,13 @@ router.post(
     createWebhookSubscription
 );
 
+// GET /webhooks/subscriptions/:id — one subscription
+router.get(
+    '/subscriptions/:id',
+    requirePermission('read', 'WebhookSubscription'),
+    getWebhookSubscription
+);
+
 // PUT /webhooks/subscriptions/:id — replace the whole subscription
 router.put(
     '/subscriptions/:id',
@@ -64,6 +75,20 @@ router.delete(
     deleteWebhookSubscription
 );
 
+// POST /webhooks/subscriptions/:id/enable — switch it back on, whatever switched it off
+router.post(
+    '/subscriptions/:id/enable',
+    requirePermission('update', 'WebhookSubscription'),
+    enableWebhookSubscription
+);
+
+// POST /webhooks/subscriptions/:id/disable — pause it by hand
+router.post(
+    '/subscriptions/:id/disable',
+    requirePermission('update', 'WebhookSubscription'),
+    disableWebhookSubscription
+);
+
 // POST /webhooks/subscriptions/:id/rotate-secret — add a new ring secret; the old one stays active
 router.post(
     '/subscriptions/:id/rotate-secret',
@@ -80,6 +105,9 @@ router.delete(
 
 // GET /webhooks/deliveries — the delivery log, newest first
 router.get('/deliveries', requirePermission('read', 'WebhookSubscription'), listWebhookDeliveries);
+
+// GET /webhooks/deliveries/:id — one delivery of the log
+router.get('/deliveries/:id', requirePermission('read', 'WebhookSubscription'), getWebhookDelivery);
 
 // POST /webhooks/deliveries/:id/replay — re-send one delivery now
 router.post(

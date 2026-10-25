@@ -7,6 +7,7 @@
 
 import { recordStaffRead } from '@kernel/staff-read';
 import { userService } from '../services';
+import { callerContextOf } from '@infrastructure/http/request';
 import { usersAuditActions } from '../audit';
 import { createItemController } from '@infrastructure/surfaces/create-item-controller';
 
@@ -31,6 +32,6 @@ export const getUserItem = createItemController({
                 targetId: id,
                 ownerId: id
             });
-            return userService.toUserContract(user, request.caller);
+            return userService.toUserContract(user, callerContextOf(request).caller);
         })
 });

@@ -34,11 +34,12 @@ import { t } from '@infrastructure/i18n';
 import { userService } from '@modules/users';
 import { withOwnAccount } from './caller';
 import { WORKER_CHANNELS } from '@types';
-import type { AccountExportJobPayload, CallerContext } from '@types';
+import type { AccountExportJobPayload, AccountExportRequest, CallerContext } from '@types';
 import type { AfterErase } from '@kernel/registry';
 import { exportRetentionMs } from '../config';
 import { recipientLocale } from '../emails';
 import { accountAuditActions } from '../audit';
+import { presentExportRequest } from '../presenter';
 import { accountExportRepository, type AccountExportRow } from '../repository';
 import { mailRecipientRefusal } from '../mail-budget';
 import { runExportJob } from './export-job';
@@ -51,12 +52,6 @@ import { removeRow } from './export-rows';
  * its own file.
  */
 const EXPORT_BUILD_LIMIT_MS = 30 * 60 * 1000;
-
-/** What `POST /account/export` answers, and what a request resolves to. */
-export interface AccountExportRequestResult {
-    id: string;
-    status: AccountExportRow['status'];
-}
 
 /**
  * Builds running in this process because no broker took the job. Only tests wait for them: a
@@ -192,7 +187,7 @@ const isRow = (outcome: ExportRowChoice | ResponseReject): outcome is ExportRowC
 export const requestExport = (
     userId: string,
     context: CallerContext
-): Promise<ResponseSuccess<AccountExportRequestResult> | ResponseReject> =>
+): Promise<ResponseSuccess<AccountExportRequest> | ResponseReject> =>
     withOwnAccount(
         userId,
         (user) =>
@@ -215,8 +210,8 @@ export const requestExport = (
                 };
 
                 return (created ? dispatch(job) : Promise.resolve()).then(() =>
-                    generateSuccess<AccountExportRequestResult>(
-                        { id: String(row._id), status: row.status },
+                    generateSuccess<AccountExportRequest>(
+                        presentExportRequest(row),
                         202,
                         t('account.export.requested')
                     )

@@ -674,7 +674,7 @@ describe('withActions — withdraw', () => {
         );
 
         expect(openBody.actions?.withdraw).toBe(true);
-        expect(openBody.actions?.withdrawUntil).toEqual(expect.any(String));
+        expect(new Date(openBody.withdrawUntil!).getTime()).not.toBeNaN();
         expect(closedBody.actions?.withdraw).toBe(false);
     });
 
@@ -694,7 +694,7 @@ describe('withActions — withdraw', () => {
         );
 
         expect(body.actions?.withdraw).toBe(true);
-        expect(body.actions?.withdrawUntil).toBe(announced.toISOString());
+        expect(new Date(body.withdrawUntil!).toISOString()).toBe(announced.toISOString());
     });
 
     it('is never offered on a cancelled order', async () => {
@@ -717,7 +717,6 @@ describe('withActions', () => {
         const body = await orderService.withActions(order, asUser(user));
 
         expect(body.actions).toEqual({
-            transitions: ['cancelled'],
             cancel: true,
             pay: true,
             recordPayment: false,
@@ -727,7 +726,8 @@ describe('withActions', () => {
             invoice: false,
             withdraw: true,
             delete: false,
-            hardDelete: false
+            hardDelete: false,
+            restore: false
         });
     });
 
@@ -740,7 +740,6 @@ describe('withActions', () => {
         const body = await orderService.withActions(cancelled!, asAdmin());
 
         expect(body.actions).toEqual({
-            transitions: [],
             cancel: false,
             pay: false,
             recordPayment: false,
@@ -750,18 +749,20 @@ describe('withActions', () => {
             invoice: false,
             withdraw: false,
             delete: true,
-            hardDelete: true
+            hardDelete: true,
+            restore: false
         });
     });
 
-    it('never offers `paid` to anyone, because no request may claim `system`', async () => {
+    it('offers `pay` to the buyer only, because no request may claim `system`', async () => {
         const user = await createUser();
         const order = await seedOrder(user);
 
-        for (const caller of [asUser(user), asAdmin()]) {
-            const body = await orderService.withActions(order, caller);
-            expect((body.actions as { transitions: string[] }).transitions).not.toContain('paid');
-        }
+        const buyer = await orderService.withActions(order, asUser(user));
+        const admin = await orderService.withActions(order, asAdmin());
+
+        expect(buyer.actions?.pay).toBe(true);
+        expect(admin.actions?.pay).toBe(false);
     });
 
     it("gives the warehouse `start` on a paid order, without `update:Order`'s admin column", async () => {
@@ -773,8 +774,8 @@ describe('withActions', () => {
 
         const body = await orderService.withActions(paid!, asWarehouse());
 
-        expect(body.actions!.start).toBe(true);
-        expect(body.actions!.override).toEqual([]);
+        expect(body.actions.start).toBe(true);
+        expect(body.actions.override).toEqual([]);
     });
 
     it("never offers `start` once already `processing` — an echo write isn't a fresh offer", async () => {
@@ -791,7 +792,7 @@ describe('withActions', () => {
 
         const body = await orderService.withActions(processing!, asWarehouse());
 
-        expect(body.actions!.start).toBe(false);
+        expect(body.actions.start).toBe(false);
     });
 
     it('withdraws the cancel once anything has shipped, but keeps the withdrawal', async () => {
@@ -801,10 +802,7 @@ describe('withActions', () => {
         const before = await orderService.getById(String(order._id));
         expect(
             await orderService.withActions(before!, asAdmin()).then((one) => one.actions)
-        ).toMatchObject({
-            cancel: true,
-            transitions: ['cancelled']
-        });
+        ).toMatchObject({ cancel: true });
 
         // `delivery` reports the first shipment: units remain, so the status stays `processing`.
         const shippedInPart = await orderModel
@@ -828,7 +826,6 @@ describe('withActions', () => {
         expect(admin.status).toBe('processing');
         expect(admin.fulfillmentStatus).toBe('partially_fulfilled');
         expect(admin.actions).toMatchObject({ cancel: false });
-        expect(admin.actions!.transitions).not.toContain('cancelled');
         // The buyer's withdrawal still stands: what has not shipped is cancelled through `returns`.
         expect(buyer.actions).toMatchObject({ cancel: false, withdraw: true });
     });
@@ -842,7 +839,7 @@ describe('withActions', () => {
 
         const body = await orderService.withActions(paid!, asAdmin());
 
-        expect(body.actions!.override).toEqual(['processing', 'shipped', 'delivered']);
+        expect(body.actions.override).toEqual(['processing', 'shipped', 'delivered']);
     });
 
     it("never offers the warehouse `override:Order`'s destinations", async () => {
@@ -852,7 +849,7 @@ describe('withActions', () => {
 
         const body = await orderService.withActions(paid!, asWarehouse());
 
-        expect(body.actions!.override).toEqual([]);
+        expect(body.actions.override).toEqual([]);
     });
 
     it('carries the serialized order, not the document', async () => {

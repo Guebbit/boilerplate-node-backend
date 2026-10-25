@@ -1,7 +1,7 @@
 /**
  * @module
- * The `/api-keys` router. Every route sits behind an `apikeys.*` key — read to list, create to
- * mint, delete to revoke — and every
+ * The `/api-keys` router. Every route sits behind an `apikeys.*` key — read to list or read one,
+ * create to mint, delete to revoke — and every
  * route is reached with a human session — the credentials THIS module mints are presented to
  * OTHER routes, never to these.
  */
@@ -9,6 +9,7 @@
 import { Router } from 'express';
 import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
 import { listApiKeys } from './controllers/list-api-keys';
+import { getApiKey } from './controllers/get-api-key';
 import { mintApiKey } from './controllers/mint-api-key';
 import { revokeApiKey } from './controllers/revoke-api-key';
 
@@ -25,6 +26,9 @@ router.use(getAuth, isAuth);
 
 // GET /api-keys — list the keys (never their secrets).
 router.get('/', requirePermission('read', 'ApiKey'), listApiKeys);
+
+// GET /api-keys/:id — one key (never its secret).
+router.get('/:id', requirePermission('read', 'ApiKey'), getApiKey);
 
 // POST /api-keys — mint a key.
 router.post('/', requirePermission('create', 'ApiKey'), mintApiKey);

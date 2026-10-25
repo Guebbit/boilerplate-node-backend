@@ -16,7 +16,7 @@ x-error-codes:
     CART_CHANGED: { status: 409, description: 'The cart changed between the request that read it and this write — reload and retry.' }
     CART_EMPTY: { status: 409, description: 'Checkout was attempted on a cart with no lines.' }
     CART_INSUFFICIENT_STOCK: { status: 409, description: 'One or more lines cannot be bought as they stand — see `errors[].details.lines`, one entry per refused line with its `productId`, `title`, the `requested` quantity and its `availability` (`insufficient_stock`, `out_of_stock` or `unavailable`, so the client picks the message). The number left is not part of the answer: exact stock is for callers who read it (`read:StockLevel`).' }
-    CART_OPEN_ORDER_LIMIT: { status: 409, description: 'The account already holds `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` unpaid orders, whatever their payment method — each holds stock. `errors[].details.orderIds` names them: pay one (`POST /payments/intent`) or cancel one (`POST /orders/{id}/cancel`), then check out again.' }
+    CART_OPEN_ORDER_LIMIT_REACHED: { status: 409, description: 'The account already holds `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` unpaid orders, whatever their payment method — each holds stock. `errors[].details.orderIds` names them: pay one (`POST /payments`) or cancel one (`POST /orders/{id}/cancel`), then check out again.' }
     CART_PAYMENT_METHOD_NOT_AVAILABLE: { status: 409, description: 'The chosen payment method is not enabled for this deployment or this cart.' }
     CART_PRODUCT_UNAVAILABLE: { status: 409, description: 'A line references a product that was deleted or hidden (`active: false`) since it was added: its `availability` is `removed`. A product merely taken off sale is `unavailable` and refused as `CART_INSUFFICIENT_STOCK`.' }
     CART_PURCHASE_HOLD: { status: 409, description: 'The account is under a purchase hold: a protective pause after repeated cancellations, or one set by staff. `errors[].details` carries `until` (when checkout opens again), `reason` (`repeated_cancellations` or `staff`) and, for a staff hold, the `note` written for the buyer. Paying an existing order, cancelling, a withdrawal and a return are never blocked; the buyer can contest it through the contact form.' }
@@ -27,7 +27,7 @@ x-error-codes:
     CART_SHIPPING_NOT_APPLICABLE: { status: 409, description: 'The chosen shipping method does not apply to an all-digital cart.' }
     CART_TOTAL_CHANGED: { status: 409, description: 'The total the buyer was shown is not the total this checkout would charge — a price, a shipping cost or the cart itself changed. `errors[].details` carries `expected` (what the request named) and `actual` (what the order would cost now), each `{ amount, currency }` in minor units; show the new total and let the buyer confirm.' }
     CART_SHIP_TO_COUNTRY_NOT_SUPPORTED: { status: 422, description: 'The address''s country is outside this deployment''s configured ship-to list.' }
-    EMAIL_NOT_VERIFIED: { status: 403, description: 'Checkout requires a verified email address — see `POST /account/verify-email`.' }
+    EMAIL_NOT_VERIFIED: { status: 403, description: 'Checkout requires a verified email address — see `POST /account/email-verification/resend`.' }
     REORDER_UNAVAILABLE: { status: 409, description: 'The past order named for reorder no longer has any purchasable lines.' }
 
 # This module's section of the account data export (`POST /account/export`): the bundler
@@ -58,15 +58,18 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /cart/items:
         post:
             tags: [Cart]
             summary: Add to cart
             description: >-
                 "Add to cart": a product with no line in the caller's cart gets one, and a line
                 already there GROWS by `quantity` — pressing the button twice makes two (Shopify's
-                `/cart/add`, commercetools' `addLineItem`). Answers 201 with the cart and the
-                line's `Location` when a line was created, 200 when an existing one grew; the line
-                may not pass the per-line cap (422). To SET a quantity, `PUT /cart/{productId}`.
+                `/cart/add`, commercetools' `addLineItem`). A line is written through its parent, so
+                the answer is always 200 with the whole cart: no `Location`, no read of a line. The
+                line may not pass the per-line cap (422). To SET a quantity,
+                `PATCH /cart/items/{productId}`.
             operationId: addCartItem
             security:
                 - bearerAuth: []
@@ -77,16 +80,8 @@ paths:
                         schema:
                             $ref: '#/components/schemas/AddCartItemRequest'
             responses:
-                '201':
-                    description: The product had no line; the cart now holds one
-                    headers:
-                        Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/CartResponseEnvelope'
                 '200':
-                    description: The product already had a line, which grew
+                    description: The cart after the add; a new line was pushed, or the existing one grew
                     content:
                         application/json:
                             schema:
@@ -99,38 +94,8 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
             tags: [Cart]
-            summary: Remove item from cart
-            description: Removes the cart line for the product identified by `productId` in the body from the authenticated user's cart. Alternate spelling of `DELETE /cart/{productId}`, for a caller that would rather carry the id in the body. To empty the cart entirely, use `DELETE /cart/all` instead — a stripped or malformed body here 422s rather than falling back to clearing everything. Returns the updated cart.
-            operationId: removeCartItemByBody
-            x-alias-of: removeCartItem
-            security:
-                - bearerAuth: []
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/RemoveCartItemRequest'
-            responses:
-                '200':
-                    description: Updated cart
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/CartResponseEnvelope'
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                # Well-formed product id that matches no cart line. 422 covers the malformed case.
-                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # A missing or malformed `productId` in the body — the controller answers before querying.
-                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
-
-    /cart/all:
-        delete:
-            tags: [Cart]
             summary: Clear cart
-            description: Empties the authenticated user's cart entirely. Bodyless on purpose — the destructive spelling gets its own URL instead of being what `DELETE /cart` falls back to when a body goes missing, so a body stripped in transit 422s there instead of silently landing here.
+            description: Empties the authenticated user's cart entirely. Bodyless on purpose — the destructive spelling gets its own URL, and any body on it is refused (415), so a body can never turn a one-line delete into this. Returns the (empty) cart; clearing an already-empty cart is the state the caller asked for, so also 200.
             operationId: clearCart
             security:
                 - bearerAuth: []
@@ -145,11 +110,11 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /cart/{productId}:
-        put:
+    /cart/items/{productId}:
+        patch:
             tags: [Cart]
             summary: Set cart item quantity
-            description: Sets the quantity of the cart line for the product identified by `{productId}` in the path — the quantity, not an increment; `POST /cart` is the door that adds. Answers 201 when it created the line (RFC 9110 §9.3.4) and 200 when it wrote one already there; repeating it changes nothing. Returns the updated cart.
+            description: Sets the quantity of the cart line for the product identified by `{productId}` in the path — the quantity, not an increment; `POST /cart/items` is the door that adds. A change never creates, so a product the cart holds no line for is 404 `cart.item-not-found`, and a held line whose product the storefront no longer shows is 404 `products.not-found`. Repeating it changes nothing. Returns the updated cart.
             operationId: updateCartItemById
             security:
                 - bearerAuth: []
@@ -161,15 +126,10 @@ paths:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/UpdateCartItemByIdRequest'
+                    application/merge-patch+json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateCartItemByIdRequest'
             responses:
-                '201':
-                    description: The product had no line; the cart now holds one
-                    headers:
-                        Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/CartResponseEnvelope'
                 '200':
                     description: Updated cart
                     content:
@@ -179,6 +139,7 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '415': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/UnsupportedMediaType' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
@@ -281,7 +242,7 @@ paths:
                                 $ref: '#/components/schemas/CheckoutResponseEnvelope'
                     links:
                         PayOrder:
-                            operationId: createPaymentIntent
+                            operationId: createPayment
                             parameters:
                                 orderId: '$response.body#/data/id'
                             description: The new order's id is the `orderId` to freeze into a payment intent.
@@ -304,7 +265,7 @@ paths:
                 # lookup that might resolve), a `paymentMethod` this
                 # deployment does not offer (`CART_PAYMENT_METHOD_NOT_AVAILABLE`), or the caller
                 # already has `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` unpaid orders, of any
-                # payment method (`CART_OPEN_ORDER_LIMIT`, naming them in
+                # payment method (`CART_OPEN_ORDER_LIMIT_REACHED`, naming them in
                 # `details.orderIds`), or the account is under a purchase hold
                 # (`CART_PURCHASE_HOLD`, with `details.until`). A stored shipping choice the basket no
                 # longer fits (gone digital-only, lost its last physical line, outgrown the method)
@@ -331,7 +292,7 @@ paths:
             summary: Merge a guest cart into the cart
             description: >-
                 Adds every line of a cart built while signed out, in one call, by the same rule as
-                `POST /cart`: a product already in the cart GROWS by the line's quantity, a new one
+                `POST /cart/items`: a product already in the cart GROWS by the line's quantity, a new one
                 gets a line. The answer holds the cart as it now stands and ONE RESULT PER SUBMITTED
                 LINE, in request order, saying what the line asked for (`requested`), what the cart
                 holds for that product now (`resulting`) and, when the two differ or the line did
@@ -376,7 +337,7 @@ paths:
         post:
             tags: [Cart]
             summary: Reorder (refill cart from a past order)
-            description: Copies the lines of one of the authenticated user's own orders back into their cart — quantities from the order, added on top of what the cart already holds. The order stores product snapshots, so each line is re-resolved against the catalogue as it is today; products that have since been removed, deactivated or hidden are skipped, and the returned cart view is the record of what actually landed. A line that would pass the per-line ceiling (`NODE_CART_LINE_MAX`) is clamped to what room is left instead, and skipped outright once there is none — the same best-effort treatment as an unavailable product. Any signed-in account, staff included, reorders only its own orders — the cart being filled is the caller's.
+            description: Copies the lines of one of the authenticated user's own orders back into their cart — quantities from the order, added on top of what the cart already holds. The order stores product snapshots, so each line is re-resolved against the catalogue as it is today; products that have since been removed, deactivated or hidden are skipped, and the answer holds the cart as it now stands and ONE RESULT PER ORDER LINE, in the order's own order, by the same rule and in the same shape as `POST /cart/merge` (`requested`, `resulting`, `reason`, `availability`). A line that would pass the per-line ceiling (`NODE_CART_LINE_MAX`) is clamped to what room is left (`capped`), and adds nothing once there is none; an unavailable product is `removed`. Neither is a failure. Any signed-in account, staff included, reorders only its own orders — the cart being filled is the caller's.
             operationId: reorder
             security:
                 - bearerAuth: []
@@ -385,11 +346,11 @@ paths:
                   description: One of the caller's own orders
             responses:
                 '200':
-                    description: The updated cart
+                    description: The updated cart, and what happened to each order line
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CartResponseEnvelope'
+                                $ref: '#/components/schemas/ReorderResponseEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # Well-formed order id that matches none of the caller's own orders.
@@ -450,8 +411,8 @@ components:
             maximum: 999
             description: >-
                 Bounded at both ends, and this bound is on the STORED line, not only the request:
-                `PUT /cart/{productId}` sets a line to exactly this value, which already fits;
-                a caller that instead adds to an existing line (`POST /cart`, the wishlist's
+                `PATCH /cart/items/{productId}` sets a line to exactly this value, which already fits;
+                a caller that instead adds to an existing line (`POST /cart/items`, the wishlist's
                 move-to-cart) is refused past it with 422 `CART_QUANTITY_LIMIT` rather than
                 silently overflowing. The ceiling is not a stock check — stock is verified at
                 checkout, which refuses with `CART_INSUFFICIENT_STOCK` and is the real boundary.
@@ -478,7 +439,7 @@ components:
                     type: array
                     minItems: 1
                     maxItems: 100
-                    description: The guest cart's lines. A product listed twice is two lines, summed like two `POST /cart`s.
+                    description: The guest cart's lines. A product listed twice is two lines, summed like two `POST /cart/items`s.
                     items:
                         $ref: '#/components/schemas/AddCartItemRequest'
 
@@ -510,7 +471,7 @@ components:
         MergeLineReason:
             type: string
             description: >-
-                Why a guest line did not land exactly as asked. Absent when it did.
+                Why a merged guest line or a reordered order line did not land exactly as asked. Absent when it did.
 
                 - `summed`: the cart already held some of the product, so `resulting` is the sum.
                 - `capped`: the sum would pass the per-line cap (`NODE_CART_LINE_MAX`); `resulting` is the cap.
@@ -530,11 +491,11 @@ components:
                 requested:
                     type: integer
                     minimum: 1
-                    description: What the guest line asked for.
+                    description: What the guest line (or the order line) asked for.
                 resulting:
                     type: integer
                     minimum: 0
-                    description: What the cart holds for this product after the merge.
+                    description: What the cart holds for this product after the merge or reorder.
                 reason:
                     $ref: '#/components/schemas/MergeLineReason'
                 # What `resulting` can do right now. Never the number left. Independent of
@@ -569,6 +530,33 @@ components:
                 data:
                     $ref: '#/components/schemas/MergeCartResponse'
 
+        ReorderResponse:
+            type: object
+            additionalProperties: false
+            required: [cart, lines]
+            properties:
+                cart:
+                    $ref: '#/components/schemas/CartResponse'
+                lines:
+                    type: array
+                    description: One result per order line, in the order's own order.
+                    items:
+                        $ref: '#/components/schemas/MergeLineResult'
+
+        ReorderResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/ReorderResponse'
+
         UpdateCartItemByIdRequest:
             type: object
             additionalProperties: false
@@ -576,14 +564,6 @@ components:
             properties:
                 quantity:
                     $ref: '#/components/schemas/CartQuantity'
-
-        RemoveCartItemRequest:
-            type: object
-            additionalProperties: false
-            required: [productId]
-            properties:
-                productId:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
 
         SetCartShippingMethodRequest:
             type: object
@@ -676,7 +656,7 @@ components:
         CartSummaryResponse:
             type: object
             additionalProperties: false
-            required: [itemsCount, totalQuantity, itemsTotal, shippingCost, totalPrice, currency]
+            required: [itemsCount, totalQuantity, itemsTotal, shippingCost, totalPrice, currency, expectedTotal]
             properties:
                 itemsCount:
                     type: integer
@@ -712,11 +692,17 @@ components:
                 currency:
                     type: string
                     description: ISO-4217 currency code (e.g. USD)
+                expectedTotal:
+                    allOf: [{ $ref: '#/components/schemas/ExpectedTotal' }]
+                    description: >-
+                        `totalPrice` in minor units, exactly as `POST /cart/checkout` compares it:
+                        send it back unchanged as the checkout's `expectedTotal`. A client never
+                        converts the decimal itself, so it needs no table of currency exponents.
 
         CartResponse:
             type: object
             additionalProperties: false
-            required: [items, summary, shipping]
+            required: [items, summary, shipping, checkoutable]
             properties:
                 items:
                     type: array
@@ -726,11 +712,18 @@ components:
                     $ref: '#/components/schemas/CartSummaryResponse'
                 shipping:
                     $ref: '#/components/schemas/CartShipping'
+                checkoutable:
+                    type: boolean
+                    description: >-
+                        Whether every line can be bought as it stands (each line's `availability`
+                        is `in_stock`, `preorder` or `backorder`) and the cart is not empty. Checkout
+                        refuses the others (`CART_INSUFFICIENT_STOCK`, `CART_PRODUCT_UNAVAILABLE`);
+                        a shipping method and an address are separate steps and not part of this.
 
         CartResponseItem:
             type: object
             additionalProperties: false
-            required: [productId, quantity, availability]
+            required: [productId, quantity, availability, canIncrease]
             description: >-
                 One line of the basket as the cart answers it: the stored line plus whether it can
                 be bought as it stands. Not `CartItem`, which stays the bare stored line the export and the
@@ -745,11 +738,18 @@ components:
                 # stock is for callers holding `read:StockLevel`, the same level of
                 # disclosure as checkout's `CART_INSUFFICIENT_STOCK`. Read from the stock
                 # ledger and the catalogue by the cart view, the merge and checkout
-                # through one rule; `POST /cart` and `PUT` do not refuse a line for stock
+                # through one rule; `POST /cart/items` and `PATCH` do not refuse a line for stock
                 # or for being off sale, so a client polling `GET /cart` is how it learns
                 # a line has gone short or unavailable.
                 availability:
                     $ref: '#/components/schemas/LineAvailability'
+                canIncrease:
+                    type: boolean
+                    description: >-
+                        Whether the line can hold one more unit: `quantity` is below the shop's
+                        per-line ceiling (`NODE_CART_LINE_MAX`). Stock plays no part, as for
+                        `POST /cart/items`. A client disables its "+" on `false` instead of copying
+                        the ceiling.
 
         CartShippingOption:
             type: object

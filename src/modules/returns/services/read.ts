@@ -30,6 +30,7 @@ export interface ReturnFilters {
     orderId?: string;
     status?: string;
     reason?: string;
+    sort?: string[];
 }
 
 /** Whether this caller works the returns queue — the wide read. */

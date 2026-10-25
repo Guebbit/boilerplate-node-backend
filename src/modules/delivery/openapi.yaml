@@ -52,7 +52,7 @@ paths:
                                 $ref: '#/components/schemas/ShippingMethodsResponseEnvelope'
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /delivery/order/{orderId}:
+    /delivery/orders/{orderId}:
         get:
             tags: [Delivery]
             summary: Get the fulfilment of an order
@@ -80,7 +80,7 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /delivery/order/{orderId}/start:
+    /delivery/orders/{orderId}/start:
         post:
             tags: [Delivery]
             summary: Begin fulfilling a paid order
@@ -165,7 +165,7 @@ paths:
                   description: Only those still waiting for stock whose expected date falls within this many days.
             responses:
                 '200':
-                    description: A page of fulfillment orders, the earliest expected first
+                    description: A page of fulfillment orders, the earliest expected first (a queue, so no `sort`)
                     content:
                         application/json:
                             schema:
@@ -198,7 +198,7 @@ paths:
                   description: Only this product.
             responses:
                 '200':
-                    description: A page of product summaries, the earliest promise first
+                    description: A page of product summaries, the earliest promise first (a queue, so no `sort`)
                     content:
                         application/json:
                             schema:
@@ -294,6 +294,30 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /delivery/fulfillment-orders/{id}:
+        get:
+            tags: [Delivery]
+            summary: Get a fulfillment order
+            description: >-
+                One fulfillment order by its own id, the record `ship`, `fulfill`, `hold` and `release` act on, with the same `actions` they answer. Scoped like the order it belongs to (`read:Order`): a buyer reads their own, staff holding `display:Order` read any. Someone else's, an unknown id and a malformed one are the same 404.
+            operationId: getFulfillmentOrder
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                  description: The fulfillment order
+            responses:
+                '200':
+                    description: The fulfillment order
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FulfillmentOrderEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /delivery/fulfillment-orders/{id}/shipments:
@@ -431,6 +455,28 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /delivery/shipments/{id}:
+        get:
+            tags: [Delivery]
+            summary: Get a shipment
+            description: >-
+                One shipment by its own id, at the address `PATCH` corrects it. Scoped like the order it belongs to (`read:Order`): a buyer reads their own, staff holding `display:Order` read any. Someone else's shipment, an unknown id and a malformed one are the same 404.
+            operationId: getShipment
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                  description: The shipment
+            responses:
+                '200':
+                    description: The shipment
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ShipmentEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         patch:
             tags: [Delivery]
             summary: Correct a shipment's tracking code
@@ -707,7 +753,7 @@ components:
                 lastNoticeAt:
                     type: string
                     format: date-time
-                    description: When the buyer was last told the date had moved or passed.
+                    description: When the buyer was last told the date had moved or would be missed.
                 cancelReason:
                     $ref: '#/components/schemas/FulfillmentCancelReason'
                 actions:
@@ -736,15 +782,22 @@ components:
         ShipmentActions:
             type: object
             additionalProperties: false
-            required: [deliver, editTracking]
+            required: [deliver, forceDeliver, update]
             description: What the requesting caller may do to this shipment, decided by the server.
             properties:
                 deliver:
                     type: boolean
                     description: Whether `POST /delivery/shipments/{id}/deliver` would be accepted — still `shipped`.
-                editTracking:
+                forceDeliver:
                     type: boolean
-                    description: Whether `PATCH /delivery/shipments/{id}` would be accepted — still `shipped`.
+                    description: >-
+                        Whether `POST /delivery/shipments/{id}/deliver` with `forced: true` would be
+                        accepted: the arrival is open (as for `deliver`) and the caller also holds
+                        `override:Order`. True beside `deliver`, not instead of it: forcing records the
+                        arrival without a carrier confirmation and needs a `reason`.
+                update:
+                    type: boolean
+                    description: Whether `PATCH /delivery/shipments/{id}` (the tracking code) would be accepted — still `shipped`.
 
         Shipment:
             type: object
@@ -880,7 +933,7 @@ components:
                 lastNoticeAt:
                     type: string
                     format: date-time
-                    description: When the buyer was last told the date had moved or passed.
+                    description: When the buyer was last told the date had moved or would be missed.
                 cancelReason:
                     $ref: '#/components/schemas/FulfillmentCancelReason'
 

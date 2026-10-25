@@ -93,7 +93,7 @@ const CREDENTIAL_IDENTITY_BUDGET: RateLimitBudget = {
 
 /**
  * Failed attempts a SIGNED-IN caller makes on the routes that re-prove them (`POST /account/password`,
- * `/reauth`, `/verify-request`, `/pending-email/resend`). Those bodies name no account, so the key
+ * `/reauth`, `/email-verification/resend`, `/email-change/resend`). Those bodies name no account, so the key
  * is the session's own: a hijacked session guessing the password cannot spread across addresses.
  * Never keyed on a body field — those routes validate after their limiter, so an injected `email`
  * would rotate the bucket — and never excused by a device cookie: the session is the proof here.

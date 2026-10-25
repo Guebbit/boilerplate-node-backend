@@ -19,6 +19,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import * as auditPort from '@infrastructure/observability/audit';
 import { findOwnApiKeys, latestExpiry, list, mint, revoke } from '../../services/api-keys';
 import { apiKeysAuditActions } from '../../audit';
+import { apiKeyRepository } from '../../repository';
 import { enabledModules } from '../../../../modules';
 
 /** Every mail queued, newest last — `mock*` so the hoisted `jest.mock` may close over it. */
@@ -204,6 +205,14 @@ describe('what a refusal says', () => {
     });
 });
 
+/** Moves a stored key's expiry, since a mint refuses nothing but a date too far ahead. */
+const expireAt = (id: string, expiresAt: Date) =>
+    apiKeyRepository.findById(id).then((key) => {
+        if (!key) throw new Error('setup failed: key missing');
+        key.expiresAt = expiresAt;
+        return apiKeyRepository.save(key);
+    });
+
 describe('listing', () => {
     it('lists this tenant’s credentials, newest first, and no other tenant’s', async () => {
         const user = await createRealUser('lister');
@@ -218,6 +227,56 @@ describe('listing', () => {
         const listed = await list(mine, {});
 
         expect(listed.items.map(({ id }) => id)).toEqual([second.id, first.id]);
+    });
+
+    it('says whether each credential works: active, revoked, expired or suspended', async () => {
+        const user = await createRealUser('status-lister');
+        const gone = await createRealUser('status-banned-minter');
+        const mine = contextFor(String(user._id));
+        const live = await mintKey(mine, 'live');
+        const retired = await mintKey(mine, 'retired');
+        await revoke(retired.id, mine);
+        const lapsed = await mintKey(mine, 'lapsed');
+        await expireAt(lapsed.id, new Date(Date.now() - 1000));
+        const paused = await mintKey(contextFor(String(gone._id)), 'paused');
+        await userRepository.updateMany({ _id: gone._id }, { active: false });
+
+        const listed = await list(mine, {});
+
+        const statusOf = (id: string) => listed.items.find((item) => item.id === id)?.status;
+        expect(statusOf(live.id)).toBe('active');
+        expect(statusOf(retired.id)).toBe('revoked');
+        expect(statusOf(lapsed.id)).toBe('expired');
+        expect(statusOf(paused.id)).toBe('suspended');
+    });
+
+    it('does not call a revoked key suspended when its minter is banned too', async () => {
+        const user = await createRealUser('revoked-and-banned');
+        const context = contextFor(String(user._id));
+        const key = await mintKey(context);
+        await revoke(key.id, context);
+        await userRepository.updateMany({ _id: user._id }, { active: false });
+
+        const listed = await list(context, {});
+
+        expect(listed.items[0].status).toBe('revoked');
+    });
+
+    it('orders by the requested field, and publishes the latest expiry a mint accepts', async () => {
+        const user = await createRealUser('sorted-lister');
+        const context = contextFor(String(user._id));
+        const first = await mintKey(context, 'first');
+        const second = await mintKey(context, 'second');
+        await expireAt(first.id, new Date(Date.now() + 1_000_000));
+        await expireAt(second.id, new Date(Date.now() + 9_000_000));
+
+        const soonest = await list(context, { sort: ['expiresAt'] });
+        const latest = await list(context, { sort: ['-expiresAt'] });
+
+        expect(soonest.items.map(({ id }) => id)).toEqual([first.id, second.id]);
+        expect(latest.items.map(({ id }) => id)).toEqual([second.id, first.id]);
+        const offered = new Date(latest.maxExpiresAt).getTime();
+        expect(Math.abs(offered - latestExpiry().getTime())).toBeLessThan(60_000);
     });
 
     it('exports a person’s own credentials, newest first, and nobody else’s', async () => {

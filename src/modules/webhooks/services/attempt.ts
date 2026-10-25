@@ -227,7 +227,7 @@ export const attemptDelivery = (
     delivery: WebhookDeliveryDocument,
     subscription: WebhookSubscriptionDocument
 ): Promise<WebhookDeliveryDocument | null> => {
-    if (!subscription.enabled) return finalizeUndeliverable(delivery, 'Subscription is disabled');
+    if (subscription.disabledAt) return finalizeUndeliverable(delivery, 'Subscription is disabled');
 
     const secrets = activeRingSecrets(subscription.secrets);
     if (secrets.length === 0)

@@ -88,12 +88,12 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AccountEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
         put:
             tags: [Account]
             summary: Replace own profile
-            description: Replaces every writable field of the authenticated user's own profile — email, username, locale (RFC 9110 §9.3.4, an omitted optional field is cleared). The image is outside the representation — set by an upload, cleared by an explicit `imageUrl` null, kept when a PUT never mentions it. `analyticsConsent` is required — it has no cleared state, so a PUT always states it and consent is never reset or withdrawn by a forgotten field. Role, account state and password are out of scope — the first two belong to the admin `/users` endpoints, the password to `POST /account/password`. Changing the email does NOT take effect immediately — it is held as `pendingEmail` until `POST /account/email-change-confirm` proves the new address, and a notice carrying a 7-day one-time undo link (`POST /account/email-change-undo`) is sent to the OLD address the moment the change is requested. Changing the email needs a fresh session; an account with a second factor armed also needs an `otp` proof in it (`401 REAUTH_REQUIRED` with `details.methods`). Sending the CURRENT address, the address already PENDING, or any other value that resolves to no change is a no-op — it neither starts, restarts nor cancels anything; cancel an already-pending change with `DELETE /account/pending-email`, or have its link mailed again with `POST /account/pending-email/resend`.
+            description: Replaces every writable field of the authenticated user's own profile — email, username, locale (RFC 9110 §9.3.4, an omitted optional field is cleared). The image is outside the representation — set by an upload, cleared by an explicit `imageUrl` null, kept when a PUT never mentions it. `analyticsConsent` is required — it has no cleared state, so a PUT always states it and consent is never reset or withdrawn by a forgotten field. Role, account state and password are out of scope — the first two belong to the admin `/users` endpoints, the password to `POST /account/password`. Changing the email does NOT take effect immediately — it is held as `pendingEmail` until `POST /account/email-change/confirm` proves the new address, and a notice carrying a 7-day one-time undo link (`POST /account/email-change/undo`) is sent to the OLD address the moment the change is requested. Changing the email needs a fresh session; an account with a second factor armed also needs an `otp` proof in it (`401 REAUTH_REQUIRED` with `details.methods`). Sending the CURRENT address, the address already PENDING, or any other value that resolves to no change is a no-op — it neither starts, restarts nor cancels anything; cancel an already-pending change with `DELETE /account/email-change`, or have its link mailed again with `POST /account/email-change/resend`.
             operationId: replaceAccount
             security:
                 - bearerAuth: []
@@ -112,7 +112,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AccountEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # Changing the email to an address another account already holds.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
@@ -123,7 +123,7 @@ paths:
         patch:
             tags: [Account]
             summary: Update own profile
-            description: Merges the given fields into the authenticated user's own profile — email, username, locale, image (RFC 7396, an omitted field is left unchanged, `null` clears an optional one). Role, account state and password are out of scope — the first two belong to the admin `/users` endpoints, the password to `POST /account/password`. Changing the email does NOT take effect immediately — it is held as `pendingEmail` until `POST /account/email-change-confirm` proves the new address, and a notice carrying a 7-day one-time undo link (`POST /account/email-change-undo`) is sent to the OLD address the moment the change is requested. Changing the email needs a fresh session; an account with a second factor armed also needs an `otp` proof in it (`401 REAUTH_REQUIRED` with `details.methods`). Sending the CURRENT address, or the address already PENDING, is a no-op — it neither starts, restarts nor cancels anything; cancel an already-pending change with `DELETE /account/pending-email`, or have its link mailed again with `POST /account/pending-email/resend`.
+            description: Merges the given fields into the authenticated user's own profile — email, username, locale, image (RFC 7396, an omitted field is left unchanged, `null` clears an optional one). Role, account state and password are out of scope — the first two belong to the admin `/users` endpoints, the password to `POST /account/password`. Changing the email does NOT take effect immediately — it is held as `pendingEmail` until `POST /account/email-change/confirm` proves the new address, and a notice carrying a 7-day one-time undo link (`POST /account/email-change/undo`) is sent to the OLD address the moment the change is requested. Changing the email needs a fresh session; an account with a second factor armed also needs an `otp` proof in it (`401 REAUTH_REQUIRED` with `details.methods`). Sending the CURRENT address, or the address already PENDING, is a no-op — it neither starts, restarts nor cancels anything; cancel an already-pending change with `DELETE /account/email-change`, or have its link mailed again with `POST /account/email-change/resend`.
             operationId: updateAccount
             security:
                 - bearerAuth: []
@@ -145,7 +145,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AccountEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # Changing the email to an address another account already holds.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
@@ -155,17 +155,32 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
             tags: [Account]
-            summary: Request account deletion
-            description: Initiates the account-deletion flow for the authenticated user. A one-time confirmation token is sent to the user's email address. The token must then be submitted to `/account/delete-confirm` to complete the deletion. Needs a critically fresh session; an account with a second factor armed also needs an `otp` proof in it (`401 REAUTH_REQUIRED` with `details.methods`).
+            summary: Delete the account (locked at once, erased after a grace)
+            description: >-
+                Locks the authenticated user's account at once and schedules its erasure. Every
+                session dies with the call (the session cookie is cleared) and the account can no
+                longer sign in, so the answer is the last thing the caller sees. The account is
+                erased `NODE_ACCOUNT_DELETION_GRACE_DAYS` days later (30 by default, never more
+                than one calendar month: GDPR Art. 12(3)), at `purgeAt`. Until then it can be
+                brought back by the link in the mail this call sends (`POST /account/restore`),
+                by signing in (`POST /account/login` offers the restore), or by staff
+                (`POST /users/{id}/restore`). Needs a critically fresh session; an account with a
+                second factor armed also needs an `otp` proof in it (`401 REAUTH_REQUIRED` with
+                `details.methods`).
             operationId: requestAccountDelete
             security:
                 - bearerAuth: []
             responses:
-                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '202':
+                    description: The account is locked and its erasure is scheduled
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AccountDeletionEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /account/pending-email:
+    /account/email-change:
         delete:
             tags: [Account]
             summary: Cancel a pending email change
@@ -178,11 +193,11 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /account/pending-email/resend:
+    /account/email-change/resend:
         post:
             tags: [Account]
             summary: Resend the pending email confirmation
-            description: Mails the NEW (pending) address a fresh confirmation link — and only that address; the old one is not told again. The previous link stops working, since only the newest one counts. Answers 200 with `resendAfter`, the seconds a client counts down before offering the button again — the same shape as `POST /account/verify-request`. A no-op, answering 200 with `resendAfter` 0 and mailing nothing, when nothing is pending, so a client does not need to check `GET /account` first. Sending the pending address again through `PUT`/`PATCH /account` does nothing, which is why this route exists. Answers 429 inside the previous send's cooldown (the same 60 seconds as `POST /account/verify-request`, with `details.retryAfter` naming the wait) and spends the same per-account budget on a failure, so a client that waits never sees one. No fresh-auth guard — it mails an address the caller already asked for and changes nothing about the account.
+            description: Mails the NEW (pending) address a fresh confirmation link — and only that address; the old one is not told again. The previous link stops working, since only the newest one counts. Answers 200 with `resendAfter`, the seconds a client counts down before offering the button again — the same shape as `POST /account/email-verification/resend`. A no-op, answering 200 with `resendAfter` 0 and mailing nothing, when nothing is pending, so a client does not need to check `GET /account` first. Sending the pending address again through `PUT`/`PATCH /account` does nothing, which is why this route exists. Answers 429 inside the previous send's cooldown (the same 60 seconds as `POST /account/email-verification/resend`, with `details.retryAfter` naming the wait) and spends the same per-account budget on a failure, so a client that waits never sees one. No fresh-auth guard — it mails an address the caller already asked for and changes nothing about the account.
             operationId: resendPendingEmail
             security:
                 - bearerAuth: []
@@ -345,33 +360,6 @@ paths:
                                 $ref: '#/components/schemas/TwoFactorStatusEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
-        delete:
-            tags: [Auth]
-            summary: Disable two-factor authentication
-            description: 'Drops EVERY enrolled method and every unused backup code. Requires a valid code from any enrolled method — or an unused backup code — in the body, on top of the route''s own fresh-auth requirement: disabling from a stolen-but-fresh session is otherwise the cheapest way around the whole feature. Removing one method and keeping the rest is DELETE /account/2fa/methods/{method}.'
-            operationId: disableTwoFactor
-            security:
-                - bearerAuth: []
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/TwoFactorCodeRequest'
-            responses:
-                '200':
-                    description: >-
-                        Two-factor authentication is off. The change revoked every session, this one
-                        included, and replaced it. A bearer client of a `cookie`-mode deployment
-                        has no cookie to refresh, so `data.sessionToken` carries its replacement
-                        `ses_…` id: the old one no longer works.
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/SessionRenewedEnvelope'
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /account/2fa/methods/{method}/setup:
         post:
@@ -455,11 +443,40 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /account/2fa/methods/{method}:
-        delete:
+    /account/2fa/disable:
+        post:
+            tags: [Auth]
+            summary: Disable two-factor authentication
+            description: 'Drops EVERY enrolled method and every unused backup code. Requires a valid code from any enrolled method — or an unused backup code — in the body, on top of the route''s own fresh-auth requirement: disabling from a stolen-but-fresh session is otherwise the cheapest way around the whole feature. Removing one method and keeping the rest is POST /account/2fa/methods/{method}/remove.'
+            operationId: disableTwoFactor
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/TwoFactorCodeRequest'
+            responses:
+                '200':
+                    description: >-
+                        Two-factor authentication is off. The change revoked every session, this one
+                        included, and replaced it. A bearer client of a `cookie`-mode deployment
+                        has no cookie to refresh, so `data.sessionToken` carries its replacement
+                        `ses_…` id: the old one no longer works.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SessionRenewedEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/2fa/methods/{method}/remove:
+        post:
             tags: [Auth]
             summary: Remove one second factor
-            description: Drops one method and leaves the others armed. Requires a valid code — from any enrolled method, or a backup code — for the same reason the full disable does. Removing the LAST armed method turns two-factor authentication off and discards the backup codes with it, exactly as DELETE /account/2fa would.
+            description: Drops one method and leaves the others armed. Requires a valid code — from any enrolled method, or a backup code — for the same reason the full disable does. Removing the LAST armed method turns two-factor authentication off and discards the backup codes with it, exactly as POST /account/2fa/disable would.
             operationId: removeTwoFactorMethod
             security:
                 - bearerAuth: []
@@ -516,7 +533,7 @@ paths:
         post:
             tags: [Auth]
             summary: Logout this session
-            description: Logs out the CURRENT session only — deletes the session the `__Host-session` cookie (or, in `cookie` mode, a `ses_…` bearer) names, and clears the authentication cookies. Refused with 403 when the request names an `Origin` that is not an allowed frontend origin. Other devices stay signed in; `POST /account/logout-all` is the one that revokes everything. Answers 200 whether or not a live session was found, because the caller's goal — not being logged in here — is met either way.
+            description: Logs out the CURRENT session only — deletes the session the `__Host-session` cookie (or, in `cookie` mode, a `ses_…` bearer) names, and clears the authentication cookies. Refused with 403 when the request names an `Origin` that is not an allowed frontend origin. Other devices stay signed in; `DELETE /account/sessions` is the one that revokes everything. Answers 200 whether or not a live session was found, because the caller's goal — not being logged in here — is met either way.
             operationId: logout
             security: []
             responses:
@@ -550,8 +567,19 @@ paths:
                                 $ref: '#/components/schemas/SessionsEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        delete:
+            tags: [Auth]
+            summary: Logout from all devices
+            description: Logs out the authenticated user from ALL devices by deleting every session the account holds and clearing authentication cookies. Needs a fresh session (sensitive tier, `401 REAUTH_REQUIRED` when stale).
+            operationId: logoutAll
+            security:
+                - bearerAuth: []
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /account/session/touch:
+    /account/sessions/current/touch:
         post:
             tags: [Account]
             summary: Count the caller's own session as active, and read its idle clock
@@ -561,7 +589,7 @@ paths:
                 SESSION_IDLE`); a client shows a "still there?" prompt before then and calls this
                 when the person answers. A shopper's session never idles out, so the field is
                 absent. Every other request counts as activity too, except one sent with the
-                `X-Session-Passive: true` header: a poll or a keep-alive that is not the person
+                `Session-Passive: true` header: a poll or a keep-alive that is not the person
                 acting.
             operationId: touchSession
             security:
@@ -577,6 +605,34 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /account/sessions/{sessionId}:
+        get:
+            tags: [Account]
+            summary: Get one session
+            description: >-
+                One of the caller's own live sessions, by the id `GET /account/sessions` gave out.
+                Scoped like the list: another account's session, a session that has ended, an
+                invented id and a malformed one are the same 404. The `current` marker is judged
+                against the credential this request carries.
+            operationId: getSession
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: sessionId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: Session identifier from `GET /account/sessions`
+            responses:
+                '200':
+                    description: The session
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SessionEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
             tags: [Account]
             summary: Revoke one session
@@ -604,11 +660,11 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /account/verify-request:
+    /account/email-verification/resend:
         post:
             tags: [Auth]
             summary: Request email verification
-            description: Sends a one-time verification token to the authenticated user's email address. The token must then be submitted to `/account/verify-confirm`. Signup already sends one automatically; this endpoint re-sends it for the mail that never arrived. Answers 429 inside the previous send's cooldown, so a client that respects `resendAfter` never sees one — unlike a login guess, a SUCCESSFUL call here is the expensive one, since each publishes mail.
+            description: Sends a one-time verification token to the authenticated user's email address. The token must then be submitted to `/account/email-verification/confirm`. Signup already sends one automatically; this endpoint re-sends it for the mail that never arrived. Answers 429 inside the previous send's cooldown, so a client that respects `resendAfter` never sees one — unlike a login guess, a SUCCESSFUL call here is the expensive one, since each publishes mail.
             operationId: requestEmailVerification
             security:
                 - bearerAuth: []
@@ -625,11 +681,11 @@ paths:
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /account/verify-confirm:
+    /account/email-verification/confirm:
         post:
             tags: [Auth]
             summary: Confirm email verification
-            description: Completes the email-verification flow. Validates the one-time token issued at signup or by `/account/verify-request` and, if valid, marks the account's email address as verified.
+            description: Completes the email-verification flow. Validates the one-time token issued at signup or by `/account/email-verification/resend` and, if valid, marks the account's email address as verified.
             operationId: confirmEmailVerification
             security: []
             requestBody:
@@ -646,11 +702,11 @@ paths:
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /account/email-change-confirm:
+    /account/email-change/confirm:
         post:
             tags: [Auth]
             summary: Confirm a pending email change
-            description: Completes the email-change flow started by `PUT /account`. Validates the one-time `email-change` token sent to the NEW address and, if valid, swaps `pendingEmail` into `email`, marks the account verified, and revokes every refresh token — the same treatment `POST /account/password` gives a password change, since an email change is the stronger takeover primitive of the two. A `verify` token from the signup flow is refused here, and this token is refused by `/account/verify-confirm` — the two prove different things.
+            description: Completes the email-change flow started by `PUT /account`. Validates the one-time `email-change` token sent to the NEW address and, if valid, swaps `pendingEmail` into `email`, marks the account verified, and revokes every refresh token — the same treatment `POST /account/password` gives a password change, since an email change is the stronger takeover primitive of the two. A `verify` token from the signup flow is refused here, and this token is refused by `/account/email-verification/confirm` — the two prove different things.
             operationId: confirmEmailChange
             security: []
             requestBody:
@@ -670,11 +726,11 @@ paths:
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /account/email-change-undo:
+    /account/email-change/undo:
         post:
             tags: [Auth]
             summary: Undo an email change
-            description: Reverts an email change from the one-time link in the notice mailed to the OLD address when the change was requested. Valid for 7 days from that request, and untouched by a password change, so a person who reads mail weekly can still use it. While the change is only pending it is cancelled; once the new address was confirmed the previous one is restored, and every session is ended (a refresh token cannot outlive the address it was issued under). Public, like `POST /account/email-change-confirm`, the token in the body is the credential. Answers 409 when the previous address was meanwhile claimed by another account.
+            description: Reverts an email change from the one-time link in the notice mailed to the OLD address when the change was requested. Valid for 7 days from that request, and untouched by a password change, so a person who reads mail weekly can still use it. While the change is only pending it is cancelled; once the new address was confirmed the previous one is restored, and every session is ended (a refresh token cannot outlive the address it was issued under). Public, like `POST /account/email-change/confirm`, the token in the body is the credential. Answers 409 when the previous address was meanwhile claimed by another account.
             operationId: undoEmailChange
             security: []
             requestBody:
@@ -692,23 +748,64 @@ paths:
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /account/delete-confirm:
-        delete:
+    /account/restore:
+        post:
             tags: [Account]
-            summary: Confirm account deletion
-            description: Completes the account-deletion flow. Validates the one-time token issued by `DELETE /account` and, if valid, permanently removes the user account. Answers 429 once an address (or its network block) has sent too many wrong tokens, like the other one-time-token confirms.
-            operationId: confirmAccountDelete
+            summary: Cancel a scheduled account deletion with the mailed link
+            description: >-
+                Spends the one-time restore token mailed by `DELETE /account` and brings the account
+                back, provided its `purgeAt` has not passed. Public: the token is the credential.
+                Restoring does NOT sign the person in: holding the mailbox is not a login, the same
+                rule as a password reset. Unknown, expired and already-spent tokens answer alike
+                (`422`). Answers 429 once an address (or its network block) has sent too many wrong
+                tokens, like the other one-time-token confirms.
+            operationId: restoreAccount
             security: []
             requestBody:
                 required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/AccountDeleteConfirmRequest'
+                            $ref: '#/components/schemas/AccountRestoreRequest'
             responses:
                 '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                # `credentialLimiters` sits in front of this route — see routes.ts.
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/login/restore:
+        post:
+            tags: [Auth]
+            summary: Restore an account in its deletion grace and sign in
+            description: >-
+                The last step of a sign-in by an account whose owner asked to delete it
+                (`DELETE /account`) and whose `purgeAt` has not passed. Submits the `DeletionPending`
+                claim check that `POST /account/login` (or `POST /account/login/2fa`) answered:
+                it cancels the deletion, then starts the session exactly as `POST /account/login`
+                does, `remember` and `transport` included. A client that does not want the account
+                back simply never calls it, and the account is erased at `purgeAt`. Omit `challenge`
+                for an OAuth-originated sign-in: that claim check never reached the client and is
+                read from the httpOnly cookie the callback set. An unknown, expired or spent
+                challenge answers 401.
+            operationId: loginRestore
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/LoginRestoreRequest'
+            responses:
+                '200':
+                    description: The account is restored, and this is its new session
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AuthTokensEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                # `credentialLimiters` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
@@ -747,7 +844,10 @@ paths:
                 request asked for `transport: bearer`, which sets no cookie and returns the
                 `ses_…` id as `sessionToken` instead. When the account has two-factor
                 authentication enabled the response is a short-lived challenge to submit to
-                `POST /account/login/2fa` instead.
+                `POST /account/login/2fa` instead. When the account is inside the grace of its
+                own deletion (`DELETE /account`) and has no second factor, the response is a
+                `DeletionPending` claim check to submit to `POST /account/login/restore`: the
+                account is not restored, and no session exists, until that call.
             operationId: login
             security: []
             requestBody:
@@ -758,7 +858,7 @@ paths:
                             $ref: '#/components/schemas/LoginRequest'
             responses:
                 '200':
-                    description: Auth tokens, or a two-factor challenge
+                    description: Auth tokens, a two-factor challenge, or the offer to restore an account in its deletion grace
                     content:
                         application/json:
                             schema:
@@ -773,7 +873,7 @@ paths:
         post:
             tags: [Auth]
             summary: Complete a two-factor login
-            description: The second step of a login for an account with two-factor authentication enabled — submits the challenge from `POST /account/login` and a 6-digit code (or an unused backup code). On success, starts the session exactly as `POST /account/login` does for an account with no second factor, `transport` included.
+            description: The second step of a login for an account with two-factor authentication enabled — submits the challenge from `POST /account/login` and a 6-digit code (or an unused backup code). On success, starts the session exactly as `POST /account/login` does for an account with no second factor, `transport` included. For an account inside the grace of its own deletion the second factor passing answers a `DeletionPending` claim check instead of a session, so two-factor is asked once and `POST /account/login/restore` finishes.
             operationId: loginTwoFactor
             security: []
             requestBody:
@@ -784,11 +884,11 @@ paths:
                             $ref: '#/components/schemas/LoginTwoFactorRequest'
             responses:
                 '200':
-                    description: Auth tokens
+                    description: Auth tokens, or the offer to restore an account in its deletion grace
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AuthTokensEnvelope'
+                                $ref: '#/components/schemas/LoginTwoFactorResponseEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # A wrong code is a 422, same reasoning as /account/reauth: a 401 here would read
                 # as an expired challenge and send a caller back to /account/login for no reason.
@@ -916,7 +1016,7 @@ paths:
             tags: [Auth]
             summary: Disconnect a linked sign-in provider
             description: >-
-                Removes the link between the account and `provider`, so that provider can no longer sign in to it, and mails the owner that a sign-in method was removed. Nothing re-links it by email match, so reconnecting is `POST /account/oauth/links/{provider}` from a signed-in session. Needs a fresh session (`401 REAUTH_REQUIRED`). There is no guard on removing the last sign-in method, by decision (forgot-password recovers an account that was left with none). Answers 404 when `provider` is not linked.
+                Removes the link between the account and `provider`, so that provider can no longer sign in to it, and mails the owner that a sign-in method was removed. Nothing re-links it by email match, so reconnecting is `POST /account/oauth/links/{provider}` from a signed-in session. Needs a fresh session (`401 REAUTH_REQUIRED`). There is no guard on removing the last sign-in method, by decision (forgot-password recovers an account that was left with none). Answers 404 when `provider` is not linked. A link is a line of the caller's links list, so the answer is that list as it now stands (200 + the links left).
             operationId: unlinkOAuthProvider
             security:
                 - bearerAuth: []
@@ -929,7 +1029,12 @@ paths:
                       maxLength: 32
                   description: One of the `provider` names `GET /account/oauth/links` lists.
             responses:
-                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '200':
+                    description: The links the account still has
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OAuthLinksEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -975,7 +1080,7 @@ paths:
         get:
             tags: [Auth]
             summary: Complete an OAuth login
-            description: 'Browser-navigated only: where `provider` sends the browser back after consent. Validates `state`, exchanges the code, finds-or-creates the account, and redirects to the frontend with the session cookies set — or with `?error=<code>` on failure. When the account has two-factor authentication armed, no session is minted: the redirect instead carries `?mfaRequired=1&expiresAt=...&methods=...&defaultMethod=...` (the same fields MfaChallenge carries, minus the token itself), and the challenge token travels in a short-lived httpOnly cookie that POST /account/login/2fa and .../2fa/send read when their body omits `challenge`. Either success redirect also carries `?continue=<path>` when `GET /account/oauth/{provider}` saved one and it is still a valid same-origin path; every redirect, a failure''s included, carries `?locale=<tag>` likewise. A provider whose verified email matches an existing account links nothing and signs nobody in: the redirect carries `?error=account_exists`, and the owner connects the provider from a signed-in session (`POST /account/oauth/links/{provider}`). When that existing account never proved its own address, the redirect carries `?error=account_unverified` instead: the owner resets the password, which proves the mailbox, and signs in the way the account allows. That signed-in connect round trip comes back to this same callback, mints no session and redirects with `?linked=<provider>`, or `?error=already_linked` (the provider account belongs to another account) or `?error=link_expired` (the minutes the attempt lives ran out).'
+            description: 'Browser-navigated only: where `provider` sends the browser back after consent. Validates `state`, exchanges the code, finds-or-creates the account, and redirects to the frontend with the session cookies set — or with `?error=<code>` on failure. When the account has two-factor authentication armed, no session is minted: the redirect instead carries `?mfaRequired=1&expiresAt=...&methods=...&defaultMethod=...` (the same fields MfaChallenge carries, minus the token itself), and the challenge token travels in a short-lived httpOnly cookie that POST /account/login/2fa and .../2fa/send read when their body omits `challenge`. When the account is inside the grace of its own deletion and has no second factor, no session is minted either: the redirect carries `?deletionPending=1&purgeAt=...&expiresAt=...` and the claim check travels in a short-lived httpOnly cookie that `POST /account/login/restore` reads when its body omits `challenge`. Either success redirect also carries `?continue=<path>` when `GET /account/oauth/{provider}` saved one and it is still a valid same-origin path; every redirect, a failure''s included, carries `?locale=<tag>` likewise. A provider whose verified email matches an existing account links nothing and signs nobody in: the redirect carries `?error=account_exists`, and the owner connects the provider from a signed-in session (`POST /account/oauth/links/{provider}`). When that existing account never proved its own address, the redirect carries `?error=account_unverified` instead: the owner resets the password, which proves the mailbox, and signs in the way the account allows. That signed-in connect round trip comes back to this same callback, mints no session and redirects with `?linked=<provider>`, or `?error=already_linked` (the provider account belongs to another account) or `?error=link_expired` (the minutes the attempt lives ran out).'
             operationId: completeOAuthLogin
             security: []
             parameters:
@@ -1020,7 +1125,7 @@ paths:
         post:
             tags: [Auth]
             summary: Signup
-            description: 'Registers a new user account. Takes no image — a stranger writes nothing to the store before registering; the signed-in caller sets an avatar with `PATCH /account`. Returns the newly created user profile on success, and signs the caller in — the refresh cookie is set here, so a client reaches a usable access token through `POST /account/refresh` rather than by calling `POST /account/login` again. The new account is an `unverified` audience until `POST /account/verify-confirm` proves the address — it browses freely and is stopped only at `checkout:Cart`. Signup takes no `transport`: a bearer client signs in with `POST /account/login` afterwards.'
+            description: 'Registers a new user account. Takes no image — a stranger writes nothing to the store before registering; the signed-in caller sets an avatar with `PATCH /account`. Returns the newly created user profile on success, and signs the caller in — the refresh cookie is set here, so a client reaches a usable access token through `POST /account/refresh` rather than by calling `POST /account/login` again. The new account is an `unverified` audience until `POST /account/email-verification/confirm` proves the address — it browses freely and is stopped only at `checkout:Cart`. Signup takes no `transport`: a bearer client signs in with `POST /account/login` afterwards.'
             operationId: signup
             security: []
             parameters:
@@ -1040,7 +1145,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AccountEnvelope'
                 # The BODY is identical when rung 2 of the anti-automation ladder refuses the
                 # address: a fabricated profile from a document that was never saved, so a script
                 # gets nothing to iterate on. Only the refresh cookie tells the two apart, since
@@ -1057,12 +1162,12 @@ paths:
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /account/reset:
+    /account/password/reset:
         post:
             tags: [Auth]
             summary: Request password reset
             operationId: requestPasswordReset
-            description: Initiates the password-reset flow by sending a one-time reset token to the provided email address. The token should then be submitted to `/account/reset-confirm`.
+            description: Initiates the password-reset flow by sending a one-time reset token to the provided email address. The token should then be submitted to `/account/password/reset/confirm`.
             security: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/AntibotChallengeTokenHeader'
@@ -1081,12 +1186,12 @@ paths:
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /account/reset-confirm:
+    /account/password/reset/confirm:
         post:
             tags: [Auth]
             summary: Confirm password reset
             operationId: confirmPasswordReset
-            description: Completes the password-reset flow. Validates the one-time reset token issued by `/account/reset` and, if valid, updates the user's password to the supplied value.
+            description: Completes the password-reset flow. Validates the one-time reset token issued by `/account/password/reset` and, if valid, updates the user's password to the supplied value.
             security: []
             requestBody:
                 required: true
@@ -1132,19 +1237,6 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # `cookie` mode: there is no refresh token to rotate.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
-
-    /account/logout-all:
-        post:
-            tags: [Auth]
-            summary: Logout from all devices
-            description: Logs out the authenticated user from ALL devices by deleting every session the account holds and clearing authentication cookies. Needs a fresh session (sensitive tier, `401 REAUTH_REQUIRED` when stale).
-            operationId: logoutAll
-            security:
-                - bearerAuth: []
-            responses:
-                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /account/export:
@@ -1231,7 +1323,7 @@ components:
                     type: string
                     format: date-time
                 profile:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/User'
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Account'
 
         AccountExportRequest:
             type: object
@@ -1445,11 +1537,67 @@ components:
                     type: string
                     description: Which of `methods` to offer first — the cheapest one for the user, which is a device method when there is one.
 
+        DeletionPending:
+            type: object
+            additionalProperties: false
+            required: [deletionPending, challenge, expiresAt, purgeAt]
+            properties:
+                deletionPending:
+                    type: boolean
+                    enum: [true]
+                    description: Always true. The credentials checked out, but the account is inside the grace of its own deletion, so no session is issued until the owner chooses to restore it.
+                challenge:
+                    type: string
+                    description: A claim check recording how the sign-in was proven (password, and the second factor when armed). Submit it to `POST /account/login/restore`.
+                expiresAt:
+                    type: string
+                    format: date-time
+                    description: When the challenge stops being accepted. Signing in again earns a new one.
+                purgeAt:
+                    type: string
+                    format: date-time
+                    description: When the account is erased unless restored before.
+
         LoginOutcome:
             oneOf:
                 - $ref: '#/components/schemas/AuthTokens'
                 - $ref: '#/components/schemas/MfaChallenge'
-            description: Either a full session (AuthTokens) or a step-up challenge (MfaChallenge) when the account has two-factor authentication enabled.
+                - $ref: '#/components/schemas/DeletionPending'
+            description: A full session (AuthTokens), a step-up challenge (MfaChallenge) when the account has two-factor authentication enabled, or the offer to restore an account inside the grace of its own deletion (DeletionPending).
+
+        LoginTwoFactorOutcome:
+            oneOf:
+                - $ref: '#/components/schemas/AuthTokens'
+                - $ref: '#/components/schemas/DeletionPending'
+            description: A full session (AuthTokens), or the offer to restore an account inside the grace of its own deletion (DeletionPending) once its second factor passed.
+
+        LoginTwoFactorResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/LoginTwoFactorOutcome'
+
+        LoginRestoreRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                challenge:
+                    type: string
+                    maxLength: 128
+                    minLength: 1
+                    description: The `DeletionPending` challenge. Omit it for an OAuth-originated sign-in — that challenge was never sent to the client, and this endpoint reads it from the httpOnly cookie the callback set instead.
+                remember:
+                    $ref: '#/components/schemas/RememberTier'
+                transport:
+                    $ref: '#/components/schemas/SessionTransport'
 
         LoginResponseEnvelope:
             type: object
@@ -1821,12 +1969,30 @@ components:
         SessionConfig:
             type: object
             additionalProperties: false
-            required: [mode]
+            required: [mode, lifetimeSeconds]
             properties:
                 mode:
                     type: string
                     enum: [jwt, cookie]
                     description: The deployment's `NODE_SESSION_MODE`.
+                lifetimeSeconds:
+                    type: object
+                    additionalProperties: false
+                    required: [short, medium, long]
+                    description: >-
+                        How long a session lasts per "remember me" tier, in seconds
+                        (`NODE_SESSION_TIME_*`). `short` is what an unticked box gets; `long` is
+                        what the box offers today. A client prints these instead of a number of its own.
+                    properties:
+                        short: { type: integer, minimum: 1 }
+                        medium: { type: integer, minimum: 1 }
+                        long: { type: integer, minimum: 1 }
+                staffLifetimeSeconds:
+                    type: integer
+                    minimum: 1
+                    description: >-
+                        The longest a staff or admin session lives from sign-in, whatever the tier
+                        (`NODE_SESSION_LIFETIME_STAFF`). Absent when the cap is off.
 
         SessionTransport:
             type: string
@@ -1896,7 +2062,7 @@ components:
                 passwordConfirm:
                     $ref: '#/components/schemas/Password'
 
-        AccountDeleteConfirmRequest:
+        AccountRestoreRequest:
             type: object
             additionalProperties: false
             required: [token]
@@ -1905,7 +2071,37 @@ components:
                     type: string
                     maxLength: 128
                     minLength: 1
-                    description: One-time account deletion token (NOT a JWT).
+                    description: One-time account restore token (NOT a JWT).
+
+        AccountDeletion:
+            type: object
+            additionalProperties: false
+            required: [requestedAt, purgeAt]
+            properties:
+                requestedAt:
+                    type: string
+                    format: date-time
+                    description: When the deletion was asked for, and the account locked.
+                purgeAt:
+                    type: string
+                    format: date-time
+                    description: >-
+                        When the account is erased unless restored before. At most one calendar
+                        month after `requestedAt`, at 00:00 UTC at the latest.
+
+        AccountDeletionEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/AccountDeletion'
 
         # Self-service profile update. Deliberately narrower than `UpdateUserRequest`: no
         # `admin`, no `active`, no `password` — role and account state are the admin
@@ -2249,6 +2445,20 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/Session'
+
+        SessionEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/Session'
 
         SessionsEnvelope:
             type: object

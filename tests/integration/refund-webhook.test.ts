@@ -1,6 +1,6 @@
 /**
  * @module
- * An operator's standalone refund (`POST /payments/order/:orderId/refund`) fans out a
+ * An operator's standalone refund (`POST /payments/:id/refunds`) fans out a
  * `payment.refunded` webhook delivery, carrying the amount and currency actually returned —
  * proved through the real registry indirection, same shape as
  * `./refund-retry-webhooks.test.ts`: `payments` never imports `webhooks`, so this is the only way
@@ -15,12 +15,11 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { orderService } from '@modules/orders';
 import paymentsModule from '@modules/payments/module';
-import { paymentService } from '@modules/payments/services';
 import webhooksModule from '@modules/webhooks/module';
 import { create as createSubscription } from '@modules/webhooks/services/subscriptions';
 import { webhookDeliveryRepository } from '@modules/webhooks/repository';
 import { eventually } from '@tests/eventually';
-import { payByCard } from '@modules/payments/tests/factories';
+import { payByCard, refundOrderPayment } from '@modules/payments/tests/factories';
 import { asSuccess } from '@tests/response';
 
 setupTestDb();
@@ -60,7 +59,7 @@ it('an admin refund fans out a payment.refunded delivery carrying the amount and
 
     const { order } = await paidOrder(20);
 
-    const refunded = await paymentService.refundByOrder(
+    const refunded = await refundOrderPayment(
         String(order._id),
         asAdmin(),
         callerContextAs('admin')
@@ -69,7 +68,7 @@ it('an admin refund fans out a payment.refunded delivery carrying the amount and
     const currency = refunded.success ? refunded.data.currency : undefined;
 
     // `markRefunded` fires `PAYMENT_REFUNDED` fire-and-forget, so the delivery row lands after
-    // `refundByOrder` resolved: two real Mongo round-trips (`findEnabled`, then `create`).
+    // `refundPayment` resolved: two real Mongo round-trips (`findEnabled`, then `create`).
     await eventually(() => refundDeliveries().then((rows) => rows.length > 0));
     const [delivery] = await refundDeliveries();
     expect(delivery?.payload).toMatchObject({

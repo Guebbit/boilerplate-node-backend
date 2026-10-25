@@ -162,7 +162,7 @@ export const markPaid = (
 
 /**
  * Report that fulfilment started on a paid order. `delivery`'s own door for this move —
- * `POST /delivery/order/{id}/start` — is the one caller; the admin override
+ * `POST /delivery/orders/{id}/start` — is the one caller; the admin override
  * (`orders/services/override.ts`'s `overrideStatus`) reaches `processing` too, but does not call
  * this function — `applyOverride` writes that move itself.
  * @param orderId - the order fulfilment started on
@@ -305,6 +305,16 @@ export const markPaymentStatus = (
     paymentStatus: StampedPaymentStatus,
     session?: ClientSession
 ): Promise<boolean> => orderRepository.setProjection(orderId, { paymentStatus }, session);
+
+/**
+ * Report that money landed on an order that could no longer take it (a payment that succeeded
+ * after the cancel): from then on the order is never hard-deleted. `payments`' door for this.
+ *
+ * @param orderId - the order the money was recorded for
+ * @param session - the settlement's transaction, so the stamp commits with the money
+ */
+export const markMoneyReceived = (orderId: string, session?: ClientSession): Promise<void> =>
+    orderRepository.markMoneyReceived(orderId, session);
 
 /**
  * Report where the order's returns stand. `returns`' own door for this. `undefined` clears it: no

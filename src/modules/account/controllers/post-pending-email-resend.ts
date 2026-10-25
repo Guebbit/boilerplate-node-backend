@@ -1,6 +1,6 @@
 /**
  * @module
- * `POST /account/pending-email/resend` controller — thin HTTP adapter over
+ * `POST /account/email-change/resend` controller — thin HTTP adapter over
  * `accountService.resendPendingEmailVerificationFor`.
  */
 
@@ -11,8 +11,8 @@ import { catchAs, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
- * POST /account/pending-email/resend — mails the pending address a fresh link and answers the
- * seconds to count down before the next one, as `POST /account/verify-request` does. Nothing
+ * POST /account/email-change/resend — mails the pending address a fresh link and answers the
+ * seconds to count down before the next one, as `POST /account/email-verification/resend` does. Nothing
  * pending is not an error: it answers `resendAfter` 0.
  */
 export const postPendingEmailResend = (request: Request, response: Response) => {

@@ -15,7 +15,6 @@ import { successResponse } from '@infrastructure/http/response';
 import { ConfirmPaymentBody } from '@api/schemas.zod';
 import { paymentConfirmTotal } from '../metrics';
 import { paymentService } from '../services';
-import { presentPayment } from '../presenter';
 import { callerContextOf } from '@infrastructure/http/request';
 import { requireId } from '@infrastructure/http/ids';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
@@ -52,7 +51,13 @@ export const postPaymentConfirm = (request: Request<{ id?: string }>, response: 
             else if (declined) paymentConfirmTotal.inc({ outcome: 'declined' });
 
             if (refused(response, result)) return;
-            successResponse<Payment>(response, presentPayment(result.data), 200, result.message);
+            // `actions` ride along: the payment form swaps its stored payment for this answer, so
+            // an answer without them would hide the next step (finish at provider) right after.
+            return paymentService
+                .presentWithActions(result.data, request.authContext)
+                .then((payment) => {
+                    successResponse<Payment>(response, payment, 200, result.message);
+                });
         })
         .catch(catchAs(response, 'postPaymentConfirm'));
 };

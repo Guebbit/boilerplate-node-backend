@@ -98,7 +98,7 @@ entries are PII-encrypted, so one that grows without bound walks toward the 16 M
 and breaks its owner's own writes (about 160 posts of 100 kB would do it). The cap is a condition
 in the add's filter (`items.19` must not exist), which mongod evaluates while holding the document,
 so a burst of concurrent adds cannot all see room: exactly the cap is stored and the rest answer
-`409 ADDRESS_BOOK_FULL`. The entry's text goes into the pipeline inside `$literal`, since a string
+`409 ADDRESS_BOOK_LIMIT_REACHED`. The entry's text goes into the pipeline inside `$literal`, since a string
 starting with `$` is a field path there.
 
 `addressService.forCheckout(userId, addressId?)` answers three ways (an entry — the named one, or the

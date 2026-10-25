@@ -102,7 +102,7 @@ export const sendVerificationEmail = (
 };
 
 /**
- * The explicit re-send, `POST /account/verify-request` — the one of this function's three
+ * The explicit re-send, `POST /account/email-verification/resend` — the one of this function's three
  * callers that is a user asking for something, not a side effect of signup or an email change.
  * A wrapper around {@link sendVerificationEmail} rather than an emit inside it: signup and the
  * email-change path call that function too, and neither counts as "a request" for this audit action.
@@ -166,7 +166,7 @@ const pacedSend = (
     );
 
 /**
- * `POST /account/verify-request` end to end: loads the caller's own account, refuses the three
+ * `POST /account/email-verification/resend` end to end: loads the caller's own account, refuses the three
  * states that can't be sent to, and sends. The refusals live here since
  * `requestEmailVerification` takes an already-loaded user and can't enforce its own precondition.
  * Unlike the reset request, there's no enumeration surface to blur: the caller is authenticated
@@ -198,7 +198,7 @@ export const requestEmailVerificationFor = (
     });
 
 /**
- * `POST /account/pending-email/resend` end to end: mails the NEW (pending) address a fresh link and
+ * `POST /account/email-change/resend` end to end: mails the NEW (pending) address a fresh link and
  * nothing else — the old address was told once, when the change was requested, and hearing it
  * again reads like a takeover alert. A no-op (`resendAfter` 0, nothing sent, nothing audited) when
  * no change is pending, so a client need not read the profile first.
@@ -353,7 +353,7 @@ export const undoEmailChange = (
         );
 
 /**
- * `POST /account/verify-confirm` — spend the verification link and mark the address verified.
+ * `POST /account/email-verification/confirm` — spend the verification link and mark the address verified.
  * Find then spend: the find is a read two simultaneous clicks both pass; only the atomic spend
  * picks a winner, and the loser gets the same "token not found" an invented token would.
  *
@@ -374,7 +374,7 @@ export const confirmEmailVerification = (
     );
 
 /**
- * `POST /account/email-change-confirm` — spend the `email-change` link and swap `pendingEmail` into
+ * `POST /account/email-change/confirm` — spend the `email-change` link and swap `pendingEmail` into
  * `email`. A `verify` token never matches this type: the two prove different addresses and must
  * not do each other's work.
  *
@@ -396,7 +396,7 @@ export const confirmEmailChange = (
     );
 
 /**
- * `POST /account/email-change-undo` — spend the undo link mailed to the OLD address and put the
+ * `POST /account/email-change/undo` — spend the undo link mailed to the OLD address and put the
  * account back as it was. Refusals are recorded like every other flow's: the endpoint is public
  * and the token is the credential.
  *

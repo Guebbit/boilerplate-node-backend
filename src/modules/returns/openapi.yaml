@@ -57,9 +57,17 @@ paths:
                   in: query
                   schema:
                       $ref: '#/components/schemas/ReturnReason'
+                - name: sort
+                  in: query
+                  required: false
+                  # JSON:API grammar: `?sort=-createdAt,status` — comma-separated, `-` for descending.
+                  style: form
+                  explode: false
+                  schema:
+                      $ref: '#/components/schemas/ReturnSort'
             responses:
                 '200':
-                    description: A page of returns
+                    description: A page of returns, newest first unless `sort` says otherwise
                     content:
                         application/json:
                             schema:
@@ -308,6 +316,16 @@ components:
                 declined`. A withdrawal is born `approved` — or `closed`, when it reached the order
                 before dispatch. Which move may follow which is the
                 server's rule, answered per caller by `Return.actions`.
+
+        # The ONE sort grammar, shared with every list (docs/api/sorting.md). `-` sorts
+        # descending; earlier entries rank first; ties end on the id.
+        ReturnSort:
+            type: array
+            minItems: 1
+            maxItems: 2
+            items:
+                type: string
+                enum: [createdAt, -createdAt, status, -status]
 
         ReturnReason:
             type: string

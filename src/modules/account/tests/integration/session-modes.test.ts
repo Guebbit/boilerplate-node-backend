@@ -239,11 +239,15 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
         setEnvironment({ NODE_SESSION_MODE: mode });
     });
 
-    it('answers what mode it is, with no credential at all', async () => {
+    it('answers what mode it is and how long a session lasts, with no credential at all', async () => {
         const response = await api().get('/account/session-config');
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toEqual({ mode });
+        expect(response.body.data).toEqual({
+            mode,
+            lifetimeSeconds: { short: 86_400, medium: 604_800, long: 2_592_000 },
+            staffLifetimeSeconds: 86_400
+        });
     });
 
     it('starts a session the next request is authenticated by', async () => {
@@ -304,7 +308,7 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
         const { user, session } = await account(mode);
         const other = await signIn(user.email, mode);
 
-        const out = await api().post('/account/logout-all').set(session.headers);
+        const out = await api().delete('/account/sessions').set(session.headers);
 
         expect(out.status).toBe(200);
         expect(await sessionRowsOf(user.id)).toEqual([]);
@@ -432,7 +436,7 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
             advanceDate(16 * 60 * 1000);
 
             const headers = await keepAlive(session, mode);
-            const sensitive = await api().post('/account/logout-all').set(headers);
+            const sensitive = await api().delete('/account/sessions').set(headers);
 
             expect(sensitive.status).toBe(401);
             expect(sensitive.body.errors[0].code).toBe('REAUTH_REQUIRED');
@@ -454,7 +458,7 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
                 mode === 'jwt'
                     ? { Authorization: `Bearer ${reauth.body.data.token as string}` }
                     : { Cookie: cookieHeader(reauth, '__Host-session') };
-            const sensitive = await api().post('/account/logout-all').set(renewed);
+            const sensitive = await api().delete('/account/sessions').set(renewed);
 
             expect(sensitive.status).toBe(200);
         });
@@ -561,7 +565,7 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
         const other = await signIn(user.email, mode);
         await plantToken(user.id, 'password', 'reset-link');
 
-        const reset = await api().post('/account/reset-confirm').send({
+        const reset = await api().post('/account/password/reset/confirm').send({
             token: 'reset-link',
             password: REPLACEMENT_PASSWORD,
             passwordConfirm: REPLACEMENT_PASSWORD
@@ -584,7 +588,7 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
         await plantToken(user.id, 'email-change', 'confirm-link');
 
         const confirm = await api()
-            .post('/account/email-change-confirm')
+            .post('/account/email-change/confirm')
             .send({ token: 'confirm-link' });
 
         expect(confirm.status).toBe(200);
@@ -602,7 +606,7 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
         );
         await plantToken(user.id, 'email-change-undo', 'undo-link');
 
-        const undo = await api().post('/account/email-change-undo').send({ token: 'undo-link' });
+        const undo = await api().post('/account/email-change/undo').send({ token: 'undo-link' });
 
         expect(undo.status).toBe(200);
         expect(await sessionRowsOf(user.id)).toEqual([]);
@@ -706,7 +710,7 @@ describe('cookie mode only', () => {
         expect(await statusOfBearer(second)).toBe(200);
 
         const disabled = await api()
-            .delete('/account/2fa')
+            .post('/account/2fa/disable')
             .set('Authorization', `Bearer ${second}`)
             .set('Origin', FRONTEND)
             .send({ code: await codeFor(secret, 1) });
@@ -725,7 +729,7 @@ describe('cookie mode only', () => {
         const second = confirm.body.data.sessionToken as string;
 
         const removed = await api()
-            .delete('/account/2fa/methods/totp')
+            .post('/account/2fa/methods/totp/remove')
             .set('Authorization', `Bearer ${second}`)
             .set('Origin', FRONTEND)
             .send({ code: await codeFor(secret, 1) });
@@ -817,7 +821,7 @@ describe('cookie mode only', () => {
         const { user, session } = await account('cookie');
 
         const response = await api()
-            .post('/account/logout-all')
+            .delete('/account/sessions')
             .set('Cookie', session.cookie)
             .set('Origin', 'https://evil.example');
 
@@ -830,10 +834,10 @@ describe('cookie mode only', () => {
         const second = await signIn('person@example.com', 'cookie');
 
         const fromFrontend = await api()
-            .post('/account/logout-all')
+            .delete('/account/sessions')
             .set('Cookie', session.cookie)
             .set('Origin', FRONTEND);
-        const noOrigin = await api().post('/account/logout-all').set('Cookie', second.cookie);
+        const noOrigin = await api().delete('/account/sessions').set('Cookie', second.cookie);
 
         expect(fromFrontend.status).toBe(200);
         // The first call ended every session, the second signed-in one included.
@@ -845,7 +849,7 @@ describe('cookie mode only', () => {
         const login = await logIn(user.email, { transport: 'bearer' });
 
         const response = await api()
-            .post('/account/logout-all')
+            .delete('/account/sessions')
             .set('Authorization', `Bearer ${login.body.data.sessionToken as string}`)
             .set('Origin', 'https://evil.example');
 

@@ -5,6 +5,7 @@
  * the /account contract so removing the shop takes exactly this file with it.
  */
 
+import { refundOrderPayment } from '@modules/payments/tests/factories';
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
@@ -95,15 +96,15 @@ describe('POST /account/export', () => {
         await eventually(() =>
             invoicingService.findInvoiceForOrder(orderId).then((row) => row !== null)
         );
-        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'));
+        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'));
         await eventually(() =>
             invoicingService.findCreditNotesForOrder(orderId).then((rows) => rows.length > 0)
         );
         const added = await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 2 });
-        expect(added.status).toBe(201);
+        expect(added.status).toBe(200);
 
         const response = await requestAndDownloadExport(bearer);
 
@@ -178,7 +179,7 @@ describe('the address book at checkout', () => {
         await api().post('/account/addresses').set('Authorization', bearer).send(HOME);
         const product = await createProduct({ onHand: 5 });
         await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 1 });
 

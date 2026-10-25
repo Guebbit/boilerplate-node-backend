@@ -7,9 +7,6 @@
 
 import { DAY_MS } from '@domain-primitives/time';
 
-/** Days a buyer is promised when the product names no restock date (CRD Art. 18(1), FTC 435.2). */
-export const DEFAULT_BACKORDER_PROMISE_DAYS = 30;
-
 /** The owed part of one order line, frozen. */
 export interface OwedLine {
     backorderedQuantity: number;
@@ -28,20 +25,20 @@ export interface OwedLine {
  * @param owed - how many units of the line the shelf could not cover
  * @param restockDate - the product's restock date, when it names one
  * @param placedAt - the instant the order is placed
- * @returns the owed quantity and its promise (the restock date, else `placedAt` plus 30 days) and
+ * @param promiseDays - days promised when there is no restock date (`shop`'s `BACKORDER_PROMISE_DAYS`)
+ * @returns the owed quantity and its promise (the restock date, else `placedAt` plus `promiseDays`) and
  *   whether that date was the product's, or `undefined` when nothing is owed
  */
 export const owedLineOf = (
     owed: number,
     restockDate: Date | undefined,
-    placedAt: Date
+    placedAt: Date,
+    promiseDays: number
 ): OwedLine | undefined =>
     owed > 0
         ? {
               backorderedQuantity: owed,
-              promisedAt:
-                  restockDate ??
-                  new Date(placedAt.getTime() + DEFAULT_BACKORDER_PROMISE_DAYS * DAY_MS),
+              promisedAt: restockDate ?? new Date(placedAt.getTime() + promiseDays * DAY_MS),
               promiseDated: restockDate !== undefined
           }
         : undefined;

@@ -214,7 +214,7 @@ export interface CallerContext {
     locale?: string;
     /**
      * The caller's analytics consent choice — the stored `AuthContext.analyticsConsent`, else the
-     * `X-Analytics-Consent` header the frontend forwards from the visitor's own banner choice.
+     * `Analytics-Consent` header the frontend forwards from the visitor's own banner choice.
      * `false` covers both "denied" and "never asked": `emitAnalyticsEvent`'s gate is opt-in, and
      * it is the only reader.
      */

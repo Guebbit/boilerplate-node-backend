@@ -46,11 +46,11 @@ const rejectedFlows = (): unknown[] =>
 
 describe('an unknown one-time token', () => {
     it.each([
-        ['password_reset', 'post', '/account/reset-confirm'],
-        ['email_verify', 'post', '/account/verify-confirm'],
-        ['email_change', 'post', '/account/email-change-confirm'],
-        ['email_change_undo', 'post', '/account/email-change-undo'],
-        ['account_delete', 'delete', '/account/delete-confirm']
+        ['password_reset', 'post', '/account/password/reset/confirm'],
+        ['email_verify', 'post', '/account/email-verification/confirm'],
+        ['email_change', 'post', '/account/email-change/confirm'],
+        ['email_change_undo', 'post', '/account/email-change/undo'],
+        ['account_restore', 'post', '/account/restore']
     ] as const)('is audited and counted by the %s flow', async (flow, method, route) => {
         authOneTimeTokenRejectedTotal.reset();
 
@@ -77,7 +77,7 @@ describe('an unknown one-time token', () => {
         await plantToken(user.id, 'password', 'soon-expired-token', { ttlMs: 60_000 });
         advanceDate(3_600_000);
 
-        await api().post('/account/reset-confirm').send({
+        await api().post('/account/password/reset/confirm').send({
             token: 'soon-expired-token',
             password: PLAIN_PASSWORD,
             passwordConfirm: PLAIN_PASSWORD
@@ -87,7 +87,7 @@ describe('an unknown one-time token', () => {
     });
 
     it('is not recorded when the password pair is what was refused', async () => {
-        await api().post('/account/reset-confirm').send({
+        await api().post('/account/password/reset/confirm').send({
             token: 'never-issued',
             password: PLAIN_PASSWORD,
             passwordConfirm: 'different'

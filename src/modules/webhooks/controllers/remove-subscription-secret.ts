@@ -10,7 +10,7 @@ import { requireId } from '@infrastructure/http/ids';
 import { catchAs, refused } from '@infrastructure/http/controller';
 import type { WebhookSubscription } from '@types';
 import { webhooksService } from '../services';
-import { presentWebhookSubscription } from '../presenters';
+import { viewSubscription } from '../services/actions';
 
 /**
  * DELETE /webhooks/subscriptions/:id/secrets/:secretId
@@ -25,13 +25,14 @@ export const removeWebhookSubscriptionSecret = (
     const id = requireId(request, response, { notFound: 'generic.error-not-found' });
     if (!id) return;
 
+    const context = tenantCallerContextOf(request);
     return webhooksService
-        .removeSubscriptionSecret(id, request.params.secretId, tenantCallerContextOf(request))
+        .removeSubscriptionSecret(id, request.params.secretId, context)
         .then((result) => {
             if (refused(response, result)) return;
             return successResponse<WebhookSubscription>(
                 response,
-                presentWebhookSubscription(result.data)
+                viewSubscription(result.data, context.caller)
             );
         })
         .catch(catchAs(response, 'removeWebhookSubscriptionSecret'));

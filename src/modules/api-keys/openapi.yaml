@@ -25,13 +25,21 @@ paths:
         get:
             tags: [ApiKeys]
             summary: List this shop's machine-to-machine credentials
-            description: Never returns a credential's secret — that exists only in the response of the call that minted it.
+            description: Newest first unless `sort` says otherwise. Never returns a credential's secret — that exists only in the response of the call that minted it.
             operationId: listApiKeys
             security:
                 - bearerAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+                - name: sort
+                  in: query
+                  required: false
+                  # JSON:API grammar: `?sort=-lastUsedAt,expiresAt` — comma-separated, `-` for descending.
+                  style: form
+                  explode: false
+                  schema:
+                      $ref: '#/components/schemas/ApiKeySort'
             responses:
                 '200':
                     description: Credential list
@@ -87,6 +95,26 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /api-keys/{id}:
+        get:
+            tags: [ApiKeys]
+            summary: Get a machine-to-machine credential
+            description: One credential of this shop, with the same `status` the list gives it. Never its secret — that exists only in the response of the call that minted it. Another shop's credential, an unknown id and a malformed one are the same 404.
+            operationId: getApiKey
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The credential
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ApiKeyEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
             tags: [ApiKeys]
             summary: Revoke a machine-to-machine credential
@@ -109,10 +137,30 @@ paths:
 components:
     schemas:
         # ---------- api-keys — the schemas only this module's paths reference. ----------
+        # The ONE sort grammar, shared with every list (docs/api/sorting.md). `-` sorts
+        # descending; earlier entries rank first; ties end on the id.
+        ApiKeySort:
+            type: array
+            minItems: 1
+            maxItems: 3
+            items:
+                type: string
+                enum: [createdAt, -createdAt, expiresAt, -expiresAt, lastUsedAt, -lastUsedAt]
+
+        ApiKeyStatus:
+            type: string
+            enum: [active, expired, revoked, suspended]
+            description: >-
+                Whether the credential works right now, decided by the server. `revoked` and
+                `expired` are final. `suspended` means the person who minted it can no longer sign
+                in (banned, soft-deleted or erased): the key is refused with 401 and comes back
+                by itself if they do. Checked in that order, so a revoked key never reads as
+                `suspended`.
+
         ApiKey:
             type: object
             additionalProperties: false
-            required: [id, name, publicPrefix, permissions, expiresAt, createdAt, updatedAt]
+            required: [id, name, publicPrefix, permissions, status, expiresAt, createdAt, updatedAt]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -121,6 +169,8 @@ components:
                 publicPrefix:
                     type: string
                     description: The credential's non-secret prefix, e.g. `a1b2c3d4` — shown in a list so an operator can recognise which key is which.
+                status:
+                    $ref: '#/components/schemas/ApiKeyStatus'
                 permissions:
                     type: array
                     items: { type: string }
@@ -204,13 +254,27 @@ components:
         ApiKeysResponse:
             type: object
             additionalProperties: false
-            required: [items, meta]
+            required: [items, meta, maxExpiresAt]
             properties:
                 items:
                     type: array
                     items: { $ref: '#/components/schemas/ApiKey' }
                 meta:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
+                maxExpiresAt:
+                    type: string
+                    format: date-time
+                    description: The latest `expiresAt` a mint accepts right now (one calendar year from this response). A later one is refused with 422, so a form can bound its date picker without copying the rule.
+
+        ApiKeyEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess' }
+                status: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus' }
+                message: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage' }
+                data: { $ref: '#/components/schemas/ApiKey' }
 
         ApiKeyCreatedEnvelope:
             type: object

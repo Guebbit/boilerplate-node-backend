@@ -49,17 +49,103 @@ flowchart TD
   contract declares it `required` on every 201, and the shared response check
   (`tests/support/response-contract.ts`) fails a 201 without it.
 - A retried create under its `Idempotency-Key` replays the `Location` with the body.
+- A sub-collection create is a create too: `POST /delivery/fulfillment-orders/{id}/shipments`
+  answers 201 with `Location` naming the shipment, and `POST /payments/{id}/refunds` answers 201
+  with the new `Refund` and `Location: /payments/{id}/refunds/{refundId}`. The payment's running
+  totals are one `GET /payments/{id}` away.
 - **A 201 means something was created** (RFC 9110 §15.3.2). An intent that only refreshes the
-  order's one payment row, or a cart "add" that only grows a line, answers **200**.
+  order's one payment row answers **200**.
 - Anything the contract does not declare is a 422 (`additionalProperties: false`), never a column.
 
 ### Action → 200
 
-- `POST /orders/{id}/cancel`, `/restore`, `/status-override`, `POST
-  /delivery/fulfillment-orders/{id}/shipments`, `/rotate-secret`: a state change on a thing that
-  already exists. 200, with the thing as it now stands.
+- `POST /orders/{id}/cancel`, `/restore`, `/status-override`, `/rotate-secret`: a state change on a
+  thing that already exists. 200, with the thing as it now stands.
 - An action may create a record on the side (a shipment, a stock movement). It still answers the
   thing the caller acts on next.
+
+### A line is written through its parent
+
+A **line** is a part of a per-user parent with no life of its own: a cart line, a saved product, a
+back-in-stock request, an OAuth link, a webhook subscription's secret. It is written through the
+parent, never on a URL of its own.
+
+| Parent                    | Line collection         | Add                                  | Change                              | Remove                                            |
+| ------------------------- | ----------------------- | ------------------------------------ | ----------------------------------- | ------------------------------------------------- |
+| the cart                  | `/cart/items`           | `POST /cart/items {productId, quantity}` | `PATCH /cart/items/{productId}` | `DELETE /cart/items/{productId}`, all: `DELETE /cart/items` |
+| the wishlist              | `/wishlist/items`       | `POST /wishlist/items {productId}`   | none (a line is a yes/no)           | `DELETE /wishlist/items/{productId}`              |
+| the stock-alert list      | `/stock-alerts` itself  | `POST /stock-alerts {productId}`     | none                                | `DELETE /stock-alerts/{productId}`                |
+| the caller's OAuth links  | `/account/oauth/links`  | `POST /account/oauth/links/{provider}` (a redirect flow) | none         | `DELETE /account/oauth/links/{provider}`          |
+
+- The collection is `/items` when the parent holds one kind of line, the line's own noun when it
+  has one (`/secrets`, `/links`), and the parent itself when it is nothing but the list.
+- Every write answers **200 + the whole parent**: no 201, no `Location`, no GET of one line. A GET
+  on the line collection is a 405 naming the writes; the parent's GET is the read.
+- **A PUT never creates**, and a PATCH on a line the parent does not hold is a 404.
+- A repeat is not an error: adding what is saved is the same 200 and fires nothing twice. A
+  cart add GROWS an existing line instead (Shopify, commercetools).
+- Names: a line add is `create*` (`add*` for a cart line, which may grow instead), its removal
+  `delete*` or `remove*`, its change `update*`.
+
+Why: a 201 says a resource was created at a URL, and a line has none (RFC 9110 §9.3.3 makes the
+`Location` of a 201 a SHOULD; §9.3.4 makes a PUT that creates a MUST-201). The parent is what the
+client re-renders, so the parent is the answer (§15.3.1: a 200 carries "the result of the
+action"). Medusa v2 (`POST`/`DELETE /store/carts/{id}/line-items[/{line_id}]`), BigCommerce
+(`POST /carts/{id}/items`, `POST`/`DELETE /wishlists/{id}/items[/{item_id}]`), Shopify's
+`cartLinesAdd`/`Update`/`Remove`, commercetools' cart update actions and Auth0's identity unlink
+all answer the parent.
+
+### Repeating an action (409)
+
+An action whose target state is already reached is **refused**, not answered with a second success:
+`409` with a `<RESOURCE>_ALREADY_<STATE>` code and a plain message. This is the lifecycle rule
+(RFC 9110 §15.5.10: a conflict with the current state; Google's AIP-216 "state transition not
+allowed", with 409 where Google says 400).
+
+- `POST /users/{id}/activate` on an active account: `USER_ALREADY_ACTIVE`; `deactivate` on a
+  deactivated one: `USER_ALREADY_INACTIVE`.
+- `DELETE /users/{id}/purchase-hold` on an account with no hold and no review flag:
+  `USER_PURCHASE_HOLD_NOT_SET`.
+- A retried `DELETE` leaves the same state (RFC 9110 §9.2.2). What is already gone answers 404, as
+  Google's [AIP-135](https://google.aip.dev/135) does.
+- The caller's `actions` flag for the move is `false` in that state, so a screen never offers it.
+
+#### An action whose target state is already reached
+
+`POST …/enable` on an enabled subscription, `POST …/disable` on a disabled one: **409**, with
+`<RESOURCE>_ALREADY_<STATE>` (`WEBHOOK_SUBSCRIPTION_ALREADY_ENABLED`) and a plain message. Not
+200, because an action may carry an effect a repeat must not re-run (enabling resets the failure
+streak). Not 400, which Google's [AIP-216](https://google.aip.dev/216) uses: the lifecycle rule is
+"a refusal that depends on the current state is 409 + code" (RFC 9110 §15.5.10). A `DELETE` stays
+idempotent (RFC 9110 §9.2.2): deleting what is gone is not an action's refusal.
+
+### An item write has an item read
+
+A resource that can be changed by id can be read by id. Without `GET /x/{id}` a detail or edit page
+has to find its record in a list: past the page size it never finds it, and it cannot tell "gone"
+from "not loaded". The read is scoped like the list's rows (a row the caller may not see is a 404,
+never a 403 that confirms it exists), and answers the same shape the list rows carry. Webhook
+subscriptions are the example: `GET /webhooks/subscriptions/{id}`.
+
+The item reads, and what each is scoped by:
+
+| Item read                                              | Scoped by                                          |
+| ------------------------------------------------------ | -------------------------------------------------- |
+| `GET /webhooks/subscriptions/{id}`                     | the shop's own subscriptions                       |
+| `GET /payments/{id}`                                   | the payer's own, or `display:Payment`              |
+| `GET /payments/{id}/refunds/{refundId}`                | the payment's scope; a record it does not hold     |
+| `GET /feedback/{id}`                                   | `read:Feedback`, the list's key                    |
+| `GET /api-keys/{id}`                                   | this shop's credentials, `read:ApiKey`             |
+| `GET /account/addresses/{addressId}`                   | the caller's own book                              |
+| `GET /account/sessions/{sessionId}`                    | the caller's own live sessions                     |
+| `GET /locales/{locale}/apps/{app}/entries/{entryId}`   | `update:Locale`, the editing screen's key          |
+| `GET /delivery/shipments/{id}`                         | the order's scope: the buyer's own, or `display:Order` |
+| `GET /delivery/fulfillment-orders/{id}`                | the order's scope: the buyer's own, or `display:Order` |
+| `GET /notifications/{id}`                              | the caller's own inbox                             |
+| `GET /webhooks/deliveries/{id}`                        | this shop's delivery log, `read:WebhookSubscription` |
+| `GET /inventory/levels/{productId}`                    | `read:StockLevel`, the stock board's key           |
+
+A row the caller may not see, an unknown id and a malformed one are the same 404.
 
 ### Search → 200
 
@@ -99,15 +185,17 @@ GET → edit → PUT round trip would delete the picture.
 to the stored one is no change — no second email, no role re-grant, no version or revision bump.
 Logging each request is allowed.
 
-**A PUT with no body sets a flag or a membership.** When the URI is the whole statement, the
-body is empty: `PUT /wishlist/{productId}` (this product is saved), `PUT
-/account/addresses/{id}/default` (this address is the default). Sent twice, nothing changes —
-the GitHub-stars pattern (`PUT`/`DELETE /user/starred/{owner}/{repo}`).
+**A PUT with no body points at something.** When the URI is the whole statement, the body is
+empty: `PUT /account/addresses/{id}/default` (this address is the default). Sent twice, nothing
+changes — Shopify's `PUT …/addresses/{id}/default.json` is the same shape. A line of a parent
+(a saved product, a cart line) is not this: it is written through the parent, see
+[A line is written through its parent](#a-line-is-written-through-its-parent).
 
-**Create by PUT only where the client names the thing.** A PUT on an id that does not exist is a
-404. The one exception is a URI the caller owns by construction — a cart line, `PUT
-/cart/{productId}`: it creates the line and answers **201**, or updates it and answers 200
-(RFC 9110 §9.3.4).
+**A PUT never creates.** A PUT on an id that does not exist is a 404 (a PUT that creates MUST
+answer 201, RFC 9110 §9.3.4, and nothing here has a URL the client may name).
+
+**Offer a PUT only when the body can be the whole resource.** A route that sets two fields of a
+bigger record is a PATCH alone (`PATCH /feedback/{id}`), never a PUT that clears the rest.
 
 **A server may transform.** RFC 9110 lets the stored state differ from the body. Here that is one
 case: `PUT /account`'s `email` becomes `pendingEmail` until the new address is proven.
@@ -149,6 +237,29 @@ The guard is `requireDeclaredContentType`, built from `api/request-content-types
 `npm run gen:api` derives from the contract's own `requestBody` media types. A request with no
 bytes is not judged: a missing required body is the schema's own 422.
 
+A `DELETE` that declares no body is listed with no types at all (`types: []`), and the guard refuses
+ANY body on it, `details.accepted` empty. That is why `DELETE /products/{id}` takes no `{hardDelete}`
+body: a client or gateway that drops it would turn a hard delete into a soft one, so the flag lives
+in the query or the `/hard` path and a body is refused instead of ignored.
+
+## A known path with the wrong method
+
+A path the contract declares, asked with a method it does not give it, answers **405** with an
+`Allow` header (RFC 9110 §15.5.6) — never the catch-all's 404. `DELETE /feedback/{id}` is fine,
+`PUT /feedback/{id}` is a 405 naming `DELETE, PATCH`.
+
+- **`Allow` is sorted**, with HEAD beside GET. `OPTIONS` is never judged: the CORS layer answers
+  a preflight before any route runs.
+- **A trailing slash is the same path.** `/things/` reads as `/things`.
+- **A module this build does not serve stays a 404**: its paths are in the table, but nothing is
+  mounted to ask.
+- **Not declared per operation.** The 405 belongs to a request that matched no operation, so no
+  operation's `responses` could carry it; its code, `METHOD_NOT_ALLOWED`, is in the contract's
+  `x-error-codes`.
+
+The guard is `methodNotAllowed`, built from `api/operation-routes.ts`, which `npm run gen:api`
+derives from the contract's paths and mounted right before the 404 in `src/app/routes.ts`.
+
 ## Empty, `null`, omitted
 
 | On the wire | Means | Legal on |
@@ -181,7 +292,7 @@ A create body declares no `'null'` type — there is nothing to clear yet, so `n
 | 200 | an update, an action, a search, an idempotent refresh |
 | 201 | a create — something new exists, and `Location` says where |
 | 404 | the target does not exist (or the caller may not know it does) |
-| 409 | the write conflicts with the current state — a duplicate, a lifecycle refusal, an action whose target state is already reached (`<RESOURCE>_ALREADY_<STATE>`) |
+| 409 | the write conflicts with the current state — a duplicate, a lifecycle refusal, an action whose target state is already reached, a cap reached (`WEBHOOK_SUBSCRIPTION_LIMIT_REACHED`: deleting a record would let the same request through) |
 | 412 | an `If-Match` that no longer matches — see [Conditional writes](#conditional-writes-etag-and-if-match) |
 | 415 | a body in a type the operation does not declare |
 | 422 | the body breaks the contract or a domain rule |
@@ -238,9 +349,9 @@ and the bundler adds the header parameter, the 412 and the response header from 
 | the caller's account | `GET /account` | `PUT`, `PATCH /account` |
 | example | `GET /examples/{id}` | `PUT`, `PATCH`, `DELETE /examples/{id}` |
 
-Not versioned: a resource with no item read to take a tag from (feedback, webhook subscriptions,
-locales, an address inside its book) and anything with its own concurrency rule (cart lines,
-stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declared.
+Not versioned: a resource with no item read to take a tag from (feedback, locales, an address
+inside its book), a resource that has an item read but no `If-Match` (webhook subscriptions) and
+anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declared.
 
 ### What the tag is
 
@@ -313,9 +424,8 @@ stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declar
 | --- | --- | --- |
 | `PUT /account` | `email` is stored as `pendingEmail` | an address is proven before it replaces the old one |
 | `POST /account/signup` | a refused address still gets a 201 and the same `Location: /account`, and nothing is created | antibot: the refusal must look like a success |
-| `PUT /cart/{productId}`, `PUT /cart/shipping-method`, `PUT /locales/{locale}/apps/{app}/entries/{entryId}`, `PUT /wishlist/{productId}`, `PUT /account/addresses/{id}/default` | no PATCH | one field, or none; a PATCH would say exactly what the PUT says |
-| `POST /cart` | adds to an existing line instead of creating a second one; 201 only when the line is new | "add to cart" — Shopify, commercetools, WooCommerce and Magento all grow the line |
-| `POST /payments/intent`, `POST /payments/order/{id}/offline` | 200 when they refresh or convert the order's one payment row | one payment per order is a database fact |
+| `PUT /cart/shipping-method`, `PUT /locales/{locale}/apps/{app}/entries/{entryId}`, `PUT /account/addresses/{id}/default` | no PATCH | one field, or none; a PATCH would say exactly what the PUT says |
+| `POST /payments`, `POST /payments/orders/{id}/offline` | 200 when they refresh or convert the order's one payment row | one payment per order is a database fact |
 | `PUT`/`PATCH /locales/{locale}/apps/{app}/entries` | the app is a path segment; the body is `{ entries: { <key>: text } }`, and under PATCH a `null` deletes its key | a PUT replaces exactly what the GET on the same URI lists; the map is a real merge patch (RFC 7396) |
 
 ## How it is kept true

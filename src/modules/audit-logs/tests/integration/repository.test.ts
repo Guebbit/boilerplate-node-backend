@@ -267,6 +267,37 @@ const walk = async (actor: string, limit: number) => {
     return { collected, pages };
 };
 
+/** The target ids of a page, in a fixed order. */
+const targetsOf = (items: { targetId?: string }[]) => items.map((item) => item.targetId).toSorted();
+
+describe('auditLogService.search — the ownOrder filter', () => {
+    beforeEach(async () => {
+        await auditLogRepository.create(
+            makeEntry({ targetId: 'own', metadata: { ownOrder: true } })
+        );
+        await auditLogRepository.create(makeEntry({ targetId: 'other', metadata: { amount: 3 } }));
+        await auditLogRepository.create(makeEntry({ targetId: 'bare' }));
+    });
+
+    it('keeps only the flagged entries for true', async () => {
+        const { items } = await auditLogService.search({ ownOrder: true });
+
+        expect(targetsOf(items)).toEqual(['own']);
+    });
+
+    it('keeps every unflagged entry, metadata or not, for false', async () => {
+        const { items } = await auditLogService.search({ ownOrder: false });
+
+        expect(targetsOf(items)).toEqual(['bare', 'other']);
+    });
+
+    it('keeps both when the filter is absent', async () => {
+        const { items } = await auditLogService.search({});
+
+        expect(targetsOf(items)).toEqual(['bare', 'other', 'own']);
+    });
+});
+
 describe('reading an actor’s own trail by cursor', () => {
     const AT = new Date('2026-08-01T10:00:00.000Z');
 

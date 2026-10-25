@@ -36,9 +36,11 @@ export const putPurchaseHold = namedHandler(
             .then((result) => {
                 if (refused(response, result)) return;
 
-                return userService.toUserContract(result.data, request.caller).then((user) => {
-                    successResponse(response, user, 200, result.message);
-                });
+                return userService
+                    .toUserContract(result.data, callerContextOf(request).caller)
+                    .then((user) => {
+                        successResponse(response, user, 200, result.message);
+                    });
             })
             .catch(catchAs(response, 'setUserPurchaseHold'));
     }
@@ -59,9 +61,11 @@ export const deletePurchaseHold = namedHandler(
             .then((result) => {
                 if (refused(response, result)) return;
 
-                return userService.toUserContract(result.data, request.caller).then((user) => {
-                    successResponse(response, user, 200, result.message);
-                });
+                return userService
+                    .toUserContract(result.data, callerContextOf(request).caller)
+                    .then((user) => {
+                        successResponse(response, user, 200, result.message);
+                    });
             })
             .catch(catchAs(response, 'liftUserPurchaseHold'));
     }

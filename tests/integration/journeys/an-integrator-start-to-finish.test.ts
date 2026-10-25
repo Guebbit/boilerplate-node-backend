@@ -89,9 +89,9 @@ it('delivers every event once, signed, in causal order', async () => {
     steps.push(await arrivals());
 
     // Shipped and delivered by staff.
-    await api().post(`/delivery/order/${order.id}/start`).set('Authorization', admin).expect(200);
+    await api().post(`/delivery/orders/${order.id}/start`).set('Authorization', admin).expect(200);
     const [fulfillmentOrder] = bodyOf(
-        await api().get(`/delivery/order/${order.id}`).set('Authorization', admin),
+        await api().get(`/delivery/orders/${order.id}`).set('Authorization', admin),
         GetFulfillmentByOrder200Response
     ).data.fulfillmentOrders;
     const shipment = bodyOf(
@@ -196,9 +196,8 @@ describe('a key follows its minter', () => {
             .send({ role: 'editor' })
             .expect(200);
         await api()
-            .patch(`/users/${banned.user.id}`)
+            .post(`/users/${banned.user.id}/deactivate`)
             .set('Authorization', admin)
-            .send({ active: false })
             .expect(200);
 
         await api().get('/webhooks/subscriptions').set('Authorization', demoted.key).expect(403);

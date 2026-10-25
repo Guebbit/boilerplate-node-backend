@@ -165,12 +165,17 @@ their personal fields, since order history is part of the contract
 ([why](../theory/data-retention.md#orders-kept-while-the-account-lives)). An admin can still hard-delete an order, but only one that is `cancelled` and was never paid
 (`services/remove.ts`'s `remove`): the cancel owns every end-of-order effect (stock, payment intent,
 `order.cancelled`), so an open order answers 409 `ORDER_NOT_CANCELLED` until it is cancelled. This
-reap is what protects the far more common case, the order nobody ever deletes. A paid order refuses
+reap is what protects the far more common case, the order nobody ever deletes. An order that was
+never paid but was handed money after its cancel (a transfer or card payment that landed late, and
+its refund) refuses it too, 409 `ORDER_HAS_MONEY_HISTORY`: `payments` stamps `moneyReceivedAt`
+(`markMoneyReceived`) in the settlement's own transaction, and the delete filters on it, so a
+payment landing mid-delete turns it into the 409. A paid order refuses
 a hard delete instead (409 `ORDER_INVOICED`), once and for as long as `paidAt` is stamped:
 `invoicing` freezes a legal document from that same transition, and it must survive the order it
 was issued for. The refusal does not trust the document the caller read: the hard delete is one
 `deleteOne` that filters on `status: cancelled` and `paidAt: null`, so a settlement or a reopen
-that commits in between turns it into the matching 409.
+that commits in between turns it into the matching 409. Restoring a soft delete of an order that is
+not hidden answers 409 `ORDER_NOT_DELETED`; `actions.restore` says when it would be accepted.
 
 ## When the account is erased
 
@@ -297,7 +302,7 @@ override all ASK for a move, never assign the field themselves. See
 | Move                                        | Who asks                                                                         | Through                                                                                                                                                              |
 | ------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pending` → `paid`                          | `system`                                                                         | `payments`' settlement, on confirm                                                                                                                                   |
-| `paid` → `processing`                       | `system`                                                                         | `POST /delivery/order/{id}/start`, `start:Shipment` — or `POST /orders/{id}/status-override`, `override:Order`                                                       |
+| `paid` → `processing`                       | `system`                                                                         | `POST /delivery/orders/{id}/start`, `start:Shipment` — or `POST /orders/{id}/status-override`, `override:Order`                                                      |
 | `processing` → `shipped`                    | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/shipments` — only the shipment that leaves **nothing** remaining                                                             |
 | `shipped` → `delivered`                     | `system`                                                                         | `POST /delivery/shipments/{id}/deliver` — only the last arrival, with nothing left to ship                                                                           |
 | `processing` → `delivered`                  | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/fulfill` (digital), or a remainder cancel after every shipment arrived — `markFulfilmentComplete`, the one named double move |
@@ -435,7 +440,9 @@ write that lost its race leaves no row. `orders` cannot listen to them: they imp
 **Types and audience.** `domain/timeline.ts` decides, per type, whether the buyer may read it
 (Magento's `is_visible_on_front`, WooCommerce's `is_customer_note`); a private row is hidden whole,
 never stripped field by field. The set of types is the contract's `OrderTimelineType`, so a type
-added there without an audience row fails to compile.
+added there without an audience row fails to compile. Each row carries its own `audience`
+(`buyer` or `staff`) on the wire, so a staff screen marks which rows the buyer cannot see without
+keeping a copy of this table.
 
 | Group     | Type                                                                                         | Buyer sees |
 | --------- | -------------------------------------------------------------------------------------------- | ---------- |
@@ -533,7 +540,7 @@ and `GET /orders/{id}/credit-notes` by sharing this module's `/orders` basePath 
 [`addresses`](./addresses.md) uses on `/account`).
 
 The only trace of that relationship here is `paidAt` (`model.ts`), stamped by `services/status.ts`'s
-`markPaid` in the same write that moves an order to `paid` — the proxy `services/scope.ts`'s
+`markPaid` in the same write that moves an order to `paid` — the proxy `services/actions.ts`'s
 `actions.invoice` flag and `services/remove.ts`'s hard-delete refusal both read, so neither has to ask
 `invoicing` whether the freeze actually landed.
 

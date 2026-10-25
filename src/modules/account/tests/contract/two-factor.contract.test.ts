@@ -152,14 +152,14 @@ describe('POST /account/2fa/backup-codes', () => {
     });
 });
 
-describe('DELETE /account/2fa/methods/{method}', () => {
+describe('POST /account/2fa/methods/{method}/remove', () => {
     it('matches the contract when one of two factors is removed', async () => {
         const session = await verifiedSession();
         const secret = await armTotp(session);
         await armEmail(session, backupCodesOf.get(secret)?.[0]);
 
         const response = await api()
-            .delete('/account/2fa/methods/email')
+            .post('/account/2fa/methods/email/remove')
             .set('Authorization', session.bearer)
             .send({ code: await codeFor(secret, 1) });
 
@@ -171,7 +171,7 @@ describe('DELETE /account/2fa/methods/{method}', () => {
         const secret = await armTotp(session);
 
         const response = await api()
-            .delete('/account/2fa/methods/carrier-pigeon')
+            .post('/account/2fa/methods/carrier-pigeon/remove')
             .set('Authorization', session.bearer)
             .send({ code: await codeFor(secret, 1) });
 
@@ -179,13 +179,13 @@ describe('DELETE /account/2fa/methods/{method}', () => {
     });
 });
 
-describe('DELETE /account/2fa', () => {
+describe('POST /account/2fa/disable', () => {
     it('matches the contract, and leaves nothing armed', async () => {
         const session = await verifiedSession();
         const secret = await armTotp(session);
 
         const response = await api()
-            .delete('/account/2fa')
+            .post('/account/2fa/disable')
             .set('Authorization', session.bearer)
             .send({ code: await codeFor(secret, 1) });
 
@@ -194,6 +194,24 @@ describe('DELETE /account/2fa', () => {
         await carryOn(session);
         const status = await api().get('/account/2fa').set('Authorization', session.bearer);
         expect(status.body.data.methods).toEqual([]);
+    });
+
+    it('is gone at the old DELETE addresses', async () => {
+        const session = await verifiedSession();
+        const secret = await armTotp(session);
+        const code = await codeFor(secret, 1);
+
+        const whole = await api()
+            .delete('/account/2fa')
+            .set('Authorization', session.bearer)
+            .send({ code });
+        const one = await api()
+            .delete('/account/2fa/methods/totp')
+            .set('Authorization', session.bearer)
+            .send({ code });
+
+        // `/account/2fa` still answers GET, so the verb is wrong there (405); the method path is gone (404).
+        expect([whole.status, one.status]).toEqual([405, 404]);
     });
 });
 

@@ -7,7 +7,7 @@
 import {
     Checkout201Response,
     ConfirmPayment200Response,
-    CreatePaymentIntent201Response,
+    CreatePayment201Response,
     GetOrderById200Response,
     GetPaymentByOrder200Response,
     GetProductAdmin200Response,
@@ -62,7 +62,8 @@ export const placeOrder = async (
     lines: BasketLine[],
     body: Record<string, unknown> = {}
 ) => {
-    for (const line of lines) await api().post('/cart').set('Authorization', bearer).send(line);
+    for (const line of lines)
+        await api().post('/cart/items').set('Authorization', bearer).send(line);
     await api()
         .put('/cart/shipping-method')
         .set('Authorization', bearer)
@@ -80,8 +81,8 @@ export const placeOrder = async (
  */
 export const openIntent = async (bearer: string, orderId: string) =>
     bodyOf(
-        await api().post('/payments/intent').set('Authorization', bearer).send({ orderId }),
-        CreatePaymentIntent201Response
+        await api().post('/payments').set('Authorization', bearer).send({ orderId }),
+        CreatePayment201Response
     ).data;
 
 /**
@@ -131,7 +132,7 @@ export const orderOf = async (bearer: string, orderId: string) =>
  */
 export const paymentOf = async (bearer: string, orderId: string) =>
     bodyOf(
-        await api().get(`/payments/order/${orderId}`).set('Authorization', bearer),
+        await api().get(`/payments/orders/${orderId}`).set('Authorization', bearer),
         GetPaymentByOrder200Response
     ).data;
 

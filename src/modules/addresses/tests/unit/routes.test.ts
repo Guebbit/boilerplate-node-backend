@@ -19,6 +19,7 @@ describe('addresses routes — what is mounted', () => {
         expect(routeSignatures(router)).toEqual([
             'GET /addresses',
             'POST /addresses',
+            'GET /addresses/:addressId',
             'PUT /addresses/:addressId',
             'PATCH /addresses/:addressId',
             'PUT /addresses/:addressId/default',

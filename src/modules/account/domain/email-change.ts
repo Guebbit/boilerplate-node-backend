@@ -36,7 +36,7 @@ export const EMAIL_CHANGE_EVENTS = [
  * - `request`: a new address is asked for (`PUT`/`PATCH /account`).
  * - `resend`:  the proof link is mailed again.
  * - `confirm`: the proof link is spent; the pending address becomes the address.
- * - `cancel`:  the owner drops the pending address (`DELETE /account/pending-email`).
+ * - `cancel`:  the owner drops the pending address (`DELETE /account/email-change`).
  * - `undo`:    the undo link is spent.
  * - `lapse`:   the undo window closes and the old address is forgotten.
  */

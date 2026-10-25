@@ -87,7 +87,7 @@ const mailResetLink = (user: UserDocument, context: CallerContext): Promise<bool
 
 /**
  * Issue a password-reset token and deliver it — or silently do nothing for an unregistered
- * address. The silence is the feature: `POST /account/reset` always answers 200, so the
+ * address. The silence is the feature: `POST /account/password/reset` always answers 200, so the
  * response can't be used to enumerate registered addresses.
  *
  * Audit:    `AUTH_PASSWORD_RESET_REQUESTED` fires unconditionally, for the same reason. A row
@@ -97,8 +97,8 @@ const mailResetLink = (user: UserDocument, context: CallerContext): Promise<bool
  *           is skipped the same way: same 200, no mail, no new token, `false` for the metric.
  * Metric:   counted here, because the controller does not wait for the outcome. The boolean
  *           return serves tests and is never a client-visible refusal.
- * Token:    like `requestAccountDeletion` (`./deletion-request.ts`), its value never leaves
- *           its own file.
+ * Token:    like the restore link of `scheduleAccountDeletion` (`./account-deletion.ts`), its
+ *           value never leaves its own file.
  *
  * @returns `true` when a mail was queued, `false` when the address has no account or the lookup failed
  */

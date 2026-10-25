@@ -80,21 +80,21 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
     },
     'account PUT /': { requiresAuth: true, reason: "editing the caller's own profile" },
     'account PATCH /': { requiresAuth: true, reason: "editing the caller's own profile" },
-    'account DELETE /pending-email': {
+    'account DELETE /email-change': {
         requiresAuth: true,
         reason: "cancelling a pending change to the caller's own profile"
     },
-    'account POST /pending-email/resend': {
+    'account POST /email-change/resend': {
         requiresAuth: true,
         reason: "re-sending the link for a pending change to the caller's own profile"
     },
     'account DELETE /': {
         requiresAuth: true,
-        reason: "requesting deletion of the caller's own account"
+        reason: "locking the caller's own account and scheduling its erasure"
     },
-    'account DELETE /delete-confirm': {
+    'account POST /restore': {
         requiresAuth: false,
-        reason: 'the emailed confirmation token is the credential'
+        reason: 'the emailed restore token is the credential'
     },
     'account POST /login': {
         requiresAuth: false,
@@ -104,11 +104,11 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: false,
         reason: 'registration — there is no session yet'
     },
-    'account POST /reset': {
+    'account POST /password/reset': {
         requiresAuth: false,
         reason: 'password-reset request — the caller has no session to prove'
     },
-    'account POST /reset-confirm': {
+    'account POST /password/reset/confirm': {
         requiresAuth: false,
         reason: 'the emailed reset token is the credential'
     },
@@ -136,6 +136,10 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: false,
         reason: 'the second step of a 2FA login — the challenge token is the credential, not a session'
     },
+    'account POST /login/restore': {
+        requiresAuth: false,
+        reason: 'the last step of a sign-in during the deletion grace — the claim check is the credential, not a session'
+    },
     'account POST /login/2fa/send': {
         requiresAuth: false,
         reason: 'delivering a login code — same footing as the step it belongs to, the challenge token is the credential'
@@ -152,11 +156,11 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: "arming the caller's own pending factor"
     },
-    'account DELETE /2fa/methods/:method': {
+    'account POST /2fa/methods/:method/remove': {
         requiresAuth: true,
         reason: "removing one of the caller's own second factors"
     },
-    'account DELETE /2fa': {
+    'account POST /2fa/disable': {
         requiresAuth: true,
         reason: "disabling every one of the caller's own second factors"
     },
@@ -168,7 +172,7 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: false,
         reason: 'minting an access token — the refresh-token cookie is the credential, not a login'
     },
-    'account POST /session/touch': {
+    'account POST /sessions/current/touch': {
         requiresAuth: true,
         reason: "counts the caller's own session as active; nobody else's is reachable"
     },
@@ -176,7 +180,7 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: false,
         reason: 'revoking THIS session — the refresh-token cookie is the credential, not a login'
     },
-    'account POST /logout-all': {
+    'account DELETE /sessions': {
         requiresAuth: true,
         reason: "revoking all of the caller's own sessions"
     },
@@ -212,31 +216,31 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: "removing an entry from the caller's own address book"
     },
-    'account POST /verify-request': {
+    'account POST /email-verification/resend': {
         requiresAuth: true,
         reason: "re-sending the caller's own verification email"
     },
-    'account POST /verify-confirm': {
+    'account POST /email-verification/confirm': {
         requiresAuth: false,
         reason: 'the emailed verification token is the credential'
     },
-    'account POST /email-change-confirm': {
+    'account POST /email-change/confirm': {
         requiresAuth: false,
         reason: 'the emailed email-change token is the credential'
     },
-    'account POST /email-change-undo': {
+    'account POST /email-change/undo': {
         requiresAuth: false,
         reason: 'the undo token mailed to the old address is the credential'
     },
-    'wishlist PUT /:productId': {
+    'wishlist POST /items': {
         requiresAuth: true,
         reason: "saving a product to the caller's own wishlist"
     },
-    'wishlist DELETE /:productId': {
+    'wishlist DELETE /items/:productId': {
         requiresAuth: true,
         reason: "removing a product from the caller's own wishlist"
     },
-    'stock-alerts POST /:productId': {
+    'stock-alerts POST /': {
         requiresAuth: true,
         reason: "asking to be told when a product is back, on the caller's own account"
     },

@@ -10,6 +10,7 @@ import { Router } from 'express';
 import { getAuth, isAuth } from '@kernel/middlewares/authorizations';
 import { noStore } from '@infrastructure/http/middlewares/cache';
 import { getAddresses } from './controllers/get-addresses';
+import { getAddress } from './controllers/get-address';
 import { postAddress } from './controllers/post-address';
 import { replaceAddress, updateAddress } from './controllers/update-address';
 import { deleteAddress } from './controllers/delete-address';
@@ -30,6 +31,9 @@ router.get('/addresses', isAuth, getAddresses);
 
 // POST /account/addresses — add an entry (requires auth)
 router.post('/addresses', isAuth, postAddress);
+
+// GET /account/addresses/:addressId — one entry of the caller's own book (requires auth)
+router.get('/addresses/:addressId', isAuth, getAddress);
 
 // PUT /account/addresses/:addressId — replace the entry (requires auth)
 router.put('/addresses/:addressId', isAuth, replaceAddress);

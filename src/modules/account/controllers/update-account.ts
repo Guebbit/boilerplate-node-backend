@@ -38,5 +38,5 @@ export const { replace: replaceAccount, update: updateAccount } = createUpdateCo
         ),
     // The role comes straight off the already-resolved auth context, same as `get-account.ts` —
     // a profile edit never changes it, so no second lookup here.
-    present: (user, request) => userService.toUser(user, request.authContext!.roles.tenant)
+    present: (user, request) => userService.toAccount(user, request.authContext!.roles.tenant)
 });

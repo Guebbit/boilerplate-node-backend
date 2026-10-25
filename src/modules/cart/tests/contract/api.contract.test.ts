@@ -15,6 +15,8 @@ import { checkoutAs, shownTotal } from '@tests/checkout-as';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { giveAddress } from '@modules/addresses/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
+import { productService } from '@modules/products';
+import { testCallerContext } from '@tests/callers';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { MISSING_ID } from '@tests/ids';
@@ -32,13 +34,13 @@ const authenticateWithCart = async (quantity = 2) => {
     await giveAddress(user.id);
     const product = await createProduct();
     const response = await api()
-        .post('/cart')
+        .post('/cart/items')
         .set('Authorization', bearer)
         .send({ productId: String(product._id), quantity });
 
-    if (response.status !== 201)
+    if (response.status !== 200)
         throw new Error(
-            `cart setup failed: POST /cart returned ${response.status} — ${JSON.stringify(response.body)}`
+            `cart setup failed: POST /cart/items returned ${response.status} — ${JSON.stringify(response.body)}`
         );
 
     return { bearer, product };
@@ -65,7 +67,7 @@ describe('GET /cart', () => {
         const { bearer } = await authenticateAs('user');
         const scarce = await createProduct({ onHand: 1 });
         await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(scarce._id), quantity: 3 });
 
@@ -73,32 +75,71 @@ describe('GET /cart', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.items).toEqual([
-            { productId: String(scarce._id), quantity: 3, availability: 'insufficient_stock' }
+            {
+                productId: String(scarce._id),
+                quantity: 3,
+                availability: 'insufficient_stock',
+                canIncrease: true
+            }
         ]);
+        expect(response.body.data.checkoutable).toBe(false);
+    });
+
+    it('says a line at the per-line ceiling cannot grow, and a buyable cart is checkoutable', async () => {
+        const { bearer } = await authenticateAs('user');
+        const product = await createProduct();
+        // The default per-line ceiling is 10.
+        await api()
+            .post('/cart/items')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id), quantity: 10 });
+
+        const response = await api().get('/cart').set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items[0]).toMatchObject({ quantity: 10, canIncrease: false });
+        expect(response.body.data.checkoutable).toBe(true);
+    });
+
+    it('echoes the total in the minor units checkout compares against', async () => {
+        const { bearer } = await authenticateAs('user');
+        const product = await createProduct({ price: 25.5 });
+        await api()
+            .post('/cart/items')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id), quantity: 2 });
+
+        const response = await api().get('/cart').set('Authorization', bearer);
+
+        expect(response.body.data.summary.expectedTotal).toEqual({
+            amount: 5100,
+            currency: response.body.data.summary.currency
+        });
     });
 });
 
-describe('POST /cart', () => {
+describe('POST /cart/items', () => {
     it('matches the contract when adding an item', async () => {
         const { bearer } = await authenticateAs('user');
         const product = await createProduct();
         const response = await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 3 });
 
-        expect(response.status).toBe(201);
-        expect(response.headers.location).toBe(`/cart/${String(product._id)}`);
+        // A line is written through its parent: 200 + the whole cart, never 201 or a Location.
+        expect(response.status).toBe(200);
+        expect(response.headers.location).toBeUndefined();
         expect(response.body.data.summary.totalQuantity).toBe(3);
     });
 
-    // "Add to cart" GROWS a line already there (Shopify, commercetools) — the same button
-    // pressed twice makes two — and answers 200, because nothing was created.
+    // "Add to cart" GROWS a line already there (Shopify, commercetools): the same button
+    // pressed twice makes two.
     it('grows an existing line, answering 200 with no Location', async () => {
         const { bearer, product } = await authenticateWithCart(2);
 
         const response = await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 3 });
 
@@ -112,7 +153,7 @@ describe('POST /cart', () => {
             const { bearer, product } = await authenticateWithCart(2);
 
             const response = await api()
-                .post('/cart')
+                .post('/cart/items')
                 .set('Authorization', bearer)
                 .send({ productId: String(product._id), quantity: 1 });
 
@@ -126,7 +167,7 @@ describe('POST /cart', () => {
             const product = await createProduct();
 
             const response = await api()
-                .post('/cart')
+                .post('/cart/items')
                 .set('Authorization', bearer)
                 .send({ productId: String(product._id), quantity: 11 });
 
@@ -137,7 +178,7 @@ describe('POST /cart', () => {
     it('matches the error contract for a product that does not exist', async () => {
         const { bearer } = await authenticateAs('user');
         const response = await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: MISSING_ID, quantity: 1 });
 
@@ -150,7 +191,7 @@ describe('POST /cart', () => {
         const { bearer } = await authenticateAs('user');
         const hidden = await createProduct({ active: false });
         const response = await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(hidden._id), quantity: 1 });
 
@@ -162,7 +203,7 @@ describe('POST /cart', () => {
  * Everyone signed in shops: `update:Cart` comes with the audience, so a staff member fills a
  * basket like any customer, verified or not.
  */
-describe('POST /cart — who may shop', () => {
+describe('POST /cart/items — who may shop', () => {
     it.each([
         'customer',
         'unverified',
@@ -177,11 +218,11 @@ describe('POST /cart — who may shop', () => {
         const product = await createProduct();
 
         const response = await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 1 });
 
-        expect(response.status).toBe(201);
+        expect(response.status).toBe(200);
     });
 });
 
@@ -251,7 +292,7 @@ describe('POST /cart/merge', () => {
         const held = await createProduct();
         const scarce = await createProduct({ onHand: 3 });
         await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(held._id), quantity: 1 });
 
@@ -379,61 +420,55 @@ describe('POST /cart/merge', () => {
     });
 });
 
-describe('DELETE /cart', () => {
-    it('matches the contract when removing one product through the body, leaving the rest', async () => {
-        // Two lines, so "removed that one" and "cleared everything" produce different lengths —
-        // `authenticateWithCart` alone seeds one line, which can't tell the two apart.
-        const { bearer, product } = await authenticateWithCart();
-        const second = await createProduct();
-        await api()
+describe('the cart URLs a line no longer has', () => {
+    // A line is written through `/cart/items`; the root and the product id are not doors.
+    it('answers POST and DELETE on /cart 405, naming the read', async () => {
+        const { bearer } = await authenticateWithCart();
+
+        const added = await api()
             .post('/cart')
             .set('Authorization', bearer)
-            .send({ productId: String(second._id), quantity: 1 });
+            .send({ productId: MISSING_ID, quantity: 1 });
+        const removed = await api().delete('/cart').set('Authorization', bearer);
 
-        const response = await api()
-            .delete('/cart')
-            .set('Authorization', bearer)
-            .send({ productId: String(product._id) });
-
-        expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(1);
+        expect([added.status, removed.status]).toEqual([405, 405]);
+        expect([added.headers.allow, removed.headers.allow]).toEqual(['GET, HEAD', 'GET, HEAD']);
     });
 
-    it('matches the error contract for a missing body', async () => {
-        // `x-alias-of: removeCartItem` — the required `productId` is what makes this route a
-        // single-item remove rather than the clear-all `DELETE /cart/all` now is.
-        const { bearer } = await authenticateWithCart();
-        const response = await api().delete('/cart').set('Authorization', bearer);
+    it('answers a GET of the line collection 405, since the cart is the read', async () => {
+        const { bearer } = await authenticateAs('user');
 
-        expect(response.status).toBe(422);
-    });
+        const response = await api().get('/cart/items').set('Authorization', bearer);
 
-    it('matches the error contract for a product that is not in the cart', async () => {
-        const { bearer } = await authenticateWithCart();
-        const response = await api()
-            .delete('/cart')
-            .set('Authorization', bearer)
-            .send({ productId: MISSING_ID });
-
-        expect(response.status).toBe(404);
+        expect(response.status).toBe(405);
+        expect(response.headers.allow).toBe('DELETE, POST');
     });
 });
 
-describe('DELETE /cart/all', () => {
+describe('DELETE /cart/items', () => {
     it('matches the contract when clearing the whole cart', async () => {
         const { bearer } = await authenticateWithCart();
-        const response = await api().delete('/cart/all').set('Authorization', bearer);
+        const response = await api().delete('/cart/items').set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items).toHaveLength(0);
+    });
+
+    it('answers 200 for a cart that is already empty', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api().delete('/cart/items').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
         expect(response.body.data.items).toHaveLength(0);
     });
 });
 
-describe('PUT /cart/{productId}', () => {
+describe('PATCH /cart/items/{productId}', () => {
     it('matches the contract when setting a quantity', async () => {
         const { bearer, product } = await authenticateWithCart();
         const response = await api()
-            .put(`/cart/${String(product._id)}`)
+            .patch(`/cart/items/${String(product._id)}`)
             .set('Authorization', bearer)
             .send({ quantity: 5 });
 
@@ -441,27 +476,54 @@ describe('PUT /cart/{productId}', () => {
         expect(response.body.data.summary.totalQuantity).toBe(5);
     });
 
-    // RFC 9110 §9.3.4: a PUT that creates the resource answers 201. The cart line's URI is the
-    // caller's own by construction, so this is the one PUT allowed to create.
-    it('creates a missing line with 201 and its Location', async () => {
+    // A change never creates (a PUT that creates MUST answer 201, RFC 9110 §9.3.4, and a line has
+    // no URL to answer it with): a line the cart does not hold is a 404 and the cart is unchanged.
+    it('404s a line the cart does not hold, and creates nothing', async () => {
         const { bearer } = await authenticateAs('user');
         const product = await createProduct();
 
         const response = await api()
-            .put(`/cart/${String(product._id)}`)
+            .patch(`/cart/items/${String(product._id)}`)
             .set('Authorization', bearer)
             .send({ quantity: 4 });
+        const cart = await api().get('/cart').set('Authorization', bearer);
 
-        expect(response.status).toBe(201);
-        expect(response.headers.location).toBe(`/cart/${String(product._id)}`);
-        expect(response.body.data.summary.totalQuantity).toBe(4);
+        expect(response.status).toBe(404);
+        expect(response.body.errors[0].message).toBe(t('cart.item-not-found'));
+        expect(cart.body.data.items).toHaveLength(0);
     });
 
-    it('sets rather than adds: repeating the same PUT leaves the same cart', async () => {
+    it('also takes the body as application/merge-patch+json', async () => {
+        const { bearer, product } = await authenticateWithCart();
+
+        const response = await api()
+            .patch(`/cart/items/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .set('Content-Type', 'application/merge-patch+json')
+            .send(JSON.stringify({ quantity: 6 }));
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.summary.totalQuantity).toBe(6);
+    });
+
+    it('404s a held line whose product the storefront no longer shows', async () => {
+        const { bearer, product } = await authenticateWithCart();
+        await productService.updateById(String(product._id), { active: false }, testCallerContext);
+
+        const response = await api()
+            .patch(`/cart/items/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ quantity: 3 });
+
+        expect(response.status).toBe(404);
+        expect(response.body.errors[0].message).toBe(t('products.not-found'));
+    });
+
+    it('sets rather than adds: repeating the same PATCH leaves the same cart', async () => {
         const { bearer, product } = await authenticateWithCart(2);
         const send = () =>
             api()
-                .put(`/cart/${String(product._id)}`)
+                .patch(`/cart/items/${String(product._id)}`)
                 .set('Authorization', bearer)
                 .send({ quantity: 5 });
 
@@ -475,7 +537,7 @@ describe('PUT /cart/{productId}', () => {
     it('matches the error contract for an invalid body', async () => {
         const { bearer, product } = await authenticateWithCart();
         const response = await api()
-            .put(`/cart/${String(product._id)}`)
+            .patch(`/cart/items/${String(product._id)}`)
             .set('Authorization', bearer)
             .send({ quantity: 0 });
 
@@ -483,11 +545,11 @@ describe('PUT /cart/{productId}', () => {
     });
 
     it('matches the error contract for a product that does not exist', async () => {
-        // The declared 404 on this operation is only reachable because the gate lives in
-        // `setItemById`: nothing in the route itself asks the catalogue anything.
+        // The catalogue gate lives in the service: nothing in the route itself asks the
+        // catalogue anything.
         const { bearer } = await authenticateAs('user');
         const response = await api()
-            .put(`/cart/${MISSING_ID}`)
+            .patch(`/cart/items/${MISSING_ID}`)
             .set('Authorization', bearer)
             .send({ quantity: 1 });
 
@@ -498,7 +560,7 @@ describe('PUT /cart/{productId}', () => {
         const { bearer } = await authenticateAs('user');
         const hidden = await createProduct({ active: false });
         const response = await api()
-            .put(`/cart/${String(hidden._id)}`)
+            .patch(`/cart/items/${String(hidden._id)}`)
             .set('Authorization', bearer)
             .send({ quantity: 1 });
 
@@ -551,7 +613,7 @@ describe('PUT /cart/shipping-method', () => {
         const { bearer } = await authenticateAs('user');
         const digital = await createProduct({ requiresShipping: false });
         await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(digital._id), quantity: 1 });
 
@@ -569,7 +631,7 @@ describe('PUT /cart/shipping-method', () => {
         // express's ceiling is 5000g.
         const heavy = await createProduct({ weight: 6000, requiresShipping: true });
         await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(heavy._id), quantity: 1 });
 
@@ -593,11 +655,11 @@ describe('PUT /cart/shipping-method', () => {
     });
 });
 
-describe('DELETE /cart/{productId}', () => {
+describe('DELETE /cart/items/{productId}', () => {
     it('matches the contract when removing an item', async () => {
         const { bearer, product } = await authenticateWithCart();
         const response = await api()
-            .delete(`/cart/${String(product._id)}`)
+            .delete(`/cart/items/${String(product._id)}`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
@@ -607,7 +669,7 @@ describe('DELETE /cart/{productId}', () => {
     it('matches the error contract for a malformed product id', async () => {
         const { bearer } = await authenticateAs('user');
 
-        const response = await api().delete('/cart/not-an-id').set('Authorization', bearer);
+        const response = await api().delete('/cart/items/not-an-id').set('Authorization', bearer);
 
         // A path id: the same 404 copy a product that is not in the cart gets.
         expect(response.status).toBe(404);
@@ -838,7 +900,7 @@ describe('POST /cart/checkout', () => {
         const { bearer } = await authenticateAs('user');
         const digital = await createProduct({ requiresShipping: false });
         await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(digital._id), quantity: 1 });
         const response = await checkoutAs(bearer);
@@ -875,7 +937,7 @@ describe('POST /cart/checkout', () => {
         const { bearer } = await authenticateAs('user');
         const scarce = await createProduct({ onHand: 1 });
         await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(scarce._id), quantity: 2 });
 
@@ -958,7 +1020,7 @@ describe('POST /cart/checkout', () => {
                     expect(response.body.data.payBy).toEqual(expect.any(String));
                     expect(response.body.data).not.toHaveProperty('transferInstructions');
                     const payment = await api()
-                        .get(`/payments/order/${String(response.body.data.id)}`)
+                        .get(`/payments/orders/${String(response.body.data.id)}`)
                         .set('Authorization', bearer);
                     expect(payment.status).toBe(200);
                     expect(payment.body.data.nextAction).toEqual({
@@ -989,21 +1051,30 @@ describe('POST /cart/reorder/{orderId}', () => {
 
         expect(response.status).toBe(200);
         // Ids, not counts: the cart must hold exactly the order's products.
-        const items: { productId: string; quantity: number }[] = response.body.data.items;
+        const items: { productId: string; quantity: number }[] = response.body.data.cart.items;
         expect(items.map(({ productId }) => productId).toSorted()).toEqual(
             [String(keyboard._id), String(mouse._id)].toSorted()
         );
-        expect(response.body.data.summary.totalQuantity).toBe(3);
+        expect(response.body.data.cart.summary.totalQuantity).toBe(3);
+        expect(
+            response.body.data.lines.map(({ requested, resulting }: Record<string, number>) => [
+                requested,
+                resulting
+            ])
+        ).toEqual([
+            [2, 2],
+            [1, 1]
+        ]);
     });
 
     it('adds on top of what the cart already holds', async () => {
         const { bearer, user } = await authenticateAs('user');
         const product = await createProduct();
         const seeded = await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 2 });
-        expect(seeded.status).toBe(201);
+        expect(seeded.status).toBe(200);
 
         // The same product arrives again via a reorder of an old order holding 3 of it.
         const order = await createOrder(user, [toOrderItem(product, 3)]);
@@ -1013,7 +1084,53 @@ describe('POST /cart/reorder/{orderId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.summary.totalQuantity).toBe(5);
+        expect(response.body.data.cart.summary.totalQuantity).toBe(5);
+        expect(response.body.data.lines).toMatchObject([
+            { requested: 3, resulting: 5, reason: 'summed' }
+        ]);
+    });
+
+    it('reports a line clamped at the per-line cap as capped, not as added', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const product = await createProduct();
+        // The default per-line cap is 10: the cart holds 8, the order asks for 5 more.
+        const seeded = await api()
+            .post('/cart/items')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id), quantity: 8 });
+        expect(seeded.status).toBe(200);
+        const order = await createOrder(user, [toOrderItem(product, 5)]);
+
+        const response = await api()
+            .post(`/cart/reorder/${String(order._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.lines).toMatchObject([
+            { productId: String(product._id), requested: 5, resulting: 10, reason: 'capped' }
+        ]);
+    });
+
+    it('reports a line already at the cap as capped with nothing added', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const product = await createProduct();
+        const kept = await createProduct({ title: 'Kept' });
+        const seeded = await api()
+            .post('/cart/items')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id), quantity: 10 });
+        expect(seeded.status).toBe(200);
+        const order = await createOrder(user, [toOrderItem(product, 1), toOrderItem(kept, 1)]);
+
+        const response = await api()
+            .post(`/cart/reorder/${String(order._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.lines).toMatchObject([
+            { productId: String(product._id), requested: 1, resulting: 10, reason: 'capped' },
+            { productId: String(kept._id), requested: 1, resulting: 1 }
+        ]);
     });
 
     it('skips products that have left the public catalogue and lands the rest', async () => {
@@ -1027,8 +1144,12 @@ describe('POST /cart/reorder/{orderId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        const items: { productId: string }[] = response.body.data.items;
+        const items: { productId: string }[] = response.body.data.cart.items;
         expect(items.map(({ productId }) => productId)).toEqual([String(alive._id)]);
+        expect(response.body.data.lines).toMatchObject([
+            { productId: String(alive._id), resulting: 1 },
+            { productId: String(retired._id), requested: 4, resulting: 0, reason: 'removed' }
+        ]);
     });
 
     it('answers 409 when nothing on the order is still available', async () => {

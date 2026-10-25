@@ -33,7 +33,7 @@ paths:
                   description: Only products at or under the deployment's low-availability threshold.
             responses:
                 '200':
-                    description: A page of levels, most scarce first
+                    description: A page of levels, most scarce first (a queue, so no `sort`)
                     content:
                         application/json:
                             schema:
@@ -60,7 +60,7 @@ paths:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
             responses:
                 '200':
-                    description: A page of preorder allowances, the most outstanding first
+                    description: A page of preorder allowances, the most outstanding first (a queue, so no `sort`)
                     content:
                         application/json:
                             schema:
@@ -68,6 +68,33 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /inventory/levels/{productId}:
+        get:
+            tags: [Inventory]
+            summary: Get one product's stock level
+            description: One row of the stock board by product, with its counters and availability — the record `receive`, `adjust` and `backorder-limit` act on. Same audience as the board (`read:StockLevel`). An unknown product, one with no level row and a malformed id are the same 404.
+            operationId: getInventoryLevel
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - name: productId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+            responses:
+                '200':
+                    description: The level
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/InventoryLevelEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /inventory/levels/{productId}/backorder-limit:
@@ -133,7 +160,7 @@ paths:
                   description: Narrow to one kind of transition
             responses:
                 '200':
-                    description: The latest movements
+                    description: The latest movements, newest first (a log, so no `sort`)
                     content:
                         application/json:
                             schema:
@@ -143,7 +170,7 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /inventory/receipts:
+    /inventory/levels/{productId}/receive:
         post:
             tags: [Inventory]
             summary: Receive stock
@@ -153,6 +180,12 @@ paths:
                 - bearerAuth: []
                 - apiKeyAuth: []
             parameters:
+                - name: productId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: The product whose counter moves.
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
                 required: true
@@ -175,7 +208,7 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /inventory/adjustments:
+    /inventory/levels/{productId}/adjust:
         post:
             tags: [Inventory]
             summary: Adjust stock
@@ -185,6 +218,12 @@ paths:
                 - bearerAuth: []
                 - apiKeyAuth: []
             parameters:
+                - name: productId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: The product whose counter moves.
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
                 required: true
@@ -395,10 +434,8 @@ components:
         ReceiptRequest:
             type: object
             additionalProperties: false
-            required: [productId, quantity]
+            required: [quantity]
             properties:
-                productId:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 quantity:
                     type: integer
                     minimum: 1
@@ -412,10 +449,8 @@ components:
         AdjustmentRequest:
             type: object
             additionalProperties: false
-            required: [productId, delta]
+            required: [delta]
             properties:
-                productId:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 # Signed and non-zero. There is no `quantity` + `direction` pair here on
                 # purpose: two fields that must agree are two fields that can disagree, and the
                 # ledger stores a signed delta anyway.

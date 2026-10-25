@@ -12,6 +12,7 @@ import { Router } from 'express';
 import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 import { getInventoryLevels } from './controllers/get-inventory-levels';
+import { getInventoryLevel } from './controllers/get-inventory-level';
 import { getStockMovements } from './controllers/get-stock-movements';
 import { getPreorderLevels } from './controllers/get-preorder-levels';
 import { putBackorderLimit } from './controllers/put-backorder-limit';
@@ -35,6 +36,9 @@ router.use(getAuth, isAuthOrCredential);
 // GET /inventory/levels — the stock board, scarcest first
 router.get('/levels', requirePermission('read', 'StockLevel'), getInventoryLevels);
 
+// GET /inventory/levels/:productId — one product's counters, the record the writes below act on
+router.get('/levels/:productId', requirePermission('read', 'StockLevel'), getInventoryLevel);
+
 // GET /inventory/preorders — the preorder board: allowance, outstanding, paid vs unpaid
 router.get('/preorders', requirePermission('read', 'StockLevel'), getPreorderLevels);
 
@@ -50,15 +54,20 @@ router.put(
 // GET /inventory/movements — the ledger, newest first
 router.get('/movements', requirePermission('read', 'StockLevel'), getStockMovements);
 
-// POST /inventory/receipts — a supplier delivery lands. `create:StockMovement`: the key stock never
+// POST /inventory/levels/:productId/receive — a supplier delivery lands. `create:StockMovement`: the key stock never
 // moves without — see `shared/authorization-keys.yaml`. `idempotencyKey`: a retried receipt must
 // replay, not count the delivery twice.
-router.post('/receipts', requirePermission('create', 'StockMovement'), idempotencyKey, postReceipt);
+router.post(
+    '/levels/:productId/receive',
+    requirePermission('create', 'StockMovement'),
+    idempotencyKey,
+    postReceipt
+);
 
-// POST /inventory/adjustments — a stocktake correction, signed. Same replay guard as receipts:
+// POST /inventory/levels/:productId/adjust — a stocktake correction, signed. Same replay guard as receipts:
 // a retried delta applied twice is a wrong stock count.
 router.post(
-    '/adjustments',
+    '/levels/:productId/adjust',
     requirePermission('create', 'StockMovement'),
     idempotencyKey,
     postAdjustment

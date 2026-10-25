@@ -26,7 +26,7 @@ const makeRequest = (token?: string) =>
         method: 'POST',
         path: '/contact',
         ip: '203.0.113.10',
-        header: (name: string) => (name === 'x-antibot-challenge-token' ? token : undefined)
+        header: (name: string) => (name === 'antibot-challenge-token' ? token : undefined)
     });
 
 describe('humanChallengeGate', () => {

@@ -3,7 +3,7 @@
  * The `account` end of the shared kernel, read side: named lookups over `userRepository`.
  */
 
-import { userRepository, TRUSTED_AUTHENTICATABLE_FILTER } from '../repository';
+import { userRepository } from '../repository';
 
 /*
  * `account` end of the one domain-primitives relationship in this repo (`docs/theory/strategic-ddd.md`
@@ -24,24 +24,22 @@ export const findByIdWithCredentials = (id: string) => userRepository.findByIdWi
 
 /**
  * The credentialed account attempting an email/password login, `select: false` fields (the
- * password hash) included. Deactivated or soft-deleted accounts are already excluded by
- * `findAuthenticatableByEmail`'s own query, same clause `findAuthenticatableById` uses.
+ * password hash) included. A deactivated or soft-deleted account is excluded by the query itself,
+ * except an owner-scheduled deletion still inside its grace: that one is returned so the sign-in
+ * can offer the restore, and the caller must tell the two apart (`isAuthenticatable`, `isRestorable`).
  */
-export const findForLogin = (email: string) => userRepository.findAuthenticatableByEmail(email);
+export const findForLogin = (email: string) =>
+    userRepository.findForSignInByEmail(email, new Date());
 
 /**
  * The credentialed account already linked to this federated identity, if any — `select: false`
  * fields included because a caller may need to build a 2FA login challenge off
- * `user.twoFactorMethods` right after. Filtered by {@link TRUSTED_AUTHENTICATABLE_FILTER}, the same
- * clause `findForLogin` uses: a deactivated or soft-deleted account must not walk straight
- * into a session through a provider it linked before either happened.
+ * `user.twoFactorMethods` right after. Filtered like {@link findForLogin}: a deactivated or
+ * soft-deleted account must not walk straight into a session through a provider it linked before
+ * either happened, while an owner-scheduled deletion inside its grace is returned for the restore.
  */
 export const findByOAuthIdentity = (provider: string, providerId: string) =>
-    userRepository.findOneWithCredentials({
-        'oauthAccounts.provider': provider,
-        'oauthAccounts.providerId': providerId,
-        ...TRUSTED_AUTHENTICATABLE_FILTER
-    });
+    userRepository.findForSignInByOAuthIdentity(provider, providerId, new Date());
 
 /** The hydrated document with the pending-email-change field loaded. */
 export const findByIdWithPendingEmail = (id: string) => userRepository.findByIdWithPendingEmail(id);

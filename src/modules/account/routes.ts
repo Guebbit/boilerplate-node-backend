@@ -3,7 +3,7 @@
  * Express router for the account module: auth (login, signup, refresh, logout), password reset,
  * email verification, and sessions. The address book shares this router's `/account` prefix from
  * its own module — see `@modules/addresses/routes`. Destructive and session-eviction routes
- * (`DELETE /`, `POST /logout-all`, `DELETE /sessions/:sessionId`) and an email change on `PUT /`
+ * (`DELETE /`, `DELETE /sessions`, `DELETE /sessions/:sessionId`) and an email change on `PUT /`
  * additionally require a fresh session (`requireFreshAuth`/`requireFreshAuthWhen`).
  * See `./module.ts` for the mount point and `docs/modules/account.md` for the story.
  */
@@ -51,8 +51,8 @@ import { get2fa } from './controllers/get-2fa';
 import { post2faSetup } from './controllers/post-2fa-setup';
 import { post2faConfirm } from './controllers/post-2fa-confirm';
 import { post2faMethodSend } from './controllers/post-2fa-method-send';
-import { delete2faMethod } from './controllers/delete-2fa-method';
-import { delete2fa } from './controllers/delete-2fa';
+import { post2faMethodRemove } from './controllers/post-2fa-method-remove';
+import { post2faDisable } from './controllers/post-2fa-disable';
 import { post2faBackupCodes } from './controllers/post-2fa-backup-codes';
 import { getRefreshToken } from './controllers/get-refresh-token';
 import { postLogout } from './controllers/post-logout';
@@ -65,11 +65,13 @@ import { postEmailChangeConfirm } from './controllers/post-email-change-confirm'
 import { postEmailChangeUndo } from './controllers/post-email-change-undo';
 import { postAccountExport } from './controllers/post-account-export';
 import { getAccountExport } from './controllers/get-account-export';
-import { deleteAccountRequest } from './controllers/delete-account-request';
-import { deleteAccountConfirm } from './controllers/delete-account-confirm';
+import { deleteAccount } from './controllers/delete-account';
+import { postAccountRestore } from './controllers/post-account-restore';
+import { postLoginRestore } from './controllers/post-login-restore';
 import { getOAuthProviders } from './controllers/get-oauth-providers';
 import { getSessionConfig } from './controllers/get-session-config';
 import { postSessionTouch } from './controllers/post-session-touch';
+import { getSession } from './controllers/get-session';
 import { getOAuthLinks } from './controllers/get-oauth-links';
 import { deleteOAuthLink } from './controllers/delete-oauth-link';
 import { postOAuthLinkStart } from './controllers/post-oauth-link-start';
@@ -168,29 +170,29 @@ router.patch(
     updateAccount
 );
 
-// DELETE /account/pending-email — cancel a pending email change (requires auth). No fresh-auth
+// DELETE /account/email-change — cancel a pending email change (requires auth). No fresh-auth
 // gate: it only discards a change, the same trust level as reading the profile that shows it.
-router.delete('/pending-email', isAuth, cancelPendingEmail);
+router.delete('/email-change', isAuth, cancelPendingEmail);
 
-// POST /account/pending-email/resend — mail the pending address a fresh link (requires auth). No
+// POST /account/email-change/resend — mail the pending address a fresh link (requires auth). No
 // fresh-auth gate: the address was already asked for under one, and nothing about the account
-// changes. `credentialLimiters` and the service's cooldown are `/verify-request`'s, for the same
+// changes. `credentialLimiters` and the service's cooldown are `/email-verification/resend`'s, for the same
 // reason: each success publishes mail. `isAuth` runs first so the identity budget is per account.
-router.post('/pending-email/resend', isAuth, sessionCredentialLimiters, postPendingEmailResend);
+router.post('/email-change/resend', isAuth, sessionCredentialLimiters, postPendingEmailResend);
 
-// DELETE /account — request account deletion (requires auth). Critical: destruction. An account
-// with a second factor must also have proved a code in that fresh session.
+// DELETE /account — lock the account and schedule its erasure (requires auth). Critical:
+// destruction. An account with a second factor must also have proved a code in that fresh session.
 router.delete(
     '/',
     isAuth,
     requireFreshAuthWhen(callerHasTwoFactor, 'critical', OTP_PROOF),
     requireFreshAuth('critical'),
-    deleteAccountRequest
+    deleteAccount
 );
 
-// DELETE /account/delete-confirm — confirm account deletion with token. Public, the token is the
-// credential: `credentialLimiters` bound the guesses like `/verify-confirm`.
-router.delete('/delete-confirm', credentialLimiters, deleteAccountConfirm);
+// POST /account/restore — cancel the scheduled deletion with the mailed token. Public, the token is
+// the credential: `credentialLimiters` bound the guesses like `/email-verification/confirm`.
+router.post('/restore', credentialLimiters, postAccountRestore);
 
 // POST /account/login — authenticate and get tokens. `loginChallengeGate` (rung 3, off by
 // default) only engages once `credentialLimiters`' identity budget is mostly spent — never on an
@@ -211,23 +213,23 @@ router.post(
     postSignup
 );
 
-// POST /account/reset — request password reset email. `resetRequestLimiters`, same reasoning as
+// POST /account/password/reset — request password reset email. `resetRequestLimiters`, same reasoning as
 // signup: this route always answers 200, so only a budget spent by success bounds anything.
 router.post(
-    '/reset',
+    '/password/reset',
     resetRequestLimiters,
     mailRecipientLimiter,
     humanChallengeGate,
     postResetRequest
 );
 
-// POST /account/reset-confirm — complete password reset with token
-router.post('/reset-confirm', credentialLimiters, postResetConfirm);
+// POST /account/password/reset/confirm — complete password reset with token
+router.post('/password/reset/confirm', credentialLimiters, postResetConfirm);
 
 // POST /account/password — change password by proving the current one (requires auth). An account
 // with a second factor must also have a fresh session that proved a code; one without is asked
 // nothing new.
-// `isAuth` runs BEFORE `sessionCredentialLimiters` here, on /reauth and on /verify-request: the
+// `isAuth` runs BEFORE `sessionCredentialLimiters` here, on /reauth and on /email-verification/resend: the
 // body names no account, so the per-account budget can only be per account if it reads the session's.
 router.post(
     '/password',
@@ -279,33 +281,36 @@ router.post('/refresh', requireAllowedOrigin, getRefreshToken);
 // same origin check as refresh.
 router.post('/logout', requireAllowedOrigin, postLogout);
 
-// POST /account/logout-all — revoke all refresh tokens (requires auth). Sensitive: evicting the
+// DELETE /account/sessions — revoke all refresh tokens (requires auth). Sensitive: evicting the
 // owner is an attack, not just an action, if a stolen-but-unfresh session could do it.
-router.post('/logout-all', isAuth, requireFreshAuth('sensitive'), postLogoutEverywhere);
+router.delete('/sessions', isAuth, requireFreshAuth('sensitive'), postLogoutEverywhere);
 
 // GET /account/sessions — list live refresh tokens as sessions (requires auth)
 router.get('/sessions', isAuth, getSessions);
 
-// POST /account/session/touch — counts the session as active and answers its idle clock.
-router.post('/session/touch', isAuth, postSessionTouch);
+// POST /account/sessions/current/touch — counts the session as active and answers its idle clock.
+router.post('/sessions/current/touch', isAuth, postSessionTouch);
+
+// GET /account/sessions/:sessionId — one of the caller's own live sessions (requires auth)
+router.get('/sessions/:sessionId', isAuth, getSession);
 
 // DELETE /account/sessions/:sessionId — revoke one session (requires auth). Sensitive, same
 // reasoning as logout-all.
 router.delete('/sessions/:sessionId', isAuth, requireFreshAuth('sensitive'), deleteSession);
 
-// POST /account/verify-request — re-send the verification email (requires auth)
-router.post('/verify-request', isAuth, sessionCredentialLimiters, postVerifyRequest);
+// POST /account/email-verification/resend — re-send the verification email (requires auth)
+router.post('/email-verification/resend', isAuth, sessionCredentialLimiters, postVerifyRequest);
 
-// POST /account/verify-confirm — spend the emailed token; public, the token is the credential
-router.post('/verify-confirm', credentialLimiters, postVerifyConfirm);
+// POST /account/email-verification/confirm — spend the emailed token; public, the token is the credential
+router.post('/email-verification/confirm', credentialLimiters, postVerifyConfirm);
 
-// POST /account/email-change-confirm — spend the emailed `email-change` token; public, same
+// POST /account/email-change/confirm — spend the emailed `email-change` token; public, same
 // reasoning as verify-confirm. A DIFFERENT token type — see `services/verification.ts`.
-router.post('/email-change-confirm', credentialLimiters, postEmailChangeConfirm);
+router.post('/email-change/confirm', credentialLimiters, postEmailChangeConfirm);
 
-// POST /account/email-change-undo — spend the `email-change-undo` token mailed to the OLD address;
+// POST /account/email-change/undo — spend the `email-change-undo` token mailed to the OLD address;
 // public, the token is the credential. Survives a password change on purpose: see `revocation.ts`.
-router.post('/email-change-undo', credentialLimiters, postEmailChangeUndo);
+router.post('/email-change/undo', credentialLimiters, postEmailChangeUndo);
 
 // POST /account/export — ask for the caller's full data export; 202, built in the background.
 // Sensitive tier: requireFreshAuth is the identity proof here, not a bespoke password check in the
@@ -326,14 +331,19 @@ router.post('/login/2fa/send', credentialLimiters, mfaSendLimiter, postLoginTwoF
 // ONE challenge; `credentialLimiters` is defense in depth on top of it.
 router.post('/login/2fa', credentialLimiters, mfaChallengeLimiter, postLoginTwoFactor);
 
+// POST /account/login/restore — redeem the deletion-grace claim check: cancels the deletion and
+// starts the session. Public, the claim check is the credential: `credentialLimiters` bound the
+// guesses like the other challenge answers.
+router.post('/login/restore', credentialLimiters, postLoginRestore);
+
 // GET /account/2fa — the caller's own factors. Plain `isAuth`: reading your own 2FA status
 // reveals nothing a step-up would protect, and the profile page needs it on every visit.
 router.get('/2fa', isAuth, get2fa);
 
-// DELETE /account/2fa — drop every factor. Critical fresh auth AND a valid code in the body:
+// POST /account/2fa/disable — drop every factor. Critical fresh auth AND a valid code in the body:
 // disabling from a stolen-but-fresh session is otherwise the cheapest way around the feature.
 // The wrong-code cap lives in the service (`reserveMfaAttempt`), on the account, not in a limiter.
-router.delete('/2fa', isAuth, requireFreshAuth('critical'), delete2fa);
+router.post('/2fa/disable', isAuth, requireFreshAuth('critical'), post2faDisable);
 
 // POST /account/2fa/methods/:method/setup — start (or restart) one method's enrollment. Critical
 // tier: a restart disarms a factor that was already working.
@@ -353,9 +363,13 @@ router.post(
 // POST /account/2fa/methods/:method/confirm — arm the pending method. Critical, same reasoning.
 router.post('/2fa/methods/:method/confirm', isAuth, requireFreshAuth('critical'), post2faConfirm);
 
-// DELETE /account/2fa/methods/:method — drop one factor, keep the rest. Registered LAST of the
-// three so the two longer paths above are matched first.
-router.delete('/2fa/methods/:method', isAuth, requireFreshAuth('critical'), delete2faMethod);
+// POST /account/2fa/methods/:method/remove — drop one factor, keep the rest.
+router.post(
+    '/2fa/methods/:method/remove',
+    isAuth,
+    requireFreshAuth('critical'),
+    post2faMethodRemove
+);
 
 // POST /account/2fa/backup-codes — mint a fresh set of ten, discarding the old ones. Critical
 // tier, same reasoning as disable: the old set stops being a stolen-but-fresh session's shortcut

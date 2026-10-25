@@ -24,7 +24,7 @@ const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail
 /** Waits for a mail queued from an outbox-event listener: the relay delivers it after the commit. */
 const mailQueued = () =>
     eventually(() => settleOutboxNudges().then(() => mockEnqueueEmail.mock.calls.length > 0));
-import { createUser } from '@modules/users/tests/factories';
+import { createUser, eraseAsScheduled } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { cartService } from '@modules/cart/services';
@@ -58,8 +58,11 @@ const EMPTY_CART = {
         itemsTotal: 0,
         shippingCost: 0,
         totalPrice: 0,
-        currency: 'EUR'
+        currency: 'EUR',
+        expectedTotal: { amount: 0, currency: 'EUR' }
     },
+    // Nothing to buy is not something checkout can run on.
+    checkoutable: false,
     // An empty basket needs no shipment — `shippingOptionsFor` reads `needsShipping` as false
     // for an empty line list, the same as an all-digital one.
     shipping: { required: false, selected: null, options: [] }
@@ -230,9 +233,19 @@ describe('getForBadge', () => {
 
         // `CartResponseItem` is additionalProperties:false — an extra key here is a contract violation.
         expect(items).toEqual([
-            { productId: String(product._id), quantity: 2, availability: 'in_stock' }
+            {
+                productId: String(product._id),
+                quantity: 2,
+                availability: 'in_stock',
+                canIncrease: true
+            }
         ]);
-        expect(Object.keys(items[0])).toEqual(['productId', 'quantity', 'availability']);
+        expect(Object.keys(items[0])).toEqual([
+            'productId',
+            'quantity',
+            'availability',
+            'canIncrease'
+        ]);
     });
 
     it('computes the summary across several lines', async () => {
@@ -252,7 +265,9 @@ describe('getForBadge', () => {
             itemsTotal: 80,
             shippingCost: 0,
             totalPrice: 80,
-            currency: 'EUR'
+            currency: 'EUR',
+            // 80.00 EUR in cents: what a checkout is sent back as `expectedTotal`.
+            expectedTotal: { amount: 8000, currency: 'EUR' }
         });
     });
 
@@ -370,15 +385,24 @@ describe('setItemById', () => {
 
         expect(result.success).toBe(true);
         expect(result.data).toEqual({
-            items: [{ productId: String(product._id), quantity: 2, availability: 'in_stock' }],
+            items: [
+                {
+                    productId: String(product._id),
+                    quantity: 2,
+                    availability: 'in_stock',
+                    canIncrease: true
+                }
+            ],
             summary: {
                 itemsCount: 1,
                 totalQuantity: 2,
                 itemsTotal: 50,
                 shippingCost: 0,
                 totalPrice: 50,
-                currency: 'EUR'
+                currency: 'EUR',
+                expectedTotal: { amount: 5000, currency: 'EUR' }
             },
+            checkoutable: true,
             // A weightless product fits every method's range, so all three are on offer, priced
             // against this basket's own `itemsTotal` (50 — under `standard`'s 100 free-above).
             shipping: {
@@ -458,6 +482,80 @@ describe('setItemById', () => {
 
             expect(result.success).toBe(true);
             await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(999);
+        }));
+});
+
+describe('updateItemQuantity', () => {
+    it('rewrites the quantity of a line the cart holds', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        await cartService.addItemById(user.id, String(product._id), 5);
+
+        const result = await cartService.updateItemQuantity(
+            user.id,
+            String(product._id),
+            2,
+            testCallerContext
+        );
+
+        expect(result.success).toBe(true);
+        await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(2);
+    });
+
+    it('creates nothing for a line the cart does not hold: 404, cart untouched', async () => {
+        const user = await createUser();
+        const held = await createProduct();
+        const other = await createProduct();
+        await cartService.addItemById(user.id, String(held._id), 1);
+
+        const result = await cartService.updateItemQuantity(
+            user.id,
+            String(other._id),
+            4,
+            testCallerContext
+        );
+
+        expect(asReject(result).status).toBe(404);
+        expect(asReject(result).errors[0]?.message).toBe(t('cart.item-not-found'));
+        await expect(storedQuantity(user.id, String(other._id))).resolves.toBeUndefined();
+        await expect(storedQuantity(user.id, String(held._id))).resolves.toBe(1);
+    });
+
+    it('creates no cart at all for a user who has none', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+
+        await cartService.updateItemQuantity(user.id, String(product._id), 1, testCallerContext);
+
+        expect(await cartRepository.findByUserId(user.id)).toBeNull();
+    });
+
+    it('leaves the version alone when the quantity is already the one asked for', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        await cartService.addItemById(user.id, String(product._id), 3);
+        const before = await cartRepository.findByUserId(user.id);
+
+        await cartService.updateItemQuantity(user.id, String(product._id), 3, testCallerContext);
+
+        const after = await cartRepository.findByUserId(user.id);
+        expect(after?.__v).toBe(before?.__v);
+    });
+
+    it('refuses a quantity past the per-line ceiling', () =>
+        withEnvironmentOverrides({ NODE_CART_LINE_MAX: '10' }, async () => {
+            const user = await createUser();
+            const product = await createProduct();
+            await cartService.addItemById(user.id, String(product._id), 1);
+
+            const result = await cartService.updateItemQuantity(
+                user.id,
+                String(product._id),
+                11,
+                testCallerContext
+            );
+
+            expect(asReject(result).status).toBe(422);
         }));
 });
 
@@ -1384,7 +1482,7 @@ describe('orderConfirm — paymentMethod', () => {
             });
 
             expect(asReject(result).status).toBe(409);
-            expect(asReject(result).errors[0].code).toBe('CART_OPEN_ORDER_LIMIT');
+            expect(asReject(result).errors[0].code).toBe('CART_OPEN_ORDER_LIMIT_REACHED');
             // Plain words for a shopper: no API route in the sentence.
             expect(asReject(result).errors[0].message).not.toMatch(/POST |\/orders\/|\/payments\//);
             // The buyer is told WHICH orders to pay or cancel.
@@ -1413,7 +1511,7 @@ describe('orderConfirm — paymentMethod', () => {
 
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
-        expect(asReject(result).errors[0].code).toBe('CART_OPEN_ORDER_LIMIT');
+        expect(asReject(result).errors[0].code).toBe('CART_OPEN_ORDER_LIMIT_REACHED');
     });
 
     describe('a purchase hold', () => {
@@ -1512,7 +1610,7 @@ describe('orderConfirm — paymentMethod', () => {
                     undefined
                 );
 
-                expect(asReject(result).errors[0].code).toBe('CART_OPEN_ORDER_LIMIT');
+                expect(asReject(result).errors[0].code).toBe('CART_OPEN_ORDER_LIMIT_REACHED');
             }
         );
     });
@@ -1644,7 +1742,7 @@ describe('deleteByUserId', () => {
         const product = await createProduct();
         await cartService.setItemById(user.id, String(product._id), 2);
 
-        await userService.eraseOwnAccount(userService.redeemedOwner(user));
+        await eraseAsScheduled(user);
 
         await expect(cartRepository.findByUserId(user.id)).resolves.toBeNull();
     });

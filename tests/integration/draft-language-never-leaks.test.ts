@@ -90,7 +90,7 @@ describe('a back-in-stock mail and its event', () => {
         const { bearer, user } = await authenticateAsRole('customer');
         // Not validated against the supported list: a profile may name any language.
         await userModel.updateOne({ _id: user._id }, { locale: 'fr' });
-        await api().post(`/stock-alerts/${id}`).set('Authorization', bearer);
+        await api().post('/stock-alerts').set('Authorization', bearer).send({ productId: id });
 
         await inventoryService.receive(id, 3, undefined, testCallerContext);
         await settleOutboxNudges();

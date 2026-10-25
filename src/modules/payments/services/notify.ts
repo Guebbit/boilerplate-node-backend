@@ -70,7 +70,8 @@ export const mailPaymentReceived = ({
  * Tell the buyer their money went back, when it went back outside a return. A return's refund is
  * announced by `returns`' own closing notice, so a `return` refund carrying a `returnId` is
  * skipped; a cancellation's refund carries one too (a remainder cancel) but has no closing
- * notice, so it is mailed here. A refund that moved no money is skipped too.
+ * notice, so it is mailed here. A late payment's refund carries none and is mailed here. A refund
+ * that moved no money is skipped too.
  * @param payload - the `payment.refunded` fact
  */
 export const mailRefundIssued = ({

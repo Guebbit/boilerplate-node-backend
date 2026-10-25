@@ -1,8 +1,8 @@
 /**
  * @module
  * The daily sweep over waiting preorders (PRODUCT_STATES P5). One job: a fulfillment order whose
- * CURRENT expected date has passed with the goods still not here, and no notice since, tells its
- * buyer once that the date came and went and there is no new one. The email asks nothing and
+ * CURRENT expected date is a day away or gone with the goods still not here, and no notice for that
+ * date yet, tells its buyer once that the date will be missed and there is no new one. The email asks nothing and
  * cancels nothing: silence keeps the buyer waiting, they can cancel any time before it ships, and
  * staff see the late order on the board and decide whom to call.
  *
@@ -10,7 +10,7 @@
  * shipped are a short delay, not an indefinite one: they show in the admin's Late view instead
  * (ADMIN_SALES A5.3).
  *
- * Repeating is harmless: a date that was noticed is not noticed again.
+ * Repeating is harmless: a date that was noticed (`dueNoticeFor`) is not noticed again.
  *
  * See: docs/modules/delivery.md#the-daily-sweep
  */
@@ -23,12 +23,12 @@ import { recordNotice, type SentNotice } from './notice';
 
 /** What one sweep did. */
 export interface PreorderSweepResult {
-    /** Buyers told that an expected date passed. */
+    /** Buyers told that an expected date will be missed. */
     notified: number;
 }
 
 /**
- * Tell the buyer of one fulfillment order whose date passed, in a transaction. Re-read there, so a
+ * Tell the buyer of one fulfillment order whose date will be missed, in a transaction. Re-read there, so a
  * notice another run (or an allocation) already settled is not sent twice.
  *
  * @param fulfillmentOrderId - the fulfillment order

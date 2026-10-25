@@ -3,6 +3,13 @@
  * Level rows and the reads over them: the stock board, the low-stock gauge, the ledger.
  */
 
+import { t } from '@infrastructure/i18n';
+import {
+    generateReject,
+    generateSuccess,
+    type ResponseReject,
+    type ResponseSuccess
+} from '@infrastructure/http/response';
 import { isPreorder, productService } from '@modules/products';
 import type { InventoryLevel, PreorderLevel, StockMovement } from '@types';
 import {
@@ -13,6 +20,7 @@ import {
 import { lowStockThreshold } from '../config';
 import { stockLevelRepository, stockMovementRepository } from '../repository';
 import { roomOn } from '../domain';
+import { presentInventoryLevel, presentPreorderLevel } from '../presenter';
 import type { PaginationInput } from '@infrastructure/persistence/search';
 import type { LevelFilters, MovementFilters, StockPosition } from './types';
 
@@ -100,24 +108,14 @@ export const listPreorders = async (
     return {
         items: items.map((item) => {
             const product = byId.get(item.productId);
-            // The cap only promises something while the product is sold against it.
-            const sellsAgainstCap =
-                product !== undefined &&
-                (isPreorder(product, now) || product.allowBackorder === true);
-            return {
-                ...item,
-                title: product?.title ?? item.productId,
-                ...(product?.releaseDate ? { releaseDate: product.releaseDate.toISOString() } : {}),
-                ...(sellsAgainstCap
-                    ? {
-                          // `null` is the contract's way to say there is no cap, so no number is left.
-                          left:
-                              item.backorderLimit === null
-                                  ? null
-                                  : Math.max(0, item.backorderLimit - item.backordered)
-                      }
-                    : {})
-            };
+            return presentPreorderLevel(item, {
+                title: product?.title,
+                releaseDate: product?.releaseDate,
+                // The cap only promises something while the product is sold against it.
+                sellsAgainstCap:
+                    product !== undefined &&
+                    (isPreorder(product, now) || product.allowBackorder === true)
+            });
         }),
         meta: buildPaginatedMeta(pagination, totalItems)
     };
@@ -150,13 +148,34 @@ export const listLevels = async (
     const titleOf = new Map(products.map((product) => [String(product._id), product.title]));
 
     return {
-        items: items.map((item) => ({
-            ...item,
-            title: titleOf.get(item.productId) ?? item.productId
-        })),
+        items: items.map((item) =>
+            presentInventoryLevel(item, titleOf.get(item.productId) ?? item.productId)
+        ),
         meta: buildPaginatedMeta(pagination, totalItems)
     };
 };
+
+/**
+ * One product's stock level — the item read of a board row, the record `receive`, `adjust` and
+ * `backorder-limit` act on. A product that is gone and one with no level row are the same 404.
+ *
+ * @param productId - the product
+ * @returns its level, or the 404
+ */
+export const getLevel = (
+    productId: string
+): Promise<ResponseSuccess<InventoryLevel> | ResponseReject> =>
+    productService.findByIdRaw(productId).then((product) => {
+        if (!product) return generateReject(404, [t('inventory.product-not-found')]);
+
+        return stockLevelRepository
+            .findByProductId(productId)
+            .then((level) =>
+                level
+                    ? generateSuccess(presentInventoryLevel(level, product.title))
+                    : generateReject(404, [t('inventory.product-not-found')])
+            );
+    });
 
 /**
  * How many PUBLICLY VISIBLE products are at or under the low-stock threshold — the gauge

@@ -16,18 +16,23 @@ import { processDeliveryJob } from './attempt';
 import { listWebhookEventCatalogue, registerWebhookCatalogue } from './catalogue';
 
 export type { WebhookEventCatalogueEntry } from '@types';
-export type { SubscriptionWithMintedSecrets } from './subscriptions';
+export type { SubscriptionWithMintedSecrets, SubscriptionListFilters } from './subscriptions';
 export type { DeliveryListFilters } from './deliveries';
 
 /** The module's barrel export — controllers call through this, never the bare functions. */
 export const webhooksService = {
     listSubscriptions: subscriptions.list,
     createSubscription: subscriptions.create,
+    getSubscription: subscriptions.getById,
     updateSubscription: subscriptions.update,
+    enableSubscription: subscriptions.enable,
+    disableSubscription: subscriptions.disable,
     rotateSubscriptionSecret: subscriptions.rotateSecret,
     removeSubscriptionSecret: subscriptions.removeSecret,
     removeSubscription: subscriptions.remove,
+    forgetOwner: subscriptions.forgetOwner,
     listDeliveries: deliveries.list,
+    getDelivery: deliveries.get,
     replayDelivery: deliveries.replay,
     subscribeToWebhookEvents,
     sweepDueWebhookDeliveries,

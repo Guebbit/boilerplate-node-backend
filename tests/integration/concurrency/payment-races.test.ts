@@ -84,7 +84,7 @@ const loggedInCustomer = async (): Promise<string> => {
  */
 const orderAwaitingPayment = async (productId: string, quantity: number) => {
     const bearer = await loggedInCustomer();
-    await api().post('/cart').set('Authorization', bearer).send({ productId, quantity });
+    await api().post('/cart/items').set('Authorization', bearer).send({ productId, quantity });
     await api()
         .put('/cart/shipping-method')
         .set('Authorization', bearer)
@@ -93,10 +93,7 @@ const orderAwaitingPayment = async (productId: string, quantity: number) => {
     if (checkout.status !== 201) throw new Error(`checkout: ${JSON.stringify(checkout.body)}`);
     const orderId = String(checkout.body.data.id);
 
-    const intent = await api()
-        .post('/payments/intent')
-        .set('Authorization', bearer)
-        .send({ orderId });
+    const intent = await api().post('/payments').set('Authorization', bearer).send({ orderId });
     if (intent.status !== 201) throw new Error(`intent: ${JSON.stringify(intent.body)}`);
 
     return { bearer, orderId, paymentId: String(intent.body.data.id) };
@@ -237,7 +234,7 @@ describe('P4 — more buyers than units, all at once', () => {
             Array.from({ length: RACE_SIZE }, async () => {
                 const bearer = await loggedInCustomer();
                 await api()
-                    .post('/cart')
+                    .post('/cart/items')
                     .set('Authorization', bearer)
                     .send({ productId: String(product._id), quantity: 1 });
                 await api()

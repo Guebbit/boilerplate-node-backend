@@ -241,72 +241,75 @@ describe('POST /feedback/search', () => {
     });
 });
 
-describe('PUT /feedback/{id}', () => {
-    it('matches the contract when replacing status and notes', async () => {
+describe('GET /feedback/{id}', () => {
+    it('matches the contract for the admin who may read the list', async () => {
         const { bearer } = await authenticateAs('admin');
         const id = await createFeedbackRequest();
-        const response = await api()
-            .put(`/feedback/${id}`)
-            .set('Authorization', bearer)
-            .send({ status: 'resolved', adminNotes: 'Fixed in 2.1.1' });
+
+        const response = await api().get(`/feedback/${id}`).set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.status).toBe('resolved');
+        expect(response.body.data).toMatchObject({ id, subject: CONTACT_PAYLOAD.subject });
     });
 
-    // A PUT body IS the new resource (RFC 9110 §9.3.4) — an omitted optional
-    // field is cleared, not left alone.
-    it('clears adminNotes when the PUT body omits it', async () => {
+    it('answers 404 for a request that does not exist and for a malformed id', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const missing = await api().get(`/feedback/${MISSING_ID}`).set('Authorization', bearer);
+        const malformed = await api().get('/feedback/not-an-id').set('Authorization', bearer);
+
+        expect([missing.status, malformed.status]).toEqual([404, 404]);
+    });
+
+    it('refuses a caller without read:Feedback with 403, and a guest with 401', async () => {
+        const id = await createFeedbackRequest();
+        const { bearer } = await authenticateAs('user');
+
+        const shopper = await api().get(`/feedback/${id}`).set('Authorization', bearer);
+        const guest = await api().get(`/feedback/${id}`);
+
+        expect([shopper.status, guest.status]).toEqual([403, 401]);
+    });
+});
+
+describe('PATCH /feedback/{id}', () => {
+    // A triage state is two fields of a bigger record, so no PUT is offered (RFC 9110 §15.5.6).
+    it('answers a PUT 405 with the methods it does allow', async () => {
         const { bearer } = await authenticateAs('admin');
         const id = await createFeedbackRequest();
-        await api()
-            .put(`/feedback/${id}`)
-            .set('Authorization', bearer)
-            .send({ status: 'in_progress', adminNotes: 'triaging' });
-
         const response = await api()
             .put(`/feedback/${id}`)
             .set('Authorization', bearer)
             .send({ status: 'resolved' });
 
-        expect(response.status).toBe(200);
-        expect(response.body.data.adminNotes).toBeUndefined();
+        expect(response.status).toBe(405);
+        expect(response.headers.allow).toBe('DELETE, GET, HEAD, PATCH');
     });
 
-    it('refuses a PUT body missing the required status', async () => {
+    it('matches the contract when changing status and notes together', async () => {
         const { bearer } = await authenticateAs('admin');
         const id = await createFeedbackRequest();
         const response = await api()
-            .put(`/feedback/${id}`)
+            .patch(`/feedback/${id}`)
             .set('Authorization', bearer)
-            .send({ adminNotes: 'no status here' });
+            .send({ status: 'resolved', adminNotes: 'Fixed in 2.1.1' });
 
-        expect(response.status).toBe(422);
+        expect(response.status).toBe(200);
+        expect(response.body.data.status).toBe('resolved');
+        expect(response.body.data.adminNotes).toBe('Fixed in 2.1.1');
     });
 
     it('matches the error contract for a status outside the enum', async () => {
         const { bearer } = await authenticateAs('admin');
         const id = await createFeedbackRequest();
         const response = await api()
-            .put(`/feedback/${id}`)
+            .patch(`/feedback/${id}`)
             .set('Authorization', bearer)
             .send({ status: 'archived' });
 
         expect(response.status).toBe(422);
     });
 
-    it('matches the error contract for a request that does not exist', async () => {
-        const { bearer } = await authenticateAs('admin');
-        const response = await api()
-            .put(`/feedback/${MISSING_ID}`)
-            .set('Authorization', bearer)
-            .send({ status: 'spam' });
-
-        expect(response.status).toBe(404);
-    });
-});
-
-describe('PATCH /feedback/{id}', () => {
     it('leaves adminNotes unchanged when the PATCH body omits it', async () => {
         const { bearer } = await authenticateAs('admin');
         const id = await createFeedbackRequest();

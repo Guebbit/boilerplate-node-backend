@@ -28,7 +28,7 @@ import { appendTimeline } from './timeline';
 // `userId` is stored as an ObjectId, so writes have to coerce it — same rule `crud.ts`'s `create`
 // follows for its own writes.
 import { toObjectId } from '@infrastructure/persistence/create-repository';
-import { shopCurrency } from '@modules/shop';
+import { BACKORDER_PROMISE_DAYS, shopCurrency } from '@modules/shop';
 import type { OrderAddress } from '@types';
 
 /**
@@ -114,7 +114,12 @@ const withOwedLines = (
     return items.map((item, index) => {
         const productId = lines[index]?.item.productId;
         const quantity = owed.find((part) => part.productId === productId)?.quantity ?? 0;
-        const line = owedLineOf(quantity, lines[index]?.backorder?.restockDate, placedAt);
+        const line = owedLineOf(
+            quantity,
+            lines[index]?.backorder?.restockDate,
+            placedAt,
+            BACKORDER_PROMISE_DAYS
+        );
         return line ? { ...item, ...line } : item;
     });
 };

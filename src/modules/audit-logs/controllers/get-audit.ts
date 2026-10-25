@@ -22,6 +22,8 @@ export const getAudit = createListController({
         page: pageSchema,
         pageSize: pageSizeSchema
     }).partial(),
+    // `ownOrder` arrives as the string `true`/`false`; `booleans` decodes it before the schema.
+    input: { booleans: ['ownOrder'] },
     runList: (parsed) =>
         auditLogService.search({
             ...parsed,

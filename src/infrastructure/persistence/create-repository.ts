@@ -95,7 +95,7 @@ export interface SearchSpec {
      * A field absent here is unsortable, however the caller spells it.
      */
     sortable?: Record<string, string>;
-    /** Mongo path → the two filter keys bounding it, e.g. `price: { min: 'minPrice', … }`. */
+    /** Mongo path → the two filter keys bounding it, e.g. `price: { min: 'priceMin', … }`. */
     ranges?: Record<string, { min: string; max: string }>;
     /** Mongo path → the two filter keys bounding it as instants, e.g. `createdAt: { min: 'createdFrom', … }`. */
     dateRanges?: Record<string, { min: string; max: string }>;

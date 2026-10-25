@@ -4,6 +4,7 @@
  */
 
 import type { ClientSession } from 'mongoose';
+import { ERROR_CODES } from '@api/error-codes';
 import { t } from '@infrastructure/i18n';
 import { removeTranslations } from '@kernel/translation';
 import type { CallerContext } from '@types';
@@ -139,7 +140,10 @@ export const restoreById = (
 ): Promise<ResponseSuccess<ProductDocument> | ResponseReject> =>
     productRepository.findById(id).then((product) => {
         if (!product) return generateReject(404, [t('products.not-found')]);
-        if (!product.deletedAt) return generateReject(409, [t('products.not-deleted')]);
+        if (!product.deletedAt)
+            return generateReject(409, [
+                { code: ERROR_CODES.PRODUCT_NOT_DELETED, message: t('products.not-deleted') }
+            ]);
         product.deletedAt = undefined;
         return productRepository.save(product).then((saved) => {
             recordAudit(context, {

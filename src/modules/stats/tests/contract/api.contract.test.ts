@@ -22,7 +22,8 @@ const READS = [
     `/stats/payments?${PERIOD}`,
     `/stats/operations?${PERIOD}`,
     `/stats/customers?${PERIOD}`,
-    '/stats/pipeline'
+    '/stats/pipeline',
+    '/stats/limits'
 ];
 
 describe('GET /stats/*', () => {
@@ -40,6 +41,14 @@ describe('GET /stats/*', () => {
         const response = await api().get(`/stats/sales?${PERIOD}`).set('Authorization', bearer);
 
         expect(response.status).toBe(200);
+    });
+
+    it('states the ceilings a period may not pass', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api().get('/stats/limits').set('Authorization', bearer);
+
+        expect(response.body.data).toEqual({ maxRangeDays: 731, maxBuckets: 400 });
     });
 
     it('answers 404 for a product id that is not an id', async () => {

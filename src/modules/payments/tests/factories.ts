@@ -13,6 +13,7 @@ import type { UserDocument } from '@modules/users';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import type { OrderDocument } from '@modules/orders';
+import type { AuthContext, CallerContext } from '@types';
 import { buildReference } from '../domain';
 import { paymentService } from '../services';
 import { paymentRepository } from '../repository';
@@ -73,3 +74,30 @@ export const payByCard = async (order: OrderDocument, user: UserDocument): Promi
 
     await paymentService.confirmPayment(intent.data.id, 'pm_card_visa', buyer, testCallerContext);
 };
+
+/**
+ * The operator refund, addressed by ORDER the way a test knows the money: finds the order's
+ * payment, then goes through the same door the route does (`paymentService.refundPayment`).
+ *
+ * @param orderId - the order whose payment is being returned
+ * @param authContext - the operator
+ * @param context - the operator, as audited
+ * @param body - the optional `amount` and `currency`; absent returns everything left
+ * @returns the service's answer; a refusal when the order has no payment
+ */
+export const refundOrderPayment = (
+    orderId: string,
+    authContext: AuthContext,
+    context: CallerContext,
+    body?: { amount?: number; currency?: string }
+) =>
+    paymentRepository
+        .findByOrderId(orderId)
+        .then((payment) =>
+            paymentService.refundPayment(
+                String(payment?._id ?? orderId),
+                authContext,
+                context,
+                body
+            )
+        );

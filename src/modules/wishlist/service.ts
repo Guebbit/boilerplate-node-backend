@@ -66,7 +66,7 @@ const add = (
     productService.findPublicById(productId).then((product) => {
         if (!product) return generateReject(404, [t('wishlist.product-not-found')]);
         return wishlistRepository.addLine(userId, productId).then(({ wishlist, added }) => {
-            // Only a product that was NOT already saved is an add — a repeated PUT is not one.
+            // Only a product that was NOT already saved is an add — a repeated save is not one.
             if (added)
                 emitAnalyticsEvent({
                     ...buildAnalyticsBase(context),

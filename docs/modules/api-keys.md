@@ -120,6 +120,12 @@ a person with none live gets neither audit row nor mail), so a redelivery does n
   routes are session-only, such as `read:Stats` or the key list itself, which would hold nothing
   while looking like it holds something.
 - **Every key expires**, at most one year out. A key that never expires never gets rotated.
+  The list publishes the latest date a mint accepts as `maxExpiresAt`, so a form bounds its date
+  picker from the server instead of copying the rule.
+- **The list says what each key is doing.** `status` is `revoked`, `expired`, `suspended` or `active`,
+  checked in that order. `suspended` is a minter who cannot sign in (banned, soft-deleted, erased):
+  the key gets a 401 until they can again, which a client cannot tell from `revokedAt`/`expiresAt`.
+  The server looks each distinct minter up once per page.
 - **The minter is mailed** when a key is created, and again — with the list — when logout-everywhere,
   a password reset or an email-change undo ("this wasn't me") revoked them. These are the causes whose row in `REVOCATION` (`account/domain/revocation.ts`) announces; the list is derived there, not restated. `account` only announces the event; this module owns what it
   means for keys. An ordinary password change, where the owner typed the current password, leaves

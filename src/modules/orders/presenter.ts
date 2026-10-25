@@ -7,7 +7,7 @@
 
 import type { Order, OrderTimelineEntry } from '@types';
 import type { OrderDocument, OrderEventDocument } from './model';
-import { isBuyerVisible } from './domain';
+import { TIMELINE_AUDIENCE, isBuyerVisible } from './domain';
 
 /**
  * `.toJSON()`'s return type is the schema's own `Document['toJSON']` overload, not this module's
@@ -18,19 +18,21 @@ export const presentOrder = (document: OrderDocument): Order => document.toJSON(
 
 /**
  * One timeline row as the buyer or staff reads it. The buyer's view carries no `actor`: who at the
- * shop did something is the shop's business, and the row's own type says what happened.
+ * shop did something is the shop's business, and the row's own type says what happened. The row's
+ * own `audience` is a fact of its type, whoever reads it.
  *
  * @param event - the stored row
- * @param audience - `staff` sees the actor, `buyer` never does
+ * @param reader - `staff` sees the actor, `buyer` never does
  */
 export const presentTimelineEntry = (
     event: OrderEventDocument,
-    audience: 'buyer' | 'staff'
+    reader: 'buyer' | 'staff'
 ): OrderTimelineEntry => ({
     id: String(event._id),
     at: event.at.toISOString(),
     type: event.type,
-    ...(audience === 'staff' && event.actor ? { actor: event.actor } : {}),
+    audience: TIMELINE_AUDIENCE[event.type],
+    ...(reader === 'staff' && event.actor ? { actor: event.actor } : {}),
     ...(event.text ? { text: event.text } : {}),
     data: event.data
 });
@@ -39,12 +41,12 @@ export const presentTimelineEntry = (
  * The rows of an order a given audience may read, in the order they were stored.
  *
  * @param events - every stored row of the order
- * @param audience - who is reading
+ * @param reader - who is reading
  */
 export const presentTimeline = (
     events: readonly OrderEventDocument[],
-    audience: 'buyer' | 'staff'
+    reader: 'buyer' | 'staff'
 ): OrderTimelineEntry[] =>
     events
-        .filter((event) => audience === 'staff' || isBuyerVisible(event.type))
-        .map((event) => presentTimelineEntry(event, audience));
+        .filter((event) => reader === 'staff' || isBuyerVisible(event.type))
+        .map((event) => presentTimelineEntry(event, reader));

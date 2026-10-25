@@ -22,6 +22,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
+import { ERROR_CODES } from '@api/error-codes';
 import { accessService } from '@modules/access';
 import type { CallerContext } from '@types';
 import type { PurchaseHoldRecord, UserDocument } from '../model';
@@ -47,6 +48,16 @@ export const activeHoldOf = (
     if (!hold || hold.until.getTime() <= now.getTime()) return undefined;
     return { until: hold.until, reason: hold.reason, note: hold.note, setAt: hold.setAt };
 };
+
+/**
+ * Whether lifting has anything to clear: a hold (in force, or ended and not yet swept) or a review
+ * flag. The question behind `liftPurchaseHold`'s 409 and the `liftPurchaseHold` action flag.
+ *
+ * @param user - anything carrying the stored hold and review flag
+ */
+export const hasPurchaseHoldToClear = (
+    user: Pick<UserDocument, 'purchaseHold' | 'purchaseHoldFlaggedAt'>
+): boolean => user.purchaseHold !== undefined || user.purchaseHoldFlaggedAt !== undefined;
 
 /**
  * The instant cancellations stop counting toward a hold: whichever is later of the last hold being
@@ -186,15 +197,14 @@ export const setPurchaseHold = (
 
 /**
  * End a hold now, clear the review flag and restart the count of cancellations from this moment: a
- * staff review is exactly this call. Safe to repeat. The audit row is written when there was
- * something to review: a hold (in force, or already ended and not yet swept) or a flag; its
- * `inForce` metadata tells "lifted" from "reviewed, no hold". A repeat that finds neither writes
- * nothing.
+ * staff review is exactly this call. Refused with 409 `USER_PURCHASE_HOLD_NOT_SET` when there is
+ * neither a hold (in force, or already ended and not yet swept) nor a flag to clear. The audit row's
+ * `inForce` metadata tells "lifted" from "reviewed, no hold in force".
  *
  * @param id - the account
  * @param context - the staff caller
  * @returns the user; 404 when there is none, 403 `ROLE_MANAGEMENT_REQUIRED` for a staff account the
- *   caller may not manage
+ *   caller may not manage, 409 when there is nothing to lift
  */
 export const liftPurchaseHold = (
     id: string,
@@ -205,23 +215,27 @@ export const liftPurchaseHold = (
 
         return accessService.roleProtectedRefusal(context, id).then((refusal) => {
             if (refusal) return refusal;
+            if (!hasPurchaseHoldToClear(user))
+                return generateReject(409, [
+                    {
+                        code: ERROR_CODES.USER_PURCHASE_HOLD_NOT_SET,
+                        message: t('users.purchase-hold-not-set')
+                    }
+                ]);
 
             const now = new Date();
             const wasInForce = activeHoldOf(user, now) !== undefined;
-            const hadSomethingToReview =
-                user.purchaseHold !== undefined || user.purchaseHoldFlaggedAt !== undefined;
             user.purchaseHold = undefined;
             user.purchaseHoldFlaggedAt = undefined;
             user.purchaseHoldResetAt = now;
             return userRepository.save(user).then((saved) => {
-                if (hadSomethingToReview)
-                    recordAudit(context, {
-                        action: usersAuditActions.ADMIN_USER_PURCHASE_HOLD_LIFTED,
-                        outcome: 'success',
-                        targetType: 'user',
-                        targetId: id,
-                        metadata: { inForce: wasInForce }
-                    });
+                recordAudit(context, {
+                    action: usersAuditActions.ADMIN_USER_PURCHASE_HOLD_LIFTED,
+                    outcome: 'success',
+                    targetType: 'user',
+                    targetId: id,
+                    metadata: { inForce: wasInForce }
+                });
                 return generateSuccess(saved, 200, t('users.purchase-hold-lifted'));
             });
         });

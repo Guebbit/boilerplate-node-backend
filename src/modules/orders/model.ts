@@ -123,6 +123,7 @@ export interface OrderDocument
             | 'deletedAt'
             | 'payBy'
             | 'paidAt'
+            | 'withdrawUntil'
             | 'paymentStatus'
             | 'fulfillmentStatus'
             | 'returnStatus'
@@ -180,9 +181,16 @@ export interface OrderDocument
      * The last instant a withdrawal is valid, frozen when its clock starts: delivery for goods,
      * `paidAt` for digital content (Art. 9(2)). Absent until then — the right already exists, the
      * window has no end yet — and never recomputed, so a config change cannot move a promise
-     * already made. Internal: clients read it as `actions.withdrawUntil`.
+     * already made. On the wire as `Order.withdrawUntil`.
      */
     withdrawUntil?: Date;
+    /**
+     * When money was recorded on an order that could no longer take it: a payment that succeeded
+     * after the cancel, so `paidAt` stays unset while a succeeded Payment and its Refund exist.
+     * Stamped by `payments` through `markMoneyReceived`. Keeps the order from being hard-deleted
+     * out from under them. Internal: the wire never carries it.
+     */
+    moneyReceivedAt?: Date;
     /**
      * The last instant a defect or a wrong item can be reported: two calendar years from delivery,
      * the legal guarantee of conformity (Directive 2019/771 Art. 10). Frozen with `withdrawUntil`,
@@ -401,6 +409,10 @@ export const orderSchema = new Schema<OrderDocument>(
         withdrawUntil: {
             type: Date
         },
+        // Stamped by `payments` when money lands on an order that cannot take it — see the field.
+        moneyReceivedAt: {
+            type: Date
+        },
         // Frozen beside `withdrawUntil` — see the interface field's own comment.
         conformityUntil: {
             type: Date
@@ -599,7 +611,7 @@ const applyOrderProjections = (serialized: Record<string, unknown>) => {
 export const applyOrderTransform = applySerialization(orderSchema, {
     // `anonymizeAfter` is the reaper's own bookkeeping, not part of the `Order` contract — same
     // reasoning as `users`' `pendingImageKey`/`inactivityWarnedAt`.
-    omit: ['anonymizeAfter', 'withdrawUntil', 'conformityUntil'],
+    omit: ['anonymizeAfter', 'conformityUntil', 'moneyReceivedAt'],
     after: (serialized) => {
         applyOrderItems(serialized);
         // `currency` is required on the schema, so a serialized order always carries it; the

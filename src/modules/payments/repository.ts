@@ -55,7 +55,12 @@ const PAYMENT_SORTABLE = { createdAt: 'createdAt', amount: 'amount', payBy: 'pay
  */
 const PAYMENT_SEARCHABLE = {
     objectIds: { orderId: 'orderId' },
-    exact: { method: 'method', provider: 'provider', reference: 'reference' },
+    exact: {
+        method: 'method',
+        provider: 'provider',
+        reference: 'reference',
+        transferReference: 'transferReference'
+    },
     ranges: { amount: { min: 'amountMin', max: 'amountMax' } },
     dateRanges: {
         createdAt: { min: 'createdFrom', max: 'createdTo' },
@@ -257,7 +262,6 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
             payBy: Date;
         }
     ) => Promise<UpsertedPayment | null>;
-    findByTransferReference: (transferReference: string) => Promise<PaymentDocument | null>;
     detachUserId: (userId: string, session?: ClientSession) => Promise<number>;
     deleteAbandonedBefore: (cutoff: Date, transferCutoff: Date) => Promise<number>;
     updateStatusIfIn: (
@@ -436,15 +440,6 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                 { upsert: true, returnDocument: 'after', includeResultMetadata: true }
             )
         ),
-
-    /**
-     * The payment a bank-transfer reference names — the admin's lookup before recording a transfer.
-     * Unscoped, like the webhook's read: it is reached only behind `create:Payment`.
-     *
-     * @param transferReference - the RF reference, already parsed to its canonical form
-     */
-    findByTransferReference: (transferReference: string) =>
-        paymentModel.findOne({ transferReference }).exec(),
 
     /**
      * The status-machine primitive, same shape as the order repository's: the `$in` rides in

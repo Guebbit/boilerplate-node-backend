@@ -21,7 +21,7 @@ export const probes: Probe[] = [
         name: 'Probe: add a product that does not exist',
         why: `A well-formed body naming an id nothing owns. The contract can describe the 404 but not a request that earns one, and this is the boundary where a cart would happily store a dangling reference if the service ever stopped checking.`,
         method: 'POST',
-        path: '/cart',
+        path: '/cart/items',
         auth: 'bearer',
         body: {
             productId: '000000000000000000000000',
@@ -30,9 +30,9 @@ export const probes: Probe[] = [
     },
     {
         name: 'Probe: set a quantity on a product the storefront will not show',
-        why: `The catalogue gate, from the quieter of the two routes that create a line. \`PUT /cart/{productId}\` writes as readily as \`POST /cart\` does, so it owes the same refusal — and it is the one where a missing gate would hide best, since a line naming a product nobody can see renders as nothing rather than as an error. The rule lives in \`setItemById\`; this proves the route inherits it.`,
-        method: 'PUT',
-        path: '/cart/{{seedInactiveProductId}}',
+        why: `The catalogue gate, from the quieter of the two line writes. \`PATCH /cart/items/{productId}\` writes a quantity as readily as \`POST /cart/items\` adds one, so it owes the same refusal for a product nobody can see — and it answers 404 either way, because the cart holds no such line. The rule lives in the service the two routes share; this proves the route inherits it.`,
+        method: 'PATCH',
+        path: '/cart/items/{{seedInactiveProductId}}',
         auth: 'bearer',
         body: {
             quantity: 1
@@ -42,7 +42,7 @@ export const probes: Probe[] = [
         name: 'Probe: a quantity the schema forbids',
         why: `Zero, where the contract requires at least one. Removing a line has its own endpoint, so a zero quantity is a validation failure rather than a shortcut — worth being able to prove.`,
         method: 'POST',
-        path: '/cart',
+        path: '/cart/items',
         auth: 'bearer',
         body: {
             productId: '{{seedProductId}}',

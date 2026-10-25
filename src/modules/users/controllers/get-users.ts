@@ -9,6 +9,7 @@
 import { z } from 'zod';
 import { SearchUsersBody } from '@api/schemas.zod';
 import { userService } from '../services';
+import { callerContextOf } from '@infrastructure/http/request';
 import { optionalBooleanSchema, pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
 import { createSearchController } from '@infrastructure/surfaces/create-search-controller';
 import type { User } from '@types';
@@ -36,7 +37,7 @@ const searchUsersQuerySchema = SearchUsersBody.extend({
  *
  * Each row's CURRENT role and the `actions` the caller's rank decides are read fresh by
  * `userService.toUserContracts`, batched for the whole page — `applyUserTransform`'s own document
- * serialization has no role to offer. `request.caller` is always set behind `requirePermission`.
+ * serialization has no role to offer. The caller is always set behind `requirePermission`.
  */
 export const getUsers = createSearchController({
     entity: 'users',
@@ -46,7 +47,7 @@ export const getUsers = createSearchController({
             .search(parsed)
             .then(({ items, meta }) =>
                 userService
-                    .toUserContracts(items, request.caller)
+                    .toUserContracts(items, callerContextOf(request).caller)
                     .then((contracts) => ({ items: contracts, meta }))
             )
 });

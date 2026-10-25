@@ -7,9 +7,10 @@
 
 import type { Request, Response } from 'express';
 import { LoginTwoFactorBody } from '@api/schemas.zod';
-import type { LoginTwoFactorRequest, AuthTokens } from '@types';
+import type { LoginTwoFactorRequest, LoginTwoFactorOutcome } from '@types';
 import { t } from '@infrastructure/i18n';
-import { twoFactorService } from '../services';
+import { isRestorable } from '@modules/users';
+import { accountService, twoFactorService } from '../services';
 import { issueSession } from '../session/session';
 import { rememberDevice } from '../session/device-cookie';
 import { toRememberTier } from '../session/config';
@@ -62,6 +63,23 @@ export const postLoginTwoFactor = (
             const { user, amr } = result.data;
             const userId = user._id.toString();
 
+            // Deletion grace: the second factor passed, so the claim check goes back instead of a
+            // session. The challenge is spent either way; the client restores or walks away.
+            if (isRestorable(user)) {
+                return accountService
+                    .buildDeletionPending(user, withProofs(amr, AMR.otp))
+                    .then((pending) => {
+                        authTwoFactorChallengeTotal.inc({ status: 'success' });
+                        destroyMfaChallengeCookie(response);
+                        successResponse<LoginTwoFactorOutcome>(
+                            response,
+                            pending,
+                            200,
+                            t('account.login.deletion-pending')
+                        );
+                    });
+            }
+
             return issueSession(request, response, userId, {
                 remember: toRememberTier(remember),
                 amr: withProofs(amr, AMR.otp),
@@ -73,7 +91,12 @@ export const postLoginTwoFactor = (
                     destroyMfaChallengeCookie(response);
                     // The login is only complete here, so the browser becomes familiar here.
                     rememberDevice(request, response, user.email);
-                    successResponse<AuthTokens>(response, issued, 200, t('account.login.success'));
+                    successResponse<LoginTwoFactorOutcome>(
+                        response,
+                        issued,
+                        200,
+                        t('account.login.success')
+                    );
                 })
             );
         })

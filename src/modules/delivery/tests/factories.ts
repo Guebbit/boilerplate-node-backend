@@ -11,6 +11,7 @@ import type { UserDocument } from '@modules/users';
 import { createProduct } from '@modules/products/tests/factories';
 import { inventoryService } from '@modules/inventory';
 import { createOrder, forceOrderStatus, toOrderItem } from '@modules/orders/tests/factories';
+import { BACKORDER_PROMISE_DAYS } from '@modules/shop';
 import { owedLineOf } from '@modules/orders';
 import { OrderStatus } from '@types';
 import type { Shipment } from '@types';
@@ -29,7 +30,7 @@ export interface ShipEverythingOptions {
 }
 
 /**
- * The order's fulfillment orders, made first if it has none — what `GET /delivery/order/:id` does.
+ * The order's fulfillment orders, made first if it has none — what `GET /delivery/orders/:id` does.
  * @param orderId - the order
  */
 export const fulfillmentOrdersOf = (orderId: string): Promise<FulfillmentOrderDocument[]> =>
@@ -45,7 +46,9 @@ export const fulfillmentOrdersOf = (orderId: string): Promise<FulfillmentOrderDo
  */
 export const setFulfillmentOrderState = (
     fulfillmentOrderId: string,
-    fields: Partial<Pick<FulfillmentOrderDocument, 'agreedAt' | 'expectedAt' | 'lastNoticeAt'>>
+    fields: Partial<
+        Pick<FulfillmentOrderDocument, 'agreedAt' | 'expectedAt' | 'lastNoticeAt' | 'dueNoticeFor'>
+    >
 ): Promise<unknown> =>
     fulfillmentOrderModel.updateOne({ _id: fulfillmentOrderId }, { $set: fields }).exec();
 
@@ -193,7 +196,7 @@ export const paidBackorderOrder = async (
     const productId = String(product._id);
     await inventoryService.setBackorderLimit(productId, null);
     const owed = Math.max(0, wanted.quantity - wanted.shelf);
-    const owedLine = owedLineOf(owed, wanted.restockDate, new Date());
+    const owedLine = owedLineOf(owed, wanted.restockDate, new Date(), BACKORDER_PROMISE_DAYS);
     const order = await createOrder(
         user,
         [

@@ -5,7 +5,7 @@
  * it reads policy, it doesn't hold or mint anything.
  */
 
-import type { MfaChallenge } from '@types';
+import type { DeletionPending, MfaChallenge } from '@types';
 import { defineConfig } from '@infrastructure/config/define';
 import { text } from '@infrastructure/config/fields';
 import { isRelaxedIn } from '@infrastructure/config/define';
@@ -182,6 +182,31 @@ export const oauthFrontendMfaCallbackUrl = (
         methods: JSON.stringify(challenge.methods)
     });
     if (challenge.defaultMethod) parameters.set('defaultMethod', challenge.defaultMethod);
+    if (continueTo) parameters.set('continue', continueTo);
+    if (locale) parameters.set('locale', locale);
+
+    return `${oauthFrontendCallbackBase()}?${parameters.toString()}`;
+};
+
+/**
+ * Where the callback sends the browser when the account is in the grace of its own deletion. The
+ * dates travel here, none of it secret, while the claim check itself travels in the cookie of
+ * `oauth/deletion-redirect.ts`.
+ *
+ * @param pending - `buildDeletionPending`'s result, minus the claim check
+ * @param continueTo - the saved `?continue=` target, already validated by the caller
+ * @param locale - the saved `?locale=` tag, validated like {@link oauthFrontendCallbackUrl}'s
+ */
+export const oauthFrontendDeletionCallbackUrl = (
+    pending: Pick<DeletionPending, 'purgeAt' | 'expiresAt'>,
+    continueTo?: string,
+    locale?: string
+): string => {
+    const parameters = new URLSearchParams({
+        deletionPending: '1',
+        purgeAt: pending.purgeAt,
+        expiresAt: pending.expiresAt
+    });
     if (continueTo) parameters.set('continue', continueTo);
     if (locale) parameters.set('locale', locale);
 

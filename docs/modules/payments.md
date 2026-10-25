@@ -66,8 +66,8 @@ the record before the provider is asked. If the database fails before that, the 
 and the relay delivers the event again. After it, a provider refusal is logged and the event is
 answered: the refund sweep (`retryOpenRefunds`) finishes the open record with the same idempotency
 key, for as long as it takes. A hand-paid order opens its record too and waits for an operator:
-it shows on the needs-attention list as `manual_refund_owed`, and the operator's own refund
-settles it by hand.
+it shows on the needs-attention list as `manual_refund_owed`, and `settleRefundByHand` (the
+operator confirming the money went back) is what settles it.
 
 **`settlePayment` is the one place where the money and the goods agree.** It moves the order to
 `paid` in the same transaction, and `markPaid` commits the order's held units there rather than
@@ -137,7 +137,7 @@ cancel lifecycle itself (`statusesLeadingTo`, `orders/domain/lifecycle.ts`) has 
 Two different questions, asked at two different moments, both owned by `orders`:
 
 - **The pre-check** — `orders.isPayable(order.status)` — gates every door that could open a new
-  payment: `POST /payments/intent`, `POST /payments/order/{orderId}/offline`, and `getForOrder`'s
+  payment: `POST /payments`, `POST /payments/orders/{orderId}/offline`, and `getForOrder`'s
   `PaymentActions.pay`. `pending` only; a `paid` order answers `false` even though `system` may
   still write a `paid → paid` echo underneath it (the payment webhook's own retries) — that echo is
   not a fresh offer to pay. This module never compares a status literal to decide whether to open a
@@ -244,7 +244,7 @@ Neither net adds a marker or a field: the payment's own status and `updatedAt` a
 
 ## Status transitions
 
-`requires_confirmation` is entered once, by `POST /payments/intent`, and never again — nothing a
+`requires_confirmation` is entered once, by `POST /payments`, and never again — nothing a
 provider reports is ever that value. From there, every non-terminal status can settle to any other
 non-terminal status. Three sets in `domain/lifecycle.ts` say which write may run from where:
 
@@ -266,7 +266,7 @@ opens the refund for the whole amount in the same transaction.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> requires_confirmation: POST /payments/intent
+    [*] --> requires_confirmation: POST /payments
     requires_confirmation --> requires_action: confirm
     requires_confirmation --> processing: confirm
     requires_confirmation --> succeeded: confirm
@@ -301,7 +301,7 @@ payment, because a confirm is itself a new attempt: card A refused, then card B 
 `payment.failed` rows. A confirm that loses the race to the webhook answers the payment as the
 winner left it, not the copy it read first.
 
-`POST /payments/order/{orderId}/offline` (below) is a fourth way to reach `succeeded`, alongside
+`POST /payments/orders/{orderId}/offline` (below) is a fourth way to reach `succeeded`, alongside
 confirm, sync and the webhook — it calls the exact same `settlePayment`, so nothing about this
 diagram's terminal states or their guards changes for it.
 
@@ -313,7 +313,7 @@ way — cash at the counter, a phone order paid by bank transfer — on a still-
 ```mermaid
 sequenceDiagram
     actor Admin
-    participant API as POST /payments/order/:orderId/offline
+    participant API as POST /payments/orders/:orderId/offline
     participant Pay as payments
     participant Set as settlePayment
     Admin->>API: method, reference?, receivedAt?
@@ -339,12 +339,31 @@ attempt that never got that far (`requires_confirmation`, `declined`) is simply 
 becomes the offline one.
 
 **Only an operator can say a `manual` refund actually happened.** There is no provider to ask, so
-money that left the system by hand can only be confirmed returned by a person: the automatic
-listener (a customer's own cancel) leaves the payment `succeeded` and writes an unattended
-`payment.refund_owed_by_hand` audit row instead of guessing; `refundByOrder` — gated by `create:Refund`,
-with the same fresh-session tier as recording one — is the only door that may set
-`refundedByHand: true`. A cancelled hand-paid order therefore shows `succeeded` until an
-operator confirms it, not "refunded" for money nobody actually moved.
+money that left the system by hand can only be confirmed returned by a person. Every way a refund
+opens on a hand-paid payment (a cancel, a late transfer on a cancelled order, an operator's
+`refundPayment`, a received return, a buyer's withdrawal of the rest) only opens a `pending` record
+and writes a `payment.refund_owed_by_hand` audit row naming the order, the record, the amount and
+the reason; the actor is the caller, or the system when none is behind it. Nobody settles it on the
+spot, whoever asked: goods arriving or a buyer withdrawing is not cash going back.
+
+`settleRefundByHand` (`POST /payments/{id}/refunds/{refundId}/settle`, `create:Refund`, the same
+fresh-session tier as recording a payment) is the only door that sets `refundedByHand: true`. It
+names one record, so a payment carrying several open refunds (a cancelled remainder and two
+returns) settles each separately, and a return stays `received` until its own money is confirmed
+back. It audits `admin.payment.refund_settled_by_hand`; the `payment.refunded` event is the same as
+for a provider refund. `PaymentActions.settleByHand` lists the ids a caller may settle. A refund two
+operators settle at once settles once; the loser answers 409 `PAYMENT_REFUND_NOT_OPEN`, and a card
+refund answers `PAYMENT_REFUND_NOT_BY_HAND`. A cancelled hand-paid order therefore shows
+`succeeded` until an operator confirms it, not "refunded" for money nobody actually moved.
+
+**The `actions` on every payment.** Each response that carries a payment, the answer to every
+write included, carries `PaymentActions`: `pay` (confirm, or take a waiting transfer over with a
+card when a provider is configured), `sync` (finish an in-flight payment at the provider; narrower
+than its route on purpose, and never true together with `pay`), `refund` (`create:Refund`, a
+`succeeded` payment, and something left: a refund still open counts as taken, so a card refund
+awaiting the sweep is not offered again) and `settleByHand`. `confirm`, `sync` and `intent` read the
+order for `pay`; `offline` and `refund` only ever return a `succeeded` payment, where `pay` is false
+whatever the order says, so they read nothing.
 
 <a id="refund-records"></a>
 
@@ -360,7 +379,7 @@ sequenceDiagram
     participant D as database
     participant V as provider
     C->>P: refund(orderId, amount?)
-    P->>D: settle any refund still open (same idempotency key)
+    P->>D: card: settle any refund still open (same idempotency key)
     P->>D: open a record + raise amountRefunded (conditional on the value read)
     P->>V: refund(part, idempotencyKey)
     alt provider answers
@@ -388,7 +407,7 @@ sequenceDiagram
 - **A refusal stays open.** The record is `failed`, with a closed `failureReason` (staff only; see
   [the staff Payments page](#the-staff-payments-page)), and keeps its share of `amountRefunded`, so nothing is opened beside it. `retryOpenRefunds` (run by
   `npm run job sweep:payment-effects`) and the next cancel or operator call both finish it.
-- **The default is everything left.** `POST /payments/order/{orderId}/refund` with no body returns
+- **The default is everything left.** `POST /payments/{id}/refunds` with no body returns
   all that is still refundable; with an `amount` it returns that part. An `amount` over what is
   left, nothing left included, is a 422 (`PAYMENT_REFUND_EXCEEDS_REMAINING`); with no `amount`,
   nothing left is a 409 (`PAYMENT_NOT_REFUNDABLE`).
@@ -396,6 +415,9 @@ sequenceDiagram
   are received) opens a refund with `reason: return` and the return's `returnId`, clamped to what the
   payment has left. `payment.refunded` carries the `returnId`, so `returns` closes the return when
   the refund lands — including later, when the sweep completes one the provider first refused.
+- **A late payment is named.** Money that lands after the order could no longer be paid (its hold
+  expired or it was cancelled) is refunded with `reason: late_payment`, not `cancellation`, so staff
+  can tell a lost sale from a cancellation. The buyer is mailed it like any refund outside a return.
 - **A refund can pay for a cancelled remainder.** The same door takes `reason: cancellation` for the
   unshipped part of an order that shipped in part ([`returns`](./returns.md#cancelling-what-has-not-shipped)).
   The `returnId` names the cancellation, which is closed at birth, so nothing waits on it; and because
@@ -433,7 +455,7 @@ payment carries everything the buyer and the operator need, and the order carrie
 ```mermaid
 stateDiagram-v2
     [*] --> requires_action: order.created, paymentMethod = bank_transfer<br/>RF reference + payBy, hand-recorded
-    requires_action --> succeeded: admin records the transfer<br/>POST /payments/order/:orderId/offline
+    requires_action --> succeeded: admin records the transfer<br/>POST /payments/orders/:orderId/offline
     requires_action --> requires_confirmation: the buyer pays by card instead<br/>(same row, reference kept)
     requires_action --> cancelled: order cancelled, or payBy passed with no money
     cancelled --> succeeded: a late transfer is recorded<br/>(the order is gone: the refund record stays open)
@@ -464,7 +486,7 @@ stateDiagram-v2
   stored `expiresAt`. See [Inventory Reservations](./inventory-reservations.md#the-sweep).
 - **A week-long hold is free to take, so an account is capped, for every method.**
   `cart` owns the cap: `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` (default 2) counts that account's own unpaid (`pending`)
-  orders, a `processing` card included; a third checkout is refused with `CART_OPEN_ORDER_LIMIT`,
+  orders, a `processing` card included; a third checkout is refused with `CART_OPEN_ORDER_LIMIT_REACHED`,
   naming the open orders, before anything is written.
 - **Nothing asks a provider about it.** The reconcile sweep skips hand-recorded rows, and the
   browser's `POST /payments/{id}/sync` answers the payment as it stands: only an operator recording
@@ -488,7 +510,7 @@ admin reads it back off the bank's own website:
 flowchart LR
     C["Customer pays, writes the code<br/>RF18 5390 0754 in the transfer"] --> B["Bank website<br/>shows the incoming transfer"]
     B --> A["Admin reads the code,<br/>pastes it into the app"]
-    A --> L["GET /payments/order-by-reference<br/>finds the payment, answers its order"]
+    A --> L["GET /payments?transferReference=<br/>finds the payment, whose orderId is the order"]
     L --> P["POST .../offline<br/>marks it paid — settlePayment, as usual"]
 ```
 
@@ -501,18 +523,21 @@ flowchart LR
   rather than a rarely-firing safety net. `parseReference` reads one back.
 - **Minted once, when the payment opens, never recomputed.** It is deterministic in the order id,
   so a redelivered `order.created` could not mint a different one anyway. A `card` order never has
-  one and is not reachable through this lookup; an admin finds it by id through the normal order
-  search instead. No raw-id fallback: a raw order id is not a reference and answers 404.
-- **No new settlement code.** The admin screen calls the lookup, then the existing `POST
-/payments/order/{orderId}/offline` — the same `pending → paid` move, stock commit, and events any
+  one and is not reachable through this filter; an admin finds it by id through the normal order
+  search instead. No raw-id fallback: a raw order id is not a reference and finds nothing.
+- **No new settlement code.** The admin screen filters the payments list by the code, then the existing `POST
+/payments/orders/{orderId}/offline` — the same `pending → paid` move, stock commit, and events any
   other offline record already goes through.
-- **A transfer that arrives after its order was cancelled is recorded, not refused.** The lookup
-  still finds the order (its cancelled payment is kept), and `POST .../offline` takes the money onto
+- **A transfer that arrives after its order was cancelled is recorded, not refused.** The filter
+  still finds the payment (its cancelled payment is kept), and `POST .../offline` takes the money onto
   that payment. The order cannot be paid any more, so the settlement owes the money straight back:
   the payment reads `succeeded`, its refund record stays open (a hand-paid refund is returned by
   the operator, off-system, and marked done), and the order stays cancelled with no stock touched.
-- **A malformed and an unmatched reference answer the same 404.** Distinguishing them would tell a
-  guesser which half of a code they got right.
+- **A malformed and an unmatched reference answer the same empty list.** The filter reads the code
+  in its canonical form first (spacing and case tolerated), and a code that is not a valid RF
+  reference never reaches the database. Distinguishing the two would tell a guesser which half of
+  a code they got right. The guard is the list's own `display:Payment`, and a staff read of the
+  list is not an audited order read: the answer is a payment row, not the order.
 
 ## Libraries
 
@@ -564,7 +589,8 @@ flowchart LR
 ## The staff Payments page
 
 Four reads behind one admin page, all `display:Payment` (support, manager, moderator, admin) and never
-shared-cached. A payer reads their own payment through `GET /payments/order/{orderId}` only.
+shared-cached. A payer reads their own payment through `GET /payments/orders/{orderId}` or, by its own id (the
+`Location` of `POST /payments`), `GET /payments/{id}`; a stranger's is the same 404 as a missing one.
 
 | Read                                     | Answers                                                                                                                                                                 |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -724,7 +750,7 @@ sequenceDiagram
     participant A as This API
     participant P as Your adapter
     participant S as Provider
-    B->>A: POST /payments/intent
+    B->>A: POST /payments
     A->>P: prepare(charge, metadata)
     P->>S: create intent, idempotent on paymentId
     S-->>P: providerRef + client secret

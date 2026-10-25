@@ -118,7 +118,7 @@ describe('the events that move the epoch', () => {
         await nextSecond();
 
         const response = await api()
-            .post('/account/logout-all')
+            .delete('/account/sessions')
             .set('Authorization', caller.bearer)
             .set('Cookie', caller.cookie);
 
@@ -140,7 +140,7 @@ describe('the events that move the epoch', () => {
             .mockRejectedValueOnce(new Error('datastore down'));
 
         const response = await api()
-            .post('/account/logout-all')
+            .delete('/account/sessions')
             .set('Authorization', caller.bearer)
             .set('Cookie', caller.cookie);
 
@@ -193,16 +193,10 @@ describe('the events that move the epoch', () => {
 
     it('a completed password reset purges pending one-time tokens and challenges, not just sessions', async () => {
         const user = await createUser({ verifiedAt: new Date() });
-        for (const type of [
-            'password',
-            'verify',
-            'email-change',
-            'delete',
-            'mfa-challenge'
-        ] as const)
+        for (const type of ['password', 'verify', 'email-change', 'mfa-challenge'] as const)
             await plantToken(user.id, type, `pending-${type}`, { ttlMs: 3_600_000 });
 
-        const response = await api().post('/account/reset-confirm').send({
+        const response = await api().post('/account/password/reset/confirm').send({
             token: 'pending-password',
             password: REPLACEMENT_PASSWORD,
             passwordConfirm: REPLACEMENT_PASSWORD
@@ -251,7 +245,7 @@ describe('"this wasn\'t me" ends the sessions before it touches the address', ()
         const thief = await loginAs(user.email);
         await nextSecond();
 
-        const response = await api().post('/account/email-change-undo').send({ token: 'undo-me' });
+        const response = await api().post('/account/email-change/undo').send({ token: 'undo-me' });
 
         expect(response.status).toBe(409);
         expect(await statusWith(thief.bearer)).toBe(401);
@@ -263,7 +257,7 @@ describe('"this wasn\'t me" ends the sessions before it touches the address', ()
         const user = await changedAccount();
         await createUser({ verifiedAt: new Date(), email: 'old@example.com', username: 'taker' });
 
-        await api().post('/account/email-change-undo').send({ token: 'undo-me' });
+        await api().post('/account/email-change/undo').send({ token: 'undo-me' });
         await settleOutboxNudges();
 
         const rows = await outboxEventModel.find({ name: 'account.sessions-revoked' }).lean();
@@ -294,7 +288,7 @@ describe('a credential change moves the epoch in its own write', () => {
         await nextSecond();
 
         const response = await api()
-            .post('/account/email-change-confirm')
+            .post('/account/email-change/confirm')
             .send({ token: 'confirm-me' });
 
         expect(response.status).toBe(200);

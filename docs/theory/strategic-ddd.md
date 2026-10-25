@@ -273,7 +273,7 @@ way a handle does. What it never publishes, no matter how convenient:
     The same rule holds for the raw write a `…ById` door delegates to (`update(doc)`, `remove(doc)`):
     the barrel publishes the door, not the write. When a sibling has a legitimate reason to hold the
     loaded document, the module names a narrower door for it: `users` serves `account` through
-    `updateOwnProfile`, `eraseOwnAccount`, `softDeleteInactive` and `eraseInactive`, see
+    `updateOwnProfile`, `scheduleOwnDeletion`, `restoreOwnAccount`, `eraseScheduledDeletion`, `softDeleteInactive` and `eraseInactive`, see
     [users](../modules/users.md#the-doors-a-sibling-module-may-use).
 
     **A step exactly one other module must call** cannot be hidden this way: it has to be published.
@@ -291,7 +291,7 @@ way a handle does. What it never publishes, no matter how convenient:
   the model's does, `export type * from './presenter'`; the function itself never does, in any
   form. A sibling that needs the transform asks the service for it, the same door it already goes
   through for a repository read — `orderService.withActions` is `orders/presenter.ts`'s
-  `presentOrder`, reached this way by `cart`, `delivery` and `payments` alike.
+  `presentOrder` plus the caller's `actions` (`orders/services/actions.ts`), reached this way by `cart`, `delivery` and `payments` alike.
 - **Wiring** — `routes.ts`, `controllers/`, `module.ts`, `probes.ts`, `metrics.ts`, `analytics.ts`,
   `audit.ts`. The app registers these; a sibling never calls them.
 - **`factories.ts`.** A builder writes past the domain rules a service enforces — the same

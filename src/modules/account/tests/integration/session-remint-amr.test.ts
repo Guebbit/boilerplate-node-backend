@@ -72,7 +72,7 @@ describe('the proofs a re-minted session claims', () => {
         const { bearer } = await sessionWith(user.id, ['pwd', 'otp']);
 
         const response = await api()
-            .delete('/account/2fa')
+            .post('/account/2fa/disable')
             .set('Authorization', bearer)
             .send({ code: await codeFor(secret, 1) });
 

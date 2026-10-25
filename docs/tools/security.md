@@ -241,7 +241,7 @@ resolve, fire-and-forget, so a partner integration that stopped calling can be f
     - `sameSite=lax` reduces cross-site cookie sending in common CSRF scenarios.
     - `secure` (production) limits cookie transport to HTTPS.
 - **Server-side refresh-token check**: refresh is accepted only if the signed token still has a live `sessions` row, enabling revocation/logout-all behavior.
-- **Single-use token entropy**: every value stored in `sessions` or `verificationtokens` — refresh sessions, password reset, email verification, delete confirmation — carries at least 128 bits, from `randomBytes(16)` or a signed JWT. Storage is a plain sha256 digest, never the raw value, so a database dump yields nothing usable. Deliberately **not** bcrypt: there is no low-entropy secret to stretch, and a KDF would tax the refresh path every authenticated client hits on a timer.
+- **Single-use token entropy**: every value stored in `sessions` or `verificationtokens` — refresh sessions, password reset, email verification, account restore — carries at least 128 bits, from `randomBytes(16)` or a signed JWT. Storage is a plain sha256 digest, never the raw value, so a database dump yields nothing usable. Deliberately **not** bcrypt: there is no low-entropy secret to stretch, and a KDF would tax the refresh path every authenticated client hits on a timer.
 - **Single-use tokens are spent atomically**: a token is consumed by one `deleteOne`, never by load-then-`save()`. The operation is idempotent — deleting an already-spent token matches nothing and reports `deletedCount: 0` — and that count is the _only_ thing that distinguishes the winner when the same reset link is followed twice at once. Both callers pass the earlier "does this token exist" read; exactly one sees a non-zero count and proceeds.
 
 ## Login → auth → refresh request flow
@@ -558,7 +558,7 @@ mailboxes, cost something rather than nothing.
 ### Mail to one mailbox — the victim's budget
 
 Every budget above bounds a CALLER. A mail bomb is bounded by its VICTIM: signup, password reset,
-email change and both resends can each be pointed at a stranger's address, and `victim+1@x`,
+email change, both resends, a data export and an account-deletion request can each be pointed at a stranger's address, and `victim+1@x`,
 `victim+2@x`, … each look like a new address to a budget keyed on the submitted string.
 
 **One budget on the canonical mailbox, used by every flow that mails** (`account/mail-budget.ts`):
@@ -570,7 +570,7 @@ email change and both resends can each be pointed at a stranger's address, and `
   caught too.
 - **Two doors:** a middleware where the body names the address (signup, reset), and a charge inside
   the service where the server picks the recipient (verification resend, pending-email resend, an
-  email change to a new address). Both count in one store, so one budget has one tally.
+  email change to a new address, an account-deletion request). Both count in one store, so one budget has one tally.
 - **A refused charge sends nothing and saves nothing:** `429`, with `Retry-After`; an email change
   leaves `pendingEmail` as it was.
   Either door counts the refusal in `rate_limit_refusals_total` and audits it

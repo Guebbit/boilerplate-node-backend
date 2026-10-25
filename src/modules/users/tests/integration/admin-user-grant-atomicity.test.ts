@@ -92,7 +92,7 @@ describe('userService.updateById', () => {
 
         const result = await userService.updateById(
             user.id,
-            { active: false, role: 'admin' },
+            { username: 'taken-over', role: 'admin' },
             callerContextAs('moderator')
         );
 

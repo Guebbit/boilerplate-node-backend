@@ -14,21 +14,19 @@ on [Test it yourself](./test-me.md).
 | `display:Order` / `.update`                                 | Read and update any order in the shop, not only your own. |
 | `display:Payment` / `create:Payment` / `create:Refund`      | Read any payment, record one, and refund it.              |
 | `read:Return` / `.update`                                   | Read any return request, and approve or decline it.       |
-| `read:AuditLog`                                             | Read the history of what everyone with a key did.         |
 
 ## Banning is its own key
 
-There is no separate "ban" button in the data model. Banning an account **is** setting `active` to
-`false` on it — the same field, the same endpoint, that an edit uses — but changing that one field
-needs `ban:User`, a key [support](./support.md) does not hold. A role that fixes a customer's
-phone number should not, by that alone, be able to lock them out:
+Banning an account **is** deactivating it (`POST /users/{id}/deactivate`), and bringing it back is
+`activate`. Both need `ban:User`, a key [support](./support.md) does not hold. A role that fixes a
+customer's phone number should not, by that alone, be able to lock them out:
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
-    A["moderator sets active: false"] --> B["every session ends<br/><i>defence in depth</i>"]
+    A["moderator deactivates"] --> B["every session ends<br/><i>defence in depth</i>"]
     A --> C["the history records<br/><i>admin.user.banned</i>"]
-    D["moderator sets active: true"] --> E["the history records<br/><i>admin.user.unbanned</i>"]
+    D["moderator activates"] --> E["the history records<br/><i>admin.user.unbanned</i>"]
 
     classDef act fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef effect fill:#ccfbf1,stroke:#0f766e,color:#111827;
@@ -36,10 +34,8 @@ flowchart LR
     class B,C,E effect;
 ```
 
-What makes it show up as a **ban** rather than an ordinary edit is the action history, not a new
-code path: flipping `active` from true to false is recorded as `admin.user.banned`, and flipping it
-back is `admin.user.unbanned` — everything else that changes on the same request is still recorded
-as a plain update. → [`users`](../modules/users.md)
+The two moves are recorded under their own names in the action history: `admin.user.banned` and
+`admin.user.unbanned`. An ordinary edit never touches `active`. → [`users`](../modules/users.md)
 
 ## "Needs review": checking an account the shop flagged
 
@@ -74,13 +70,13 @@ the note as if the buyer reads it, because they do. → [`orders`](../modules/or
 
 `create:Payment` is also what lets this role record money that arrived outside the checkout
 flow — cash at the counter, a bank transfer once its reference is matched — through
-`POST /payments/order/{orderId}/offline`. It settles the order exactly as a card payment would: the
+`POST /payments/orders/{orderId}/offline`. It settles the order exactly as a card payment would: the
 order moves to `paid`, stock commits, the confirmation fires.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
-    A["money arrives<br/><i>cash, or a transfer with its reference</i>"] --> B["you record it<br/><i>POST /payments/order/{orderId}/offline</i>"]
+    A["money arrives<br/><i>cash, or a transfer with its reference</i>"] --> B["you record it<br/><i>POST /payments/orders/{orderId}/offline</i>"]
     B --> C["the order is paid<br/><i>stock commits, the confirmation fires</i>"]
 
     classDef you fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -92,14 +88,6 @@ flowchart LR
 An order already `paid` refuses a second recording, the same rule that refuses a second card
 intent — `orders` alone decides whether an order still awaits payment, and every door that could
 open a new one asks it before doing anything else. → [`payments`](../modules/payments.md)
-
-## Reading the shop's own history
-
-`read:AuditLog` opens `GET /audit` — this role's own window onto who did what, scoped to this shop.
-It is the same underlying trail [the observability dashboard](../modules/observability.md) reads
-for the platform operator, reached through a different door with a different key: this one asks
-nothing about the platform, only about this shop, which is exactly the key a shop's own staff can
-be handed. → [`audit-logs`](../modules/audit-logs.md)
 
 ## What a moderator protects
 
@@ -119,8 +107,8 @@ No `products.*` — a moderator cannot change what a thing costs or looks like; 
 
 ## The words we used
 
-| Word               | In plain terms                                                                    |
-| ------------------ | --------------------------------------------------------------------------------- |
-| **Ban**            | `active: false` on an account, recorded under its own name in the history.        |
-| **Refund**         | Money returned on a payment already taken. → [`payments`](../modules/payments.md) |
-| **Action history** | Who did what, when, to which row. → [`audit-logs`](../modules/audit-logs.md)      |
+| Word               | In plain terms                                                                                       |
+| ------------------ | ---------------------------------------------------------------------------------------------------- |
+| **Ban**            | Deactivating an account, recorded under its own name in the history.                                 |
+| **Refund**         | Money returned on a payment already taken. → [`payments`](../modules/payments.md)                    |
+| **Action history** | Who did what, when, to which row; only an admin reads it. → [`audit-logs`](../modules/audit-logs.md) |

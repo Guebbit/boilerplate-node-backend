@@ -35,6 +35,7 @@ flowchart LR
     webhooks --> users
     users --> access
     users -. "user.deactivated" .-> account
+    users -. "user.deletion-cancelled" .-> account
     users -. "user.setup-requested" .-> account
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -86,23 +87,26 @@ merges (a field left out keeps its current value) — the same replace/merge spl
 [`request-flow.md`](../theory/request-flow.md) documents for the rest of the API, through the same
 shared factory.
 
-**What an edit needs, beyond the route's key.** Three rules sit in `services/update.ts` and
+**What an edit needs, beyond the route's key.** Two rules sit in `services/update.ts` and
 `services/remove.ts`, asked before anything is written:
 
-| Rule                           | Refusal                                            | Why                                                           |
-| ------------------------------ | -------------------------------------------------- | ------------------------------------------------------------- |
-| the field's own key            | `403 FORBIDDEN`                                    | `active` needs `ban:User`, a different key from `update:User` |
-| the account holds a staff role | `403 ROLE_MANAGEMENT_REQUIRED`                     | [R1](../theory/authorization.md#protecting-people)            |
-| handing a role out             | `403 ROLE_MANAGEMENT_REQUIRED`, or `422` on `role` | only a holder of `assign:Role` hands out a staff role         |
+| Rule                           | Refusal                                            | Why                                                   |
+| ------------------------------ | -------------------------------------------------- | ----------------------------------------------------- |
+| the account holds a staff role | `403 ROLE_MANAGEMENT_REQUIRED`                     | [R1](../theory/authorization.md#protecting-people)    |
+| handing a role out             | `403 ROLE_MANAGEMENT_REQUIRED`, or `422` on `role` | only a holder of `assign:Role` hands out a staff role |
 
-A key is asked only when the field **changes**: a `PUT` resends `active` and `role` on every save,
-and resending what the account already has is no ban and no role change (`role: null` is a plain
-customer). The same protection covers soft delete, hard delete and restore. A refused attempt on a
-staff account is audited as `security.forbidden` with `metadata.reason: role_protected`.
+A role is asked only when it **changes**: a `PUT` resends `role` on every save, and resending what
+the account already has is no role change (`role: null` is a plain customer). The same protection
+covers soft delete, hard delete, restore, the purchase hold and the activate / deactivate switch. A
+refused attempt on a staff account is audited as `security.forbidden` with
+`metadata.reason: role_protected`.
+
+`active` is not a field of `PUT` / `PATCH`: a status change is an action endpoint
+([Activating and deactivating](#activating-and-deactivating)).
 
 **The fresh-login step-up** asks only a caller holding `assign:Role`, and only when the write changes
-who holds powers: a role that differs from the stored one, or an `active` flag that flips. A `PUT`
-that resends what is stored is not challenged. A caller without `assign:Role` is never asked, and
+who holds powers: a role that differs from the stored one, an account created deactivated, or a
+call to `activate` / `deactivate`. A `PUT` that resends what is stored is not challenged. A caller without `assign:Role` is never asked, and
 the service refuses a role change with the audited `403 ROLE_MANAGEMENT_REQUIRED` instead. An API
 key can never step up, so a key reaching a step-up guard is refused `403 FORBIDDEN` (audited as
 `credential_cannot_step_up`), not told to log in again.
@@ -138,12 +142,12 @@ sequenceDiagram
 without one and always mails a setup link (`USER_SETUP_REQUESTED`, handled in
 [`account`](./account.md); it rides the [outbox](../tools/outbox.md) in the account's own
 transaction, so a lost mail is retried and a refused grant sends none), so no administrator ever types, sees or resets another person's
-password, second factor or sign-in email. Each row also carries an `actions` block (`update`,
-`ban`, `delete`) with the rank already applied, which is what a screen renders its buttons from.
+password, second factor or sign-in email. Each row also carries an [`actions` block](#actions) with
+the rank and the account's state already applied, which is what a screen renders its buttons from.
 
 `phone` is stored AES-256-GCM under `NODE_PII_ENCRYPTION_KEY`
 (`@infrastructure/security/pii-encryption`) — `services/update.ts`'s `update` encrypts it on the one write
-path, `presentUser` (`presenter.ts`) decrypts it on the way out, whether the source document was hydrated or
+path, `presentAccount` and `presentUser` (`presenter.ts`) decrypt it on the way out, whether the source document was hydrated or
 `search()`'s `.lean()` result. See
 [Secrets at rest](../theory/defences/crypto-and-secrets.md#secrets-at-rest).
 
@@ -152,23 +156,68 @@ create or update has committed, a failed image hand-off is logged and the saved 
 a 500 on a write that landed. Ending sessions is not such a step — it rides in the same save as the
 session epoch.
 
+## Actions
+
+`User.actions` (required, on every `/users` read and write, list rows included) is one boolean per
+endpoint, computed per request by `userActionsFor` (`services/actions.ts`): pure, with the two
+lookups it needs (the caller's keys, who holds a staff role) made once per request or once per page.
+The presenter only maps the finished block. `/account` serves a different schema, `Account`, which
+has no `actions` and no review flag: a person's own record has no one to protect.
+
+| Flag               | Endpoint                           | The caller needs            | And the account must be         |
+| ------------------ | ---------------------------------- | --------------------------- | ------------------------------- |
+| `update`           | `PUT` / `PATCH /users/{id}`        | `update:User`               | reachable (below)               |
+| `assignRole`       | the `role` field of those          | `update`, and `assign:Role` | reachable                       |
+| `delete`           | `DELETE /users/{id}`               | `delete:User`               | not soft-deleted                |
+| `hardDelete`       | `DELETE /users/{id}/hard`          | `delete:User`               | reachable                       |
+| `restore`          | `POST /users/{id}/restore`         | `delete:User`               | soft-deleted                    |
+| `setPurchaseHold`  | `PUT /users/{id}/purchase-hold`    | `ban:User`                  | reachable                       |
+| `liftPurchaseHold` | `DELETE /users/{id}/purchase-hold` | `ban:User`                  | holding a hold or a review flag |
+| `activate`         | `POST /users/{id}/activate`        | `ban:User`                  | deactivated                     |
+| `deactivate`       | `POST /users/{id}/deactivate`      | `ban:User`                  | active                          |
+
+"Reachable" is `access`'s one pure rule, `mayChangeAccount`: an account that holds no staff role, or
+is the caller's own, or the caller holds `assign:Role`. The service's `canChangeAccount` asks the
+same function after a lookup, so the flag and the refusal cannot disagree. `ban:User` is the key of
+every ban-class move: deactivating is a ban today, and [support](../demo-ecommerce/support.md) keeps none of it.
+
+```mermaid
+flowchart LR
+    REQ["GET /users"] --> L["one lookup per page:<br/>roles + staff holders"]
+    L --> F["userActionsFor(row, holdsRole, caller)<br/><i>pure</i>"]
+    M["access.mayChangeAccount<br/><i>pure</i>"] --> F
+    F --> P["presentUser(row, role, actions)<br/><i>maps only</i>"]
+    M --> C["canChangeAccount<br/>(a refusal, after a lookup)"]
+```
+
+## Activating and deactivating
+
+`POST /users/{id}/deactivate` and `POST /users/{id}/activate` are the only way `active` changes
+after creation (a create body may still set the initial value). Deactivating ends every session in
+the same save (the [session epoch](./account-sessions.md#the-session-epoch) moves with it) and
+announces `user.deactivated` in that transaction, so `account` purges the pending links when the
+sessions died. A repeat is a conflict, not a second success: `409 USER_ALREADY_INACTIVE` /
+`USER_ALREADY_ACTIVE` ([the rule](../api/write-methods.md#repeating-an-action-409)). Audit: `admin.user.banned` / `admin.user.unbanned`.
+
 ## The doors a sibling module may use
 
 Two writes skip the ban check and the staff protection the admin routes enforce: the raw `update`
 and `remove`. Both are `@internal` and never leave the module. `account` reaches the record through
-four named doors instead, each narrower than the write beneath it:
+named doors instead, each narrower than the write beneath it:
 
-| Door                 | Who calls it                                | What it cannot do                                                  |
-| -------------------- | ------------------------------------------- | ------------------------------------------------------------------ |
-| `updateOwnProfile`   | the owner, `PUT`/`PATCH /account`           | take `active` or `role`: a profile edit cannot ban its own account |
-| `eraseOwnAccount`    | the owner, `DELETE /account/delete-confirm` | take a bare document: it asks for the spent deletion link's proof  |
-| `softDeleteInactive` | the inactivity reaper                       | take an account never warned, or one that holds a staff role (409) |
-| `eraseInactive`      | the inactivity reaper                       | erase a row the reaper did not soft-delete itself (409)            |
+| Door                     | Who calls it                      | What it cannot do                                                                      |
+| ------------------------ | --------------------------------- | -------------------------------------------------------------------------------------- |
+| `updateOwnProfile`       | the owner, `PUT`/`PATCH /account` | take `active` or `role`: a profile edit cannot ban its own account                     |
+| `scheduleOwnDeletion`    | the owner, `DELETE /account`      | erase anything: it locks the row, stamps `purgeAt` and moves the session epoch         |
+| `restoreOwnAccount`      | the owner, by link or at sign-in  | restore a row past `purgeAt`, or one the owner did not schedule (a conditional update) |
+| `eraseScheduledDeletion` | the purge job                     | erase a row not yet due: its first write is a claim on `purgeAt <= now`, else 409      |
+| `softDeleteInactive`     | the inactivity reaper             | take an account never warned, or one that holds a staff role (409)                     |
+| `eraseInactive`          | the inactivity reaper             | erase a row the reaper did not soft-delete itself (409)                                |
 
-`eraseOwnAccount` takes a `RedeemedOwner`, which `userService.redeemedOwner(user)` mints from the
-document the deletion link just resolved. The route is anonymous, so the spent link is the only thing
-that says the person asking owns the account; the type makes a caller say so out loud, and a test or
-a reviewer can see who claims it. No rank check applies, so a staff member may erase themselves.
+The state itself is the proof: an owner-scheduled row carries `deletedBy: 'owner'` and a `purgeAt`,
+as a reaper row carries `deletedBy: 'reaper'`. No rank check applies, so a staff member may delete
+and later be erased like anyone else. The purge hands a system context, so the trail says
+`system.user.erased`, not an admin erase.
 
 `updateById` and `removeById` stay the doors for an admin: they load by id and ask first.
 
@@ -177,12 +226,12 @@ a reviewer can see who claims it. No rank check applies, so a staff member may e
 A protective pause on checkout for one account, so a person steps in before a bot or a loop does
 damage. It is a field on the user (`purchaseHold`) with its own two doors and one reader:
 
-| Door                               | Who                                        | What it does                                                                                   |
-| ---------------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| `PUT /users/{id}/purchase-hold`    | staff with `ban:User`                      | a manual hold ending at `until`, with an optional `note` written for the buyer; replaces any   |
-| `DELETE /users/{id}/purchase-hold` | staff with `ban:User`                      | the review: ends the hold now and restarts the count of cancellations from this moment         |
-| `takeAutomaticPurchaseHold`        | `orders` only (a lint-guarded friend door) | the shop's own hold after repeated cancellations; atomic, so only one of two racing calls wins |
-| `purchaseHoldOf`                   | `cart`'s checkout                          | the hold in force, if any                                                                      |
+| Door                               | Who                                        | What it does                                                                                     |
+| ---------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `PUT /users/{id}/purchase-hold`    | staff with `ban:User`                      | a manual hold ending at `until`, with an optional `note` written for the buyer; replaces any     |
+| `DELETE /users/{id}/purchase-hold` | staff with `ban:User`                      | the review: ends the hold now and restarts the count; `409 USER_PURCHASE_HOLD_NOT_SET` with none |
+| `takeAutomaticPurchaseHold`        | `orders` only (a lint-guarded friend door) | the shop's own hold after repeated cancellations; atomic, so only one of two racing calls wins   |
+| `purchaseHoldOf`                   | `cart`'s checkout                          | the hold in force, if any                                                                        |
 
 A hold is in force while `until` is in the future, so every reader ignores an expired one at once.
 Reads show it only while in force, to staff on `/users` and to the buyer on `/account` and in the cart
@@ -207,9 +256,9 @@ outlives the hold, so an unreviewed pause does not drop off the staff list when 
 stays until a staff member acts. Placing a hold or lifting one clears it. The `/users` reads show it
 (never `/account`); the data export carries it with the rest of the profile.
 
-Audit: `admin.user.purchase_hold_set`; `admin.user.purchase_hold_lifted` (when there was a hold or a
-flag to clear; `metadata.inForce` says whether a hold was still running, so "reviewed, no hold" is
-audited too); `system.user.purchase_hold_set`; `system.user.purchase_hold_flagged`. The users list
+Audit: `admin.user.purchase_hold_set`; `admin.user.purchase_hold_lifted` (`metadata.inForce` says
+whether a hold was still running, so "reviewed, no hold" is audited too; a lift with nothing to clear
+is refused, so it writes no row); `system.user.purchase_hold_set`; `system.user.purchase_hold_flagged`. The users list
 takes `purchaseHold=true` (held right now) and `purchaseHoldReview=true` (flagged, not yet reviewed)
 to find them.
 The nightly job `reap:purchase-holds` is listed with the others in
@@ -219,7 +268,7 @@ The nightly job `reap:purchase-holds` is listed with the others in
 
 `DELETE /users/:id` soft-deletes by default — `deletedAt` is stamped, the account's sessions are
 revoked (the [session epoch](./account-sessions.md#the-session-epoch) moves in the same save, as it
-does when an update bans the account, so a restore or an unban never revives an old token), and a
+does when the account is deactivated, so a restore or an activation never revives an old token), and a
 repeated `DELETE` changes nothing. `POST /users/:id/restore` undoes it; the owner
 signs in again. `?hardDelete=true` is the one that runs every module's `personalData.erase` hook (the cascade above) and
 actually removes the row.
@@ -236,6 +285,19 @@ A module's erase hook may hand back work to run once the transaction has committ
 anything that is not a database write, so a rollback could not undo it. `orders` uses it to cancel
 the account's never-paid orders, see [When the account is erased](./orders.md#when-the-account-is-erased).
 A failing step is logged and never turns a committed erasure into an error.
+
+A third kind of soft delete is the **owner's own**: `DELETE /account` stamps `deletedAt` (the request
+time), `deletedBy: 'owner'` and `purgeAt`, and the account is erased by the `reap:scheduled-deletions`
+job once `purgeAt` passes ([the grace](../theory/data-retention.md#self-deletion-a-grace-under-one-month)).
+Staff see it in the list (`User.purgeAt`, "erases on {date}") and may restore it with
+`POST /users/{id}/restore` while `purgeAt` is ahead, the same `delete:User` key as any restore. Past
+it the answer is 409 `USER_ERASURE_DUE` and `actions.restore` is false. The restore commits with the
+outbox event `user.deletion-cancelled`; `account` drops the restore link and tells the owner staff did
+it. There is no reason field: the audit row records who.
+
+The erase cascade also forgets a staff member's name where it only pointed: `purchaseHold.setBy` on
+another buyer is unset before the row goes, and `webhooks` and `locales` do the same for the
+subscription owner and the translator. The rows stay, the person goes.
 
 ## What this module adds to the data export
 

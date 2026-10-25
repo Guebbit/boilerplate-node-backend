@@ -82,7 +82,10 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
         })
         .expect(201);
     const verification = await waitForMail(ACCOUNT.email, 'account.verify-request');
-    await api().post('/account/verify-confirm').send({ token: verification.token }).expect(200);
+    await api()
+        .post('/account/email-verification/confirm')
+        .send({ token: verification.token })
+        .expect(200);
     await seedMembership(String(signup.body.data.id), DEPLOYMENT_TENANT_ID, 'tenant', 'admin');
 
     // Arm TOTP. Arming ends the session that did it, so the account signs in again, with a code.
@@ -119,13 +122,13 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
 
     // Forgot the password: the reset ends the session and the credential, and mails about both.
     await api()
-        .post('/account/reset')
+        .post('/account/password/reset')
         .set(await solvedChallenge())
         .send({ email: ACCOUNT.email })
         .expect(200);
     const reset = await waitForMail(ACCOUNT.email, 'account.reset-request');
     await api()
-        .post('/account/reset-confirm')
+        .post('/account/password/reset/confirm')
         .send({
             token: reset.token,
             password: ACCOUNT.replacement,
@@ -168,13 +171,13 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
 
     // The new address proves itself; the old one holds a 7-day undo link.
     const proof = await waitForMail(ACCOUNT.movedTo, 'account.verify-request');
-    await api().post('/account/email-change-confirm').send({ token: proof.token }).expect(200);
+    await api().post('/account/email-change/confirm').send({ token: proof.token }).expect(200);
     const notice = mailsTo(ACCOUNT.email, 'account.email-change-notice');
     expect(notice).toHaveLength(1);
 
     // The undo link is dead after 7 days, and the sweep forgets the old address.
     advanceDate(8 * DAY_MS);
-    const undo = await api().post('/account/email-change-undo').send({ token: notice[0].token });
+    const undo = await api().post('/account/email-change/undo').send({ token: notice[0].token });
     expect(undo.status).toBe(422);
     expect(await runJob('reap:previous-emails')).toEqual({ cleared: 1 });
 

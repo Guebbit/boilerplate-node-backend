@@ -57,6 +57,44 @@ describe('GET /inventory/levels', () => {
     });
 });
 
+describe('GET /inventory/levels/{productId}', () => {
+    it('reads one product’s counters', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct({ onHand: 7 });
+
+        const response = await api()
+            .get(`/inventory/levels/${String(product._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toMatchObject({ onHand: 7, reserved: 0, available: 7 });
+    });
+
+    it('answers 404 for an unknown product and a malformed id alike', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const unknown = await api()
+            .get(`/inventory/levels/${MISSING_ID}`)
+            .set('Authorization', bearer);
+        const malformed = await api()
+            .get('/inventory/levels/not-an-id')
+            .set('Authorization', bearer);
+
+        expect([unknown.status, malformed.status]).toEqual([404, 404]);
+    });
+
+    it('refuses a customer with 403', async () => {
+        const { bearer } = await authenticateAs('user');
+        const product = await createProduct({ onHand: 7 });
+
+        const response = await api()
+            .get(`/inventory/levels/${String(product._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(403);
+    });
+});
+
 describe('GET /inventory/movements', () => {
     it('matches the contract for an empty ledger', async () => {
         const { bearer } = await authenticateAs('admin');
@@ -73,9 +111,9 @@ describe('GET /inventory/movements', () => {
         const product = await createProduct({ onHand: 0 });
         for (let index = 0; index < 5; index += 1)
             await api()
-                .post('/inventory/receipts')
+                .post(`/inventory/levels/${String(product._id)}/receive`)
                 .set('Authorization', bearer)
-                .send({ productId: String(product._id), quantity: 1 });
+                .send({ quantity: 1 });
 
         const response = await api()
             .get(`/inventory/movements?productId=${String(product._id)}&page=2&pageSize=2`)
@@ -97,13 +135,13 @@ describe('GET /inventory/movements', () => {
         const { bearer } = await authenticateAs('admin');
         const product = await createProduct();
         await api()
-            .post('/inventory/receipts')
+            .post(`/inventory/levels/${String(product._id)}/receive`)
             .set('Authorization', bearer)
-            .send({ productId: String(product._id), quantity: 5 });
+            .send({ quantity: 5 });
         await api()
-            .post('/inventory/adjustments')
+            .post(`/inventory/levels/${String(product._id)}/adjust`)
             .set('Authorization', bearer)
-            .send({ productId: String(product._id), delta: -2 });
+            .send({ delta: -2 });
 
         const response = await api()
             .get(`/inventory/movements?productId=${String(product._id)}&reason=adjust`)
@@ -118,9 +156,9 @@ describe('GET /inventory/movements', () => {
         const { bearer } = await authenticateAs('admin');
         const product = await createProduct();
         await api()
-            .post('/inventory/receipts')
+            .post(`/inventory/levels/${String(product._id)}/receive`)
             .set('Authorization', bearer)
-            .send({ productId: String(product._id), quantity: 5 });
+            .send({ quantity: 5 });
 
         const response = await api()
             .get(`/inventory/movements?productId=${String(product._id)}`)
@@ -137,15 +175,15 @@ describe('GET /inventory/movements', () => {
     });
 });
 
-describe('POST /inventory/receipts', () => {
+describe('POST /inventory/levels/{productId}/receive', () => {
     it('matches the contract and answers the counters after the delivery', async () => {
         const { bearer } = await authenticateAs('admin');
         const product = await createProduct({ onHand: 3 });
 
         const response = await api()
-            .post('/inventory/receipts')
+            .post(`/inventory/levels/${String(product._id)}/receive`)
             .set('Authorization', bearer)
-            .send({ productId: String(product._id), quantity: 7 });
+            .send({ quantity: 7 });
 
         expect(response.status).toBe(200);
         expect(response.body.data).toMatchObject({ onHand: 10, reserved: 0, available: 10 });
@@ -155,18 +193,19 @@ describe('POST /inventory/receipts', () => {
         const { bearer } = await authenticateAs('admin');
 
         const response = await api()
-            .post('/inventory/receipts')
+            .post(`/inventory/levels/${MISSING_ID}/receive`)
             .set('Authorization', bearer)
-            .send({ productId: MISSING_ID, quantity: 7 });
+            .send({ quantity: 7 });
 
         expect(response.status).toBe(404);
     });
 
     it('matches the error contract for an invalid body', async () => {
         const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
 
         const response = await api()
-            .post('/inventory/receipts')
+            .post(`/inventory/levels/${String(product._id)}/receive`)
             .set('Authorization', bearer)
             .send({ quantity: 0 });
 
@@ -174,15 +213,15 @@ describe('POST /inventory/receipts', () => {
     });
 });
 
-describe('POST /inventory/adjustments', () => {
+describe('POST /inventory/levels/{productId}/adjust', () => {
     it('matches the contract for a correction in either direction', async () => {
         const { bearer } = await authenticateAs('admin');
         const product = await createProduct({ onHand: 10 });
 
         const response = await api()
-            .post('/inventory/adjustments')
+            .post(`/inventory/levels/${String(product._id)}/adjust`)
             .set('Authorization', bearer)
-            .send({ productId: String(product._id), delta: -4, note: 'damaged in transit' });
+            .send({ delta: -4, note: 'damaged in transit' });
 
         expect(response.status).toBe(200);
         expect(response.body.data).toMatchObject({ onHand: 6, available: 6 });
@@ -193,9 +232,9 @@ describe('POST /inventory/adjustments', () => {
         const product = await createProduct({ onHand: 10, reserved: 8 });
 
         const response = await api()
-            .post('/inventory/adjustments')
+            .post(`/inventory/levels/${String(product._id)}/adjust`)
             .set('Authorization', bearer)
-            .send({ productId: String(product._id), delta: -5 });
+            .send({ delta: -5 });
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('INVENTORY_BELOW_RESERVED');
@@ -206,9 +245,9 @@ describe('POST /inventory/adjustments', () => {
         const product = await createProduct();
 
         const response = await api()
-            .post('/inventory/adjustments')
+            .post(`/inventory/levels/${String(product._id)}/adjust`)
             .set('Authorization', bearer)
-            .send({ productId: String(product._id), delta: 0 });
+            .send({ delta: 0 });
 
         expect(response.status).toBe(422);
         expect(response.body.errors[0]).toMatchObject({

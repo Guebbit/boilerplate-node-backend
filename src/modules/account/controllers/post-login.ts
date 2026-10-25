@@ -8,6 +8,7 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { t } from '@infrastructure/i18n';
+import { isRestorable } from '@modules/users';
 import { accountService, twoFactorService } from '../services';
 import { RefreshTokenExpiryTime } from '../session/config';
 import { SESSION_TRANSPORTS } from '../session/strategy';
@@ -100,6 +101,22 @@ export const postLogin = (
                             t('account.login.second-factor-required')
                         );
                     });
+            }
+
+            /*
+             * Deletion-grace branch: the owner asked to delete this account and its grace has not
+             * run out. No session and no login yet: a claim check goes back instead, and the
+             * client decides to restore (`POST /account/login/restore`) or to walk away.
+             */
+            if (isRestorable(data)) {
+                return accountService.buildDeletionPending(data, [AMR.password]).then((pending) => {
+                    successResponse<LoginOutcome>(
+                        response,
+                        pending,
+                        200,
+                        t('account.login.deletion-pending')
+                    );
+                });
             }
 
             return issueSession(request, response, userId, {

@@ -158,7 +158,7 @@ const CUSTOMER_ORDERS: Line[][] = [
 /**
  * The baskets left sitting in the shop when the flows finish — `[whose, lines]`.
  *
- * Filled LAST, and through `POST /cart` like everything else here, for a reason that is not
+ * Filled LAST, and through `POST /cart/items` like everything else here, for a reason that is not
  * stylistic: a checkout empties the cart it came from, so any cart written before these flows ran
  * would be gone by the time anyone looked. Only three people have one — absence and an empty cart
  * are the same state, so "has never added anything" is most of the customer base's fixture. Never
@@ -223,7 +223,7 @@ const plannedDemand = (): Map<string, number> => {
 };
 
 /**
- * Put every product's opening stock on the shelf — `POST /inventory/receipts`, before anyone can
+ * Put every product's opening stock on the shelf — `POST /inventory/levels/{productId}/receive`, before anyone can
  * buy anything, since the catalogue seeds at `onHand: 0`.
  *
  * Each receipt is the catalogue's own opening figure PLUS what the flows are about to buy, so a
@@ -287,16 +287,13 @@ const driveCatalogueEdits = async (owner: Caller): Promise<void> => {
  * Last of all, and after every shopper has signed out: he places two of the orders above, and a
  * banned account cannot use the session it placed them with.
  *
- * `PATCH`, not `PUT`: a PUT replaces the whole user, and would clear his avatar, locale, phone and
- * website along with the one field this changes.
+ * `POST …/deactivate`, the action endpoint: a status change is not a field of PUT or PATCH.
  */
 const banOneCustomer = (owner: Caller): Promise<void> =>
-    owner
-        .call('PATCH', `/users/${SEED_CUSTOMER_IDS.marcus}`, { active: false })
-        .then(() => undefined);
+    owner.call('POST', `/users/${SEED_CUSTOMER_IDS.marcus}/deactivate`).then(() => undefined);
 
 /**
- * Every caller signs out of every device — `POST /account/logout-all`.
+ * Every caller signs out of every device — `DELETE /account/sessions`.
  *
  * Not housekeeping: a login writes a refresh token onto the user document, and twelve accounts
  * signed in at build time would ship twelve phantom sessions in the demo dataset. They are an
@@ -305,7 +302,7 @@ const banOneCustomer = (owner: Caller): Promise<void> =>
  * finds.
  */
 const signOutEveryone = (callers: Caller[]): Promise<void> =>
-    Promise.all(callers.map((caller) => caller.call('POST', '/account/logout-all'))).then(
+    Promise.all(callers.map((caller) => caller.call('DELETE', '/account/sessions'))).then(
         () => undefined
     );
 
@@ -504,7 +501,7 @@ export const driveShopHistory = async (
 
     /*
      * Paid, then cancelled by the operator: `payments` hears `ORDER_CANCELLED` and returns it.
-     * The subject is the ORDER's id, not the payment's, because `GET /payments/order/{orderId}`
+     * The subject is the ORDER's id, not the payment's, because `GET /payments/orders/{orderId}`
      * is the only way to read a payment back — a payment id would name a row nothing can fetch.
      */
     subjects['payment.refunded'] = dated(await checkoutAndPay(customer, DOG_FOOD(1)));
@@ -635,7 +632,7 @@ export const driveShopHistory = async (
     /* The baskets people are still shopping with — after every checkout, which empties one. */
     for (const [who, lines] of CARTS) {
         const shopper = shopperFor(base, who);
-        for (const line of lines) await shopper.call('POST', '/cart', line);
+        for (const line of lines) await shopper.call('POST', '/cart/items', line);
     }
 
     await driveCatalogueEdits(owner);

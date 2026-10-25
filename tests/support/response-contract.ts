@@ -63,10 +63,10 @@ const pascalCase = (operationId: string): string =>
 /**
  * The operation a response's method + path belongs to, or `undefined` for an undeclared route.
  *
- * A literal path and a templated sibling can both match the same request — `/cart/{productId}`'s
- * `[^/]+` accepts the literal string `shipping-method` just as well as a real id. The most
- * SPECIFIC match (fewest `{param}` segments) wins, the same tie-break `cart/routes.ts` itself
- * relies on by mounting the literal route first.
+ * A literal path and a templated sibling can both match the same request — `/products/{id}`'s
+ * `[^/]+` accepts the literal string `search` just as well as a real id. The most
+ * SPECIFIC match (fewest `{param}` segments) wins, the same tie-break the route tables rely
+ * on by mounting the literal route first.
  */
 const operationFor = (method: HttpMethod, pathname: string): string | undefined => {
     const matches = DECLARED_ROUTES.filter(

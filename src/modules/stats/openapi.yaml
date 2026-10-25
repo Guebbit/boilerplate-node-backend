@@ -228,6 +228,28 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /stats/limits:
+        get:
+            tags: [Stats]
+            summary: How big a period may be (staff)
+            description: >-
+                The two ceilings every period read enforces, so a form can refuse a period before a
+                round trip does: the most calendar days (inclusive) and the most buckets one request
+                may cover. Needs `read:Stats`.
+            operationId: getStatsLimits
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: The ceilings
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/StatsLimitsEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
 components:
     parameters:
         StatsFromParam:
@@ -634,6 +656,32 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
                     $ref: '#/components/schemas/CustomerStats'
+
+        StatsLimits:
+            type: object
+            additionalProperties: false
+            required: [maxRangeDays, maxBuckets]
+            properties:
+                maxRangeDays:
+                    type: integer
+                    description: The most calendar days one period may cover, both ends counted.
+                maxBuckets:
+                    type: integer
+                    description: The most buckets one series may hold, the first possibly starting before `from`.
+
+        StatsLimitsEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/StatsLimits'
 
         PipelineStatsEnvelope:
             type: object

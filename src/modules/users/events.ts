@@ -18,6 +18,12 @@ declare module '@kernel/events' {
          * its sessions. `account` owns the one-time links, so it is the subscriber that purges them.
          */
         'user.deactivated': { userId: string };
+        /**
+         * Staff restored an account its owner had scheduled for erasure, committed with the write
+         * that cleared the schedule. `account` owns the restore link and the mail, so it is the
+         * subscriber that drops the link and tells the owner.
+         */
+        'user.deletion-cancelled': { userId: string };
     }
 }
 
@@ -26,3 +32,6 @@ export const USER_SETUP_REQUESTED = 'user.setup-requested';
 
 /** See `DomainEventMap['user.deactivated']` above. */
 export const USER_DEACTIVATED = 'user.deactivated';
+
+/** See `DomainEventMap['user.deletion-cancelled']` above. */
+export const USER_DELETION_CANCELLED = 'user.deletion-cancelled';

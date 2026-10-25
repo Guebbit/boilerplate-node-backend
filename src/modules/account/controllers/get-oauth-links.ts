@@ -8,6 +8,7 @@ import { successResponse } from '@infrastructure/http/response';
 import type { OAuthLinks } from '@types';
 import { catchAs } from '@infrastructure/http/controller';
 import { accountService } from '../services';
+import { presentOAuthLinks } from '../presenter';
 
 /**
  * GET /account/oauth/links
@@ -16,12 +17,5 @@ import { accountService } from '../services';
 export const getOAuthLinks = (request: Request, response: Response) =>
     accountService
         .listOAuthLinks(request.authContext!.id)
-        .then((links) =>
-            successResponse<OAuthLinks>(response, {
-                links: links.map(({ provider, connectedAt }) => ({
-                    provider,
-                    connectedAt: connectedAt.toISOString()
-                }))
-            })
-        )
+        .then((links) => successResponse<OAuthLinks>(response, presentOAuthLinks(links)))
         .catch(catchAs(response, 'getOAuthLinks'));

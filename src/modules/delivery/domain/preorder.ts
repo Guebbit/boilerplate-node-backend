@@ -9,7 +9,7 @@
  * | ------------------------------------------ | -------------------------------------------------------- |
  * | moves later, or is cleared                 | an email: the new date (or none yet), cancel for a full refund |
  * | moves earlier, or was cleared already      | nothing; the order page shows the date                   |
- * | passes with the goods still not here       | one email: still no stock, cancel any time               |
+ * | is a day away or gone, goods not here      | one email: it will miss the date, cancel any time        |
  *
  * Silence always means the buyer keeps waiting. The buyer can cancel any time before it ships, and
  * staff see the late orders on the board and decide whom to call.
@@ -115,24 +115,32 @@ export interface MoveFacts {
 export const judgeMove = (facts: MoveFacts, next: Date | undefined): SlipVerdict | undefined =>
     facts.agreedAt === undefined ? undefined : judgeSlip({ expectedAt: facts.expectedAt, next });
 
+/**
+ * How far ahead of its expected date the sweep tells the buyer it will be missed. A daily sweep
+ * must reach the buyer before the date, not the day after: the FTC mail-order rule counts from
+ * the promised date.
+ */
+export const DUE_NOTICE_LEAD_MS = DAY_MS;
+
 /** What the daily sweep reads off a waiting fulfillment order. */
 export interface SweepFacts {
     expectedAt?: Date | undefined;
-    lastNoticeAt?: Date | undefined;
+    /** The `expectedAt` the due notice was sent for; a different date is a new one to tell about. */
+    dueNoticeFor?: Date | undefined;
 }
 
 /**
- * Has the expected date passed with the buyer not told since? The one email the sweep sends: the
- * date came and the goods did not. A notice sent after the date (or never needed one) stops a
- * daily repeat, and a date that moves later is a new date that can pass again.
+ * Will the expected date be missed, with the buyer not told for it yet? The one email the sweep
+ * sends: the date is within a day (or already gone) and the goods are not here. A notice sent for
+ * this very date stops a daily repeat, and a date that moves is a new date to tell about.
  *
- * @param facts - the fulfillment order's expected date and last notice
+ * @param facts - the fulfillment order's expected date and the date a notice was sent for
  * @param now - the instant of the sweep
  */
 export const needsDueNotice = (facts: SweepFacts, now: Date): boolean =>
     facts.expectedAt !== undefined &&
-    facts.expectedAt.getTime() <= now.getTime() &&
-    (facts.lastNoticeAt === undefined || facts.lastNoticeAt.getTime() < facts.expectedAt.getTime());
+    facts.expectedAt.getTime() <= now.getTime() + DUE_NOTICE_LEAD_MS &&
+    facts.dueNoticeFor?.getTime() !== facts.expectedAt.getTime();
 
 /**
  * The day gap between the date promised and the date expected, for a board column.

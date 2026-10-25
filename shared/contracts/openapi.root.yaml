@@ -84,6 +84,11 @@ x-error-codes:
             status: 500,
             description: 'An unexpected server-side failure. Never carries library or stack detail.'
         }
+    METHOD_NOT_ALLOWED:
+        {
+            status: 405,
+            description: 'The path exists, but not with this method. The `Allow` header lists the methods it does answer.'
+        }
     PAYLOAD_TOO_LARGE:
         { status: 413, description: "The request body exceeds this deployment's size limit." }
     UNSUPPORTED_MEDIA_TYPE:
@@ -169,7 +174,7 @@ servers:
 # behind it: it goes stale silently, and the next app-level response repeats the whole exercise.
 #
 # `appliesTo` — `all` for what any request can trigger, `requestBody` for what only a request
-# carrying a body can.
+# carrying a body can, `requestBodyOrDelete` for the 415, which a body-less DELETE answers too.
 x-app-level-responses:
     '400':
         response: BadRequest
@@ -179,7 +184,7 @@ x-app-level-responses:
         appliesTo: requestBody
     '415':
         response: UnsupportedMediaType
-        appliesTo: requestBody
+        appliesTo: requestBodyOrDelete
     '429':
         response: TooManyRequests
         appliesTo: all
@@ -260,7 +265,7 @@ components:
         # Optional at the contract level: absent while the provider is `none`, required by the
         # server once a real one is selected.
         AntibotChallengeTokenHeader:
-            name: x-antibot-challenge-token
+            name: Antibot-Challenge-Token
             in: header
             required: false
             schema:
@@ -379,8 +384,7 @@ components:
             description: >-
                 Where the created resource lives, as a path on this API (RFC 9110 §9.3.3). A create
                 that answers 201 always sends it, so a client follows the link instead of composing
-                one. Some created things have no `GET` of their own (a feedback ticket, a payment, an
-                API key) — the link is still their address for `PUT`, `PATCH` and `DELETE`.
+                one. A `GET` on it reads what was created.
             schema:
                 type: string
 
@@ -476,10 +480,10 @@ components:
                         $ref: '#/components/schemas/ErrorResponse'
         UnsupportedMediaType:
             description: >-
-                The request body declares a character set or a content encoding the body parser
-                cannot read. Refused before any route runs, like `413` above — a body whose
-                content-type simply matches no parser is NOT this: it reaches the route, which
-                answers whatever it says about a request missing every field.
+                The body's media type is not one the operation declares (`details.accepted` lists
+                them), or its charset or encoding cannot be read. Refused before any route runs,
+                like `413` above. A request with no body is never judged. A `DELETE` that declares no
+                body refuses any body, and `details.accepted` is then empty.
             content:
                 application/json:
                     schema:
@@ -556,6 +560,31 @@ components:
                 which language tags a deployment supports.
             pattern: '^[A-Z]{2}$'
             example: IT
+        # One address, field by field: `OrderAddress` (frozen on an order), `Address` (the book) and
+        # its three write bodies all `$ref` these, so a limit moves in one place. `minLength: 1`
+        # because `''` is never a synonym for "absent".
+        AddressFullName:
+            type: string
+            minLength: 1
+            maxLength: 100
+            description: The name the parcel is addressed to.
+        AddressStreet:
+            type: string
+            minLength: 1
+            maxLength: 200
+        AddressCity:
+            type: string
+            minLength: 1
+            maxLength: 100
+        AddressZip:
+            type: string
+            minLength: 1
+            maxLength: 20
+            description: Postal code, free-form (formats differ per country).
+        AddressPhone:
+            type: string
+            minLength: 1
+            maxLength: 32
         ImageUrl:
             type: string
             format: uri-reference
@@ -739,11 +768,27 @@ components:
                 data:
                     $ref: '#/components/schemas/User'
 
-        User:
+        AccountEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/Account'
+
+        # The account as its OWN holder sees it: `/account`, the signup answer and the data export's
+        # `profile`. The admin view of the same record, with what the caller may do to it, is `User`.
+        Account:
             type: object
             additionalProperties: false
             required: [id, email, username]
-            properties:
+            properties: &accountProperties
                 id:
                     $ref: '#/components/schemas/Id'
                 email:
@@ -774,7 +819,7 @@ components:
                     type: [string, 'null']
                     format: date-time
                 # Set only by `PUT`/`PATCH /account` requesting a new address, cleared once
-                # `POST /account/email-change-confirm` proves it or `DELETE /account/pending-email`
+                # `POST /account/email-change/confirm` proves it or `DELETE /account/email-change`
                 # cancels it explicitly — resending the CURRENT address is a no-op, not a cancel.
                 # Inlined rather than `$ref`ing `Email`: that schema is shared with WRITABLE
                 # request bodies, and `readOnly` belongs to this field's use here, not to every one
@@ -804,7 +849,7 @@ components:
                 analyticsConsentAt:
                     type: string
                     format: date-time
-                # When the account accepted the terms, and which text (`NODE_TERMS_VERSION` at that
+                # When the account accepted the terms, and which text (`GET /shop`'s `termsVersion` at that
                 # moment). Stamped by a signup, or by the first sign-in with a provider; absent on
                 # an account an administrator created. There is no re-acceptance flow.
                 termsAcceptedAt:
@@ -831,19 +876,38 @@ components:
                 deletedAt:
                     type: string
                     format: date-time
-                # What the CALLER may do to this account, decided by the server — present on the
-                # `/users` reads and writes, absent on `/account` (a person's own record has no
-                # one to protect). A client renders its controls from this rather than from the
-                # role names: the answer is the route's key AND the protection of staff accounts
-                # ("does it hold a role only a role manager may touch?"), and a second copy of that
-                # in a separately deployed client is how the two come to disagree.
-                actions:
-                    $ref: '#/components/schemas/UserActions'
                 # Present only while a purchase hold is in force: expired or lifted holds are left
                 # out. The buyer reads their own on `/account` (for a cart banner), staff read it
                 # on `/users`, and the data export carries it with the rest of the profile.
                 purchaseHold:
                     $ref: '#/components/schemas/PurchaseHold'
+
+        # The account as STAFF see it on the `/users` reads and writes: every `Account` field, plus
+        # what the caller may do to this row and the shop's own review flag. A separate schema rather
+        # than an optional `actions` on `Account`, so `actions` can be required.
+        User:
+            type: object
+            additionalProperties: false
+            required: [id, email, username, actions]
+            properties:
+                <<: *accountProperties
+                # What the CALLER may do to this account, decided by the server — on every
+                # `/users` read and write, list rows included. A client renders its controls from this rather than from the
+                # role names: the answer is the route's key AND the protection of staff accounts
+                # ("does it hold a role only a role manager may touch?"), and a second copy of that
+                # in a separately deployed client is how the two come to disagree.
+                actions:
+                    $ref: '#/components/schemas/UserActions'
+                # Present only while the account's OWNER has asked for its deletion and the grace has
+                # not run out: the account is locked until then and erased at this instant.
+                # Staff-facing (the owner cannot sign in to read it; sign-in and the mail carry it).
+                purgeAt:
+                    type: string
+                    format: date-time
+                    description: >-
+                        When the account is erased, after its owner asked to delete it. Present only
+                        on such a row, and `deletedAt` is then the request time. Staff may restore it
+                        until then (`POST /users/{id}/restore`).
                 # Staff-facing, so only on the `/users` reads (never on `/account`): the shop's rule
                 # flagged this account for a person to look at. It stays until a staff member sets or
                 # lifts a hold, even after the automatic hold ended by itself. The data export
@@ -886,12 +950,24 @@ components:
         UserActions:
             type: object
             additionalProperties: false
-            required: [update, ban, delete]
+            required:
+                [
+                    update,
+                    assignRole,
+                    delete,
+                    hardDelete,
+                    restore,
+                    setPurchaseHold,
+                    liftPurchaseHold,
+                    activate,
+                    deactivate
+                ]
             description: >-
-                What the requesting caller may do to this account. Each is the route's permission
-                key AND the protection of staff accounts: an account that holds a staff role is
-                `false` for all three unless the caller holds `assign:Role`; the caller's own
-                account is judged by the keys alone.
+                What the requesting caller may do to this account, one flag per endpoint. Each is the
+                route's permission key AND the protection of staff accounts: an account that holds a
+                staff role is `false` for all of them unless the caller holds `assign:Role`; the
+                caller's own account is judged by the keys alone. A flag also reads the account's
+                state, so a control never offers a move the server would refuse with a 409.
             properties:
                 update:
                     type: boolean
@@ -900,27 +976,54 @@ components:
                         — `update:User`, and the account is not a staff account the caller may not manage. Never covers
                         a credential: no caller changes another person's email, password or second
                         factor.
-                ban:
+                assignRole:
                     type: boolean
                     description: >-
-                        Whether the account may be deactivated or reactivated — `ban:User`,
-                        and the account is not a staff account the caller may not manage.
+                        Whether the `role` field of `PUT`/`PATCH /users/{id}` would be accepted —
+                        `update` AND the caller holds `assign:Role`. No rule refuses the caller's
+                        own account.
                 delete:
                     type: boolean
                     description: >-
-                        Whether `DELETE /users/{id}` (soft or hard) and `POST /users/{id}/restore`
-                        would be accepted — `delete:User`, and the account is not a staff
-                        account the caller may not manage.
-
-        # For the path-form deletes, which need no id — `{id}` already carries it — but do
-        # read the flag from a body as readily as from the query.
-        HardDeleteRequest:
-            type: object
-            additionalProperties: false
-            properties:
+                        Whether `DELETE /users/{id}` would soft-delete the account — `delete:User`,
+                        the account is not a staff account the caller may not manage, and it is
+                        not deleted already.
                 hardDelete:
                     type: boolean
-                    default: false
+                    description: >-
+                        Whether `DELETE /users/{id}/hard` would erase the account for good —
+                        `delete:User`, and the account is not a staff account the caller may not
+                        manage. A soft-deleted account can be erased.
+                restore:
+                    type: boolean
+                    description: >-
+                        Whether `POST /users/{id}/restore` would be accepted — `delete:User`, the
+                        account is not a staff account the caller may not manage, and it is
+                        soft-deleted.
+                setPurchaseHold:
+                    type: boolean
+                    description: >-
+                        Whether `PUT /users/{id}/purchase-hold` would be accepted — `ban:User`, and
+                        the account is not a staff account the caller may not manage. A hold can be
+                        placed again to extend it.
+                liftPurchaseHold:
+                    type: boolean
+                    description: >-
+                        Whether `DELETE /users/{id}/purchase-hold` would be accepted — `ban:User`,
+                        the account is not a staff account the caller may not manage, and there is
+                        a hold or a review flag to clear.
+                activate:
+                    type: boolean
+                    description: >-
+                        Whether `POST /users/{id}/activate` would be accepted — `ban:User`, the
+                        account is not a staff account the caller may not manage, and it is
+                        deactivated.
+                deactivate:
+                    type: boolean
+                    description: >-
+                        Whether `POST /users/{id}/deactivate` would be accepted — `ban:User`, the
+                        account is not a staff account the caller may not manage, and it is
+                        active. Deactivating ends every session of the account.
 
         # ---------- system — the schemas only this module's paths reference. ----------
         HealthPing:
@@ -1070,10 +1173,10 @@ paths:
     # ---------- account ----------
     /account:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account'
-    /account/pending-email:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1pending-email'
-    /account/pending-email/resend:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1pending-email~1resend'
+    /account/email-change:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change'
+    /account/email-change/resend:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change~1resend'
     /account/abilities:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1abilities'
     /account/password:
@@ -1094,30 +1197,28 @@ paths:
         $ref: '../../src/modules/addresses/openapi.yaml#/paths/~1account~1addresses~1{addressId}'
     /account/addresses/{addressId}/default:
         $ref: '../../src/modules/addresses/openapi.yaml#/paths/~1account~1addresses~1{addressId}~1default'
-    /account/verify-request:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1verify-request'
-    /account/verify-confirm:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1verify-confirm'
-    /account/email-change-confirm:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change-confirm'
-    /account/email-change-undo:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change-undo'
-    /account/delete-confirm:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1delete-confirm'
+    /account/email-verification/resend:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-verification~1resend'
+    /account/email-verification/confirm:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-verification~1confirm'
+    /account/email-change/confirm:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change~1confirm'
+    /account/email-change/undo:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change~1undo'
+    /account/restore:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1restore'
     /account/login:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1login'
+    /account/login/restore:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1login~1restore'
     /account/signup:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1signup'
-    /account/reset:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1reset'
-    /account/reset-confirm:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1reset-confirm'
+    /account/password/reset:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1password~1reset'
+    /account/password/reset/confirm:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1password~1reset~1confirm'
     /account/refresh:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1refresh'
-    /account/logout-all:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1logout-all'
-    /account/tokens/expired:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1tokens~1expired'
     /account/export:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1export'
     /account/login/2fa:
@@ -1126,14 +1227,16 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1login~12fa~1send'
     /account/2fa:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa'
-    /account/2fa/methods/{method}:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1methods~1{method}'
     /account/2fa/methods/{method}/setup:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1methods~1{method}~1setup'
     /account/2fa/methods/{method}/send:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1methods~1{method}~1send'
     /account/2fa/methods/{method}/confirm:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1methods~1{method}~1confirm'
+    /account/2fa/disable:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1disable'
+    /account/2fa/methods/{method}/remove:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1methods~1{method}~1remove'
     /account/2fa/backup-codes:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1backup-codes'
     /account/oauth/providers:
@@ -1174,8 +1277,6 @@ paths:
         $ref: '../../src/modules/products/openapi.yaml#/paths/~1products'
     /products/categories:
         $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1categories'
-    /products/settings:
-        $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1settings'
     /products/{id}:
         $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1{id}'
     /products/{id}/admin:
@@ -1190,10 +1291,10 @@ paths:
     # ---------- cart ----------
     /cart:
         $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart'
-    /cart/all:
-        $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1all'
-    /cart/{productId}:
-        $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1{productId}'
+    /cart/items:
+        $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1items'
+    /cart/items/{productId}:
+        $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1items~1{productId}'
     /cart/shipping-method:
         $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1shipping-method'
     /cart/summary:
@@ -1206,10 +1307,12 @@ paths:
     # ---------- wishlist ----------
     /wishlist:
         $ref: '../../src/modules/wishlist/openapi.yaml#/paths/~1wishlist'
-    /wishlist/{productId}:
-        $ref: '../../src/modules/wishlist/openapi.yaml#/paths/~1wishlist~1{productId}'
-    /wishlist/{productId}/move-to-cart:
-        $ref: '../../src/modules/wishlist/openapi.yaml#/paths/~1wishlist~1{productId}~1move-to-cart'
+    /wishlist/items:
+        $ref: '../../src/modules/wishlist/openapi.yaml#/paths/~1wishlist~1items'
+    /wishlist/items/{productId}:
+        $ref: '../../src/modules/wishlist/openapi.yaml#/paths/~1wishlist~1items~1{productId}'
+    /wishlist/items/{productId}/move-to-cart:
+        $ref: '../../src/modules/wishlist/openapi.yaml#/paths/~1wishlist~1items~1{productId}~1move-to-cart'
 
     # ---------- orders ----------
     /orders:
@@ -1239,16 +1342,16 @@ paths:
     # ---------- payments ----------
     /payments/methods:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1methods'
-    /payments/intent:
-        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1intent'
-    /payments/order/{orderId}:
-        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1order~1{orderId}'
-    /payments/order-by-reference:
-        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1order-by-reference'
-    /payments/order/{orderId}/refund:
-        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1order~1{orderId}~1refund'
-    /payments/order/{orderId}/offline:
-        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1order~1{orderId}~1offline'
+    /payments/orders/{orderId}:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1orders~1{orderId}'
+    /payments/{id}/refunds:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1{id}~1refunds'
+    /payments/{id}/refunds/{refundId}:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1{id}~1refunds~1{refundId}'
+    /payments/orders/{orderId}/offline:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1orders~1{orderId}~1offline'
+    /payments/{id}:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1{id}'
     /payments/{id}/confirm:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1{id}~1confirm'
     /payments/{id}/sync:
@@ -1259,10 +1362,10 @@ paths:
     # ---------- delivery ----------
     /delivery/methods:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1methods'
-    /delivery/order/{orderId}:
-        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}'
-    /delivery/order/{orderId}/start:
-        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}~1start'
+    /delivery/orders/{orderId}:
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1orders~1{orderId}'
+    /delivery/orders/{orderId}/start:
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1orders~1{orderId}~1start'
     /delivery/fulfillment-orders:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1fulfillment-orders'
     /delivery/fulfillment-orders/summary:
@@ -1303,10 +1406,10 @@ paths:
         $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1preorders'
     /inventory/movements:
         $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1movements'
-    /inventory/receipts:
-        $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1receipts'
-    /inventory/adjustments:
-        $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1adjustments'
+    /inventory/levels/{productId}/receive:
+        $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1levels~1{productId}~1receive'
+    /inventory/levels/{productId}/adjust:
+        $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1levels~1{productId}~1adjust'
     /inventory/reservations/sweep:
         $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1reservations~1sweep'
 

@@ -19,6 +19,7 @@ import { streamNotifications, publishToUser, openStreamCount } from './stream';
 /** The service's public surface — controllers and siblings call through this, never the bare functions. */
 export const notificationsService = {
     list: inbox.notificationsList,
+    get: inbox.notificationGet,
     create: inbox.notificationsCreate,
     remove: inbox.notificationDelete,
     dismissAll: inbox.notificationsDismissAll,

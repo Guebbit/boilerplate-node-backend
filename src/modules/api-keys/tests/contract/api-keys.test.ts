@@ -52,6 +52,88 @@ describe('GET /api-keys', () => {
             expect(item.secret).toBeUndefined();
         }
     });
+
+    it('says what each credential is doing and the latest expiry a mint accepts', async () => {
+        const { bearer } = await authenticateAsRole('admin');
+        await api()
+            .post('/api-keys')
+            .set('Authorization', bearer)
+            .send({
+                name: 'status check',
+                permissions: ['read:WebhookSubscription'],
+                expiresAt: IN_A_WEEK()
+            });
+
+        const response = await api().get('/api-keys').set('Authorization', bearer);
+
+        expect(response.body.data.items[0].status).toBe('active');
+        expect(new Date(response.body.data.maxExpiresAt).getTime()).toBeGreaterThan(
+            Date.now() + 364 * 24 * 3_600_000
+        );
+    });
+
+    it('takes a comma-separated sort and refuses a field outside the enum', async () => {
+        const { bearer } = await authenticateAsRole('admin');
+
+        const sorted = await api()
+            .get('/api-keys?sort=-lastUsedAt,expiresAt')
+            .set('Authorization', bearer);
+        const refused = await api().get('/api-keys?sort=name').set('Authorization', bearer);
+
+        expect(sorted.status).toBe(200);
+        expect(refused.status).toBe(422);
+    });
+});
+
+/** Mints one credential and returns its id. */
+const mintOne = async (bearer: string): Promise<string> => {
+    const created = await api()
+        .post('/api-keys')
+        .set('Authorization', bearer)
+        .send({
+            name: 'one to read back',
+            permissions: ['read:WebhookSubscription'],
+            expiresAt: IN_A_WEEK()
+        });
+    return String(created.body.data.id);
+};
+
+describe('GET /api-keys/:id', () => {
+    it('reads a credential back with its status, never a secret', async () => {
+        const { bearer } = await authenticateAsRole('admin');
+        const id = await mintOne(bearer);
+
+        const response = await api().get(`/api-keys/${id}`).set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toMatchObject({
+            id,
+            name: 'one to read back',
+            status: 'active'
+        });
+        expect(response.body.data.secret).toBeUndefined();
+    });
+
+    it('answers 404 for an unknown id and a malformed one alike', async () => {
+        const { bearer } = await authenticateAsRole('admin');
+
+        const unknown = await api()
+            .get('/api-keys/000000000000000000000000')
+            .set('Authorization', bearer);
+        const malformed = await api().get('/api-keys/not-an-id').set('Authorization', bearer);
+
+        expect([unknown.status, malformed.status]).toEqual([404, 404]);
+    });
+
+    it('refuses a caller without read:ApiKey with 403', async () => {
+        const { bearer: adminBearer } = await authenticateAsRole('admin');
+        const id = await mintOne(adminBearer);
+        const { bearer } = await authenticateAsRole('customer');
+
+        const response = await api().get(`/api-keys/${id}`).set('Authorization', bearer);
+
+        expect(response.status).toBe(403);
+    });
 });
 
 describe('POST /api-keys', () => {

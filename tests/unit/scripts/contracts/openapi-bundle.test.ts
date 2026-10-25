@@ -22,7 +22,8 @@ const bundle = (extra: Record<string, unknown>) =>
         openapi: '3.1.0',
         'x-app-level-responses': {
             '429': { response: 'TooManyRequests', appliesTo: 'all' },
-            '400': { response: 'BadRequest', appliesTo: 'requestBody' }
+            '400': { response: 'BadRequest', appliesTo: 'requestBody' },
+            '415': { response: 'UnsupportedMediaType', appliesTo: 'requestBodyOrDelete' }
         },
         paths: extra
     });
@@ -57,6 +58,20 @@ describe('withAppLevelResponses', () => {
         const responses = result.paths['/widgets']?.post?.responses;
         expect(responses).toHaveProperty('429');
         expect(responses).toHaveProperty('400');
+    });
+
+    it('gives a DELETE without a body the 415 a GET without one does not get', () => {
+        const result = parsedResult(
+            bundle({
+                '/widgets/{id}': {
+                    delete: { responses: { '200': { description: 'ok' } } },
+                    get: { responses: { '200': { description: 'ok' } } }
+                }
+            })
+        );
+
+        expect(result.paths['/widgets/{id}']?.delete?.responses).toHaveProperty('415');
+        expect(result.paths['/widgets/{id}']?.get?.responses).not.toHaveProperty('415');
     });
 
     it('never overwrites a response the operation already declares for itself', () => {

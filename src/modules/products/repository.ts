@@ -90,7 +90,7 @@ export const productRepository: Repository<ProductDocument, Product> & {
              */
             booleans: { active: 'active', purchasable: 'purchasable' },
             presence: { deleted: 'deletedAt' },
-            ranges: { price: { min: 'minPrice', max: 'maxPrice' } },
+            ranges: { price: { min: 'priceMin', max: 'priceMax' } },
             // `title` is the fallback-locale column, the one the public catalogue exposes.
             sortable: { createdAt: 'createdAt', price: 'price', title: 'title' }
         }
@@ -116,7 +116,7 @@ export const productRepository: Repository<ProductDocument, Product> & {
 
     /**
      * The publicly visible product with this id, or `null` — {@link findByIdScoped} bound to the
-     * public scope, used by `cart/services/reorder.ts` and `wishlist/service.ts`.
+     * public scope, used by `wishlist/service.ts`.
      *
      * @param productId - the product's id
      * @returns the product if it is published and not soft-deleted, otherwise `null`

@@ -9,6 +9,7 @@
 import type { ClientSession } from 'mongoose';
 import type { ExportSession, Session } from '@types';
 import { sessionRepository, verificationTokenRepository } from '../repository';
+import { presentExportSession } from '../presenter';
 import { newestPerFamily } from '../session/listing';
 import { activeStrategy, type SessionRequest } from '../session/strategy';
 
@@ -27,22 +28,29 @@ export const sessionsList = (userId: string, request: SessionRequest): Promise<S
 };
 
 /**
+ * One of the authenticated user's live sessions of the active mode.
+ *
+ * @param userId - the authenticated caller's own id
+ * @param sessionId - the session id `GET /account/sessions` gave out
+ * @param request - the caller's own request, so the row can be marked `current`
+ * @returns the session, or `undefined` for one that is not the caller's, is not live, or never was
+ */
+export const sessionGet = (
+    userId: string,
+    sessionId: string,
+    request: SessionRequest
+): Promise<Session | undefined> =>
+    sessionsList(userId, request).then((rows) => rows.find((row) => row.id === sessionId));
+
+/**
  * This caller's own live sessions for the data export: metadata only, never a credential.
  *
  * @param userId - the account being exported
  */
 export const exportSessions = (userId: string): Promise<ExportSession[]> =>
-    sessionRepository.listLive(userId, undefined, new Date()).then((rows) =>
-        newestPerFamily(rows).map(
-            (row): ExportSession => ({
-                id: String(row.familyId),
-                createdAt: row.startedAt.toISOString(),
-                expiration: row.expiresAt.toISOString(),
-                ...(row.lastUsedAt ? { lastUsedAt: row.lastUsedAt.toISOString() } : {}),
-                ...(row.device ? { device: row.device } : {})
-            })
-        )
-    );
+    sessionRepository
+        .listLive(userId, undefined, new Date())
+        .then((rows) => newestPerFamily(rows).map((row) => presentExportSession(row)));
 
 /**
  * Erase everything this module keeps to sign an account in or prove a link: its sessions and its

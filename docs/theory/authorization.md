@@ -208,11 +208,11 @@ Five details carry the rule:
   with it and none can change a staff account, whoever minted it (Stripe and Shopify keep team
   management out of API keys the same way).
 - **Changing who holds powers asks for a fresh session.** `POST`, `PUT` and `PATCH /users` that name
-  a role (to grant it, or `null` to take it away), or that ban or unban while the caller holds
-  `assign:Role`, are gated by `requireFreshAuthWhen` at the critical tier, the one minting an API
-  key asks. A stolen session cannot quietly make a second administrator, unban an old one, or lock
-  every other administrator out. A write that names no role and bans nobody is never prompted, and
-  neither is a moderator banning a customer. `system` is never handed out at all.
+  a role (to grant it, or `null` to take it away), and `POST /users/{id}/activate` / `deactivate`,
+  while the caller holds `assign:Role`, are gated by `requireFreshAuthWhen` at the critical tier,
+  the one minting an API key asks. A stolen session cannot quietly make a second administrator,
+  activate an old one, or lock every other administrator out. A write that names no role is never
+  prompted, and neither is a moderator deactivating a customer. `system` is never handed out at all.
 - **An administrator may change another administrator**, and may hand out or take away any role,
   their own included. Locking the shop out of its last administrator is a technician's edit of the
   database to repair, by decision.
@@ -238,8 +238,8 @@ flowchart TD
     class F403,OUT bad;
 ```
 
-**Where it is applied.** `canChangeAccount` and `roleProtectedRefusal` in `@modules/access` answer
-it; `users` asks before it edits, erases or restores an account, and `assignRole` refuses a grant
+**Where it is applied.** `mayChangeAccount` (the pure rule), `canChangeAccount` and `roleProtectedRefusal` in
+`@modules/access` answer it; `users` asks before it edits, erases or restores an account, and `assignRole` refuses a grant
 from a caller without the rule. The read side tells a client the same thing: the `actions` block on
 a user already has the protection applied, so a screen renders only what would be accepted.
 

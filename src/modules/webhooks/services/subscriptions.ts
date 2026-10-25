@@ -1,12 +1,14 @@
 /**
  * @module
- * Subscription CRUD: list, create (mints the ring's first secret), update (state fields only),
- * the two secret-ring actions (`rotateSecret`/`removeSecret`), remove. Tenant-scoped throughout —
+ * Subscription CRUD: list, get, create (mints the ring's first secret), update (url, description
+ * and event filter only), the two on/off actions (`enable`/`disable`), the two secret-ring
+ * actions (`rotateSecret`/`removeSecret`), remove. Tenant-scoped throughout —
  * every read and write narrows to `context.caller.tenantId`, which any `webhooks.*` caller always
  * carries (every key in the family is `scope: tenant` in `shared/authorization-keys.yaml`, and
  * `Caller.tenantId` is null only in platform scope — see its own doc comment).
  */
 
+import type { ClientSession } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import {
@@ -17,6 +19,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
+import { auditChanges } from '@infrastructure/observability/audit-changes';
 import type { TenantCallerContext } from '@types';
 import type { PaginatedResult } from '@infrastructure/persistence/create-repository';
 import type {
@@ -30,8 +33,10 @@ import { liveRingEntries, mintRingSecret, removeRingSecret } from '../secrets';
 import { getWebhookSubscriptionCap } from '../config';
 import { resolveSafeOutboundTarget, SsrfRefusedError } from '@infrastructure/adapters/ssrf-guard';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
+import { ERROR_CODES } from '@api/error-codes';
 import { webhooksAuditActions } from '../audit';
 import { unknownEventTypes } from './catalogue';
+import { standingOn, viewSubscription, withSubscriptionActions } from './actions';
 
 /** A subscription alongside whichever plaintext secrets this call just minted — shown once. */
 export interface SubscriptionWithMintedSecrets {
@@ -87,17 +92,70 @@ const refuseUnknownEvents = (
     ]);
 };
 
-/** List this tenant's subscriptions, newest first, optionally filtered by `enabled`. */
+/** What `GET /webhooks/subscriptions` accepts, mirroring the query parameters `openapi.yaml` declares. */
+export interface SubscriptionListFilters {
+    enabled?: boolean;
+    autoDisabled?: boolean;
+    sort?: string[];
+    page?: unknown;
+    pageSize?: unknown;
+}
+
+/**
+ * List this tenant's subscriptions with the caller's `actions`, newest first unless `sort` says
+ * otherwise.
+ *
+ * `enabled` is remapped to the repository's `disabled` presence filter here: the stored fact is
+ * `disabledAt`, and "enabled" is its absence.
+ */
 export const list = (
     context: TenantCallerContext,
-    filters: { enabled?: boolean; page?: unknown; pageSize?: unknown }
+    filters: SubscriptionListFilters
 ): Promise<PaginatedResult<WebhookSubscription>> => {
-    const scope: Record<string, unknown> = { tenant: context.caller.tenantId };
-    if (filters.enabled !== undefined) scope.enabled = filters.enabled;
-    // No `searchable` spec on this repository (the admin list has no free-text filter — see
-    // `../repository.ts`), so `scope` is the whole query; `filters` only carries page/pageSize.
-    return webhookSubscriptionRepository.search(filters, scope, { createdAt: -1, _id: -1 });
+    const standing = standingOn(context.caller);
+    // No explicit sort argument: the `sort` filter goes through the repository's `sortable`
+    // whitelist, and an absent one falls back to the shared newest-first default.
+    return webhookSubscriptionRepository
+        .search(
+            {
+                disabled: filters.enabled === undefined ? undefined : !filters.enabled,
+                autoDisabled: filters.autoDisabled,
+                sort: filters.sort,
+                page: filters.page,
+                pageSize: filters.pageSize
+            },
+            { tenant: context.caller.tenantId }
+        )
+        .then(({ items, meta }) => ({
+            items: items.map((row) => withSubscriptionActions(row, standing)),
+            meta
+        }));
 };
+
+/**
+ * One subscription of this tenant, with the caller's `actions`.
+ *
+ * @returns the subscription, or `undefined` outside this tenant's rows: an unknown id and another
+ *   shop's id are indistinguishable
+ */
+export const getById = (
+    id: string,
+    context: TenantCallerContext
+): Promise<WebhookSubscription | undefined> =>
+    webhookSubscriptionRepository
+        .findByIdInTenant(id, context.caller.tenantId)
+        .then((subscription) =>
+            subscription ? viewSubscription(subscription, context.caller) : undefined
+        );
+
+/** The 409 both cap checks in {@link create} answer with. */
+const rejectLimitReached = (): ResponseReject =>
+    generateReject(409, [
+        {
+            code: ERROR_CODES.WEBHOOK_SUBSCRIPTION_LIMIT_REACHED,
+            message: t('webhooks.subscription-cap-reached')
+        }
+    ]);
 
 /**
  * This subscription's position among its tenant's rows, oldest first. `_id` is total-ordered
@@ -117,9 +175,7 @@ const insertionRank = (
  * the follow-up half of the race guard `create` below relies on.
  */
 const rollbackOverCap = (subscription: WebhookSubscriptionDocument): Promise<ResponseReject> =>
-    webhookSubscriptionRepository
-        .deleteOne(subscription)
-        .then(() => generateReject(422, [t('webhooks.subscription-cap-reached')]));
+    webhookSubscriptionRepository.deleteOne(subscription).then(rejectLimitReached);
 
 /**
  * Finish a create once the row is written: reject and roll it back if it lands over cap once
@@ -160,7 +216,8 @@ const finalizeCreate = async (
  * can ever rank within it, so exactly one guard's-worth of rows survives regardless of how many
  * creates land in the same instant.
  *
- * @returns a 422 rejection once this tenant is at `getWebhookSubscriptionCap()` — the fan-out
+ * @returns a 409 `WEBHOOK_SUBSCRIPTION_LIMIT_REACHED` once this tenant is at
+ *   `getWebhookSubscriptionCap()` (deleting one lets the same request through) — the fan-out
  *   guard this module exists for: one event x N subscriptions is N deliveries.
  */
 export const create = (
@@ -172,8 +229,7 @@ export const create = (
     if (unknownEvents) return Promise.resolve(unknownEvents);
 
     return webhookSubscriptionRepository.count({ tenant }).then(async (count) => {
-        if (count >= getWebhookSubscriptionCap())
-            return generateReject(422, [t('webhooks.subscription-cap-reached')]);
+        if (count >= getWebhookSubscriptionCap()) return rejectLimitReached();
 
         const refusal = await refuseUnsafeUrl(body.url);
         if (refusal) return refusal;
@@ -197,8 +253,19 @@ export const create = (
 };
 
 /**
- * Update a subscription's state: any of url/description/eventTypes/enabled. The secret ring is
- * never touched here — see {@link rotateSecret}/{@link removeSecret}.
+ * The fields an update is audited for. The event filter is configuration, so it is recorded by
+ * value; the url is a bearer secret (a receiver's address can carry a token) and the description
+ * is free text, so both are recorded by name only.
+ */
+const AUDITED_FIELDS = {
+    valued: ['eventTypes'],
+    named: ['url', 'description']
+} as const;
+
+/**
+ * Update a subscription: any of url/description/eventTypes. The secret ring is never touched here
+ * (see {@link rotateSecret}/{@link removeSecret}), and neither is whether the subscription is on
+ * (see {@link enable}/{@link disable}).
  *
  * @returns a 404 outside this tenant's subscriptions
  */
@@ -222,29 +289,100 @@ export const update = (
                 if (refusal) return refusal;
             }
 
+            // Read before the assignments below overwrite what it compares against.
+            const metadata = auditChanges(subscription, body, AUDITED_FIELDS);
+
             if (body.url !== undefined) subscription.url = body.url;
             // `null` clears the description — $unset on save.
             if (body.description !== undefined)
                 subscription.description = clearedOrValue(body.description);
             if (body.eventTypes !== undefined) subscription.eventTypes = body.eventTypes;
-            if (body.enabled !== undefined) {
-                // Only a disabled → enabled transition re-arms. `enabled: true` on an already
-                // enabled subscription (editing its description, say) must not zero a streak that
-                // is still building toward the auto-disable threshold.
-                const reArming = !subscription.enabled && body.enabled;
-                subscription.enabled = body.enabled;
-                if (reArming) {
-                    subscription.disabledAt = undefined;
-                    subscription.consecutiveFailures = 0;
-                    // A fresh streak: the age floor protects subscribers from OUR outages, so
-                    // the old streak's start date must not carry over (`domain/backoff.ts`).
-                    subscription.failingSince = undefined;
-                }
-            }
 
             return webhookSubscriptionRepository.save(subscription).then((saved) => {
                 recordAudit(context, {
                     action: webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_UPDATED,
+                    outcome: 'success',
+                    targetType: 'webhook_subscription',
+                    targetId: id,
+                    metadata
+                });
+                return generateSuccess(saved);
+            });
+        });
+
+/** The 409 a repeated {@link enable} or {@link disable} answers with. */
+const rejectAlready = (
+    code:
+        | typeof ERROR_CODES.WEBHOOK_SUBSCRIPTION_ALREADY_ENABLED
+        | typeof ERROR_CODES.WEBHOOK_SUBSCRIPTION_ALREADY_DISABLED,
+    messageKey: string
+): ResponseReject => generateReject(409, [{ code, message: t(messageKey) }]);
+
+/**
+ * Switch a subscription back on, whatever switched it off: clears both timestamps and resets the
+ * failure streak, so the guard counts from zero.
+ *
+ * @returns a 404 outside this tenant's subscriptions; a 409 `WEBHOOK_SUBSCRIPTION_ALREADY_ENABLED`
+ *   when it is already on, so a healthy subscription's streak is never reset by a repeated call
+ */
+export const enable = (
+    id: string,
+    context: TenantCallerContext
+): Promise<ResponseSuccess<WebhookSubscriptionDocument> | ResponseReject> =>
+    webhookSubscriptionRepository
+        .findByIdInTenant(id, context.caller.tenantId)
+        .then((subscription) => {
+            if (!subscription) return generateReject(404, [t('generic.error-not-found')]);
+            if (!subscription.disabledAt)
+                return rejectAlready(
+                    ERROR_CODES.WEBHOOK_SUBSCRIPTION_ALREADY_ENABLED,
+                    'webhooks.already-enabled'
+                );
+
+            subscription.disabledAt = undefined;
+            subscription.autoDisabledAt = undefined;
+            subscription.consecutiveFailures = 0;
+            // A fresh streak: the age floor protects subscribers from OUR outages, so the old
+            // streak's start date must not carry over (`domain/backoff.ts`).
+            subscription.failingSince = undefined;
+
+            return webhookSubscriptionRepository.save(subscription).then((saved) => {
+                recordAudit(context, {
+                    action: webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_ENABLED,
+                    outcome: 'success',
+                    targetType: 'webhook_subscription',
+                    targetId: id
+                });
+                return generateSuccess(saved);
+            });
+        });
+
+/**
+ * Pause a subscription by hand. `autoDisabledAt` stays absent, which is how a pause is told from
+ * the failure guard's work; the streak is left as it is.
+ *
+ * @returns a 404 outside this tenant's subscriptions; a 409 `WEBHOOK_SUBSCRIPTION_ALREADY_DISABLED`
+ *   when it is already off
+ */
+export const disable = (
+    id: string,
+    context: TenantCallerContext
+): Promise<ResponseSuccess<WebhookSubscriptionDocument> | ResponseReject> =>
+    webhookSubscriptionRepository
+        .findByIdInTenant(id, context.caller.tenantId)
+        .then((subscription) => {
+            if (!subscription) return generateReject(404, [t('generic.error-not-found')]);
+            if (subscription.disabledAt)
+                return rejectAlready(
+                    ERROR_CODES.WEBHOOK_SUBSCRIPTION_ALREADY_DISABLED,
+                    'webhooks.already-disabled'
+                );
+
+            subscription.disabledAt = new Date();
+
+            return webhookSubscriptionRepository.save(subscription).then((saved) => {
+                recordAudit(context, {
+                    action: webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_DISABLED,
                     outcome: 'success',
                     targetType: 'webhook_subscription',
                     targetId: id
@@ -348,3 +486,13 @@ export const remove = (
                 return generateSuccess(undefined);
             });
         });
+
+/**
+ * `personalData.erase` hook: forget the owner of every subscription an erased staff member
+ * configured. Same rule as the order timeline's actor: the row stays, the person goes.
+ *
+ * @param userId - the erased account's id
+ * @param session - the erasure's transaction
+ */
+export const forgetOwner = (userId: string, session: ClientSession): Promise<void> =>
+    webhookSubscriptionRepository.forgetOwner(userId, session);

@@ -1,6 +1,6 @@
 /**
  * @module
- * `POST /account/email-change-confirm` controller — spends a one-time `email-change` token and
+ * `POST /account/email-change/confirm` controller — spends a one-time `email-change` token and
  * swaps the caller's `pendingEmail` into `email`.
  */
 
@@ -16,7 +16,7 @@ import { parseBody, refused, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
- * POST /account/email-change-confirm — spends a one-time `email-change` token, swaps
+ * POST /account/email-change/confirm — spends a one-time `email-change` token, swaps
  * `pendingEmail` into `email`. Public deliberately, like `verify-confirm`: the token in the body
  * is the credential, not a login. A `'verify'` token is refused: the two prove different
  * addresses and must not do each other's work.

@@ -19,14 +19,15 @@ import {
     Checkout201Response,
     ConfirmEmailVerification200Response,
     ConfirmPayment200Response,
-    CreatePaymentIntent201Response,
+    CreatePayment201Response,
     CreateReturn201Response,
     DeliverShipment200Response,
     GetFulfillmentByOrder200Response,
     GetSalesStats200Response,
     ListAuditEntries200Response,
     ListOrderCreditNotes200Response,
-    RefundPaymentByOrder200Response,
+    RefundPaymentByOrder201Response,
+    GetPayment200Response,
     ReceiveReturn200Response,
     ShipFulfillmentOrder201Response,
     Signup201Response,
@@ -79,7 +80,7 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
     );
     const verification = await waitForMail(SHOPPER.email, 'account.verify-request');
     bodyOf(
-        await api().post('/account/verify-confirm').send({ token: verification.token }),
+        await api().post('/account/email-verification/confirm').send({ token: verification.token }),
         ConfirmEmailVerification200Response
     );
     const shopper = await loginBearer(SHOPPER.email, SHOPPER.password);
@@ -97,10 +98,13 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
         AddAddress201Response
     ).data;
     await api()
-        .post('/cart')
+        .post('/cart/items')
         .set('Authorization', shopper)
         .send({ productId: dogFoodId, quantity: 2 });
-    await api().post('/cart').set('Authorization', shopper).send({ productId: toyId, quantity: 1 });
+    await api()
+        .post('/cart/items')
+        .set('Authorization', shopper)
+        .send({ productId: toyId, quantity: 1 });
     await api()
         .put('/cart/shipping-method')
         .set('Authorization', shopper)
@@ -114,11 +118,8 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
 
     // Pay by card.
     const intent = bodyOf(
-        await api()
-            .post('/payments/intent')
-            .set('Authorization', shopper)
-            .send({ orderId: order.id }),
-        CreatePaymentIntent201Response
+        await api().post('/payments').set('Authorization', shopper).send({ orderId: order.id }),
+        CreatePayment201Response
     ).data;
     const paid = bodyOf(
         await api()
@@ -132,11 +133,11 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
 
     // Staff start, ship and deliver the whole order.
     bodyOf(
-        await api().post(`/delivery/order/${order.id}/start`).set('Authorization', staff),
+        await api().post(`/delivery/orders/${order.id}/start`).set('Authorization', staff),
         StartFulfilment200Response
     );
     const [fulfillmentOrder] = bodyOf(
-        await api().get(`/delivery/order/${order.id}`).set('Authorization', staff),
+        await api().get(`/delivery/orders/${order.id}`).set('Authorization', staff),
         GetFulfillmentByOrder200Response
     ).data.fulfillmentOrders;
     const shipment = bodyOf(
@@ -269,7 +270,7 @@ it('records a staff buyer’s refund of their own order as theirs', async () => 
         AddAddress201Response
     ).data;
     await api()
-        .post('/cart')
+        .post('/cart/items')
         .set('Authorization', moderator)
         .send({ productId: String(product._id), quantity: 1 });
     await api()
@@ -281,11 +282,8 @@ it('records a staff buyer’s refund of their own order as theirs', async () => 
         Checkout201Response
     ).data;
     const intent = bodyOf(
-        await api()
-            .post('/payments/intent')
-            .set('Authorization', moderator)
-            .send({ orderId: order.id }),
-        CreatePaymentIntent201Response
+        await api().post('/payments').set('Authorization', moderator).send({ orderId: order.id }),
+        CreatePayment201Response
     ).data;
     bodyOf(
         await api()
@@ -297,13 +295,18 @@ it('records a staff buyer’s refund of their own order as theirs', async () => 
     await drain();
 
     // The moderator returns the money of the order they bought themselves.
-    const refunded = bodyOf(
+    const refund = bodyOf(
         await api()
-            .post(`/payments/order/${order.id}/refund`)
+            .post(`/payments/${intent.id}/refunds`)
             .set('Authorization', moderator)
             .set('Idempotency-Key', 'journey-own-order-refund')
             .send({}),
-        RefundPaymentByOrder200Response
+        RefundPaymentByOrder201Response
+    ).data;
+    expect(refund).toMatchObject({ amount: 25 });
+    const refunded = bodyOf(
+        await api().get(`/payments/${intent.id}`).set('Authorization', moderator),
+        GetPayment200Response
     ).data;
     expect(refunded).toMatchObject({ amount: 25, amountRefunded: 25 });
 

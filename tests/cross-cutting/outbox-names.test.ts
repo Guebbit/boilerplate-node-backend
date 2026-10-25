@@ -167,11 +167,13 @@ it('publishes the set the pair agreed on', () => {
      * answer. So is `delivery.shipment-delivered`, the notice that a shipment arrived: an order ships in
      * parts on this backend first. So is `orders.purchase-hold-staff`, the operator's notice that a purchase hold was
      * placed: the twin has no hold. So is `users.purchase-hold-placed`, the buyer's notice of the same
-     * hold. The other eight are the agreed, mirrored set.
+     * hold. So are `account.deletion-scheduled` and `account.restored`: this backend locks an account and
+     * erases it after a grace, the twin still deletes on a confirmed link. The other eight are the
+     * agreed, mirrored set.
      */
     const agreedByPair = [
-        'account.delete-confirm',
-        'account.delete-request',
+        'account.deleted',
+        'account.deletion-scheduled',
         'account.email-change-notice',
         'account.export-failed',
         'account.export-ready',
@@ -180,6 +182,7 @@ it('publishes the set the pair agreed on', () => {
         'account.reauth-code',
         'account.reset-confirm',
         'account.reset-request',
+        'account.restored',
         'account.setup-request',
         'account.sign-in-method-changed',
         'account.two-factor-changed',

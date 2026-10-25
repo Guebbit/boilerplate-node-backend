@@ -53,6 +53,10 @@ layout and shared parts are declared in one file under `scripts/contracts/`.
 | `asyncapi.public.yaml`   | **merged**    | the same merge over the shared sections only — one `SHARED_SECTIONS` list decides which |
 | the 4 client collections | **generated** | produced whole from `openapi.yaml` + the dataset, nothing on disk between; untracked |
 
+A 405 is not merged in: it answers a request that matched no operation, so it is the
+`METHOD_NOT_ALLOWED` code in the root's `x-error-codes` and a guard built from `api/operation-routes.ts`
+([Write Methods](./write-methods.md#a-known-path-with-the-wrong-method)).
+
 A hand-written restatement of the contract is a copy and copies rot, which is why the last row
 exists at all. See [The client collections](#the-client-collections-generated).
 
@@ -337,7 +341,7 @@ file (`../orders/openapi.yaml#/components/schemas/Order`). Only what has no sing
 | Scalars | `Id`, `Email`, `Locale`, `Page`, `PageSize`, `Text`, `ImageUrl` | referenced everywhere |
 | Envelope machinery | `EnvelopeSuccess`, `EnvelopeStatus`, `EnvelopeMessage`, `PaginationMeta`, `MessageResponse`, `ErrorItem`, `ErrorResponse`, `ValidationErrorResponse` | every operation's success and failure shape |
 | The user record | `User`, `UserEnvelope`, `UserActions` | `account` authenticates the record `users` administers: the repo's one shared kernel |
-| Cross-domain requests | `HardDeleteRequest`, `RequiredIdempotencyKeyHeader` | products, users and orders all take the first; the second belongs to a middleware in `infrastructure` |
+| Cross-domain requests | `RequiredIdempotencyKeyHeader` | belongs to a middleware in `infrastructure` |
 | The shell's own | `HealthPing`, `HealthPingEnvelope`, the `System` tag | `GET /` belongs to no module, so neither does its answer |
 
 The root file is the authority for the exact set. Everything else is owned: `Product` and its tax

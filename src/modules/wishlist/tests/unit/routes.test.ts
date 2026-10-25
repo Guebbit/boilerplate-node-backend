@@ -2,29 +2,30 @@
  * @module
  * The wishlist route table.
  *
- * A wishlist is somebody's, so the whole router is authenticated and none of it is admin. The one
- * thing that can silently break is ORDER: `/:productId/move-to-cart` must be declared before the
- * bare `/:productId` routes, or a move-to-cart is read as a product id called "move-to-cart".
+ * A wishlist is somebody's, so the whole router is authenticated and none of it is admin. A saved
+ * product is a line of it, written under `/items`.
  */
-import { routeTable, routeSignatures, guardsOn } from '@tests/routes';
+import { routeSignatures, guardsOn } from '@tests/routes';
 import { router } from '@modules/wishlist/routes';
 
 describe('wishlist routes', () => {
     it('mounts exactly the documented endpoints, in the documented order', () => {
         expect(routeSignatures(router)).toEqual([
             'GET /',
-            'POST /:productId/move-to-cart',
-            'PUT /:productId',
-            'DELETE /:productId'
+            'POST /items',
+            'POST /items/:productId/move-to-cart',
+            'DELETE /items/:productId'
         ]);
     });
 
-    it.each(['GET /', 'PUT /:productId', 'POST /:productId/move-to-cart', 'DELETE /:productId'])(
-        '%s requires a session',
-        (signature) => {
-            expect(guardsOn(router, signature)).toContain('isAuth');
-        }
-    );
+    it.each([
+        'GET /',
+        'POST /items',
+        'POST /items/:productId/move-to-cart',
+        'DELETE /items/:productId'
+    ])('%s requires a session', (signature) => {
+        expect(guardsOn(router, signature)).toContain('isAuth');
+    });
 
     it('is admin-free by design, and asks a key only where a basket is written', () => {
         // There is no operator view of someone else's wishlist. If one appears, this fails and
@@ -33,14 +34,6 @@ describe('wishlist routes', () => {
             guardsOn(router, signature).includes('requirePermissionGuard')
         );
 
-        expect(keyGuarded).toEqual(['POST /:productId/move-to-cart']);
-    });
-
-    it('declares move-to-cart before the bare /:productId route', () => {
-        const paths = routeTable(router).map(({ path }) => path);
-
-        expect(paths.indexOf('/:productId/move-to-cart')).toBeLessThan(
-            paths.indexOf('/:productId')
-        );
+        expect(keyGuarded).toEqual(['POST /items/:productId/move-to-cart']);
     });
 });

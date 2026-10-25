@@ -56,7 +56,7 @@ describe('forceShip and the forced ship door agree', () => {
                 const [fulfillmentOrder] = await fulfillmentOrdersOf(orderId);
                 if (status !== OrderStatus.paid) await forceOrderStatus(orderId, status);
                 const view = await api()
-                    .get(`/delivery/order/${orderId}`)
+                    .get(`/delivery/orders/${orderId}`)
                     .set('Authorization', staff.bearer);
                 const shown = (view.body as { data?: { fulfillmentOrders?: FulfillmentOrder[] } })
                     .data?.fulfillmentOrders?.[0]?.actions;

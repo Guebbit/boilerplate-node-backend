@@ -21,6 +21,7 @@ import { localeRepository } from '../repository';
 import { isKnownApp } from '../apps';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
+import { auditChanges } from '@infrastructure/observability/audit-changes';
 import { localeAuditActions } from '../audit';
 import { refreshOverlayNow } from './overlay';
 import { translatableCacheTags } from './translatables';
@@ -128,6 +129,17 @@ export const updateLanguage = (
     localeRepository.findByTag(tag).then((language) => {
         if (!language) return languageNotFound();
 
+        // Read before the assignments below. Display names are not personal data: shown by value.
+        const metadata = auditChanges(
+            language,
+            {
+                ...payload,
+                name: payload.name?.trim(),
+                nativeName: payload.nativeName?.trim()
+            },
+            { valued: ['name', 'nativeName', 'direction'], named: [] }
+        );
+
         if (payload.name !== undefined) language.name = payload.name.trim();
         if (payload.nativeName !== undefined) language.nativeName = payload.nativeName.trim();
         if (payload.direction !== undefined) language.direction = payload.direction;
@@ -138,9 +150,7 @@ export const updateLanguage = (
                 outcome: 'success',
                 targetType: 'locale',
                 targetId: tag,
-                // Field names only: a display name is free text, and the trail is not a second
-                // copy of it.
-                metadata: { changedFields: Object.keys(payload).toSorted() }
+                metadata
             });
 
             // The negotiation reads an in-memory list of the served languages, refreshed by
@@ -197,7 +207,10 @@ const setActive = (
                         : localeAuditActions.ADMIN_LOCALE_DEACTIVATED,
                     outcome: 'success',
                     targetType: 'locale',
-                    targetId: tag
+                    targetId: tag,
+                    // `active` is the field worth having in the trail: it is what makes a
+                    // half-finished translation public.
+                    metadata: { changes: { active: { from: !active, to: active } } }
                 });
 
                 // Same as an edit: this worker's served-language list follows at once.

@@ -32,11 +32,12 @@ import { productModel } from '@modules/products/model';
 import { presentProduct } from '@modules/products/presenter';
 import { orderModel } from '@modules/orders/model';
 import { orderService } from '@modules/orders';
-import { asCustomer } from '@tests/callers';
+import { asCustomer, callerContextAs } from '@tests/callers';
 import { paymentModel } from '@modules/payments/model';
 import { fulfillmentOrderModel, shipmentModel } from '@modules/delivery/model';
 import { returnModel } from '@modules/returns/model';
 import { userModel } from '@modules/users/model';
+import { userService } from '@modules/users';
 import { auditLogModel } from '@modules/audit-logs/model';
 import { addressBookModel } from '@modules/addresses/model';
 import { decryptAddressItem } from '@modules/addresses/pii';
@@ -515,7 +516,7 @@ describe('the history reads as a history', () => {
 
     it('accounts for every unit of stock with a movement the app wrote', async () => {
         // Nothing seeds `onHand`: the catalogue starts empty and takes delivery through
-        // `POST /inventory/receipts`, so a product with stock and no receipt cannot exist. Rather
+        // `POST /inventory/levels/{productId}/receive`, so a product with stock and no receipt cannot exist. Rather
         // than trust the mirror alone, this reconciles it against the ledger it was copied FROM —
         // `stockmovements`'s own docblock: summing `onHandDelta` over a product's rows reproduces
         // the counter, which is the module's stated source of truth
@@ -568,10 +569,13 @@ describe('conformance: a produced row parses as the response the API would serve
         const users = await userModel.find().exec();
         expect(users.length).toBeGreaterThan(0);
 
-        for (const user of users)
-            expect(() =>
-                GetUserById200Response.shape.data.parse(wireShape(user.toJSON()))
-            ).not.toThrow();
+        // `toUserContract` is the real serialization boundary: it adds the role and the `actions`
+        // block the response requires, which a stored row never carries.
+        const { caller } = callerContextAs('admin');
+        for (const user of users) {
+            const wire = await userService.toUserContract(user, caller);
+            expect(() => GetUserById200Response.shape.data.parse(wireShape(wire))).not.toThrow();
+        }
     });
 
     it('every audit log entry', async () => {

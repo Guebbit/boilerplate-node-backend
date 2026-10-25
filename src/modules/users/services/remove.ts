@@ -13,15 +13,18 @@ import {
 } from '@infrastructure/http/response';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { withTransaction } from '@infrastructure/runtime/database';
+import { announceInTransaction } from '@kernel/outbox';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { CallerContext } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import type { AfterErase } from '@kernel/registry';
+import { ERROR_CODES } from '@api/error-codes';
 import { accessService } from '@modules/access';
 import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
 import { personalDataErasers } from '../erasure-registry';
 import { usersAuditActions } from '../audit';
+import { USER_DELETION_CANCELLED } from '../events';
 import { markSessionsEnded } from './credentials';
 
 /**
@@ -44,6 +47,8 @@ const runErasureCascade = async (
         const afterErase = await erase(user.id, session);
         if (afterErase) deferred.push(afterErase);
     }
+    // A hold this account placed on someone else keeps its force but loses the name.
+    await userRepository.forgetHoldSetter(user.id, session);
     await userRepository.deleteOne(user, session);
     return deferred;
 };
@@ -70,30 +75,26 @@ const runAfterErase = (userId: string, deferred: readonly AfterErase[]): Promise
     ).then(() => undefined);
 
 /**
- * Remove a user document (soft or hard delete). Soft delete stamps `deletedAt` once;
- * `restoreById` undoes it. A hard delete runs the erasure cascade, `access`'s hook included, so
- * every membership the account holds (a tenant seat AND a platform one) goes in the same
- * transaction as the row. Only the hard path does, since a soft delete is a restore waiting to
- * happen.
+ * The hard delete: cascade, commit, then the work the erasers deferred, the image and the audit row.
  *
- * @internal The step beneath `removeById` (which refuses a staff account the caller may not
- * manage) and the three named doors (`eraseOwnAccount`, `softDeleteInactive`, `eraseInactive`).
- * Unpublished, a sibling could erase an administrator with no check.
+ * @internal Beneath `remove` and the purge door; unpublished for the same reason `remove` is.
  *
- * @param context - who did this. Absent for a caller with no request behind it that also has no
- * stake in the trail (a test, a script's dry run). Present and `caller.system` for the inactivity
- * reaper, which records `SYSTEM_USER_SOFT_DELETED`/`SYSTEM_USER_ERASED` rather than an `admin.*`
- * action — nobody was at the keyboard. Present and NOT `caller.system` for the admin
- * `DELETE /users(/:id)` route, which records `ADMIN_USER_SOFT_DELETED`/`ADMIN_USER_ERASED`.
+ * @param claim - the first write of the transaction, when the erasure must be won against a
+ * concurrent writer (the scheduled purge against a restore). Resolving `false` abandons the
+ * erasure with 409 and nothing deleted.
  */
-export const remove = (
+export const erase = (
     user: UserDocument,
-    hardDelete = false,
-    context?: CallerContext
-): Promise<ResponseSuccess<UserDocument> | ResponseSuccess<undefined> | ResponseReject> => {
-    if (hardDelete)
-        return withTransaction((session) => runErasureCascade(user, session))
-            .then((deferred) => runAfterErase(user.id, deferred))
+    context?: CallerContext,
+    claim?: (session: ClientSession) => Promise<boolean>
+): Promise<ResponseSuccess<undefined> | ResponseReject> =>
+    withTransaction((session) =>
+        (claim ? claim(session) : Promise.resolve(true)).then((won) =>
+            won ? runErasureCascade(user, session) : undefined
+        )
+    ).then((deferred) => {
+        if (!deferred) return generateReject(409, [t('users.erasure-not-due')]);
+        return runAfterErase(user.id, deferred)
             .then(() => imageStore.remove(user.imageUrl))
             .then(() => {
                 recordAudit(context, {
@@ -107,6 +108,31 @@ export const remove = (
                 });
             })
             .then(() => generateSuccess(undefined, 200, t('users.hard-deleted')));
+    });
+
+/**
+ * Remove a user document (soft or hard delete). Soft delete stamps `deletedAt` once;
+ * `restoreById` undoes it. A hard delete runs the erasure cascade, `access`'s hook included, so
+ * every membership the account holds (a tenant seat AND a platform one) goes in the same
+ * transaction as the row. Only the hard path does, since a soft delete is a restore waiting to
+ * happen.
+ *
+ * @internal The step beneath `removeById` (which refuses a staff account the caller may not
+ * manage) and the named doors (`softDeleteInactive`, `eraseInactive`, and `erase` for the purge).
+ * Unpublished, a sibling could erase an administrator with no check.
+ *
+ * @param context - who did this. Absent for a caller with no request behind it that also has no
+ * stake in the trail (a test, a script's dry run). Present and `caller.system` for the inactivity
+ * reaper, which records `SYSTEM_USER_SOFT_DELETED`/`SYSTEM_USER_ERASED` rather than an `admin.*`
+ * action — nobody was at the keyboard. Present and NOT `caller.system` for the admin
+ * `DELETE /users(/:id)` route, which records `ADMIN_USER_SOFT_DELETED`/`ADMIN_USER_ERASED`.
+ */
+export const remove = (
+    user: UserDocument,
+    hardDelete = false,
+    context?: CallerContext
+): Promise<ResponseSuccess<UserDocument> | ResponseSuccess<undefined> | ResponseReject> => {
+    if (hardDelete) return erase(user, context);
 
     // Already deleted: nothing to do. DELETE must be safe to retry; undoing it is `restoreById`.
     if (user.deletedAt) return Promise.resolve(generateSuccess(user, 200, t('users.soft-deleted')));
@@ -131,7 +157,50 @@ export const remove = (
 };
 
 /**
- * Undo a soft delete. The account's sessions stay revoked: the owner logs in again.
+ * Cancel a deletion the account's owner asked for, if its grace has not run out. The clear is
+ * conditional on `purgeAt > now`, the mirror of the purge's claim, so it can never both match;
+ * `user.deletion-cancelled` commits with it, and `account` drops the restore link and tells the
+ * owner.
+ *
+ * @param user - the loaded account, soft-deleted by its owner
+ * @param context - the staff caller
+ * @returns the restored user, or 409 `USER_ERASURE_DUE` once the grace has run out
+ */
+const restoreScheduled = (
+    user: UserDocument,
+    context: CallerContext
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
+    const now = new Date();
+    const due = generateReject(409, [
+        { code: ERROR_CODES.USER_ERASURE_DUE, message: t('users.erasure-due') }
+    ]);
+    if (!user.purgeAt || user.purgeAt <= now) return Promise.resolve(due);
+
+    return announceInTransaction(
+        (session) =>
+            userRepository
+                .restoreScheduledDeletion(user.id, now, session)
+                .then((restored) => (restored ? user.id : null)),
+        (id) => ({ name: USER_DELETION_CANCELLED, payload: { userId: id }, aggregateId: id })
+    ).then((id) => {
+        if (id === null) return due;
+
+        recordAudit(context, {
+            action: usersAuditActions.ADMIN_USER_RESTORED,
+            outcome: 'success',
+            targetType: 'user',
+            targetId: user.id,
+            metadata: { scheduledErasure: true }
+        });
+        return userRepository
+            .findById(user.id)
+            .then((restored) => generateSuccess(restored ?? user, 200, t('users.restored')));
+    });
+};
+
+/**
+ * Undo a soft delete. The account's sessions stay revoked: the owner logs in again. An account its
+ * owner asked to delete is restored too, while its grace runs ({@link restoreScheduled}).
  *
  * @param id - the user to restore
  * @param context - the caller: records `ADMIN_USER_RESTORED`, and is judged against the account
@@ -147,7 +216,12 @@ export const restoreById = (
 
         return accessService.roleProtectedRefusal(context, id).then((refusal) => {
             if (refusal) return refusal;
-            if (!user.deletedAt) return generateReject(409, [t('users.not-deleted')]);
+            if (!user.deletedAt)
+                return generateReject(409, [
+                    { code: ERROR_CODES.USER_NOT_DELETED, message: t('users.not-deleted') }
+                ]);
+            if (user.deletedBy === 'owner') return restoreScheduled(user, context);
+
             user.deletedAt = undefined;
             user.deletedBy = undefined;
             return userRepository.save(user).then((saved) => {

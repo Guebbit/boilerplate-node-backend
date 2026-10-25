@@ -36,14 +36,14 @@ const EMPTY_STRING_CASES: readonly WriteCase[] = [
         '/account/addresses',
         { fullName: 'A', street: 's', city: 'c', zip: 'z', country: 'IT', phone: '' }
     ],
-    ['post', `/payments/order/${MISSING_ID}/offline`, { method: 'cash', reference: '' }],
+    ['post', `/payments/orders/${MISSING_ID}/offline`, { method: 'cash', reference: '' }],
     ['post', `/delivery/fulfillment-orders/${MISSING_ID}/shipments`, { trackingCode: '' }],
-    ['post', '/inventory/receipts', { productId: MISSING_ID, quantity: 1, note: '' }],
-    ['post', '/inventory/adjustments', { productId: MISSING_ID, delta: 1, note: '' }],
+    ['post', `/inventory/levels/${MISSING_ID}/receive`, { quantity: 1, note: '' }],
+    ['post', `/inventory/levels/${MISSING_ID}/adjust`, { delta: 1, note: '' }],
     ['patch', `/users/${MISSING_ID}`, { role: '' }],
     ['patch', `/users/${MISSING_ID}`, { username: 'ab' }],
     ['post', '/account/login/2fa', { challenge: '', code: '123456' }],
-    ['post', '/account/reset-confirm', { token: '', password: 'Sup3r-secret-Passw0rd!' }],
+    ['post', '/account/password/reset/confirm', { token: '', password: 'Sup3r-secret-Passw0rd!' }],
     ['post', '/feedback/contact', { name: '', email: 'a@b.co', subject: 's', message: 'm' }],
     ['patch', `/products/${MISSING_ID}`, { tags: [''] }],
     ['patch', `/products/${MISSING_ID}`, { categories: [''] }],
@@ -104,17 +104,17 @@ describe('the body media type', () => {
 
 describe('stock writes replay under an Idempotency-Key', () => {
     it.each([
-        ['receipts', { quantity: 5 }, 5],
-        ['adjustments', { delta: -2 }, -2]
+        ['receive', { quantity: 5 }, 5],
+        ['adjust', { delta: -2 }, -2]
     ])('a retried %s call moves the stock once', async (route, amount, expectedDelta) => {
         const { bearer } = await authenticateAs('admin');
         const product = await createProduct({ title: 'Cedar Toy', price: 5, onHand: 10 });
         const send = () =>
             api()
-                .post(`/inventory/${route}`)
+                .post(`/inventory/levels/${String(product._id)}/${route}`)
                 .set('Authorization', bearer)
                 .set('Idempotency-Key', `stock-${route}-1`)
-                .send({ productId: String(product._id), ...amount });
+                .send(amount);
 
         const first = await send();
         const second = await send();

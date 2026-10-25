@@ -25,6 +25,8 @@ import {
     postHoldFulfillmentOrder,
     postReleaseFulfillmentOrder
 } from './controllers/post-hold-fulfillment-order';
+import { getShipment } from './controllers/get-shipment';
+import { getFulfillmentOrder } from './controllers/get-fulfillment-order';
 import { patchShipment } from './controllers/patch-shipment';
 import { getReleaseDateImpact, getRestockDateImpact } from './controllers/get-date-impact';
 import {
@@ -47,8 +49,8 @@ export const router = Router();
 // GET /delivery/methods — public: what shipping costs is pre-purchase information
 router.get('/methods', getShippingMethods);
 
-// GET /delivery/order/:orderId — the fulfillment orders and shipments behind one of the caller's orders
-router.get('/order/:orderId', getAuth, isAuth, getOrderFulfillment);
+// GET /delivery/orders/:orderId — the fulfillment orders and shipments behind one of the caller's orders
+router.get('/orders/:orderId', getAuth, isAuth, getOrderFulfillment);
 
 // GET /delivery/fulfillment-orders and /summary — the preorder board's reads. `read:Order`, the
 // key of the orders they are about, which every signed-in account holds: the service narrows the
@@ -93,10 +95,20 @@ router.get(
     getRestockDateImpact
 );
 
-// POST /delivery/order/:orderId/start — begins fulfilment; moves the order paid -> processing.
+// GET /delivery/fulfillment-orders/:id — one fulfillment order. Mounted after the literal paths
+// above, so `summary` and the two impact previews are not read as an id.
+router.get(
+    '/fulfillment-orders/:id',
+    getAuth,
+    isAuth,
+    requirePermission('read', 'Order'),
+    getFulfillmentOrder
+);
+
+// POST /delivery/orders/:orderId/start — begins fulfilment; moves the order paid -> processing.
 // No `forced` variant, so no step-up guard: the admin override is the other reachable path here.
 router.post(
-    '/order/:orderId/start',
+    '/orders/:orderId/start',
     getAuth,
     isAuth,
     requirePermission('start', 'Shipment'),
@@ -143,6 +155,11 @@ router.post(
     requirePermission('update', 'Shipment'),
     postReleaseFulfillmentOrder
 );
+
+// GET /delivery/shipments/:id and /fulfillment-orders/:id — the item reads. `read:Order` like the
+// lists; the service narrows to the caller's own orders unless they hold `display:Order`, and
+// answers 404 for what they may not see.
+router.get('/shipments/:id', getAuth, isAuth, requirePermission('read', 'Order'), getShipment);
 
 // PATCH /delivery/shipments/:id — correct a tracking code (RFC 7396).
 router.patch(

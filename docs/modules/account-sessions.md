@@ -4,7 +4,7 @@ How this application decides who is making a request — and why none of it is p
 
 ::: tip At a glance
 **Two modes behind one port** — `strategy.ts` is the port (`issue` · `snapshot` · `reissue` · `remint` · `resolveBearer` · `resolveCookie` · `watchCookie` · `credentialOf` · `list`), `jwt-strategy.ts` and `cookie-strategy.ts` are its adapters, and `NODE_SESSION_MODE` picks one. The choice and what each defends against: [Two ways to stay signed in](../theory/sessions.md).
-**The files** — `config.ts` reads the mode and the lifetimes, `session.ts` is what controllers call, `resolver.ts` answers the kernel's port, `auth-context.ts` turns a proof into an `AuthContext`, `listing.ts` shapes the session list, `mint-guard.ts` refuses a first session without its second factor or on a stale proof, `activity.ts` stamps `lastActiveAt`, the session-epoch rule lives in `../domain/epoch.ts`, `cookies.ts` sets and clears. `jwt` mode adds `jwt.ts` (sign, verify, rotate) and `key-ring.ts` (a secret's `kid`); `cookie` mode adds `session-id.ts` (the `ses_…` id). `device-cookie.ts` is the familiar-device cookie, `login-observability.ts` records that a login happened.
+**The files** — `config.ts` reads the mode and the lifetimes, `session.ts` is what controllers call, `resolver.ts` answers the kernel's port, `auth-context.ts` turns a proof into an `AuthContext`, `listing.ts` decides which rows are the caller's sessions and when each ends, and `../presenter.ts` (pure) maps a row to the wire's `Session`, `mint-guard.ts` refuses a first session without its second factor or on a stale proof, `activity.ts` stamps `lastActiveAt`, the session-epoch rule lives in `../domain/epoch.ts`, `cookies.ts` sets and clears. `jwt` mode adds `jwt.ts` (sign, verify, rotate) and `key-ring.ts` (a secret's `kid`); `cookie` mode adds `session-id.ts` (the `ses_…` id). `device-cookie.ts` is the familiar-device cookie, `login-observability.ts` records that a login happened.
 **Published** — nothing. `session/` has no barrel and may not be imported from outside the module.
 **Breaks if you change** — the cookie flags or the lifetimes. Every guard in the app resolves through here.
 :::
@@ -33,7 +33,8 @@ One variable, `NODE_SESSION_MODE`, read through `session/config.ts`. Documented 
   The old rows age out by their own date.
 - **The frontend follows on its own.** It reads `GET /account/session-config` at boot and picks its
   transport: the access-token interceptor in `jwt` mode, `credentials: 'include'` and no interceptor
-  in `cookie` mode.
+  in `cookie` mode. The same answer carries each tier's lifetime (`lifetimeSeconds`) and the staff
+  cap (`staffLifetimeSeconds`), so the cookie list prints the deployment's numbers, not its own.
 - **The staff idle timeout and lifetime cap apply in both modes**, judged from the session row's clocks. See [sessions](../theory/sessions.md#the-staff-idle-timeout).
 
 A client with no cookie jar logs in with `transport: "bearer"` in the body (`cookie` mode only;
@@ -510,6 +511,12 @@ re-minted, and which session modes it applies to. `revokeFor(cause, userId)` in
 `services/revocation.ts` acts on a row; the reasons an event can carry (`SessionsRevokedReason`),
 and so the cases `api-keys` mails about, are derived from the rows that announce. Adding a cause
 means adding a row, and the compiler asks for its test trigger.
+
+`deletion-scheduled` is the row for `DELETE /account` ([scheduled deletion](./account.md#scheduled-deletion)):
+the epoch rides `users`' own save, the pending links (reset, verification, email change, login challenges)
+are purged, nothing is announced to `api-keys` (the keys are suspended by the resolver, not revoked, and
+come back on restore), and the caller is not re-minted. The `account-restore` link is minted after
+this purge, and is deliberately not among the links it kills.
 
 **Where the epoch is written.** In the credential's own write, so a second write failing cannot
 leave an old session live: the password's transaction, the swap's `save`, the factor's `save`. Two

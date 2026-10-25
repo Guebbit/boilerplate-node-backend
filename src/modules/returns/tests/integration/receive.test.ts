@@ -6,6 +6,7 @@
  * refund that finally lands — not left stuck.
  */
 
+import { refundOrderPayment } from '@modules/payments/tests/factories';
 import { setupTestDb } from '@tests/setup-test-db';
 import { observePort } from '@tests/ports';
 import * as auditPort from '@infrastructure/observability/audit';
@@ -463,7 +464,7 @@ describe('what the customer gets back', () => {
 
     it('never refunds more than the payment has left, whatever was refunded on goodwill before', async () => {
         const fixture = await paidAndDelivered();
-        await paymentService.refundByOrder(fixture.orderId, asAdmin(), callerContextAs('admin'), {
+        await refundOrderPayment(fixture.orderId, asAdmin(), callerContextAs('admin'), {
             amount: 40
         });
         const id = await approvedReturn(fixture);

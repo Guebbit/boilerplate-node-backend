@@ -114,7 +114,7 @@ it is the stored `users.analyticsConsent`, once the account has answered (`analy
 when) — read fresh on every request, via `AuthContext`, settable through `PUT /account`. A stored
 answer, yes or no, always wins: a header never overrides a withdrawal. Anonymous traffic has no
 account to read, so the frontend forwards the visitor's own banner choice on the
-`X-Analytics-Consent` request header — which also applies to a logged-in caller whose account was
+`Analytics-Consent` request header — which also applies to a logged-in caller whose account was
 never asked, so a choice made before login counts until `PUT /account` records it. A header-borne
 grant is a client assertion with no server-side record behind it; the stored field is what you can
 produce under Art. 7(1), so record it as soon as you have an account to record it against.

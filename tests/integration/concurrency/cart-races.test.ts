@@ -51,10 +51,10 @@ setupTestDb();
 
 describe('R3 — concurrent writes of the SAME product', () => {
     /*
-     * `POST /cart` ADDS: every participant's increment must land, so the line holds their
-     * sum, and exactly one of them — whoever created the line — is answered 201. Two participants
-     * both concluding "absent" and both appending is the failure the `$ne`-in-filter guard
-     * prevents; a lost increment is the one the filtered `$inc` prevents.
+     * `POST /cart/items` ADDS: every participant's increment must land, so the line holds their
+     * sum, and every one is answered 200 (a line is written through its parent, never 201). Two
+     * participants both concluding "absent" and both appending is the failure the `$ne`-in-filter
+     * guard prevents; a lost increment is the one the filtered `$inc` prevents.
      *
      * The line ends at exactly `RACE_SIZE` units, so the per-line ceiling is set to fit it: the race
      * size is a knob, and a ceiling below it would turn the last adds into refusals.
@@ -66,15 +66,14 @@ describe('R3 — concurrent writes of the SAME product', () => {
 
             const results = await raceN(RACE_SIZE, () =>
                 api()
-                    .post('/cart')
+                    .post('/cart/items')
                     .set('Authorization', bearer)
                     .send({ productId: String(product._id), quantity: 1 })
             );
 
             expectNoServerErrors(results);
-            // Every participant gets an answer, and only the one that created the line got a 201.
-            expect(countStatus(results, 201)).toBe(1);
-            expect(countStatus(results, 200)).toBe(RACE_SIZE - 1);
+            // Every participant gets the same answer, whether it made the line or grew it.
+            expect(countStatus(results, 200)).toBe(RACE_SIZE);
 
             // One cart document — the unique `userId` index plus the retry, working together.
             expect(await cartModel.countDocuments({ userId: user._id })).toBe(1);
@@ -101,7 +100,7 @@ describe('R3 — concurrent adds of DIFFERENT products', () => {
 
         const results = await raceN(RACE_SIZE, (index) =>
             api()
-                .post('/cart')
+                .post('/cart/items')
                 .set('Authorization', bearer)
                 .send({ productId: String(products[index]._id), quantity: 1 })
         );
@@ -127,14 +126,14 @@ describe('R3 — concurrent quantity writes to the same line', () => {
         const product = await createProduct({ onHand: RACE_SIZE * 5 });
 
         await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 1 });
 
         const quantities = Array.from({ length: RACE_SIZE }, (_, index) => index + 2);
         const results = await raceN(RACE_SIZE, (index) =>
             api()
-                .put(`/cart/${String(product._id)}`)
+                .patch(`/cart/items/${String(product._id)}`)
                 .set('Authorization', bearer)
                 .send({ quantity: quantities[index] })
         );
@@ -156,7 +155,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
         const product = await createProduct({ onHand: RACE_SIZE * 5 });
 
         await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 2 });
         await api()
@@ -176,7 +175,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
         const product = await createProduct({ onHand: RACE_SIZE * 5 });
 
         await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 2 });
         await api()
@@ -197,7 +196,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
         const product = await createProduct({ onHand: RACE_SIZE * 5 });
 
         await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 2 });
         await api()
@@ -220,7 +219,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
         const product = await createProduct({ price: 10, onHand: RACE_SIZE * 5 });
 
         await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 3 });
         await api()
@@ -246,7 +245,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
         const product = await createProduct({ price: 10, onHand: RACE_SIZE * 5 });
 
         await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 3 });
         await api()
@@ -279,7 +278,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
         const product = await createProduct({ onHand: RACE_SIZE * 5 });
 
         await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 1 });
         await api()
@@ -322,7 +321,6 @@ describe('R2 — a checkout that lost the cart race announces nothing', () => {
             tenant: 'shop',
             url: 'https://example.test/inbox',
             eventTypes: ['order.created'],
-            enabled: true,
             consecutiveFailures: 0,
             secrets: [entry]
         });
@@ -365,7 +363,7 @@ describe('account deletion racing a cart write', () => {
         const product = await createProduct({ onHand: RACE_SIZE * 5 });
 
         await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 1 });
 
@@ -373,7 +371,7 @@ describe('account deletion racing a cart write', () => {
             index === 0
                 ? api().delete('/account').set('Authorization', bearer)
                 : api()
-                      .post('/cart')
+                      .post('/cart/items')
                       .set('Authorization', bearer)
                       .send({ productId: String(product._id), quantity: 1 })
         );

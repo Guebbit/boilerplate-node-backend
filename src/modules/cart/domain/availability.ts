@@ -73,3 +73,16 @@ export const lineAvailability = ({
         return 'backorder';
     return 'in_stock';
 };
+
+/**
+ * Whether a line in this state can become an order as it stands. A preorder ships from its release
+ * date and a backorder by its restock date, so both are buyable; the rest checkout refuses.
+ * `removed` is buyable-no too, but checkout names it apart (`CART_PRODUCT_UNAVAILABLE`).
+ *
+ * @param availability - the line's availability
+ * @returns `true` for `in_stock`, `preorder` and `backorder`
+ */
+export const isBuyable = (
+    availability: LineAvailability
+): availability is 'in_stock' | 'preorder' | 'backorder' =>
+    availability === 'in_stock' || availability === 'preorder' || availability === 'backorder';

@@ -10,7 +10,7 @@ import { guardsOn } from '@tests/routes';
 import { router } from '@modules/notifications/routes';
 
 describe('notifications routes', () => {
-    it.each(['GET /', 'POST /read-all', 'POST /dismiss-all', 'DELETE /:id'])(
+    it.each(['GET /', 'POST /read-all', 'POST /dismiss-all', 'GET /:id', 'DELETE /:id'])(
         '%s requires a bearer session and a key',
         (signature) => {
             const guards = guardsOn(router, signature);

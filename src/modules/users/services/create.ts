@@ -31,7 +31,7 @@ import { roleRefusalReject } from './role-refusal';
  * - Password: never supplied. A credential is its owner's alone, so the account starts with a
  *   random value nobody is told, and `USER_SETUP_REQUESTED` (on the outbox, in the same
  *   transaction as the account) mails the owner a link to choose
- *   their own (`POST /account/reset-confirm`).
+ *   their own (`POST /account/password/reset/confirm`).
  * - Typed off `CreateUserRequest`, not a hand-picked `Pick`: a hand-copied list is what silently
  *   dropped `active` from `update()`.
  * - No `role` means a plain customer: the account holds no staff role and is a `customer` because

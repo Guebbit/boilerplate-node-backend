@@ -114,7 +114,12 @@ describe('get: availability per line', () => {
         expect(moved.success).toBe(true);
         const cart = await cartService.getForBadge(user.id);
         expect(cart.items).toEqual([
-            { productId: String(offSale._id), quantity: 1, availability: 'unavailable' }
+            {
+                productId: String(offSale._id),
+                quantity: 1,
+                availability: 'unavailable',
+                canIncrease: true
+            }
         ]);
     });
 });
@@ -234,7 +239,12 @@ describe('moveToCart', () => {
         expect(await savedIds(user.id)).toEqual([]);
         const cart = await cartService.getForBadge(user.id);
         expect(cart.items).toEqual([
-            { productId: String(product._id), quantity: 1, availability: 'in_stock' }
+            {
+                productId: String(product._id),
+                quantity: 1,
+                availability: 'in_stock',
+                canIncrease: true
+            }
         ]);
     });
 
@@ -248,7 +258,12 @@ describe('moveToCart', () => {
 
         const cart = await cartService.getForBadge(user.id);
         expect(cart.items).toEqual([
-            { productId: String(product._id), quantity: 3, availability: 'in_stock' }
+            {
+                productId: String(product._id),
+                quantity: 3,
+                availability: 'in_stock',
+                canIncrease: true
+            }
         ]);
     });
 

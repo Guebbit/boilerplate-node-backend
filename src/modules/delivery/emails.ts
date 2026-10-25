@@ -45,7 +45,7 @@ export interface FulfillmentDelayedEmailInput {
     agreedAt: Date;
     /** The date now expected; absent when there is none. */
     expectedAt?: Date | undefined;
-    /** `moved`: the date changed. `due`: it passed and the goods are still not here. */
+    /** `moved`: the date changed. `due`: it will be missed (a day away or gone) and the goods are still not here. */
     reason: 'moved' | 'due';
     /** The buyer's own order page, where Cancel is. */
     orderUrl: string;
@@ -195,9 +195,9 @@ export const holdNoticeEmail = (
 };
 
 /**
- * "Part of your order will be late" — sent when a waiting fulfillment order's date moved or passed.
+ * "Part of your order will be late" — sent when a waiting fulfillment order's date moved or will be missed.
  * Three wordings, one per thing that happened: a new date, a date taken away (none yet), and a date
- * that came with no stock. Every one closes the same way: the buyer may cancel for a full refund
+ * that is here with no stock. Every one closes the same way: the buyer may cancel for a full refund
  * until it ships, and doing nothing means they keep waiting. The shop asks nothing.
  *
  * @param locale - the buyer's language

@@ -101,8 +101,14 @@ describe('checkout holds units without selling them', () => {
         // And the cart survives — a refused checkout is not a lost basket.
         const cart = await cartService.getForBadge(user.id);
         expect(cart.items).toEqual([
-            { productId: String(product._id), quantity: 3, availability: 'insufficient_stock' }
+            {
+                productId: String(product._id),
+                quantity: 3,
+                availability: 'insufficient_stock',
+                canIncrease: true
+            }
         ]);
+        expect(cart.checkoutable).toBe(false);
     });
 
     it('refuses a product whose units are all held by someone else', async () => {

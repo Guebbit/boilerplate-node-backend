@@ -5,12 +5,14 @@
 
 import { z } from 'zod';
 import type { Request, Response } from 'express';
-import type { LocaleEntriesResponse } from '@types';
+import type { LocaleEntriesResponse, LocaleEntry } from '@types';
 import { readInput } from '@infrastructure/http/request';
 import { blankToUndefined, pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
 import { ListAppLocaleEntriesQueryParams, ListLocaleEntriesQueryParams } from '@api/schemas.zod';
 import { successResponse } from '@infrastructure/http/response';
+import { requireId } from '@infrastructure/http/ids';
 import { localeService } from '../services';
+import { presentLocaleEntry } from '../presenters';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
@@ -89,3 +91,27 @@ export const getAppLocaleEntries = (
     request: Request<{ locale: string; app: string }, unknown, unknown, Record<string, string>>,
     response: Response
 ) => listEntries(request, response, listAppLocaleEntriesQuerySchema, request.params.app);
+
+/**
+ * GET /locales/:locale/apps/:app/entries/:entryId (admin)
+ * One entry, at the address the single-entry writes target. An entry of another app or language,
+ * an unknown id and a malformed one all answer the same 404.
+ */
+export const getLocaleEntry = (
+    request: Request<{ locale: string; app: string; entryId: string }>,
+    response: Response
+) => {
+    const entryId = requireId(request, response, {
+        notFound: 'locales.error-entry-not-found',
+        name: 'entryId'
+    });
+    if (!entryId) return Promise.resolve();
+
+    return localeService
+        .getEntry(request.params.locale, request.params.app, entryId)
+        .then((result) => {
+            if (refused(response, result)) return;
+            successResponse<LocaleEntry>(response, presentLocaleEntry(result.data));
+        })
+        .catch(catchAs(response, 'getLocaleEntry'));
+};

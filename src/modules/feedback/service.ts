@@ -35,6 +35,7 @@ import {
 import type { Lean } from '@infrastructure/persistence/create-repository';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
+import { auditChanges } from '@infrastructure/observability/audit-changes';
 import { feedbackAuditActions } from './audit';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
@@ -204,17 +205,39 @@ const updateStatusById = (
 ): Promise<ResponseSuccess<FeedbackRequestDocument> | ResponseReject> =>
     feedbackRequestRepository.findById(id).then((feedback) => {
         if (!feedback) return generateReject(404, [t('generic.error-not-found')]);
+        // Read before `updateStatus` assigns onto the document. The notes are free text: by name only.
+        const metadata = auditChanges(feedback, payload, {
+            valued: ['status'],
+            named: ['adminNotes']
+        });
+
         return updateStatus(feedback, payload).then((result) => {
             recordAudit(context, {
                 action: feedbackAuditActions.ADMIN_FEEDBACK_STATUS_UPDATED,
                 outcome: 'success',
                 targetType: 'feedback',
                 targetId: id,
-                metadata: { status: payload.status }
+                metadata
             });
             return result;
         });
     });
+
+/**
+ * One ticket by id — the item read of the list the admin queue shows. The same rows the list
+ * returns, so there is no further scope: whoever holds `read:Feedback` reads any of them.
+ *
+ * @param id - the ticket
+ * @returns the ticket, or the 404 a missing one earns
+ */
+const getById = (id: string): Promise<ResponseSuccess<FeedbackRequestDocument> | ResponseReject> =>
+    feedbackRequestRepository
+        .findById(id)
+        .then((feedback) =>
+            feedback
+                ? generateSuccess(feedback)
+                : generateReject(404, [t('generic.error-not-found')])
+        );
 
 /**
  * Loads a ticket by id and permanently removes it, then — on success — emits
@@ -295,6 +318,7 @@ const findOwnTicketsForExport = (email: string): Promise<ExportFeedbackTicket[]>
 export const feedbackRequestService = {
     create,
     search,
+    getById,
     updateStatusById,
     removeById,
     findOwnTickets,

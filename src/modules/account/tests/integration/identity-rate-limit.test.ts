@@ -365,10 +365,10 @@ describe('mounted on the real routes', () => {
         expect(response.headers).toHaveProperty('ratelimit');
     });
 
-    it('resetRequestLimiters is mounted on POST /account/reset', async () => {
+    it('resetRequestLimiters is mounted on POST /account/password/reset', async () => {
         const user = await createUser();
 
-        const response = await api().post('/account/reset').send({ email: user.email });
+        const response = await api().post('/account/password/reset').send({ email: user.email });
 
         expect(response.headers).toHaveProperty('ratelimit');
     });

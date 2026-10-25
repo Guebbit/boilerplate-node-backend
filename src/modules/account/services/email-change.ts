@@ -42,7 +42,7 @@ export interface EmailChangeOutcome {
 /**
  * Applies `PUT/PATCH /account`'s `email` field to `user.pendingEmail` — never straight to
  * `user.email`. The account keeps its current, PROVEN address until the new one is confirmed
- * through `POST /account/email-change-confirm` — docs/modules/account.md#proving-an-address.
+ * through `POST /account/email-change/confirm` — docs/modules/account.md#proving-an-address.
  *
  * Outcomes:
  * - Absent field:    leaves everything alone.
@@ -80,7 +80,7 @@ export const applyEmailChangeRequest = (
 };
 
 /**
- * `DELETE /account/pending-email` — the explicit cancel. Resending the current address through
+ * `DELETE /account/email-change` — the explicit cancel. Resending the current address through
  * {@link applyEmailChangeRequest} never performs one as a side effect. A no-op when nothing is
  * pending, so a client can call it without checking `GET /account` first — but when something WAS
  * pending, the live `email-change` link is revoked in the same call, so it cannot still swap in

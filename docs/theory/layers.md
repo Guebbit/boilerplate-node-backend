@@ -166,7 +166,7 @@ Inside `services/`, one file per flow, as `cart` does:
 | ------------------------------------------------------------------------------ | ------------------------------------------------------------- |
 | `signup.ts`, `login.ts`, `logout.ts`, `refresh.ts`                             | getting in, getting out, staying in                           |
 | `password-reset-request.ts`, `password-reset.ts`, `password.ts`                | asking for a reset link, spending it, changing                |
-| `deletion-request.ts`, `self-delete.ts`                                        | asking to delete the account, and doing it                    |
+| `account-deletion.ts`, `purge-deletions.ts`                                    | locking the account, restoring it, and erasing it at the end  |
 | `email-change.ts`, `verification.ts`, `profile.ts`                             | the address, its proof, and the other profile fields          |
 | `two-factor-enrollment.ts`, `two-factor-challenge.ts`, `two-factor-lockout.ts` | `twoFactorService`: managing factors, the login step, the cap |
 | `two-factor-outcomes.ts`                                                       | internal: what the 2FA flows say back                         |

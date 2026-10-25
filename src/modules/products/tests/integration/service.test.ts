@@ -141,7 +141,7 @@ describe('productService.search', () => {
         await createProduct({ title: 'Expensive', price: 100, active: true });
 
         const result = await productService.search(
-            { minPrice: 50 },
+            { priceMin: 50 },
             productService.callerScope(GUEST)
         );
 
@@ -154,7 +154,7 @@ describe('productService.search', () => {
         await createProduct({ title: 'Expensive', price: 100, active: true });
 
         const result = await productService.search(
-            { maxPrice: 10 },
+            { priceMax: 10 },
             productService.callerScope(GUEST)
         );
 
@@ -485,6 +485,7 @@ describe('productService.restoreById', () => {
         const result = await productService.restoreById(product._id.toString());
 
         expect((result as ResponseReject).status).toBe(409);
+        expect((result as ResponseReject).errors[0]).toMatchObject({ code: 'PRODUCT_NOT_DELETED' });
     });
 
     it('answers 404 for a product that does not exist', async () => {

@@ -216,7 +216,7 @@ sequenceDiagram
     participant I as inventory
     participant O as outbox
     participant D as delivery
-    A->>I: POST /inventory/receipts
+    A->>I: POST /inventory/levels/{productId}/receive
     I->>I: receive, then allocate oldest payment first (one transaction)
     I->>O: inventory.backorder_allocated {orderId, productId, waiting}
     O->>D: at least once
@@ -269,7 +269,7 @@ something moved, and a redelivery finds the date already expected. A product tha
 no release date makes the whole group undated (it cannot leave before that product), and an undated
 group has no `expectedAt` at all: a cleared date removes it, so a redelivered event finds nothing to
 move and tells nobody twice. The fulfillment order carries the state: `agreedAt`, `expectedAt`,
-`lastNoticeAt` and `cancelReason`.
+`lastNoticeAt`, `dueNoticeFor` and `cancelReason`.
 
 ```mermaid
 stateDiagram-v2
@@ -278,8 +278,8 @@ stateDiagram-v2
     Waiting --> Waiting: date moved earlier<br/>(no email)
     Waiting --> Told: date moved later or cleared<br/>(email, silence keeps waiting)
     Told --> Told: another move<br/>(another email)
-    Told --> Late: the date passes, no stock<br/>(one more email, from the sweep)
-    Waiting --> Late: the date passes, no stock
+    Told --> Late: the date is a day away, no stock<br/>(one more email, from the sweep)
+    Waiting --> Late: the date is a day away, no stock
     Waiting --> Allocated: stock arrives
     Told --> Allocated: stock arrives
     Late --> Allocated: stock arrives
@@ -319,12 +319,15 @@ an inbox row, `notifications.fulfillment-delayed`.
 
 `npm run job sweep:preorders` (02:20 UTC, under a lease; [scheduled jobs](../reference/ops.md#scheduled-jobs))
 does one thing, and only to fulfillment orders still `on_hold` for stock: a fulfillment order whose
-**current** `expectedAt` has passed, with no stock and no notice since, tells its buyer once: "we
-have not been able to send it, there is no new date yet, you can cancel any time". It is keyed on
-`expectedAt`, not `agreedAt`: after a moved date the agreed one is long gone and only the expected
-one can still be missed. `lastNoticeAt` is what stops a daily repeat, and a date that moves later is
-a new date that can pass again. A backorder promised the 30-day default is told like any other,
-the day after day 30.
+**current** `expectedAt` is a day away or already gone (`expectedAt <= now + 1 day`), with no stock
+and no notice for that date, tells its buyer once that it will miss the date: "the stock has not
+reached us, there is no new date yet, you can cancel any time". The sweep is daily, so looking a day
+ahead is what lets the email land before the date, not after it. It is keyed on `expectedAt`, not
+`agreedAt`: after a moved date the agreed one is long gone and only the expected one can still be
+missed. `dueNoticeFor` is what stops a daily repeat: it stores the `expectedAt` the notice was sent
+for, so a date that moves is a new date and is told about again (timestamps cannot say that, since
+a moved-date notice also stamps `lastNoticeAt`). A backorder promised the 30-day default is told like
+any other, on day 29 of 30.
 
 The sweep cancels nothing and expires nothing. Units already allocated but not shipped (`open`) are
 left alone: goods on the shelf are a short, definite delay, and the buyer can already cancel any
@@ -381,7 +384,7 @@ every order see every row; anyone else sees only their own orders' fulfillment o
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Normal     | this module listens to `order.status_changed {to: paid}` through the outbox, as `invoicing` does. Idempotent on `{ orderId, number }`                                                                         |
 | Safety net | `ensureFulfillmentOrders` runs the same idempotent create on every read and every `start` of a paid order: the outbox gives up after its last retry, and a missing fulfillment order would leave no ship door |
-| Not paid   | `GET /delivery/order/{orderId}` answers `200` with both lists empty                                                                                                                                           |
+| Not paid   | `GET /delivery/orders/{orderId}` answers `200` with both lists empty                                                                                                                                          |
 
 ## One transaction per act
 
@@ -517,7 +520,7 @@ Each act writes its rows to the order's [timeline](./orders.md#the-timeline) in 
 | `fulfillment_released` | staff, or an allocation of stock, release it (staff only)      | fulfillment order id                                         |
 | `remainder_cancelled`  | `returns` cancels what had not shipped                         | fulfillment order id                                         |
 | `release_date_moved`   | a product's date moved and this order's expected date followed | fulfillment order id, `from` and `to` (ISO, or `null`)       |
-| `delay_notice_sent`    | the buyer was told: the date moved, or it passed               | fulfillment order id, `reason`, `expectedAt`                 |
+| `delay_notice_sent`    | the buyer was told: the date moved, or it will be missed       | fulfillment order id, `reason`, `expectedAt`                 |
 
 A whole-order cancel writes no `remainder_cancelled`: the order's own `cancelled` row says it. The
 shipment row comes first, then the order's own move that it caused (`shipped`, `delivered`). A
@@ -536,8 +539,8 @@ date this order was expecting, not the product's previous date.
 | `GET /delivery/methods`                                    | public                             | the shipping methods and what each costs                            |
 | `GET /delivery/fulfillment-orders` · `/summary`            | `display:Order`                    | [the preorder board](#the-preorder-board)'s two reads               |
 | `GET /delivery/fulfillment-orders/restock-date-impact`     | `update:Product` + `display:Order` | orders a restock-date move would email, before it is saved          |
-| `GET /delivery/order/{orderId}`                            | the owner, or staff                | `{ fulfillmentOrders[], shipments[] }`, each with its own `actions` |
-| `POST /delivery/order/{orderId}/start`                     | `start:Shipment`                   | the order, `processing`                                             |
+| `GET /delivery/orders/{orderId}`                           | the owner, or staff                | `{ fulfillmentOrders[], shipments[] }`, each with its own `actions` |
+| `POST /delivery/orders/{orderId}/start`                    | `start:Shipment`                   | the order, `processing`                                             |
 | `POST /delivery/fulfillment-orders/{id}/shipments`         | `update:Shipment`                  | `201` + the shipment                                                |
 | `POST /delivery/fulfillment-orders/{id}/fulfill`           | `update:Shipment`                  | the shipment, delivered                                             |
 | `POST /delivery/fulfillment-orders/{id}/hold` · `/release` | `update:Shipment`                  | the fulfillment order                                               |
@@ -546,6 +549,11 @@ date this order was expecting, not the product's previous date.
 
 Every button a client draws comes from the record's own `actions` (or `GET /returns/options`): the
 frontend never re-derives a rule. Every staff door asks the key and nothing else: [no rank](../theory/authorization.md#protecting-people).
+
+A forced door has its own flag beside the ordinary one: `forceShip` (the ordinary ship door is closed,
+`override:Order` opens it) and `forceDeliver` (the arrival is open, as for `deliver`, and the caller
+also holds `override:Order`; true beside `deliver`, since forcing only skips the carrier's
+confirmation). `ShipmentActions.update` is the tracking-code edit.
 
 | Event                                                 | Payload                                                    | Public webhook                 |
 | ----------------------------------------------------- | ---------------------------------------------------------- | ------------------------------ |

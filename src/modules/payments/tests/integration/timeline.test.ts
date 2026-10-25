@@ -6,6 +6,7 @@
  * Real Mongo, through the services' public door.
  */
 
+import { refundOrderPayment } from '../factories';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
@@ -48,7 +49,7 @@ const paidOrder = async () => {
 
 /** Refund `amount` of the order's payment as the operator `admin-1`. */
 const refund = (orderId: string, amount: number) =>
-    paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin', 'admin-1'), {
+    refundOrderPayment(orderId, asAdmin(), callerContextAs('admin', 'admin-1'), {
         amount
     });
 

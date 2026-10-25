@@ -6,8 +6,8 @@
  * would only stop deliveries arriving, not make it safer), and `GET /methods`, which is
  * pre-purchase information exactly like `GET /delivery/methods`.
  *
- * Admin-only:    the refund, the offline record, and the RF-reference lookup that precedes it — a
- *                self-service withdrawal, or a self-reported "I paid", if left open to any caller,
+ * Admin-only:    the refund and the offline record — a self-service withdrawal, or a
+ *                self-reported "I paid", if left open to any caller,
  *                versus an intent or confirm locked to admins being a checkout nobody can
  *                complete.
  * Fresh session: every route that moves money requires `requireFreshAuth('critical')` —
@@ -19,7 +19,7 @@
  *                mail at an inbox nobody confirmed. `cart` owns the key; `payments` mounts it, the
  *                same as `products/routes.ts` mounts `locales`-owned `translations.*`.
  * Card testing:  `POST /:id/confirm` alone additionally carries the payment-velocity budgets — the
- *                confirm is where a card number is actually validated, `/intent` merely freezes a
+ *                confirm is where a card number is actually validated, `POST /` merely freezes a
  *                price. See `paymentConfirmAttemptLimiter`/`paymentConfirmDeclineLimiter`/`paymentConfirmDeclineBlockLimiter`.
  */
 
@@ -42,13 +42,15 @@ import {
     idempotencyKey,
     requireIdempotencyKey
 } from '@infrastructure/http/middlewares/idempotency';
-import { postPaymentIntent } from './controllers/post-payment-intent';
+import { postPayment } from './controllers/post-payment';
 import { postPaymentConfirm } from './controllers/post-payment-confirm';
 import { postPaymentSync } from './controllers/post-payment-sync';
 import { postPaymentWebhook } from './controllers/post-payment-webhook';
+import { getPayment } from './controllers/get-payment';
+import { getRefund } from './controllers/get-refund';
 import { getPaymentByOrder } from './controllers/get-payment-by-order';
-import { getOrderByReference } from './controllers/get-order-by-reference';
 import { postPaymentRefund } from './controllers/post-payment-refund';
+import { postPaymentRefundSettle } from './controllers/post-payment-refund-settle';
 import { postPaymentOffline } from './controllers/post-payment-offline';
 import { getPaymentMethods } from './controllers/get-payment-methods';
 import { getPayments } from './controllers/get-payments';
@@ -83,25 +85,21 @@ router.get(
     getPaymentAttention
 );
 
-// POST /payments/intent — freeze an order's price, ready to confirm. No idempotencyKey: asking again
+// POST /payments — freeze an order's price, ready to confirm. No idempotencyKey: asking again
 // already refreshes the same intent, and the idempotency ledger would store the response, the
 // `clientSecret` included. `paymentIntentLimiter` is shared with `/sync` below.
 router.post(
-    '/intent',
+    '/',
     requirePermission('checkout', 'Cart'),
     requireFreshAuth('critical'),
     paymentIntentLimiter,
-    postPaymentIntent
+    postPayment
 );
 
-// GET /payments/order/:orderId — the payment behind an order
-router.get('/order/:orderId', getPaymentByOrder);
+// GET /payments/orders/:orderId — the payment behind an order
+router.get('/orders/:orderId', getPaymentByOrder);
 
-// GET /payments/order-by-reference — the admin's RF-code lookup, same authority as offline below.
-// A literal segment, not `/order/:something`: it names no order yet, that's the whole point of it.
-router.get('/order-by-reference', requirePermission('create', 'Payment'), getOrderByReference);
-
-// POST /payments/order/:orderId/refund — the operator returns the money, order untouched. The key
+// POST /payments/:id/refunds — the operator returns the money, order untouched. The key
 // is REQUIRED: a retried refund would otherwise return the money twice.
 /*
  * No `requireFreshAuth` here: `create:Refund` carries `stepUp: critical` in
@@ -110,16 +108,34 @@ router.get('/order-by-reference', requirePermission('create', 'Payment'), getOrd
  * second route reaching the same key would otherwise have to remember.
  */
 router.post(
-    '/order/:orderId/refund',
+    '/:id/refunds',
     requirePermission('create', 'Refund'),
     requireIdempotencyKey,
     postPaymentRefund
 );
 
-// POST /payments/order/:orderId/offline — the admin recording money by hand. Same `stepUp`
+// GET /payments/:id — one payment by its own id. Declared after every literal GET above (`/refunds`,
+// `/attention`), which a bare `/:id` would otherwise swallow. No permission
+// guard: the read is scoped in the service, a stranger's payment is the same 404 as a missing one.
+router.get('/:id', getPayment);
+
+// GET /payments/:id/refunds/:refundId — one refund record, scoped exactly like the payment read.
+router.get('/:id/refunds/:refundId', getRefund);
+
+// POST /payments/:id/refunds/:refundId/settle — the operator confirming hand-paid money went back.
+// Same `create:Refund` key (and so the same `stepUp`) as the refund that opened the record; the
+// key is optional because settling twice is refused by the record itself (409), never repeated.
+router.post(
+    '/:id/refunds/:refundId/settle',
+    requirePermission('create', 'Refund'),
+    idempotencyKey,
+    postPaymentRefundSettle
+);
+
+// POST /payments/orders/:orderId/offline — the admin recording money by hand. Same `stepUp`
 // arrangement as the refund: `create:Payment` carries it in `shared/authorization-keys.yaml`.
 router.post(
-    '/order/:orderId/offline',
+    '/orders/:orderId/offline',
     requirePermission('create', 'Payment'),
     idempotencyKey,
     postPaymentOffline
@@ -143,7 +159,7 @@ router.post(
 // POST /payments/:id/sync — the browser reporting it finished at the provider. No idempotencyKey
 // here: it is already idempotent by construction, keyed on the provider's own payment reference
 // rather than a client-supplied one, so a second sync call settles the same outcome, not a
-// second one. It spends the same per-account budget as `/intent`: both end in a provider call.
+// second one. It spends the same per-account budget as `POST /`: both end in a provider call.
 router.post(
     '/:id/sync',
     requirePermission('checkout', 'Cart'),

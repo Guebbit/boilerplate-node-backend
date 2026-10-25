@@ -8,6 +8,9 @@ tags:
     - name: Products
       description: The catalogue - browsing, searching and managing products and their images.
 
+x-error-codes:
+    PRODUCT_NOT_DELETED: { status: 409, description: 'A restore named a product that is not soft-deleted, so there is nothing to undo.' }
+
 paths:
     /products:
         get:
@@ -47,14 +50,14 @@ paths:
                   schema:
                       type: string
                       maxLength: 200
-                - name: minPrice
+                - name: priceMin
                   in: query
                   required: false
                   schema:
                       type: number
                       format: double
                       minimum: 0
-                - name: maxPrice
+                - name: priceMax
                   in: query
                   required: false
                   schema:
@@ -103,7 +106,7 @@ paths:
                 one entry per locale — the fallback locale (`NODE_FALLBACK_LOCALE`) MUST be
                 present and non-null, since a product with nothing to fall back to cannot exist.
                 See `PATCH /products/{id}` for the three-way table a locale entry follows. A new
-                product starts with no stock: units enter only through `POST /inventory/receipts`, the
+                product starts with no stock: units enter only through `POST /inventory/levels/{productId}/receive`, the
                 one transition that creates them, which needs `create:StockMovement` and leaves a ledger
                 row. A client that wants an opening count creates the product, then receives it.
             operationId: createProduct
@@ -146,8 +149,9 @@ paths:
                 - bearerAuth: []
                 - apiKeyAuth: []
             # The flag is readable from the query here too, exactly as it is on the `{id}` form:
-            # one controller serves both, and `surface: 'delete'` reads params, query and body on
-            # whichever route it is mounted on. Declared rather than merely tolerated.
+            # one controller serves both, and the flag is read from the path flag, the query and
+            # the body on whichever route it is mounted on. The id is the body's alone here, and the
+            # path's alone on the `{id}` form. Declared rather than merely tolerated.
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/HardDeleteParam'
             requestBody:
@@ -317,12 +321,6 @@ paths:
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/HardDeleteParam'
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/HardDeleteRequest'
             responses:
                 '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
@@ -385,6 +383,7 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # `PRODUCT_NOT_DELETED`: the product is not soft-deleted.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
@@ -562,7 +561,7 @@ components:
         ProductAdmin:
             type: object
             additionalProperties: false
-            required: [id, title, price, currency, inStock, lowStock, translations]
+            required: [id, title, price, currency, inStock, lowStock, buyable, translations]
             description: >-
                 A product with every language it has a row for, not just the caller's resolved
                 one — what the editor's form needs to populate its tabs. `title`/`description`
@@ -626,6 +625,14 @@ components:
                     $ref: '#/components/schemas/RestockDate'
                 # Derived, never stored: `active && purchasable && releaseDate > now`. Turns false by
                 # itself when the date passes, so nothing has to run on the release day.
+                buyable:
+                    type: boolean
+                    readOnly: true
+                    description: >-
+                        A shopper can order it right now: visible, on sale, and something to order
+                        (shelf units, room in a preorder's allowance, or an open backorder). The one
+                        answer behind the add-to-cart button and "notify me", so a client never
+                        re-derives it from the other flags.
                 preorder:
                     type: boolean
                     readOnly: true
@@ -765,11 +772,11 @@ components:
                     minItems: 1
                     maxItems: 100
                     items: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id' }
-                minPrice:
+                priceMin:
                     type: number
                     format: double
                     minimum: 0
-                maxPrice:
+                priceMax:
                     type: number
                     format: double
                     minimum: 0
@@ -1322,7 +1329,7 @@ components:
         Product:
             type: object
             additionalProperties: false
-            required: [id, title, price, currency, inStock, lowStock]
+            required: [id, title, price, currency, inStock, lowStock, buyable]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -1417,6 +1424,14 @@ components:
                     $ref: '#/components/schemas/RestockDate'
                 # Derived, never stored: `active && purchasable && releaseDate > now`. Turns false by
                 # itself when the date passes, so nothing has to run on the release day.
+                buyable:
+                    type: boolean
+                    readOnly: true
+                    description: >-
+                        A shopper can order it right now: visible, on sale, and something to order
+                        (shelf units, room in a preorder's allowance, or an open backorder). The one
+                        answer behind the add-to-cart button and "notify me", so a client never
+                        re-derives it from the other flags.
                 preorder:
                     type: boolean
                     readOnly: true

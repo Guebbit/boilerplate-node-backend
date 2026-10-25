@@ -109,10 +109,10 @@ describe('POST /products', () => {
         expect(empty.body.data.onHand).toBe(0);
 
         const received = await api()
-            .post('/inventory/receipts')
+            .post(`/inventory/levels/${id}/receive`)
             .set('Authorization', bearer)
             .set('Idempotency-Key', 'opening-count-1')
-            .send({ productId: id, quantity: 7 });
+            .send({ quantity: 7 });
         const read = await api().get(`/products/${id}`).set('Authorization', bearer);
         const movements = await api()
             .get(`/inventory/movements?productId=${id}`)

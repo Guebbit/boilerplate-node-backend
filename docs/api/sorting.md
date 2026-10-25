@@ -16,8 +16,8 @@ and not just the ten rows on screen. One parameter, one grammar, everywhere.
 | Query form | `?sort=-price,title` — comma-separated; a repeated key (`?sort=a&sort=b`) is accepted too |
 | Body form | `{ "sort": ["-price", "title"] }` — one token per item, exactly as sent |
 | Direction | `field` ascending, `-field` descending |
-| Several fields | the earlier one ranks first; the cap is the enum's `maxItems` (3 for most resources, 2 for `PaymentSort`, 5 for `OrderSort`) |
-| Absent or blank | the resource's default order, newest first. Blank means absent on the **query only** (`?sort=`); a blank body `sort` is a 422 |
+| Several fields | the earlier one ranks first; the cap is the enum's `maxItems` (3 for most resources, 2 for `PaymentSort`, `ReturnSort` and `WebhookSubscriptionSort`, 5 for `OrderSort`) |
+| Absent or blank | the resource's default order, newest first (a list that takes `sort`; a fixed-order list has no `sort` at all, see below). Blank means absent on the **query only** (`?sort=`); a blank body `sort` is a 422 |
 | A repeated field | the first mention wins: `price,-price` sorts by price ascending |
 | A CSV inside a body item | **422** — only the query string is split on commas |
 | A field outside the list | **422** — the contract enum refuses it |
@@ -28,7 +28,7 @@ case-insensitively (`Apple` before `banana`).
 ## Who can be sorted, by what
 
 The list is an **enum per resource** in that module's `openapi.yaml` (`ProductSort`, `UserSort`,
-`OrderSort`, `PaymentSort`, `FeedbackRequestSort`, `ExampleSort`). It is a whitelist on purpose: an unindexed or derived field
+`OrderSort`, `PaymentSort`, `FeedbackRequestSort`, `ExampleSort`, `WebhookSubscriptionSort`, `ReturnSort`, `ApiKeySort`). It is a whitelist on purpose: an unindexed or derived field
 would let a stranger ask for a collection scan.
 
 | Resource | Sortable fields |
@@ -39,6 +39,20 @@ would let a stranger ask for a collection scan.
 | Payments | `createdAt` · `amount` · `payBy` (a payment with no bank-transfer deadline counts as the earliest) |
 | Feedback | `createdAt` · `status` · `email` |
 | Examples | `createdAt` · `title` · `status` |
+| Webhook subscriptions | `createdAt` · `url` |
+| Returns | `createdAt` · `status` |
+| API keys | `createdAt` · `expiresAt` · `lastUsedAt` (a key never used has no `lastUsedAt`) |
+
+## Lists with one fixed order
+
+A paged list with no `sort` has ONE order, and says so in its 200 description. That is allowed
+only when the order is why the screen exists, never for records staff manage (those take `sort`).
+
+| Kind | Order | Lists |
+| --- | --- | --- |
+| log | newest first | webhook deliveries · audit logs · observability audit · stock movements · refunds |
+| queue | by urgency, index-backed | inventory levels (scarcest first) · preorder allowances (most outstanding first) · preorder fulfillment orders (earliest expected first) and their product summary (earliest promise first) |
+| dictionary | natural key, ascending | locale entries (both the language's and one app's) |
 
 ## How it flows
 

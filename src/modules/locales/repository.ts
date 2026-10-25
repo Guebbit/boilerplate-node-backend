@@ -530,6 +530,24 @@ const upsertEntityLocale = (
         .exec();
 };
 
+/**
+ * Unset the translator on every translation one account wrote: the text stays, the person goes
+ * (GDPR Art. 17 for the staff member who typed it). `timestamps: false`, since forgetting a name
+ * is not an edit of the translation.
+ *
+ * @param userId - the erased account's id
+ * @param session - joins the clear to the erasure's transaction
+ */
+const forgetTranslator = (userId: string, session: ClientSession): Promise<void> =>
+    translationModel
+        .updateMany(
+            { translatedBy: userId },
+            { $unset: { translatedBy: 1 } },
+            { session, timestamps: false }
+        )
+        .exec()
+        .then(() => undefined);
+
 /** Delete one entity's one-locale row — a `null` in a PATCH. A no-op if it never existed. */
 const removeEntityLocale = (
     entityType: string,
@@ -664,6 +682,7 @@ export const translationRepository: Repository<TranslationDocument, Translation>
         session?: ClientSession
     ) => Promise<void>;
     removeEntityTranslations: (entityType: string, entityId: string) => Promise<number>;
+    forgetTranslator: (userId: string, session: ClientSession) => Promise<void>;
 } = {
     ...translationBase,
     findEntityTranslations,
@@ -673,5 +692,6 @@ export const translationRepository: Repository<TranslationDocument, Translation>
     findEntityIdsByFieldMatch,
     upsertEntityLocale,
     removeEntityLocale,
-    removeEntityTranslations
+    removeEntityTranslations,
+    forgetTranslator
 };

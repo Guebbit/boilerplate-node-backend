@@ -50,7 +50,7 @@ afterEach(() => settleInlineExports().then(emptyFileSandbox));
  * The mailer is REPLACED, not spied on — same reasoning as the audit/analytics ports elsewhere
  * (`jest.spyOn` cannot redefine the non-configurable getter a CommonJS namespace import exposes
  * under swc). Needed here because a token is a digest at rest: the plaintext verify
- * token this suite submits to `/account/verify-confirm` only ever exists in the emailed link,
+ * token this suite submits to `/account/email-verification/confirm` only ever exists in the emailed link,
  * never in storage — see `verifyTokenFromMail` below.
  */
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -593,7 +593,7 @@ describe('PATCH /account refuses what a profile edit may not carry', () => {
     });
 });
 
-describe('DELETE /account/pending-email', () => {
+describe('DELETE /account/email-change', () => {
     it('cancels a pending change explicitly', async () => {
         const { bearer } = await authenticateAs('user');
         await api()
@@ -601,7 +601,7 @@ describe('DELETE /account/pending-email', () => {
             .set('Authorization', bearer)
             .send({ email: 'someone-else-typed-this@example.com' });
 
-        const response = await api().delete('/account/pending-email').set('Authorization', bearer);
+        const response = await api().delete('/account/email-change').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
 
@@ -612,7 +612,7 @@ describe('DELETE /account/pending-email', () => {
     it('is a no-op when nothing is pending', async () => {
         const { bearer } = await authenticateAs('user');
 
-        const response = await api().delete('/account/pending-email').set('Authorization', bearer);
+        const response = await api().delete('/account/email-change').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
     });
@@ -631,7 +631,7 @@ const requestChangeAndWait = async (address: string) => {
  * The resend is the only way to ask for the pending address's link again: restating it on `PATCH
  * /account` is a no-op. The cooldown is stepped over with a frozen clock rather than a wait.
  */
-describe('POST /account/pending-email/resend', () => {
+describe('POST /account/email-change/resend', () => {
     afterEach(() => jest.useRealTimers());
 
     it('mails the NEW address a fresh link and nobody else, answering resendAfter', async () => {
@@ -642,7 +642,7 @@ describe('POST /account/pending-email/resend', () => {
         enqueueEmail.mockClear();
 
         const response = await api()
-            .post('/account/pending-email/resend')
+            .post('/account/email-change/resend')
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
@@ -657,14 +657,14 @@ describe('POST /account/pending-email/resend', () => {
         const { user, bearer } = await requestChangeAndWait('new-address@example.com');
         const firstToken = verifyTokenFromMail();
 
-        await api().post('/account/pending-email/resend').set('Authorization', bearer);
+        await api().post('/account/email-change/resend').set('Authorization', bearer);
         const secondToken = verifyTokenFromMail();
 
         expect(secondToken).not.toBe(firstToken);
-        const stale = await api().post('/account/email-change-confirm').send({ token: firstToken });
+        const stale = await api().post('/account/email-change/confirm').send({ token: firstToken });
         expect(stale.status).toBe(422);
         const confirm = await api()
-            .post('/account/email-change-confirm')
+            .post('/account/email-change/confirm')
             .send({ token: secondToken });
         expect(confirm.status).toBe(200);
         const stored = await userRepository.findById(user.id);
@@ -673,10 +673,10 @@ describe('POST /account/pending-email/resend', () => {
 
     it('answers 429 with the seconds to wait inside the cooldown', async () => {
         const { bearer } = await requestChangeAndWait('new-address@example.com');
-        await api().post('/account/pending-email/resend').set('Authorization', bearer);
+        await api().post('/account/email-change/resend').set('Authorization', bearer);
 
         const response = await api()
-            .post('/account/pending-email/resend')
+            .post('/account/email-change/resend')
             .set('Authorization', bearer);
 
         expect(response.status).toBe(429);
@@ -694,7 +694,7 @@ describe('POST /account/pending-email/resend', () => {
         enqueueEmail.mockClear();
 
         const response = await api()
-            .post('/account/pending-email/resend')
+            .post('/account/email-change/resend')
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
@@ -713,16 +713,16 @@ const tooShortPasswordInItalian = (minimum: number): string => {
 };
 
 /**
- * `POST /account/reset-confirm`, its own describe because the flow needs a live one-time token
+ * `POST /account/password/reset/confirm`, its own describe because the flow needs a live one-time token
  * rather than a session.
  */
-describe('POST /account/reset-confirm', () => {
+describe('POST /account/password/reset/confirm', () => {
     it("answers a weak password with the password named, in the caller's language", async () => {
         const user = await createUser({ email: 'reset-copy@example.com' });
         await plantToken(user.id, 'password', 'a-live-reset-token', { ttlMs: 60 * 60 * 1000 });
 
         const response = await api()
-            .post('/account/reset-confirm')
+            .post('/account/password/reset/confirm')
             .set('Accept-Language', 'it')
             .send({
                 token: 'a-live-reset-token',
@@ -747,14 +747,14 @@ describe('POST /account/reset-confirm', () => {
         const user = await createUser({ email: 'reset-typo@example.com' });
         await plantToken(user.id, 'password', 'a-fresh-reset-token', { ttlMs: 60 * 60 * 1000 });
 
-        const weakAttempt = await api().post('/account/reset-confirm').send({
+        const weakAttempt = await api().post('/account/password/reset/confirm').send({
             token: 'a-fresh-reset-token',
             password: WEAK_PASSWORD,
             passwordConfirm: WEAK_PASSWORD
         });
         expect(weakAttempt.status).toBe(422);
 
-        const validAttempt = await api().post('/account/reset-confirm').send({
+        const validAttempt = await api().post('/account/password/reset/confirm').send({
             token: 'a-fresh-reset-token',
             password: REPLACEMENT_PASSWORD,
             passwordConfirm: REPLACEMENT_PASSWORD
@@ -1023,6 +1023,44 @@ describe('POST /account/logout', () => {
     });
 });
 
+describe('GET /account/sessions/{sessionId}', () => {
+    it('reads one of the caller’s own sessions, flagged current via the cookie', async () => {
+        const { bearer, jwtCookie } = await loginWithCookie();
+        const listing = await api()
+            .get('/account/sessions')
+            .set('Authorization', bearer)
+            .set('Cookie', jwtCookie);
+        const [session] = listing.body.data.sessions as { id: string }[];
+
+        const response = await api()
+            .get(`/account/sessions/${session.id}`)
+            .set('Authorization', bearer)
+            .set('Cookie', jwtCookie);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toMatchObject({ id: session.id, current: true });
+    });
+
+    it('answers 404 for an unknown id and a malformed one alike', async () => {
+        const { bearer } = await loginWithCookie();
+
+        const unknown = await api()
+            .get('/account/sessions/000000000000000000000000')
+            .set('Authorization', bearer);
+        const malformed = await api()
+            .get('/account/sessions/not-an-id')
+            .set('Authorization', bearer);
+
+        expect([unknown.status, malformed.status]).toEqual([404, 404]);
+    });
+
+    it('answers 401 without a session', async () => {
+        const response = await api().get('/account/sessions/000000000000000000000000');
+
+        expect(response.status).toBe(401);
+    });
+});
+
 describe('GET /account/sessions', () => {
     it('lists the one session a fresh login has, flagged current via the cookie', async () => {
         const { bearer, jwtCookie } = await loginWithCookie();
@@ -1064,7 +1102,7 @@ describe('GET /account/sessions', () => {
                 .get('/account/sessions')
                 .set('Authorization', bearer)
                 .set('Cookie', jwtCookie)
-                .set('X-Session-Passive', 'true');
+                .set('Session-Passive', 'true');
 
         const before = await listed();
         expect(before.body.data.sessions[0].lastUsedAt).toBeUndefined();
@@ -1157,7 +1195,7 @@ describe('DELETE /account/sessions/{sessionId}', () => {
     });
 });
 
-describe('POST /account/verify-request and /account/verify-confirm', () => {
+describe('POST /account/email-verification/resend and /account/email-verification/confirm', () => {
     it('signup starts unverified and holding a verification token', async () => {
         const response = await api().post('/account/signup').send({
             email: 'joiner@example.com',
@@ -1219,11 +1257,13 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
     it('re-sends for an unverified account and the emailed token then verifies it', async () => {
         const { user, bearer } = await loginWithCookie();
 
-        const request = await api().post('/account/verify-request').set('Authorization', bearer);
+        const request = await api()
+            .post('/account/email-verification/resend')
+            .set('Authorization', bearer);
         expect(request.status).toBe(200);
 
         const token = verifyTokenFromMail();
-        const confirm = await api().post('/account/verify-confirm').send({ token });
+        const confirm = await api().post('/account/email-verification/confirm').send({ token });
         expect(confirm.status).toBe(200);
 
         const stored = await userRepository.findById(user.id);
@@ -1233,14 +1273,16 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
     it('matches the error contract when the account is already verified', async () => {
         const { bearer } = await loginWithCookie({ verifiedAt: new Date() });
 
-        const response = await api().post('/account/verify-request').set('Authorization', bearer);
+        const response = await api()
+            .post('/account/email-verification/resend')
+            .set('Authorization', bearer);
 
         expect(response.status).toBe(409);
     });
 
     it('matches the error contract for an invented token', async () => {
         const response = await api()
-            .post('/account/verify-confirm')
+            .post('/account/email-verification/confirm')
             .send({ token: 'not-a-real-token' });
 
         expect(response.status).toBe(422);
@@ -1248,18 +1290,18 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
 
     it('a token spends exactly once', async () => {
         const { bearer } = await loginWithCookie();
-        await api().post('/account/verify-request').set('Authorization', bearer);
+        await api().post('/account/email-verification/resend').set('Authorization', bearer);
         const token = verifyTokenFromMail();
 
-        const first = await api().post('/account/verify-confirm').send({ token });
-        const second = await api().post('/account/verify-confirm').send({ token });
+        const first = await api().post('/account/email-verification/confirm').send({ token });
+        const second = await api().post('/account/email-verification/confirm').send({ token });
 
         expect(first.status).toBe(200);
         expect(second.status).toBe(422);
     });
 });
 
-describe('PATCH /account (email change) and /account/email-change-confirm', () => {
+describe('PATCH /account (email change) and /account/email-change/confirm', () => {
     it('notifies the OLD address and mails a link to the NEW one, the moment the change is requested', async () => {
         const { user, bearer } = await loginWithCookie({ verifiedAt: new Date() });
 
@@ -1283,7 +1325,7 @@ describe('PATCH /account (email change) and /account/email-change-confirm', () =
             .send({ email: 'new-address@example.com' });
         const token = verifyTokenFromMail();
 
-        const confirm = await api().post('/account/email-change-confirm').send({ token });
+        const confirm = await api().post('/account/email-change/confirm').send({ token });
 
         expect(confirm.status).toBe(200);
         const stored = await userRepository.findById(user.id);
@@ -1300,7 +1342,7 @@ describe('PATCH /account (email change) and /account/email-change-confirm', () =
         expect(changeRequest.status).toBe(200);
 
         const token = verifyTokenFromMail();
-        const confirm = await api().post('/account/email-change-confirm').send({ token });
+        const confirm = await api().post('/account/email-change/confirm').send({ token });
         expect(confirm.status).toBe(200);
 
         // A confirmed email change ends every session (the old bearer included, in `cookie`
@@ -1325,7 +1367,7 @@ describe('PATCH /account (email change) and /account/email-change-confirm', () =
         expect(stillOld.status).toBe(200);
 
         const token = verifyTokenFromMail();
-        await api().post('/account/email-change-confirm').send({ token });
+        await api().post('/account/email-change/confirm').send({ token });
 
         const oldNowFails = await api()
             .post('/account/login')
@@ -1345,7 +1387,7 @@ describe('PATCH /account (email change) and /account/email-change-confirm', () =
             .send({ email: 'new-address@example.com' });
         const token = verifyTokenFromMail();
 
-        await api().post('/account/email-change-confirm').send({ token });
+        await api().post('/account/email-change/confirm').send({ token });
 
         expect(await statusOfSession(jwtCookie)).toBe(401);
         expect(await userRepository.findById(user.id)).not.toBeNull();
@@ -1353,10 +1395,10 @@ describe('PATCH /account (email change) and /account/email-change-confirm', () =
 
     it('a `verify` token is refused by email-change-confirm', async () => {
         const { bearer } = await loginWithCookie();
-        await api().post('/account/verify-request').set('Authorization', bearer);
+        await api().post('/account/email-verification/resend').set('Authorization', bearer);
         const token = verifyTokenFromMail();
 
-        const response = await api().post('/account/email-change-confirm').send({ token });
+        const response = await api().post('/account/email-change/confirm').send({ token });
 
         expect(response.status).toBe(422);
     });
@@ -1369,14 +1411,14 @@ describe('PATCH /account (email change) and /account/email-change-confirm', () =
             .send({ email: 'new-address@example.com' });
         const token = verifyTokenFromMail();
 
-        const response = await api().post('/account/verify-confirm').send({ token });
+        const response = await api().post('/account/email-verification/confirm').send({ token });
 
         expect(response.status).toBe(422);
     });
 
     it('matches the error contract for an invented email-change token', async () => {
         const response = await api()
-            .post('/account/email-change-confirm')
+            .post('/account/email-change/confirm')
             .send({ token: 'not-a-real-token' });
 
         expect(response.status).toBe(422);
@@ -1411,7 +1453,7 @@ describe('PATCH /account (email change) and /account/email-change-confirm', () =
         holderDocument.email = 'contested@example.com';
         await userRepository.save(holderDocument);
 
-        const confirm = await api().post('/account/email-change-confirm').send({ token });
+        const confirm = await api().post('/account/email-change/confirm').send({ token });
 
         expect(confirm.status).toBe(409);
         // The loser changes nothing — still the account it started as.

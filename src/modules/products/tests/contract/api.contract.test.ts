@@ -387,9 +387,9 @@ describe('DELETE /products/{id}', () => {
             const product = await createProduct();
 
             const response = await api()
-                .delete(`/products/${String(product._id)}?hardDelete=${query}`)
+                .delete(`/products?hardDelete=${query}`)
                 .set('Authorization', bearer)
-                .send({ hardDelete: body });
+                .send({ id: String(product._id), hardDelete: body });
 
             expect(response.status).toBe(200);
             expect(await stored(String(product._id))).toBeNull();
@@ -401,13 +401,29 @@ describe('DELETE /products/{id}', () => {
             const product = await createProduct();
 
             const response = await api()
-                .delete(`/products/${String(product._id)}?hardDelete=maybe`)
+                .delete(`/products?hardDelete=maybe`)
                 .set('Authorization', bearer)
-                .send({ hardDelete: true });
+                .send({ id: String(product._id), hardDelete: true });
 
             expect(response.status).toBe(422);
             expect(await stored(String(product._id))).not.toBeNull();
         });
+    });
+});
+
+describe('DELETE /products/{id} — takes no body', () => {
+    it('refuses a body with 415 and keeps the record', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+
+        const response = await api()
+            .delete(`/products/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ hardDelete: true });
+
+        expect(response.status).toBe(415);
+        expect(response.body.errors[0].details.accepted).toEqual([]);
+        expect(await stored(String(product._id))).not.toBeNull();
     });
 });
 
@@ -489,6 +505,7 @@ describe('POST /products/{id}/restore', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('PRODUCT_NOT_DELETED');
     });
 });
 
@@ -549,6 +566,25 @@ describe('DELETE /products — the id in the body', () => {
         expect(response.status).toBe(200);
         const stored = await productRepository.findById(String(product._id));
         expect(stored?.deletedAt).toBeInstanceOf(Date);
+    });
+
+    it('reads the id from the body alone, whatever the query says', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const decoy = await createProduct();
+        const target = await createProduct();
+
+        const response = await api()
+            .delete(`/products?id=${String(decoy._id)}`)
+            .set('Authorization', bearer)
+            .send({ id: String(target._id) });
+
+        expect(response.status).toBe(200);
+        const [hit, spared] = await Promise.all([
+            productRepository.findById(String(target._id)),
+            productRepository.findById(String(decoy._id))
+        ]);
+        expect(hit?.deletedAt).toBeInstanceOf(Date);
+        expect(spared?.deletedAt).toBeFalsy();
     });
 
     it('matches the error contract for an id nobody holds', async () => {

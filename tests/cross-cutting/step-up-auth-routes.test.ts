@@ -57,7 +57,7 @@ const ROUTERS: Record<string, Router> = {
  */
 const STEP_UP_ROUTES: Record<string, string[]> = {
     'cart POST /checkout': [`requireFreshAuth(critical)`],
-    'payments POST /intent': [`requireFreshAuth(critical)`],
+    'payments POST /': [`requireFreshAuth(critical)`],
     'payments POST /:id/confirm': [`requireFreshAuth(critical)`],
     // The sync settles money just as the confirm does, from the provider's answer rather than
     // from a method the caller supplied — so it sits at the same tier, not a lower one.
@@ -70,7 +70,7 @@ const STEP_UP_ROUTES: Record<string, string[]> = {
     'account POST /password': [`requireFreshAuthWhen(sensitive)`],
     'account PUT /': [`requireFreshAuthWhen(sensitive)`, `requireFreshAuthWhen(sensitive)`],
     'account PATCH /': [`requireFreshAuthWhen(sensitive)`, `requireFreshAuthWhen(sensitive)`],
-    'account POST /logout-all': [`requireFreshAuth(sensitive)`],
+    'account DELETE /sessions': [`requireFreshAuth(sensitive)`],
     // Disconnecting a provider removes a way into the account: an identity change, sensitive tier.
     'account POST /oauth/links/:provider': [`requireFreshAuth(sensitive)`],
     'account DELETE /oauth/links/:provider': [`requireFreshAuth(sensitive)`],
@@ -84,8 +84,8 @@ const STEP_UP_ROUTES: Record<string, string[]> = {
     'account POST /2fa/methods/:method/setup': [`requireFreshAuth(critical)`],
     'account POST /2fa/methods/:method/send': [`requireFreshAuth(critical)`],
     'account POST /2fa/methods/:method/confirm': [`requireFreshAuth(critical)`],
-    'account DELETE /2fa/methods/:method': [`requireFreshAuth(critical)`],
-    'account DELETE /2fa': [`requireFreshAuth(critical)`],
+    'account POST /2fa/methods/:method/remove': [`requireFreshAuth(critical)`],
+    'account POST /2fa/disable': [`requireFreshAuth(critical)`],
     // Regenerating backup codes discards the old set — the same stolen-but-fresh-session risk
     // as disabling a factor.
     'account POST /2fa/backup-codes': [`requireFreshAuth(critical)`],
@@ -102,10 +102,13 @@ const STEP_UP_ROUTES: Record<string, string[]> = {
     // prompted (the predicate asks `update:Order`).
     'orders POST /:id/cancel': [`requireFreshAuthWhen(critical)`],
     // Handing a staff role out, or taking one away, widens or narrows a person's powers: the same
-    // critical tier minting an API key asks. A write that names no role is never prompted.
+    // critical tier minting an API key asks. A write that names no role is never prompted. So is
+    // activating or deactivating an account, since the role stays and the power comes or goes.
     'users POST /': [`requireFreshAuthWhen(critical)`],
     'users PUT /:id': [`requireFreshAuthWhen(critical)`],
-    'users PATCH /:id': [`requireFreshAuthWhen(critical)`]
+    'users PATCH /:id': [`requireFreshAuthWhen(critical)`],
+    'users POST /:id/activate': [`requireFreshAuthWhen(critical)`],
+    'users POST /:id/deactivate': [`requireFreshAuthWhen(critical)`]
 };
 
 /** Every step-up label actually mounted on a router, keyed the same way as {@link STEP_UP_ROUTES}. */

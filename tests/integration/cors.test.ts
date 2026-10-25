@@ -123,7 +123,7 @@ describe('CORS', () => {
      * A header a browser will actually send has to be pre-cleared here, or the preflight refuses
      * it and the real request never leaves the browser — `humanChallengeGate`
      * (`src/infrastructure/http/middlewares/human-challenge.ts`) reads
-     * `x-antibot-challenge-token`, `callerContextOf` reads `x-analytics-consent` and the session guard reads `x-session-passive`; none
+     * `antibot-challenge-token`, `callerContextOf` reads `analytics-consent` and the session guard reads `session-passive`; none
      * reaching the server is a silent break, not a 4xx anyone would notice here.
      */
     it('allows the antibot, analytics-consent and passive-session headers through preflight', async () => {
@@ -133,16 +133,16 @@ describe('CORS', () => {
             .set('Access-Control-Request-Method', 'POST')
             .set(
                 'Access-Control-Request-Headers',
-                'x-antibot-challenge-token, x-analytics-consent, x-session-passive'
+                'antibot-challenge-token, analytics-consent, session-passive'
             );
 
         expect(response.status).toBeLessThan(300);
         const allowedHeaders = (response.headers['access-control-allow-headers'] ?? '')
             .split(',')
             .map((header: string) => header.trim().toLowerCase());
-        expect(allowedHeaders).toContain('x-antibot-challenge-token');
-        expect(allowedHeaders).toContain('x-analytics-consent');
-        expect(allowedHeaders).toContain('x-session-passive');
+        expect(allowedHeaders).toContain('antibot-challenge-token');
+        expect(allowedHeaders).toContain('analytics-consent');
+        expect(allowedHeaders).toContain('session-passive');
     });
 
     /**

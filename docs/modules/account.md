@@ -1,7 +1,7 @@
 # account
 
 ::: tip At a glance
-**Owns** — every way into an account: signup, login, [OAuth](./account-oauth.md), [two-factor auth](./account-two-factor.md), refresh, re-auth, password reset, session listing and revocation, logout-everywhere, two-step deletion, and the [data export](#data-export). Three collections of its own: `sessions`, `verificationtokens` and `accountexports`; the address book is [`addresses`](./addresses.md).
+**Owns** — every way into an account: signup, login, [OAuth](./account-oauth.md), [two-factor auth](./account-two-factor.md), refresh, re-auth, password reset, session listing and revocation, logout-everywhere, [scheduled deletion](#scheduled-deletion), and the [data export](#data-export). Three collections of its own: `sessions`, `verificationtokens` and `accountexports`; the address book is [`addresses`](./addresses.md).
 **Depends on** — [`users`](./users.md), whose record it authenticates. The repo's only `shared-kernel` edge.
 **Breaks if you change** — the token lifetimes or the cookie flags. Every guard in the app resolves through this module.
 :::
@@ -19,12 +19,15 @@ flowchart LR
     account["account<br/><i>this module</i>"]
     access["access"]
     api_keys["api-keys"]
+    shop["shop"]
     users["users"]
 
     api_keys --> account
+    shop --> account
     account --> access
     account --> users
     users -. "user.deactivated" .-> account
+    users -. "user.deletion-cancelled" .-> account
     users -. "user.setup-requested" .-> account
     account -. "account.authenticator-removed" .-> api_keys
     account -. "account.sessions-revoked" .-> api_keys
@@ -33,6 +36,7 @@ flowchart LR
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
+    class shop supporting;
     class access,api_keys,users generic;
     class account centre;
 ```
@@ -150,11 +154,11 @@ flowchart TB
     C -->|"any other"| W["pendingEmail set"]
     W --> N["notice → OLD address<br/><i>carries the 7-day undo link</i>"]
     W --> V["verification link → NEW address<br/><i>email-change token · 24h</i>"]
-    V --> F["POST /account/email-change-confirm"]
+    V --> F["POST /account/email-change/confirm"]
     F --> S["pendingEmail → email<br/>verified = true<br/>refresh tokens revoked"]
-    N --> U["POST /account/email-change-undo<br/><i>cancels, or restores the old address and ends every session</i>"]
-    D["DELETE /account/pending-email"] --> X["pendingEmail cleared<br/><i>no mail, no token</i>"]
-    Q["POST /account/pending-email/resend"] --> V2["fresh link → NEW address only<br/><i>the old link dies · 60 s cooldown</i>"]
+    N --> U["POST /account/email-change/undo<br/><i>cancels, or restores the old address and ends every session</i>"]
+    D["DELETE /account/email-change"] --> X["pendingEmail cleared<br/><i>no mail, no token</i>"]
+    Q["POST /account/email-change/resend"] --> V2["fresh link → NEW address only<br/><i>the old link dies · 60 s cooldown</i>"]
 
     classDef entry fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef warn fill:#fee2e2,stroke:#dc2626,color:#111827;
@@ -195,13 +199,13 @@ Three things in the flow above are decisions rather than mechanics:
 - **Cancelling is its own explicit action, not a side effect of re-typing the current address.**
   `PUT /account`'s `email` is required — every replace, including a phone-only edit, names it — so
   treating "same address" as "cancel" would let a routine save silently drop a pending change
-  the caller never asked to drop. `DELETE /account/pending-email` is the only thing that cancels
+  the caller never asked to drop. `DELETE /account/email-change` is the only thing that cancels
   one.
 - **Resending is its own action too, and it mails the new address only.** Sending the pending
   address again through `PUT`/`PATCH /account` is a no-op (a double-submitted save must not mail
-  twice), so `POST /account/pending-email/resend` is the explicit way to ask for the link again.
+  twice), so `POST /account/email-change/resend` is the explicit way to ask for the link again.
   The old address was told once, when the change was requested; telling it on every resend would
-  read like a takeover alert. It uses `POST /account/verify-request`'s cooldown and budget and
+  read like a takeover alert. It uses `POST /account/email-verification/resend`'s cooldown and budget and
   answers `200 { resendAfter }` like it, so the button counts down from the server's number; when
   nothing is pending it mails nothing and answers `resendAfter` 0.
 - **A new change request is paced, and so is a reset request.** A genuine change to a different
@@ -239,12 +243,32 @@ up-to-24-hours between the two.
 
 ### How long each link and challenge lives
 
-| What                                   | Lives                                                                                                                      |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| the new address's confirmation link    | 24 hours                                                                                                                   |
-| the old address's undo link            | 7 days                                                                                                                     |
-| the account-deletion confirmation link | 1 hour (`deletion-request.ts`)                                                                                             |
-| a login's two-factor challenge         | 5 minutes, 10 when a delivered factor (email) is armed, since the code must cross a mail queue (`two-factor-challenge.ts`) |
+| What                                | Lives                                                                                                                      |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| the new address's confirmation link | 24 hours                                                                                                                   |
+| the old address's undo link         | 7 days                                                                                                                     |
+| the account restore link            | until `purgeAt` (`account-deletion.ts`)                                                                                    |
+| a login's two-factor challenge      | 5 minutes, 10 when a delivered factor (email) is armed, since the code must cross a mail queue (`two-factor-challenge.ts`) |
+
+## Scheduled deletion {#scheduled-deletion}
+
+`DELETE /account` (a critically fresh session, and a second-factor proof when one is armed) locks the
+account, ends its sessions (revocation cause `deletion-scheduled`), mails a restore link and answers
+`202 {requestedAt, purgeAt}`. `purgeAt` is `min(requestedAt + NODE_ACCOUNT_DELETION_GRACE_DAYS,
+one calendar month later)`: the reasoning, the GDPR clock and the table of what a locked account
+loses are in [the retention page](../theory/data-retention.md#self-deletion-a-grace-under-one-month).
+
+| Way back        | Route                                        | Proof                                                               |
+| --------------- | -------------------------------------------- | ------------------------------------------------------------------- |
+| the mailed link | `POST /account/restore {token}`              | the `account-restore` token; it does not sign anyone in             |
+| signing in      | `POST /account/login`, then `/login/restore` | password (and second factor), then a `deletion-restore` claim check |
+| staff           | `POST /users/{id}/restore`                   | `delete:User`; `account` hears `user.deletion-cancelled`            |
+
+The purge is `reap:scheduled-deletions` (hourly, leased). Per due account it copies the address and
+name, runs `eraseScheduledDeletion` (the whole erase cascade), then mails the goodbye and records
+`auth.account_delete.completed`. Audit: `.scheduled`, `.cancelled` (`metadata.via` is `link`,
+`sign-in` or `staff`), `.completed`. Metric `auth_account_delete_total{status}`; analytics
+`account_deletion_scheduled` and `account_restored` (the purge fires nothing).
 
 ## Data export {#data-export}
 
@@ -333,6 +357,12 @@ caller may assign through the user writes. The list comes from `grantableRoles` 
 [`access`](./access.md) service, which asks the same rule as the `409` those writes answer, so a role
 picker built from it offers exactly what the write accepts. Like the rules, it has no authority:
 the write is re-checked. Empty for an anonymous caller.
+
+## Terms version {#terms-version}
+
+`NODE_TERMS_VERSION` and `termsVersion()` belong here, with the consent record signup writes: the
+version is stored beside the date the Terms were accepted. `shop` reads it through this module's
+barrel to print it on `GET /shop`; `account` is foundation and never reaches the other way.
 
 ## Related pages
 

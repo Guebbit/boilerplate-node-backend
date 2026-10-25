@@ -11,40 +11,31 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { heldRules } from '@kernel/ability';
 import { encryptPii } from '@infrastructure/security/pii-encryption';
 import { imageStore, applyImageWriteback } from '@infrastructure/adapters/image-store';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
 import { rearmPrecondition } from '@infrastructure/persistence/versioning';
 import { withTransaction } from '@infrastructure/runtime/database';
-import { announceWithin, nudgeOutbox } from '@kernel/outbox';
-import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { auditForbidden } from '@infrastructure/observability/forbidden';
-import type { AuditAction } from '@infrastructure/observability/audit';
 import type { CallerContext, UpdateUserByIdRequest, WithServerImage } from '@types';
 import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { phoneAad, type UserDocument } from '../model';
 import { userRepository } from '../repository';
-import { usersAnalyticsEvents } from '../analytics';
 import { usersAuditActions } from '../audit';
-import { USER_DEACTIVATED } from '../events';
-import { markSessionsEnded } from './credentials';
 import { enqueueIfPending } from './image';
+import { userAuditChanges } from './audit-changes';
 import { roleRefusalReject } from './role-refusal';
 
 /**
  * Update an existing user document. Returns a result envelope instead of throwing, the protocol
  * every service here follows.
  *
- * @internal The step beneath `updateById` (which asks the ban and staff-role questions first) and
- * `updateOwnProfile` (whose data cannot carry `active`). Unpublished, a sibling could ban or
- * re-role an account with neither check.
+ * @internal The step beneath `updateById` (which asks the staff-role question first) and
+ * `updateOwnProfile`. Unpublished, a sibling could re-role an account without the check.
  *
- * Typed off `UpdateUserByIdRequest` rather than a hand-picked `Pick`:
- * a hand-picked list can miss `active`, which would fire `USER_DEACTIVATED` without ever
- * writing the field.
+ * Typed off `UpdateUserByIdRequest` rather than a hand-picked `Pick`, so a field added to the
+ * contract reaches the write.
  */
 export const update = (
     user: UserDocument,
@@ -69,17 +60,9 @@ export const update = (
     /** {@link changedRole}'s answer: the role to grant, `null` to take it away, `undefined` for no change. */
     role?: RoleChange
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
-    let banned = false;
     if (data.username !== undefined) user.username = data.username;
     // `role` is not written here — there is no column, only the membership,
     // written below in `saveWithRole` once the rest of the document has saved.
-    if (data.active !== undefined) {
-        // A ban ends every session in the SAME save: the `active` gate alone would let the old
-        // tokens back in the moment someone unbans the account.
-        banned = !data.active && Boolean(user.active);
-        if (banned) markSessionsEnded(user);
-        user.active = data.active;
-    }
     // The old url is captured before the overwrite so the save can delete it once
     // the new one is durably saved — see `applyImageWriteback`'s own docblock for the gate
     // shared with `products/services/crud.ts`'s own `update`. `null` unsets the field, and the
@@ -101,7 +84,7 @@ export const update = (
         user.analyticsConsentAt = new Date();
     }
 
-    return saveWithRole(user, { active: data.active, banned, role }, context, oldImageUrl);
+    return saveWithRole(user, role, context, oldImageUrl);
 };
 
 /**
@@ -142,32 +125,29 @@ const changedRole = (user: UserDocument, requested?: string | null): Promise<Rol
           });
 
 /**
- * Whether an edit would change who holds powers: the staff role, or a ban or unban. Judged on the
- * id and the body alone, the way the route asks BEFORE the controller runs, to decide whether the
- * caller owes a fresh login. The same comparison {@link changedRole} makes, so the two cannot
- * disagree. A PUT carries `role` and `active` every time, so only a value that differs from the
- * stored one counts.
+ * Whether an edit would change the staff role. Judged on the id and the body alone, the way the
+ * route asks BEFORE the controller runs, to decide whether the caller owes a fresh login. The same
+ * comparison {@link changedRole} makes, so the two cannot disagree. A PUT carries `role` every
+ * time, so only a value that differs from the held one counts.
  *
  * @param id - the account about to be edited
- * @param body - `role` and `active` as the request sent them
+ * @param role - `role` as the request sent it
  * @returns `false` for nothing sent or nothing different (and for an unknown account, which the
- *   controller answers 404); `true` for a role granted or removed, or an active flag flipped
+ *   controller answers 404); `true` for a role granted or removed
  */
-export const powersChangeRequested = (
+export const roleChangeRequested = (
     id: string,
-    body: { role?: string | null; active?: boolean | string } | undefined
+    role: string | null | undefined
 ): Promise<boolean> =>
-    userRepository.findById(id).then((user) => {
-        if (!user) return false;
-        // A multipart body is read before validation turns its strings into booleans.
-        const active = typeof body?.active === 'string' ? body.active === 'true' : body?.active;
-        if (active !== undefined && active !== user.active) return true;
-        if (body?.role === undefined) return false;
+    role === undefined
+        ? Promise.resolve(false)
+        : userRepository.findById(id).then((user) => {
+              if (!user) return false;
 
-        return accessService
-            .rolesOf(id, DEPLOYMENT_TENANT_ID)
-            .then(({ tenant }) => roleDiffers(tenant, body.role!));
-    });
+              return accessService
+                  .rolesOf(id, DEPLOYMENT_TENANT_ID)
+                  .then(({ tenant }) => roleDiffers(tenant, role));
+          });
 
 /**
  * The membership half of {@link saveAndGrant}: grant the role, take it away, or do nothing.
@@ -204,14 +184,12 @@ const writeRole = (
  *
  * @param user - the loaded, already-mutated document
  * @param role - {@link changedRole}'s answer, never the raw request's
- * @param banned - whether this save is the ban, which commits `user.deactivated` with it
  * @param context - the caller, whose keys bound the role they may grant
  * @param session - the transaction both writes join
  */
 const saveAndGrant = (
     user: UserDocument,
     role: RoleChange,
-    banned: boolean,
     context: CallerContext,
     session: ClientSession
 ): Promise<UserDocument> => {
@@ -225,40 +203,22 @@ const saveAndGrant = (
     // fence the write, so two admins holding the same tag cannot both change the role.
     if (role !== undefined) user.markModified('updatedAt');
 
-    return announceWithin(
-        session,
-        () =>
-            userRepository
-                .save(user, session)
-                .then((saved) =>
-                    writeRole(String(saved._id), role, context, session).then(() => saved)
-                ),
-        // The ban commits with its announcement or not at all, so the links are purged exactly when
-        // the sessions died. An ordinary edit announces nothing.
-        (saved) =>
-            banned
-                ? {
-                      name: USER_DEACTIVATED,
-                      payload: { userId: String(saved._id) },
-                      aggregateId: String(saved._id)
-                  }
-                : []
-    );
+    return userRepository
+        .save(user, session)
+        .then((saved) => writeRole(String(saved._id), role, context, session).then(() => saved));
 };
 
 /**
- * What follows a committed update: the new avatar's cleanup and the role grant's audit row. A ban
- * ends every session in the update's own save (`markSessionsEnded`); the one-time links it leaves
- * are purged by `account`, on `user.deactivated`.
+ * What follows a committed update: the new avatar's cleanup and the role grant's audit row.
  *
  * @param savedUser - the committed document
- * @param data - `role` here is {@link changedRole}'s answer; `active` the request's
+ * @param role - {@link changedRole}'s answer
  * @param context - the caller
  * @param oldImageUrl - the image the update replaced, or `undefined` when the avatar was not touched
  */
 const finishUpdate = (
     savedUser: UserDocument,
-    data: Pick<UpdateUserByIdRequest, 'active'> & { role: RoleChange },
+    role: RoleChange,
     context: CallerContext,
     oldImageUrl?: string
 ): Promise<ResponseSuccess<UserDocument>> => {
@@ -268,19 +228,19 @@ const finishUpdate = (
         : Promise.resolve();
 
     // The change is true only now: it committed with the document.
-    if (data.role && 'grant' in data.role)
+    if (role && 'grant' in role)
         accessService.auditRoleAssigned(
             context,
             String(savedUser._id),
-            data.role.grant,
+            role.grant,
             DEPLOYMENT_TENANT_ID,
             'tenant'
         );
-    else if (data.role)
+    else if (role)
         accessService.auditRoleRevoked(
             context,
             String(savedUser._id),
-            data.role.revoke,
+            role.revoke,
             DEPLOYMENT_TENANT_ID,
             'tenant'
         );
@@ -292,11 +252,11 @@ const finishUpdate = (
  * {@link update} once the role is known to be a real change (or none): check the grant
  * and audit a refusal, write the document and the membership in one transaction, then clean up.
  *
- * @param data - `role` here is {@link changedRole}'s answer, never the raw request's
+ * @param role - {@link changedRole}'s answer, never the raw request's
  */
 const saveWithRole = (
     user: UserDocument,
-    data: Pick<UpdateUserByIdRequest, 'active'> & { banned: boolean; role: RoleChange },
+    role: RoleChange,
     context: CallerContext,
     oldImageUrl?: string
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
@@ -305,10 +265,10 @@ const saveWithRole = (
     // underneath a request that, as a whole, failed. The escalation rule needs no
     // database read, so asking first costs one more in-memory pass.
     const refusal =
-        data.role && 'grant' in data.role
+        role && 'grant' in role
             ? accessService.grantRefusalAudited(
                   'tenant',
-                  data.role.grant,
+                  role.grant,
                   context.caller.permissions,
                   context,
                   String(user._id)
@@ -317,141 +277,51 @@ const saveWithRole = (
     if (refusal) return Promise.resolve(roleRefusalReject(refusal));
 
     return Promise.resolve()
-        .then(() =>
-            withTransaction((session) =>
-                saveAndGrant(user, data.role, data.banned, context, session)
-            )
-        )
-        .then((savedUser) => {
-            // After the commit, never inside: the relay reads what the transaction wrote.
-            if (data.banned) nudgeOutbox();
-            return finishUpdate(savedUser, data, context, oldImageUrl);
-        });
-};
-
-/**
- * The key a writable field needs on top of the route's own `update:User` — the one
- * field-to-key map. Every other field (username, image, locale, phone, website, `role`) rides on
- * `update:User` alone; a body mixing fields needs every key its CHANGED fields need.
- */
-const FIELD_RULES = { active: 'ban:User' } as const;
-
-/**
- * The keys this update needs beyond the route's. A field counts only when it CHANGES: a PUT
- * carries `active` on every save, and resending the value an account already has is not a ban.
- *
- * @param user - the loaded document, before the update touches it
- * @param data - the request body
- */
-const extraRulesNeeded = (
-    user: UserDocument,
-    data: Pick<UpdateUserByIdRequest, 'active'>
-): string[] =>
-    data.active !== undefined && data.active !== (user.active ?? true) ? [FIELD_RULES.active] : [];
-
-/**
- * `403 FORBIDDEN` for a field the caller's keys do not cover, audited like the route guard's own
- * refusal — `requirePermission` can only ask about the route, never about the body.
- *
- * @param key - the missing key
- * @param id - the account the update was aimed at
- * @param context - the caller
- */
-const missingKeyRefusal = (key: string, id: string, context: CallerContext): ResponseReject => {
-    auditForbidden(context, {
-        targetType: 'user',
-        targetId: id,
-        metadata: { reason: 'missing_permission', permission: key }
-    });
-
-    return generateReject(403, [t('generic.error-forbidden')]);
-};
-
-/**
- * Everything an admin update must clear before a field is written, in order: the keys its
- * changed fields need, then the protection of an account that holds a staff role.
- *
- * @param user - the loaded document
- * @param data - the request body
- * @param context - the caller
- * @returns the refusal, or `undefined` to carry on
- */
-const refusalFor = (
-    user: UserDocument,
-    data: Pick<UpdateUserByIdRequest, 'active'>,
-    context: CallerContext
-): Promise<ResponseReject | undefined> => {
-    const id = String(user._id);
-    const held = heldRules(context.caller);
-    const missing = extraRulesNeeded(user, data).find((key) => !held.has(key));
-
-    if (missing) return Promise.resolve(missingKeyRefusal(missing, id, context));
-
-    return accessService.roleProtectedRefusal(context, id);
-};
-
-/**
- * Which admin action an update represents: a ban, its reversal, or an ordinary edit — the
- * distinction the history is for. `active` is `undefined` when the request never mentions the
- * field, same as every other optional column `update()` handles; `wasActive` is `undefined` only
- * when the type carries the contract's optionality rather than a loaded row's real state, so it
- * falls back to the schema's own default rather than reporting a ban on a guess.
- */
-const auditActionForUpdate = (wasActive: boolean | undefined, active?: boolean): AuditAction => {
-    if (active === undefined || active === (wasActive ?? true))
-        return usersAuditActions.ADMIN_USER_UPDATED;
-    return active ? usersAuditActions.ADMIN_USER_UNBANNED : usersAuditActions.ADMIN_USER_BANNED;
+        .then(() => withTransaction((session) => saveAndGrant(user, role, context, session)))
+        .then((savedUser) => finishUpdate(savedUser, role, context, oldImageUrl));
 };
 
 /** The shape of an admin update's data: the contract's body, plus the image fields the server decides. */
 type UpdateByIdData = WithServerImage<UpdateUserByIdRequest>;
 
 /**
- * The write half of {@link updateById}, once every refusal has been cleared: the update itself,
- * then its audit row and analytics event.
+ * The write half of {@link updateById}, once the staff-role protection has cleared: the update
+ * itself, then its audit row.
  *
  * @param user - the loaded document
  * @param data - the request body
  * @param context - the caller
- * @param wasActive - `user.active` read BEFORE `update()` mutates it in place — the flip is the
- *   whole signal for the ban/unban audit action and the deactivation event
  * @param role - {@link changedRole}'s answer for this request
  */
 const applyUpdate = (
     user: UserDocument,
     data: UpdateByIdData,
     context: CallerContext,
-    wasActive: boolean | undefined,
     role: RoleChange
-): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    update(user, data, context, role).then((result) => {
-        if (result.success) {
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
+    // Read before `update` assigns onto the document.
+    const metadata = userAuditChanges(user, data);
+
+    return update(user, data, context, role).then((result) => {
+        if (result.success)
             recordAudit(context, {
-                action: auditActionForUpdate(wasActive, data.active),
+                action: usersAuditActions.ADMIN_USER_UPDATED,
                 outcome: 'success',
                 targetType: 'user',
-                targetId: String(user._id)
+                targetId: String(user._id),
+                metadata
             });
-            // Deactivation is a product event as well as an administrative one: it is what a
-            // churn dashboard counts, and it is invisible in a plain "updated" signal. Only on
-            // the flip — a PUT resends `active: false` on every save of a deactivated user.
-            if (data.active === false && wasActive !== false)
-                emitAnalyticsEvent({
-                    ...buildAnalyticsBase(context),
-                    distinctId: String(user._id),
-                    event: usersAnalyticsEvents.USER_DEACTIVATED
-                });
-        }
         return result;
     });
+};
 
 /**
- * Update an existing user by ID: load the document, clear the refusals ({@link refusalFor}),
- * then {@link applyUpdate}.
+ * Update an existing user by ID: load the document, clear the staff-role protection, then
+ * {@link applyUpdate}.
  *
  * @param id - the account being changed
  * @param data - the request body
- * @param context - the caller, whose keys decide what may change
+ * @param context - the caller, whose keys and role protection decide what may change
  */
 export const updateById = (
     id: string,
@@ -465,13 +335,10 @@ export const updateById = (
         // at the `.catch()` that has to tell them apart.
         if (!user) return generateReject(404, [t('users.not-found')]);
 
-        // Read before `update()` mutates `user.active` in place — the flip is the whole signal.
-        const wasActive = user.active;
-
         // Once per request: the role the membership already holds is not a change.
         return changedRole(user, data.role).then((role) =>
-            refusalFor(user, data, context).then(
-                (refusal) => refusal ?? applyUpdate(user, data, context, wasActive, role)
-            )
+            accessService
+                .roleProtectedRefusal(context, id)
+                .then((refusal) => refusal ?? applyUpdate(user, data, context, role))
         );
     });

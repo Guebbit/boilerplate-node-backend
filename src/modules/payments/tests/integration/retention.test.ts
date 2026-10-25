@@ -8,7 +8,7 @@
  * any more), and pins that it records no garbage payer rather than the string `"undefined"`.
  */
 import { setupTestDb } from '@tests/setup-test-db';
-import { createUser } from '@modules/users/tests/factories';
+import { createUser, eraseAsScheduled } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { resetDomainEvents } from '@kernel/events';
@@ -16,7 +16,6 @@ import { detachOrderUserId } from '@modules/orders/tests/factories';
 import { paymentService } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
 import { paymentModel, type PaymentDocument } from '@modules/payments/model';
-import { userService } from '@modules/users';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import type { ResponseSuccess } from '@infrastructure/http/response';
@@ -42,7 +41,7 @@ describe('payments — detach on account erasure', () => {
         const intent = await paymentService.createIntent(String(order._id), asCustomer(user.id));
         const payment = (intent as ResponseSuccess<Payment>).data;
 
-        await userService.eraseOwnAccount(userService.redeemedOwner(user));
+        await eraseAsScheduled(user);
 
         const reloaded = await paymentRepository.findById(payment.id);
         expect(reloaded!.userId).toBeUndefined();
@@ -55,7 +54,7 @@ describe('payments — detach on account erasure', () => {
         const intent = await paymentService.createIntent(String(order._id), asCustomer(user.id));
         const payment = (intent as ResponseSuccess<Payment>).data;
 
-        await userService.eraseOwnAccount(userService.redeemedOwner(user));
+        await eraseAsScheduled(user);
 
         await expect(paymentRepository.findById(payment.id)).resolves.not.toBeNull();
     });
