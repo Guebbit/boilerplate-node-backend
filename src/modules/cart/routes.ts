@@ -67,8 +67,8 @@ router.post(
 // `mergeLimiter` first: a hundred lines per call is a hundredfold of what the global brake counts.
 router.post('/merge', mergeLimiter, idempotencyKey, postCartMerge);
 
-// POST /cart/reorder/:orderId — copy one of the caller's own orders back into the cart
-router.post('/reorder/:orderId', postReorder);
+// POST /cart/reorder {orderId} — copy one of the caller's own orders back into the cart
+router.post('/reorder', postReorder);
 
 // GET /cart
 router.get('/', getCart);

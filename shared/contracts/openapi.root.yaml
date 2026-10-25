@@ -1259,8 +1259,8 @@ paths:
         $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1summary'
     /cart/checkout:
         $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1checkout'
-    /cart/reorder/{orderId}:
-        $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1reorder~1{orderId}'
+    /cart/reorder:
+        $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1reorder'
 
     # ---------- wishlist ----------
     /wishlist:

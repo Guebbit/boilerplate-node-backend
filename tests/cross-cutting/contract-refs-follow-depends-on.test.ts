@@ -58,8 +58,8 @@ describe('contract references and dependsOn', () => {
 
     it('finds the references it means to check', () => {
         // Exact, not "at least": a sweep that silently found nothing would pass for ever.
-        // Two are foundation's own; the other thirteen go with the shop.
-        expect(references).toHaveLength(isDeployed('orders') ? 15 : 2);
+        // Two are foundation's own; the other twelve go with the shop.
+        expect(references).toHaveLength(isDeployed('orders') ? 14 : 2);
     });
 
     it('has every cross-module $ref declared as a dependency of the module that writes it', () => {

@@ -23,7 +23,7 @@ const ALL = [
     'GET /summary',
     'POST /checkout',
     'POST /merge',
-    'POST /reorder/:orderId',
+    'POST /reorder',
     'GET /',
     'POST /items',
     'DELETE /items',

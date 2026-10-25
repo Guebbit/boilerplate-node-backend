@@ -18,7 +18,7 @@ export const cartAnalyticsEvents = {
     CART_ITEM_UPDATED: 'cart_item_updated',
     CART_ITEM_REMOVED: 'cart_item_removed',
     CART_CLEARED: 'cart_cleared',
-    // `POST /cart/reorder/{orderId}` — an old order refilling the cart. A cart event, not an
+    // `POST /cart/reorder` — an old order refilling the cart. A cart event, not an
     // orders one: the order is only read, the cart is what changes.
     CART_REORDERED: 'cart_reordered',
 

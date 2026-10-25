@@ -102,7 +102,7 @@ flowchart LR
     N --> DB[("notifications")]
     N -->|"SSE"| T["open tab<br/><i>the bell</i>"]
     T -->|"GET /notifications<br/>on load, reload, reconnect"| N
-    T -->|"read-all · delete · dismiss-all"| N
+    T -->|"read-all · delete · delete all"| N
 
     classDef own fill:#ede9fe,stroke:#7c3aed,color:#111827;
     classDef peer fill:#dbeafe,stroke:#2563eb,color:#111827;
