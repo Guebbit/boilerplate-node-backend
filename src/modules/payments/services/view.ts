@@ -73,9 +73,7 @@ export const listForOrder = (
 
         return paymentRepository
             .findByOrderId(orderId, callerScope(authContext))
-            .then((payment) =>
-                payment ? presentWithActions(payment, authContext).then((wire) => [wire]) : []
-            )
+            .then((payment) => (payment ? [withActions(payment, order, authContext)] : []))
             .then((items) => generateSuccess({ items }));
     });
 

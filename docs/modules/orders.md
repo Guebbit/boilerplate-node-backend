@@ -340,6 +340,14 @@ summary, the status move and the events commit together or not at all.
 
 The per-status half (rows 1 and 4) is the `fulfillment` trait in [the status traits](#status-traits).
 
+**Finding an order by the number the customer quotes.** `GET /orders`, `POST /orders/search` and the
+CSV export take an exact, indexed `orderNumber` filter (`orders_orderNumber`, unique: a receipt number
+names one order). The value is read the way customers type it (`parseOrderNumber`): spaces and a leading
+`#` are dropped and the sequence is padded, so `#2026-41` finds `2026-000041`. Anything that is not
+`{year}-{digits}` finds nothing, an empty page rather than an error, the same choice as payments'
+`transferReference`. It narrows the caller's own scope like any other filter, so a buyer holding only
+`read:Order` cannot reach another buyer's order by its number.
+
 `GET /orders?fulfillmentStatus=` lists by that value. The filter is built from the same table
 (`fulfillmentStatusFilter`) and ANDed into the caller's own scope, rather than storing a copy of the
 answer: the filter and the value a row serializes with cannot disagree, and a unit test holds them to

@@ -1296,6 +1296,8 @@ paths:
         $ref: '../../src/modules/invoicing/openapi.yaml#/paths/~1orders~1{id}~1credit-notes'
     /orders/{id}/credit-notes/{creditNoteId}:
         $ref: '../../src/modules/invoicing/openapi.yaml#/paths/~1orders~1{id}~1credit-notes~1{creditNoteId}'
+    /orders/{id}/payments:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1orders~1{id}~1payments'
 
     # ---------- delivery's door under an order ---------- (`POST /orders/{id}/process`: the order's URL,
     # delivery's module and key; mounted through a second entry in delivery's `mounts`)
@@ -1309,8 +1311,6 @@ paths:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1{id}~1refunds'
     /payments/{id}/refunds/{refundId}:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1{id}~1refunds~1{refundId}'
-    /orders/{id}/payments:
-        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1orders~1{id}~1payments'
     /payments/{id}:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1{id}'
     /payments/{id}/confirm:

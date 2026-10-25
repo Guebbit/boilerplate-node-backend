@@ -68,6 +68,7 @@ paths:
                   in: query
                   schema:
                       $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                - $ref: '#/components/parameters/OrderNumberParam'
                 - name: status
                   in: query
                   schema:
@@ -252,6 +253,7 @@ paths:
                   in: query
                   schema:
                       $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                - $ref: '#/components/parameters/OrderNumberParam'
                 - name: status
                   in: query
                   schema:
@@ -871,6 +873,12 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 email:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                orderNumber:
+                    type: string
+                    maxLength: 32
+                    description: >-
+                        The order's number as the customer quotes it; a leading `#`, spaces and an
+                        unpadded sequence are tolerated; anything else finds nothing.
                 # Narrows a listing already scoped to the caller: a customer filtering by
                 # status is filtering their own orders, and staff see the same shape.
                 status:
@@ -1780,6 +1788,19 @@ components:
             schema:
                 $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
             description: Order identifier
+
+        OrderNumberParam:
+            name: orderNumber
+            in: query
+            required: false
+            description: >-
+                The order's number as the customer quotes it (`2026-000041`); a leading `#`, spaces and
+                an unpadded sequence (`#2026-41`) are tolerated. Exact and indexed. Anything that is
+                not an order number finds nothing: an empty page, not an error. A caller holding
+                `read:Order` alone still sees only their own orders.
+            schema:
+                type: string
+                maxLength: 32
 
         UserIdParam:
             name: userId

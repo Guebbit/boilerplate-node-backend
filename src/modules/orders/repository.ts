@@ -77,7 +77,12 @@ const base = createRepository<OrderDocument, Order>(orderModel, {
             // identifies which product an order line holds.
             productId: 'items.product._id'
         },
-        exact: { email: 'email', status: 'status', paymentMethod: 'paymentMethod' },
+        exact: {
+            email: 'email',
+            status: 'status',
+            paymentMethod: 'paymentMethod',
+            orderNumber: 'orderNumber'
+        },
         presence: { deleted: 'deletedAt' },
         dateRanges: {
             createdAt: { min: 'createdFrom', max: 'createdTo' },
