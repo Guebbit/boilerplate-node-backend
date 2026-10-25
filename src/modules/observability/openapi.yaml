@@ -91,9 +91,18 @@ paths:
                         than opening: an unauthenticated metrics endpoint is not a state to arrive
                         at by forgetting an environment variable.
                     content:
-                        application/json:
+                        application/problem+json:
                             schema:
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ErrorResponse'
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Problem'
+                '500':
+                    x-not-problem: true
+                    description: >-
+                        The registry could not be read. Prometheus text, not a problem body: a scraper
+                        parses the exposition format only.
+                    content:
+                        text/plain:
+                            schema:
+                                type: string
 
     /observability/metrics/overview:
         get:

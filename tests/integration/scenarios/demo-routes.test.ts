@@ -110,6 +110,9 @@ describe('POST /__test/restore', () => {
             .send({ scenario: 'not-a-real-scenario' });
 
         expect(response.status).toBe(400);
+        // The levers refuse in the API's own problem details, naming the scenario.
+        expect(response.type).toBe('application/problem+json');
+        expect(response.body.errors[0].message).toContain('not-a-real-scenario');
     });
 
     it('defaults to the shop scenario on an empty body', async () => {

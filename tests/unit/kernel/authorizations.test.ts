@@ -671,7 +671,7 @@ describe('isAuth', () => {
         expect(next).not.toHaveBeenCalled();
         expect(response.status).toHaveBeenCalledWith(401);
         expect(response.json).toHaveBeenCalledWith(
-            expect.objectContaining({ success: false, status: 401 })
+            expect.objectContaining({ title: 'Unauthorized', status: 401 })
         );
     });
 

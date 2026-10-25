@@ -45,6 +45,25 @@ rules:
         then:
             function: truthy
 
+    # --- Every error body is a problem document ---
+    #
+    # RFC 9457: a 4xx/5xx answers `application/problem+json`, nothing else, so a client branches on
+    # one media type (Zalando guideline 176). An answer that is not JSON on purpose, such as the
+    # Prometheus text of a failed scrape, opts out with `x-not-problem: true`. House rule, not the
+    # whole Zalando ruleset.
+    error-responses-are-problem-json:
+        description: 'A 4xx/5xx response declares only `application/problem+json` content (`x-not-problem: true` opts a deliberate non-JSON answer out).'
+        severity: error
+        given: "$.paths[*][*].responses[?(@property.match(/^[45]/) && !@['x-not-problem'])].content"
+        then:
+            function: schema
+            functionOptions:
+                schema:
+                    type: object
+                    required: ['application/problem+json']
+                    propertyNames:
+                        const: 'application/problem+json'
+
     # --- operationId naming matches the HTTP verb ---
     #
     # `replace*` means a full, idempotent replace; `update*` means a partial change — but nothing

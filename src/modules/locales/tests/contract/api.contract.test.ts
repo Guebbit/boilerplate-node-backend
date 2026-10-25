@@ -163,7 +163,7 @@ describe('GET /locales/:locale', () => {
         const response = await api().get('/locales/kl');
 
         expect(response.status).toBe(404);
-        expect(response.body.success).toBe(false);
+        expect(response.type).toBe('application/problem+json');
     });
 
     /*

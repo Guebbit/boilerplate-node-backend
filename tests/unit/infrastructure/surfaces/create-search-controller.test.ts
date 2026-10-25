@@ -20,6 +20,9 @@ const makeRequest = (query: unknown) =>
 
 const makeResponse = () =>
     asStub<Response>({
+        setHeader: jest.fn(),
+        getHeader: jest.fn(),
+        removeHeader: jest.fn(),
         status: jest.fn().mockReturnThis(),
         json: jest.fn().mockReturnThis()
     });
@@ -188,7 +191,9 @@ describe('createSearchController — refusals and failures', () => {
         expect(response.status).toHaveBeenCalledTimes(1);
         expect(response.status).toHaveBeenCalledWith(500);
         expect(response.status).not.toHaveBeenCalledWith(200);
-        expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+        expect(response.json).toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'about:blank', status: expect.any(Number) })
+        );
     });
 
     it.each([',', ' '])('passes a blank sort %p on with no sort key at all', async (blank) => {

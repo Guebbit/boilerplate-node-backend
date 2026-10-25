@@ -69,6 +69,9 @@ const hit = async (
             headers[name.toLowerCase()] = value;
         },
         getHeader: (name: string) => headers[name.toLowerCase()],
+        removeHeader: (name: string) => {
+            delete headers[name.toLowerCase()];
+        },
         status: (code: number) => {
             status = code;
             return { json: () => undefined };

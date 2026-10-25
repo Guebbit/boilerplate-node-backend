@@ -361,8 +361,8 @@ answers `rejectResponse` directly instead of throwing something for this handler
 
 A refusal that carries no text of its own (a bare 404 from the catch-all, a 409, a 412) answers
 `errors[0].message` from one `generic.*` locale key per status, in the caller's `Accept-Language`.
-The top-level `message` stays the English reason phrase on purpose: it is the developer-facing
-label, `errors[]` is what a person reads (AIP-193 splits them the same way). The locale is
+The problem's `title` stays the English status phrase on purpose: it is the developer-facing
+label, `detail` and `errors[]` are what a person reads ([the shape](../api/errors.md#problem-details)). The locale is
 negotiated before request parsing, so the global limiter's 429 and a parser's 400 / 413 / 415
 speak the caller's language and carry `Content-Language` too. A `MulterError` keeps its `code`,
 and its English text is replaced by `generic.error-upload-refused`.

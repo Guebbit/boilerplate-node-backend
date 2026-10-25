@@ -9,7 +9,7 @@
 import { createHash } from 'node:crypto';
 import { asStub } from '@tests/stub';
 import { makeResponseStub } from '@tests/express';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 
 jest.mock('@infrastructure/http/middlewares/idempotency-model', () => ({
     idempotencyRecordModel: {
@@ -312,6 +312,84 @@ describe('idempotencyKey', () => {
             expect(response.status).toHaveBeenCalledWith(409);
             expect(next).not.toHaveBeenCalled();
         });
+    });
+});
+
+/** A response that remembers the headers set on it, as far as the middleware reads them. */
+const makeHeaderResponse = (initial: Record<string, string> = {}) => {
+    const headers = new Map(Object.entries(initial).map(([k, v]) => [k.toLowerCase(), v]));
+    return asStub<Response & { json: jest.Mock; status: jest.Mock }>({
+        statusCode: 503,
+        getHeader: (name: string) => headers.get(name.toLowerCase()),
+        set: jest.fn((name: string, value: string) => {
+            headers.set(name.toLowerCase(), value);
+        }),
+        type: jest.fn((value: string) => {
+            headers.set('content-type', value);
+        }),
+        location: jest.fn(),
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn().mockReturnThis()
+    });
+};
+
+describe('an answer that is stored and replayed', () => {
+    beforeEach(() => {
+        create.mockReset();
+        create.mockResolvedValue(undefined);
+        updateOne.mockClear();
+    });
+
+    it('stores the content type and the replayable headers with the body', async () => {
+        const response = makeHeaderResponse({
+            'Content-Type': 'application/problem+json; charset=utf-8',
+            'Retry-After': '30',
+            'X-Other': 'dropped'
+        });
+
+        idempotencyKey(makeRequest('key-1', { a: 1 }), response, jest.fn());
+        await flush();
+        response.json({ ok: false });
+
+        const [, update] = updateOne.mock.calls.at(-1) as [
+            unknown,
+            { $set: Record<string, unknown> }
+        ];
+        expect(update.$set).toMatchObject({
+            state: 'done',
+            status: 503,
+            contentType: 'application/problem+json; charset=utf-8',
+            headers: { 'Retry-After': '30' }
+        });
+        expect(update.$set.headers).not.toHaveProperty('X-Other');
+    });
+
+    it('replays the stored content type and headers beside the body', async () => {
+        const fingerprint = await fingerprintOfFirstClaim();
+        create.mockRejectedValueOnce({ code: 11_000 });
+        findOne.mockReturnValueOnce({
+            lean: () => ({
+                exec: () =>
+                    Promise.resolve({
+                        state: 'done',
+                        fingerprint,
+                        status: 429,
+                        body: { stored: true },
+                        contentType: 'application/problem+json; charset=utf-8',
+                        headers: { 'Retry-After': '30' }
+                    })
+            })
+        });
+        const response = makeHeaderResponse();
+
+        idempotencyKey(makeRequest('key-1', { a: 1 }), response, jest.fn());
+        await flush();
+        await flush();
+
+        expect(response.getHeader('content-type')).toBe('application/problem+json; charset=utf-8');
+        expect(response.getHeader('retry-after')).toBe('30');
+        expect(response.status).toHaveBeenCalledWith(429);
+        expect(response.json).toHaveBeenCalledWith({ stored: true });
     });
 });
 

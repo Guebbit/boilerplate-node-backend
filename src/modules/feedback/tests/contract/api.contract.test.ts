@@ -153,7 +153,7 @@ describe('GET /feedback', () => {
                 .set('Authorization', bearer);
 
             expect(response.status).toBe(422);
-            expect(response.body.success).toBe(false);
+            expect(response.type).toBe('application/problem+json');
         }
     );
 
@@ -224,7 +224,7 @@ describe('POST /feedback/search', () => {
                 .send(body);
 
             expect(response.status).toBe(422);
-            expect(response.body.success).toBe(false);
+            expect(response.type).toBe('application/problem+json');
         }
     );
 

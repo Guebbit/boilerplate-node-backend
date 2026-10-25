@@ -2,11 +2,15 @@
  * @module
  * Response envelope.
  *
- * Every endpoint answers with the same top-level shape, so clients can branch on `success`
- * without knowing which route they called — and so the generated API client (orval) has a
- * single discriminated union to model.
+ * A success answers with the `{ success, status, message, data }` envelope. A failure answers with
+ * RFC 9457 problem details (`application/problem+json`) whose `errors` extension carries the
+ * machine codes. Internally both outcomes stay one `ServiceResult` union discriminated on
+ * `success`; only `rejectResponse` turns a rejection into a problem.
+ *
+ * See: docs/api/errors.md
  */
 
+import { STATUS_CODES } from 'node:http';
 import type { Response } from 'express';
 import type { ZodError } from 'zod';
 // Type-only: this file sits on `contracts:bundle`'s own incidental module-load path (it loads a
@@ -17,13 +21,13 @@ import type { ZodError } from 'zod';
 import type { ErrorCode } from '@api/error-codes';
 import { t } from '@infrastructure/i18n';
 
-/** Fields shared by both outcomes — the discriminant plus human/machine status. */
+/** Fields shared by both internal outcomes — the discriminant plus human/machine status. */
 export interface ResponseNeutral {
     /** The discriminant. `true` → read `data`; `false` → read `errors`. */
     success: boolean;
     /** Mirrors the HTTP status in the body, which survives proxies that rewrite status codes. */
     status: number;
-    /** Human-readable summary. Optional in practice (often ''). */
+    /** Human-readable summary. A success's is optional (often ''); a rejection's is its problem `title`. */
     message: string;
 }
 
@@ -141,60 +145,53 @@ export const createdOrOk = <T>(
         ? createdResponse(response, data, location, message)
         : successResponse(response, data, status, message);
 
-/** One status's wording: its stable code, its English reason phrase, and the key of its translated text. */
+/** One status's wording: its stable code and the key of its translated text. */
 interface StatusEnvelope {
     /** Machine code; absent where the status shares the generic one. */
     code?: ErrorCode;
-    /** The top-level `message`: English on purpose, a developer-facing label (AIP-193). */
-    message: string;
     /** The `generic.*` locale key the status-only `errors[0].message` is translated from. */
     messageKey: string;
 }
 
 /**
- * Every status the envelope names, with the code, the message and the translated text it answers with.
+ * Every status the envelope names, with the code and the translated text it answers with.
  *
- * One list, so adding 402 or 423 cannot reach the message and miss the code. An absent `code` is
- * deliberate: 422 and 429 get a reason phrase and the generic code, because a client branches on
- * "the request was wrong", not on which flavour of wrong.
+ * One list, so adding 402 or 423 cannot reach the text and miss the code. An absent `code` is
+ * deliberate: 422 and 429 get the generic code, because a client branches on "the request was
+ * wrong", not on which flavour of wrong.
  */
 const STATUS_ENVELOPE: Readonly<Partial<Record<number, StatusEnvelope>>> = {
-    400: { code: 'BAD_REQUEST', message: 'Bad Request', messageKey: 'generic.error-bad-request' },
-    401: {
-        code: 'UNAUTHORIZED',
-        message: 'Unauthorized',
-        messageKey: 'generic.error-unauthorized'
-    },
-    403: { code: 'FORBIDDEN', message: 'Forbidden', messageKey: 'generic.error-forbidden' },
-    404: { code: 'NOT_FOUND', message: 'Not Found', messageKey: 'generic.error-nothing-found' },
-    405: {
-        code: 'METHOD_NOT_ALLOWED',
-        message: 'Method Not Allowed',
-        messageKey: 'generic.error-method-not-allowed'
-    },
-    409: { code: 'CONFLICT', message: 'Conflict', messageKey: 'generic.error-conflict' },
-    412: {
-        code: 'PRECONDITION_FAILED',
-        message: 'Precondition Failed',
-        messageKey: 'generic.error-precondition-failed'
-    },
-    422: { message: 'Unprocessable Entity', messageKey: 'generic.error-invalid-data' },
-    429: { message: 'Too Many Requests', messageKey: 'generic.error-rate-limited' }
+    400: { code: 'BAD_REQUEST', messageKey: 'generic.error-bad-request' },
+    401: { code: 'UNAUTHORIZED', messageKey: 'generic.error-unauthorized' },
+    403: { code: 'FORBIDDEN', messageKey: 'generic.error-forbidden' },
+    404: { code: 'NOT_FOUND', messageKey: 'generic.error-nothing-found' },
+    405: { code: 'METHOD_NOT_ALLOWED', messageKey: 'generic.error-method-not-allowed' },
+    409: { code: 'CONFLICT', messageKey: 'generic.error-conflict' },
+    412: { code: 'PRECONDITION_FAILED', messageKey: 'generic.error-precondition-failed' },
+    422: { messageKey: 'generic.error-invalid-data' },
+    429: { messageKey: 'generic.error-rate-limited' }
 };
 
-/** What every 5xx answers with. One code and one phrase: the flavour would leak internals. */
+/** What every 5xx answers with. One code: the flavour would leak internals. */
 const SERVER_FAULT = {
     code: 'INTERNAL_ERROR',
-    message: 'Internal Server Error',
     messageKey: 'generic.error-internal'
 } as const satisfies StatusEnvelope;
 
 /** What an unmapped 4xx answers with. */
 const UNMAPPED_REQUEST_FAULT = {
     code: 'REQUEST_ERROR',
-    message: 'Request Error',
     messageKey: 'generic.error-unknown'
 } as const satisfies StatusEnvelope;
+
+/**
+ * The two statuses whose RFC 9110 name is newer than Node's `STATUS_CODES`, which still carries the
+ * names from RFC 7231 (413 "Payload Too Large", 422 "Unprocessable Entity").
+ */
+const CURRENT_STATUS_TITLES: Readonly<Partial<Record<number, string>>> = {
+    413: 'Content Too Large',
+    422: 'Unprocessable Content'
+};
 
 /**
  * Maps HTTP status codes to stable machine-readable error codes.
@@ -209,17 +206,21 @@ const resolveErrorCode = (status: number): ErrorCode => {
 };
 
 /**
- * The envelope's `message`, DERIVED from the status and nothing else — callers cannot supply one,
- * so there is exactly one wording per status and no handler name leaks into a 404.
- *
- * `message` is developer-facing; the translated, user-facing text is `errors[]`.
+ * The problem's `title`: the English RFC 9110 status phrase, one per status and nothing else, so
+ * there is exactly one wording per status and no handler name leaks into a 404. Stays English on
+ * purpose — it names the status class (RFC 9457 §3.1.3); the translated text is `detail`.
  *
  * @param status - HTTP status code
- * @returns the canonical reason phrase for that status
+ * @returns the status phrase, or its class name for a status Node has no phrase for
  */
-export const resolveErrorMessage = (status: number): string => {
-    if (status >= 500) return SERVER_FAULT.message;
-    return STATUS_ENVELOPE[status]?.message ?? UNMAPPED_REQUEST_FAULT.message;
+export const resolveErrorTitle = (status: number): string => {
+    // Typed `string` by @types/node, but a status Node has no name for is `undefined`.
+    const nodePhrase: string | undefined = STATUS_CODES[status];
+    return (
+        CURRENT_STATUS_TITLES[status] ??
+        nodePhrase ??
+        (status >= 500 ? 'Server Error' : 'Client Error')
+    );
 };
 
 /**
@@ -279,13 +280,13 @@ const normalizeErrors = (
  * Build the reject envelope. Counterpart to `generateSuccess`, separated from the send step so it
  * can be asserted on directly in tests. Defaults to 400 — the most common client error, and a
  * safer accidental default than 500. No `message` parameter on purpose (see
- * {@link resolveErrorMessage}) — `errors` is the half the client is meant to read.
+ * {@link resolveErrorTitle}) — `errors` is the half the client is meant to read.
  */
 export const generateReject = (status = 400, errors: (string | ResponseErrorItem)[] = []) =>
     ({
         success: false,
         status,
-        message: resolveErrorMessage(status),
+        message: resolveErrorTitle(status),
         // Explicitly present-but-undefined; see `ResponseReject.data`.
         data: undefined,
         errors: normalizeErrors(status, errors)
@@ -301,12 +302,78 @@ const retryAfterOf = (rejection: ResponseReject): number | undefined =>
         .map((item) => item.details?.retryAfter)
         .find((value): value is number => typeof value === 'number');
 
+/** The media type of every error body (RFC 9457 §6.1). */
+const PROBLEM_MEDIA_TYPE = 'application/problem+json';
+
+/**
+ * A rough hint, not a promise — how long a client should wait before retrying a 503. There is no
+ * backoff state to read this from (an infra outage's real duration is unknown), so one constant
+ * for every 503 is honest about that, rather than inventing a number that looks computed.
+ * RFC 9110 §10.2.3.
+ */
+const SERVICE_UNAVAILABLE_RETRY_AFTER_SECONDS = 5;
+
+/**
+ * An error body: RFC 9457 problem details plus the `errors` extension that carries the machine
+ * codes. A response can hold several codes, so there is no top-level `code`.
+ */
+export interface ProblemDetails {
+    /** Always `about:blank` (RFC 9457 §4.2.1): the machine key is `errors[].code`, not a type URI. */
+    type: 'about:blank';
+    /** The English status phrase — see {@link resolveErrorTitle}. */
+    title: string;
+    /** The HTTP status, repeated in the body so it survives a proxy that rewrites the status line. */
+    status: number;
+    /** The translated sentence a user may read: the one error's message, or the status's generic text. */
+    detail: string;
+    /** `urn:uuid:<request id>` — names this occurrence in a support ticket; never the URL. */
+    instance?: string;
+    /** One item per failure; never empty. */
+    errors: ResponseErrorItem[];
+}
+
+/** What `x-request-id` must look like to name an occurrence: the id the request middleware mints. */
+const UUID_PATTERN = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
+
+/**
+ * The problem's `instance`: the request id as a URN, absent when no id was minted (a unit test, or
+ * an error before the request-id middleware).
+ *
+ * @param response - the response whose `x-request-id` header names the occurrence
+ */
+const instanceOf = (response: Response): string | undefined => {
+    const requestId = response.getHeader('x-request-id');
+    return typeof requestId === 'string' && UUID_PATTERN.test(requestId)
+        ? `urn:uuid:${requestId}`
+        : undefined;
+};
+
+/**
+ * Turn an internal rejection into the body that goes on the wire.
+ *
+ * @param rejection - the envelope {@link generateReject} built
+ * @param instance - the occurrence id, when there is one
+ */
+const problemOf = (rejection: ResponseReject, instance: string | undefined): ProblemDetails => ({
+    type: 'about:blank',
+    title: rejection.message,
+    status: rejection.status,
+    // One item says it all; several are summarised by the status's own text, the items carry the rest.
+    detail:
+        rejection.errors.length === 1
+            ? rejection.errors[0].message
+            : resolveErrorText(rejection.status),
+    ...(instance ? { instance } : {}),
+    errors: rejection.errors
+});
+
 /**
  * Send a normalized error payload instead of leaking framework-specific response shapes.
  *
- * The single exit point for failures. Notably it does *not* throw, so controllers must
- * `return rejectResponse(...)` — forgetting the `return` would let execution continue and
- * trigger Express' "headers already sent" error.
+ * The single exit point for failures: RFC 9457 problem details, always `application/problem+json`
+ * whatever `Accept` says (RFC 9110 §12.5.1 allows ignoring it). Notably it does *not* throw, so
+ * controllers must `return rejectResponse(...)` — forgetting the `return` would let execution
+ * continue and trigger Express' "headers already sent" error.
  */
 export const rejectResponse = (
     response: Response,
@@ -318,11 +385,20 @@ export const rejectResponse = (
     // `Retry-After` is the header form of what `details.retryAfter` already says (RFC 9110 §10.2.3).
     if (status === 429 && retryAfter !== undefined)
         response.setHeader('Retry-After', String(retryAfter));
+    // A 503 carries a wait hint too (RFC 9110 §15.6.4); a guard that knows better sets it first.
+    if (status === 503 && !response.hasHeader('Retry-After'))
+        response.setHeader('Retry-After', String(SERVICE_UNAVAILABLE_RETRY_AFTER_SECONDS));
     // A 401 MUST carry a challenge (RFC 9110 §15.5.2, §11.6.1): the default says which scheme the
     // API takes. A guard that names a more specific one (`error="invalid_token"`) sets it first.
     if (status === 401 && !response.hasHeader('WWW-Authenticate'))
         response.setHeader('WWW-Authenticate', 'Bearer realm="api"');
-    return response.status(status).json(rejection) as Response<ResponseReject>;
+    // Set before `.json()`, which only defaults the type when none is set: an export route's
+    // earlier `text/csv` would otherwise leak onto its own error. An error is never an attachment.
+    response.setHeader('Content-Type', PROBLEM_MEDIA_TYPE);
+    response.removeHeader('Content-Disposition');
+    return response
+        .status(status)
+        .json(problemOf(rejection, instanceOf(response))) as Response<ProblemDetails>;
 };
 
 /**

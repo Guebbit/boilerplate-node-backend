@@ -230,9 +230,11 @@ describe('a failure with no message of its own', () => {
         expect(messagesOf(response.body)).toEqual([italian('generic.error-payload-too-large')]);
     });
 
-    it('keeps the top-level message in English while errors[] is translated', async () => {
+    it('keeps the title in English while detail and errors[] are translated', async () => {
         const response = await api().get('/no/such/route').set('Accept-Language', 'it');
 
-        expect(response.body.message).toBe('Not Found');
+        expect(response.body.title).toBe('Not Found');
+        expect(response.body.detail).toBe(response.body.errors[0].message);
+        expect(response.body.detail).toBe(italian('generic.error-nothing-found'));
     });
 });

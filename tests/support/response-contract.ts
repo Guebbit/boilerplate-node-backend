@@ -84,6 +84,25 @@ const schemaFor = (operationId: string, status: number): zod.ZodType | undefined
 };
 
 /**
+ * Throws unless an error answer that has a JSON body is `application/problem+json` (RFC 9457).
+ *
+ * The body schemas below judge bodies only, and superagent parses `+json` like plain JSON, so a
+ * 4xx/5xx sent as `application/json` would pass them. Judged for every path, declared or not:
+ * the catch-all 404 and the 405 belong to no operation. A `text/*` answer (the Prometheus text) and
+ * an empty one (a probe's 503) are not problems and are left alone.
+ *
+ * @param response - a real response from `supertest(app)`
+ * @throws {Error} when an error response carries a JSON body of another media type
+ */
+const assertProblemMediaType = (response: Response): void => {
+    if (response.status < 400 || response.text === '' || response.type.startsWith('text/')) return;
+    if (response.type !== 'application/problem+json')
+        throw new Error(
+            `${response.request.method} ${new URL(response.request.url).pathname} answered ${String(response.status)} as "${response.type}", not application/problem+json`
+        );
+};
+
+/**
  * Checks one captured response against `openapi.yaml`, throwing a plain `Error` on a mismatch.
  *
  * An undeclared path is not this function's job — that's the 404-envelope contract test's own
@@ -94,6 +113,8 @@ const schemaFor = (operationId: string, status: number): zod.ZodType | undefined
  * @throws {Error} when the status is undocumented for its operation, or the body doesn't match
  */
 export const assertResponseMatchesContract = (response: Response): void => {
+    assertProblemMediaType(response);
+
     const { pathname } = new URL(response.request.url);
     // Node's http reports the verb upper-case; `HttpMethod` (and the spec walk) is lower-case —
     // safe because this app only ever issues the five methods the spec can declare an operation

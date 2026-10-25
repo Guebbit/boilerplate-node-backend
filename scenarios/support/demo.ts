@@ -25,6 +25,7 @@
 import type { Express, Request, Response } from 'express';
 import { clearCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
+import { rejectResponse } from '@infrastructure/http/response';
 import { refreshLocaleOverrides } from '@infrastructure/i18n';
 import type { JobDeclaration } from '@kernel/registry';
 import { seedCredentials } from '@scenarios/accounts';
@@ -185,8 +186,7 @@ const describeScenario = (): Record<string, unknown> => ({
  */
 const requireClock = (response: Response): DemoClock | undefined => {
     const clock = getDemoClock();
-    if (!clock)
-        response.status(501).json({ success: false, message: 'this profile has no demo clock' });
+    if (!clock) rejectResponse(response, 501, ['this profile has no demo clock']);
     return clock;
 };
 
@@ -241,7 +241,7 @@ export const installDemo = (app: Express, jobs: readonly JobDeclaration[]): void
     app.post('/__test/restore', (request: Request, response: Response) => {
         const body = RESTORE_BODY.safeParse(request.body ?? {});
         if (!body.success) {
-            response.status(400).json({ success: false, message: z.prettifyError(body.error) });
+            rejectResponse(response, 400, [z.prettifyError(body.error)]);
             return;
         }
 
@@ -249,12 +249,12 @@ export const installDemo = (app: Express, jobs: readonly JobDeclaration[]): void
             .then(() => response.status(204).end())
             .catch((error: unknown) => {
                 if (error instanceof UnknownScenarioError) {
-                    response.status(400).json({ success: false, message: error.message });
+                    rejectResponse(response, 400, [error.message]);
                     return;
                 }
                 // Stryker disable next-line all
                 logger.error({ message: 'scenario restore failed', error });
-                response.status(500).json({ success: false });
+                rejectResponse(response, 500);
             });
     });
 
@@ -274,7 +274,7 @@ export const installDemo = (app: Express, jobs: readonly JobDeclaration[]): void
 
         const body = CLOCK_BODY.safeParse(request.body ?? {});
         if (!body.success) {
-            response.status(400).json({ success: false, message: z.prettifyError(body.error) });
+            rejectResponse(response, 400, [z.prettifyError(body.error)]);
             return;
         }
 
@@ -294,7 +294,7 @@ export const installDemo = (app: Express, jobs: readonly JobDeclaration[]): void
             .then(() => {
                 const job = levers.get(name);
                 if (!job) {
-                    response.status(404).json({ success: false, message: `unknown job: ${name}` });
+                    rejectResponse(response, 404, [`unknown job: ${name}`]);
                     return undefined;
                 }
                 // What the job resolves is its own count of what it swept, so a spec can assert it did something.
@@ -305,23 +305,21 @@ export const installDemo = (app: Express, jobs: readonly JobDeclaration[]): void
             .catch((error: unknown) => {
                 // Stryker disable next-line all
                 logger.error({ message: 'demo job failed', job: name, error });
-                response.status(500).json({ success: false });
+                rejectResponse(response, 500);
             });
     });
 
     app.post('/__test/payments/refund-failure', (request: Request, response: Response) => {
         const body = REFUND_FAILURE_BODY.safeParse(request.body ?? {});
         if (!body.success) {
-            response.status(400).json({ success: false, message: z.prettifyError(body.error) });
+            rejectResponse(response, 400, [z.prettifyError(body.error)]);
             return;
         }
 
         providerRefOf(body.data.orderId)
             .then((providerRef) => {
                 if (!providerRef) {
-                    response
-                        .status(404)
-                        .json({ success: false, message: 'no payment with a provider reference' });
+                    rejectResponse(response, 404, ['no payment with a provider reference']);
                     return;
                 }
                 // `null` becomes `undefined`: that is how the double clears a failure.
@@ -331,7 +329,7 @@ export const installDemo = (app: Express, jobs: readonly JobDeclaration[]): void
             .catch((error: unknown) => {
                 // Stryker disable next-line all
                 logger.error({ message: 'refund-failure lever failed', error });
-                response.status(500).json({ success: false });
+                rejectResponse(response, 500);
             });
     });
 

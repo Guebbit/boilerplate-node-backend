@@ -37,7 +37,9 @@ const makeResponse = () => {
     const response = asStub<Response>({
         status,
         hasHeader: jest.fn(() => false),
-        setHeader: jest.fn()
+        setHeader: jest.fn(),
+        getHeader: jest.fn(),
+        removeHeader: jest.fn()
     });
     return { response, status, json };
 };

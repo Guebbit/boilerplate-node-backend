@@ -14,6 +14,7 @@ import { createUser, PLAIN_PASSWORD, userRepository } from '@modules/users/tests
 import { ACCOUNT_RESTORE_TOKEN_TYPE } from '@modules/account/services';
 import { deletionPurgeAt } from '../../config';
 import { plantToken, tokenTypesOf } from '../factories';
+import { withoutInstance } from '@tests/problem';
 
 /**
  * Every mail the app queued, newest last. Named `mock*` because `jest.mock` is hoisted above the
@@ -165,7 +166,7 @@ describe('POST /account/restore', () => {
         const expired = await api().post('/account/restore').send({ token: 'stale' });
 
         expect([unknown.status, expired.status]).toEqual([422, 422]);
-        expect(expired.body).toEqual(unknown.body);
+        expect(withoutInstance(expired.body)).toEqual(withoutInstance(unknown.body));
     });
 
     it('leaves an account whose grace has run out locked, even with a live link', async () => {

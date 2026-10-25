@@ -181,7 +181,16 @@ const refusalsOf = (namespace: string) =>
 const capturingResponse = () => {
     const json = jest.fn();
     const status = jest.fn(() => ({ json }));
-    return { response: asStub<Response>({ status }), status, json };
+    return {
+        response: asStub<Response>({
+            status,
+            setHeader: jest.fn(),
+            getHeader: jest.fn(),
+            removeHeader: jest.fn()
+        }),
+        status,
+        json
+    };
 };
 
 describe('refuseRateLimited', () => {
@@ -258,14 +267,14 @@ describe('refuseRateLimited — the answer a caller and the audit trail see', ()
         expect(status).toHaveBeenCalledWith(429);
     });
 
-    it('answers the shared error envelope with the RATE_LIMITED code', () => {
+    it('answers problem details with the RATE_LIMITED code', () => {
         const { response, json } = capturingResponse();
 
         refuseRateLimited({ namespace: 'envelope-test', audited: false })(routeRequest(), response);
 
         expect(json).toHaveBeenCalledWith(
             expect.objectContaining({
-                success: false,
+                title: 'Too Many Requests',
                 status: 429,
                 errors: [expect.objectContaining({ code: 'RATE_LIMITED' })]
             })

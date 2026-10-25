@@ -306,6 +306,7 @@ export default withMermaid(
                             { text: 'Overview', link: '/api/' },
                             { text: 'Endpoints', link: '/api/endpoints' },
                             { text: 'Write Methods', link: '/api/write-methods' },
+                            { text: 'Error Responses', link: '/api/errors' },
                             { text: 'Field Limits', link: '/api/field-limits' },
                             { text: 'Sorting a list', link: '/api/sorting' },
                             { text: 'Observability Endpoints', link: '/api/observability' },

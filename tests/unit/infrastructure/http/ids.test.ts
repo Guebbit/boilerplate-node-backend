@@ -42,6 +42,9 @@ const makeRequest = (
 const makeResponse = () => {
     const sent: { status?: number; payload?: unknown } = {};
     const response = asStub<Response>({
+        setHeader: jest.fn(),
+        getHeader: jest.fn(),
+        removeHeader: jest.fn(),
         status(code: number) {
             sent.status = code;
             return this;

@@ -72,7 +72,7 @@ describe('GET /orders/export', () => {
         expect(response.status).toBe(401);
     });
 
-    it('answers 422 ORDER_EXPORT_TOO_LARGE over the cap, as JSON and before the file', async () => {
+    it('answers 422 ORDER_EXPORT_TOO_LARGE over the cap, as a problem and before the file', async () => {
         setEnvironment({ NODE_ORDER_EXPORT_MAX_ROWS: '1' });
         const { bearer, user } = await authenticateAs('admin');
         await seedOrderFor(user);
@@ -81,7 +81,8 @@ describe('GET /orders/export', () => {
         const response = await api().get('/orders/export').set('Authorization', bearer);
 
         expect(response.status).toBe(422);
-        expect(response.headers['content-type']).toMatch(/json/);
+        expect(response.headers['content-type']).toMatch(/^application\/problem\+json/);
+        expect(response.headers['content-disposition']).toBeUndefined();
         expect(response.body.errors[0].code).toBe('ORDER_EXPORT_TOO_LARGE');
     });
 

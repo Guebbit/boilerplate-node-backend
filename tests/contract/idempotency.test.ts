@@ -43,6 +43,24 @@ describe('Idempotency-Key — POST /feedback/contact', () => {
         expect(await idempotencyRecordModel.countDocuments({})).toBe(1);
     });
 
+    it('replays a refusal as the problem it was, with its status and media type', async () => {
+        const invalid = { ...PAYLOAD, email: 'not-an-email' };
+        const first = await api()
+            .post('/feedback/contact')
+            .set('Idempotency-Key', 'replay-error-key')
+            .send(invalid);
+        const second = await api()
+            .post('/feedback/contact')
+            .set('Idempotency-Key', 'replay-error-key')
+            .send(invalid);
+
+        expect(first.status).toBe(422);
+        expect(second.status).toBe(422);
+        expect(second.headers['idempotent-replay']).toBe('true');
+        expect(second.type).toBe('application/problem+json');
+        expect(second.body).toEqual(first.body);
+    });
+
     it('answers 422 when the same key is reused with a different body', async () => {
         await api().post('/feedback/contact').set('Idempotency-Key', 'reuse-key-1').send(PAYLOAD);
 

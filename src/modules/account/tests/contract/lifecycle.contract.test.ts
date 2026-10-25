@@ -14,6 +14,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { userRepository } from '@modules/users/tests/factories';
 import { sessionRowsOf } from '../factories';
 import * as mailerPort from '@infrastructure/adapters/mailer';
+import { withoutInstance } from '@tests/problem';
 
 // The queue, not the copy — the token each flow mails is read back from here.
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -106,7 +107,7 @@ describe('POST /account/password/reset', () => {
 
         // Everything a client can read, except the RateLimit headers, which count per caller.
         expect(unknown.status).toBe(known.status);
-        expect(unknown.body).toEqual(known.body);
+        expect(withoutInstance(unknown.body)).toEqual(withoutInstance(known.body));
         expect(unknown.headers['set-cookie']).toEqual(known.headers['set-cookie']);
         expect(unknown.headers.etag).toEqual(known.headers.etag);
         expect(mailerPort.enqueueEmail).not.toHaveBeenCalled();

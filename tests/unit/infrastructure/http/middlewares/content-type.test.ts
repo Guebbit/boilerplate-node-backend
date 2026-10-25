@@ -62,6 +62,9 @@ const run = (sent: Sent): { status?: number; body?: unknown; passed: boolean } =
     });
     const outcome: { status?: number; body?: unknown; passed: boolean } = { passed: false };
     const response = asStub<Response>({
+        setHeader: jest.fn(),
+        getHeader: jest.fn(),
+        removeHeader: jest.fn(),
         status: (code: number) => {
             outcome.status = code;
             return response;

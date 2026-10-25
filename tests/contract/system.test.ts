@@ -87,7 +87,12 @@ describe('error envelopes', () => {
         const response = await api().get('/definitely-not-a-route');
 
         expect(response.status).toBe(404);
-        expect(response.body.success).toBe(false);
+        expect(response.type).toBe('application/problem+json');
+        expect(response.body).toMatchObject({
+            type: 'about:blank',
+            title: 'Not Found',
+            status: 404
+        });
         expect(Array.isArray(response.body.errors)).toBe(true);
     });
 

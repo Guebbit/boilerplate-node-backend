@@ -31,6 +31,8 @@ export type ResponseStub = Response & {
     json: jest.Mock;
     setHeader: jest.Mock;
     hasHeader: jest.Mock;
+    getHeader: jest.Mock;
+    removeHeader: jest.Mock;
 };
 
 /**
@@ -40,16 +42,20 @@ export type ResponseStub = Response & {
  *          response itself, so `status(...).json(...)` works as it does in production code
  */
 export const makeResponseStub = (): ResponseStub => {
-    // Header names set so far, lower-cased as Express compares them: `rejectResponse` asks
-    // `hasHeader` before it adds the default 401 challenge, so the stub has to answer truthfully.
-    const headers = new Set<string>();
+    // Headers set so far, names lower-cased as Express compares them: `rejectResponse` asks
+    // `hasHeader` before it adds a default challenge and reads `x-request-id`, so the stub has to answer truthfully.
+    const headers = new Map<string, unknown>();
     const response = asStub<ResponseStub>({
         status: jest.fn(),
         json: jest.fn(),
-        setHeader: jest.fn((name: string) => {
-            headers.add(name.toLowerCase());
+        setHeader: jest.fn((name: string, value: unknown) => {
+            headers.set(name.toLowerCase(), value);
         }),
-        hasHeader: jest.fn((name: string) => headers.has(name.toLowerCase()))
+        getHeader: jest.fn((name: string) => headers.get(name.toLowerCase())),
+        hasHeader: jest.fn((name: string) => headers.has(name.toLowerCase())),
+        removeHeader: jest.fn((name: string) => {
+            headers.delete(name.toLowerCase());
+        })
     });
 
     response.status.mockReturnValue(response);
