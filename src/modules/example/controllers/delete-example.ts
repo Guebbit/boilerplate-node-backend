@@ -8,7 +8,7 @@
  */
 
 import type { Request, Response } from 'express';
-import { successResponse } from '@infrastructure/http/response';
+import { noContentResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs, refused } from '@infrastructure/http/controller';
 import { requireId } from '@infrastructure/http/ids';
@@ -26,7 +26,7 @@ export const deleteExample = (request: Request<{ id: string }>, response: Respon
         .removeById(id, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse(response, undefined, 200);
+            noContentResponse(response);
         })
         .catch(catchAs(response, 'deleteExample'));
 };

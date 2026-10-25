@@ -29,10 +29,10 @@ describe('GET /orders/{id} — the VAT fields on the response', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items[0].product.taxRate).toBe(0.22);
-        expect(response.body.data.items[0].taxAmount).toBe(7.18);
-        expect(response.body.data.items[0].netAmount).toBe(32.62);
-        expect(response.body.data.netTotal).toBe(32.62);
-        expect(response.body.data.taxTotal).toBe(7.18);
+        expect(response.body.items[0].product.taxRate).toBe(0.22);
+        expect(response.body.items[0].taxAmount).toBe(7.18);
+        expect(response.body.items[0].netAmount).toBe(32.62);
+        expect(response.body.netTotal).toBe(32.62);
+        expect(response.body.taxTotal).toBe(7.18);
     });
 });

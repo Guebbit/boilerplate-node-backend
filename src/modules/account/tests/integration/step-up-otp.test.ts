@@ -64,7 +64,7 @@ const tokenOfLastMail = (template: string): string => {
 const armedAccount = async (email = 'armed@example.com') => {
     const user = await createUser({ verifiedAt: new Date(), email });
     const login = await api().post('/account/login').send({ email, password: PLAIN_PASSWORD });
-    const bearer = `Bearer ${login.body.data.token as string}`;
+    const bearer = `Bearer ${login.body.token as string}`;
     const setup = await api()
         .post('/account/2fa/methods/totp/setup')
         .set('Authorization', bearer)
@@ -72,9 +72,9 @@ const armedAccount = async (email = 'armed@example.com') => {
     const confirm = await api()
         .post('/account/2fa/methods/totp/confirm')
         .set('Authorization', bearer)
-        .send({ code: await codeFor(setup.body.data.secret as string, 0) });
+        .send({ code: await codeFor(setup.body.secret as string, 0) });
     await forgetSessionEpoch(bearer);
-    return { user, backupCodes: confirm.body.data.backupCodes as string[] };
+    return { user, backupCodes: confirm.body.backupCodes as string[] };
 };
 
 /** The status of a pending request, awaited without reaching into the response inline. */
@@ -178,7 +178,7 @@ describe('POST /account/reauth with an otp', () => {
             .post('/account/reauth')
             .set('Authorization', bearer)
             .send({ method: 'password', password: PLAIN_PASSWORD });
-        const change = await requestChange(`Bearer ${reauth.body.data.token as string}`);
+        const change = await requestChange(`Bearer ${reauth.body.token as string}`);
 
         expect(reauth.status).toBe(200);
         expect(change.status).toBe(401);
@@ -192,7 +192,7 @@ describe('POST /account/reauth with an otp', () => {
             .post('/account/reauth')
             .set('Authorization', bearer)
             .send({ method: 'password', password: PLAIN_PASSWORD, otp: backupCodes[0] });
-        const change = await requestChange(`Bearer ${reauth.body.data.token as string}`);
+        const change = await requestChange(`Bearer ${reauth.body.token as string}`);
 
         expect(reauth.status).toBe(200);
         expect(change.status).toBe(200);

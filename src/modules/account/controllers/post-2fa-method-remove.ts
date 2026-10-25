@@ -55,11 +55,7 @@ export const post2faMethodRemove = (
                         withProofs(amr, AMR.otp),
                         snapshot
                     ).then((issued) => {
-                        successResponse<AuthTokens | undefined>(
-                            response,
-                            issued.sessionToken ? issued : undefined,
-                            200
-                        );
+                        successResponse<AuthTokens>(response, issued, 200);
                     });
                 })
         )

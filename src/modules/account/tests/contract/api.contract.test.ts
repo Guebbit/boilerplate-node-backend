@@ -162,7 +162,7 @@ describe('POST /account/login — remember me', () => {
             .post('/account/login')
             .send({ email: user.email, password: PLAIN_PASSWORD });
 
-        const { iat, exp } = decodeJwt(response.body.data.token) as { iat: number; exp: number };
+        const { iat, exp } = decodeJwt(response.body.token) as { iat: number; exp: number };
         expect(exp - iat).toBe(getAccessExpiryTime());
         expect(getAccessExpiryTime()).toBeLessThan(getExpiryTime());
     });
@@ -191,14 +191,14 @@ const loginRemembering = async (remember?: 'short' | 'medium' | 'long', email?: 
     if (!jwtCookie) throw new Error('login set no jwt cookie');
     return {
         user,
-        bearer: `Bearer ${response.body.data.token as string}` as const,
+        bearer: `Bearer ${response.body.token as string}` as const,
         jwtCookie,
         // What the browser sends next: `jwt` mode needs the access token beside the refresh
         // cookie, `cookie` mode the cookie alone (a bearer would make the reply a bearer's: no cookie).
         headers: (getSessionMode() === 'cookie'
             ? { Cookie: jwtCookie }
             : {
-                  Authorization: `Bearer ${response.body.data.token as string}`,
+                  Authorization: `Bearer ${response.body.token as string}`,
                   Cookie: jwtCookie
               }) as Record<string, string>
     };
@@ -295,7 +295,7 @@ describe('the "remember me" choice survives every re-mint', () => {
 
         const rotated = await api().post('/account/refresh').set('Cookie', jwtCookie);
 
-        const { iat, exp } = decodeJwt(rotated.body.data.token as string) as {
+        const { iat, exp } = decodeJwt(rotated.body.token as string) as {
             iat: number;
             exp: number;
         };
@@ -396,7 +396,7 @@ describe('PUT /account', () => {
             .send({ email: user.email, username: 'replaced-self', analyticsConsent: false });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.username).toBe('replaced-self');
+        expect(response.body.username).toBe('replaced-self');
     });
 
     // Consent has no cleared state, so a PUT that forgets it is refused, never read as "no".
@@ -508,7 +508,7 @@ describe('PATCH /account', () => {
             .send({ username: 'self-renamed' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.username).toBe('self-renamed');
+        expect(response.body.username).toBe('self-renamed');
     });
 
     it('holds a new address as pending rather than changing email immediately', async () => {
@@ -521,11 +521,11 @@ describe('PATCH /account', () => {
 
         expect(response.status).toBe(200);
         // The account keeps its current, proven address until the new one is confirmed.
-        expect(response.body.data.email).toBe(user.email);
-        expect(response.body.data.pendingEmail).toBe('fresh-address@example.com');
+        expect(response.body.email).toBe(user.email);
+        expect(response.body.pendingEmail).toBe('fresh-address@example.com');
         // Still verified, at the same instant: an unconfirmed new address must not unverify the
         // proven one it has not yet replaced.
-        expect(response.body.data.verifiedAt).toBe(user.verifiedAt!.toISOString());
+        expect(response.body.verifiedAt).toBe(user.verifiedAt!.toISOString());
     });
 
     it('restating the CURRENT address is a no-op — a pending change survives it', async () => {
@@ -541,7 +541,7 @@ describe('PATCH /account', () => {
             .send({ email: user.email });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.pendingEmail).toBe('someone-else-typed-this@example.com');
+        expect(response.body.pendingEmail).toBe('someone-else-typed-this@example.com');
     });
 
     it('matches the error contract for an email another account holds', async () => {
@@ -603,10 +603,10 @@ describe('DELETE /account/email-change', () => {
 
         const response = await api().delete('/account/email-change').set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
 
         const after = await api().get('/account').set('Authorization', bearer);
-        expect(after.body.data.pendingEmail).toBeUndefined();
+        expect(after.body.pendingEmail).toBeUndefined();
     });
 
     it('is a no-op when nothing is pending', async () => {
@@ -614,7 +614,7 @@ describe('DELETE /account/email-change', () => {
 
         const response = await api().delete('/account/email-change').set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
     });
 });
 
@@ -646,7 +646,7 @@ describe('POST /account/email-change/resend', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toEqual({ resendAfter: 60 });
+        expect(response.body).toEqual({ resendAfter: 60 });
         expect(enqueueEmail).toHaveBeenCalledTimes(1);
         expect(mailTo('new-address@example.com')?.[1]).toBe('account.verify-request');
         // The old address was told once, when the change was requested — not again.
@@ -666,7 +666,7 @@ describe('POST /account/email-change/resend', () => {
         const confirm = await api()
             .post('/account/email-change/confirm')
             .send({ token: secondToken });
-        expect(confirm.status).toBe(200);
+        expect(confirm.status).toBe(204);
         const stored = await userRepository.findById(user.id);
         expect(stored?.email).toBe('new-address@example.com');
     });
@@ -698,7 +698,7 @@ describe('POST /account/email-change/resend', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toEqual({ resendAfter: 0 });
+        expect(response.body).toEqual({ resendAfter: 0 });
         expect(enqueueEmail).not.toHaveBeenCalled();
     });
 });
@@ -759,7 +759,7 @@ describe('POST /account/password/reset/confirm', () => {
             password: REPLACEMENT_PASSWORD,
             passwordConfirm: REPLACEMENT_PASSWORD
         });
-        expect(validAttempt.status).toBe(200);
+        expect(validAttempt.status).toBe(204);
     });
 });
 
@@ -835,7 +835,7 @@ describe('POST /account/password', () => {
         });
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toBeUndefined();
+        expect(response.body).toEqual({});
         expect(loggedWarn).toHaveBeenCalledWith(
             expect.objectContaining({
                 message: 'Password changed, but the session re-mint failed.',
@@ -857,7 +857,7 @@ describe('POST /account/reauth', () => {
             .send({ method: 'password', password: PLAIN_PASSWORD });
 
         expect(response.status).toBe(200);
-        expect(typeof response.body.data.token).toBe('string');
+        expect(typeof response.body.token).toBe('string');
     });
 
     it('matches the error contract for a wrong password — 422, never 401', async () => {
@@ -1008,7 +1008,7 @@ describe('POST /account/logout', () => {
 
         const response = await api().post('/account/logout').set('Cookie', jwtCookie);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
 
         // The revoked cookie names nothing any more (it can no longer mint access tokens in `jwt`
         // mode, no longer authenticates in `cookie` mode): the session is dead server-side, not
@@ -1019,7 +1019,7 @@ describe('POST /account/logout', () => {
     it('answers 200 with no cookie at all — the caller already has what they asked for', async () => {
         const response = await api().post('/account/logout');
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
     });
 });
 
@@ -1030,7 +1030,7 @@ describe('GET /account/sessions/{sessionId}', () => {
             .get('/account/sessions')
             .set('Authorization', bearer)
             .set('Cookie', jwtCookie);
-        const [session] = listing.body.data.sessions as { id: string }[];
+        const [session] = listing.body.sessions as { id: string }[];
 
         const response = await api()
             .get(`/account/sessions/${session.id}`)
@@ -1038,7 +1038,7 @@ describe('GET /account/sessions/{sessionId}', () => {
             .set('Cookie', jwtCookie);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({ id: session.id, current: true });
+        expect(response.body).toMatchObject({ id: session.id, current: true });
     });
 
     it('answers 404 for an unknown id and a malformed one alike', async () => {
@@ -1071,8 +1071,8 @@ describe('GET /account/sessions', () => {
             .set('Cookie', jwtCookie);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.sessions).toHaveLength(1);
-        expect(response.body.data.sessions[0].current).toBe(true);
+        expect(response.body.sessions).toHaveLength(1);
+        expect(response.body.sessions[0].current).toBe(true);
     });
 
     it('flags nothing current for a bearer-only caller', async () => {
@@ -1083,8 +1083,8 @@ describe('GET /account/sessions', () => {
         const response = await api().get('/account/sessions').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.sessions).toHaveLength(1);
-        expect(response.body.data.sessions[0].current).toBe(false);
+        expect(response.body.sessions).toHaveLength(1);
+        expect(response.body.sessions[0].current).toBe(false);
     });
 
     /**
@@ -1105,7 +1105,7 @@ describe('GET /account/sessions', () => {
                 .set('Session-Passive', 'true');
 
         const before = await listed();
-        expect(before.body.data.sessions[0].lastUsedAt).toBeUndefined();
+        expect(before.body.sessions[0].lastUsedAt).toBeUndefined();
 
         const used = await api().get('/account').set('Authorization', bearer);
         expect(used.status).toBe(200);
@@ -1114,7 +1114,7 @@ describe('GET /account/sessions', () => {
 
         const after = await listed();
         expect(after.status).toBe(200);
-        expect(typeof after.body.data.sessions[0].lastUsedAt).toBe('string');
+        expect(typeof after.body.sessions[0].lastUsedAt).toBe('string');
     });
 });
 
@@ -1131,7 +1131,7 @@ describe('DELETE /account/sessions/{sessionId}', () => {
             .get('/account/sessions')
             .set('Authorization', bearer)
             .set('Cookie', jwtCookie);
-        const sessions: { id: string; current: boolean }[] = listing.body.data.sessions;
+        const sessions: { id: string; current: boolean }[] = listing.body.sessions;
         expect(sessions).toHaveLength(2);
         const other = sessions.find(({ current }) => !current);
 
@@ -1139,13 +1139,13 @@ describe('DELETE /account/sessions/{sessionId}', () => {
             .delete(`/account/sessions/${other!.id}`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
 
         const after = await api()
             .get('/account/sessions')
             .set('Authorization', bearer)
             .set('Cookie', jwtCookie);
-        expect(after.body.data.sessions.map(({ id }: { id: string }) => id)).toEqual(
+        expect(after.body.sessions.map(({ id }: { id: string }) => id)).toEqual(
             sessions.filter(({ current }) => current).map(({ id }) => id)
         );
     });
@@ -1155,7 +1155,7 @@ describe('DELETE /account/sessions/{sessionId}', () => {
         const ownerListing = await api()
             .get('/account/sessions')
             .set('Authorization', owner.bearer);
-        const ownerSessionId = ownerListing.body.data.sessions[0].id as string;
+        const ownerSessionId = ownerListing.body.sessions[0].id as string;
 
         const attacker = await loginWithCookie({
             email: 'attacker@example.com',
@@ -1169,9 +1169,7 @@ describe('DELETE /account/sessions/{sessionId}', () => {
 
         // And the owner's session is untouched.
         const after = await api().get('/account/sessions').set('Authorization', owner.bearer);
-        expect(after.body.data.sessions.map(({ id }: { id: string }) => id)).toEqual([
-            ownerSessionId
-        ]);
+        expect(after.body.sessions.map(({ id }: { id: string }) => id)).toEqual([ownerSessionId]);
     });
 
     it('matches the error contract for a well-formed id that matches nothing', async () => {
@@ -1206,9 +1204,9 @@ describe('POST /account/email-verification/resend and /account/email-verificatio
         });
 
         expect(response.status).toBe(201);
-        expect(response.body.data.verifiedAt).toBeUndefined();
+        expect(response.body.verifiedAt).toBeUndefined();
 
-        expect(await readVerifyToken(response.body.data.id)).toBeDefined();
+        expect(await readVerifyToken(response.body.id)).toBeDefined();
     });
 
     /*
@@ -1227,7 +1225,7 @@ describe('POST /account/email-verification/resend and /account/email-verificatio
         });
 
         expect(response.status).toBe(201);
-        expect(response.body.data.token).toBeUndefined();
+        expect(response.body.token).toBeUndefined();
 
         expect(setCookie(response, '__Host-session')).toBeDefined();
 
@@ -1251,7 +1249,7 @@ describe('POST /account/email-verification/resend and /account/email-verificatio
         });
 
         expect(response.status).toBe(201);
-        expect(response.body.data.email).toBe('ada+shop@mail.example.photography');
+        expect(response.body.email).toBe('ada+shop@mail.example.photography');
     });
 
     it('re-sends for an unverified account and the emailed token then verifies it', async () => {
@@ -1264,7 +1262,7 @@ describe('POST /account/email-verification/resend and /account/email-verificatio
 
         const token = verifyTokenFromMail();
         const confirm = await api().post('/account/email-verification/confirm').send({ token });
-        expect(confirm.status).toBe(200);
+        expect(confirm.status).toBe(204);
 
         const stored = await userRepository.findById(user.id);
         expect(stored?.verifiedAt).toBeInstanceOf(Date);
@@ -1296,7 +1294,7 @@ describe('POST /account/email-verification/resend and /account/email-verificatio
         const first = await api().post('/account/email-verification/confirm').send({ token });
         const second = await api().post('/account/email-verification/confirm').send({ token });
 
-        expect(first.status).toBe(200);
+        expect(first.status).toBe(204);
         expect(second.status).toBe(422);
     });
 });
@@ -1327,7 +1325,7 @@ describe('PATCH /account (email change) and /account/email-change/confirm', () =
 
         const confirm = await api().post('/account/email-change/confirm').send({ token });
 
-        expect(confirm.status).toBe(200);
+        expect(confirm.status).toBe(204);
         const stored = await userRepository.findById(user.id);
         expect(stored?.email).toBe('new-address@example.com');
         expect(stored?.verifiedAt).toBeInstanceOf(Date);
@@ -1343,14 +1341,14 @@ describe('PATCH /account (email change) and /account/email-change/confirm', () =
 
         const token = verifyTokenFromMail();
         const confirm = await api().post('/account/email-change/confirm').send({ token });
-        expect(confirm.status).toBe(200);
+        expect(confirm.status).toBe(204);
 
         // A confirmed email change ends every session (the old bearer included, in `cookie`
         // mode), so the account signs in again under the new address.
         const account = await api()
             .get('/account')
             .set('Authorization', await loginBearer('ada+shop@mail.example.photography'));
-        expect(account.body.data.email).toBe('ada+shop@mail.example.photography');
+        expect(account.body.email).toBe('ada+shop@mail.example.photography');
     });
 
     it('keeps authenticating under the OLD address until the token is spent', async () => {

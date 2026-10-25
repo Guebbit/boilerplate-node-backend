@@ -140,7 +140,7 @@ describe('upload content validation', () => {
 describe('serving the upload directory', () => {
     it('serves a stored image with an image content type', async () => {
         const uploaded = await uploadAvatarWith(PNG_BYTES, 'avatar.png', 'image/png');
-        const imageUrl = uploaded.body.data.imageUrl as string;
+        const imageUrl = uploaded.body.imageUrl as string;
 
         const response = await api().get(imageUrl);
 
@@ -162,7 +162,7 @@ describe('serving the upload directory', () => {
      */
     it('never serves an uploaded file as html, whatever it was named', async () => {
         const uploaded = await uploadAvatarWith(PNG_BYTES, 'payload.html', 'image/png');
-        const imageUrl = uploaded.body.data.imageUrl as string;
+        const imageUrl = uploaded.body.imageUrl as string;
 
         expect(imageUrl.endsWith('.png')).toBe(true);
 

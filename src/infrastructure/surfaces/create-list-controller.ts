@@ -34,8 +34,8 @@ export interface ListControllerSpec<TSchema extends ZodType, TResult> {
     input?: Omit<RequestInputDeclaration<string>, 'surface'>;
     /**
      * Run the module's own query, given the validated input. Answers the bare payload — same
-     * convention as {@link createSearchController}'s `runSearch` — since `successResponse` is what
-     * builds the wire envelope; a service pre-wrapping its own would be building it twice.
+     * convention as {@link createSearchController}'s `runSearch` — since `successResponse` sends
+     * it as the body as it is; a service pre-wrapping its own would be wrapping it twice.
      */
     runList: (parsed: TSchema['_output'], request: Request) => Promise<TResult>;
 }

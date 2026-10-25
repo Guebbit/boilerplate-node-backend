@@ -76,7 +76,7 @@ describe('GET /orders/{id}/credit-notes', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toEqual([]);
+        expect(response.body).toEqual({ items: [] });
     });
 
     it('refuses a caller who is not signed in', async () => {

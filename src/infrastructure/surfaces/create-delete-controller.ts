@@ -9,7 +9,7 @@
  */
 
 import type { Request, Response } from 'express';
-import { successResponse } from '@infrastructure/http/response';
+import { noContentResponse } from '@infrastructure/http/response';
 import { withIfMatch } from '@infrastructure/http/preconditions';
 import { readInput } from '@infrastructure/http/request';
 import { requireId } from '@infrastructure/http/ids';
@@ -79,7 +79,7 @@ export const createDeleteController = ({ entity, remove, notFoundKey }: DeleteCo
                 // Sends the error envelope and stops here if the service refused.
                 if (refused(response, result)) return;
 
-                successResponse(response, undefined, 200);
+                noContentResponse(response);
             })
             .catch(catchAs(response, operation));
     });

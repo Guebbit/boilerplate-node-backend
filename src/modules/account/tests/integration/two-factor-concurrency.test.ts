@@ -59,7 +59,7 @@ const signedIn = async () => {
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD });
 
-    return { user, bearer: `Bearer ${login.body.data.token as string}` as const };
+    return { user, bearer: `Bearer ${login.body.token as string}` as const };
 };
 
 /** A signed-in account with the TOTP factor armed, and the codes `confirm` handed out. */
@@ -70,14 +70,14 @@ const armedAccount = async () => {
         .post('/account/2fa/methods/totp/setup')
         .set('Authorization', bearer)
         .send();
-    const { secret } = setup.body.data as { secret: string };
+    const { secret } = setup.body as { secret: string };
     const confirm = await api()
         .post('/account/2fa/methods/totp/confirm')
         .set('Authorization', bearer)
         .send({ code: await codeFor(secret, 0) });
     await forgetSessionEpoch(bearer);
 
-    return { user, bearer, backupCodes: confirm.body.data.backupCodes as string[] };
+    return { user, bearer, backupCodes: confirm.body.backupCodes as string[] };
 };
 
 /** A fresh login challenge, minted at the service level — one per racing request. */
@@ -133,7 +133,7 @@ describe('a backup code, spent in parallel', () => {
                 .send({ code: backupCodes[1] })
         ]);
 
-        const fresh = regenerate.body.data.backupCodes as string[];
+        const fresh = regenerate.body.backupCodes as string[];
         const after = await userRepository.findByIdWithCredentials(user.id);
         expect(after!.twoFactorBackupCodes).toEqual(
             fresh.map((code) => hashBackupCode(code, after!.twoFactorBackupCodeSalt!))
@@ -239,7 +239,7 @@ describe('the first backup-code set, when two factors are confirmed in parallel'
             .send();
         await api().post('/account/2fa/methods/email/setup').set('Authorization', bearer).send({});
         const emailCode = mailedCode('account.two-factor-code');
-        const { secret } = totp.body.data as { secret: string };
+        const { secret } = totp.body as { secret: string };
 
         const responses = await Promise.all([
             api()
@@ -252,7 +252,7 @@ describe('the first backup-code set, when two factors are confirmed in parallel'
 
         expect(responses.map(({ status }) => status)).toEqual([200, 200]);
         const handedOut = responses.flatMap(
-            ({ body }) => (body.data as { backupCodes?: string[] }).backupCodes ?? []
+            ({ body }) => (body as { backupCodes?: string[] }).backupCodes ?? []
         );
         const stored = await userRepository.findByIdWithCredentials(user.id);
         const salt = stored!.twoFactorBackupCodeSalt!;

@@ -13,13 +13,17 @@ info:
         Language: every endpoint honours `Accept-Language` (q-weights and region tags
         included). One language is picked per request, from the languages switched on in
         `GET /locales`, and it selects the language of user-facing copy and of translated entity
-        fields (a product's `title`, `description`) — `errors[].message`, a success envelope's
-        `message` — never the response shape, the status code, or a machine-readable field such
+        fields (a product's `title`, `description`) — `errors[].message` — never the response shape, the status code, or a machine-readable field such
         as `errors[].code`. A message the API has no wording for in that language falls back to
         the default language, one message at a time. An unknown or switched-off language falls
         back instead of erroring; `Content-Language` states the language picked, the audience the
         answer is written for (RFC 9110 section 8.5), and `Vary: Accept-Language` is always set.
         `GET /locales` lists what a deployment offers.
+
+        Successes: a 2xx answers the resource itself, with no wrapper. A list is an object, never a
+        top-level array: `{ items, meta }` when paged (`meta` is `PaginationMeta`), or a named key
+        (`{ methods }`). An answer with nothing to say is `204` and has no body. A create is `201`
+        with a `Location` header. See `docs/api/responses.md`.
 
         Errors: every 4xx and 5xx answers RFC 9457 problem details as `application/problem+json`,
         whatever `Accept` says: `type` (always `about:blank`), `title` (the English status
@@ -429,12 +433,8 @@ components:
                 type: string
 
     responses:
-        Success:
-            description: Success
-            content:
-                application/json:
-                    schema:
-                        $ref: '#/components/schemas/MessageResponse'
+        NoContent:
+            description: Done. There is nothing to say, so the body is empty (RFC 9110 section 15.3.5).
         BadRequest:
             description: >-
                 The request could not be understood or authenticated as what it claims to be —
@@ -539,7 +539,7 @@ components:
                         $ref: '#/components/schemas/Problem'
 
     schemas:
-        # ---------- Shared — scalars, envelopes and the entities more than one module references. ----------
+        # ---------- Shared — scalars and the entities more than one module references. ----------
         Page:
             type: integer
             minimum: 1
@@ -684,35 +684,6 @@ components:
 
         # ---------- System Messages ----------
 
-        # The three `&envelope*` anchors below are the single definition of the success-envelope
-        # preamble. Every *Envelope schema aliases them with `*envelopeSuccess` etc., so the shape
-        # is written once here and the YAML parser expands it everywhere — no allOf, and therefore
-        # no schema that has to stay non-strict. See the note on ErrorResponse for why.
-        # The success-envelope preamble, named so every *Envelope schema in every module file can
-        # `$ref` it. These were YAML anchors while the document was assembled by concatenation;
-        # anchors cannot cross files, and each module is now a standalone document.
-        EnvelopeSuccess:
-            type: boolean
-            enum: [true]
-
-        EnvelopeStatus:
-            type: integer
-
-        EnvelopeMessage:
-            type: string
-
-        MessageResponse:
-            type: object
-            additionalProperties: false
-            required: [success, status, message]
-            properties:
-                success:
-                    $ref: '#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '#/components/schemas/EnvelopeMessage'
-
         ErrorItem:
             type: object
             additionalProperties: false
@@ -781,38 +752,8 @@ components:
 
         # ---------- Domain ----------
 
-        # All success responses are wrapped in a standard envelope:
-        # { success: true, status: number, message: string, data: <payload> }
-        # The schemas below describe the "data" payload for each endpoint.
-        # Wrapped response schemas below combine the envelope with the domain payload.
-
-        UserEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/User'
-
-        AccountEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/Account'
+        # A success answers with the payload itself (see docs/api/responses.md): the schemas below
+        # are the bodies of the 2xx responses.
 
         # The account as its OWN holder sees it: `/account`, the signup answer and the data export's
         # `profile`. The admin view of the same record, with what the caller may do to it, is `User`.
@@ -1068,20 +1009,6 @@ components:
                     enum: [ok]
                     description: Liveness indicator. Always `ok` when the process is answering.
 
-        HealthPingEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/HealthPing'
-
 paths:
     # --------- System ---------
     /:
@@ -1099,7 +1026,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/HealthPingEnvelope'
+                                $ref: '#/components/schemas/HealthPing'
 
     /livez:
         get:
@@ -1145,7 +1072,7 @@ paths:
                 RFC 9116 `security.txt`: where an outside reporter sends a vulnerability.
                 Published only when the deployment sets `NODE_SECURITY_CONTACT` and
                 `NODE_SECURITY_EXPIRES`; a fork that has not opted in answers 404 and publishes
-                nothing. Plain text, not the JSON envelope, because the format is fixed by the RFC.
+                nothing. Plain text, not JSON, because the format is fixed by the RFC.
             operationId: getSecurityTxt
             security: []
             responses:

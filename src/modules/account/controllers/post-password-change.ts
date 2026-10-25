@@ -81,7 +81,7 @@ export const postPasswordChange = (
                         error
                     });
                     authPasswordChangeTotal.inc({ status: 'success' });
-                    successResponse(response, undefined, 200);
+                    successResponse<AuthTokens>(response, {}, 200);
                 });
         })
         .catch((error: unknown) => {

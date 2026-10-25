@@ -180,7 +180,7 @@ describe('R4 — concurrent logins for one account', () => {
 
         const token = logins
             .map((result) => (result.status === 'fulfilled' ? result.value : undefined))
-            .find((response) => response?.status === 200)?.body?.data?.token;
+            .find((response) => response?.status === 200)?.body?.token;
 
         const results = await raceN(3, () =>
             api().delete('/account/sessions').set('Authorization', `Bearer ${token}`)

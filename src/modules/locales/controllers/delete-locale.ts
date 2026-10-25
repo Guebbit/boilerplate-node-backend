@@ -4,7 +4,7 @@
  */
 
 import type { Request, Response } from 'express';
-import { successResponse } from '@infrastructure/http/response';
+import { noContentResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { localeService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
@@ -22,6 +22,6 @@ export const deleteLocale = (request: Request<{ locale: string }>, response: Res
         .then((result) => {
             if (refused(response, result)) return;
 
-            return successResponse(response, undefined);
+            return noContentResponse(response);
         })
         .catch(catchAs(response, 'deleteLocale'));

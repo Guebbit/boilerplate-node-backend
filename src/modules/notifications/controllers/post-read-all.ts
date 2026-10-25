@@ -4,7 +4,7 @@
  */
 
 import type { Request, Response } from 'express';
-import { successResponse } from '@infrastructure/http/response';
+import { noContentResponse } from '@infrastructure/http/response';
 import { catchAs } from '@infrastructure/http/controller';
 import { notificationsService } from '../services';
 
@@ -15,8 +15,8 @@ import { notificationsService } from '../services';
 export const postReadAll = (request: Request, response: Response) => {
     return notificationsService
         .readAll(request.authContext!.id)
-        .then((result) => {
-            successResponse(response, result.data, 200);
+        .then(() => {
+            noContentResponse(response);
         })
         .catch(catchAs(response, 'readAllNotifications'));
 };

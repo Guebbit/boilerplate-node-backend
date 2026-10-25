@@ -18,7 +18,7 @@ const manifestTags = (bearer?: string) => {
     const pending = api().get('/locales');
     return (bearer ? pending.set('Authorization', bearer) : pending).then((response) => {
         expect(response.status).toBe(200);
-        return (response.body.data.locales as { tag: string; active: boolean }[]).map(
+        return (response.body.locales as { tag: string; active: boolean }[]).map(
             ({ tag, active }) => [tag, active] as const
         );
     });

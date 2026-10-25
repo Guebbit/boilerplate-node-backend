@@ -8,7 +8,7 @@
 import type { Request, Response } from 'express';
 import { RequestPasswordResetBody } from '@api/schemas.zod';
 import { accountService } from '../services';
-import { successResponse } from '@infrastructure/http/response';
+import { noContentResponse } from '@infrastructure/http/response';
 import type { PasswordResetRequest } from '@types';
 import { parseBody } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -36,5 +36,5 @@ export const postResetRequest = (
     // (OWASP Forgot Password Cheat Sheet, "consistent response time"). The service logs its own
     // failures and keeps the metric and the audit row.
     void accountService.requestPasswordReset(body.email, callerContextOf(request));
-    successResponse(response, undefined, 200);
+    noContentResponse(response);
 };

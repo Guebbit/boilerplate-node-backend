@@ -87,7 +87,7 @@ describe('GET /account/reauth', () => {
         const response = await api().get('/account/reauth').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toEqual({ methods: ['password'] });
+        expect(response.body).toEqual({ methods: ['password'] });
     });
 
     it('offers the mailed code to an account with no password', async () => {
@@ -95,7 +95,7 @@ describe('GET /account/reauth', () => {
 
         const response = await api().get('/account/reauth').set('Authorization', bearer);
 
-        expect(response.body.data).toEqual({ methods: ['email'] });
+        expect(response.body).toEqual({ methods: ['email'] });
     });
 
     it('offers nothing to an account with no password and no verified address', async () => {
@@ -107,7 +107,7 @@ describe('GET /account/reauth', () => {
 
         const response = await api().get('/account/reauth').set('Authorization', bearer);
 
-        expect(response.body.data).toEqual({ methods: [] });
+        expect(response.body).toEqual({ methods: [] });
     });
 });
 
@@ -121,7 +121,7 @@ describe('POST /account/reauth/methods/email/send', () => {
             .send();
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({ method: 'email', sentTo: 'o***h@example.com' });
+        expect(response.body).toMatchObject({ method: 'email', sentTo: 'o***h@example.com' });
         expect(mailedCode()).toMatch(/^\d{6}$/);
     });
 

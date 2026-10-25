@@ -63,7 +63,7 @@ const adminWithKey = async () => {
         .send({ email: user.email, password: PLAIN_PASSWORD });
     return {
         user,
-        bearer: `Bearer ${login.body.data.token as string}`,
+        bearer: `Bearer ${login.body.token as string}`,
         secret: minted.data?.secret ?? ''
     };
 };

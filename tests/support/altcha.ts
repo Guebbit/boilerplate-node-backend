@@ -33,10 +33,7 @@ export const useAltcha = (): void => {
  * @returns the header name and its value
  */
 export const solvedChallenge = async (): Promise<Record<string, string>> => {
-    const challenge = bodyOf(
-        await api().get('/antibot/challenge'),
-        GetAntibotChallenge200Response
-    ).data;
+    const challenge = bodyOf(await api().get('/antibot/challenge'), GetAntibotChallenge200Response);
     // altcha-lib: finds the key the challenge asks for. https://github.com/altcha-org/altcha-lib
     const solution = await solveChallenge({ challenge, deriveKey });
 

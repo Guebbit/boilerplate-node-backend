@@ -547,9 +547,7 @@ describe('conformance: a produced row parses as the response the API would serve
         expect(products.length).toBeGreaterThan(0);
 
         for (const product of products)
-            expect(() =>
-                CreateProduct201Response.shape.data.parse(wireShape(product.toJSON()))
-            ).not.toThrow();
+            expect(() => CreateProduct201Response.parse(wireShape(product.toJSON()))).not.toThrow();
     });
 
     it('every order', async () => {
@@ -561,7 +559,7 @@ describe('conformance: a produced row parses as the response the API would serve
         // stored order never carries. See `orders/services/current.ts`.
         for (const order of orders) {
             const wire = await orderService.withActions(order);
-            expect(() => CreateOrder201Response.shape.data.parse(wireShape(wire))).not.toThrow();
+            expect(() => CreateOrder201Response.parse(wireShape(wire))).not.toThrow();
         }
     });
 
@@ -574,7 +572,7 @@ describe('conformance: a produced row parses as the response the API would serve
         const { caller } = callerContextAs('admin');
         for (const user of users) {
             const wire = await userService.toUserContract(user, caller);
-            expect(() => GetUserById200Response.shape.data.parse(wireShape(wire))).not.toThrow();
+            expect(() => GetUserById200Response.parse(wireShape(wire))).not.toThrow();
         }
     });
 
@@ -582,7 +580,7 @@ describe('conformance: a produced row parses as the response the API would serve
         const entries = await auditLogModel.find().exec();
         expect(entries.length).toBeGreaterThan(0);
 
-        const entrySchema = ListAuditEntries200Response.shape.data.shape.items.element;
+        const entrySchema = ListAuditEntries200Response.shape.items.element;
         for (const entry of entries)
             expect(() => entrySchema.parse(wireShape(entry.toJSON()))).not.toThrow();
     });
@@ -591,7 +589,7 @@ describe('conformance: a produced row parses as the response the API would serve
         const books = await addressBookModel.find().exec();
         expect(books.length).toBeGreaterThan(0);
 
-        const addressSchema = ListAddresses200Response.shape.data.shape.addresses.element;
+        const addressSchema = ListAddresses200Response.shape.addresses.element;
         for (const book of books) {
             // Decrypted first, same as every real reader (`addresses/repository.ts`'s
             // `decryptBook`) — `.toJSON()` alone would parse ciphertext, not what `GET

@@ -98,13 +98,13 @@ export const loginCompleting = async (
     const first = await api()
         .post('/account/login')
         .send({ email, password, ...body });
-    if (first.status !== 200 || first.body?.data?.mfaRequired !== true) return first;
+    if (first.status !== 200 || first.body?.mfaRequired !== true) return first;
 
     // An armed account answers a challenge, not a session: finish it the way its app would.
     return withLoginCode(email, (code) =>
         api()
             .post('/account/login/2fa')
-            .send({ challenge: first.body.data.challenge, code, ...body })
+            .send({ challenge: first.body.challenge, code, ...body })
     );
 };
 
@@ -139,7 +139,7 @@ export const loginBearer = async (
                 `— ${JSON.stringify(response.body)}`
         );
 
-    const token = response.body?.data?.token ?? response.body?.data?.sessionToken;
+    const token = response.body?.token ?? response.body?.sessionToken;
     if (!token)
         throw new Error(
             `loginBearer('${email}'): no token in login response — ${JSON.stringify(response.body)}`
@@ -161,7 +161,7 @@ export const bearerForCookie = async (cookie: string): Promise<`Bearer ${string}
     if (value.startsWith('ses_')) return `Bearer ${value}`;
 
     const refreshed = await api().post('/account/refresh').set('Cookie', cookie);
-    return `Bearer ${refreshed.body.data.token as string}`;
+    return `Bearer ${refreshed.body.token as string}`;
 };
 
 /**

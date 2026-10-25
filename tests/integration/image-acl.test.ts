@@ -106,7 +106,7 @@ describe('imageUrl is never a client-named path', () => {
             .field('price', '10')
             .attach('imageUpload', PNG_BYTES, { filename: 'v.png', contentType: 'image/png' });
         expect(created.status).toBe(201);
-        victimUrl = created.body.data.imageUrl as string;
+        victimUrl = created.body.imageUrl as string;
         expect(fileExists(victimUrl)).toBe(true);
     });
 
@@ -146,7 +146,7 @@ describe('imageUrl is never a client-named path', () => {
                 .post('/products')
                 .set('Authorization', adminBearer)
                 .send({ price: 1, translations: { en: { title: 'Target' } } });
-            const url = label.startsWith('POST') ? '/products' : `/products/${target.body.data.id}`;
+            const url = label.startsWith('POST') ? '/products' : `/products/${target.body.id}`;
             const method = label.split(' ', 1)[0].toLowerCase() as 'post' | 'put' | 'patch';
             const full = {
                 price: 1,
@@ -185,7 +185,7 @@ describe('imageUrl is never a client-named path', () => {
                 .patch('/account')
                 .set('Authorization', userBearer)
                 .attach('imageUpload', PNG_BYTES, { filename: 'a.png', contentType: 'image/png' });
-            const ownUrl = uploaded.body.data.imageUrl as string;
+            const ownUrl = uploaded.body.imageUrl as string;
             expect(fileExists(ownUrl)).toBe(true);
 
             const cleared = await api()
@@ -203,7 +203,7 @@ describe('imageUrl is never a client-named path', () => {
                 .patch('/account')
                 .set('Authorization', userBearer)
                 .attach('imageUpload', PNG_BYTES, { filename: 'a.png', contentType: 'image/png' });
-            const ownUrl = uploaded.body.data.imageUrl as string;
+            const ownUrl = uploaded.body.imageUrl as string;
 
             const response = await api()
                 .patch('/account')
@@ -211,7 +211,7 @@ describe('imageUrl is never a client-named path', () => {
                 .send({ username: 'renamed' });
 
             expect(response.status).toBe(200);
-            expect(response.body.data.imageUrl).toBe(ownUrl);
+            expect(response.body.imageUrl).toBe(ownUrl);
             expect(fileExists(ownUrl)).toBe(true);
         });
 
@@ -222,8 +222,8 @@ describe('imageUrl is never a client-named path', () => {
                 .patch('/account')
                 .set('Authorization', userBearer)
                 .attach('imageUpload', PNG_BYTES, { filename: 'a.png', contentType: 'image/png' });
-            const ownUrl = uploaded.body.data.imageUrl as string;
-            const profile = { email: uploaded.body.data.email as string, username: 'putname' };
+            const ownUrl = uploaded.body.imageUrl as string;
+            const profile = { email: uploaded.body.email as string, username: 'putname' };
 
             const kept = await api()
                 .put('/account')
@@ -235,7 +235,7 @@ describe('imageUrl is never a client-named path', () => {
                 .send({ ...profile, analyticsConsent: false, imageUrl: null });
 
             expect(kept.status).toBe(200);
-            expect(kept.body.data.imageUrl).toBe(ownUrl);
+            expect(kept.body.imageUrl).toBe(ownUrl);
             expect(cleared.status).toBe(200);
             expect(fileExists(ownUrl)).toBe(false);
         });
@@ -247,8 +247,8 @@ describe('imageUrl is never a client-named path', () => {
                 .attach('imageUpload', PNG_BYTES, { filename: 'a.png', contentType: 'image/png' });
 
             expect(response.status).toBe(200);
-            expect(response.body.data.imageUrl).toMatch(/^\/images\/.+\.png$/);
-            expect(fileExists(response.body.data.imageUrl as string)).toBe(true);
+            expect(response.body.imageUrl).toMatch(/^\/images\/.+\.png$/);
+            expect(fileExists(response.body.imageUrl as string)).toBe(true);
         });
     });
 });

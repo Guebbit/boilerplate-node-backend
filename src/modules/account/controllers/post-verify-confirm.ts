@@ -6,7 +6,7 @@
 
 import type { Request, Response } from 'express';
 import { ConfirmEmailVerificationBody } from '@api/schemas.zod';
-import { successResponse } from '@infrastructure/http/response';
+import { noContentResponse } from '@infrastructure/http/response';
 import type { VerifyEmailConfirmRequest } from '@types';
 import { authEmailVerifyTotal } from '../metrics';
 import { accountService } from '../services';
@@ -36,7 +36,7 @@ export const postVerifyConfirm = (
                 return;
             }
             authEmailVerifyTotal.inc({ status: 'success' });
-            successResponse(response, undefined, result.status);
+            noContentResponse(response);
         })
         .catch((error: unknown) => {
             authEmailVerifyTotal.inc({ status: 'failure' });

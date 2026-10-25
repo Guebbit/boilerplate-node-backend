@@ -1,13 +1,13 @@
 /**
  * @module
- * Response envelope.
+ * Response serialisers.
  *
- * A success answers with the `{ success, status, message, data }` envelope. A failure answers with
- * RFC 9457 problem details (`application/problem+json`) whose `errors` extension carries the
- * machine codes. Internally both outcomes stay one `ServiceResult` union discriminated on
- * `success`; only `rejectResponse` turns a rejection into a problem.
+ * A success answers with the resource itself, a list with an object, or 204 with no body. A
+ * failure answers with RFC 9457 problem details (`application/problem+json`) whose `errors`
+ * extension carries the machine codes. Internally both outcomes stay one `ServiceResult` union
+ * discriminated on `success`; only the serialisers below put anything on the wire.
  *
- * See: docs/api/errors.md
+ * See: docs/api/responses.md, docs/api/errors.md
  */
 
 import { STATUS_CODES } from 'node:http';
@@ -27,12 +27,11 @@ export interface ResponseNeutral {
     success: boolean;
     /** Mirrors the HTTP status in the body, which survives proxies that rewrite status codes. */
     status: number;
-    /** Human-readable summary. A success's is optional (often ''); a rejection's is its problem `title`. */
-    message: string;
 }
 
 /**
- * The envelope shape for a successful response — `success: true` with a payload and no errors.
+ * The internal shape of a successful result — `success: true` with a payload and no errors. Only
+ * `data` reaches the wire.
  */
 export interface ResponseSuccess<T> extends ResponseNeutral {
     /** The literal (not `boolean`) is what lets TypeScript narrow `ServiceResult<T>` on this field alone. */
@@ -63,6 +62,8 @@ export interface ResponseErrorItem {
  * structured error.
  */
 export interface ResponseReject extends ResponseNeutral {
+    /** The problem `title`: the English status phrase. */
+    message: string;
     /** The literal (not `boolean`) is what lets TypeScript narrow `ServiceResult<T>` on this field alone. */
     success: false;
     // explicit undefined keeps `result.data` union-safe
@@ -74,40 +75,34 @@ export interface ResponseReject extends ResponseNeutral {
 }
 
 /**
- * Build the canonical success envelope so every endpoint speaks the same response dialect.
+ * Build the internal success result a service hands to its controller.
  *
- * Split from `successResponse` so the envelope can be built without an Express `Response` —
+ * Split from `successResponse` so the result can be built without an Express `Response` —
  * useful in unit tests, and in workers that produce the same shape outside HTTP.
  */
-export const generateSuccess = <T>(data: T, status = 200, message = '') =>
+export const generateSuccess = <T>(data: T, status = 200) =>
     ({
         success: true,
         status,
-        message,
         data
         // `as` cast is required because `errors: never` cannot be satisfied by any literal:
         // the field is deliberately absent at runtime and exists only to drive narrowing.
     }) as ResponseSuccess<T>;
 
 /**
- * Serialize the success envelope immediately when a controller is done with its work.
- *
- * `status` is applied twice on purpose — to the HTTP response and inside the body — so the two
- * can never disagree.
+ * Send the payload itself as the body of a success.
  *
  * @param response - Express response
- * @param data - payload
+ * @param data - payload: the resource, or the list object
  * @param status - HTTP status (200 by default; pass 201 for creations)
  */
-export const successResponse = <T>(response: Response, data: T, status = 200, message = '') =>
+export const successResponse = <T>(response: Response, data: T, status = 200) =>
     // `.json()` sets Content-Type and ends the response; the cast just types the return value
     // so controllers can `return successResponse(...)` and keep their signature accurate.
-    response.status(status).json(generateSuccess(data, status, message)) as Response<
-        ResponseSuccess<T>
-    >;
+    response.status(status).json(data) as Response<T>;
 
 /**
- * A create's answer: 201, the envelope, and `Location` naming the new resource.
+ * A create's answer: 201, the resource, and `Location` naming it.
  *
  * RFC 9110 §9.3.3: a POST that creates SHOULD send `Location`, and §15.3.2 reads a 201 without one
  * as "the resource is the target URI", which for `POST /products` would name the collection.
@@ -115,13 +110,12 @@ export const successResponse = <T>(response: Response, data: T, status = 200, me
  * @param response - Express response
  * @param data - payload, the created resource
  * @param location - the new resource's path on this API, e.g. `/products/abc`
- * @param message - optional envelope message
  */
-export const createdResponse = <T>(response: Response, data: T, location: string, message = '') => {
+export const createdResponse = <T>(response: Response, data: T, location: string) => {
     // Express: sets the `Location` header, URL-encoding it; it never follows it.
     // https://expressjs.com/en/api.html#res.location
     response.location(location);
-    return successResponse(response, data, 201, message);
+    return successResponse(response, data, 201);
 };
 
 /**
@@ -132,18 +126,27 @@ export const createdResponse = <T>(response: Response, data: T, location: string
  * @param data - payload
  * @param status - what the service answered; 201 only when this call created the resource, unset is 200
  * @param location - the new resource's path, sent only on a 201
- * @param message - optional envelope message
  */
 export const createdOrOk = <T>(
     response: Response,
     data: T,
     status: number | undefined,
-    location: string,
-    message = ''
+    location: string
 ) =>
     status === 201
-        ? createdResponse(response, data, location, message)
-        : successResponse(response, data, status, message);
+        ? createdResponse(response, data, location)
+        : successResponse(response, data, status);
+
+/**
+ * Answer 204: the work is done and there is nothing to say (RFC 9110 §15.3.5).
+ *
+ * Ends with `.end()`, not `.json()`: a 204 carries no body and no `Content-Type`. The idempotency
+ * ledger captures a response through `res.json` only, so a route behind `idempotencyKey` must not
+ * answer through here (none does today; see docs/tools/idempotency.md).
+ *
+ * @param response - Express response
+ */
+export const noContentResponse = (response: Response) => response.status(204).end();
 
 /** One status's wording: its stable code and the key of its translated text. */
 interface StatusEnvelope {

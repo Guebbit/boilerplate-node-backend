@@ -59,7 +59,7 @@ const loginAs = async (email: string) => {
             password: PLAIN_PASSWORD,
             ...(sessionMode === 'cookie' && { transport: 'bearer' })
         });
-    const credential = (response.body.data.token ?? response.body.data.sessionToken) as string;
+    const credential = (response.body.token ?? response.body.sessionToken) as string;
     return {
         bearer: `Bearer ${credential}`,
         cookie: sessionMode === 'jwt' ? cookieHeader(response, '__Host-session') : ''
@@ -195,7 +195,7 @@ const viaTwoFactorConfirm: Trigger = async () => {
                 .post('/account/2fa/methods/totp/confirm')
                 .set('Authorization', caller.bearer)
                 .set('Cookie', caller.cookie)
-                .send({ code: await codeFor(setup.body.data.secret as string, 0) });
+                .send({ code: await codeFor(setup.body.secret as string, 0) });
         }
     };
 };

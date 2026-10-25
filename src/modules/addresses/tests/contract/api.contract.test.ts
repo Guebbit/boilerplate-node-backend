@@ -30,40 +30,38 @@ describe('the address book: /account/addresses', () => {
             .set('Authorization', bearer)
             .send(HOME);
         expect(added.status).toBe(201);
-        expect(added.headers.location).toBe(`/account/addresses/${String(added.body.data.id)}`);
-        expect(added.body.data.default).toBe(true);
+        expect(added.headers.location).toBe(`/account/addresses/${String(added.body.id)}`);
+        expect(added.body.default).toBe(true);
 
         const second = await api()
             .post('/account/addresses')
             .set('Authorization', bearer)
             .send({ ...HOME, label: 'office', street: 'Via Milano 2', default: true });
         expect(second.status).toBe(201);
-        expect(second.body.data).toMatchObject({ label: 'office', default: true });
+        expect(second.body).toMatchObject({ label: 'office', default: true });
 
         const listed = await api().get('/account/addresses').set('Authorization', bearer);
         expect(listed.status).toBe(200);
-        expect(listed.body.data.addresses).toHaveLength(2);
-        const defaults = listed.body.data.addresses.filter(
-            ({ default: d }: { default: boolean }) => d
-        );
+        expect(listed.body.addresses).toHaveLength(2);
+        const defaults = listed.body.addresses.filter(({ default: d }: { default: boolean }) => d);
         expect(defaults.map(({ label }: { label: string }) => label)).toEqual(['office']);
 
-        const officeId = second.body.data.id as string;
+        const officeId = second.body.id as string;
         const updated = await api()
             .patch(`/account/addresses/${officeId}`)
             .set('Authorization', bearer)
             .send({ city: 'Bologna' });
         expect(updated.status).toBe(200);
-        expect(updated.body.data).toMatchObject({ id: officeId, city: 'Bologna' });
+        expect(updated.body).toMatchObject({ id: officeId, city: 'Bologna' });
 
         const removed = await api()
             .delete(`/account/addresses/${officeId}`)
             .set('Authorization', bearer);
         expect(removed.status).toBe(200);
         // The promoted survivor keeps the book at exactly one default.
-        expect(
-            removed.body.data.addresses.map(({ default: d }: { default: boolean }) => d)
-        ).toEqual([true]);
+        expect(removed.body.addresses.map(({ default: d }: { default: boolean }) => d)).toEqual([
+            true
+        ]);
     });
 
     // The default is the book's pointer: an idempotent action of its own, not a field of
@@ -75,7 +73,7 @@ describe('the address book: /account/addresses', () => {
             .post('/account/addresses')
             .set('Authorization', bearer)
             .send({ ...HOME, label: 'office', street: 'Via Milano 2' });
-        const officeId = second.body.data.id as string;
+        const officeId = second.body.id as string;
         const send = () =>
             api().put(`/account/addresses/${officeId}/default`).set('Authorization', bearer);
 
@@ -83,11 +81,11 @@ describe('the address book: /account/addresses', () => {
         const again = await send();
 
         expect(first.status).toBe(200);
-        expect(first.body.data).toMatchObject({ id: officeId, default: true });
-        expect(again.body.data).toEqual(first.body.data);
+        expect(first.body).toMatchObject({ id: officeId, default: true });
+        expect(again.body).toEqual(first.body);
         const listed = await api().get('/account/addresses').set('Authorization', bearer);
         expect(
-            listed.body.data.addresses
+            listed.body.addresses
                 .filter(({ default: d }: { default: boolean }) => d)
                 .map(({ label }: { label: string }) => label)
         ).toEqual(['office']);
@@ -99,7 +97,7 @@ describe('the address book: /account/addresses', () => {
             .post('/account/addresses')
             .set('Authorization', bearer)
             .send(HOME);
-        const addressId = added.body.data.id as string;
+        const addressId = added.body.id as string;
 
         const response = await api()
             .patch(`/account/addresses/${addressId}`)
@@ -163,7 +161,7 @@ describe('the address book: /account/addresses', () => {
             .post('/account/addresses')
             .set('Authorization', bearer)
             .send(HOME);
-        const addressId = added.body.data.id as string;
+        const addressId = added.body.id as string;
 
         const response = await api()
             .put(`/account/addresses/${addressId}`)
@@ -177,7 +175,7 @@ describe('the address book: /account/addresses', () => {
             });
 
         expect(response.status).toBe(200);
-        const replaced = response.body.data as { id: string; city: string; label?: string };
+        const replaced = response.body as { id: string; city: string; label?: string };
         expect(replaced.id).toBe(addressId);
         expect(replaced.city).toBe('Torino');
         // Omitted on a PUT — RFC 9110 clears it, not "leaves it alone".
@@ -190,7 +188,7 @@ describe('the address book: /account/addresses', () => {
             .post('/account/addresses')
             .set('Authorization', bearer)
             .send(HOME);
-        const addressId = added.body.data.id as string;
+        const addressId = added.body.id as string;
 
         const response = await api()
             .put(`/account/addresses/${addressId}`)
@@ -206,7 +204,7 @@ describe('the address book: /account/addresses', () => {
             .post('/account/addresses')
             .set('Authorization', bearer)
             .send(HOME);
-        const addressId = added.body.data.id as string;
+        const addressId = added.body.id as string;
 
         const response = await api()
             .patch(`/account/addresses/${addressId}`)
@@ -214,7 +212,7 @@ describe('the address book: /account/addresses', () => {
             .send({ label: null });
 
         expect(response.status).toBe(200);
-        const patched = response.body.data as { label?: string; city: string };
+        const patched = response.body as { label?: string; city: string };
         expect(patched.label).toBeUndefined();
         expect(patched.city).toBe(HOME.city);
     });
@@ -225,7 +223,7 @@ describe('the address book: /account/addresses', () => {
             .post('/account/addresses')
             .set('Authorization', bearer)
             .send(HOME);
-        const addressId = added.body.data.id as string;
+        const addressId = added.body.id as string;
 
         const response = await api()
             .patch(`/account/addresses/${addressId}`)
@@ -267,14 +265,14 @@ describe('GET /account/addresses/{addressId}', () => {
             .post('/account/addresses')
             .set('Authorization', bearer)
             .send(OFFICE);
-        const addressId = String(added.body.data.id);
+        const addressId = String(added.body.id);
 
         const response = await api()
             .get(`/account/addresses/${addressId}`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({ id: addressId, label: 'office', default: true });
+        expect(response.body).toMatchObject({ id: addressId, label: 'office', default: true });
     });
 
     it('answers the same 404 for an unknown id, a malformed one and another account’s entry', async () => {
@@ -292,7 +290,7 @@ describe('GET /account/addresses/{addressId}', () => {
             .get('/account/addresses/not-an-id')
             .set('Authorization', owner.bearer);
         const others = await api()
-            .get(`/account/addresses/${String(added.body.data.id)}`)
+            .get(`/account/addresses/${String(added.body.id)}`)
             .set('Authorization', stranger.bearer);
 
         expect([unknown.status, malformed.status, others.status]).toEqual([404, 404, 404]);

@@ -21,7 +21,7 @@
 
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { noContentResponse, rejectResponse } from '@infrastructure/http/response';
 import { logger } from '@infrastructure/adapters/logger';
 import { catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -57,7 +57,7 @@ export const postPaymentWebhook = (request: Request, response: Response) => {
                 .parseWebhook(rawBody, String(headers[WEBHOOK_SIGNATURE_HEADER] ?? ''))
                 .then((event) => paymentService.applyWebhookDelivery(event))
                 .then(() => {
-                    successResponse(response, undefined, 200);
+                    noContentResponse(response);
                 });
         })
         .catch((error: unknown) => {

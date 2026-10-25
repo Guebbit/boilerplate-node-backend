@@ -24,7 +24,7 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.translations).toEqual([]);
+        expect(response.body.translations).toEqual([]);
     });
 
     it('upserts a locale and matches the spec', async () => {
@@ -38,8 +38,8 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
             .send({ pt: { fields: { title: 'Cama boa' } } });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.translations).toHaveLength(1);
-        expect(response.body.data.translations[0]).toMatchObject({
+        expect(response.body.translations).toHaveLength(1);
+        expect(response.body.translations[0]).toMatchObject({
             locale: 'pt',
             fields: { title: 'Cama boa' },
             origin: 'human'
@@ -109,8 +109,8 @@ describe('PUT /locales/translations/:entityType/:id', () => {
             .send({ en: { fields: { title: 'Bed, replaced' } } });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.translations).toHaveLength(1);
-        expect(response.body.data.translations[0]).toMatchObject({
+        expect(response.body.translations).toHaveLength(1);
+        expect(response.body.translations[0]).toMatchObject({
             locale: 'en',
             fields: { title: 'Bed, replaced' }
         });

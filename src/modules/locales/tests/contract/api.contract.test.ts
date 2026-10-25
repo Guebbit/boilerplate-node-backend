@@ -38,24 +38,24 @@ const createEntry = async (
                 JSON.stringify(response.body)
         );
 
-    return response.body.data.id as string;
+    return response.body.id as string;
 };
 
 /** The language tags a manifest response lists. */
-const tags = (response: { body: { data: { locales: { tag: string }[] } } }): string[] =>
-    response.body.data.locales.map(({ tag }) => tag);
+const tags = (response: { body: { locales: { tag: string }[] } }): string[] =>
+    response.body.locales.map(({ tag }) => tag);
 
 describe('GET /locales', () => {
     it('reports every deployed language as one the API can answer in', async () => {
         const response = await api().get('/locales');
 
-        expect(response.body.data.locales.map(({ tag }: { tag: string }) => tag)).toEqual(
+        expect(response.body.locales.map(({ tag }: { tag: string }) => tag)).toEqual(
             listSupportedLocales()
         );
-        for (const row of response.body.data.locales) expect(row.apps).toContain('demo-be');
+        for (const row of response.body.locales) expect(row.apps).toContain('demo-be');
 
-        expect(response.body.data.default).toBe(getDefaultLocale());
-        expect(response.body.data.fallback).toBe(getFallbackLocale());
+        expect(response.body.default).toBe(getDefaultLocale());
+        expect(response.body.fallback).toBe(getFallbackLocale());
     });
 
     /*
@@ -68,9 +68,7 @@ describe('GET /locales', () => {
         await createLanguage(bearer);
 
         const response = await api().get('/locales');
-        const portuguese = response.body.data.locales.find(
-            ({ tag }: { tag: string }) => tag === 'pt'
-        );
+        const portuguese = response.body.locales.find(({ tag }: { tag: string }) => tag === 'pt');
 
         expect(portuguese.apps).toEqual(['demo-fe']);
         expect(portuguese.source).toBe('dynamic');
@@ -81,9 +79,7 @@ describe('GET /locales', () => {
         await createLanguage(bearer, { tag: 'it', name: 'Italian', nativeName: 'Italiano' });
 
         const response = await api().get('/locales');
-        const italian = response.body.data.locales.filter(
-            ({ tag }: { tag: string }) => tag === 'it'
-        );
+        const italian = response.body.locales.filter(({ tag }: { tag: string }) => tag === 'it');
 
         expect(italian).toHaveLength(1);
         expect(italian[0].apps).toEqual(['demo-be', 'demo-fe']);
@@ -96,9 +92,7 @@ describe('GET /locales', () => {
         await createEntry(bearer, 'pt', 'cart.title', 'O seu carrinho');
 
         const response = await api().get('/locales');
-        const portuguese = response.body.data.locales.find(
-            ({ tag }: { tag: string }) => tag === 'pt'
-        );
+        const portuguese = response.body.locales.find(({ tag }: { tag: string }) => tag === 'pt');
 
         expect(portuguese.entryCount).toBe(1);
         expect(portuguese.revision).toBe(1);
@@ -111,9 +105,7 @@ describe('GET /locales', () => {
 
         const response = await api().get('/locales');
 
-        expect(response.body.data.locales.some(({ tag }: { tag: string }) => tag === 'pt')).toBe(
-            false
-        );
+        expect(response.body.locales.some(({ tag }: { tag: string }) => tag === 'pt')).toBe(false);
     });
 
     it('is public — the client that needs it most is the one that just failed to authenticate', async () => {
@@ -145,16 +137,16 @@ describe('GET /locales/:locale', () => {
     it('serves the API’s own dictionary, shared keys and module keys together', async () => {
         const response = await api().get('/locales/it');
 
-        expect(response.body.data.locale).toBe('it');
+        expect(response.body.locale).toBe('it');
         // The shared half — `generic.*` in particular, which the paired frontend reads by name.
-        expect(response.body.data.messages).toMatchObject(itTranslation);
+        expect(response.body.messages).toMatchObject(itTranslation);
         // The module half: a client rendering API copy needs domain messages on the wire too, not
         // just i18next's in-memory resources. Asserted as "extra namespaces" rather than by name,
         // since this test doesn't know which modules exist.
         const shared = new Set(Object.keys(itTranslation));
-        const contributed = Object.keys(
-            response.body.data.messages as Record<string, unknown>
-        ).filter((namespace) => !shared.has(namespace));
+        const contributed = Object.keys(response.body.messages as Record<string, unknown>).filter(
+            (namespace) => !shared.has(namespace)
+        );
 
         expect(contributed.length).toBeGreaterThan(0);
     });
@@ -206,7 +198,7 @@ describe('GET /locales/:locale/messages', () => {
         const response = await api().get('/locales/pt/messages');
 
         expect(response.status).toBe(200);
-        expect(response.body.data.messages).toEqual({
+        expect(response.body.messages).toEqual({
             products: { list: { title: 'Catálogo', empty: 'Sem resultados' } }
         });
     });
@@ -218,7 +210,7 @@ describe('GET /locales/:locale/messages', () => {
 
         const response = await api().get('/locales/pt/messages');
 
-        expect(response.body.data.revision).toBe(1);
+        expect(response.body.revision).toBe(1);
     });
 
     it('answers an empty dictionary for a language with no entries yet', async () => {
@@ -228,7 +220,7 @@ describe('GET /locales/:locale/messages', () => {
         const response = await api().get('/locales/pt/messages');
 
         expect(response.status).toBe(200);
-        expect(response.body.data.messages).toEqual({});
+        expect(response.body.messages).toEqual({});
     });
 
     it('is public, like every other locale read', async () => {
@@ -340,7 +332,7 @@ describe('POST /locales', () => {
             .set('Authorization', bearer)
             .send({ ...PORTUGUESE, nativeName: '  Português  ' });
 
-        expect(response.body.data.nativeName).toBe('Português');
+        expect(response.body.nativeName).toBe('Português');
     });
 });
 
@@ -356,7 +348,7 @@ describe('PUT /locales/:locale', () => {
         });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.nativeName).toBe('Português (Brasil)');
+        expect(response.body.nativeName).toBe('Português (Brasil)');
     });
 
     it('refuses `active` in the body — activate and deactivate own it', async () => {
@@ -424,9 +416,9 @@ describe('PATCH /locales/:locale', () => {
             .send({ nativeName: 'Português (Brasil)' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.nativeName).toBe('Português (Brasil)');
-        expect(response.body.data.active).toBe(true);
-        expect(response.body.data.name).toBe('Portuguese');
+        expect(response.body.nativeName).toBe('Português (Brasil)');
+        expect(response.body.active).toBe(true);
+        expect(response.body.name).toBe('Portuguese');
     });
 
     it('refuses `active` in the body — activate and deactivate own it', async () => {
@@ -474,9 +466,9 @@ describe('POST /locales/:locale/activate and /deactivate', () => {
         const on = await api().post('/locales/pt/activate').set('Authorization', bearer);
 
         expect(off.status).toBe(200);
-        expect(off.body.data.active).toBe(false);
+        expect(off.body.active).toBe(false);
         expect(on.status).toBe(200);
-        expect(on.body.data.active).toBe(true);
+        expect(on.body.active).toBe(true);
     });
 
     it('carries the flags that follow the move on the response', async () => {
@@ -485,7 +477,7 @@ describe('POST /locales/:locale/activate and /deactivate', () => {
 
         const off = await api().post('/locales/pt/deactivate').set('Authorization', bearer);
 
-        expect(off.body.data.actions).toEqual({
+        expect(off.body.actions).toEqual({
             update: true,
             activate: true,
             deactivate: false,
@@ -542,9 +534,9 @@ describe('POST /locales/:locale/activate and /deactivate', () => {
 
 /** The `actions` block of one language in a `GET /locales` answer. */
 const flagsOf = (
-    response: { body: { data: { locales: { tag: string; actions: unknown }[] } } },
+    response: { body: { locales: { tag: string; actions: unknown }[] } },
     tag: string
-) => response.body.data.locales.find((row) => row.tag === tag)?.actions;
+) => response.body.locales.find((row) => row.tag === tag)?.actions;
 
 describe('actions on a language', () => {
     it('gives a guest every flag false, so the shared cache never carries a real one', async () => {
@@ -633,7 +625,7 @@ describe('DELETE /locales/:locale', () => {
 
         const response = await api().delete('/locales/pt').set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
 
         const gone = await api().get('/locales/pt/messages');
         expect(gone.status).toBe(404);
@@ -657,7 +649,7 @@ describe('GET /locales/:locale/entries', () => {
         const response = await api().get('/locales/pt/entries').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(1);
+        expect(response.body.items).toHaveLength(1);
     });
 
     it('matches the contract when the language has no entries yet', async () => {
@@ -666,7 +658,7 @@ describe('GET /locales/:locale/entries', () => {
 
         const response = await api().get('/locales/pt/entries').set('Authorization', bearer);
 
-        expect(response.body.data.items).toHaveLength(0);
+        expect(response.body.items).toHaveLength(0);
     });
 
     // Without its own pagination validation this endpoint would silently clamp `?pageSize=500`
@@ -813,7 +805,7 @@ describe('GET /locales/:locale/apps/:app/entries/:entryId', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({
+        expect(response.body).toMatchObject({
             id: entryId,
             key: 'cart.title',
             value: 'Carrinho'
@@ -864,7 +856,7 @@ describe('PUT and DELETE /locales/:locale/apps/:app/entries/:entryId', () => {
             .send({ value: 'O seu carrinho' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.value).toBe('O seu carrinho');
+        expect(response.body.value).toBe('O seu carrinho');
     });
 
     it('matches the contract when removing one key', async () => {
@@ -876,10 +868,10 @@ describe('PUT and DELETE /locales/:locale/apps/:app/entries/:entryId', () => {
             .delete(`/locales/pt/apps/demo-fe/entries/${entryId}`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
 
         const dictionary = await api().get('/locales/pt/messages');
-        expect(dictionary.body.data.messages).toEqual({});
+        expect(dictionary.body.messages).toEqual({});
     });
 
     it('404s when the entry belongs to another app than the one in the path', async () => {
@@ -900,7 +892,7 @@ describe('PUT and DELETE /locales/:locale/apps/:app/entries/:entryId', () => {
         const listed = await api()
             .get('/locales/pt/apps/demo-fe/entries')
             .set('Authorization', bearer);
-        expect(listed.body.data.items.map(({ value }: { value: string }) => value)).toEqual([
+        expect(listed.body.items.map(({ value }: { value: string }) => value)).toEqual([
             'Carrinho'
         ]);
     });
@@ -979,7 +971,7 @@ describe('the app is the path', () => {
             .send({ key: 'cart.title', value: 'Carrinho' });
 
         expect(response.headers.location).toBe(
-            `/locales/pt/apps/demo-fe/entries/${String(response.body.data.id)}`
+            `/locales/pt/apps/demo-fe/entries/${String(response.body.id)}`
         );
     });
 
@@ -1000,10 +992,8 @@ describe('the app is the path', () => {
         const everything = await api().get('/locales/pt/entries').set('Authorization', bearer);
 
         expect(replaced.status).toBe(200);
-        expect(slice.body.data.items.map(({ key }: { key: string }) => key)).toEqual([
-            'cart.empty'
-        ]);
-        expect(everything.body.data.items).toHaveLength(2);
+        expect(slice.body.items.map(({ key }: { key: string }) => key)).toEqual(['cart.empty']);
+        expect(everything.body.items).toHaveLength(2);
     });
 
     it('422s an app the deployment does not configure', async () => {
@@ -1042,10 +1032,10 @@ describe('PUT vs PATCH /locales/:locale/apps/:app/entries', () => {
             .send({ entries: { 'cart.title': 'O seu carrinho' } });
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({ created: 0, updated: 1, removed: 1 });
+        expect(response.body).toMatchObject({ created: 0, updated: 1, removed: 1 });
 
         const dictionary = await api().get('/locales/pt/messages');
-        expect(dictionary.body.data.messages).toEqual({ cart: { title: 'O seu carrinho' } });
+        expect(dictionary.body.messages).toEqual({ cart: { title: 'O seu carrinho' } });
     });
 
     it('PATCH keeps what was not sent', async () => {
@@ -1058,10 +1048,10 @@ describe('PUT vs PATCH /locales/:locale/apps/:app/entries', () => {
             .send({ entries: { 'cart.title': 'O seu carrinho' } });
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({ created: 0, updated: 1, removed: 0 });
+        expect(response.body).toMatchObject({ created: 0, updated: 1, removed: 0 });
 
         const dictionary = await api().get('/locales/pt/messages');
-        expect(dictionary.body.data.messages).toEqual({
+        expect(dictionary.body.messages).toEqual({
             cart: { title: 'O seu carrinho', empty: 'Vazio' }
         });
     });
@@ -1076,10 +1066,10 @@ describe('PUT vs PATCH /locales/:locale/apps/:app/entries', () => {
             .send({ entries: { 'cart.empty': null, 'cart.never': null } });
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({ created: 0, updated: 0, removed: 1 });
+        expect(response.body).toMatchObject({ created: 0, updated: 0, removed: 1 });
 
         const dictionary = await api().get('/locales/pt/messages');
-        expect(dictionary.body.data.messages).toEqual({ cart: { title: 'Carrinho' } });
+        expect(dictionary.body.messages).toEqual({ cart: { title: 'Carrinho' } });
     });
 
     it('PATCH 422s on an empty map', async () => {
@@ -1115,7 +1105,7 @@ describe('PUT vs PATCH /locales/:locale/apps/:app/entries', () => {
             .set('Authorization', bearer)
             .send({ entries: { 'cart.title': 'Carrinho' } });
 
-        expect(response.body.data.revision).toBe(1);
+        expect(response.body.revision).toBe(1);
     });
 
     it('409s on a batch that collides with itself', async () => {
@@ -1224,7 +1214,7 @@ describe('GET /locales/apps', () => {
         const response = await api().get('/locales/apps');
 
         expect(response.status).toBe(200);
-        expect(response.body.data.apps).toEqual([
+        expect(response.body.apps).toEqual([
             { id: 'demo-be', label: 'API', kind: 'backend' },
             { id: 'demo-fe', label: 'Frontend', kind: 'frontend' }
         ]);
@@ -1234,7 +1224,7 @@ describe('GET /locales/apps', () => {
         // The one ordering mistake the router comment warns about.
         const response = await api().get('/locales/apps');
 
-        expect(response.body.data.messages).toBeUndefined();
+        expect(response.body.messages).toBeUndefined();
     });
 });
 
@@ -1263,7 +1253,7 @@ describe('apps on the write routes', () => {
         expect(response.status).toBe(422);
 
         const listed = await api().get('/locales/pt/entries').set('Authorization', bearer);
-        expect(listed.body.data.items).toEqual([]);
+        expect(listed.body.items).toEqual([]);
     });
 
     it('keeps the same key apart across two apps', async () => {
@@ -1276,7 +1266,7 @@ describe('apps on the write routes', () => {
             .get('/locales/pt/apps/demo-be/entries')
             .set('Authorization', bearer);
 
-        expect(listed.body.data.items.map(({ value }: { value: string }) => value)).toEqual([
+        expect(listed.body.items.map(({ value }: { value: string }) => value)).toEqual([
             'do backend'
         ]);
     });
@@ -1291,7 +1281,7 @@ describe('GET /locales/:locale/messages?app=', () => {
 
         const named = await api().get('/locales/pt/messages?app=demo-fe');
         expect(named.status).toBe(200);
-        expect(named.body.data.messages).toEqual({ cart: { title: 'Carrinho' } });
+        expect(named.body.messages).toEqual({ cart: { title: 'Carrinho' } });
 
         // The backend's rows are layered internally; asking for them is asking for nothing.
         const backend = await api().get('/locales/pt/messages?app=demo-be');

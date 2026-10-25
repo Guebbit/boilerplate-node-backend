@@ -80,14 +80,13 @@ it('lets go in stages, with a way back until the last', async () => {
         bodyOf(
             await api().get('/account/addresses').set('Authorization', back),
             ListAddresses200Response
-        ).data.addresses
+        ).addresses
     ).toEqual([]);
     expect(
-        bodyOf(await api().get('/orders').set('Authorization', back), ListOrders200Response).data
-            .items
+        bodyOf(await api().get('/orders').set('Authorization', back), ListOrders200Response).items
     ).toHaveLength(1);
     expect(
-        bodyOf(await api().get('/wishlist').set('Authorization', back), GetWishlist200Response).data
+        bodyOf(await api().get('/wishlist').set('Authorization', back), GetWishlist200Response)
             .items
     ).toHaveLength(1);
 
@@ -119,7 +118,7 @@ it('lets go in stages, with a way back until the last', async () => {
     const found = bodyOf(
         await api().post('/users/search').set('Authorization', staff).send({ email: silent.email }),
         SearchUsers200Response
-    ).data.items;
+    ).items;
     expect(found).toEqual([]);
     await api()
         .post('/account/signup')

@@ -42,7 +42,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/PaymentMethodsResponseEnvelope'
+                                $ref: '#/components/schemas/PaymentMethodsResponse'
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /payments:
@@ -126,7 +126,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/PaymentsResponseEnvelope'
+                                $ref: '#/components/schemas/PaymentsResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -152,7 +152,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/PaymentEnvelope'
+                                $ref: '#/components/schemas/Payment'
                     links:
                         ConfirmPayment:
                             operationId: confirmPayment
@@ -163,7 +163,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/PaymentEnvelope'
+                                $ref: '#/components/schemas/Payment'
                     links:
                         ConfirmPayment:
                             operationId: confirmPayment
@@ -203,7 +203,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/PaymentsResponseEnvelope'
+                                $ref: '#/components/schemas/PaymentsResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -247,7 +247,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/RefundsResponseEnvelope'
+                                $ref: '#/components/schemas/RefundsResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -274,7 +274,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/PaymentAttentionResponseEnvelope'
+                                $ref: '#/components/schemas/PaymentAttentionResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -296,7 +296,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/PaymentEnvelope'
+                                $ref: '#/components/schemas/Payment'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -349,7 +349,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/RefundEnvelope'
+                                $ref: '#/components/schemas/Refund'
                 # `IDEMPOTENCY_KEY_REQUIRED`: the `Idempotency-Key` header is missing.
                 '400': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/BadRequest' }
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
@@ -388,7 +388,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/RefundEnvelope'
+                                $ref: '#/components/schemas/Refund'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -431,7 +431,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/PaymentEnvelope'
+                                $ref: '#/components/schemas/Payment'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # The payment, or a refund with that id on it, does not exist.
@@ -487,13 +487,13 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/PaymentEnvelope'
+                                $ref: '#/components/schemas/Payment'
                 '200':
                     description: The payment, `succeeded` — it converted the row of an unpaid card intent — with the order now `paid`
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/PaymentEnvelope'
+                                $ref: '#/components/schemas/Payment'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -520,7 +520,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/PaymentEnvelope'
+                                $ref: '#/components/schemas/Payment'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -561,7 +561,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/PaymentEnvelope'
+                                $ref: '#/components/schemas/Payment'
                     links:
                         SyncPayment:
                             operationId: syncPayment
@@ -616,7 +616,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/PaymentEnvelope'
+                                $ref: '#/components/schemas/Payment'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -665,12 +665,8 @@ paths:
                         schema:
                             $ref: '#/components/schemas/PaymentWebhookEvent'
             responses:
-                '200':
-                    description: Accepted — acted on, or knowingly ignored
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/MessageResponse'
+                '204':
+                    description: Accepted — acted on, or knowingly ignored. No body.
                 # The signature did not verify, is stale, or the body is not an event.
                 '400': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/BadRequest' }
                 # No card payment provider is configured (`NODE_PAYMENT_PROVIDER` unset).
@@ -989,20 +985,6 @@ components:
                 meta:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
 
-        PaymentsResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/PaymentsResponse'
-
         # One row per refund, with the payment it belongs to.
         RefundListItem:
             type: object
@@ -1040,20 +1022,6 @@ components:
                         $ref: '#/components/schemas/RefundListItem'
                 meta:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
-
-        RefundsResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/RefundsResponse'
 
         PaymentAttentionKind:
             type: string
@@ -1095,20 +1063,6 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/PaymentAttentionItem'
-
-        PaymentAttentionResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/PaymentAttentionResponse'
 
         RefundReason:
             type: string
@@ -1211,34 +1165,6 @@ components:
                     maxLength: 200
                     description: Which intent the event is about. Absent for an event this API ignores.
 
-        PaymentEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/Payment'
-
-        RefundEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/Refund'
-
         CreatePaymentRequest:
             type: object
             additionalProperties: false
@@ -1288,20 +1214,6 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/PaymentMethodOption'
-
-        PaymentMethodsResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/PaymentMethodsResponse'
 
         RecordOfflinePaymentRequest:
             type: object

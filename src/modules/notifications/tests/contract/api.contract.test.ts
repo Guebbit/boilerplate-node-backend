@@ -29,7 +29,7 @@ describe('GET /notifications', () => {
         const response = await api().get('/notifications').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toEqual([]);
+        expect(response.body.items).toEqual([]);
     });
 
     it('matches the contract for an inbox holding a read and an unread notification', async () => {
@@ -40,7 +40,7 @@ describe('GET /notifications', () => {
         const response = await api().get('/notifications').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(2);
+        expect(response.body.items).toHaveLength(2);
     });
 
     it('matches the contract for every variant of the union, each with its own params', async () => {
@@ -63,9 +63,10 @@ describe('GET /notifications', () => {
         const response = await api().get('/notifications').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(
-            response.body.data.items.map(({ code }: { code: string }) => code).toSorted()
-        ).toEqual(['notifications.cart-merge-refused', 'notifications.wishlist-item-removed']);
+        expect(response.body.items.map(({ code }: { code: string }) => code).toSorted()).toEqual([
+            'notifications.cart-merge-refused',
+            'notifications.wishlist-item-removed'
+        ]);
     });
 });
 
@@ -77,8 +78,8 @@ describe('POST /notifications/read-all', () => {
         const response = await api().post('/notifications/read-all').set('Authorization', bearer);
         const inbox = await api().get('/notifications').set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
-        expect(inbox.body.data.items[0].readAt).toEqual(expect.any(String));
+        expect(response.status).toBe(204);
+        expect(inbox.body.items[0].readAt).toEqual(expect.any(String));
     });
 });
 
@@ -92,8 +93,8 @@ describe('POST /notifications/dismiss-all', () => {
             .set('Authorization', bearer);
         const inbox = await api().get('/notifications').set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
-        expect(inbox.body.data.items).toEqual([]);
+        expect(response.status).toBe(204);
+        expect(inbox.body.items).toEqual([]);
     });
 });
 
@@ -107,7 +108,7 @@ describe('GET /notifications/{id}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({ id: String(row._id) });
+        expect(response.body).toMatchObject({ id: String(row._id) });
     });
 
     it('answers 404, never 403, for someone else’s notification', async () => {
@@ -151,7 +152,7 @@ describe('DELETE /notifications/{id}', () => {
             .delete(`/notifications/${String(row._id)}`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
     });
 
     it('matches the error contract for a notification that is someone else’s', async () => {

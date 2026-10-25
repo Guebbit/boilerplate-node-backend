@@ -190,12 +190,12 @@ describe('the address book at checkout', () => {
         const response = await checkoutAs(bearer);
 
         expect(response.status).toBe(201);
-        expect(response.body.data.shippingAddress).toMatchObject({
+        expect(response.body.shippingAddress).toMatchObject({
             fullName: 'Ada Lovelace',
             street: 'Via Roma 1'
         });
         // "Same as shipping" is the default when something ships.
-        expect(response.body.data.billingAddress).toMatchObject({
+        expect(response.body.billingAddress).toMatchObject({
             fullName: 'Ada Lovelace',
             street: 'Via Roma 1'
         });

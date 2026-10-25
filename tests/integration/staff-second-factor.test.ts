@@ -23,7 +23,7 @@ setupTestDb();
 const unarmedStaff = async (role: string, email = `${role}@example.com`) => {
     const user = await createUser({ email, username: role, verifiedAt: new Date() }, role);
     const login = await api().post('/account/login').send({ email, password: PLAIN_PASSWORD });
-    return { user, bearer: `Bearer ${login.body.data.token as string}` as const };
+    return { user, bearer: `Bearer ${login.body.token as string}` as const };
 };
 
 describe('a staff role without an authenticator app', () => {
@@ -43,7 +43,7 @@ describe('a staff role without an authenticator app', () => {
 
         const abilities = await api().get('/account/abilities').set('Authorization', bearer);
 
-        expect(abilities.body.data.secondFactorRequired).toBe(true);
+        expect(abilities.body.secondFactorRequired).toBe(true);
     });
 
     it('is not told apart from a plain refusal when the rule is not the role’s anyway', async () => {
@@ -60,7 +60,7 @@ describe('a staff role without an authenticator app', () => {
         const login = await api()
             .post('/account/login')
             .send({ email: user.email, password: PLAIN_PASSWORD });
-        const bearer = `Bearer ${login.body.data.token as string}`;
+        const bearer = `Bearer ${login.body.token as string}`;
         await seedMembership(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'manager');
 
         const response = await api().get('/orders/export').set('Authorization', bearer);
@@ -77,7 +77,7 @@ describe('a staff role without an authenticator app', () => {
 
         const response = await api()
             .get('/observability/audit')
-            .set('Authorization', `Bearer ${login.body.data.token as string}`);
+            .set('Authorization', `Bearer ${login.body.token as string}`);
 
         expect(response.body.errors[0].code).toBe('SECOND_FACTOR_ENROLLMENT_REQUIRED');
     });
@@ -88,7 +88,7 @@ describe('a staff role without an authenticator app', () => {
             .post('/account/2fa/methods/totp/setup')
             .set('Authorization', bearer)
             .send();
-        const { secret } = setup.body.data as { secret: string };
+        const { secret } = setup.body as { secret: string };
         await api()
             .post('/account/2fa/methods/totp/confirm')
             .set('Authorization', bearer)
@@ -101,7 +101,7 @@ describe('a staff role without an authenticator app', () => {
         const abilities = await api().get('/account/abilities').set('Authorization', bearer);
 
         expect(staff.status).toBe(200);
-        expect(abilities.body.data.secondFactorRequired).toBe(false);
+        expect(abilities.body.secondFactorRequired).toBe(false);
     });
 });
 

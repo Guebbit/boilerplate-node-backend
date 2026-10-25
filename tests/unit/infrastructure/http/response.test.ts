@@ -23,6 +23,7 @@ import {
     resolveErrorTitle,
     successResponse,
     createdOrOk,
+    noContentResponse,
     rejectResponse
 } from '@infrastructure/http/response';
 import { makeResponseStub } from '@tests/express';
@@ -45,12 +46,11 @@ describe('generateSuccess', () => {
         expect(response.data).toBe('ok');
     });
 
-    it('defaults to status 200 and an empty message', () => {
+    it('defaults to status 200', () => {
         const response = generateSuccess({ id: 'x' });
 
         expect(response.success).toBe(true);
         expect(response.status).toBe(200);
-        expect(response.message).toBe('');
     });
 
     it('honours an explicit status', () => {
@@ -64,7 +64,7 @@ describe('generateSuccess', () => {
         // `errors` field on every successful response.
         const response = generateSuccess({ id: 'x' });
 
-        expect(Object.keys(response).toSorted()).toEqual(['data', 'message', 'status', 'success']);
+        expect(Object.keys(response).toSorted()).toEqual(['data', 'status', 'success']);
     });
 
     it('preserves undefined data rather than dropping the key', () => {
@@ -297,17 +297,13 @@ describe('generateReject', () => {
 });
 
 describe('successResponse', () => {
-    it('applies the same status to the HTTP response and the body', () => {
+    it('sends the payload itself as the body, under the given status', () => {
         const response = makeResponseStub();
 
         successResponse(response, { id: 'x' }, 201);
 
-        // Written twice on purpose, so the two can never disagree — a proxy that rewrites the
-        // HTTP status still leaves the body's copy intact.
         expect(response.status).toHaveBeenCalledWith(201);
-        expect(response.json).toHaveBeenCalledWith(
-            expect.objectContaining({ success: true, status: 201 })
-        );
+        expect(response.json).toHaveBeenCalledWith({ id: 'x' });
     });
 
     it('defaults to 200', () => {
@@ -329,6 +325,21 @@ const stubWithLocation = () => {
     return { response, location };
 };
 
+describe('noContentResponse', () => {
+    it('answers 204 and ends without a body', () => {
+        const response = makeResponseStub();
+        const end = jest.fn();
+        Object.assign(response, { end });
+        jest.mocked(response.status).mockReturnValue(response);
+
+        noContentResponse(response);
+
+        expect(response.status).toHaveBeenCalledWith(204);
+        expect(end).toHaveBeenCalledTimes(1);
+        expect(response.json).not.toHaveBeenCalled();
+    });
+});
+
 describe('createdOrOk', () => {
     it('answers 201 and names the new resource when the call created it', () => {
         const { response, location } = stubWithLocation();
@@ -337,7 +348,7 @@ describe('createdOrOk', () => {
 
         expect(location).toHaveBeenCalledWith('/things/x');
         expect(response.status).toHaveBeenCalledWith(201);
-        expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ status: 201 }));
+        expect(response.json).toHaveBeenCalledWith({ id: 'x' });
     });
 
     it('answers the given status without a Location when nothing was created', () => {
@@ -347,7 +358,7 @@ describe('createdOrOk', () => {
 
         expect(location).not.toHaveBeenCalled();
         expect(response.status).toHaveBeenCalledWith(200);
-        expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ status: 200 }));
+        expect(response.json).toHaveBeenCalledWith({ id: 'x' });
     });
 
     it('answers 200 when the status is unset', () => {

@@ -6,7 +6,7 @@
 
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { noContentResponse, rejectResponse } from '@infrastructure/http/response';
 import { accountService } from '../services';
 import { catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -43,7 +43,7 @@ export const deleteSession = (request: Request<{ sessionId: string }>, response:
                 destroySessionCookie(response);
             }
 
-            successResponse<undefined>(response, undefined, 200);
+            noContentResponse(response);
         })
         .catch(catchAs(response, 'deleteSession'));
 };

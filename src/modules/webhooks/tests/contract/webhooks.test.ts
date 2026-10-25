@@ -37,8 +37,8 @@ describe('GET /webhooks/subscriptions', () => {
         const response = await api().get('/webhooks/subscriptions').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items.length).toBeGreaterThan(0);
-        for (const item of response.body.data.items) {
+        expect(response.body.items.length).toBeGreaterThan(0);
+        for (const item of response.body.items) {
             expect(item.secret).toBeUndefined();
             expect(item.newSecret).toBeUndefined();
             expect(Array.isArray(item.secretIds)).toBe(true);
@@ -54,7 +54,7 @@ describe('GET /webhooks/subscriptions', () => {
 
         const response = await api().get('/webhooks/subscriptions').set('Authorization', bearer);
 
-        expect(response.body.data.items[0].actions).toEqual({
+        expect(response.body.items[0].actions).toEqual({
             update: true,
             delete: true,
             enable: false,
@@ -78,7 +78,7 @@ describe('GET /webhooks/subscriptions', () => {
         const byDefault = await api().get('/webhooks/subscriptions').set('Authorization', bearer);
 
         const paths = (response: typeof byUrl) =>
-            (response.body.data.items as { url: string }[]).map(({ url }) => url.slice(-1));
+            (response.body.items as { url: string }[]).map(({ url }) => url.slice(-1));
         expect(paths(byUrl)).toEqual(['a', 'b', 'c']);
         expect(paths(byDefault)).toEqual(['c', 'a', 'b']);
     });
@@ -101,16 +101,16 @@ describe('GET /webhooks/subscriptions/:id', () => {
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
             .send(subscriptionBody());
-        const id = String(created.body.data.id);
+        const id = String(created.body.id);
 
         const response = await api()
             .get(`/webhooks/subscriptions/${id}`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.id).toBe(id);
-        expect(response.body.data.secret).toBeUndefined();
-        expect(response.body.data.actions.disable).toBe(true);
+        expect(response.body.id).toBe(id);
+        expect(response.body.secret).toBeUndefined();
+        expect(response.body.actions.disable).toBe(true);
     });
 
     it('404s an id that matches nothing, and a malformed one alike', async () => {
@@ -164,11 +164,11 @@ describe('POST /webhooks/subscriptions', () => {
             .send(subscriptionBody());
 
         expect(response.status).toBe(201);
-        expect(typeof response.body.data.secret).toBe('string');
-        expect(response.body.data.secret.startsWith('whsec_')).toBe(true);
-        expect(response.body.data.eventTypes).toEqual(['order.paid']);
-        expect(response.body.data.enabled).toBe(true);
-        expect(response.body.data.consecutiveFailures).toBe(0);
+        expect(typeof response.body.secret).toBe('string');
+        expect(response.body.secret.startsWith('whsec_')).toBe(true);
+        expect(response.body.eventTypes).toEqual(['order.paid']);
+        expect(response.body.enabled).toBe(true);
+        expect(response.body.consecutiveFailures).toBe(0);
     });
 
     it('422s a plain http:// url', async () => {
@@ -211,7 +211,7 @@ describe('POST /webhooks/subscriptions', () => {
         expect(second.body.errors[0].code).toBe('WEBHOOK_SUBSCRIPTION_LIMIT_REACHED');
 
         await api()
-            .delete(`/webhooks/subscriptions/${String(first.body.data.id)}`)
+            .delete(`/webhooks/subscriptions/${String(first.body.id)}`)
             .set('Authorization', bearer);
         const third = await api()
             .post('/webhooks/subscriptions')
@@ -230,14 +230,14 @@ describe('PUT /webhooks/subscriptions/:id', () => {
             .send(subscriptionBody({ description: 'was here' }));
 
         const response = await api()
-            .put(`/webhooks/subscriptions/${String(created.body.data.id)}`)
+            .put(`/webhooks/subscriptions/${String(created.body.id)}`)
             .set('Authorization', bearer)
             .send({ url: 'https://example.test/inbox-2', eventTypes: ['order.paid'] });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.url).toBe('https://example.test/inbox-2');
-        expect(response.body.data.enabled).toBe(true);
-        expect(response.body.data.description).toBeUndefined();
+        expect(response.body.url).toBe('https://example.test/inbox-2');
+        expect(response.body.enabled).toBe(true);
+        expect(response.body.description).toBeUndefined();
     });
 
     it('422s an `enabled` field: whether it is on has its own endpoints', async () => {
@@ -248,7 +248,7 @@ describe('PUT /webhooks/subscriptions/:id', () => {
             .send(subscriptionBody());
 
         const response = await api()
-            .put(`/webhooks/subscriptions/${String(created.body.data.id)}`)
+            .put(`/webhooks/subscriptions/${String(created.body.id)}`)
             .set('Authorization', bearer)
             .send({ ...subscriptionBody(), enabled: false });
 
@@ -263,7 +263,7 @@ describe('PUT /webhooks/subscriptions/:id', () => {
             .send(subscriptionBody());
 
         const response = await api()
-            .put(`/webhooks/subscriptions/${String(created.body.data.id)}`)
+            .put(`/webhooks/subscriptions/${String(created.body.id)}`)
             .set('Authorization', bearer)
             .send({ url: 'https://example.test/inbox-2' });
 
@@ -291,13 +291,13 @@ describe('PATCH /webhooks/subscriptions/:id', () => {
             .send(subscriptionBody({ description: 'was here' }));
 
         const response = await api()
-            .patch(`/webhooks/subscriptions/${String(created.body.data.id)}`)
+            .patch(`/webhooks/subscriptions/${String(created.body.id)}`)
             .set('Authorization', bearer)
             .send({ eventTypes: ['*'] });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.eventTypes).toEqual(['*']);
-        expect(response.body.data.description).toBe('was here');
+        expect(response.body.eventTypes).toEqual(['*']);
+        expect(response.body.description).toBe('was here');
     });
 
     it('422s an `enabled` field: whether it is on has its own endpoints', async () => {
@@ -308,7 +308,7 @@ describe('PATCH /webhooks/subscriptions/:id', () => {
             .send(subscriptionBody());
 
         const response = await api()
-            .patch(`/webhooks/subscriptions/${String(created.body.data.id)}`)
+            .patch(`/webhooks/subscriptions/${String(created.body.id)}`)
             .set('Authorization', bearer)
             .send({ enabled: false });
 
@@ -332,7 +332,7 @@ describe('PATCH /webhooks/subscriptions/:id', () => {
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
             .send(subscriptionBody());
-        const id = String(created.body.data.id);
+        const id = String(created.body.id);
         const stored = await webhookSubscriptionRepository.findById(id);
         if (!stored) throw new Error('fixture subscription vanished');
         stored.consecutiveFailures = 2;
@@ -344,7 +344,7 @@ describe('PATCH /webhooks/subscriptions/:id', () => {
             .send({ description: 'renamed' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.consecutiveFailures).toBe(2);
+        expect(response.body.consecutiveFailures).toBe(2);
     });
 });
 
@@ -358,20 +358,20 @@ describe('POST /webhooks/subscriptions/:id/disable and /enable', () => {
             .set('Authorization', bearer);
 
         expect(disabled.status).toBe(200);
-        expect(disabled.body.data).toMatchObject({
+        expect(disabled.body).toMatchObject({
             enabled: false,
             actions: { enable: true, disable: false }
         });
-        expect(typeof disabled.body.data.disabledAt).toBe('string');
-        expect(disabled.body.data.autoDisabledAt).toBeUndefined();
+        expect(typeof disabled.body.disabledAt).toBe('string');
+        expect(disabled.body.autoDisabledAt).toBeUndefined();
 
         const enabled = await api()
             .post(`/webhooks/subscriptions/${id}/enable`)
             .set('Authorization', bearer);
 
         expect(enabled.status).toBe(200);
-        expect(enabled.body.data.enabled).toBe(true);
-        expect(enabled.body.data.disabledAt).toBeUndefined();
+        expect(enabled.body.enabled).toBe(true);
+        expect(enabled.body.disabledAt).toBeUndefined();
     });
 
     it('enabling clears the auto-disable marker and the failure streak', async () => {
@@ -389,9 +389,9 @@ describe('POST /webhooks/subscriptions/:id/disable and /enable', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.consecutiveFailures).toBe(0);
-        expect(response.body.data.disabledAt).toBeUndefined();
-        expect(response.body.data.autoDisabledAt).toBeUndefined();
+        expect(response.body.consecutiveFailures).toBe(0);
+        expect(response.body.disabledAt).toBeUndefined();
+        expect(response.body.autoDisabledAt).toBeUndefined();
     });
 
     it('409s enabling an enabled subscription, and leaves its streak alone', async () => {
@@ -448,18 +448,18 @@ describe('POST /webhooks/subscriptions/:id/rotate-secret', () => {
             .send(subscriptionBody());
 
         const response = await api()
-            .post(`/webhooks/subscriptions/${String(created.body.data.id)}/rotate-secret`)
+            .post(`/webhooks/subscriptions/${String(created.body.id)}/rotate-secret`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(typeof response.body.data.newSecret).toBe('string');
-        expect(response.body.data.secretIds).toHaveLength(2);
+        expect(typeof response.body.newSecret).toBe('string');
+        expect(response.body.secretIds).toHaveLength(2);
         // The first secret keeps signing for the overlap window, and the wire says until when.
-        expect(response.body.data.retiringSecrets).toEqual([
-            { id: created.body.data.secretIds[0], retiresAt: expect.any(String) }
+        expect(response.body.retiringSecrets).toEqual([
+            { id: created.body.secretIds[0], retiresAt: expect.any(String) }
         ]);
-        expect(response.body.data.actions.removeSecret).toBe(true);
-        expect(created.body.data.retiringSecrets).toEqual([]);
+        expect(response.body.actions.removeSecret).toBe(true);
+        expect(created.body.retiringSecrets).toEqual([]);
     });
 
     it('keeps at most two secrets, dropping the oldest on a second rotation', async () => {
@@ -468,15 +468,15 @@ describe('POST /webhooks/subscriptions/:id/rotate-secret', () => {
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
             .send(subscriptionBody());
-        const url = `/webhooks/subscriptions/${String(created.body.data.id)}/rotate-secret`;
+        const url = `/webhooks/subscriptions/${String(created.body.id)}/rotate-secret`;
 
         const first = await api().post(url).set('Authorization', bearer);
         const second = await api().post(url).set('Authorization', bearer);
 
-        expect(second.body.data.secretIds).toHaveLength(2);
+        expect(second.body.secretIds).toHaveLength(2);
         // The oldest is gone; the one the first rotation minted survives beside the new one.
-        expect(second.body.data.secretIds).toContain(first.body.data.secretIds[1]);
-        expect(second.body.data.secretIds).not.toContain(first.body.data.secretIds[0]);
+        expect(second.body.secretIds).toContain(first.body.secretIds[1]);
+        expect(second.body.secretIds).not.toContain(first.body.secretIds[0]);
     });
 
     it('404s an id from outside this admin’s reach', async () => {
@@ -499,12 +499,12 @@ describe('DELETE /webhooks/subscriptions/:id/secrets/:secretId', () => {
             .send(subscriptionBody());
 
         const response = await api()
-            .delete(`/webhooks/subscriptions/${String(created.body.data.id)}/secrets/not-a-real-id`)
+            .delete(`/webhooks/subscriptions/${String(created.body.id)}/secrets/not-a-real-id`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
 
-        const stored = await webhookSubscriptionRepository.findById(String(created.body.data.id));
+        const stored = await webhookSubscriptionRepository.findById(String(created.body.id));
         expect(stored?.secrets).toHaveLength(1);
     });
 
@@ -514,12 +514,10 @@ describe('DELETE /webhooks/subscriptions/:id/secrets/:secretId', () => {
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
             .send(subscriptionBody());
-        const [onlySecretId] = created.body.data.secretIds as string[];
+        const [onlySecretId] = created.body.secretIds as string[];
 
         const response = await api()
-            .delete(
-                `/webhooks/subscriptions/${String(created.body.data.id)}/secrets/${onlySecretId}`
-            )
+            .delete(`/webhooks/subscriptions/${String(created.body.id)}/secrets/${onlySecretId}`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(422);
@@ -531,20 +529,20 @@ describe('DELETE /webhooks/subscriptions/:id/secrets/:secretId', () => {
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
             .send(subscriptionBody());
-        const [originalSecretId] = created.body.data.secretIds as string[];
+        const [originalSecretId] = created.body.secretIds as string[];
         await api()
-            .post(`/webhooks/subscriptions/${String(created.body.data.id)}/rotate-secret`)
+            .post(`/webhooks/subscriptions/${String(created.body.id)}/rotate-secret`)
             .set('Authorization', bearer);
 
         const response = await api()
             .delete(
-                `/webhooks/subscriptions/${String(created.body.data.id)}/secrets/${originalSecretId}`
+                `/webhooks/subscriptions/${String(created.body.id)}/secrets/${originalSecretId}`
             )
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.secretIds).toHaveLength(1);
-        expect(response.body.data.secretIds).not.toContain(originalSecretId);
+        expect(response.body.secretIds).toHaveLength(1);
+        expect(response.body.secretIds).not.toContain(originalSecretId);
     });
 });
 
@@ -557,15 +555,15 @@ describe('DELETE /webhooks/subscriptions/:id', () => {
             .send(subscriptionBody());
 
         const response = await api()
-            .delete(`/webhooks/subscriptions/${String(created.body.data.id)}`)
+            .delete(`/webhooks/subscriptions/${String(created.body.id)}`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
 
         const listed = await api().get('/webhooks/subscriptions').set('Authorization', bearer);
         expect(
-            (listed.body.data.items as { id: string }[]).some(
-                (item) => item.id === String(created.body.data.id)
+            (listed.body.items as { id: string }[]).some(
+                (item) => item.id === String(created.body.id)
             )
         ).toBe(false);
     });
@@ -578,7 +576,7 @@ describe('GET /webhooks/deliveries', () => {
         const response = await api().get('/webhooks/deliveries').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toEqual([]);
+        expect(response.body.items).toEqual([]);
     });
 
     it('says per row whether a replay would be accepted: not while its subscription is off', async () => {
@@ -602,7 +600,7 @@ describe('GET /webhooks/deliveries', () => {
 
         const replayBySubscription = Object.fromEntries(
             (
-                response.body.data.items as {
+                response.body.items as {
                     subscriptionId: string;
                     actions: { replay: boolean };
                 }[]
@@ -646,7 +644,7 @@ describe('GET /webhooks/deliveries/:id', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({
+        expect(response.body).toMatchObject({
             id: String(delivery._id),
             status: 'exhausted',
             actions: { replay: true }
@@ -695,11 +693,11 @@ describe('POST /webhooks/deliveries/:id/replay', () => {
             .send(subscriptionBody());
         // Filed under the subscription's own tenant — replay only sees the caller's shop.
         const subscription = await webhookSubscriptionRepository.findById(
-            created.body.data.id as string
+            created.body.id as string
         );
         const delivery = await webhookDeliveryRepository.create({
             tenant: subscription!.tenant,
-            subscriptionId: new Types.ObjectId(created.body.data.id as string),
+            subscriptionId: new Types.ObjectId(created.body.id as string),
             eventId: 'evt_contract_replay',
             eventType: 'order.paid',
             payload: { orderId: 'order_1' },
@@ -713,9 +711,9 @@ describe('POST /webhooks/deliveries/:id/replay', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.id).toBe(String(delivery._id));
-        expect(response.body.data.attempt).toBeGreaterThan(1);
-        expect(response.body.data.actions).toEqual({ replay: true });
+        expect(response.body.id).toBe(String(delivery._id));
+        expect(response.body.attempt).toBeGreaterThan(1);
+        expect(response.body.actions).toEqual({ replay: true });
     });
 
     it('409s while the subscription is disabled, with its code, and leaves the row alone', async () => {
@@ -762,7 +760,7 @@ describe('GET /webhooks/events', () => {
 
         expect(response.status).toBe(200);
         expect(
-            (response.body.data as { name: string }[]).map((event) => event.name).toSorted()
+            (response.body.items as { name: string }[]).map((event) => event.name).toSorted()
         ).toEqual(declaredWebhookEvents());
     });
 });
@@ -773,7 +771,7 @@ const createSubscription = async (bearer: string): Promise<string> => {
         .post('/webhooks/subscriptions')
         .set('Authorization', bearer)
         .send(subscriptionBody());
-    return String(created.body.data.id);
+    return String(created.body.id);
 };
 
 describe('an event filter must name events the catalogue lists', () => {
@@ -859,7 +857,7 @@ describe('a private target is refused at create and update', () => {
 
         const response = await api()
             [verb.toLowerCase() as 'put' | 'patch'](
-                `/webhooks/subscriptions/${String(created.body.data.id)}`
+                `/webhooks/subscriptions/${String(created.body.id)}`
             )
             .set('Authorization', bearer)
             .send({ url: 'https://internal.example.test/hook', ...rest });
@@ -876,7 +874,7 @@ describe('a private target is refused at create and update', () => {
         jest.mocked(resolve4).mockClear();
 
         const response = await api()
-            .patch(`/webhooks/subscriptions/${String(created.body.data.id)}`)
+            .patch(`/webhooks/subscriptions/${String(created.body.id)}`)
             .set('Authorization', bearer)
             .send({ url: subscriptionBody().url, description: 'renamed' });
 

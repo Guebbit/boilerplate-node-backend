@@ -25,7 +25,7 @@ beforeEach(() => {
 const loginAs = async (email: string) => {
     const response = await api().post('/account/login').send({ email, password: PLAIN_PASSWORD });
     return {
-        bearer: `Bearer ${response.body.data.token as string}`,
+        bearer: `Bearer ${response.body.token as string}`,
         cookie: cookieHeader(response, '__Host-session')
     };
 };
@@ -39,7 +39,7 @@ const sessionIds = (bearer: string): Promise<string[]> =>
         .get('/account/sessions')
         .set('Authorization', bearer)
         .then((response) =>
-            (response.body.data.sessions as { id: string }[]).map(({ id }) => id).toSorted()
+            (response.body.sessions as { id: string }[]).map(({ id }) => id).toSorted()
         );
 
 describe('a session id across a refresh rotation', () => {
@@ -65,7 +65,7 @@ describe('a session id across a refresh rotation', () => {
             .set('Authorization', device.bearer)
             .set('Cookie', device.cookie)
             .then((response) =>
-                (response.body.data.sessions as { id: string; current: boolean }[]).filter(
+                (response.body.sessions as { id: string; current: boolean }[]).filter(
                     ({ current }) => !current
                 )
             );
@@ -77,7 +77,7 @@ describe('a session id across a refresh rotation', () => {
             .set('Authorization', device.bearer)
             .set('Cookie', device.cookie);
 
-        expect(revoked.status).toBe(200);
+        expect(revoked.status).toBe(204);
         const next = await refresh(cookieHeader(rotated, '__Host-session'));
         expect(next.status).toBe(401);
         const untouched = await refresh(device.cookie);

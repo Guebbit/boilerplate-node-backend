@@ -53,12 +53,12 @@ export default function () {
         const list = http.get(`${BASE_URL}/products`);
         check(list, {
             'list answers 200': (response) => response.status === 200,
-            'list carries items': (response) => (response.json('data.items') || []).length > 0
+            'list carries items': (response) => (response.json('items') || []).length > 0
         });
 
         // Follow through to a detail page, so this exercises the id lookup and its cache rather
         // than one endpoint's happy path repeated a thousand times.
-        const first = list.json('data.items.0.id');
+        const first = list.json('items.0.id');
         if (first) {
             const detail = http.get(`${BASE_URL}/products/${first}`);
             check(detail, { 'detail answers 200': (response) => response.status === 200 });

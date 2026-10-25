@@ -54,9 +54,7 @@ describe('GET /users', () => {
         const response = await api().get('/users').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        const {
-            data: { items }
-        } = response.body as { data: { items: { id: string; role?: string }[] } };
+        const { items } = response.body as { items: { id: string; role?: string }[] };
         expect(items.find((item) => item.id === String(user._id))?.role).toBe('admin');
     });
 });
@@ -146,7 +144,7 @@ describe('POST /users', () => {
 
         expect(response.status).toBe(201);
         assertNoCredentials(response.body);
-        expect(seen).toEqual([(response.body as { data: { id: string } }).data.id]);
+        expect(seen).toEqual([(response.body as { id: string }).id]);
     });
 
     it.each([
@@ -216,8 +214,8 @@ describe('PUT /users/{id}', () => {
             });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.imageUrl).toBe('https://cdn.example.com/avatars/original.png');
-        expect(response.body.data.phone).toBeUndefined();
+        expect(response.body.imageUrl).toBe('https://cdn.example.com/avatars/original.png');
+        expect(response.body.phone).toBeUndefined();
     });
 
     // `username`/`role` are the Replace schema's `required` set — an omitted one is a
@@ -296,9 +294,9 @@ describe('PATCH /users/{id}', () => {
             .send({ role: 'moderator' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.role).toBe('moderator');
-        expect(response.body.data.email).toBe(target.email);
-        expect(response.body.data.username).toBe(target.username);
+        expect(response.body.role).toBe('moderator');
+        expect(response.body.email).toBe(target.email);
+        expect(response.body.username).toBe(target.username);
     });
 
     it('leaves an existing avatar untouched on a JSON edit that uploads no new image', async () => {
@@ -315,7 +313,7 @@ describe('PATCH /users/{id}', () => {
             .send({ username: 'patcheditkeepsimage' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.imageUrl).toBe('https://cdn.example.com/avatars/original.png');
+        expect(response.body.imageUrl).toBe('https://cdn.example.com/avatars/original.png');
     });
 
     it('null clears an optional field', async () => {
@@ -332,7 +330,7 @@ describe('PATCH /users/{id}', () => {
             .send({ phone: null });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.phone).toBeUndefined();
+        expect(response.body.phone).toBeUndefined();
     });
 
     it('"" is refused, never a synonym for null', async () => {
@@ -383,7 +381,7 @@ describe('DELETE /users/{id} — the audit action names which discharge happened
             .delete(`/users/${String(target._id)}`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: 'admin.user.soft_deleted',
@@ -402,7 +400,7 @@ describe('DELETE /users/{id} — the audit action names which discharge happened
             .delete(`/users/${String(target._id)}?hardDelete=true`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: 'admin.user.erased',
@@ -467,11 +465,11 @@ describe('POST /users/{id}/activate and /deactivate', () => {
         const on = await api().post(`/users/${user.id}/activate`).set('Authorization', bearer);
 
         expect(off.status).toBe(200);
-        expect(off.body.data).toMatchObject({ active: false });
-        expect(off.body.data.actions).toMatchObject({ activate: true, deactivate: false });
+        expect(off.body).toMatchObject({ active: false });
+        expect(off.body.actions).toMatchObject({ activate: true, deactivate: false });
         expect(on.status).toBe(200);
-        expect(on.body.data).toMatchObject({ active: true });
-        expect(on.body.data.actions).toMatchObject({ activate: false, deactivate: true });
+        expect(on.body).toMatchObject({ active: true });
+        expect(on.body.actions).toMatchObject({ activate: false, deactivate: true });
     });
 
     it.each([
@@ -574,7 +572,7 @@ describe('DELETE /users — the id in the body', () => {
             .set('Authorization', bearer)
             .send({ id: String(target._id) });
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         const stored = await userRepository.findById(String(target._id));
         expect(stored?.deletedAt).toBeInstanceOf(Date);
     });
@@ -589,7 +587,7 @@ describe('DELETE /users/{id}/hard', () => {
             .delete(`/users/${String(target._id)}/hard`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         await expect(userRepository.findById(String(target._id))).resolves.toBeNull();
     });
 });
@@ -624,10 +622,8 @@ describe('an id nobody holds', () => {
     );
 });
 
-const emailsOf = (response: { body: { data: { items: { email: string }[] } } }) =>
-    response.body.data.items
-        .map((user) => user.email)
-        .filter((email) => email.endsWith('@sort.test'));
+const emailsOf = (response: { body: { items: { email: string }[] } }) =>
+    response.body.items.map((user) => user.email).filter((email) => email.endsWith('@sort.test'));
 
 describe('GET /users — sort', () => {
     it('orders by email in either direction, and answers 422 for a column outside the whitelist', async () => {
@@ -667,11 +663,9 @@ const actionsSeenBy = async (callerRole: string) => {
     );
 
     const response = await api().get('/users?pageSize=50').set('Authorization', bearer);
-    const { items } = (
-        response.body as {
-            data: { items: { id: string; username: string; actions?: unknown }[] };
-        }
-    ).data;
+    const { items } = response.body as {
+        items: { id: string; username: string; actions?: unknown }[];
+    };
 
     return {
         status: response.status,
@@ -769,9 +763,9 @@ describe('GET /users — what the caller may do to each account', () => {
         const byName = new Map(
             (
                 response.body as {
-                    data: { items: { username: string; actions: Record<string, boolean> }[] };
+                    items: { username: string; actions: Record<string, boolean> }[];
                 }
-            ).data.items.map((item) => [item.username, item.actions])
+            ).items.map((item) => [item.username, item.actions])
         );
 
         expect(byName.get('row-gone')).toMatchObject({ delete: false, restore: true });
@@ -792,8 +786,8 @@ describe('GET /users — what the caller may do to each account', () => {
             .set('Authorization', bearer)
             .send({ username: 'row-edited' });
 
-        expect(read.body.data.actions).toEqual(liveAccountActions);
-        expect(edit.body.data.actions).toEqual(liveAccountActions);
+        expect(read.body.actions).toEqual(liveAccountActions);
+        expect(edit.body.actions).toEqual(liveAccountActions);
     });
 
     it('is absent from the account’s own record, which has no one to protect', async () => {
@@ -801,7 +795,7 @@ describe('GET /users — what the caller may do to each account', () => {
 
         const response = await api().get('/account').set('Authorization', bearer);
 
-        expect(response.body.data).not.toHaveProperty('actions');
+        expect(response.body).not.toHaveProperty('actions');
     });
 });
 
@@ -901,7 +895,7 @@ describe('the step-up on naming a role', () => {
             .send({ username: 'renamedfive', role: 'support' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.role).toBe('support');
+        expect(response.body.role).toBe('support');
     });
 
     it('still asks a stale role manager once the PUT changes the role', async () => {
