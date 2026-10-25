@@ -160,6 +160,9 @@ export interface PaymentProvider {
      * rather than returning the money twice — Stripe's own idempotency keys work this way. The
      * caller's own conditional `addRefund` write on `amountRefunded` is the other half, for the case where
      * this application's two callers never reach the provider at the same time to begin with.
+     *
+     * An adapter must time its request out well inside the refund sweep's lease (10 minutes for
+     * up to 200 payments): a call that hangs holds the whole sweep.
      */
     refund(
         providerRef: string,
