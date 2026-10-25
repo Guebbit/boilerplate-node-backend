@@ -119,6 +119,12 @@ never asked, so a choice made before login counts until `PUT /account` records i
 grant is a client assertion with no server-side record behind it; the stored field is what you can
 produce under Art. 7(1), so record it as soon as you have an account to record it against.
 
+Two rules follow from consent being the data subject's own. An event about another person is sent
+as the actor, never as the subject: an admin creating or deactivating an account emits under the
+admin's id, gated by the admin's consent, with no target id in it. And a login is gated on the
+account's stored answer, the banner header counting only for an account that never answered (the
+login routes carry no token, so the header is all the request context knows).
+
 `NODE_ANALYTICS_REQUIRE_CONSENT` defaults `true` — Art. 25(2) says the private setting is the
 default one. Set it `false` only after taking your own legal advice about server-side, non-cookie
 analytics. Note the consequence of the default: a fresh deployment captures nothing until users
