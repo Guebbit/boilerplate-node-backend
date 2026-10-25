@@ -19,7 +19,7 @@ export const router = Router();
  * orchestrator probe: `/livez` is liveness, `/readyz` readiness.
  */
 router.get('/', (_request, response) => {
-    successResponse(response, { status: 'ok' }, 200, 'API is running');
+    successResponse(response, { status: 'ok' }, 200);
 });
 
 /**

@@ -51,7 +51,7 @@ describe('GET /account/oauth/providers', () => {
         const response = await api().get('/account/oauth/providers');
 
         expect(response.status).toBe(200);
-        expect(response.body.data.providers).toContain('fake');
+        expect(response.body.providers).toContain('fake');
     });
 });
 
@@ -404,7 +404,7 @@ describe('GET /account/oauth/:provider/callback — 2FA armed (1b)', () => {
             .post('/account/2fa/methods/totp/setup')
             .set('Authorization', bearer)
             .send();
-        const { secret } = setup.body.data as { secret: string };
+        const { secret } = setup.body as { secret: string };
         await api()
             .post('/account/2fa/methods/totp/confirm')
             .set('Authorization', bearer)
@@ -456,7 +456,7 @@ const signInAs = (email: string) =>
         .post('/account/login')
         .send({ email, password: PLAIN_PASSWORD })
         .then((login) => ({
-            bearer: `Bearer ${login.body.data.token as string}`,
+            bearer: `Bearer ${login.body.token as string}`,
             session: cookieHeader(login, '__Host-session')
         }));
 
@@ -497,7 +497,7 @@ const connect = async (bearer: string, session: string, provider = 'fake') => {
     const start = await api()
         .post(`/account/oauth/links/${provider}?continue=%2Fprofile`)
         .set('Authorization', bearer);
-    const callbackUrl = new URL(start.body.data.authorizeUrl as string);
+    const callbackUrl = new URL(start.body.authorizeUrl as string);
     const callback = await api()
         .get(callbackUrl.pathname + callbackUrl.search)
         .set(
@@ -526,7 +526,7 @@ describe('POST /account/oauth/links/:provider', () => {
         const response = await api().post('/account/oauth/links/fake').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.authorizeUrl).toContain('/account/oauth/fake/callback');
+        expect(response.body.authorizeUrl).toContain('/account/oauth/fake/callback');
         for (const name of ['__Host-oauth_state', '__Host-oauth_verifier', '__Host-oauth_link']) {
             expect(setCookie(response, name)).toMatch(/HttpOnly/i);
             // Five minutes, the lifetime of the link token the cookie carries.
@@ -570,7 +570,7 @@ describe('POST /account/oauth/links/:provider', () => {
         await createUser({ email: 'owner@example.com', verifiedAt: new Date() });
         const { bearer, session } = await signInAs('owner@example.com');
         const start = await api().post('/account/oauth/links/fake').set('Authorization', bearer);
-        const callbackUrl = new URL(start.body.data.authorizeUrl as string);
+        const callbackUrl = new URL(start.body.authorizeUrl as string);
         const cookies = `${cookieHeader(start, '__Host-oauth_state', '__Host-oauth_verifier', '__Host-oauth_link')}; ${session}`;
         await api()
             .get(callbackUrl.pathname + callbackUrl.search)
@@ -587,7 +587,7 @@ describe('POST /account/oauth/links/:provider', () => {
         const user = await createUser({ email: 'owner@example.com', verifiedAt: new Date() });
         const { bearer } = await signInAs('owner@example.com');
         const start = await api().post('/account/oauth/links/fake').set('Authorization', bearer);
-        const callbackUrl = new URL(start.body.data.authorizeUrl as string);
+        const callbackUrl = new URL(start.body.authorizeUrl as string);
 
         // The three connect cookies are all present; only the session is not.
         const callback = await api()
@@ -634,7 +634,7 @@ describe('POST /account/oauth/links/:provider', () => {
 
         const response = await api()
             .post('/account/oauth/links/fake')
-            .set('Authorization', `Bearer ${refreshed.body.data.token as string}`);
+            .set('Authorization', `Bearer ${refreshed.body.token as string}`);
 
         expect(response.status).toBe(401);
         expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
@@ -658,9 +658,9 @@ describe('DELETE /account/oauth/links/:provider', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(
-            response.body.data.links.map(({ provider }: { provider: string }) => provider)
-        ).toEqual(['google']);
+        expect(response.body.links.map(({ provider }: { provider: string }) => provider)).toEqual([
+            'google'
+        ]);
     });
 
     it('answers 404 for a provider that was never linked', async () => {

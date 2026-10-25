@@ -34,13 +34,7 @@ export const postPaymentOffline = (request: Request<{ orderId?: string }>, respo
             // order says: no order read is needed for `actions`.
             const payment = paymentService.withActions(result.data, undefined, request.authContext);
             // 201 when a row was inserted; 200 when this converted an unpaid card intent's row.
-            createdOrOk<Payment>(
-                response,
-                payment,
-                result.status,
-                `/payments/${payment.id}`,
-                result.message
-            );
+            createdOrOk<Payment>(response, payment, result.status, `/payments/${payment.id}`);
         })
         .catch(catchAs(response, 'postPaymentOffline'));
 };

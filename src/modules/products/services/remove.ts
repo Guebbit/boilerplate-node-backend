@@ -90,18 +90,17 @@ export const remove = (
         )
             .then(() => imageStore.remove(product.imageUrl))
             .then(() => auditDeleted())
-            .then(() => generateSuccess(undefined, 200, t('products.hard-deleted')));
+            .then(() => generateSuccess(undefined, 200));
 
     // SOFT delete. Already deleted: nothing to do, and nothing to announce again.
-    if (product.deletedAt)
-        return Promise.resolve(generateSuccess(product, 200, t('products.soft-deleted')));
+    if (product.deletedAt) return Promise.resolve(generateSuccess(product, 200));
 
     product.deletedAt = new Date();
     return announceDeleted(product, false, (session) =>
         productRepository.save(product, session)
     ).then((saved) => {
         auditDeleted();
-        return generateSuccess(saved, 200, t('products.soft-deleted'));
+        return generateSuccess(saved, 200);
     });
 };
 
@@ -152,6 +151,6 @@ export const restoreById = (
                 targetType: 'product',
                 targetId: id
             });
-            return generateSuccess(saved, 200, t('products.restored'));
+            return generateSuccess(saved, 200);
         });
     });

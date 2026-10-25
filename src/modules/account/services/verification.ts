@@ -190,8 +190,7 @@ export const requestEmailVerificationFor = (
             requestEmailVerification(user, context).then(() =>
                 generateSuccess<EmailVerificationRequested>(
                     { resendAfter: VERIFY_RESEND_SECONDS },
-                    200,
-                    t('account.verify.email-sent')
+                    200
                 )
             )
         );
@@ -217,11 +216,7 @@ export const resendPendingEmailVerificationFor = (
     withOwnAccount(userId, (user) => {
         const { pendingEmail } = user;
         if (emailChangeNext(emailChangeStateOf(user), 'resend') === undefined || !pendingEmail)
-            return generateSuccess<EmailVerificationRequested>(
-                { resendAfter: 0 },
-                200,
-                t('account.email-change.nothing-pending')
-            );
+            return generateSuccess<EmailVerificationRequested>({ resendAfter: 0 }, 200);
 
         // The recipient is the stored pending address.
         return pacedSend(user, EMAIL_CHANGE_TOKEN_TYPE, pendingEmail, context, () =>
@@ -232,8 +227,7 @@ export const resendPendingEmailVerificationFor = (
                 });
                 return generateSuccess<EmailVerificationRequested>(
                     { resendAfter: VERIFY_RESEND_SECONDS },
-                    200,
-                    t('account.email-change.resent')
+                    200
                 );
             })
         );
@@ -367,9 +361,7 @@ export const confirmEmailVerification = (
 ): Promise<ResponseSuccess<undefined> | ResponseReject> =>
     redeemLiveToken(EMAIL_VERIFY_TOKEN_TYPE, token).then((user) =>
         user
-            ? completeEmailVerification(user, context).then(() =>
-                  generateSuccess(undefined, 200, t('account.verify.success'))
-              )
+            ? completeEmailVerification(user, context).then(() => generateSuccess(undefined, 200))
             : refuseLink(context, 'email_verify', 'account.verify.token-not-found')
     );
 
@@ -389,9 +381,7 @@ export const confirmEmailChange = (
 ): Promise<ResponseSuccess<undefined> | ResponseReject> =>
     redeemLiveToken(EMAIL_CHANGE_TOKEN_TYPE, token).then((user) =>
         user
-            ? completeEmailChange(user, context).then(() =>
-                  generateSuccess(undefined, 200, t('account.email-change.success'))
-              )
+            ? completeEmailChange(user, context).then(() => generateSuccess(undefined, 200))
             : refuseLink(context, 'email_change', 'account.email-change.token-not-found')
     );
 
@@ -411,8 +401,6 @@ export const undoEmailChangeByToken = (
 ): Promise<ResponseSuccess<undefined> | ResponseReject> =>
     redeemLiveToken(EMAIL_CHANGE_UNDO_TOKEN_TYPE, token).then((user) =>
         user
-            ? undoEmailChange(user, context).then(() =>
-                  generateSuccess(undefined, 200, t('account.email-change.undone'))
-              )
+            ? undoEmailChange(user, context).then(() => generateSuccess(undefined, 200))
             : refuseLink(context, 'email_change_undo', 'account.email-change.token-not-found')
     );

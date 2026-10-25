@@ -69,7 +69,7 @@ const loggedInCustomer = async (): Promise<string> => {
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD });
     if (login.status !== 200) throw new Error(`login failed: ${JSON.stringify(login.body)}`);
-    return `Bearer ${String(login.body.data.token)}`;
+    return `Bearer ${String(login.body.token)}`;
 };
 
 /**
@@ -91,12 +91,12 @@ const orderAwaitingPayment = async (productId: string, quantity: number) => {
         .send({ shippingMethodId: 'pickup' });
     const checkout = await checkoutAs(bearer);
     if (checkout.status !== 201) throw new Error(`checkout: ${JSON.stringify(checkout.body)}`);
-    const orderId = String(checkout.body.data.id);
+    const orderId = String(checkout.body.id);
 
     const intent = await api().post('/payments').set('Authorization', bearer).send({ orderId });
     if (intent.status !== 201) throw new Error(`intent: ${JSON.stringify(intent.body)}`);
 
-    return { bearer, orderId, paymentId: String(intent.body.data.id) };
+    return { bearer, orderId, paymentId: String(intent.body.id) };
 };
 
 /**
@@ -191,7 +191,7 @@ describe('P2 — one webhook event redelivered in parallel', () => {
 
         expectNoServerErrors(results);
         // A provider reads anything but 2xx as "retry harder" — a duplicate is not a failure.
-        expect(countStatus(results, 200)).toBe(RACE_SIZE);
+        expect(countStatus(results, 204)).toBe(RACE_SIZE);
         expect(succeededFor(orderId)).toBe(1);
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
         await expect(

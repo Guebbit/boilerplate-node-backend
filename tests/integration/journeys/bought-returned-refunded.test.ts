@@ -17,7 +17,6 @@ import {
     AddAddress201Response,
     ApproveReturn200Response,
     Checkout201Response,
-    ConfirmEmailVerification200Response,
     ConfirmPayment200Response,
     CreatePayment201Response,
     CreateReturn201Response,
@@ -62,7 +61,7 @@ const salesTotals = async (bearer: string) =>
             .query({ from: '2026-01-01', to: '2026-12-31' })
             .set('Authorization', bearer),
         GetSalesStats200Response
-    ).data.currencies[0].totals;
+    ).currencies[0].totals;
 
 it('adds up across money, stock, documents, stats, audit and mail', async () => {
     const dogFood = await createProduct({ price: 20, onHand: 10 });
@@ -79,10 +78,10 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
         Signup201Response
     );
     const verification = await waitForMail(SHOPPER.email, 'account.verify-request');
-    bodyOf(
-        await api().post('/account/email-verification/confirm').send({ token: verification.token }),
-        ConfirmEmailVerification200Response
-    );
+    await api()
+        .post('/account/email-verification/confirm')
+        .send({ token: verification.token })
+        .expect(204);
     const shopper = await loginBearer(SHOPPER.email, SHOPPER.password);
 
     // Two lines, one of quantity 2: 2 x 20 + 30 = 70, and standard shipping is 5 under 100.
@@ -96,7 +95,7 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
             country: 'IT'
         }),
         AddAddress201Response
-    ).data;
+    );
     await api()
         .post('/cart/items')
         .set('Authorization', shopper)
@@ -109,10 +108,7 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
         .put('/cart/shipping-method')
         .set('Authorization', shopper)
         .send({ shippingMethodId: 'standard' });
-    const order = bodyOf(
-        await checkoutAs(shopper, { addressId: address.id }),
-        Checkout201Response
-    ).data;
+    const order = bodyOf(await checkoutAs(shopper, { addressId: address.id }), Checkout201Response);
     expect(order).toMatchObject({ totalPrice: 75, shippingCost: 5, status: 'pending' });
     expect(await stockOf(staff, dogFoodId)).toEqual({ onHand: 10, reserved: 2 });
 
@@ -120,14 +116,14 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
     const intent = bodyOf(
         await api().post('/payments').set('Authorization', shopper).send({ orderId: order.id }),
         CreatePayment201Response
-    ).data;
+    );
     const paid = bodyOf(
         await api()
             .post(`/payments/${intent.id}/confirm`)
             .set('Authorization', shopper)
             .send({ paymentMethodRef: 'pm_card_visa' }),
         ConfirmPayment200Response
-    ).data;
+    );
     expect(paid).toMatchObject({ status: 'succeeded', amount: 75, amountRefunded: 0 });
     await drain();
 
@@ -139,14 +135,14 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
     const [fulfillmentOrder] = bodyOf(
         await api().get(`/delivery/orders/${order.id}`).set('Authorization', staff),
         GetFulfillmentByOrder200Response
-    ).data.fulfillmentOrders;
+    ).fulfillmentOrders;
     const shipment = bodyOf(
         await api()
             .post(`/delivery/fulfillment-orders/${fulfillmentOrder.id}/shipments`)
             .set('Authorization', staff)
             .send({ trackingCode: 'TRK-JOURNEY01' }),
         ShipFulfillmentOrder201Response
-    ).data;
+    );
     bodyOf(
         await api().post(`/delivery/shipments/${shipment.id}/deliver`).set('Authorization', staff),
         DeliverShipment200Response
@@ -163,7 +159,7 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
                 .set('Authorization', shopper)
                 .send({ orderId: order.id, reason: 'withdrawal', lines }),
             CreateReturn201Response
-        ).data;
+        );
         if (requested.status === 'requested')
             bodyOf(
                 await api().post(`/returns/${requested.id}/approve`).set('Authorization', staff),
@@ -172,7 +168,7 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
         const received = bodyOf(
             await api().post(`/returns/${requested.id}/receive`).set('Authorization', staff),
             ReceiveReturn200Response
-        ).data;
+        );
         await drain();
         return received;
     };
@@ -213,11 +209,11 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
     const creditNotes = bodyOf(
         await api().get(`/orders/${order.id}/credit-notes`).set('Authorization', shopper),
         ListOrderCreditNotes200Response
-    ).data;
+    );
     expect(invoice?.number).toMatch(/^\d{4}-\d{6}$/);
-    expect(creditNotes.map(({ number }) => number)).toEqual(['2026-000001', '2026-000002']);
-    expect(creditNotes.map(({ grandTotal }) => grandTotal)).toEqual([20, 55]);
-    expect(creditNotes.map(({ refundId }) => refundId)).toEqual(
+    expect(creditNotes.items.map(({ number }) => number)).toEqual(['2026-000001', '2026-000002']);
+    expect(creditNotes.items.map(({ grandTotal }) => grandTotal)).toEqual([20, 55]);
+    expect(creditNotes.items.map(({ refundId }) => refundId)).toEqual(
         payment.refunds.map(({ id }) => id)
     );
 
@@ -225,7 +221,7 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
     const audit = bodyOf(
         await api().get('/audit').query({ pageSize: 100 }).set('Authorization', staff),
         ListAuditEntries200Response
-    ).data.items.map(({ action }) => action);
+    ).items.map(({ action }) => action);
     const timesOf = (action: string) => audit.filter((one) => one === action).length;
     expect(
         [
@@ -268,7 +264,7 @@ it('records a staff buyer’s refund of their own order as theirs', async () => 
             country: 'IT'
         }),
         AddAddress201Response
-    ).data;
+    );
     await api()
         .post('/cart/items')
         .set('Authorization', moderator)
@@ -280,11 +276,11 @@ it('records a staff buyer’s refund of their own order as theirs', async () => 
     const order = bodyOf(
         await checkoutAs(moderator, { addressId: address.id }),
         Checkout201Response
-    ).data;
+    );
     const intent = bodyOf(
         await api().post('/payments').set('Authorization', moderator).send({ orderId: order.id }),
         CreatePayment201Response
-    ).data;
+    );
     bodyOf(
         await api()
             .post(`/payments/${intent.id}/confirm`)
@@ -302,19 +298,19 @@ it('records a staff buyer’s refund of their own order as theirs', async () => 
             .set('Idempotency-Key', 'journey-own-order-refund')
             .send({}),
         RefundPaymentByOrder201Response
-    ).data;
+    );
     expect(refund).toMatchObject({ amount: 25 });
     const refunded = bodyOf(
         await api().get(`/payments/${intent.id}`).set('Authorization', moderator),
         GetPayment200Response
-    ).data;
+    );
     expect(refunded).toMatchObject({ amount: 25, amountRefunded: 25 });
 
     // The trail says the order was theirs; a refund of someone else's order carries no such flag.
     const refunds = bodyOf(
         await api().get('/audit').query({ pageSize: 100 }).set('Authorization', admin),
         ListAuditEntries200Response
-    ).data.items.filter(({ action }) => action === 'admin.payment.refunded');
+    ).items.filter(({ action }) => action === 'admin.payment.refunded');
     expect(refunds).toHaveLength(1);
     expect(refunds[0].metadata).toMatchObject({ amount: 25, ownOrder: true });
 });

@@ -74,7 +74,7 @@ describe('the provider reports the wrong amount', () => {
         const audit = bodyOf(
             await api().get('/audit').query({ pageSize: 100 }).set('Authorization', staff),
             ListAuditEntries200Response
-        ).data.items.map(({ action }) => action);
+        ).items.map(({ action }) => action);
         expect(audit).toContain('payment.amount_mismatch');
     });
 });
@@ -135,7 +135,7 @@ describe('the provider settles a payment behind the server’s back', () => {
         const synced = bodyOf(
             await api().post(`/payments/${intent.id}/sync`).set('Authorization', bearer),
             SyncPayment200Response
-        ).data;
+        );
         await drain();
 
         expect(synced).toMatchObject({ status: 'succeeded', amount: order.totalPrice });

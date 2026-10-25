@@ -284,7 +284,7 @@ const receiveFor = (
                     });
                     return refundAndClose(received, breakdown.shipping, context);
                 })
-                .then((after) => generateSuccess(after, 200, t('returns.received')));
+                .then((after) => generateSuccess(after, 200));
         }
     );
 

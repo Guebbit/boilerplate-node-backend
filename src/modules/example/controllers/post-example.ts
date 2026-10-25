@@ -22,7 +22,7 @@ export const postExample = namedHandler('postExample', (request: Request, respon
         .create(body, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            createdResponse(response, result.data, `/examples/${result.data.id}`, result.message);
+            createdResponse(response, result.data, `/examples/${result.data.id}`);
         })
         .catch(catchAs(response, 'postExample'));
 });

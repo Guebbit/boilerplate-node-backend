@@ -71,7 +71,7 @@ describe('a translation write invalidates the cached product it translated', () 
 
         const first = await api().get(`/products/${id}`);
         expect(first.headers['x-cache']).toBe('MISS');
-        expect(first.body.data.title).toBe('Old title');
+        expect(first.body.title).toBe('Old title');
 
         const cached = await api().get(`/products/${id}`);
         expect(cached.headers['x-cache']).toBe('HIT');
@@ -83,7 +83,7 @@ describe('a translation write invalidates the cached product it translated', () 
 
         const afterPatch = await api().get(`/products/${id}`);
         expect(afterPatch.headers['x-cache']).toBe('MISS');
-        expect(afterPatch.body.data.title).toBe('New title');
+        expect(afterPatch.body.title).toBe('New title');
     });
 
     it('does not clear the cache when the write was refused', async () => {
@@ -112,7 +112,7 @@ const readInItalian = (id: string) =>
         .get(`/products/${id}`)
         .set('Accept-Language', 'it')
         .then((response) => ({
-            title: response.body.data.title,
+            title: response.body.title,
             cache: response.headers['x-cache']
         }));
 

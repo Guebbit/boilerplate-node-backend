@@ -131,7 +131,7 @@ describe.each(RESOURCES)('conditional writes on $name', (resource) => {
         expect(response.status).toBe(200);
         expect(etagOf(response)).toBe(`"${String(await storedRevision(resource.collection, id))}"`);
         // The counter is the version, not part of the representation.
-        expect(response.body.data).not.toHaveProperty('editRevision');
+        expect(response.body).not.toHaveProperty('editRevision');
     });
 
     it('moves the counter by one per edit, whatever the clock says', async () => {
@@ -262,7 +262,7 @@ describe.each(DELETABLE)('conditional DELETE on $name', (resource) => {
             .set('Authorization', bearer)
             .set('If-Match', etagOf(read));
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(await resource.stored(id)).toBeUndefined();
     });
 });
@@ -470,6 +470,6 @@ describe('the ETag validates writes only', () => {
             .set('If-None-Match', etagOf(first));
 
         expect(second.status).toBe(200);
-        expect(second.body.data.id).toBe(product.id);
+        expect(second.body.id).toBe(product.id);
     });
 });

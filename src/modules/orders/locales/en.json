@@ -1,11 +1,7 @@
 {
     "orders": {
         "not-found": "The requested order was not found",
-        "hard-deleted": "Order was permanently deleted.",
-        "soft-deleted": "Order was soft deleted (hidden from the customer).",
-        "creation-success": "Order created with success.",
         "cancel": {
-            "success": "Order cancelled.",
             "not-cancellable": "This order can no longer be cancelled."
         },
         "address": {
@@ -81,7 +77,6 @@
         "insufficient-stock": "Some items on this order are no longer available in the quantity requested — see `details.lines`.",
         "line-limit-lines": "This order has more than {{limit}} lines.",
         "line-limit-quantity": "A line on this order asks for more than {{limit}} units.",
-        "restored": "Order restored.",
         "not-deleted": "This order is not deleted.",
         "email-purchase-hold": {
             "paused": {

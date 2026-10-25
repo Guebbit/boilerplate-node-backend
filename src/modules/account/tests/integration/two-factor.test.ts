@@ -73,7 +73,7 @@ const authenticateVerified = async () => {
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD });
 
-    return { user, bearer: `Bearer ${login.body.data.token as string}` as const };
+    return { user, bearer: `Bearer ${login.body.token as string}` as const };
 };
 
 /**
@@ -87,7 +87,7 @@ const authenticateUnverified = async () => {
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD });
 
-    return { user, bearer: `Bearer ${login.body.data.token as string}` as const };
+    return { user, bearer: `Bearer ${login.body.token as string}` as const };
 };
 
 /** Enrolls and confirms the TOTP factor for an authenticated caller. */
@@ -96,7 +96,7 @@ const enrollTotp = async (bearer: string) => {
         .post('/account/2fa/methods/totp/setup')
         .set('Authorization', bearer)
         .send();
-    const { secret } = setup.body.data as { secret: string };
+    const { secret } = setup.body as { secret: string };
 
     const confirm = await api()
         .post('/account/2fa/methods/totp/confirm')
@@ -104,7 +104,7 @@ const enrollTotp = async (bearer: string) => {
         .send({ code: await codeFor(secret, 0) });
 
     await forgetSessionEpoch(bearer);
-    return { secret, backupCodes: (confirm.body.data.backupCodes ?? []) as string[] };
+    return { secret, backupCodes: (confirm.body.backupCodes ?? []) as string[] };
 };
 
 /**
@@ -123,7 +123,7 @@ const enrollEmail = async (bearer: string, proof?: string) => {
         .send({ code: mailedCode() });
 
     await forgetSessionEpoch(bearer);
-    return { backupCodes: (confirm.body.data.backupCodes ?? []) as string[] };
+    return { backupCodes: (confirm.body.backupCodes ?? []) as string[] };
 };
 
 /** Password step only — the half that answers with a challenge rather than a token. */
@@ -148,11 +148,11 @@ describe('status', () => {
         const response = await api().get('/account/2fa').set('Authorization', bearer).send();
 
         expect(response.status).toBe(200);
-        expect(response.body.data.enabled).toBe(false);
-        expect(response.body.data.methods).toEqual([]);
-        expect(response.body.data.backupCodesRemaining).toBe(0);
+        expect(response.body.enabled).toBe(false);
+        expect(response.body.methods).toEqual([]);
+        expect(response.body.backupCodesRemaining).toBe(0);
         expect(
-            (response.body.data.available as { method: string; enrollable: boolean }[]).map(
+            (response.body.available as { method: string; enrollable: boolean }[]).map(
                 ({ method, enrollable }) => [method, enrollable]
             )
         ).toEqual([
@@ -167,7 +167,7 @@ describe('status', () => {
         const response = await api().get('/account/2fa').set('Authorization', bearer).send();
 
         const email = (
-            response.body.data.available as {
+            response.body.available as {
                 method: string;
                 enrollable: boolean;
                 reason?: string;
@@ -183,14 +183,14 @@ describe('status', () => {
 
         const response = await api().get('/account/2fa').set('Authorization', bearer).send();
 
-        expect(response.body.data.enabled).toBe(true);
-        expect((response.body.data.methods as { method: string }[]).map((m) => m.method)).toEqual([
+        expect(response.body.enabled).toBe(true);
+        expect((response.body.methods as { method: string }[]).map((m) => m.method)).toEqual([
             'totp'
         ]);
-        expect((response.body.data.available as { method: string }[]).map((m) => m.method)).toEqual(
-            ['email']
-        );
-        expect(response.body.data.backupCodesRemaining).toBe(10);
+        expect((response.body.available as { method: string }[]).map((m) => m.method)).toEqual([
+            'email'
+        ]);
+        expect(response.body.backupCodesRemaining).toBe(10);
     });
 });
 
@@ -201,9 +201,9 @@ describe('status while an enrollment is pending', () => {
 
         const response = await api().get('/account/2fa').set('Authorization', bearer).send();
 
-        expect(response.body.data.enabled).toBe(false);
-        expect(response.body.data.methods).toEqual([]);
-        expect((response.body.data.available as { method: string }[]).map((m) => m.method)).toEqual(
+        expect(response.body.enabled).toBe(false);
+        expect(response.body.methods).toEqual([]);
+        expect((response.body.available as { method: string }[]).map((m) => m.method)).toEqual(
             expect.arrayContaining(['totp'])
         );
     });
@@ -218,9 +218,9 @@ describe('status while an enrollment is pending', () => {
 
         const response = await api().get('/account/2fa').set('Authorization', bearer).send();
 
-        expect(response.body.data.enabled).toBe(false);
-        expect(response.body.data.methods).toEqual([]);
-        expect((response.body.data.available as { method: string }[]).map((m) => m.method)).toEqual(
+        expect(response.body.enabled).toBe(false);
+        expect(response.body.methods).toEqual([]);
+        expect((response.body.available as { method: string }[]).map((m) => m.method)).toEqual(
             expect.arrayContaining(['email'])
         );
     });
@@ -235,8 +235,8 @@ describe('status while an enrollment is pending', () => {
 
         const response = await api().get('/account/2fa').set('Authorization', bearer).send();
 
-        expect(response.body.data.enabled).toBe(false);
-        expect(response.body.data.methods).toEqual([]);
+        expect(response.body.enabled).toBe(false);
+        expect(response.body.methods).toEqual([]);
     });
 });
 
@@ -279,8 +279,8 @@ describe('changing factors once one is armed', () => {
         const status = await api().get('/account/2fa').set('Authorization', bearer).send();
 
         expect(response.status).toBe(422);
-        expect(status.body.data.enabled).toBe(true);
-        expect((status.body.data.methods as { method: string }[]).map((m) => m.method)).toEqual([
+        expect(status.body.enabled).toBe(true);
+        expect((status.body.methods as { method: string }[]).map((m) => m.method)).toEqual([
             'totp'
         ]);
     });
@@ -296,7 +296,7 @@ describe('changing factors once one is armed', () => {
         const status = await api().get('/account/2fa').set('Authorization', bearer).send();
 
         expect(response.status).toBe(422);
-        expect(status.body.data.enabled).toBe(true);
+        expect(status.body.enabled).toBe(true);
     });
 
     it('accepts an unused backup code, which is the lost-phone route, and spends it', async () => {
@@ -310,7 +310,7 @@ describe('changing factors once one is armed', () => {
         const status = await api().get('/account/2fa').set('Authorization', bearer).send();
 
         expect(response.status).toBe(200);
-        expect(status.body.data.backupCodesRemaining).toBe(9);
+        expect(status.body.backupCodesRemaining).toBe(9);
     });
 
     it('lets an email-only account replace its email with a code sent to it first', async () => {
@@ -386,10 +386,10 @@ describe('sending a code to a signed-in account', () => {
             .send({ code: mailedCode() });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.sentTo).toBe('a***a@example.com');
+        expect(response.body.sentTo).toBe('a***a@example.com');
         expect(mailsOf('account.two-factor-code')).toHaveLength(1);
         expect(regenerate.status).toBe(200);
-        expect(regenerate.body.data.backupCodes).not.toEqual(backupCodes);
+        expect(regenerate.body.backupCodes).not.toEqual(backupCodes);
     });
 
     it('refuses a second send inside the cooldown, and mails once', async () => {
@@ -517,9 +517,9 @@ describe('enrolling the device factor', () => {
             .send();
 
         expect(response.status).toBe(200);
-        expect(response.body.data.delivers).toBe(false);
-        expect(response.body.data.secret).toEqual(expect.any(String));
-        expect(response.body.data.otpauthUri).toMatch(/^otpauth:\/\/totp\//);
+        expect(response.body.delivers).toBe(false);
+        expect(response.body.secret).toEqual(expect.any(String));
+        expect(response.body.otpauthUri).toMatch(/^otpauth:\/\/totp\//);
         expect(mockOutbox).toEqual([]);
     });
 
@@ -545,7 +545,7 @@ describe('enrolling the device factor', () => {
         expect(new Set(backupCodes).size).toBe(backupCodes.length);
 
         const profile = await api().get('/account').set('Authorization', bearer).send();
-        expect(profile.body.data.twoFactorEnabledAt).toEqual(expect.any(String));
+        expect(profile.body.twoFactorEnabledAt).toEqual(expect.any(String));
     });
 
     it('a pending, unconfirmed factor does not change login', async () => {
@@ -555,8 +555,8 @@ describe('enrolling the device factor', () => {
         const login = await startLogin(user.email);
 
         expect(login.status).toBe(200);
-        expect(login.body.data.token).toEqual(expect.any(String));
-        expect(login.body.data.mfaRequired).toBeUndefined();
+        expect(login.body.token).toEqual(expect.any(String));
+        expect(login.body.mfaRequired).toBeUndefined();
     });
 });
 
@@ -582,10 +582,10 @@ describe('enrolling the email factor', () => {
             .send();
 
         expect(response.status).toBe(200);
-        expect(response.body.data.delivers).toBe(true);
-        expect(response.body.data.sentTo).toBe('a***a@example.com');
-        expect(response.body.data.sentTo).not.toContain('ada@example.com');
-        expect(response.body.data.secret).toBeUndefined();
+        expect(response.body.delivers).toBe(true);
+        expect(response.body.sentTo).toBe('a***a@example.com');
+        expect(response.body.sentTo).not.toContain('ada@example.com');
+        expect(response.body.secret).toBeUndefined();
         expect(mockOutbox).toHaveLength(1);
         expect(mailedCode()).toMatch(/^\d{6}$/);
     });
@@ -596,7 +596,7 @@ describe('enrolling the email factor', () => {
         await enrollEmail(bearer);
 
         const status = await api().get('/account/2fa').set('Authorization', bearer).send();
-        expect((status.body.data.methods as { method: string }[]).map((m) => m.method)).toEqual([
+        expect((status.body.methods as { method: string }[]).map((m) => m.method)).toEqual([
             'email'
         ]);
     });
@@ -649,10 +649,10 @@ describe('logging in with a device factor', () => {
         const login = await startLogin(user.email);
 
         expect(login.status).toBe(200);
-        expect(login.body.data.mfaRequired).toBe(true);
-        expect(login.body.data.challenge).toEqual(expect.any(String));
-        expect(login.body.data.defaultMethod).toBe('totp');
-        expect(login.body.data.methods).toEqual([{ method: 'totp', delivers: false }]);
+        expect(login.body.mfaRequired).toBe(true);
+        expect(login.body.challenge).toEqual(expect.any(String));
+        expect(login.body.defaultMethod).toBe('totp');
+        expect(login.body.methods).toEqual([{ method: 'totp', delivers: false }]);
         expect(login.headers['set-cookie']).toBeUndefined();
     });
 
@@ -663,7 +663,7 @@ describe('logging in with a device factor', () => {
 
         const response = await api()
             .post('/account/login/2fa')
-            .send({ challenge: login.body.data.challenge, code: '000000' });
+            .send({ challenge: login.body.challenge, code: '000000' });
 
         expect(response.status).toBe(422);
     });
@@ -675,7 +675,7 @@ describe('logging in with a device factor', () => {
 
         const response = await api()
             .post('/account/login/2fa')
-            .send({ challenge: login.body.data.challenge, code: '' });
+            .send({ challenge: login.body.challenge, code: '' });
 
         expect(response.status).toBe(422);
         expect(await lockStateOf(user.id)).toEqual({ failures: 0, lockedUntil: undefined });
@@ -688,10 +688,10 @@ describe('logging in with a device factor', () => {
 
         const response = await api()
             .post('/account/login/2fa')
-            .send({ challenge: login.body.data.challenge, code: await codeFor(secret, 1) });
+            .send({ challenge: login.body.challenge, code: await codeFor(secret, 1) });
 
         expect(response.status).toBe(200);
-        const claims = decodeJwt(response.body.data.token as string) as { amr?: string[] };
+        const claims = decodeJwt(response.body.token as string) as { amr?: string[] };
         expect(claims.amr).toEqual(['pwd', 'otp']);
     });
 
@@ -705,7 +705,7 @@ describe('logging in with a device factor', () => {
         const response = await api()
             .post('/account/login/2fa')
             .send({
-                challenge: login.body.data.challenge,
+                challenge: login.body.challenge,
                 code: await codeFor(secret, 1),
                 remember: 'medium'
             });
@@ -722,7 +722,7 @@ describe('logging in with a device factor', () => {
 
         const response = await api()
             .post('/account/login/2fa')
-            .send({ challenge: login.body.data.challenge, code: await codeFor(secret, 1) });
+            .send({ challenge: login.body.challenge, code: await codeFor(secret, 1) });
 
         expect(response.status).toBe(200);
         expect(setCookie(response, '__Host-session')).toBeDefined();
@@ -738,7 +738,7 @@ describe('logging in with a device factor', () => {
         const response = await api()
             .post('/account/login/2fa')
             .send({
-                challenge: login.body.data.challenge,
+                challenge: login.body.challenge,
                 code: await codeFor(secret, 1),
                 remember: 'forever'
             });
@@ -754,13 +754,13 @@ describe('logging in with a device factor', () => {
         const firstLogin = await startLogin(user.email);
         const first = await api()
             .post('/account/login/2fa')
-            .send({ challenge: firstLogin.body.data.challenge, code });
+            .send({ challenge: firstLogin.body.challenge, code });
         expect(first.status).toBe(200);
 
         const secondLogin = await startLogin(user.email);
         const second = await api()
             .post('/account/login/2fa')
-            .send({ challenge: secondLogin.body.data.challenge, code });
+            .send({ challenge: secondLogin.body.challenge, code });
 
         expect(second.status).toBe(422);
     });
@@ -773,13 +773,13 @@ describe('logging in with a device factor', () => {
         const firstLogin = await startLogin(user.email);
         const first = await api()
             .post('/account/login/2fa')
-            .send({ challenge: firstLogin.body.data.challenge, code: backupCode });
+            .send({ challenge: firstLogin.body.challenge, code: backupCode });
         expect(first.status).toBe(200);
 
         const secondLogin = await startLogin(user.email);
         const second = await api()
             .post('/account/login/2fa')
-            .send({ challenge: secondLogin.body.data.challenge, code: backupCode });
+            .send({ challenge: secondLogin.body.challenge, code: backupCode });
 
         expect(second.status).toBe(422);
     });
@@ -788,7 +788,7 @@ describe('logging in with a device factor', () => {
         const { user, bearer } = await authenticateVerified();
         await enrollTotp(bearer);
         const login = await startLogin(user.email);
-        const { challenge } = login.body.data as { challenge: string };
+        const { challenge } = login.body as { challenge: string };
 
         const attempts = await Promise.all(
             Array.from({ length: 6 }, () =>
@@ -805,7 +805,7 @@ describe('logging in with a device factor', () => {
         const { user, bearer } = await authenticateVerified();
         const { secret } = await enrollTotp(bearer);
         const login = await startLogin(user.email);
-        const { challenge } = login.body.data as { challenge: string };
+        const { challenge } = login.body as { challenge: string };
 
         const first = await api()
             .post('/account/login/2fa')
@@ -824,7 +824,7 @@ describe('logging in with a device factor', () => {
         const { user, bearer } = await authenticateVerified();
         const { secret } = await enrollTotp(bearer);
         const login = await startLogin(user.email);
-        const { challenge } = login.body.data as { challenge: string };
+        const { challenge } = login.body as { challenge: string };
 
         const wrong = await api().post('/account/login/2fa').send({ challenge, code: '000000' });
         expect(wrong.status).toBe(422);
@@ -863,11 +863,11 @@ describe('logging in with the email factor', () => {
 
         // No `enrolledAt`: whoever is answering this challenge has proved a password and nothing
         // else, and when the factor was armed is not theirs to know.
-        expect(login.body.data.methods).toEqual([
+        expect(login.body.methods).toEqual([
             { method: 'email', delivers: true, target: 'a***a@example.com', resendAfter: 30 }
         ]);
         // Ten minutes, not five: the code has an SMTP queue and a person switching apps to survive.
-        const remaining = new Date(login.body.data.expiresAt as string).getTime() - Date.now();
+        const remaining = new Date(login.body.expiresAt as string).getTime() - Date.now();
         expect(remaining).toBeGreaterThan(300_000);
     });
 
@@ -886,21 +886,21 @@ describe('logging in with the email factor', () => {
         const { user, bearer } = await authenticateVerified();
         await enrollEmail(bearer);
         const login = await startLogin(user.email);
-        const { challenge } = login.body.data as { challenge: string };
+        const { challenge } = login.body as { challenge: string };
         mockOutbox.length = 0;
 
         const send = await api()
             .post('/account/login/2fa/send')
             .send({ challenge, method: 'email' });
         expect(send.status).toBe(200);
-        expect(send.body.data.sentTo).toBe('a***a@example.com');
+        expect(send.body.sentTo).toBe('a***a@example.com');
 
         const response = await api()
             .post('/account/login/2fa')
             .send({ challenge, code: mailedCode() });
 
         expect(response.status).toBe(200);
-        const claims = decodeJwt(response.body.data.token as string) as { amr?: string[] };
+        const claims = decodeJwt(response.body.token as string) as { amr?: string[] };
         expect(claims.amr).toEqual(['pwd', 'otp']);
     });
 
@@ -908,7 +908,7 @@ describe('logging in with the email factor', () => {
         const { user, bearer } = await authenticateVerified();
         await enrollEmail(bearer);
         const login = await startLogin(user.email);
-        const { challenge } = login.body.data as { challenge: string };
+        const { challenge } = login.body as { challenge: string };
 
         await api().post('/account/login/2fa/send').send({ challenge, method: 'email' });
         const second = await api()
@@ -925,7 +925,7 @@ describe('logging in with the email factor', () => {
 
         const response = await api()
             .post('/account/login/2fa/send')
-            .send({ challenge: login.body.data.challenge, method: 'email' });
+            .send({ challenge: login.body.challenge, method: 'email' });
 
         expect(response.status).toBe(422);
         expect(mockOutbox.filter(({ template }) => template === 'account.two-factor-code')).toEqual(
@@ -1017,16 +1017,16 @@ describe('several factors at once', () => {
         await enrollEmail(bearer, backupCodes[0]);
 
         const login = await startLogin(user.email);
-        expect((login.body.data.methods as { method: string }[]).map((m) => m.method)).toEqual([
+        expect((login.body.methods as { method: string }[]).map((m) => m.method)).toEqual([
             'totp',
             'email'
         ]);
         // The cheapest for the user: no round-trip, no mailbox.
-        expect(login.body.data.defaultMethod).toBe('totp');
+        expect(login.body.defaultMethod).toBe('totp');
 
         const response = await api()
             .post('/account/login/2fa')
-            .send({ challenge: login.body.data.challenge, code: await codeFor(secret, 1) });
+            .send({ challenge: login.body.challenge, code: await codeFor(secret, 1) });
 
         expect(response.status).toBe(200);
     });
@@ -1044,10 +1044,8 @@ describe('several factors at once', () => {
         expect(removal.status).toBe(200);
 
         const login = await startLogin(user.email);
-        expect(login.body.data.mfaRequired).toBe(true);
-        expect((login.body.data.methods as { method: string }[]).map((m) => m.method)).toEqual([
-            'totp'
-        ]);
+        expect(login.body.mfaRequired).toBe(true);
+        expect((login.body.methods as { method: string }[]).map((m) => m.method)).toEqual(['totp']);
     });
 
     it('removing the LAST one turns the feature off, backup codes included', async () => {
@@ -1061,13 +1059,13 @@ describe('several factors at once', () => {
         await forgetSessionEpoch(bearer);
 
         const status = await api().get('/account/2fa').set('Authorization', bearer).send();
-        expect(status.body.data.enabled).toBe(false);
+        expect(status.body.enabled).toBe(false);
         // Left behind, they would arm the NEXT enrollment with a list the user wrote down for a
         // factor that no longer exists.
-        expect(status.body.data.backupCodesRemaining).toBe(0);
+        expect(status.body.backupCodesRemaining).toBe(0);
 
         const login = await startLogin(user.email);
-        expect(login.body.data.token).toEqual(expect.any(String));
+        expect(login.body.token).toEqual(expect.any(String));
     });
 
     it('accepts a code from the OTHER armed factor when removing one', async () => {
@@ -1100,7 +1098,7 @@ describe('several factors at once', () => {
             .send({ email: 'ada@example.com', password: PLAIN_PASSWORD });
         const send = await api()
             .post('/account/login/2fa/send')
-            .send({ challenge: login.body.data.challenge, method: 'email' });
+            .send({ challenge: login.body.challenge, method: 'email' });
         expect(send.status).toBe(200);
 
         const removal = await api()
@@ -1141,8 +1139,8 @@ describe('disabling 2FA', () => {
 
         const login = await startLogin(user.email);
 
-        expect(login.body.data.token).toEqual(expect.any(String));
-        expect(login.body.data.mfaRequired).toBeUndefined();
+        expect(login.body.token).toEqual(expect.any(String));
+        expect(login.body.mfaRequired).toBeUndefined();
     });
 });
 
@@ -1180,19 +1178,19 @@ describe('regenerating backup codes', () => {
             .send({ code: await codeFor(secret, 1) });
 
         expect(regenerate.status).toBe(200);
-        const freshCodes = regenerate.body.data.backupCodes as string[];
+        const freshCodes = regenerate.body.backupCodes as string[];
         expect(freshCodes.length).toBe(10);
         expect(new Set(freshCodes).size).toBe(10);
         // A fresh draw, not the same list handed back again.
         expect(freshCodes.some((code) => oldCodes.includes(code))).toBe(false);
 
         const status = await api().get('/account/2fa').set('Authorization', bearer).send();
-        expect(status.body.data.backupCodesRemaining).toBe(10);
+        expect(status.body.backupCodesRemaining).toBe(10);
 
         const login = await startLogin(user.email);
         const stale = await api()
             .post('/account/login/2fa')
-            .send({ challenge: login.body.data.challenge, code: oldCodes[0] });
+            .send({ challenge: login.body.challenge, code: oldCodes[0] });
         expect(stale.status).toBe(422);
     });
 
@@ -1224,7 +1222,7 @@ describe('no staff path strips a second factor', () => {
         const login = await startLogin(user.email);
 
         expect(attempt.status).toBe(404);
-        expect(login.body.data.mfaRequired).toBe(true);
+        expect(login.body.mfaRequired).toBe(true);
     });
 });
 
@@ -1233,7 +1231,7 @@ describe('the bypass — a challenge token must never authenticate a request on 
         const { user, bearer } = await authenticateVerified();
         await enrollTotp(bearer);
         const login = await startLogin(user.email);
-        const { challenge } = login.body.data as { challenge: string };
+        const { challenge } = login.body as { challenge: string };
 
         const response = await api()
             .get('/account')
@@ -1282,7 +1280,7 @@ describe('the per-account wrong-code lock', () => {
         expect(mailsOf('account.two-factor-locked')).toHaveLength(1);
         // The armed factor survived: a refused check disarms nothing.
         const status = await api().get('/account/2fa').set('Authorization', bearer).send();
-        expect(status.body.data.enabled).toBe(true);
+        expect(status.body.enabled).toBe(true);
     });
 
     it('lets a right code through once the lock has expired, and clears the counter', async () => {
@@ -1375,7 +1373,7 @@ describe('the per-account wrong-code lock', () => {
             passwordConfirm: REPLACEMENT_PASSWORD
         });
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(await lockStateOf(user.id)).toEqual({ failures: 0, lockedUntil: undefined });
     });
 

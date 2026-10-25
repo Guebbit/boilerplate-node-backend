@@ -60,7 +60,7 @@ const signIn = async (email: string, password: string, code: string) => {
     const challenged = await api().post('/account/login').send({ email, password });
     const response = await api()
         .post('/account/login/2fa')
-        .send({ challenge: challenged.body.data.challenge, code });
+        .send({ challenge: challenged.body.challenge, code });
 
     const cookie = setCookie(response, '__Host-session') ?? '';
 
@@ -85,8 +85,8 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
     await api()
         .post('/account/email-verification/confirm')
         .send({ token: verification.token })
-        .expect(200);
-    await seedMembership(String(signup.body.data.id), DEPLOYMENT_TENANT_ID, 'tenant', 'admin');
+        .expect(204);
+    await seedMembership(String(signup.body.id), DEPLOYMENT_TENANT_ID, 'tenant', 'admin');
 
     // Arm TOTP. Arming ends the session that did it, so the account signs in again, with a code.
     // The role came after the signup, so the account has no app yet: it enrols the real way.
@@ -95,7 +95,7 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
         .post('/account/2fa/methods/totp/setup')
         .set('Authorization', plain)
         .send();
-    const { secret } = setup.body.data as { secret: string };
+    const { secret } = setup.body as { secret: string };
     await api()
         .post('/account/2fa/methods/totp/confirm')
         .set('Authorization', plain)
@@ -117,7 +117,7 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
             expiresAt: new Date(Date.now() + 7 * DAY_MS).toISOString()
         })
         .expect(201);
-    const key = `Bearer ${minted.body.data.secret as string}`;
+    const key = `Bearer ${minted.body.secret as string}`;
     await api().get('/webhooks/subscriptions').set('Authorization', key).expect(200);
 
     // Forgot the password: the reset ends the session and the credential, and mails about both.
@@ -125,7 +125,7 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
         .post('/account/password/reset')
         .set(await solvedChallenge())
         .send({ email: ACCOUNT.email })
-        .expect(200);
+        .expect(204);
     const reset = await waitForMail(ACCOUNT.email, 'account.reset-request');
     await api()
         .post('/account/password/reset/confirm')
@@ -134,7 +134,7 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
             password: ACCOUNT.replacement,
             passwordConfirm: ACCOUNT.replacement
         })
-        .expect(200);
+        .expect(204);
     await api().get('/account').set('Authorization', armedBearer).expect(401);
     await api().get('/webhooks/subscriptions').set('Authorization', key).expect(401);
     expect(mailsTo(ACCOUNT.email, 'api-keys.revoked')).toHaveLength(1);
@@ -161,7 +161,7 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
         .send({ method: 'password', password: ACCOUNT.replacement, otp: await codeFor(secret, 0) })
         .expect(200);
     // A jwt session answers a token; a cookie session, called with a bearer, its session id.
-    const { token, sessionToken } = reauthed.body.data as { token?: string; sessionToken?: string };
+    const { token, sessionToken } = reauthed.body as { token?: string; sessionToken?: string };
     const fresh = `Bearer ${token ?? sessionToken ?? ''}`;
     await api()
         .patch('/account')
@@ -171,7 +171,7 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
 
     // The new address proves itself; the old one holds a 7-day undo link.
     const proof = await waitForMail(ACCOUNT.movedTo, 'account.verify-request');
-    await api().post('/account/email-change/confirm').send({ token: proof.token }).expect(200);
+    await api().post('/account/email-change/confirm').send({ token: proof.token }).expect(204);
     const notice = mailsTo(ACCOUNT.email, 'account.email-change-notice');
     expect(notice).toHaveLength(1);
 
@@ -191,7 +191,7 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
         .send()
         .expect(202);
     await settleInlineExports();
-    const exportPath = `/account/export/${String(requested.body.data.id)}`;
+    const exportPath = `/account/export/${String(requested.body.id)}`;
     expect(mailsTo(ACCOUNT.movedTo, 'account.export-ready')).toHaveLength(1);
     await api().get(exportPath).set('Authorization', exporterBearer).expect(200);
     advanceDate(8 * DAY_MS + 60_000);
@@ -204,7 +204,7 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
     const audit = bodyOf(
         await api().get('/audit').query({ pageSize: 100 }).set('Authorization', laterBearer),
         ListAuditEntries200Response
-    ).data.items.map(({ action }) => action);
+    ).items.map(({ action }) => action);
     expect(audit).toEqual(
         expect.arrayContaining([
             'auth.signup',

@@ -11,14 +11,9 @@
         "nothing-returnable": "Nothing on this order is left to return.",
         "not-decidable": "This return has already been decided.",
         "not-receivable": "This return is not awaiting its goods.",
-        "requested": "Return requested.",
         "cancellation-invalid": "A cancellation must name the fulfillment order to cancel, and send no lines — the whole remainder is cancelled.",
         "cancellation-withdrawal-buyer-only": "Only the order's own buyer can cancel as a withdrawal; staff cancel with another reason.",
         "nothing-to-cancel": "There is nothing left to cancel here. If nothing has shipped yet, cancel the whole order instead.",
-        "remainder-cancelled": "What had not shipped is cancelled — your money is on its way back.",
-        "withdrawn": "Withdrawal received — the order is cancelled and your money is on its way back.",
-        "approved": "Return approved.",
-        "declined": "Return declined.",
         "email": {
             "greeting": "Hello, {{name}}!",
             "postage-consumer": "Returning the goods is at your own cost.",
@@ -45,7 +40,6 @@
                 "body": "We received your return for order {{order}} and refunded {{amount}}."
             }
         },
-        "received": "Return received — the goods are back on sale.",
         "deduction-too-high": "The handling deduction is more than the refund is worth."
     }
 }

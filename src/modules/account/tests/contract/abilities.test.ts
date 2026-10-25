@@ -31,9 +31,9 @@ setupTestDb();
  * opposite of the invariant.
  */
 const abilityFrom = (
-    body: { data: { tenant: unknown[]; platform: unknown[] } },
+    body: { tenant: unknown[]; platform: unknown[] },
     scope: 'tenant' | 'platform'
-): MongoAbility => createMongoAbility(unpackRules(body.data[scope] as never) as never);
+): MongoAbility => createMongoAbility(unpackRules(body[scope] as never) as never);
 
 describe('GET /account/abilities', () => {
     it('answers a stranger with the guest role rather than refusing them', async () => {
@@ -43,7 +43,7 @@ describe('GET /account/abilities', () => {
         // The client's own job, documented on `Abilities.tenantId`: the collection stores no
         // tenant column at all (this deployment ships one shop), so a checked object never
         // carries one — the envelope's own `tenantId` is what a client attaches before asking.
-        const { tenantId } = response.body.data;
+        const { tenantId } = response.body;
 
         expect(
             abilityFrom(response.body, 'tenant').can(
@@ -55,7 +55,7 @@ describe('GET /account/abilities', () => {
 
     it('does not let a stranger read somebody’s order', async () => {
         const response = await api().get('/account/abilities').expect(200);
-        const { tenantId } = response.body.data;
+        const { tenantId } = response.body;
 
         expect(
             abilityFrom(response.body, 'tenant').can(
@@ -73,7 +73,7 @@ describe('GET /account/abilities', () => {
             .set('Authorization', bearer)
             .expect(200);
         const ability = abilityFrom(response.body, 'tenant');
-        const { tenantId } = response.body.data;
+        const { tenantId } = response.body;
 
         expect(
             ability.can('read', subject('Order', { userId: user.id, deletedAt: null, tenantId }))
@@ -91,7 +91,7 @@ describe('GET /account/abilities', () => {
             .set('Authorization', `Bearer ${secret}`)
             .expect(200);
         const ability = abilityFrom(response.body, 'tenant');
-        const { tenantId } = response.body.data;
+        const { tenantId } = response.body;
 
         expect(ability.can('display', subject('Order', { tenantId }))).toBe(true);
         expect(ability.can('delete', subject('Product', { tenantId }))).toBe(false);
@@ -104,7 +104,7 @@ describe('GET /account/abilities', () => {
             .get('/account/abilities')
             .set('Authorization', bearer)
             .expect(200);
-        const { tenantId } = response.body.data;
+        const { tenantId } = response.body;
 
         // The same key that lets the route guard through: one rule set, asked twice.
         expect(
@@ -143,7 +143,7 @@ describe('GET /account/abilities', () => {
             .set('Authorization', bearer)
             .expect(200);
 
-        expect(response.body.data.platform).toEqual([]);
+        expect(response.body.platform).toEqual([]);
         expect(
             abilityFrom(response.body, 'platform').can('read', subject('ObservabilitySnapshot', {}))
         ).toBe(false);
@@ -156,7 +156,7 @@ describe('GET /account/abilities', () => {
         // cannot change it.
         const response = await api().get('/account/abilities').expect(200);
 
-        expect(response.body.data.version).toBe(
+        expect(response.body.version).toBe(
             permissionModelVersion(PERMISSION_RULES.map((entry) => entry.id))
         );
     });
@@ -166,14 +166,14 @@ describe('GET /account/abilities', () => {
         // every subject a key COULD name, not just the ones this particular caller holds.
         const response = await api().get('/account/abilities').expect(200);
 
-        expect(response.body.data.subjects).toEqual(PERMISSION_SUBJECTS);
-        expect(response.body.data.subjects).toEqual(expect.arrayContaining(['Product', 'Order']));
+        expect(response.body.subjects).toEqual(PERMISSION_SUBJECTS);
+        expect(response.body.subjects).toEqual(expect.arrayContaining(['Product', 'Order']));
     });
 
     it('lists no grantable role for a stranger', async () => {
         const response = await api().get('/account/abilities').expect(200);
 
-        expect(response.body.data.grantableRoles).toEqual([]);
+        expect(response.body.grantableRoles).toEqual([]);
     });
 
     it('lists the roles an administrator may assign, and not the platform one', async () => {
@@ -184,10 +184,10 @@ describe('GET /account/abilities', () => {
             .set('Authorization', bearer)
             .expect(200);
 
-        expect(response.body.data.grantableRoles).toEqual(
+        expect(response.body.grantableRoles).toEqual(
             expect.arrayContaining(['manager', 'moderator', 'admin'])
         );
-        expect(response.body.data.grantableRoles).not.toContain('operator');
-        expect(response.body.data.grantableRoles).not.toContain('customer');
+        expect(response.body.grantableRoles).not.toContain('operator');
+        expect(response.body.grantableRoles).not.toContain('customer');
     });
 });

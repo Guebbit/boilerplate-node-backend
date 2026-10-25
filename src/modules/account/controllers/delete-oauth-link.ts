@@ -34,12 +34,7 @@ export const deleteOAuthLink = (request: Request<{ provider: string }>, response
             return accountService
                 .listOAuthLinks(request.authContext!.id)
                 .then((links) =>
-                    successResponse<OAuthLinks>(
-                        response,
-                        presentOAuthLinks(links),
-                        200,
-                        t('account.oauth.link-removed')
-                    )
+                    successResponse<OAuthLinks>(response, presentOAuthLinks(links), 200)
                 );
         })
         .catch(catchAs(response, 'deleteOAuthLink'));

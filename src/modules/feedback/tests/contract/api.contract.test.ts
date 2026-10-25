@@ -31,7 +31,7 @@ const createFeedbackRequest = async () => {
                 JSON.stringify(response.body)
         );
 
-    return response.body.data.id as string;
+    return response.body.id as string;
 };
 
 describe('POST /feedback/contact', () => {
@@ -44,7 +44,7 @@ describe('POST /feedback/contact', () => {
     it('starts a new request in the `new` status', async () => {
         const response = await api().post('/feedback/contact').send(CONTACT_PAYLOAD);
 
-        expect(response.body.data.status).toBe('new');
+        expect(response.body.status).toBe('new');
     });
 
     it('keeps the category and order number a visitor chose, and echoes them back', async () => {
@@ -53,7 +53,7 @@ describe('POST /feedback/contact', () => {
             .send({ ...CONTACT_PAYLOAD, category: 'privacy', orderNumber: 'ORD-9' });
 
         expect(response.status).toBe(201);
-        expect(response.body.data).toMatchObject({ category: 'privacy', orderNumber: 'ORD-9' });
+        expect(response.body).toMatchObject({ category: 'privacy', orderNumber: 'ORD-9' });
     });
 
     it('422s a category outside the list', async () => {
@@ -122,7 +122,7 @@ describe('POST /feedback/contact — the contract bounds the form restates nothi
             .send({ ...CONTACT_PAYLOAD, subject: '  Broken checkout  ' });
 
         expect(response.status).toBe(201);
-        expect(response.body.data.subject).toBe('Broken checkout');
+        expect(response.body.subject).toBe('Broken checkout');
     });
 });
 
@@ -139,7 +139,7 @@ describe('GET /feedback', () => {
         const { bearer } = await authenticateAs('admin');
         const response = await api().get('/feedback').set('Authorization', bearer);
 
-        expect(response.body.data.items).toHaveLength(0);
+        expect(response.body.items).toHaveLength(0);
     });
 
     // Without its own pagination validation this endpoint would silently clamp `?pageSize=500`
@@ -169,8 +169,8 @@ describe('GET /feedback', () => {
         const response = await api().get('/feedback?category=privacy').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(1);
-        expect(response.body.data.items[0].category).toBe('privacy');
+        expect(response.body.items).toHaveLength(1);
+        expect(response.body.items[0].category).toBe('privacy');
     });
 
     it('422s a status outside the enum instead of matching every row', async () => {
@@ -209,7 +209,7 @@ describe('POST /feedback/search', () => {
             .send({ status: 'resolved' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(0);
+        expect(response.body.items).toHaveLength(0);
     });
 
     // The same bounds as the query form, from the same shared schema — the two spellings of one
@@ -249,7 +249,7 @@ describe('GET /feedback/{id}', () => {
         const response = await api().get(`/feedback/${id}`).set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({ id, subject: CONTACT_PAYLOAD.subject });
+        expect(response.body).toMatchObject({ id, subject: CONTACT_PAYLOAD.subject });
     });
 
     it('answers 404 for a request that does not exist and for a malformed id', async () => {
@@ -295,8 +295,8 @@ describe('PATCH /feedback/{id}', () => {
             .send({ status: 'resolved', adminNotes: 'Fixed in 2.1.1' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.status).toBe('resolved');
-        expect(response.body.data.adminNotes).toBe('Fixed in 2.1.1');
+        expect(response.body.status).toBe('resolved');
+        expect(response.body.adminNotes).toBe('Fixed in 2.1.1');
     });
 
     it('matches the error contract for a status outside the enum', async () => {
@@ -324,8 +324,8 @@ describe('PATCH /feedback/{id}', () => {
             .send({ status: 'resolved' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.status).toBe('resolved');
-        expect(response.body.data.adminNotes).toBe('first pass');
+        expect(response.body.status).toBe('resolved');
+        expect(response.body.adminNotes).toBe('first pass');
     });
 
     it('clears adminNotes on an explicit null', async () => {
@@ -342,7 +342,7 @@ describe('PATCH /feedback/{id}', () => {
             .send({ adminNotes: null });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.adminNotes).toBeUndefined();
+        expect(response.body.adminNotes).toBeUndefined();
     });
 
     it('refuses "" for adminNotes, never a synonym for null', async () => {
@@ -376,10 +376,10 @@ describe('POST /feedback/contact — honeypot', () => {
 
         // The bot must learn nothing from the response — same 201 a real submission gets.
         expect(response.status).toBe(201);
-        expect(response.body.data).not.toHaveProperty('website');
+        expect(response.body).not.toHaveProperty('website');
 
         const listed = await api().get('/feedback').set('Authorization', bearer);
-        expect(listed.body.data.items[0].status).toBe('spam');
+        expect(listed.body.items[0].status).toBe('spam');
     });
 });
 
@@ -390,10 +390,10 @@ describe('DELETE /feedback/{id}', () => {
 
         const response = await api().delete(`/feedback/${id}`).set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
 
         const listed = await api().get('/feedback').set('Authorization', bearer);
-        expect(listed.body.data.items).toHaveLength(0);
+        expect(listed.body.items).toHaveLength(0);
     });
 
     it('matches the error contract for a request that does not exist', async () => {
@@ -424,7 +424,7 @@ describe('GET /feedback — sort', () => {
         const up = await api().get('/feedback?sort=email').set('Authorization', bearer);
         const refused = await api().get('/feedback?sort=message').set('Authorization', bearer);
 
-        expect(up.body.data.items.map((item: { email: string }) => item.email)).toEqual([
+        expect(up.body.items.map((item: { email: string }) => item.email)).toEqual([
             'amy@example.com',
             'zed@example.com'
         ]);

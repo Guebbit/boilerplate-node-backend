@@ -50,7 +50,7 @@ const linkedAccount = async () => {
         .send({ email: user.email, password: PLAIN_PASSWORD });
     return {
         user,
-        bearer: `Bearer ${login.body.data.token as string}`,
+        bearer: `Bearer ${login.body.token as string}`,
         cookie: cookieHeader(login, '__Host-session')
     };
 };
@@ -76,7 +76,7 @@ describe('GET /account/oauth/links', () => {
         const response = await api().get('/account/oauth/links').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.links).toEqual([
+        expect(response.body.links).toEqual([
             { provider: 'google', connectedAt: '2026-01-01T00:00:00.000Z' },
             { provider: 'github', connectedAt: '2026-01-01T00:00:00.000Z' }
         ]);
@@ -91,10 +91,10 @@ describe('GET /account/oauth/links', () => {
 
         const own = await api()
             .get('/account/oauth/links')
-            .set('Authorization', `Bearer ${login.body.data.token as string}`);
+            .set('Authorization', `Bearer ${login.body.token as string}`);
         const anonymous = await api().get('/account/oauth/links');
 
-        expect(own.body.data.links).toEqual([]);
+        expect(own.body.links).toEqual([]);
         expect(anonymous.status).toBe(401);
     });
 });
@@ -141,7 +141,7 @@ describe('DELETE /account/oauth/links/{provider}', () => {
 
         const response = await api()
             .delete('/account/oauth/links/google')
-            .set('Authorization', `Bearer ${refreshed.body.data.token as string}`);
+            .set('Authorization', `Bearer ${refreshed.body.token as string}`);
 
         expect(response.status).toBe(401);
         expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
@@ -156,7 +156,7 @@ describe('DELETE /account/oauth/links/{provider}', () => {
 
         const response = await api()
             .delete('/account/oauth/links/google')
-            .set('Authorization', `Bearer ${login.body.data.token as string}`);
+            .set('Authorization', `Bearer ${login.body.token as string}`);
 
         expect(response.status).toBe(404);
         expect(await linksOf(owner.id)).toHaveLength(2);
@@ -171,7 +171,7 @@ describe('the reset-confirm mail', () => {
         const response = await resetFor('reset-names-providers');
 
         const mail = mockOutbox.find(({ template }) => template === 'account.reset-confirm');
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(String(mail?.data.providers)).toContain('Google, Github');
     });
 

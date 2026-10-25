@@ -58,7 +58,7 @@ const aliases = operations.filter(({ operation }) => operation['x-alias-of'] !==
  *
  * Compared rather than merely present, because the claim `x-alias-of` makes is that a caller can
  * switch spellings without changing what they parse. An alias whose 200 returned a different
- * envelope would be a different operation wearing the annotation.
+ * schema would be a different operation wearing the annotation.
  */
 const successSchema = (operation: Operation): string => {
     const responses = operation.responses ?? {};

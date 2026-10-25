@@ -52,7 +52,7 @@ describe('POST /account/password/reset timing', () => {
 
         const response = await api().post('/account/password/reset').send({ email: user.email });
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         // The repository is still thinking: the answer did not wait for it.
         expect(released).toBe(false);
         await eventually(() =>
@@ -77,11 +77,11 @@ describe('POST /account/password/reset timing', () => {
             .post('/account/password/reset')
             .send({ email: 'nobody@example.com' });
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(released).toBe(false);
     });
 
-    it('logs a failure behind the answer instead of swallowing it, and still answers 200', async () => {
+    it('logs a failure behind the answer instead of swallowing it, and still answers 204', async () => {
         jest.spyOn(userService, 'findByEmail').mockRejectedValue(new Error('database is gone'));
         const logged = jest.spyOn(logger, 'error').mockImplementation(() => logger);
 
@@ -90,7 +90,7 @@ describe('POST /account/password/reset timing', () => {
             .send({ email: 'anyone@example.com' });
         await eventually(() => logged.mock.calls.length > 0);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(logged).toHaveBeenCalledWith(
             expect.objectContaining({ message: 'A password reset request failed.' })
         );

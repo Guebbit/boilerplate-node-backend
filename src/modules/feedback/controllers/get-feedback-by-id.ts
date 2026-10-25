@@ -24,7 +24,7 @@ export const getFeedbackById = (request: Request<{ id: string }>, response: Resp
         .getById(id)
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse(response, presentFeedbackRequest(result.data), 200, result.message);
+            successResponse(response, presentFeedbackRequest(result.data), 200);
         })
         .catch(catchAs(response, 'getFeedbackById'));
 };

@@ -30,7 +30,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AntibotConfigEnvelope'
+                                $ref: '#/components/schemas/AntibotConfig'
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /antibot/challenge:
@@ -50,27 +50,13 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AntibotChallengeEnvelope'
+                                $ref: '#/components/schemas/AntibotChallenge'
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
 components:
     schemas:
         # ---------- antibot — the schemas only this module's paths reference. ----------
-        AntibotConfigEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/AntibotConfig'
-
         AntibotConfig:
             type: object
             additionalProperties: false
@@ -111,20 +97,6 @@ components:
                     description: >
                         Rung 2's active posture (`NODE_ANTIBOT_EMAIL_POLICY`). `off`, the default,
                         means no address is ever refused.
-
-        AntibotChallengeEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/AntibotChallenge'
 
         AntibotChallenge:
             type: object

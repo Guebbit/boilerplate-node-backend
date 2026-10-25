@@ -1,7 +1,7 @@
 /**
  * @module
  * The HTTP caller the flow runner drives the app with: one base URL, one bearer token, and the
- * envelope unwrapping that every call would otherwise repeat.
+ * reading of each call's status and body, which every call would otherwise repeat.
  *
  * Deliberately not supertest, though the repo already depends on it for the test suites: this
  * file runs on a container boot (`npm run db:bootstrap` → `scenario:apply`), where
@@ -12,9 +12,8 @@
 
 import { generate } from 'otplib';
 
-/** Every response this API sends, successful or not. Only these two fields are ever read here. */
-interface Envelope {
-    data?: unknown;
+/** The problem-details members a refusal carries that are read here. */
+interface Problem {
     errors?: { code?: string; message?: string }[];
 }
 
@@ -24,7 +23,7 @@ type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 /** What a call came back with, before anything decides whether that was acceptable. */
 export interface Attempt {
     status: number;
-    /** The envelope's `data` — `undefined` for a 204 and for any body that carries none. */
+    /** The success body itself — `undefined` for a 204, for a refusal and for a body that is not JSON. */
     data: unknown;
     /** The first `errors[].code`, which is how every refusal in this API names itself. */
     errorCode: string | undefined;
@@ -77,12 +76,12 @@ export interface Caller {
 const readAttempt = (response: Response): Promise<Attempt> =>
     response.json().then(
         (body: unknown) => {
-            const envelope = body as Envelope;
+            const problem = body as Problem;
             return {
                 status: response.status,
-                data: envelope.data,
-                errorCode: envelope.errors?.[0]?.code,
-                errorMessages: (envelope.errors ?? []).map((error) => error.message ?? '')
+                data: response.ok ? body : undefined,
+                errorCode: problem.errors?.[0]?.code,
+                errorMessages: (problem.errors ?? []).map((error) => error.message ?? '')
             };
         },
         () => ({

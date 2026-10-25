@@ -57,7 +57,7 @@ it('delivers every event once, signed, in causal order', async () => {
                 expiresAt: inAWeek()
             }),
         MintApiKey201Response
-    ).data;
+    );
     const key = `Bearer ${minted.secret}`;
     const { secret } = bodyOf(
         await api()
@@ -65,7 +65,7 @@ it('delivers every event once, signed, in causal order', async () => {
             .set('Authorization', key)
             .send({ url: `${endpoint.url}/hook`, eventTypes: ['*'] }),
         CreateWebhookSubscription201Response
-    ).data;
+    );
     if (!secret) throw new Error('the subscription answered no signing secret');
 
     let seen = 0;
@@ -93,14 +93,14 @@ it('delivers every event once, signed, in causal order', async () => {
     const [fulfillmentOrder] = bodyOf(
         await api().get(`/delivery/orders/${order.id}`).set('Authorization', admin),
         GetFulfillmentByOrder200Response
-    ).data.fulfillmentOrders;
+    ).fulfillmentOrders;
     const shipment = bodyOf(
         await api()
             .post(`/delivery/fulfillment-orders/${fulfillmentOrder.id}/shipments`)
             .set('Authorization', admin)
             .send({ trackingCode: 'TRK-INTEGRATOR1' }),
         ShipFulfillmentOrder201Response
-    ).data;
+    );
     steps.push(await arrivals());
     bodyOf(
         await api().post(`/delivery/shipments/${shipment.id}/deliver`).set('Authorization', admin),
@@ -115,7 +115,7 @@ it('delivers every event once, signed, in causal order', async () => {
             .set('Authorization', bearer)
             .send({ orderId: order.id, reason: 'withdrawal' }),
         CreateReturn201Response
-    ).data;
+    );
     steps.push(await arrivals());
     await api().post(`/returns/${returned.id}/receive`).set('Authorization', admin).expect(200);
     steps.push(await arrivals());
@@ -149,7 +149,7 @@ it('delivers every event once, signed, in causal order', async () => {
 
     // Revoking the key ends the integrator's access at once.
     await api().get('/webhooks/subscriptions').set('Authorization', key).expect(200);
-    await api().delete(`/api-keys/${minted.id}`).set('Authorization', admin).expect(200);
+    await api().delete(`/api-keys/${minted.id}`).set('Authorization', admin).expect(204);
     await api().get('/webhooks/subscriptions').set('Authorization', key).expect(401);
 });
 
@@ -174,7 +174,7 @@ const adminWithKey = async (n: number) => {
                 expiresAt: inAWeek()
             }),
         MintApiKey201Response
-    ).data;
+    );
 
     return { user, key: `Bearer ${minted.secret}` };
 };

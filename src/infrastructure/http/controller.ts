@@ -1,7 +1,7 @@
 /**
  * @module
  * The four steps every controller repeats — read input, validate, call one service method, branch
- * on the envelope, catch — written once as helpers rather than a `defineController()` wrapper. A
+ * on the result, catch — written once as helpers rather than a `defineController()` wrapper. A
  * wrapper would own the chain: it adds a stack frame pointing here instead of the handler, forces
  * the service result through a generic, and hides the `.catch()` call that
  * `controller-chain-must-catch` walks the AST looking for. Helpers keep all three visible.

@@ -61,7 +61,7 @@ const login = () => {
         { headers: { 'Content-Type': 'application/json' } }
     );
     check(response, { 'login answers 200': (r) => r.status === 200 });
-    return response.json('data.token');
+    return response.json('token');
 };
 
 export default function () {
@@ -74,7 +74,7 @@ export default function () {
 
     group('fill the cart', () => {
         const list = http.get(`${BASE_URL}/products`);
-        const productId = list.json('data.items.0.id');
+        const productId = list.json('items.0.id');
         if (!productId) return;
 
         const added = http.post(

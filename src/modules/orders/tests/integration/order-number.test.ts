@@ -24,6 +24,6 @@ describe('GET /orders/{id} — the order number on the response', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.orderNumber).toBe('2026-000041');
+        expect(response.body.orderNumber).toBe('2026-000041');
     });
 });

@@ -111,7 +111,7 @@ export const erase = (
                     metadata: { hardDelete: true }
                 });
             })
-            .then(() => generateSuccess(undefined, 200, t('users.hard-deleted')));
+            .then(() => generateSuccess(undefined, 200));
     });
 
 /**
@@ -139,7 +139,7 @@ export const remove = (
     if (hardDelete) return erase(user, context);
 
     // Already deleted: nothing to do. DELETE must be safe to retry; undoing it is `restoreById`.
-    if (user.deletedAt) return Promise.resolve(generateSuccess(user, 200, t('users.soft-deleted')));
+    if (user.deletedAt) return Promise.resolve(generateSuccess(user, 200));
 
     user.deletedAt = new Date();
     // The epoch moves in the same save, so a restore does not bring the old tokens back.
@@ -156,7 +156,7 @@ export const remove = (
             targetId: user.id,
             metadata: { hardDelete: false }
         });
-        return generateSuccess(saved, 200, t('users.soft-deleted'));
+        return generateSuccess(saved, 200);
     });
 };
 
@@ -198,7 +198,7 @@ const restoreScheduled = (
         });
         return userRepository
             .findById(user.id)
-            .then((restored) => generateSuccess(restored ?? user, 200, t('users.restored')));
+            .then((restored) => generateSuccess(restored ?? user, 200));
     });
 };
 
@@ -235,7 +235,7 @@ export const restoreById = (
                     targetType: 'user',
                     targetId: id
                 });
-                return generateSuccess(saved, 200, t('users.restored'));
+                return generateSuccess(saved, 200);
             });
         });
     });

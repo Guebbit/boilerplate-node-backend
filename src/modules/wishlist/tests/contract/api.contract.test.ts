@@ -47,7 +47,7 @@ describe('GET /wishlist', () => {
         const response = await api().get('/wishlist').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(0);
+        expect(response.body.items).toHaveLength(0);
     });
 
     it('matches the contract for a wishlist holding items', async () => {
@@ -55,7 +55,7 @@ describe('GET /wishlist', () => {
         const response = await api().get('/wishlist').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toEqual([
+        expect(response.body.items).toEqual([
             { productId: String(product._id), availability: 'in_stock' }
         ]);
     });
@@ -72,7 +72,7 @@ describe('POST /wishlist/items', () => {
             .send({ productId: String(product._id) });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toEqual([
+        expect(response.body.items).toEqual([
             { productId: String(product._id), availability: 'in_stock' }
         ]);
     });
@@ -100,7 +100,7 @@ describe('POST /wishlist/items', () => {
             .send({ productId: String(product._id) });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toEqual([
+        expect(response.body.items).toEqual([
             { productId: String(product._id), availability: 'in_stock' }
         ]);
     });
@@ -142,7 +142,7 @@ describe('DELETE /wishlist/items/{productId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(0);
+        expect(response.body.items).toHaveLength(0);
     });
 
     // The move writes a basket, and every signed-in account holds one: a staff member keeps a
@@ -163,7 +163,7 @@ describe('DELETE /wishlist/items/{productId}', () => {
             const wishlist = await api().get('/wishlist').set('Authorization', bearer);
 
             expect(response.status).toBe(200);
-            expect(wishlist.body.data.items).toHaveLength(0);
+            expect(wishlist.body.items).toHaveLength(0);
         }
     );
 
@@ -197,10 +197,10 @@ describe('POST /wishlist/items/{productId}/move-to-cart', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(0);
+        expect(response.body.items).toHaveLength(0);
 
         const cart = await api().get('/cart').set('Authorization', bearer);
-        expect(cart.body.data.items).toEqual([
+        expect(cart.body.items).toEqual([
             {
                 productId: String(product._id),
                 quantity: 1,

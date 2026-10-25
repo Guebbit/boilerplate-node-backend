@@ -32,7 +32,7 @@ export const getOrderTimeline = (
                 return undefined;
             }
             return orderService.readTimeline(id, request.authContext).then((entries) => {
-                successResponse<OrderTimelineEntry[]>(response, entries, 200);
+                successResponse<{ items: OrderTimelineEntry[] }>(response, { items: entries }, 200);
             });
         })
         .catch(catchAs(response, 'getOrderTimeline'));

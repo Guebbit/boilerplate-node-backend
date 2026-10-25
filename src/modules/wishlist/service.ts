@@ -73,9 +73,7 @@ const add = (
                     event: wishlistAnalyticsEvents.WISHLIST_ITEM_ADDED,
                     properties: { product_id: productId }
                 });
-            return present(wishlist).then((view) =>
-                generateSuccess(view, 200, t('wishlist.added'))
-            );
+            return present(wishlist).then((view) => generateSuccess(view, 200));
         });
     });
 
@@ -97,7 +95,7 @@ const remove = (
             event: wishlistAnalyticsEvents.WISHLIST_ITEM_REMOVED,
             properties: { product_id: productId }
         });
-        return present(wishlist).then((view) => generateSuccess(view, 200, t('wishlist.removed')));
+        return present(wishlist).then((view) => generateSuccess(view, 200));
     });
 
 /**
@@ -140,9 +138,7 @@ const moveToCart = (
                     event: wishlistAnalyticsEvents.WISHLIST_MOVED_TO_CART,
                     properties: { product_id: productId }
                 });
-                return present(updated).then((view) =>
-                    generateSuccess(view, 200, t('wishlist.moved-to-cart'))
-                );
+                return present(updated).then((view) => generateSuccess(view, 200));
             });
         });
     });

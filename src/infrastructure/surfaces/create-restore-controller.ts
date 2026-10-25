@@ -63,7 +63,7 @@ export const createRestoreController = <TRow>({
                 if (refused(response, result)) return;
 
                 return Promise.resolve(present(result.data, request)).then((shaped) => {
-                    successResponse(response, shaped, 200, result.message);
+                    successResponse(response, shaped, 200);
                 });
             })
             .catch(catchAs(response, operation));

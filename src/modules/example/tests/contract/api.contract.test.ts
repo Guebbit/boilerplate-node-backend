@@ -48,7 +48,7 @@ const createViaApi = async (bearer: string, body: { title: string; body: string 
             `example setup failed: POST /examples returned ${response.status}: ${JSON.stringify(response.body)}`
         );
 
-    return response.body.data as { id: string };
+    return response.body as { id: string };
 };
 
 /**
@@ -73,7 +73,7 @@ describe('GET /examples/published/{id}', () => {
         const response = await api().get(`/examples/published/${String(published._id)}`);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({
+        expect(response.body).toMatchObject({
             id: String(published._id),
             status: 'published',
             ownerName: user.username
@@ -111,13 +111,13 @@ describe('POST /examples', () => {
             .send({ title: 'First', body: 'Hello' });
 
         expect(response.status).toBe(201);
-        expect(response.body.data).toMatchObject({
+        expect(response.body).toMatchObject({
             title: 'First',
             status: 'draft',
             userId: user.id,
             ownerName: user.username
         });
-        expect(response.headers.location).toBe(`/examples/${String(response.body.data.id)}`);
+        expect(response.headers.location).toBe(`/examples/${String(response.body.id)}`);
     });
 
     it.each(['user', 'unverified'] as const)(
@@ -168,8 +168,8 @@ describe('GET /examples and POST /examples/search', () => {
         const response = await api().get('/examples').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(1);
-        expect(response.body.data.meta.totalItems).toBe(1);
+        expect(response.body.items).toHaveLength(1);
+        expect(response.body.meta.totalItems).toBe(1);
     });
 
     it('never lists someone else’s', async () => {
@@ -179,7 +179,7 @@ describe('GET /examples and POST /examples/search', () => {
 
         const response = await api().get('/examples').set('Authorization', bearer);
 
-        expect(response.body.data.items).toEqual([]);
+        expect(response.body.items).toEqual([]);
     });
 
     it('lists everyone’s for an administrator', async () => {
@@ -189,7 +189,7 @@ describe('GET /examples and POST /examples/search', () => {
 
         const response = await api().get('/examples').set('Authorization', bearer);
 
-        expect(response.body.data.items).toHaveLength(1);
+        expect(response.body.items).toHaveLength(1);
     });
 
     it('filters by status in the query, and sorts', async () => {
@@ -202,9 +202,7 @@ describe('GET /examples and POST /examples/search', () => {
             .query({ status: 'published', sort: 'title' })
             .set('Authorization', bearer);
 
-        expect(response.body.data.items.map((item: { title: string }) => item.title)).toEqual([
-            'A out'
-        ]);
+        expect(response.body.items.map((item: { title: string }) => item.title)).toEqual(['A out']);
     });
 
     it('answers 422 for a status outside the closed set', async () => {
@@ -229,7 +227,7 @@ describe('GET /examples and POST /examples/search', () => {
             .send({ text: 'puppies' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(1);
+        expect(response.body.items).toHaveLength(1);
     });
 });
 
@@ -268,7 +266,7 @@ describe('PUT and PATCH /examples/{id}', () => {
             .send({ title: 'Whole', body: 'New' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({ title: 'Whole', status: 'draft' });
+        expect(response.body).toMatchObject({ title: 'Whole', status: 'draft' });
     });
 
     it('answers 422 to a PUT that leaves out a required field', async () => {
@@ -293,7 +291,7 @@ describe('PUT and PATCH /examples/{id}', () => {
             .send({ title: 'Only the title' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({
+        expect(response.body).toMatchObject({
             title: 'Only the title',
             body: 'A body',
             status: 'draft'
@@ -378,7 +376,7 @@ describe('DELETE /examples/{id}', () => {
 
         const response = await api().delete(`/examples/${id}`).set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(await statusOf(api().get(`/examples/${id}`).set('Authorization', bearer))).toBe(404);
     });
 
@@ -418,8 +416,8 @@ describe('PUT /examples/{id}/cover', () => {
             .attach('imageUpload', PNG_BYTES, { filename: 'cover.png', contentType: 'image/png' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.imageUrl).toMatch(/^\/images\/.+\.png$/);
-        expect(response.body.data.thumbnailUrl).toBeDefined();
+        expect(response.body.imageUrl).toMatch(/^\/images\/.+\.png$/);
+        expect(response.body.thumbnailUrl).toBeDefined();
     });
 
     it('answers 422 when no file is sent', async () => {
@@ -472,11 +470,11 @@ describe('POST /examples/{id}/transitions', () => {
             .send({ to: 'published' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({
+        expect(response.body).toMatchObject({
             status: 'published',
             actions: { transitions: ['archived'], update: true, delete: true }
         });
-        expect(response.body.data.publishedAt).toBeDefined();
+        expect(response.body.publishedAt).toBeDefined();
     });
 
     it('answers 409 with the code and details for a move not on the table', async () => {
@@ -561,7 +559,7 @@ describe('Example.actions', () => {
             .get(`/examples/${String(theirs._id)}`)
             .set('Authorization', bearer);
 
-        expect(response.body.data.actions).toEqual({
+        expect(response.body.actions).toEqual({
             transitions: ['published', 'archived'],
             update: true,
             delete: true
@@ -578,7 +576,7 @@ describe('Example.actions', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.actions).toEqual({
+        expect(response.body.actions).toEqual({
             transitions: [],
             update: false,
             delete: false
@@ -591,7 +589,7 @@ describe('Example.actions', () => {
 
         const response = await api().get(`/examples/published/${String(published._id)}`);
 
-        expect(response.body.data).not.toHaveProperty('actions');
+        expect(response.body).not.toHaveProperty('actions');
     });
 });
 
@@ -611,7 +609,7 @@ describe('POST /examples with an Idempotency-Key', () => {
 
         expect(first.status).toBe(201);
         expect(replay.status).toBe(201);
-        expect(replay.body.data.id).toBe(first.body.data.id);
+        expect(replay.body.id).toBe(first.body.id);
         expect(replay.headers['idempotent-replay']).toBe('true');
         expect(changed.status).toBe(422);
     });

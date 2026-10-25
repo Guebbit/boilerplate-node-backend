@@ -21,12 +21,12 @@ describe('GET /inventory/levels', () => {
         const response = await api().get('/inventory/levels').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items[0]).toMatchObject({
+        expect(response.body.items[0]).toMatchObject({
             onHand: 7,
             reserved: 0,
             available: 7
         });
-        expect(response.body.data.meta).toMatchObject({ totalItems: 1, totalPages: 1 });
+        expect(response.body.meta).toMatchObject({ totalItems: 1, totalPages: 1 });
     });
 
     it('matches the contract when narrowed to what needs ordering', async () => {
@@ -38,8 +38,8 @@ describe('GET /inventory/levels', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(0);
-        expect(response.body.data.meta.totalItems).toBe(0);
+        expect(response.body.items).toHaveLength(0);
+        expect(response.body.meta.totalItems).toBe(0);
     });
 
     it('pages the board rather than reading the whole catalogue', async () => {
@@ -52,8 +52,8 @@ describe('GET /inventory/levels', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(2);
-        expect(response.body.data.meta).toMatchObject({ totalItems: 5, totalPages: 3 });
+        expect(response.body.items).toHaveLength(2);
+        expect(response.body.meta).toMatchObject({ totalItems: 5, totalPages: 3 });
     });
 });
 
@@ -67,7 +67,7 @@ describe('GET /inventory/levels/{productId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({ onHand: 7, reserved: 0, available: 7 });
+        expect(response.body).toMatchObject({ onHand: 7, reserved: 0, available: 7 });
     });
 
     it('answers 404 for an unknown product and a malformed id alike', async () => {
@@ -102,8 +102,8 @@ describe('GET /inventory/movements', () => {
         const response = await api().get('/inventory/movements').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(0);
-        expect(response.body.data.meta).toMatchObject({ totalItems: 0, totalPages: 0 });
+        expect(response.body.items).toHaveLength(0);
+        expect(response.body.meta).toMatchObject({ totalItems: 0, totalPages: 0 });
     });
 
     it('pages the ledger rather than truncating it', async () => {
@@ -120,10 +120,10 @@ describe('GET /inventory/movements', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(2);
+        expect(response.body.items).toHaveLength(2);
         // `totalItems` counts everything matching the filters, not the page — which is what lets
         // an audit see that there is more history than it is currently looking at.
-        expect(response.body.data.meta).toMatchObject({
+        expect(response.body.meta).toMatchObject({
             page: 2,
             pageSize: 2,
             totalItems: 5,
@@ -148,8 +148,8 @@ describe('GET /inventory/movements', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(1);
-        expect(response.body.data.items[0].reason).toBe('adjust');
+        expect(response.body.items).toHaveLength(1);
+        expect(response.body.items[0].reason).toBe('adjust');
     });
 
     it('matches the contract for a ledger holding rows, narrowed by product', async () => {
@@ -165,9 +165,9 @@ describe('GET /inventory/movements', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(1);
+        expect(response.body.items).toHaveLength(1);
         // Both deltas on the row, which is what makes the ledger replayable.
-        expect(response.body.data.items[0]).toMatchObject({
+        expect(response.body.items[0]).toMatchObject({
             reason: 'receive',
             onHandDelta: 5,
             reservedDelta: 0
@@ -186,7 +186,7 @@ describe('POST /inventory/levels/{productId}/receive', () => {
             .send({ quantity: 7 });
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({ onHand: 10, reserved: 0, available: 10 });
+        expect(response.body).toMatchObject({ onHand: 10, reserved: 0, available: 10 });
     });
 
     it('matches the error contract for an unknown product', async () => {
@@ -224,7 +224,7 @@ describe('POST /inventory/levels/{productId}/adjust', () => {
             .send({ delta: -4, note: 'damaged in transit' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({ onHand: 6, available: 6 });
+        expect(response.body).toMatchObject({ onHand: 6, available: 6 });
     });
 
     it('matches the error contract when the correction goes below what is reserved', async () => {
@@ -266,7 +266,7 @@ describe('POST /inventory/reservations/sweep', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toEqual({ expired: 0 });
+        expect(response.body).toEqual({ expired: 0 });
     });
 });
 
@@ -285,7 +285,7 @@ describe('GET /inventory/preorders', () => {
         const response = await api().get('/inventory/preorders').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toMatchObject([
+        expect(response.body.items).toMatchObject([
             {
                 productId: String(product._id),
                 backorderLimit: 6,
@@ -296,7 +296,7 @@ describe('GET /inventory/preorders', () => {
                 ordered: 0
             }
         ]);
-        expect(response.body.data.meta).toMatchObject({ totalItems: 1 });
+        expect(response.body.meta).toMatchObject({ totalItems: 1 });
     });
 });
 
@@ -311,7 +311,7 @@ describe('PUT /inventory/levels/:productId/backorder-limit', () => {
             .send({ backorderLimit: 8 });
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({ onHand: 3, backorderLimit: 8, backordered: 0 });
+        expect(response.body).toMatchObject({ onHand: 3, backorderLimit: 8, backordered: 0 });
     });
 
     it('matches the error contract for an unknown product', async () => {

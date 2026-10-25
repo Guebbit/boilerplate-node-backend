@@ -64,6 +64,20 @@ rules:
                     propertyNames:
                         const: 'application/problem+json'
 
+    # --- A JSON success is never a top-level array ---
+    #
+    # A list answers an object (`{ items, meta }`, or a resource-named key): a bare array cannot
+    # grow a field without breaking every reader (Zalando guideline 110).
+    success-body-is-not-an-array:
+        description: 'A 2xx `application/json` body is an object, never a top-level array.'
+        severity: error
+        given: "$.paths[*][*].responses[?(@property.match(/^2/))].content['application/json'].schema"
+        then:
+            field: type
+            function: pattern
+            functionOptions:
+                notMatch: '^array$'
+
     # --- operationId naming matches the HTTP verb ---
     #
     # `replace*` means a full, idempotent replace; `update*` means a partial change — but nothing

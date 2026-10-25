@@ -6,7 +6,7 @@
 
 import type { Request, Response } from 'express';
 import { ConfirmEmailChangeBody } from '@api/schemas.zod';
-import { successResponse } from '@infrastructure/http/response';
+import { noContentResponse } from '@infrastructure/http/response';
 // Both token endpoints take `{ token }`, so orval names the TYPE after the shared schema.
 import type { VerifyEmailConfirmRequest } from '@types';
 import { authEmailChangeUndoTotal } from '../metrics';
@@ -38,7 +38,7 @@ export const postEmailChangeUndo = (
                 return;
             }
             authEmailChangeUndoTotal.inc({ status: 'success' });
-            successResponse(response, undefined, result.status, result.message);
+            noContentResponse(response);
         })
         .catch((error: unknown) => {
             authEmailChangeUndoTotal.inc({ status: 'failure' });

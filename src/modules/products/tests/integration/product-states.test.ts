@@ -15,7 +15,7 @@ setupTestDb();
 
 /** The titles a catalogue search answers, however the response wraps them. */
 const titlesOf = (body: unknown): string[] =>
-    (body as { data: { items: { title: string }[] } }).data.items.map(({ title }) => title);
+    (body as { items: { title: string }[] }).items.map(({ title }) => title);
 
 /** One product per state a shopper can meet, titled by what it is. */
 const seedStates = () =>
@@ -67,7 +67,7 @@ describe('GET /products/:id', () => {
         const response = await api().get(`/products/${String(offSale._id)}`);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({ purchasable: false, active: true });
+        expect(response.body).toMatchObject({ purchasable: false, active: true });
     });
 
     it('answers 404 for an inactive product, whatever its purchasable flag', async () => {
@@ -90,6 +90,6 @@ describe('GET /products/:id', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.active).toBe(false);
+        expect(response.body.active).toBe(false);
     });
 });

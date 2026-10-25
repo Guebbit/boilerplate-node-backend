@@ -24,7 +24,7 @@ describe('GET /stock-alerts', () => {
         const response = await api().get('/stock-alerts').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toEqual([]);
+        expect(response.body.items).toEqual([]);
     });
 
     it('matches the contract for a caller with one', async () => {
@@ -35,7 +35,7 @@ describe('GET /stock-alerts', () => {
         const response = await api().get('/stock-alerts').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toMatchObject([{ productId }]);
+        expect(response.body.items).toMatchObject([{ productId }]);
     });
 
     it('refuses a caller who is not signed in', async () => {
@@ -60,7 +60,7 @@ describe('POST /stock-alerts', () => {
             .send({ productId });
 
         expect([first.status, second.status]).toEqual([200, 200]);
-        expect(second.body.data.items).toHaveLength(1);
+        expect(second.body.items).toHaveLength(1);
     });
 
     it('matches the error contract while the product can be ordered now: 409 with its code', async () => {
@@ -128,7 +128,7 @@ describe('DELETE /stock-alerts/{productId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toEqual([]);
+        expect(response.body.items).toEqual([]);
     });
 
     it('matches the error contract for a request the caller does not hold', async () => {

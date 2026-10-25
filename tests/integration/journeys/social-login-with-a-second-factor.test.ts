@@ -48,7 +48,7 @@ it('asks for the code after the provider, and runs the session on the answer', a
         .post('/account/2fa/methods/totp/setup')
         .set('Authorization', bearer)
         .send();
-    const { secret } = setup.body.data as { secret: string };
+    const { secret } = setup.body as { secret: string };
     await api()
         .post('/account/2fa/methods/totp/confirm')
         .set('Authorization', bearer)
@@ -80,18 +80,18 @@ it('asks for the code after the provider, and runs the session on the answer', a
     const account = bodyOf(
         await api().get('/account').set('Authorization', session),
         GetAccount200Response
-    ).data;
+    );
     expect(account).toMatchObject({ email: 'oauth.demo@example.com' });
     expect(account.verifiedAt).toEqual(expect.any(String));
     const { links } = bodyOf(
         await api().get('/account/oauth/links').set('Authorization', session),
         ListOAuthLinks200Response
-    ).data;
+    );
     expect(links.map(({ provider }) => provider)).toEqual(['fake']);
     const { sessions } = bodyOf(
         await api().get('/account/sessions').set('Authorization', session),
         ListSessions200Response
-    ).data;
+    );
     expect(sessions).toHaveLength(2);
 
     // The challenge was spent with the session it bought.

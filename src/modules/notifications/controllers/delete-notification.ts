@@ -5,7 +5,7 @@
 
 import type { Request, Response } from 'express';
 import { requireId } from '@infrastructure/http/ids';
-import { successResponse } from '@infrastructure/http/response';
+import { noContentResponse } from '@infrastructure/http/response';
 import { catchAs, refused } from '@infrastructure/http/controller';
 import { notificationsService } from '../services';
 
@@ -23,7 +23,7 @@ export const deleteNotification = (request: Request<{ id: string }>, response: R
         .then((result) => {
             if (refused(response, result)) return;
 
-            successResponse(response, result.data, 200, result.message);
+            noContentResponse(response);
         })
         .catch(catchAs(response, 'deleteNotificationById'));
 };

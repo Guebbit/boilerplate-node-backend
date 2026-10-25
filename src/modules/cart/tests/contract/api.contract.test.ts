@@ -52,7 +52,7 @@ describe('GET /cart', () => {
         const response = await api().get('/cart').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(0);
+        expect(response.body.items).toHaveLength(0);
     });
 
     it('matches the contract for a cart holding items', async () => {
@@ -60,7 +60,7 @@ describe('GET /cart', () => {
         const response = await api().get('/cart').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(1);
+        expect(response.body.items).toHaveLength(1);
     });
 
     it('matches the contract for a line over what is for sale: CartResponseItem flags it, no number', async () => {
@@ -74,7 +74,7 @@ describe('GET /cart', () => {
         const response = await api().get('/cart').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toEqual([
+        expect(response.body.items).toEqual([
             {
                 productId: String(scarce._id),
                 quantity: 3,
@@ -82,7 +82,7 @@ describe('GET /cart', () => {
                 canIncrease: true
             }
         ]);
-        expect(response.body.data.checkoutable).toBe(false);
+        expect(response.body.checkoutable).toBe(false);
     });
 
     it('says a line at the per-line ceiling cannot grow, and a buyable cart is checkoutable', async () => {
@@ -97,8 +97,8 @@ describe('GET /cart', () => {
         const response = await api().get('/cart').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items[0]).toMatchObject({ quantity: 10, canIncrease: false });
-        expect(response.body.data.checkoutable).toBe(true);
+        expect(response.body.items[0]).toMatchObject({ quantity: 10, canIncrease: false });
+        expect(response.body.checkoutable).toBe(true);
     });
 
     it('echoes the total in the minor units checkout compares against', async () => {
@@ -111,9 +111,9 @@ describe('GET /cart', () => {
 
         const response = await api().get('/cart').set('Authorization', bearer);
 
-        expect(response.body.data.summary.expectedTotal).toEqual({
+        expect(response.body.summary.expectedTotal).toEqual({
             amount: 5100,
-            currency: response.body.data.summary.currency
+            currency: response.body.summary.currency
         });
     });
 });
@@ -130,7 +130,7 @@ describe('POST /cart/items', () => {
         // A line is written through its parent: 200 + the whole cart, never 201 or a Location.
         expect(response.status).toBe(200);
         expect(response.headers.location).toBeUndefined();
-        expect(response.body.data.summary.totalQuantity).toBe(3);
+        expect(response.body.summary.totalQuantity).toBe(3);
     });
 
     // "Add to cart" GROWS a line already there (Shopify, commercetools): the same button
@@ -145,7 +145,7 @@ describe('POST /cart/items', () => {
 
         expect(response.status).toBe(200);
         expect(response.headers.location).toBeUndefined();
-        expect(response.body.data.summary.totalQuantity).toBe(5);
+        expect(response.body.summary.totalQuantity).toBe(5);
     });
 
     it('422s an add that would push a line past the per-line ceiling', () =>
@@ -244,7 +244,7 @@ const heldOf = (bearer: string, id: string) =>
         .set('Authorization', bearer)
         .then(
             (response) =>
-                (response.body.data.items as { productId: string; quantity: number }[]).find(
+                (response.body.items as { productId: string; quantity: number }[]).find(
                     (item) => item.productId === id
                 )?.quantity ?? 0
         );
@@ -260,7 +260,7 @@ describe('POST /cart/merge', () => {
             .send({ lines: [{ productId: String(product._id), quantity: 2 }] });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.lines).toEqual([
+        expect(response.body.lines).toEqual([
             {
                 productId: String(product._id),
                 requested: 2,
@@ -268,7 +268,7 @@ describe('POST /cart/merge', () => {
                 availability: 'in_stock'
             }
         ]);
-        expect(response.body.data.cart.items).toHaveLength(1);
+        expect(response.body.cart.items).toHaveLength(1);
     });
 
     it('takes 100 guest lines and refuses 101 with a 422', async () => {
@@ -308,7 +308,7 @@ describe('POST /cart/merge', () => {
             });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.lines).toEqual([
+        expect(response.body.lines).toEqual([
             {
                 productId: String(held._id),
                 requested: 2,
@@ -348,11 +348,11 @@ describe('POST /cart/merge', () => {
             });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.lines.map(({ reason }: { reason?: string }) => reason)).toEqual([
+        expect(response.body.lines.map(({ reason }: { reason?: string }) => reason)).toEqual([
             'removed',
             undefined
         ]);
-        expect(response.body.data.cart.items).toHaveLength(1);
+        expect(response.body.cart.items).toHaveLength(1);
     });
 
     describe('with an Idempotency-Key', () => {
@@ -451,7 +451,7 @@ describe('DELETE /cart/items', () => {
         const response = await api().delete('/cart/items').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(0);
+        expect(response.body.items).toHaveLength(0);
     });
 
     it('answers 200 for a cart that is already empty', async () => {
@@ -460,7 +460,7 @@ describe('DELETE /cart/items', () => {
         const response = await api().delete('/cart/items').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(0);
+        expect(response.body.items).toHaveLength(0);
     });
 });
 
@@ -473,7 +473,7 @@ describe('PATCH /cart/items/{productId}', () => {
             .send({ quantity: 5 });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.summary.totalQuantity).toBe(5);
+        expect(response.body.summary.totalQuantity).toBe(5);
     });
 
     // A change never creates (a PUT that creates MUST answer 201, RFC 9110 §9.3.4, and a line has
@@ -490,7 +490,7 @@ describe('PATCH /cart/items/{productId}', () => {
 
         expect(response.status).toBe(404);
         expect(response.body.errors[0].message).toBe(t('cart.item-not-found'));
-        expect(cart.body.data.items).toHaveLength(0);
+        expect(cart.body.items).toHaveLength(0);
     });
 
     it('also takes the body as application/merge-patch+json', async () => {
@@ -503,7 +503,7 @@ describe('PATCH /cart/items/{productId}', () => {
             .send(JSON.stringify({ quantity: 6 }));
 
         expect(response.status).toBe(200);
-        expect(response.body.data.summary.totalQuantity).toBe(6);
+        expect(response.body.summary.totalQuantity).toBe(6);
     });
 
     it('404s a held line whose product the storefront no longer shows', async () => {
@@ -531,7 +531,7 @@ describe('PATCH /cart/items/{productId}', () => {
         const second = await send();
 
         expect(second.status).toBe(200);
-        expect(second.body.data.summary.totalQuantity).toBe(first.body.data.summary.totalQuantity);
+        expect(second.body.summary.totalQuantity).toBe(first.body.summary.totalQuantity);
     });
 
     it('matches the error contract for an invalid body', async () => {
@@ -577,8 +577,8 @@ describe('PUT /cart/shipping-method', () => {
             .send({ shippingMethodId: 'standard' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.shipping.selected).toBe('standard');
-        expect(response.body.data.summary.shippingCost).toBeGreaterThanOrEqual(0);
+        expect(response.body.shipping.selected).toBe('standard');
+        expect(response.body.summary.shippingCost).toBeGreaterThanOrEqual(0);
     });
 
     it('matches the contract when clearing the choice with null', async () => {
@@ -594,7 +594,7 @@ describe('PUT /cart/shipping-method', () => {
             .send({ shippingMethodId: null });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.shipping.selected).toBeNull();
+        expect(response.body.shipping.selected).toBeNull();
     });
 
     it('matches the error contract for an unknown method', async () => {
@@ -663,7 +663,7 @@ describe('DELETE /cart/items/{productId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(0);
+        expect(response.body.items).toHaveLength(0);
     });
 
     it('matches the error contract for a malformed product id', async () => {
@@ -690,7 +690,7 @@ describe('GET /cart/summary', () => {
         const response = await api().get('/cart/summary').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.itemsCount).toBe(1);
+        expect(response.body.itemsCount).toBe(1);
     });
 
     // `currency` is now required on the summary, empty cart included — the automatic
@@ -700,7 +700,7 @@ describe('GET /cart/summary', () => {
         const { bearer } = await authenticateAs('user');
         const response = await api().get('/cart/summary').set('Authorization', bearer);
 
-        expect(response.body.data.currency).toBe('EUR');
+        expect(response.body.currency).toBe('EUR');
     });
 });
 
@@ -716,9 +716,9 @@ describe('POST /cart/checkout', () => {
         // `data` is the created order itself, as `POST /orders` answers it — not a
         // wrapper — and `Location` names it.
         expect(response.status).toBe(201);
-        expect(response.body.data.items).toHaveLength(1);
-        expect(response.body.data.order).toBeUndefined();
-        expect(response.headers.location).toBe(`/orders/${String(response.body.data.id)}`);
+        expect(response.body.items).toHaveLength(1);
+        expect(response.body.order).toBeUndefined();
+        expect(response.headers.location).toBe(`/orders/${String(response.body.id)}`);
     });
 
     /*
@@ -759,13 +759,13 @@ describe('POST /cart/checkout', () => {
 
         // One order, not two.
         const orders = await api().get('/orders').set('Authorization', bearer);
-        expect(orders.body.data.items).toHaveLength(1);
+        expect(orders.body.items).toHaveLength(1);
 
         // The basket's stock was reserved once, not twice, by the replay.
         const after = await api()
             .get(`/products/${String(product._id)}`)
             .set('Authorization', stockReader);
-        expect(after.body.data.available).toBe(before.body.data.available - 2);
+        expect(after.body.available).toBe(before.body.available - 2);
     });
 
     /*
@@ -781,7 +781,7 @@ describe('POST /cart/checkout', () => {
         const response = await checkoutAs(bearer, { notes: 'Leave with the concierge' });
 
         expect(response.status).toBe(201);
-        expect(response.body.data.notes).toBe('Leave with the concierge');
+        expect(response.body.notes).toBe('Leave with the concierge');
     });
 
     it('matches the error contract for an unrecognised payment method value', async () => {
@@ -802,7 +802,7 @@ describe('POST /cart/checkout', () => {
             zip: '41121',
             country: 'IT'
         });
-        const addressId = address.body.data.id as string;
+        const addressId = address.body.id as string;
 
         await api()
             .put('/cart/shipping-method')
@@ -825,7 +825,7 @@ describe('POST /cart/checkout', () => {
             zip: 'SW1A 1AA',
             country: 'GB'
         });
-        const addressId = address.body.data.id as string;
+        const addressId = address.body.id as string;
 
         await api()
             .put('/cart/shipping-method')
@@ -870,8 +870,8 @@ describe('POST /cart/checkout', () => {
         const response = await checkoutAs(bearer);
 
         expect(response.status).toBe(201);
-        expect(response.body.data.billingAddress).toMatchObject({ street: 'Via Roma 1' });
-        expect(response.body.data.shippingAddress).toBeUndefined();
+        expect(response.body.billingAddress).toMatchObject({ street: 'Via Roma 1' });
+        expect(response.body.shippingAddress).toBeUndefined();
     });
 
     it('bills the address named by billingAddressId and ships to the default', async () => {
@@ -888,12 +888,12 @@ describe('POST /cart/checkout', () => {
             .set('Authorization', bearer)
             .send({ shippingMethodId: 'standard' });
         const response = await checkoutAs(bearer, {
-            billingAddressId: office.body.data.id as string
+            billingAddressId: office.body.id as string
         });
 
         expect(response.status).toBe(201);
-        expect(response.body.data.shippingAddress.street).toBe('Via Roma 1');
-        expect(response.body.data.billingAddress.street).toBe('Via Milano 2');
+        expect(response.body.shippingAddress.street).toBe('Via Roma 1');
+        expect(response.body.billingAddress.street).toBe('Via Milano 2');
     });
 
     it('matches the error contract for a checkout with no billing address to use', async () => {
@@ -921,7 +921,7 @@ describe('POST /cart/checkout', () => {
         await checkoutAs(bearer);
         const response = await api().get('/cart').set('Authorization', bearer);
 
-        expect(response.body.data.items).toHaveLength(0);
+        expect(response.body.items).toHaveLength(0);
     });
 
     // 409, not 422: an empty cart is a state conflict, not a malformed request. The spec did not
@@ -1016,14 +1016,14 @@ describe('POST /cart/checkout', () => {
                     await settleOutboxNudges();
 
                     expect(response.status).toBe(201);
-                    expect(response.body.data.paymentMethod).toBe('bank_transfer');
-                    expect(response.body.data.payBy).toEqual(expect.any(String));
-                    expect(response.body.data).not.toHaveProperty('transferInstructions');
+                    expect(response.body.paymentMethod).toBe('bank_transfer');
+                    expect(response.body.payBy).toEqual(expect.any(String));
+                    expect(response.body).not.toHaveProperty('transferInstructions');
                     const payment = await api()
-                        .get(`/payments/orders/${String(response.body.data.id)}`)
+                        .get(`/payments/orders/${String(response.body.id)}`)
                         .set('Authorization', bearer);
                     expect(payment.status).toBe(200);
-                    expect(payment.body.data.nextAction).toEqual({
+                    expect(payment.body.nextAction).toEqual({
                         type: 'bank_transfer',
                         beneficiary: 'Guebbit Shop',
                         // Grouped into 4s for display — see `bankTransferIbanFriendly`.
@@ -1031,7 +1031,7 @@ describe('POST /cart/checkout', () => {
                         // The exact RF code is `buildReference`'s own concern
                         // (`payments/tests/unit/transfer-reference.test.ts`) — this pins its shape.
                         reference: expect.stringMatching(/^RF\d{2}[\dA-Z]{19}$/),
-                        payBy: response.body.data.payBy
+                        payBy: response.body.payBy
                     });
                 }
             )
@@ -1051,13 +1051,13 @@ describe('POST /cart/reorder/{orderId}', () => {
 
         expect(response.status).toBe(200);
         // Ids, not counts: the cart must hold exactly the order's products.
-        const items: { productId: string; quantity: number }[] = response.body.data.cart.items;
+        const items: { productId: string; quantity: number }[] = response.body.cart.items;
         expect(items.map(({ productId }) => productId).toSorted()).toEqual(
             [String(keyboard._id), String(mouse._id)].toSorted()
         );
-        expect(response.body.data.cart.summary.totalQuantity).toBe(3);
+        expect(response.body.cart.summary.totalQuantity).toBe(3);
         expect(
-            response.body.data.lines.map(({ requested, resulting }: Record<string, number>) => [
+            response.body.lines.map(({ requested, resulting }: Record<string, number>) => [
                 requested,
                 resulting
             ])
@@ -1084,8 +1084,8 @@ describe('POST /cart/reorder/{orderId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.cart.summary.totalQuantity).toBe(5);
-        expect(response.body.data.lines).toMatchObject([
+        expect(response.body.cart.summary.totalQuantity).toBe(5);
+        expect(response.body.lines).toMatchObject([
             { requested: 3, resulting: 5, reason: 'summed' }
         ]);
     });
@@ -1106,7 +1106,7 @@ describe('POST /cart/reorder/{orderId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.lines).toMatchObject([
+        expect(response.body.lines).toMatchObject([
             { productId: String(product._id), requested: 5, resulting: 10, reason: 'capped' }
         ]);
     });
@@ -1127,7 +1127,7 @@ describe('POST /cart/reorder/{orderId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.lines).toMatchObject([
+        expect(response.body.lines).toMatchObject([
             { productId: String(product._id), requested: 1, resulting: 10, reason: 'capped' },
             { productId: String(kept._id), requested: 1, resulting: 1 }
         ]);
@@ -1144,9 +1144,9 @@ describe('POST /cart/reorder/{orderId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        const items: { productId: string }[] = response.body.data.cart.items;
+        const items: { productId: string }[] = response.body.cart.items;
         expect(items.map(({ productId }) => productId)).toEqual([String(alive._id)]);
-        expect(response.body.data.lines).toMatchObject([
+        expect(response.body.lines).toMatchObject([
             { productId: String(alive._id), resulting: 1 },
             { productId: String(retired._id), requested: 4, resulting: 0, reason: 'removed' }
         ]);

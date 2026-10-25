@@ -92,7 +92,7 @@ describe('POST /account/logout', () => {
             .set('Cookie', cookie)
             .set('Origin', FRONTEND);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
     });
 
     it('refuses a foreign origin and revokes nothing', async () => {

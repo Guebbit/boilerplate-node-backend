@@ -123,6 +123,12 @@ after the provider moved the money would pay twice. The client therefore:
 
 Proven by `tests/integration/idempotency-server-fault.test.ts`.
 
+## A body-less answer is never captured
+
+The ledger records a JSON response. A `204` sent with `.end()`
+(`noContentResponse`) bypasses it, so the key would stay in flight and a retry would answer `409`.
+No keyed route answers 204 today; a new one that must, answers through `.json()` instead.
+
 ## Retention
 
 `NODE_IDEMPOTENCY_RETENTION_HOURS` (default 24) backs a TTL index on `createdAt`, the same

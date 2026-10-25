@@ -1,11 +1,7 @@
 {
     "orders": {
         "not-found": "L'ordine richiesto non è stato trovato",
-        "hard-deleted": "L'ordine è stato eliminato definitivamente.",
-        "soft-deleted": "L'ordine è stato eliminato logicamente (nascosto al cliente).",
-        "creation-success": "Ordine creato con successo.",
         "cancel": {
-            "success": "Ordine annullato.",
             "not-cancellable": "Questo ordine non può più essere annullato."
         },
         "address": {
@@ -81,7 +77,6 @@
         "insufficient-stock": "Alcuni articoli di questo ordine non sono più disponibili nella quantità richiesta — vedi `details.lines`.",
         "line-limit-lines": "Questo ordine ha più di {{limit}} righe.",
         "line-limit-quantity": "Una riga di questo ordine chiede più di {{limit}} unità.",
-        "restored": "Ordine ripristinato.",
         "not-deleted": "Questo ordine non è eliminato.",
         "email-purchase-hold": {
             "paused": {
