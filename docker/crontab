@@ -35,6 +35,8 @@
 */5 * * * * cd /app && npm run job sweep:reservations
 # Deletes stored invoice and credit-note PDFs past their retention window; the next download renders again.
 8 2 * * * cd /app && npm run job reap:invoice-pdfs
+# Blanks an invoice's or credit note's buyer block once its tax retention has ended; the numbered document stays and its cached PDF is deleted.
+14 2 * * * cd /app && npm run job reap:invoices
 # Anonymizes an order's remaining PII once its retention window has passed, and unsets a timeline row's staff text once its own window has.
 10 2 * * * cd /app && npm run job reap:orders
 # Deletes abandoned (never-settled) payment attempts past their retention window.

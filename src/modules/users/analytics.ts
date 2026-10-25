@@ -1,8 +1,8 @@
 /**
  * @module
  * The analytics event names this module emits: the admin-facing half of account creation,
- * distinct from `account`'s self-signup `USER_SIGNED_UP` since an operator acting on someone
- * else's record is a different event that the month's account total still sums. Declared by
+ * distinct from `account`'s self-signup `USER_SIGNED_UP`. Both are sent as the acting admin,
+ * never as the subject: an event about another person belongs to the actor. Declared by
  * augmenting the analytics port's name map, as `./audit.ts` does for audit actions.
  * Naming rule: docs/tools/analytics.md#naming.
  */

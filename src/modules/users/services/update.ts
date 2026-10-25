@@ -58,7 +58,9 @@ export const update = (
      */
     context: CallerContext,
     /** {@link changedRole}'s answer: the role to grant, `null` to take it away, `undefined` for no change. */
-    role?: RoleChange
+    role?: RoleChange,
+    /** {@link SaveHook}: a write that must commit with this save, from the one caller that has one. */
+    alsoInSave?: SaveHook
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     if (data.username !== undefined) user.username = data.username;
     // `role` is not written here — there is no column, only the membership,
@@ -84,8 +86,14 @@ export const update = (
         user.analyticsConsentAt = new Date();
     }
 
-    return saveWithRole(user, role, context, oldImageUrl);
+    return saveWithRole(user, role, context, oldImageUrl, alsoInSave);
 };
+
+/**
+ * Another write that joins an update's transaction, so it commits with the document or not at all.
+ * `account` uses it to write an outbox row beside a profile edit.
+ */
+export type SaveHook = (session: ClientSession) => Promise<unknown>;
 
 /**
  * What an update does to the staff role: grant one, take the held one away, or (`undefined`) leave
@@ -186,12 +194,14 @@ const writeRole = (
  * @param role - {@link changedRole}'s answer, never the raw request's
  * @param context - the caller, whose keys bound the role they may grant
  * @param session - the transaction both writes join
+ * @param alsoInSave - a caller's own write that joins the same transaction
  */
 const saveAndGrant = (
     user: UserDocument,
     role: RoleChange,
     context: CallerContext,
-    session: ClientSession
+    session: ClientSession,
+    alsoInSave?: SaveHook
 ): Promise<UserDocument> => {
     // The transaction may re-run this on a transient conflict: each attempt checks the caller's
     // `If-Match` against the row it holds, instead of the first attempt's having used it up.
@@ -203,9 +213,11 @@ const saveAndGrant = (
     // fence the write, so two admins holding the same tag cannot both change the role.
     if (role !== undefined) user.markModified('updatedAt');
 
-    return userRepository
-        .save(user, session)
-        .then((saved) => writeRole(String(saved._id), role, context, session).then(() => saved));
+    return userRepository.save(user, session).then((saved) =>
+        writeRole(String(saved._id), role, context, session)
+            .then(() => alsoInSave?.(session))
+            .then(() => saved)
+    );
 };
 
 /**
@@ -253,12 +265,15 @@ const finishUpdate = (
  * and audit a refusal, write the document and the membership in one transaction, then clean up.
  *
  * @param role - {@link changedRole}'s answer, never the raw request's
+ * @param oldImageUrl - the image the update replaced, if any
+ * @param alsoInSave - a caller's own write that joins the save's transaction
  */
 const saveWithRole = (
     user: UserDocument,
     role: RoleChange,
     context: CallerContext,
-    oldImageUrl?: string
+    oldImageUrl?: string,
+    alsoInSave?: SaveHook
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     // Validated BEFORE anything is written, and a refusal audited: a refused role change
     // must not leave the rest of the update — a deactivation included — committed
@@ -277,7 +292,9 @@ const saveWithRole = (
     if (refusal) return Promise.resolve(roleRefusalReject(refusal));
 
     return Promise.resolve()
-        .then(() => withTransaction((session) => saveAndGrant(user, role, context, session)))
+        .then(() =>
+            withTransaction((session) => saveAndGrant(user, role, context, session, alsoInSave))
+        )
         .then((savedUser) => finishUpdate(savedUser, role, context, oldImageUrl));
 };
 

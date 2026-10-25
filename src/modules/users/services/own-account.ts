@@ -18,7 +18,7 @@ import {
 import type { CallerContext } from '@types';
 import { accessService } from '@modules/access';
 import type { UserDocument } from '../model';
-import { update } from './update';
+import { update, type SaveHook } from './update';
 import { remove, erase } from './remove';
 import { userRepository } from '../repository';
 import { markSessionsEnded } from './credentials';
@@ -36,12 +36,15 @@ export type OwnProfileData = Omit<Parameters<typeof update>[1], 'active'>;
  * @param user - the loaded account, the caller's own
  * @param data - the validated profile fields; no `active`, no `role`
  * @param context - the caller, for the audit row
+ * @param alsoInSave - a write that commits with the save (an outbox row), or `undefined`
  */
 export const updateOwnProfile = (
     user: UserDocument,
     data: OwnProfileData,
-    context: CallerContext
-): Promise<ResponseSuccess<UserDocument> | ResponseReject> => update(user, data, context);
+    context: CallerContext,
+    alsoInSave?: SaveHook
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
+    update(user, data, context, undefined, alsoInSave);
 
 /**
  * Soft-delete an account the inactivity reaper found idle past its warning. The reaper hands a

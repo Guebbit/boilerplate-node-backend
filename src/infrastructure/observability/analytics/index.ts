@@ -99,6 +99,17 @@ export interface AnalyticsProvider {
     configured(): boolean;
 
     /**
+     * Erase everything this provider holds about one account (GDPR Art. 17). Unlike `capture`
+     * this is awaited and REJECTS on failure: the outbox relay retries a rejected erasure and parks
+     * it `dead` for the operator, where a swallowed failure would be a silent breach. Resolves
+     * without a call when the provider has nothing keyed to an account, or lacks the credentials
+     * to delete it.
+     *
+     * @param distinctId - the account id that was sent as `distinctId`
+     */
+    forget(distinctId: string): Promise<void>;
+
+    /**
      * Flush anything buffered and release the client.
      *
      * Called last in the shutdown chain (`runtime/server-lifecycle`). A provider that batches

@@ -18,7 +18,7 @@
 
 import path from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { reapDirectory, writeFileAtomically, type ReapResult } from './filesystem';
+import { reapDirectory, unlinkIfPresent, writeFileAtomically, type ReapResult } from './filesystem';
 import { pdfConfig } from '@infrastructure/adapters/config';
 
 /** Where stored documents live. Mount a volume here in a deployment; the default is dev-only. */
@@ -87,3 +87,17 @@ export const writeDocument = (name: string, bytes: Buffer | Uint8Array): Promise
  */
 export const reapDocuments = (retentionMs: number): Promise<ReapResult> =>
     reapDirectory(documentRoot(), Date.now() - retentionMs, 'Stored document');
+
+/**
+ * Delete one stored document now, ahead of its retention window. An absent file is success: the
+ * document may never have been rendered, or the nightly reaper got there first.
+ *
+ * @param name - the document's name
+ * @returns whether a file was deleted
+ */
+export const removeDocument = (name: string): Promise<boolean> => {
+    const target = resolveName(name);
+    if (!target) return Promise.resolve(false);
+
+    return unlinkIfPresent(target, 'Could not remove a stored document.', { name });
+};

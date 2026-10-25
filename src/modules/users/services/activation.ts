@@ -133,8 +133,8 @@ export const deactivate = (
             // Deactivation is a product event as well as an administrative one: it is what a churn
             // dashboard counts, and it is invisible in a plain "updated" signal.
             emitAnalyticsEvent({
+                // The admin's event, no target id: see `create.ts`.
                 ...buildAnalyticsBase(context),
-                distinctId: id,
                 event: usersAnalyticsEvents.USER_DEACTIVATED
             });
             return generateSuccess(saved, 200, t('users.deactivated'));

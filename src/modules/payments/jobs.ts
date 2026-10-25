@@ -24,6 +24,9 @@ export const paymentsJobs: readonly JobDeclaration[] = [
         schedule: '*/5 * * * *',
         summary:
             'Retries refunds the provider has not answered, and settles unsettled payments whose webhook never arrived.',
-        run: () => retryOpenRefunds().then(() => reconcileStalePayments())
+        run: () => retryOpenRefunds().then(() => reconcileStalePayments()),
+        // A provider that hangs can keep one pass past its 5-minute interval; the lease stops a
+        // second pass sending the same idempotency keys while the first is still running.
+        lease: { ttlMs: 10 * 60_000 }
     }
 ];

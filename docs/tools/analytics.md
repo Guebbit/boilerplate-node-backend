@@ -119,6 +119,12 @@ never asked, so a choice made before login counts until `PUT /account` records i
 grant is a client assertion with no server-side record behind it; the stored field is what you can
 produce under Art. 7(1), so record it as soon as you have an account to record it against.
 
+Two rules follow from consent being the data subject's own. An event about another person is sent
+as the actor, never as the subject: an admin creating or deactivating an account emits under the
+admin's id, gated by the admin's consent, with no target id in it. And a login is gated on the
+account's stored answer, the banner header counting only for an account that never answered (the
+login routes carry no token, so the header is all the request context knows).
+
 `NODE_ANALYTICS_REQUIRE_CONSENT` defaults `true` — Art. 25(2) says the private setting is the
 default one. Set it `false` only after taking your own legal advice about server-side, non-cookie
 analytics. Note the consequence of the default: a fresh deployment captures nothing until users
@@ -153,10 +159,18 @@ NODE_ANALYTICS_PROVIDER=umami       # umami | posthog | none
 NODE_UMAMI_INGEST_HOST=http://umami:3000
 NODE_UMAMI_WEBSITE_ID=00000000-0000-4000-8000-000000000001
 
-# provider: posthog
+# provider: posthog (capture)
 NODE_POSTHOG_API_KEY=phc_...
-NODE_POSTHOG_HOST=https://app.posthog.com
+NODE_POSTHOG_HOST=https://eu.i.posthog.com      # or https://us.i.posthog.com
+
+# provider: posthog (erasure, optional: see below)
+NODE_POSTHOG_PERSONAL_API_KEY=phx_...
+NODE_POSTHOG_PROJECT_ID=12345
+NODE_POSTHOG_API_HOST=https://eu.posthog.com    # or https://us.posthog.com
 ```
+
+The repo picks no region: both hosts are yours to set. PostHog recommends its EU Cloud for EU data
+subjects.
 
 `GET /observability/health` reports the active one as `telemetry.analytics` — `{ provider, configured }`, so a provider selected without its credentials is visible rather than indistinguishable from a working one.
 
@@ -166,6 +180,39 @@ from, and what health reports. The API dials Umami from inside the network, wher
 origin is usually wrong: under compose it is `http://localhost:3080`, and `localhost` inside the
 API container _is_ the API. Unset, the ingest host falls back to the public one, which is correct
 only where both reach Umami at the same address.
+:::
+
+## Erasure in PostHog
+
+An account's id reaches PostHog as `distinct_id`, so erasing the account (Art. 17) must delete it
+there too. A hashed id would still be personal data (Recital 26), so the standard is PostHog's API
+delete, with `delete_events: true` ([data deletion](https://posthog.com/docs/privacy/data-deletion)).
+
+```mermaid
+sequenceDiagram
+    participant E as users erase()
+    participant O as outbox
+    participant S as users subscriber
+    participant P as PostHog API
+    E->>O: user.erased (same transaction as the delete)
+    O->>S: after commit
+    S->>P: POST persons/bulk_delete {distinct_ids, delete_events}
+    P-->>O: 2xx = published, anything else = retry with backoff
+```
+
+| Question                       | Answer                                                                                                                                                                                                                                                                                                       |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Which paths?                   | All three: the scheduled purge, the admin hard delete and the inactivity reaper. They share one `erase()`                                                                                                                                                                                                    |
+| What if PostHog is down?       | The erasure still commits. The outbox retries with backoff, then parks the row `dead`, which fires `outbox_events_dead_total`; replay it                                                                                                                                                                     |
+| What if the knobs are missing? | Capture keeps working and the deletion is a no-op: no boot warning, no refusal. **Erasure in PostHog needs all three erasure knobs**                                                                                                                                                                         |
+| How fast?                      | PostHog removes the person within minutes; the events go in its weekend batch, inside Art. 12(3)'s month                                                                                                                                                                                                     |
+| Replays                        | `persons_found: 0` resolves, so a replayed row is harmless                                                                                                                                                                                                                                                   |
+| Withdrawing consent            | Deletes it too: `PATCH /account` flipping `analyticsConsent` `true → false` writes `account.analytics_consent_withdrawn` in the same transaction, and the `account` subscriber calls the same `forget`. `undefined → false` and `false → false` write nothing; turning consent back on starts a fresh person |
+
+::: warning The management host is not the ingestion host
+Capture goes to `eu.i.posthog.com`; the persons API lives on `eu.posthog.com`, so
+`NODE_POSTHOG_API_HOST` is a separate knob with no default. The personal key needs the
+`person:write` scope and nothing else; it is not the `phc_` project key.
 :::
 
 ## Naming

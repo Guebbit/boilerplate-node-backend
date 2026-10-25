@@ -27,6 +27,14 @@ declare module '@kernel/events' {
          * session revocation. Internal only: no AsyncAPI channel carries it.
          */
         'account.authenticator-removed': { userId: string };
+
+        /**
+         * The owner withdrew analytics consent (`true` → `false`), committed with the profile save.
+         * `account` is its own subscriber: it asks the analytics provider to forget the id, since
+         * what was captured under the consent is no longer lawful to keep (GDPR Art. 7(3), 17).
+         * Internal only: no AsyncAPI channel carries it.
+         */
+        'account.analytics_consent_withdrawn': { userId: string };
     }
 }
 
@@ -35,3 +43,6 @@ export const ACCOUNT_SESSIONS_REVOKED = 'account.sessions-revoked';
 
 /** See `DomainEventMap['account.authenticator-removed']` above. */
 export const ACCOUNT_AUTHENTICATOR_REMOVED = 'account.authenticator-removed';
+
+/** See `DomainEventMap['account.analytics_consent_withdrawn']` above. */
+export const ACCOUNT_ANALYTICS_CONSENT_WITHDRAWN = 'account.analytics_consent_withdrawn';

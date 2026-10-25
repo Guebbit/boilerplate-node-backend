@@ -23,6 +23,9 @@ export const analyticsConfig = defineConfig({
         NODE_UMAMI_INGEST_HOST: text(),
         NODE_UMAMI_WEBSITE_ID: text(),
         NODE_POSTHOG_API_KEY: text({ sensitive: true }),
-        NODE_POSTHOG_HOST: text()
+        NODE_POSTHOG_HOST: text(),
+        NODE_POSTHOG_PERSONAL_API_KEY: text({ sensitive: true }),
+        NODE_POSTHOG_PROJECT_ID: text(),
+        NODE_POSTHOG_API_HOST: text()
     }
 });

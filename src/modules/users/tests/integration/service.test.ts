@@ -658,6 +658,28 @@ describe('userService.updateById', () => {
         );
     });
 
+    it('sends the admin-created and deactivated events as the admin, with no target id', async () => {
+        const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
+        const admin = callerContextAs('admin', 'a'.repeat(24));
+        const created = await userService.create(
+            { email: 'actor-event@example.com', username: 'actorevent' },
+            admin
+        );
+        const targetId = String(created.success ? created.data._id : '');
+        await userService.deactivate(targetId, admin);
+
+        const events = analyticsSpy.mock.calls.map(([event]) => event);
+        expect(events.map((event) => event.event)).toEqual(
+            expect.arrayContaining([
+                usersAnalyticsEvents.USER_CREATED,
+                usersAnalyticsEvents.USER_DEACTIVATED
+            ])
+        );
+        expect(targetId).not.toBe('');
+        expect(events.map((event) => event.distinctId)).toEqual(events.map(() => 'a'.repeat(24)));
+        expect(JSON.stringify(events)).not.toContain(targetId);
+    });
+
     it('counts a deactivation once: a repeat is refused, not counted', async () => {
         const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
         const deactivated = expect.objectContaining({

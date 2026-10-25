@@ -126,9 +126,8 @@ export const create = (
             });
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(context),
-                // The new user, not the admin who created it — the funnel counts who came into
-                // existence, not who did the typing.
-                distinctId: String(user._id),
+                // No target id: the event is the admin's, gated by the admin's consent. A
+                // pseudonymous id is personal data and consent is the data subject's own.
                 event: usersAnalyticsEvents.USER_CREATED,
                 properties: { admin_created: true }
             });

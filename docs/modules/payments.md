@@ -405,8 +405,10 @@ sequenceDiagram
   or `refunded`) is stamped in the settlement's own transaction. No later refund exists to repair a
   missed stamp after the last one, so a failing stamp settles nothing and the sweep retries.
 - **A refusal stays open.** The record is `failed`, with a closed `failureReason` (staff only; see
-  [the staff Payments page](#the-staff-payments-page)), and keeps its share of `amountRefunded`, so nothing is opened beside it. `retryOpenRefunds` (run by
-  `npm run job sweep:payment-effects`) and the next cancel or operator call both finish it.
+  [the staff Payments page](#the-staff-payments-page)), and keeps its share of `amountRefunded`, so nothing is opened beside it. Only `retryOpenRefunds` (run by
+  `npm run job sweep:payment-effects`) re-sends it. A later cancel, return or operator call sends
+  only records it opened itself (or found `pending`), so one stuck refund never blocks the next:
+  the request opens its own record and the sweep keeps retrying the old one.
 - **The default is everything left.** `POST /payments/{id}/refunds` with no body returns
   all that is still refundable; with an `amount` it returns that part. An `amount` over what is
   left, nothing left included, is a 422 (`PAYMENT_REFUND_EXCEEDS_REMAINING`); with no `amount`,

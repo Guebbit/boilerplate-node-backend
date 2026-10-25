@@ -24,6 +24,12 @@ declare module '@kernel/events' {
          * subscriber that drops the link and tells the owner.
          */
         'user.deletion-cancelled': { userId: string };
+        /**
+         * An account was hard-deleted, committed in the erasure transaction itself, so it exists
+         * exactly when the erasure did. `users` is its own subscriber: it asks the analytics
+         * provider to forget the account id (GDPR Art. 17).
+         */
+        'user.erased': { userId: string };
     }
 }
 
@@ -35,3 +41,6 @@ export const USER_DEACTIVATED = 'user.deactivated';
 
 /** See `DomainEventMap['user.deletion-cancelled']` above. */
 export const USER_DELETION_CANCELLED = 'user.deletion-cancelled';
+
+/** See `DomainEventMap['user.erased']` above. */
+export const USER_ERASED = 'user.erased';

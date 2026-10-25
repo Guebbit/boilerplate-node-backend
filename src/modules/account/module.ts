@@ -26,6 +26,8 @@ import { type AppModule, resolvePersonalDataSections } from '@kernel/registry';
 import { WORKER_CHANNELS, AccountExportJobPayloadSchema } from '@types';
 import { registerAuthResolver } from '@kernel/authentication';
 import { onDomainEvent } from '@kernel/events';
+import { resolveAnalyticsProvider } from '@infrastructure/observability/analytics';
+import { ACCOUNT_ANALYTICS_CONSENT_WITHDRAWN } from './events';
 import {
     userService,
     USER_SETUP_REQUESTED,
@@ -131,6 +133,13 @@ export default {
          * mailed is spent by that, and the owner is told it happened.
          */
         onDomainEvent(USER_DELETION_CANCELLED, ({ userId }) => handleRestoredByStaff(userId));
+        /*
+         * Consent withdrawn: the analytics provider may hold what was captured under it. A
+         * rejection fails the dispatch, so the outbox retries it and parks it `dead` (alerting).
+         */
+        onDomainEvent(ACCOUNT_ANALYTICS_CONSENT_WITHDRAWN, ({ userId }) =>
+            resolveAnalyticsProvider().forget(userId)
+        );
     },
     locales: path.join(__dirname, 'locales'),
     templates: path.join(__dirname, 'templates')

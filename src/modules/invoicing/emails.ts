@@ -277,6 +277,10 @@ export const buildDocumentView = (
                 : undefined,
         meta: buildMeta(locale, t, document),
         billing: buildBilling(document),
+        buyerErasedNotice:
+            document.buyerErasedAt && !document.billingAddress
+                ? t('invoicing.document.buyer-erased')
+                : undefined,
         vat: buildVatBlock(locale, t, document)
     };
 };

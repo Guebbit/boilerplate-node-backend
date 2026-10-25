@@ -13,7 +13,7 @@ import {
 } from '@infrastructure/http/response';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { withTransaction } from '@infrastructure/runtime/database';
-import { announceInTransaction } from '@kernel/outbox';
+import { announceInTransaction, enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { CallerContext } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
@@ -24,7 +24,7 @@ import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
 import { personalDataErasers } from '../erasure-registry';
 import { usersAuditActions } from '../audit';
-import { USER_DELETION_CANCELLED } from '../events';
+import { USER_DELETION_CANCELLED, USER_ERASED } from '../events';
 import { markSessionsEnded } from './credentials';
 
 /**
@@ -50,6 +50,9 @@ const runErasureCascade = async (
     // A hold this account placed on someone else keeps its force but loses the name.
     await userRepository.forgetHoldSetter(user.id, session);
     await userRepository.deleteOne(user, session);
+    // Committed with the erasure, so the third-party deletion exists exactly when the erasure
+    // does and is retried by the outbox, never lost with a crash after the commit.
+    await enqueueOutboxEvent(USER_ERASED, { userId: user.id }, user.id, session);
     return deferred;
 };
 
@@ -94,6 +97,7 @@ export const erase = (
         )
     ).then((deferred) => {
         if (!deferred) return generateReject(409, [t('users.erasure-not-due')]);
+        nudgeOutbox();
         return runAfterErase(user.id, deferred)
             .then(() => imageStore.remove(user.imageUrl))
             .then(() => {
