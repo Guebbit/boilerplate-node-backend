@@ -27,14 +27,7 @@ import { recordOfflinePayment } from './offline';
 import { openTransferPayment } from './transfer';
 import { mailPaymentReceived, mailRefundIssued } from './notify';
 import { callerScope, payerScope, buyerOrderScope, readsAllPayments } from './scope';
-import {
-    getById,
-    getForOrder,
-    getRefund,
-    newestRefund,
-    presentWithActions,
-    withActions
-} from './view';
+import { getById, getForOrder, getRefund, refundOf, presentWithActions, withActions } from './view';
 import {
     detachUserId,
     findOwnPayments,
@@ -68,7 +61,7 @@ export const paymentService = {
     getById,
     getForOrder,
     getRefund,
-    newestRefund,
+    refundOf,
     refundPayment,
     openReturnRefund,
     sendOpenedRefund,

@@ -133,6 +133,25 @@ export const MONEY_DID_NOT_MOVE_FAILURES: readonly RefundFailureReason[] = [
     RefundFailureReason.insufficient_funds
 ];
 
+/**
+ * Whether an operator may report this refund's money returned outside the application. A hand-paid
+ * refund: any `pending` one (nobody else can say the cash went back). A card refund: only one the
+ * provider refused in a way that proves the money did not move, because a settle on an unclear
+ * failure could pay the buyer twice.
+ *
+ * @param payment - the payment the refund sits on
+ * @param refund - the refund record
+ */
+export const mayBeSettledByHand = (
+    payment: { provider: string },
+    refund: { status: RefundStatus; failureReason?: RefundFailureReason }
+): boolean =>
+    isHandRecorded(payment)
+        ? refund.status === RefundStatus.pending
+        : refund.status === RefundStatus.failed &&
+          refund.failureReason !== undefined &&
+          MONEY_DID_NOT_MOVE_FAILURES.includes(refund.failureReason);
+
 /** The longest wait the growing retry delay reaches: a day. */
 const MAX_RETRY_DELAY_MS = 24 * 60 * 60_000;
 

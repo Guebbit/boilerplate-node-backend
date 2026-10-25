@@ -213,7 +213,7 @@ describe('a refund that must not mail', () => {
             refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
                 amount: 30
             })
-        ).rejects.toThrow('provider down');
+        ).resolves.toMatchObject({ success: true, status: 201 });
         await settleOutboxNudges();
 
         expect(mailsOf('payments.refund-issued')).toHaveLength(0);

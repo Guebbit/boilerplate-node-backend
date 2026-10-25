@@ -99,7 +99,7 @@ describe('a received return on a cash-paid order', () => {
 
         expect(received.success && received.data.status).toBe('received');
         const payment = await paymentOf(fixture.orderId);
-        expect(payment.refundedByHand).toBeUndefined();
+        expect(payment.refunds[0].settledByHand).toBeUndefined();
         expect(payment.refunds).toHaveLength(1);
         expect(payment.refunds[0]).toMatchObject({ status: 'pending', reason: 'return' });
         expect(owedRows()).toHaveLength(1);
@@ -151,7 +151,7 @@ describe('a buyer cancelling the unshipped remainder of a cash-paid order', () =
 
         expect(outcome.success).toBe(true);
         const payment = await paymentOf(fixture.orderId);
-        expect(payment.refundedByHand).toBeUndefined();
+        expect(payment.refunds[0].settledByHand).toBeUndefined();
         expect(payment.refunds).toHaveLength(1);
         expect(payment.refunds[0]).toMatchObject({ status: 'pending', reason: 'cancellation' });
         expect(owedRows()).toHaveLength(1);

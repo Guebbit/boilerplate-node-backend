@@ -87,6 +87,12 @@ export interface RefundRecord {
      * refusal, which is never sent again. Internal.
      */
     nextAttemptAt?: Date;
+    /**
+     * `true` when an operator reported this refund's money returned outside the application (a
+     * hand-paid payment's, or a card refund the provider refused). Per refund, because one
+     * hand-settled refund says nothing about the next.
+     */
+    settledByHand?: true;
     /** When the money was confirmed back, or (for a hand-paid one) reported back. */
     settledAt?: Date;
     createdAt: Date;
@@ -98,9 +104,14 @@ export interface RefundRecord {
  */
 export interface RefundSettlement {
     providerRefundRef?: string;
-    refundedByHand?: true;
+    settledByHand?: true;
     /** The fence token of the attempt that got the provider's answer; absent for a hand settle. */
     attempt?: Date;
+    /**
+     * The statuses a hand settle may run from, when there is no attempt: `pending` for hand-paid
+     * money, `failed` for a card refund the provider refused. Absent means any open one.
+     */
+    from?: readonly RefundStatus[];
 }
 
 /**
@@ -150,12 +161,6 @@ export interface PaymentDocument extends Document {
     /** The end of the stock hold the transfer instructions quote — a copy of the order's `payBy`. */
     payBy?: Date;
     /**
-     * `true` once a refunded `manual` payment has had its money returned to the customer outside
-     * this application — there is no provider to ask, so this is the operator's own record that it
-     * was done by hand.
-     */
-    refundedByHand?: boolean;
-    /**
      * Everything asked back so far, pending and succeeded both — Stripe's `amount_refunded`. It
      * counts a refund the moment it is opened, which is what stops two racing partial refunds
      * from returning more than the customer paid.
@@ -201,6 +206,7 @@ const refundSchema = new Schema<RefundRecord>(
         attempts: { type: Number, min: 0 },
         attemptedAt: { type: Date },
         nextAttemptAt: { type: Date },
+        settledByHand: { type: Boolean },
         settledAt: { type: Date }
     },
     { timestamps: { createdAt: true, updatedAt: false } }
@@ -266,10 +272,6 @@ export const paymentSchema = new Schema<PaymentDocument>(
         },
         payBy: {
             type: Date
-        },
-        // Offline-only, and only once refunded — see `refunds.ts`'s dispatch on `provider`.
-        refundedByHand: {
-            type: Boolean
         },
         amountRefunded: moneyPath({ required: true, nonNegative: true, default: 0 }),
         refunds: {

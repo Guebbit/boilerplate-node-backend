@@ -21,6 +21,7 @@ export {
     OPEN_REFUND_STATUSES,
     FINAL_REFUND_FAILURES,
     MONEY_DID_NOT_MOVE_FAILURES,
+    mayBeSettledByHand,
     nextRefundAttemptAt
 } from './lifecycle';
 

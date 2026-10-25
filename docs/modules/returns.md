@@ -284,6 +284,9 @@ sequenceDiagram
     end
 ```
 
+- **A refused refund does not change the answer.** `POST /returns/{id}/receive` answers 200 either
+  way: `received` means the money is still owed (its refund record is already on the payment, where
+  the sweep and the attention list follow it), `closed` means it went back.
 - **Received is a fact about a parcel; closed is a fact about money.** The status move and the
   restock and the refund RECORD are ONE transaction, so units are never on the shelf behind a return
   that reads `approved`, and a received return always has its debt on file. Money cannot roll back,

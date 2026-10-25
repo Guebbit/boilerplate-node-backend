@@ -347,13 +347,12 @@ the reason; the actor is the caller, or the system when none is behind it. Nobod
 spot, whoever asked: goods arriving or a buyer withdrawing is not cash going back.
 
 `settleRefundByHand` (`POST /payments/{id}/refunds/{refundId}/settle`, `create:Refund`, the same
-fresh-session tier as recording a payment) is the only door that sets `refundedByHand: true`. It
+fresh-session tier as recording a payment) is the only door that sets `settledByHand: true` (on the refund, never on the payment: one hand-settled refund says nothing about the next). It
 names one record, so a payment carrying several open refunds (a cancelled remainder and two
 returns) settles each separately, and a return stays `received` until its own money is confirmed
 back. It audits `admin.payment.refund_settled_by_hand`; the `payment.refunded` event is the same as
 for a provider refund. `PaymentActions.settleByHand` lists the ids a caller may settle. A refund two
-operators settle at once settles once; the loser answers 409 `PAYMENT_REFUND_NOT_OPEN`, and a card
-refund answers `PAYMENT_REFUND_NOT_BY_HAND`. A cancelled hand-paid order therefore shows
+operators settle at once settles once; the loser answers 409 `PAYMENT_REFUND_NOT_OPEN`. A cancelled hand-paid order therefore shows
 `succeeded` until an operator confirms it, not "refunded" for money nobody actually moved.
 
 **The `actions` on every payment.** Each response that carries a payment, the answer to every
@@ -388,9 +387,19 @@ sequenceDiagram
         P-->>C: payment.refunded (once per refund)
     else provider refuses
         P->>D: record failed + failureReason, still counted
-        P-->>C: error — the sweep retries the same record
+        P-->>C: 201 with the failed record — the sweep retries it, or staff settle it
     end
 ```
+
+- **A refusal is an answer, not an error.** The record exists and counts against what is left, so
+  `POST /payments/{id}/refunds` answers **201** with the `failed` record (never a 5xx: a 500 would
+  invite a second click that opens a second partial refund). The three entry points differ:
+
+    | Entry point                   | Answers                                       | Where staff follow the refund                                        |
+    | ----------------------------- | --------------------------------------------- | -------------------------------------------------------------------- |
+    | `POST /payments/{id}/refunds` | 201 and the record (`failed` if refused)      | the record itself, `actions.settleByHand`, the attention list        |
+    | `POST /orders/{id}/cancel`    | 200; the refund runs after the answer         | the payment's `displayStatus` (`refund_pending`), the attention list |
+    | `POST /returns/{id}/receive`  | 200; `received` = still owed, `closed` = back | the order's payment, the attention list                              |
 
 - **Opened before asked.** The write that appends the record also raises `amountRefunded`, and it is
   conditional on `amountRefunded` still being what the caller read — so two racing partial refunds
@@ -468,6 +477,39 @@ them. See [Retiring a provider](./payments-provider-port.md#retiring-a-provider)
 use (Stripe). Past that a reused key makes a NEW refund, so the adapter must adopt the refund the
 record already made ([the port](./payments-provider-port.md#a-key-the-provider-forgot)). The age
 is measured from the record's `createdAt`, never from the last attempt.
+
+### When a card refund cannot go back {#when-a-card-refund-cannot-go-back}
+
+A refused card refund is the shop's to settle: the money has to reach the buyer another way, and an
+operator then presses **Mark returned** (`POST /payments/{id}/refunds/{refundId}/settle`). That is
+only offered when the refusal PROVES the money did not move.
+
+| The refusal                                                   | Money moved? | Retried?           | Hand settle                        | Attention kind                      |
+| ------------------------------------------------------------- | ------------ | ------------------ | ---------------------------------- | ----------------------------------- |
+| `declined`, `expired_or_canceled_card`, `lost_or_stolen_card` | no           | never (final)      | yes                                | `refused_refund`, at once           |
+| `provider_removed` (the adapter is no longer installed)       | no           | never (final)      | yes                                | `refused_refund`, at once           |
+| `insufficient_funds` (the shop's provider balance is short)   | no           | yes, growing delay | yes                                | `stale_refund`, after the threshold |
+| `provider_unavailable`, `unknown`                             | maybe        | yes, growing delay | no: 409 `PAYMENT_REFUND_IN_FLIGHT` | `stale_refund`, after the threshold |
+| a `pending` record (an attempt is running)                    | maybe        | claimed when stale | no: 409 `PAYMENT_REFUND_IN_FLIGHT` | `stale_refund`                      |
+
+```mermaid
+flowchart TD
+    A[provider refuses] --> B{the answer was about THIS refund?}
+    B -->|yes, definite| C[final: declined, expired, lost, removed]
+    B -->|yes, shop balance| D[insufficient_funds: retried, settleable]
+    B -->|no answer or unclear| E[provider_unavailable or unknown: retried]
+    C --> F[on the attention list at once]
+    D --> G[settleByHand lists it]
+    C --> G
+    E --> H[sweep resends under the same key; a timeout then gets the real answer]
+    G --> I[operator returns the money, presses Mark returned]
+    I --> J[credit note, return closes, buyer mail, webhook]
+```
+
+An unclear failure that never resolves (the provider gone dark) stays open with the growing delay
+and shows on the attention list after `NODE_PAYMENT_ATTENTION_MINUTES`. There is no override: a
+provider gone for good is a technician's edit of the record. Staff check the provider's dashboard or
+support first. Rule of thumb for adapter authors: [reading a refusal](./payments-provider-port.md#reading-a-refusal).
 
 Every other refund dispatches to the provider named on the payment's own `provider` field — never
 the deployment's currently configured one — so a refund of an older payment still reaches the

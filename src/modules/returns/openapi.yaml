@@ -275,7 +275,9 @@ paths:
                 `handlingDeduction` for damage the customer caused (Art. 14(2)). The amount is fixed
                 when the goods are received and shown as `refundAmount`. If the payment provider
                 refuses, the return stays `received` and the refund is retried by the payment sweep;
-                the return closes when it lands. Sends `Idempotency-Key`-safe retries. Requires a
+                the return closes when it lands. The answer is 200 either way: `received` means the
+                money is still owed (its refund record is already on the payment, follow it there
+                and on `GET /payments/attention`), `closed` means it went back. Sends `Idempotency-Key`-safe retries. Requires a
                 session that has re-proved itself within the last few minutes — a valid-but-stale
                 token answers 401 with `errors[].code` `REAUTH_REQUIRED`.
             operationId: receiveReturn

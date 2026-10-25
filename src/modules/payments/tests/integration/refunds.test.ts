@@ -287,7 +287,10 @@ describe('a refund the provider refuses', () => {
             new Error('provider secret detail')
         );
 
-        await expect(refund(orderId, { amount: 30 })).rejects.toThrow('provider secret detail');
+        await expect(refund(orderId, { amount: 30 })).resolves.toMatchObject({
+            success: true,
+            status: 201
+        });
 
         const payment = await paymentOf(orderId);
         expect(payment.refunds[0]).toMatchObject({
@@ -311,7 +314,10 @@ describe('a refund the provider refuses', () => {
             new PaymentProviderError('insufficient_funds', 'raw provider text')
         );
 
-        await expect(refund(orderId, { amount: 30 })).rejects.toThrow('raw provider text');
+        await expect(refund(orderId, { amount: 30 })).resolves.toMatchObject({
+            success: true,
+            status: 201
+        });
 
         const payment = await paymentOf(orderId);
         expect(payment.refunds[0].failureReason).toBe('insufficient_funds');
@@ -327,7 +333,10 @@ describe('a refund the provider refuses', () => {
             const spy = jest.spyOn(fakePaymentProvider, 'refund');
             const { orderId } = await paidOrder();
             spy.mockRejectedValueOnce(new Error('unreachable'));
-            await expect(refund(orderId, { amount: 30 })).rejects.toThrow('unreachable');
+            await expect(refund(orderId, { amount: 30 })).resolves.toMatchObject({
+                success: true,
+                status: 201
+            });
 
             expect(await paymentService.retryOpenRefunds()).toBe(1);
 
@@ -344,7 +353,7 @@ describe('a refund the provider refuses', () => {
             const { orderId } = await paidOrder();
             await refund(orderId, { amount: 40 });
             jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
-            await expect(refund(orderId)).rejects.toThrow('down');
+            await expect(refund(orderId)).resolves.toMatchObject({ success: true, status: 201 });
             const { status: statusNow } = await paymentOf(orderId);
             expect(statusNow).toBe('succeeded');
 
@@ -360,7 +369,7 @@ describe('a refund the provider refuses', () => {
             const { orderId } = await paidOrder();
             const spy = jest.spyOn(fakePaymentProvider, 'refund');
             spy.mockRejectedValueOnce(new Error('down'));
-            await expect(refund(orderId)).rejects.toThrow('down');
+            await expect(refund(orderId)).resolves.toMatchObject({ success: true, status: 201 });
 
             // The failed record still holds the money, so a click is not a second send.
             const asked = await refund(orderId);
@@ -391,7 +400,10 @@ describe('a refund after one the provider keeps refusing', () => {
     it('is opened and sent by a cancel, and the refused one is left to the sweep', async () => {
         const { orderId } = await paidOrder();
         const spy = refuseRefundsOf(20);
-        await expect(refund(orderId, { amount: 20 })).rejects.toThrow('card refused');
+        await expect(refund(orderId, { amount: 20 })).resolves.toMatchObject({
+            success: true,
+            status: 201
+        });
 
         await refundForOrder(orderId);
 
@@ -445,7 +457,10 @@ describe('the refund sweep', () => {
         withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const { orderId } = await paidOrder();
             jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
-            await expect(refund(orderId, { amount: 30 })).rejects.toThrow('down');
+            await expect(refund(orderId, { amount: 30 })).resolves.toMatchObject({
+                success: true,
+                status: 201
+            });
             // 201 hand-paid payments with an open refund, all older than the card one.
             // `providerRef` is unique and a hand-paid payment has none.
             const stored = await paymentOf(orderId);
@@ -526,7 +541,7 @@ describe('a partial refund on a payment recorded by hand', () => {
         await refund(orderId, { amount: 40 });
         await refund(orderId);
         const opened = await paymentOf(orderId);
-        expect(opened.refundedByHand).toBeUndefined();
+        expect(opened.refunds.some((entry) => entry.settledByHand)).toBe(false);
         expect(opened.refunds.map((entry) => [entry.amount, entry.status])).toEqual([
             [40, 'pending'],
             [60, 'pending']
@@ -544,7 +559,7 @@ describe('a partial refund on a payment recorded by hand', () => {
 
         const payment = await paymentOf(orderId);
         expect(payment.status).toBe('succeeded');
-        expect(payment.refundedByHand).toBe(true);
+        expect(payment.refunds.every((entry) => entry.settledByHand)).toBe(true);
         expect(payment.refunds.every((entry) => entry.providerRefundRef === undefined)).toBe(true);
         expect(presentPayment(payment).displayStatus).toBe('refunded');
         expect(providerSpy).not.toHaveBeenCalled();
@@ -663,7 +678,7 @@ describe('the request of a refund', () => {
             jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
             await expect(
                 refundOrderPayment(orderId, asAdmin(), own, { amount: 30 })
-            ).rejects.toThrow('down');
+            ).resolves.toMatchObject({ success: true, status: 201 });
 
             await paymentService.retryOpenRefunds();
 

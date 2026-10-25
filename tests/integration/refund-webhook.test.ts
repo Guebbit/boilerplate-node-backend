@@ -65,7 +65,7 @@ it('an admin refund fans out a payment.refunded delivery carrying the amount and
         callerContextAs('admin')
     );
     expect(refunded.success).toBe(true);
-    const currency = refunded.success ? refunded.data.currency : undefined;
+    const currency = refunded.success ? refunded.data.payment.currency : undefined;
 
     // `markRefunded` fires `PAYMENT_REFUNDED` fire-and-forget, so the delivery row lands after
     // `refundPayment` resolved: two real Mongo round-trips (`findEnabled`, then `create`).

@@ -139,8 +139,8 @@ const refundAttention = (row: RefundRow, kind: PaymentAttentionKind): PaymentAtt
 });
 
 /**
- * Every problem still recorded on a payment, oldest first: refunds open past the threshold, and
- * refunds owed by hand. A refund owed is always an open record, so a fixed problem has closed it
+ * Every problem still recorded on a payment, oldest first: refunds open past the threshold, refunds the
+ * provider refused for good (at once), and refunds owed by hand. A refund owed is always an open record, so a fixed problem has closed it
  * and is not here.
  */
 export const listAttention = (): Promise<{ items: PaymentAttentionItem[] }> => {
@@ -149,12 +149,20 @@ export const listAttention = (): Promise<{ items: PaymentAttentionItem[] }> => {
         paymentRepository.findOpenRefundRows({
             manual: false,
             openBefore: cutoff,
+            refusal: 'not-final',
+            limit: ATTENTION_LIMIT
+        }),
+        // A final refusal needs a person now: no waiting for the threshold.
+        paymentRepository.findOpenRefundRows({
+            manual: false,
+            refusal: 'final',
             limit: ATTENTION_LIMIT
         }),
         paymentRepository.findOpenRefundRows({ manual: true, limit: ATTENTION_LIMIT })
-    ]).then(([stale, manual]) => ({
+    ]).then(([stale, refused, manual]) => ({
         items: [
             ...stale.map((row) => refundAttention(row, PaymentAttentionKind.stale_refund)),
+            ...refused.map((row) => refundAttention(row, PaymentAttentionKind.refused_refund)),
             ...manual.map((row) => refundAttention(row, PaymentAttentionKind.manual_refund_owed))
         ].toSorted((a, b) => a.since.localeCompare(b.since))
     }));

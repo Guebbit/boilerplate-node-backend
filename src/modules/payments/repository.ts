@@ -333,6 +333,8 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
     findOpenRefundRows: (options: {
         manual: boolean;
         openBefore?: Date;
+        /** `final` keeps only refusals that end the retrying, `not-final` leaves them out. */
+        refusal?: 'final' | 'not-final';
         limit: number;
     }) => Promise<RefundRow[]>;
     findWithOpenRefunds: (updatedBefore: Date, limit: number) => Promise<PaymentDocument[]>;
@@ -570,7 +572,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      *
      * @param paymentId - the payment
      * @param refundId - the refund record inside it
-     * @param fields - the provider's refund id when there was one, and `refundedByHand` for money
+     * @param fields - the provider's refund id when there was one, and `settledByHand` for money
      *   an operator returned outside the application
      * @param session - the caller's transaction, when the settlement is announced through the outbox
      * @returns the payment as it now stands, or `null` if that refund was not open
@@ -587,7 +589,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                             // current; an operator's report (no attempt) takes any open record.
                             ...(fields.attempt
                                 ? { status: RefundStatus.pending, attemptedAt: fields.attempt }
-                                : { status: { $in: OPEN_REFUND_STATUSES } })
+                                : { status: { $in: fields.from ?? OPEN_REFUND_STATUSES } })
                         }
                     }
                 },
@@ -598,7 +600,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                         ...(fields.providerRefundRef === undefined
                             ? {}
                             : { 'refunds.$.providerRefundRef': fields.providerRefundRef }),
-                        ...(fields.refundedByHand ? { refundedByHand: true } : {})
+                        ...(fields.settledByHand ? { 'refunds.$.settledByHand': true } : {})
                     },
                     $unset: { 'refunds.$.failureReason': 1, 'refunds.$.nextAttemptAt': 1 }
                 },
@@ -761,9 +763,10 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * provider's open refund only counts once it is older than `openBefore`; a `manual` payment's
      * has no such grace, because nothing but the operator ever finishes it.
      *
-     * @param options - which kind, the age cutoff for provider refunds, and the cap
+     * @param options - which kind, the age cutoff for provider refunds, whether final refusals are
+     *   wanted or left out, and the cap
      */
-    findOpenRefundRows: ({ manual, openBefore, limit }) =>
+    findOpenRefundRows: ({ manual, openBefore, refusal, limit }) =>
         aggregateRefundRows([
             {
                 $match: {
@@ -775,7 +778,14 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
             {
                 $match: {
                     'refunds.status': { $in: [...OPEN_REFUND_STATUSES] },
-                    ...(openBefore ? { 'refunds.createdAt': { $lte: openBefore } } : {})
+                    ...(openBefore ? { 'refunds.createdAt': { $lte: openBefore } } : {}),
+                    ...(refusal === undefined
+                        ? {}
+                        : {
+                              'refunds.failureReason': {
+                                  [refusal === 'final' ? '$in' : '$nin']: [...FINAL_REFUND_FAILURES]
+                              }
+                          })
                 }
             },
             { $sort: { 'refunds.createdAt': 1, 'refunds._id': 1, _id: 1 } },
