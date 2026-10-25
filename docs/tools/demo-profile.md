@@ -56,15 +56,15 @@ Two things it needs from the SSRF guard and the mailer live next to it as [test 
 ← 204, no body
 
 → { "scenario": "not-a-real-name" }
-← 400 { "success": false, "message": "unknown scenario: \"not-a-real-name\"" }
+← 400 problem+json, errors[0].message: unknown scenario: "not-a-real-name"
 
 → { "scenario": 42 }            // not even a string
-← 400 { "success": false, "message": "unknown scenario: 42" }
+← 400 problem+json, errors[0].message: unknown scenario: 42
 ```
 
-A build failure mid-restore answers `500 { "success": false }` with the real cause only in the
+A build failure mid-restore answers a `500` problem document with the real cause only in the
 server log, never the response — the same reasoning as every other unhandled failure this API
-answers.
+answers. Every lever refuses in the API's own [problem details](../api/errors.md#problem-details).
 
 `GET /__test/scenario`:
 

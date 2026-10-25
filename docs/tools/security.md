@@ -695,7 +695,8 @@ account exists.
 Every 401 carries a `WWW-Authenticate` challenge (RFC 9110 §15.5.2): `rejectResponse` adds
 `Bearer realm="api"` by default, and a guard that knows more sets its own first
 (`error="invalid_token"` for an `sk_` key, `error="insufficient_user_authentication"` for a
-step-up). The app's own clients read `errors[].code` and never the header.
+step-up). The app's own clients read `errors[].code` and never the header. See
+[Error Responses](../api/errors.md#headers-on-an-error).
 
 An [api-key](#machine-to-machine-credentials) follows the same rule from a third direction: it IS
 a credential, so a route it holds no permission for is 403 like any other refusal — including a
@@ -749,7 +750,7 @@ signatures.
 flowchart LR
     R[GET /.well-known/security.txt] --> C{contact + Expires still ahead?}
     C -- yes --> T[200 text/plain]
-    C -- no --> N[404 envelope]
+    C -- no --> N[404 problem+json]
 ```
 
 ## Strategy

@@ -208,7 +208,7 @@ Everything the module's paths need and nothing else:
 - the `components.schemas` only it uses,
 - its `tags:` declaration.
 
-Anything used by two or more modules — the error envelope, pagination parameters, the security
+Anything used by two or more modules — the error body (`Problem`), pagination parameters, the security
 schemes — stays in the shared root fragment. **Duplicating a shared schema into two fragments is
 the failure mode to watch for**: the bundle will contain two definitions that drift apart silently,
 and nothing but a careful reading catches it.
@@ -339,7 +339,7 @@ file (`../orders/openapi.yaml#/components/schemas/Order`). Only what has no sing
 | Kind | Examples | Why shared |
 | ---- | -------- | ---------- |
 | Scalars | `Id`, `Email`, `Locale`, `Page`, `PageSize`, `Text`, `ImageUrl` | referenced everywhere |
-| Envelope machinery | `EnvelopeSuccess`, `EnvelopeStatus`, `EnvelopeMessage`, `PaginationMeta`, `MessageResponse`, `ErrorItem`, `ErrorResponse`, `ValidationErrorResponse` | every operation's success and failure shape |
+| Envelope machinery | `EnvelopeSuccess`, `EnvelopeStatus`, `EnvelopeMessage`, `PaginationMeta`, `MessageResponse`, `ErrorItem`, `Problem` | every operation's success and failure shape |
 | The user record | `User`, `UserEnvelope`, `UserActions` | `account` authenticates the record `users` administers: the repo's one shared kernel |
 | Cross-domain requests | `RequiredIdempotencyKeyHeader` | belongs to a middleware in `infrastructure` |
 | The shell's own | `HealthPing`, `HealthPingEnvelope`, the `System` tag | `GET /` belongs to no module, so neither does its answer |
