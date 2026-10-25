@@ -74,6 +74,12 @@ export interface RefundRequest {
     lines?: RefundLine[];
     /** The delivery cost inside the amount, beside `lines` — a decimal. */
     shipping?: number;
+    /**
+     * Take at most what is left instead of refusing when the figure no longer fits. A return's
+     * amount is clamped on a read that a racing refund can outdate; the re-read after a missed
+     * write then refunds the rest, not nothing.
+     */
+    capAtRemaining?: boolean;
 }
 
 /** The request the automatic callers make: everything left, for a cancellation. */
@@ -231,8 +237,9 @@ export const openRefund = (
 ): Promise<OpenedRefund | null> => {
     const { currency, _id: paymentId, orderId, amountRefunded } = payment;
     const remaining = remainingOf(payment);
-    const amount =
+    const wanted =
         request.amount === undefined ? remaining : toMinorUnits(request.amount, currency);
+    const amount = request.capAtRemaining ? minMoney(wanted, remaining) : wanted;
     if (amount <= 0 || amount > remaining) return Promise.resolve(null);
 
     const refundId = new Types.ObjectId();
@@ -941,7 +948,7 @@ const mayReturnMoney = (
 /**
  * Give back the money for goods a customer returned, or for a remainder cancelled before it
  * shipped — `returns`' one door into the refund. The amount is clamped to what the payment still
- * has left, so a goodwill refund made earlier can never make a return over-refund; the refund is
+ * has left, so a goodwill refund made earlier (or one racing it) can never make a return over-refund; the refund is
  * recorded as `return` (or `cancellation`) and carries `returnId`, so `returns` can close the
  * return when the money lands — now, or later when the sweep finishes it.
  *
@@ -986,12 +993,12 @@ export const refundForReturn = (
             );
         }
 
-        const wanted = toMinorUnits(input.amount, payment.currency);
-        const amount = minMoney(wanted, remainingOf(payment));
-        if (amount <= 0) return null;
+        if (toMinorUnits(input.amount, payment.currency) <= 0 || remainingOf(payment) <= 0)
+            return null;
 
         return performRefund(orderId, context, {
-            amount: toDecimalAmount(amount, payment.currency),
+            amount: input.amount,
+            capAtRemaining: true,
             reason,
             returnId: input.returnId,
             lines: input.lines,

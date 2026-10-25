@@ -466,6 +466,32 @@ describe('the refund sweep', () => {
         }));
 });
 
+describe('a return refund racing another refund', () => {
+    it('takes what is left instead of closing the return with nothing', async () => {
+        const { orderId } = await paidOrder();
+        const addRefund = paymentRepository.addRefund.bind(paymentRepository);
+        // The goodwill refund lands between the return's read and its write.
+        jest.spyOn(paymentRepository, 'addRefund').mockImplementationOnce(async (...args) => {
+            await refund(orderId, { amount: 30 });
+            return addRefund(...args);
+        });
+
+        const outcome = await paymentService.refundForReturn(
+            orderId,
+            { returnId: 'return-a', amount: 100, lines: [], shipping: 0 },
+            callerContextAs('admin')
+        );
+
+        expect(outcome).not.toBeNull();
+        const payment = await paymentOf(orderId);
+        expect(payment.refunds.map((entry) => [entry.amount, entry.returnId])).toEqual([
+            [30, undefined],
+            [70, 'return-a']
+        ]);
+        expect(payment.amountRefunded).toBe(100);
+    });
+});
+
 describe('cancelling an order that was already partly refunded', () => {
     it('returns only what is left', async () => {
         const { user, orderId } = await paidOrder();
