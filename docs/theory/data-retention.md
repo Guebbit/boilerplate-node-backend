@@ -75,6 +75,44 @@ A single-country shop may lower it.
 
 Check the current figure for the country before relying on it: these change (Germany did in 2025).
 
+## Invoices: the tax clock
+
+An invoice or credit note is the legal record of a sale, so it outlives the order, the account and
+the order's own PII clock. What it does not need forever is the buyer. Once the tax period ends,
+`reap:invoices` blanks the buyer block (name, street, city, zip, country) and keeps the numbered
+document: seller, lines, every amount, the order link, and a credit note's link to its invoice.
+The stats read revenue from these rows, so they stay.
+
+| Part                         | After the clock ends                                    |
+| ---------------------------- | ------------------------------------------------------- |
+| buyer block                  | removed; `buyerErasedAt` records when                   |
+| number, dates, seller, lines | kept                                                    |
+| amounts, VAT summary         | kept                                                    |
+| cached PDF                   | deleted at once; the next render prints a one-line note |
+
+**The clock.** `NODE_INVOICE_BUYER_RETENTION_YEARS` (default 10, the longest EU period: IT art.
+2220 c.c.; DE books 10, invoices 8). It counts from the END of the issue year, in the time zone
+frozen on the document, as tax authorities count. A document is due at local midnight of 1 January
+of issue year + N + 1. An invoice issued on 31 December 2015 at 23:30 UTC is already a 2016 invoice
+in Rome, so it is due on 1 January 2027, not 2026. Counting `issuedAt + N * 365 days` would run up
+to a year early. A credit note has its own clock, on its own issue date.
+
+```mermaid
+flowchart LR
+    I["issued<br/>(zone year Y)"] --> E["end of Y"]
+    E --> N["+ N full years"]
+    N --> D["1 Jan of Y+N+1<br/>local midnight"]
+    D --> R["reap:invoices<br/>blanks the buyer"]
+```
+
+**What others do.** WooCommerce anonymises completed orders. Shopify keeps what was sold, the date
+and the value. Amasty GDPR (Magento) deletes the personal data on invoices and credit memos and
+keeps the documents. Odoo cannot delete a posted invoice; it anonymises the partner. None deletes
+the numbered document.
+
+A shorter country period lowers the knob; a pending tax audit raises it. The job reads the
+`invoices_issuedAt` index for a coarse bound, then applies the exact year-end rule per row.
+
 ## Inactive accounts: minimise, don't delete
 
 | Who                | What happens to an inactive account                                                              |
@@ -99,14 +137,14 @@ purpose any more, and keep the login. That step is on by default.
 passive) or the latest API-key use. An account driven only through its API keys is a live
 integration, not an idle account.
 
-| Data on an inactive account | Its purpose                  | On inactivity                             |
-| --------------------------- | ---------------------------- | ----------------------------------------- |
-| login (email, password)     | letting the person come back | kept                                      |
-| profile, wishlist           | the account's own content    | kept                                      |
-| saved address book          | a faster next checkout       | deleted — re-entered on the next order    |
-| orders' addresses and notes | showing order history        | the per-order clock starts, as on erasure |
-| invoices                    | the tax record               | untouched                                 |
-| return free text            | the legal-claims window      | its own clock, below                      |
+| Data on an inactive account | Its purpose                  | On inactivity                                    |
+| --------------------------- | ---------------------------- | ------------------------------------------------ |
+| login (email, password)     | letting the person come back | kept                                             |
+| profile, wishlist           | the account's own content    | kept                                             |
+| saved address book          | a faster next checkout       | deleted — re-entered on the next order           |
+| orders' addresses and notes | showing order history        | the per-order clock starts, as on erasure        |
+| invoices                    | the tax record               | untouched ([own clock](#invoices-the-tax-clock)) |
+| return free text            | the legal-claims window      | its own clock, below                             |
 
 A banned account is minimised like any other: minimising drops data and deletes nothing, so a ban is no
 reason to keep the address book.
@@ -159,6 +197,10 @@ Three ways back, all conditional on `purgeAt > now`: the mailed link, signing in
 `DeletionPending` claim check, redeemed at `POST /account/login/restore`), and staff
 (`POST /users/{id}/restore`, the same `delete:User` key as any restore, with a confirm in the admin).
 The purge's first write is a claim on `purgeAt <= now`, so a restore and a purge can never both match.
+
+**Third parties.** Every hard erasure, the purge included, also asks the PostHog provider (when it is
+configured for erasure) to delete the person and its events:
+[Erasure in PostHog](../tools/analytics.md#erasure-in-posthog).
 
 **Backups.** A snapshot restore must re-apply `auth.account_delete.scheduled` and `.cancelled` since
 the snapshot, or the purge erases an account the person restored:

@@ -12,6 +12,7 @@ import type {
     TranslationOrigin,
     UpsertTranslationsRequest
 } from '@types';
+import { ERROR_CODES } from '@api/error-codes';
 import { getFallbackLocale, t } from '@infrastructure/i18n';
 import type { TranslatableTarget } from '@kernel/registry';
 import { fillOmittedWithNull } from '@infrastructure/object-guards';
@@ -45,11 +46,21 @@ export interface EntityTranslationsResult {
 
 /** An `entityType` the registry does not know: 404, like any path that names nothing. */
 const entityTypeUnknown = (entityType: string): ResponseReject =>
-    generateReject(404, [t('locales.error-entity-type-unknown', { entityType })]);
+    generateReject(404, [
+        {
+            code: ERROR_CODES.LOCALE_ENTITY_TYPE_UNKNOWN,
+            message: t('locales.error-entity-type-unknown', { entityType })
+        }
+    ]);
 
 /** An `entityId` the module named by `entityType` does not currently hold. */
 const entityNotFound = (entityType: string, entityId: string): ResponseReject =>
-    generateReject(404, [t('locales.error-entity-not-found', { entityType, entityId })]);
+    generateReject(404, [
+        {
+            code: ERROR_CODES.LOCALE_ENTITY_NOT_FOUND,
+            message: t('locales.error-entity-not-found', { entityType, entityId })
+        }
+    ]);
 
 /**
  * One `VALIDATION_ERROR` rejection for a single locale slot — the shape every {@link planSlot}

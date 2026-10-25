@@ -41,10 +41,7 @@ describe('GET /locales for a language with a deployed file that is switched off'
         await givenLocale('it', { active: false });
         const { bearer } = await authenticateAs('admin');
 
-        const on = await api()
-            .patch('/locales/it')
-            .set('Authorization', bearer)
-            .send({ active: true });
+        const on = await api().post('/locales/it/activate').set('Authorization', bearer);
 
         expect(on.status).toBe(200);
         expect(await manifestTags()).toContainEqual(['it', true]);

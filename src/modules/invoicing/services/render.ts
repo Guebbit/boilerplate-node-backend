@@ -35,6 +35,7 @@ const sharedFields = (
     billingAddress: document.billingAddress
         ? decryptInvoiceParty(document.billingAddress, kind, document._id)
         : undefined,
+    buyerErasedAt: document.buyerErasedAt,
     seller: document.seller,
     lines: document.lines,
     shippingCost: document.shippingCost,
@@ -96,6 +97,15 @@ const storedOrRendered = (name: string, render: () => Promise<Buffer>): Promise<
 };
 
 /**
+ * The name a document's PDF is stored under.
+ *
+ * @param kind - which collection holds the document
+ * @param id - the document's own `_id`
+ */
+export const storedDocumentName = (kind: InvoiceDocumentKind, id: unknown): string =>
+    `${kind}-${String(id)}.pdf`;
+
+/**
  * Renders one issued invoice's PDF — every render reads the same frozen row, so two downloads of
  * the same invoice always produce byte-identical copies (barring a provider upgrade), and the
  * second is the stored one.
@@ -103,7 +113,7 @@ const storedOrRendered = (name: string, render: () => Promise<Buffer>): Promise<
  * @returns the rendered artefact's bytes
  */
 export const renderInvoicePdf = (invoice: InvoiceDocument): Promise<Buffer> =>
-    storedOrRendered(`invoice-${String(invoice._id)}.pdf`, () =>
+    storedOrRendered(storedDocumentName('invoice', invoice._id), () =>
         resolveEInvoicingProvider().issue({ kind: 'invoice', ...sharedFields(invoice, 'invoice') })
     );
 
@@ -113,7 +123,7 @@ export const renderInvoicePdf = (invoice: InvoiceDocument): Promise<Buffer> =>
  * @returns the rendered artefact's bytes
  */
 export const renderCreditNotePdf = (creditNote: CreditNoteDocument): Promise<Buffer> =>
-    storedOrRendered(`credit-note-${String(creditNote._id)}.pdf`, () =>
+    storedOrRendered(storedDocumentName('credit-note', creditNote._id), () =>
         resolveEInvoicingProvider().issue({
             kind: 'creditNote',
             ...sharedFields(creditNote, 'credit-note'),

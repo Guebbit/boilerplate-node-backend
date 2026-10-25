@@ -74,4 +74,5 @@ flowchart LR
    follow from the contract.
 
 The pieces live in `src/infrastructure/http/request.ts` (`parseFormCsvList`, the query decode) and
-`src/infrastructure/persistence/search.ts` (`resolveSort`).
+`src/infrastructure/persistence/search.ts` (`resolveSort`, and `withTiebreaker`, which closes every
+paged sort with `_id` — `findAll` applies it, so a caller's own sort needs no tiebreaker of its own).

@@ -70,6 +70,7 @@ does: a unique `(subscriptionId, eventId)` index turns a redelivered fan-out int
 | `user.setup-requested`                    | `src/modules/users/services/create.ts`                   |
 | `user.deactivated`                        | `src/modules/users/services/update.ts`                   |
 | `user.deletion-cancelled`                 | `src/modules/users/services/remove.ts`                   |
+| `user.erased`                             | `src/modules/users/services/remove.ts`                   |
 | `example.published`                       | `src/modules/example/services/crud.ts`                   |
 | `return.requested`                        | `src/modules/returns/services/create.ts`                 |
 | `return.received`                         | `src/modules/returns/services/receive.ts`                |

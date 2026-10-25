@@ -18,6 +18,11 @@ export const noneAnalyticsProvider: AnalyticsProvider = {
         // Deliberately empty.
     },
 
+    // Nothing was collected, so nothing is held to erase.
+    forget(): Promise<void> {
+        return Promise.resolve();
+    },
+
     // Collecting nothing is this provider's whole configuration, so it is never unconfigured.
     configured(): boolean {
         return true;

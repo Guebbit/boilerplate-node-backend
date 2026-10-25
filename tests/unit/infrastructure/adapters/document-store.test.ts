@@ -10,6 +10,7 @@ import path from 'node:path';
 import { setEnvironment } from '@tests/environment';
 import {
     reapDocuments,
+    removeDocument,
     readDocument,
     writeDocument
 } from '@infrastructure/adapters/document-store';
@@ -86,5 +87,24 @@ describe('reapDocuments', () => {
         await rm(root, { recursive: true });
 
         await expect(reapDocuments(1000)).resolves.toEqual({ checked: 0, reaped: 0 });
+    });
+});
+
+describe('removeDocument', () => {
+    it('deletes the named file and only that one', async () => {
+        await writeDocument('invoice-1.pdf', Buffer.from('a'));
+        await writeDocument('invoice-2.pdf', Buffer.from('b'));
+
+        await expect(removeDocument('invoice-1.pdf')).resolves.toBe(true);
+
+        expect(await readdir(root)).toEqual(['invoice-2.pdf']);
+    });
+
+    it('treats an absent file as nothing to do', async () => {
+        await expect(removeDocument('invoice-9.pdf')).resolves.toBe(false);
+    });
+
+    it('never touches a path for a name the store would not write', async () => {
+        await expect(removeDocument('../invoice-1.pdf')).resolves.toBe(false);
     });
 });

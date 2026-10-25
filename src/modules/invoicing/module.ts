@@ -13,7 +13,7 @@
  * No route requests an invoice or a credit note into existence — both are frozen ONLY from this
  * module's own event listeners below, reacting to a fact another module already recorded. Neither
  * document is ever deleted, updated or re-rendered from live config: this module has no delete
- * door, on purpose.
+ * door, on purpose. The one write after issue is `reap:invoices`, which blanks the buyer block.
  */
 
 import path from 'node:path';

@@ -85,6 +85,11 @@ export interface FrozenTaxDocument {
     orderNumber: string;
     /** Absent on an order with no billing address (an admin-created one, which runs no checkout). */
     billingAddress?: InvoiceParty;
+    /**
+     * When `reap:invoices` removed the buyer block at the end of its tax retention. Set means the
+     * block is gone on purpose, so the PDF says why; absent means none was ever frozen.
+     */
+    buyerErasedAt?: Date;
     seller: InvoiceSeller;
     lines: InvoiceLine[];
     /** The shipping cost frozen at checkout — absent exactly when the order's own field is. */
@@ -183,6 +188,7 @@ const frozenTaxDocumentFields = {
     locale: { type: String, required: true },
     orderNumber: { type: String, required: true },
     billingAddress: { type: partySchema },
+    buyerErasedAt: { type: Date },
     seller: { type: sellerSchema, required: true },
     lines: { type: [lineSchema], required: true },
     shippingCost: moneyPath({ nonNegative: true }),

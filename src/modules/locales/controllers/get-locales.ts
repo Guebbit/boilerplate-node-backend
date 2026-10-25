@@ -21,7 +21,10 @@ import { catchAs } from '@infrastructure/http/controller';
 export const getLocales = (request: Request, response: Response) =>
     localeService
         // Role-based row filtering — `getAuth` on the route is what makes it readable here.
-        .listCapabilities(localeService.callerScope(request.caller))
+        .listCapabilities(
+            localeService.callerScope(request.caller),
+            localeService.readStanding(request.caller)
+        )
         .then((capabilities) => successResponse<LocaleCapabilities>(response, capabilities))
         .catch(catchAs(response, 'getLocales'));
 

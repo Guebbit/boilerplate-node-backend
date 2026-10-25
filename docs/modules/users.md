@@ -199,6 +199,9 @@ announces `user.deactivated` in that transaction, so `account` purges the pendin
 sessions died. A repeat is a conflict, not a second success: `409 USER_ALREADY_INACTIVE` /
 `USER_ALREADY_ACTIVE` ([the rule](../api/write-methods.md#repeating-an-action-409)). Audit: `admin.user.banned` / `admin.user.unbanned`.
 
+A hard erasure also writes `user.erased` in its transaction; this module's own subscriber asks the
+analytics provider to forget the id ([PostHog erasure](../tools/analytics.md#erasure-in-posthog)).
+
 ## The doors a sibling module may use
 
 Two writes skip the ban check and the staff protection the admin routes enforce: the raw `update`

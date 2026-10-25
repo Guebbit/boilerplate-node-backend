@@ -8,6 +8,7 @@
  */
 
 import { LocaleDirection, type CreateLocaleRequest, type UpdateLocaleRequest } from '@types';
+import { ERROR_CODES } from '@api/error-codes';
 import { getFallbackLocale, t } from '@infrastructure/i18n';
 import {
     generateReject,
@@ -35,7 +36,12 @@ const clearTranslatableCaches = (): Promise<void> =>
 
 /** Not found, phrased the one way every route in this module phrases it. */
 export const languageNotFound = (): ResponseReject =>
-    generateReject(404, [t('locales.error-language-not-found')]);
+    generateReject(404, [
+        {
+            code: ERROR_CODES.LOCALE_LANGUAGE_NOT_FOUND,
+            message: t('locales.error-language-not-found')
+        }
+    ]);
 
 /**
  * The deployment's fallback locale, deactivated or deleted — refused before either happens.
@@ -44,12 +50,24 @@ export const languageNotFound = (): ResponseReject =>
  */
 const rejectFallbackLocale = (tag: string): ResponseReject | undefined =>
     tag === getFallbackLocale()
-        ? generateReject(409, [t('locales.error-language-is-fallback')])
+        ? generateReject(409, [
+              {
+                  code: ERROR_CODES.LOCALE_LANGUAGE_IS_FALLBACK,
+                  message: t('locales.error-language-is-fallback')
+              }
+          ])
         : undefined;
 
 /** An app this deployment does not know — refused before anything is written under it. */
 export const rejectUnknownApp = (app: string): ResponseReject | undefined =>
-    isKnownApp(app) ? undefined : generateReject(422, [t('locales.error-app-unknown', { app })]);
+    isKnownApp(app)
+        ? undefined
+        : generateReject(422, [
+              {
+                  code: ERROR_CODES.LOCALE_APP_UNKNOWN,
+                  message: t('locales.error-app-unknown', { app })
+              }
+          ]);
 
 /**
  * Register a language in the dynamic tier.
@@ -65,7 +83,13 @@ export const createLanguage = (
     // Checked here for the message, and by a unique index for the race — a concurrent creation of
     // the same tag reaches E11000, which the shared interpreter answers 409 for anyway.
     return localeRepository.findByTag(tag).then((existing) => {
-        if (existing) return generateReject(409, [t('locales.error-language-exists', { tag })]);
+        if (existing)
+            return generateReject(409, [
+                {
+                    code: ERROR_CODES.LOCALE_LANGUAGE_EXISTS,
+                    message: t('locales.error-language-exists', { tag })
+                }
+            ]);
 
         return localeRepository
             .create({
@@ -90,10 +114,12 @@ export const createLanguage = (
 };
 
 /**
- * Edit a language's display fields or its visibility.
+ * Edit a language's display fields.
  *
  * `undefined` means "leave it alone", which is why each field is tested rather than assigned: a
- * blanket assign would turn a request that changed one field into one that cleared the other three.
+ * blanket assign would turn a request that changed one field into one that cleared the other two.
+ * Whether the language is switched on is not editable here — {@link activateLanguage} and
+ * {@link deactivateLanguage} own that, with its refusals, cache clear and audit row.
  */
 export const updateLanguage = (
     tag: string,
@@ -103,11 +129,6 @@ export const updateLanguage = (
     localeRepository.findByTag(tag).then((language) => {
         if (!language) return languageNotFound();
 
-        if (payload.active === false) {
-            const fallbackRefusal = rejectFallbackLocale(tag);
-            if (fallbackRefusal) return fallbackRefusal;
-        }
-
         // Read before the assignments below. Display names are not personal data: shown by value.
         const metadata = auditChanges(
             language,
@@ -116,41 +137,100 @@ export const updateLanguage = (
                 name: payload.name?.trim(),
                 nativeName: payload.nativeName?.trim()
             },
-            { valued: ['name', 'nativeName', 'direction', 'active'], named: [] }
+            { valued: ['name', 'nativeName', 'direction'], named: [] }
         );
 
         if (payload.name !== undefined) language.name = payload.name.trim();
         if (payload.nativeName !== undefined) language.nativeName = payload.nativeName.trim();
         if (payload.direction !== undefined) language.direction = payload.direction;
-        if (payload.active !== undefined) language.active = payload.active;
+
+        return localeRepository.save(language).then((saved) => {
+            recordAudit(context, {
+                action: localeAuditActions.ADMIN_LOCALE_UPDATED,
+                outcome: 'success',
+                targetType: 'locale',
+                targetId: tag,
+                metadata
+            });
+
+            // The negotiation reads an in-memory list of the served languages, refreshed by
+            // this: an edit must reach this worker's next request, not wait for the timer.
+            return refreshOverlayNow().then(() => generateSuccess(saved));
+        });
+    });
+
+/**
+ * Switches a language on or off — the one place `active` changes after creation.
+ *
+ * Refuses a move to the state it is already in (409, an action endpoint never succeeds silently)
+ * and switching the fallback off. Cached translated text is keyed by language and kept for an hour:
+ * switching a language off must not leave its text served, nor switching it on leave the fallback
+ * served in its place.
+ *
+ * @param active - the state to move to
+ */
+const setActive = (
+    tag: string,
+    active: boolean,
+    context?: CallerContext
+): Promise<ResponseSuccess<LocaleDocument> | ResponseReject> =>
+    localeRepository.findByTag(tag).then((language) => {
+        if (!language) return languageNotFound();
+
+        if (language.active === active)
+            return generateReject(409, [
+                {
+                    code: active
+                        ? ERROR_CODES.LOCALE_LANGUAGE_ALREADY_ACTIVE
+                        : ERROR_CODES.LOCALE_LANGUAGE_ALREADY_INACTIVE,
+                    message: t(
+                        active
+                            ? 'locales.error-language-already-active'
+                            : 'locales.error-language-already-inactive',
+                        { tag }
+                    )
+                }
+            ]);
+
+        const fallbackRefusal = active ? undefined : rejectFallbackLocale(tag);
+        if (fallbackRefusal) return fallbackRefusal;
+
+        language.active = active;
 
         return localeRepository
             .save(language)
-            .then((saved) =>
-                // Cached product responses are keyed by language and kept for an hour: switching a
-                // language off must not leave its text served, nor switching it on leave the
-                // fallback served in its place. Only the visibility flag changes what is served.
-                (payload.active === undefined ? Promise.resolve() : clearTranslatableCaches()).then(
-                    () => saved
-                )
-            )
+            .then((saved) => clearTranslatableCaches().then(() => saved))
             .then((saved) => {
                 recordAudit(context, {
-                    action: localeAuditActions.ADMIN_LOCALE_UPDATED,
+                    action: active
+                        ? localeAuditActions.ADMIN_LOCALE_ACTIVATED
+                        : localeAuditActions.ADMIN_LOCALE_DEACTIVATED,
                     outcome: 'success',
                     targetType: 'locale',
                     targetId: tag,
                     // `active` is the field worth having in the trail: it is what makes a
                     // half-finished translation public.
-                    metadata
+                    metadata: { changes: { active: { from: !active, to: active } } }
                 });
 
-                // The negotiation reads an in-memory list of the served languages, refreshed by
-                // this: switching one on or off must reach this worker's next request, not wait
-                // for the timer.
+                // Same as an edit: this worker's served-language list follows at once.
                 return refreshOverlayNow().then(() => generateSuccess(saved));
             });
     });
+
+/**
+ * Switch a language on.
+ * @param context - caller context for the `ADMIN_LOCALE_ACTIVATED` audit emit
+ */
+export const activateLanguage = (tag: string, context?: CallerContext) =>
+    setActive(tag, true, context);
+
+/**
+ * Switch a language off. The fallback language refuses.
+ * @param context - caller context for the `ADMIN_LOCALE_DEACTIVATED` audit emit
+ */
+export const deactivateLanguage = (tag: string, context?: CallerContext) =>
+    setActive(tag, false, context);
 
 /**
  * Remove a language and everything translated into it.
@@ -167,7 +247,13 @@ export const removeLanguage = (
     localeRepository.findByTag(tag).then((language) => {
         if (!language) return languageNotFound();
 
-        if (language.active) return generateReject(409, [t('locales.error-language-active')]);
+        if (language.active)
+            return generateReject(409, [
+                {
+                    code: ERROR_CODES.LOCALE_LANGUAGE_ACTIVE,
+                    message: t('locales.error-language-active')
+                }
+            ]);
 
         const fallbackRefusal = rejectFallbackLocale(tag);
         if (fallbackRefusal) return fallbackRefusal;

@@ -97,6 +97,20 @@ be read in the shop's own screens before it is switched on, and entity text can 
 from the editor's language tabs. Going live is the one flag. Switching a language off keeps its
 text; deleting it (refused while it is on) removes its UI strings and its entity text.
 
+The flag moves through two action endpoints, never through `PUT`/`PATCH`: `POST
+/locales/{locale}/activate` and `/deactivate`, both on `update:Locale`. They refuse a move to the
+state the language is already in (409 `LOCALE_LANGUAGE_ALREADY_ACTIVE` / `_INACTIVE`) and switching
+the fallback language off (409 `LOCALE_LANGUAGE_IS_FALLBACK`); the cache clear, the overlay refresh
+and the audit row (`admin.locale.activated` / `deactivated`) live there. A create body may still set
+the initial value.
+
+Every `Language` and every manifest row carries `actions` (`update`, `activate`, `deactivate`,
+`delete`, and `deleteBlocked` when a caller allowed to delete could not yet), computed in
+`services/actions.ts` so a client never restates the two-step. The manifest is publicly cached, so
+only a caller answered outside that cache (`display:Locale`) gets a flag set to `true`; a visitor's
+answer carries them all `false`. A language that is only a deployed file has no row to switch, so
+its flags are `false` for everyone.
+
 ## The pipeline
 
 The two tiers, and the two sinks they never share. Follow `app` and the whole module falls out.
@@ -161,7 +175,9 @@ write can never vary by caller.
 `translatables` declares — words only, any registered entity, and it has no way to touch anything
 else about that entity. PUT replaces the whole set (a stored locale the body doesn't name is
 deleted, and the fallback locale is required), PATCH merges — the same replace/merge split
-`/locales/{locale}/apps/{app}/entries` already uses for its own bulk import. A product also has its own write
+`/locales/{locale}/apps/{app}/entries` already uses for its own bulk import (body
+`{ entries: { <key>: text } }`; under PATCH a `null` deletes its key, and a `null` for a key that is not stored does
+nothing; an empty PATCH map is a 422). A product also has its own write
 surface, [`POST /products` / `PUT`/`PATCH /products/{id}`](./products.md#writing-translated-content),
 which writes the SAME rows but alongside price, stock flags and the image, in one request.
 

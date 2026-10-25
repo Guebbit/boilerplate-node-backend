@@ -105,7 +105,7 @@ export const notificationRepository: Repository<
         const owner = { userId: toObjectId(userId) };
         const excess = await notificationModel
             .find(owner)
-            .sort({ createdAt: -1 })
+            .sort({ createdAt: -1, _id: -1 })
             .skip(keep)
             .select('_id')
             .lean()
