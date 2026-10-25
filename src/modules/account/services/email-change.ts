@@ -4,7 +4,6 @@
  * `../domain/email-change`; confirming and undoing are `./verification`.
  */
 
-import { t } from '@infrastructure/i18n';
 import { emailChangeNoticeEmail, greetableName, recipientLocale } from '../emails';
 import { sendAccountMail } from './mail';
 import { emailChangeNext, emailChangeStateOf } from '../domain';
@@ -100,7 +99,7 @@ export const cancelPendingEmailChange = (
             return userService
                 .cancelPendingEmail(user)
                 .then((saved) => revokeCancelledChange(hadPending, saved, context))
-                .then((saved) => generateSuccess(saved, 200, t('account.email-change.cancelled')));
+                .then((saved) => generateSuccess(saved, 200));
         })
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 

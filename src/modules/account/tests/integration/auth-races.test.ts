@@ -180,7 +180,7 @@ describe('R4 — concurrent logins for one account', () => {
 
         const token = logins
             .map((result) => (result.status === 'fulfilled' ? result.value : undefined))
-            .find((response) => response?.status === 200)?.body?.data?.token;
+            .find((response) => response?.status === 200)?.body?.token;
 
         const results = await raceN(3, () =>
             api().delete('/account/sessions').set('Authorization', `Bearer ${token}`)
@@ -309,7 +309,7 @@ describe('one-time tokens under contention', () => {
         );
 
         expectNoServerErrors(results);
-        expect(countStatus(results, 200)).toBe(1);
+        expect(countStatus(results, 204)).toBe(1);
 
         // And the token is spent, whichever request spent it.
         expect(await tokenTypesOf(user.id)).not.toContain('password');

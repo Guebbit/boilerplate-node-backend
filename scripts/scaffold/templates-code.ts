@@ -590,7 +590,7 @@ export const deleteController = (names: ModuleNames, options: ScaffoldOptions): 
  */
 
 import type { Request, Response } from 'express';
-import { successResponse } from '@infrastructure/http/response';
+import { noContentResponse } from '@infrastructure/http/response';
 ${callerImport(options)}import { catchAs, refused } from '@infrastructure/http/controller';
 import { requireId } from '@infrastructure/http/ids';
 import { ${names.entityCamel}Service } from '../service';
@@ -607,7 +607,7 @@ export const delete${names.entity} = (request: Request<{ id: string }>, response
         .removeById(id${contextArgument(options)})
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse(response, undefined, 200, result.message);
+            noContentResponse(response);
         })
         .catch(catchAs(response, 'delete${names.entity}'));
 };

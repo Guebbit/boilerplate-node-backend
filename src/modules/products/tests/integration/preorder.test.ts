@@ -32,7 +32,7 @@ describe('GET /products/:id', () => {
 
         const response = await api().get(`/products/${String(product._id)}`);
 
-        expect(response.body.data).toMatchObject({ preorder: true, releaseDate });
+        expect(response.body).toMatchObject({ preorder: true, releaseDate });
     });
 
     it('stops being a preorder once the date has passed, with nothing run', async () => {
@@ -40,7 +40,7 @@ describe('GET /products/:id', () => {
 
         const response = await api().get(`/products/${String(product._id)}`);
 
-        expect(response.body.data.preorder).toBe(false);
+        expect(response.body.preorder).toBe(false);
     });
 
     it('is not a preorder when it is off sale', async () => {
@@ -48,7 +48,7 @@ describe('GET /products/:id', () => {
 
         const response = await api().get(`/products/${String(product._id)}`);
 
-        expect(response.body.data.preorder).toBe(false);
+        expect(response.body.preorder).toBe(false);
     });
 
     it('never calls a preorder low on stock', async () => {
@@ -56,7 +56,7 @@ describe('GET /products/:id', () => {
 
         const response = await api().get(`/products/${String(product._id)}`);
 
-        expect(response.body.data).toMatchObject({ preorder: true, lowStock: false });
+        expect(response.body).toMatchObject({ preorder: true, lowStock: false });
     });
 });
 
@@ -76,9 +76,9 @@ describe('PATCH /products/:id releaseDate', () => {
             .set('Authorization', bearer)
             .send({ releaseDate: null });
 
-        expect(set.body.data).toMatchObject({ preorder: true, releaseDate });
-        expect(cleared.body.data.releaseDate).toBeUndefined();
-        expect(cleared.body.data.preorder).toBe(false);
+        expect(set.body).toMatchObject({ preorder: true, releaseDate });
+        expect(cleared.body.releaseDate).toBeUndefined();
+        expect(cleared.body.preorder).toBe(false);
         const payloads = await announcedPayloads();
         expect(payloads).toEqual([
             { productId: id, to: releaseDate },
@@ -139,6 +139,6 @@ describe('PATCH /products/:id releaseDate', () => {
             .send({ releaseDate: inDays(-5) });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.preorder).toBe(false);
+        expect(response.body.preorder).toBe(false);
     });
 });

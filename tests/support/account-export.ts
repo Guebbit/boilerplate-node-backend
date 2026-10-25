@@ -24,7 +24,7 @@ export interface DownloadedExport {
  */
 export const requestAndDownloadExport = async (bearer: string): Promise<DownloadedExport> => {
     const requested = await api().post('/account/export').set('Authorization', bearer).send();
-    const { id } = (requested.body as { data: { id: string } }).data;
+    const { id } = requested.body as { id: string };
 
     await settleInlineExports();
     const downloaded = await api().get(`/account/export/${id}`).set('Authorization', bearer);

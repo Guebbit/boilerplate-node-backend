@@ -218,9 +218,7 @@ describe('createUpdateController', () => {
         await patch(makeRequest({ title: 'x' }), response);
 
         expect(response.status).toHaveBeenCalledWith(200);
-        expect(response.json).toHaveBeenCalledWith(
-            expect.objectContaining({ data: { shaped: { title: 'x' } } })
-        );
+        expect(response.json).toHaveBeenCalledWith({ shaped: { title: 'x' } });
     });
 
     it('reads the id from idFrom instead of the path, for a self-service resource like /account', async () => {

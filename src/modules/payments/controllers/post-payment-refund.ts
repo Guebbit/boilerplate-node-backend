@@ -31,12 +31,7 @@ export const postPaymentRefund = (request: Request<{ id?: string }>, response: R
             const refund = paymentService.refundOf(payment, refundId, request.authContext);
             // Unreachable on a success: the refund that just ran left its record on the payment.
             if (!refund) throw new Error('a successful refund left no record on the payment');
-            createdResponse(
-                response,
-                refund,
-                `/payments/${paymentId}/refunds/${refund.id}`,
-                result.message
-            );
+            createdResponse(response, refund, `/payments/${paymentId}/refunds/${refund.id}`);
         })
         .catch(catchAs(response, 'postPaymentRefund'));
 };

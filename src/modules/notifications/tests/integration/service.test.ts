@@ -192,7 +192,7 @@ describe('notificationDelete', () => {
 
         const result = await notificationsService.remove(user.id, String(row._id));
 
-        expect(result).toMatchObject({ success: true, message: 'Notification deleted.' });
+        expect(result).toMatchObject({ success: true });
         await expect(inboxOf(user.id)).resolves.toEqual([]);
         expect(publish).toHaveBeenCalledWith(user.id, 'notifications.deleted', {
             all: false,
@@ -235,7 +235,7 @@ describe('notificationsDismissAll', () => {
 
         const result = await notificationsService.dismissAll(user.id);
 
-        expect(result).toMatchObject({ success: true, message: 'All notifications deleted.' });
+        expect(result).toMatchObject({ success: true });
         await expect(inboxOf(user.id)).resolves.toEqual([]);
         await expect(inboxOf(other.id)).resolves.toEqual([String(kept._id)]);
     });
@@ -271,7 +271,7 @@ describe('notificationsReadAll', () => {
 
         const result = await notificationsService.readAll(user.id);
 
-        expect(result.message).toBe('All notifications marked as read.');
+        expect(result.success).toBe(true);
         const { items: mine } = await notificationsService.list(user.id);
         expect(mine.every(({ readAt }) => readAt !== undefined)).toBe(true);
         const { items: theirs } = await notificationsService.list(other.id);

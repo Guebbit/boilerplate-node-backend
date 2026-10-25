@@ -218,7 +218,7 @@ const afterCancel = (
         properties: { order_id: String(order._id) }
     });
 
-    return generateSuccess(order, 200, t('orders.cancel.success'));
+    return generateSuccess(order, 200);
 };
 
 /**

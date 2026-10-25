@@ -33,7 +33,7 @@ setupTestDb();
  */
 const pollUntilAudited = async (bearer: string, query: string) => {
     const read = () => api().get(`/observability/audit${query}`).set('Authorization', bearer);
-    await eventually(() => read().then((response) => response.body?.data?.items?.length > 0));
+    await eventually(() => read().then((response) => response.body?.items?.length > 0));
     return read();
 };
 
@@ -55,7 +55,7 @@ describe('GET /observability/health', () => {
         const response = await api().get('/observability/health').set('Authorization', bearer);
 
         expect(connection.readyState).toBe(1);
-        expect(response.body.data.dependencies.database.status).toBe('ready');
+        expect(response.body.dependencies.database.status).toBe('ready');
     });
 
     it('describes cache and queue in the same words as the database', async () => {
@@ -71,7 +71,7 @@ describe('GET /observability/health', () => {
 
         const response = await api().get('/observability/health').set('Authorization', bearer);
 
-        const { dependencies, status } = response.body.data;
+        const { dependencies, status } = response.body;
         const reported = [dependencies.database, dependencies.cache, dependencies.queue].map(
             (dependency: { status: string }) => dependency.status
         );
@@ -97,7 +97,7 @@ describe('GET /observability/health', () => {
 
         const response = await api().get('/observability/health').set('Authorization', bearer);
 
-        const { analytics } = response.body.data.telemetry;
+        const { analytics } = response.body.telemetry;
         expect(typeof analytics.provider).toBe('string');
         expect(typeof analytics.configured).toBe('boolean');
     });
@@ -110,8 +110,8 @@ describe('GET /observability/health', () => {
 
         const response = await api().get('/observability/health').set('Authorization', bearer);
 
-        expect(Array.isArray(response.body.data.queues)).toBe(true);
-        expect(response.body.data.queues).toEqual([]);
+        expect(Array.isArray(response.body.queues)).toBe(true);
+        expect(response.body.queues).toEqual([]);
     });
 
     it("reports a seeded lease's real outcome in `jobs`, not just an empty array", async () => {
@@ -133,7 +133,7 @@ describe('GET /observability/health', () => {
         const { bearer } = await authenticateAs('admin');
         const response = await api().get('/observability/health').set('Authorization', bearer);
 
-        const job = response.body.data.jobs.find(
+        const job = response.body.jobs.find(
             (candidate: { name: string }) => candidate.name === 'observability-contract-test.seeded'
         );
         expect(job).toBeDefined();
@@ -164,13 +164,13 @@ describe('GET /observability/metrics/overview', () => {
             .get('/observability/metrics/overview')
             .set('Authorization', bearer);
 
-        expect(typeof response.body.data.http.totalRequests).toBe('number');
+        expect(typeof response.body.http.totalRequests).toBe('number');
         /* `auth.*` and `business.*` are the rows read out of counters `account`, `cart` and
          * `orders` own. In this suite nothing has checked out, so `checkoutSuccess` is a zero the
          * overview REPORTS rather than a key it omits — the difference between a dashboard that
          * survives a deleted module and one that 500s on it. */
-        expect(response.body.data.auth.loginSuccess).toBeGreaterThan(0);
-        expect(response.body.data.business.checkoutSuccess).toBe(0);
+        expect(response.body.auth.loginSuccess).toBeGreaterThan(0);
+        expect(response.body.business.checkoutSuccess).toBe(0);
     });
 });
 
@@ -195,12 +195,12 @@ describe('GET /observability/audit', () => {
         const response = await pollUntilAudited(bearer, '?outcome=failure&pageSize=10');
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items.length).toBeGreaterThan(0);
-        for (const entry of response.body.data.items) expect(entry.outcome).toBe('failure');
+        expect(response.body.items.length).toBeGreaterThan(0);
+        for (const entry of response.body.items) expect(entry.outcome).toBe('failure');
         // The page's own meta, not a bare count: `totalItems` is every failure matching the
         // filter, and `totalPages` is how many requests reach the rest of them.
-        expect(response.body.data.meta.totalItems).toBeGreaterThan(0);
-        expect(response.body.data.meta.pageSize).toBe(10);
+        expect(response.body.meta.totalItems).toBeGreaterThan(0);
+        expect(response.body.meta.pageSize).toBe(10);
     });
 
     it('refuses a page size the contract does not allow', async () => {

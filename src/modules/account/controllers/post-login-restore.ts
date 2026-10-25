@@ -59,12 +59,7 @@ export const postLoginRestore = (
                 recordLoginSuccess(request, userId).then(() => {
                     destroyDeletionChallengeCookie(response);
                     rememberDevice(request, response, user.email);
-                    successResponse<AuthTokens>(
-                        response,
-                        issued,
-                        200,
-                        t('account.delete.restored')
-                    );
+                    successResponse<AuthTokens>(response, issued, 200);
                 })
             );
         })

@@ -39,6 +39,7 @@ flowchart LR
 | Change SSE/event/queue contracts | [AsyncAPI Workflow](./asyncapi-workflow.md) |
 | Understand route style and response patterns | [REST patterns used here](#rest-patterns-used-here) |
 | Know what POST, PUT and PATCH must do, and the status each answers | [Write Methods](./write-methods.md) |
+| Read a success: the resource, a list, or 204 | [Success Responses](./responses.md) |
 | Read an error: its shape, codes, language and headers | [Error Responses](./errors.md) |
 | Sort a list, or add a sortable field | [Sorting a list](./sorting.md) |
 | Pick the `maxLength` of a new string field | [Field limits](./field-limits.md) |

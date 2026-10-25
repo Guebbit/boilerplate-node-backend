@@ -23,12 +23,10 @@ const COUNTERS = ['onHand', 'reserved', 'available'];
 const FLAGS = ['inStock', 'lowStock'];
 
 /** The rows of a list response. */
-const rows = (response: { body: { data: { items: Record<string, unknown>[] } } }) =>
-    response.body.data.items;
+const rows = (response: { body: { items: Record<string, unknown>[] } }) => response.body.items;
 
 /** The data object of a response. */
-const dataOf = (response: { body: { data: unknown } }) =>
-    response.body.data as Record<string, unknown>;
+const dataOf = (response: { body: unknown }) => response.body as Record<string, unknown>;
 
 describe('GET /products/{id} — the counters follow read:StockLevel', () => {
     it.each([
@@ -127,7 +125,7 @@ describe('GET /products — the list follows the same rule', () => {
         const guest = await api().get('/products');
 
         expect(
-            (guest.body.data.items as Record<string, unknown>[]).flatMap((row) =>
+            (guest.body.items as Record<string, unknown>[]).flatMap((row) =>
                 COUNTERS.filter((field) => field in row)
             )
         ).toEqual([]);

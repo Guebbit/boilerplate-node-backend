@@ -23,8 +23,8 @@ export interface ShownTotal {
 export const shownTotal = async (bearer: string): Promise<ShownTotal> => {
     const response = await api().get('/cart').set('Authorization', bearer);
     const { totalPrice, currency } = (
-        response.body as { data: { summary: { totalPrice: number; currency: string } } }
-    ).data.summary;
+        response.body as { summary: { totalPrice: number; currency: string } }
+    ).summary;
     return { amount: toMinorUnits(totalPrice, currency), currency };
 };
 

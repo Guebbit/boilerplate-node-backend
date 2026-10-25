@@ -1190,8 +1190,8 @@ describe('what a decision leaves behind', () => {
         expect(mailData(0).address).toEqual(expect.stringContaining('Send the goods to:'));
         expect(mailSubject(1)).toBe('Your return was declined');
         expect(mailData(1).address).toBeUndefined();
-        expect(approval.success && approval.message).toBe('Return approved.');
-        expect(decline.success && decline.message).toBe('Return declined.');
+        expect(approval.success && approval.data.status).toBe('approved');
+        expect(decline.success && decline.data.status).toBe('declined');
     });
 
     it('still decides when the order has vanished — the decision is never lost for want of a mail', async () => {

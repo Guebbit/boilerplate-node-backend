@@ -55,7 +55,7 @@ const authenticateWithIntent = async () => {
             `payments setup failed: POST /payments returned ${response.status} — ${JSON.stringify(response.body)}`
         );
 
-    return { bearer, order, paymentId: String(response.body.data.id) };
+    return { bearer, order, paymentId: String(response.body.id) };
 };
 
 /**
@@ -76,7 +76,7 @@ const paidOrder = async () => {
         .set('Authorization', bearer)
         .send({ paymentMethodRef: GOOD_METHOD });
 
-    if (confirmed.status !== 200 || confirmed.body.data?.status !== 'succeeded')
+    if (confirmed.status !== 200 || confirmed.body?.status !== 'succeeded')
         throw new Error(
             `payments setup failed: POST /payments/${paymentId}/confirm returned ${confirmed.status} — ${JSON.stringify(confirmed.body)}`
         );
@@ -89,10 +89,8 @@ describe('GET /payments/methods', () => {
         const response = await api().get('/payments/methods');
 
         expect(response.status).toBe(200);
-        expect(response.body.data.methods.length).toBeGreaterThan(0);
-        expect(response.body.data.methods.map((method: { id: string }) => method.id)).toContain(
-            'card'
-        );
+        expect(response.body.methods.length).toBeGreaterThan(0);
+        expect(response.body.methods.map((method: { id: string }) => method.id)).toContain('card');
     });
 });
 
@@ -109,7 +107,7 @@ describe('with no card payment provider configured', () => {
         const response = await api().get('/payments/methods');
 
         expect(response.status).toBe(200);
-        expect(response.body.data.methods.map((method: { id: string }) => method.id)).not.toContain(
+        expect(response.body.methods.map((method: { id: string }) => method.id)).not.toContain(
             'card'
         );
     });
@@ -150,10 +148,10 @@ describe('POST /payments', () => {
             .send({ orderId: String(order._id) });
 
         expect(response.status).toBe(201);
-        expect(response.body.data.amount).toBe(20);
-        expect(response.body.data.status).toBe('requires_confirmation');
+        expect(response.body.amount).toBe(20);
+        expect(response.body.status).toBe('requires_confirmation');
         // The answer is what the payment form keeps: it must say the next step is `pay`.
-        expect(response.body.data.actions).toEqual({
+        expect(response.body.actions).toEqual({
             pay: true,
             sync: false,
             refund: false,
@@ -175,10 +173,10 @@ describe('POST /payments', () => {
         const again = await ask();
 
         expect(first.status).toBe(201);
-        expect(first.headers.location).toBe(`/payments/${String(first.body.data.id)}`);
+        expect(first.headers.location).toBe(`/payments/${String(first.body.id)}`);
         expect(again.status).toBe(200);
         expect(again.headers.location).toBeUndefined();
-        expect(again.body.data.id).toBe(first.body.data.id);
+        expect(again.body.id).toBe(first.body.id);
     });
 
     it('never publishes the provider reference, and returns the client secret only here', async () => {
@@ -195,10 +193,10 @@ describe('POST /payments', () => {
             .get(`/payments/orders/${String(order._id)}`)
             .set('Authorization', bearer);
 
-        expect(intent.body.data).not.toHaveProperty('providerRef');
-        expect(intent.body.data.clientSecret).toEqual(expect.any(String));
-        expect(readBack.body.data).not.toHaveProperty('providerRef');
-        expect(readBack.body.data).not.toHaveProperty('clientSecret');
+        expect(intent.body).not.toHaveProperty('providerRef');
+        expect(intent.body.clientSecret).toEqual(expect.any(String));
+        expect(readBack.body).not.toHaveProperty('providerRef');
+        expect(readBack.body).not.toHaveProperty('clientSecret');
     });
 
     it('matches the error contract for an order that does not exist', async () => {
@@ -231,8 +229,8 @@ describe('POST /payments/{id}/confirm', () => {
             .send({ paymentMethodRef: GOOD_METHOD });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.status).toBe('succeeded');
-        expect(response.body.data.actions).toEqual({
+        expect(response.body.status).toBe('succeeded');
+        expect(response.body.actions).toEqual({
             pay: false,
             sync: false,
             refund: false,
@@ -303,9 +301,9 @@ describe('POST /payments/{id}/confirm', () => {
         // A 4xx here would tell the browser to stop, and the browser is the only thing that can
         // answer the challenge.
         expect(response.status).toBe(200);
-        expect(response.body.data.status).toBe('requires_action');
+        expect(response.body.status).toBe('requires_action');
         // The answer replaces the stored payment: without `sync` the Finish button would vanish.
-        expect(response.body.data.actions).toMatchObject({ pay: false, sync: true });
+        expect(response.body.actions).toMatchObject({ pay: false, sync: true });
     });
 });
 
@@ -322,8 +320,8 @@ describe('POST /payments/{id}/sync', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.status).toBe('succeeded');
-        expect(response.body.data.actions).toMatchObject({ pay: false, sync: false });
+        expect(response.body.status).toBe('succeeded');
+        expect(response.body.actions).toMatchObject({ pay: false, sync: false });
     });
 
     it('answers an already-succeeded payment as it stands, without asking the provider again', async () => {
@@ -342,7 +340,7 @@ describe('POST /payments/{id}/sync', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.status).toBe('succeeded');
+        expect(response.body.status).toBe('succeeded');
     });
 
     it('matches the error contract for a payment that does not exist', async () => {
@@ -421,7 +419,7 @@ describe('POST /payments/webhook', () => {
 
         const response = await deliver({ id: `evt_${paymentId}`, providerRef });
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         const settled = await paymentRepository.findById(paymentId);
         expect(settled!.status).toBe('succeeded');
     });
@@ -438,7 +436,7 @@ describe('POST /payments/webhook', () => {
             '/Payments/Webhook'
         );
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         const settled = await paymentRepository.findById(paymentId);
         expect(settled!.status).toBe('succeeded');
     });
@@ -449,7 +447,7 @@ describe('POST /payments/webhook', () => {
 
         const response = await deliver({ id: `evt_${paymentId}`, providerRef });
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         const untouched = await paymentRepository.findById(paymentId);
         expect(untouched!.status).not.toBe('succeeded');
     });
@@ -476,17 +474,16 @@ describe('POST /payments/webhook', () => {
         expect(untouched!.status).toBe('requires_confirmation');
     });
 
-    it('answers a MessageResponse, not the PaymentEnvelope every other route answers', async () => {
-        // A deliberate shape difference: the caller is a machine with no use for the payment back,
-        // and the automatic contract check alone would pass a `PaymentEnvelope` here too, since
-        // the two schemas overlap on `success`/`status`. This is the one assertion that would
-        // catch a controller change that started leaking the payment into the webhook's response.
+    it('answers 204 with no body, not the payment every other route answers', async () => {
+        // A deliberate shape difference: the caller is a machine with no use for the payment back.
+        // This is the assertion that catches a controller change that started leaking the payment
+        // into the webhook's response.
         const { providerRef } = await preparedPayment();
 
         const response = await deliver({ id: 'evt_envelope_shape', providerRef });
 
-        expect(response.body).not.toHaveProperty('data');
-        expect(Object.keys(response.body).toSorted()).toEqual(['message', 'status', 'success']);
+        expect(response.status).toBe(204);
+        expect(response.body).toEqual({});
     });
 
     it('refuses a delivery nobody signed', async () => {
@@ -505,7 +502,7 @@ describe('POST /payments/webhook', () => {
         setFakeOutcome(providerRef, { status: 'succeeded' });
         const event = { id: `evt_replay_${paymentId}`, providerRef };
 
-        // What the conditional writes actually protect: `first`/`replay` alone answer 200 on both
+        // What the conditional writes actually protect: `first`/`replay` alone answer 204 on both
         // branches, so a status-only assertion can never fail on a double settlement.
         const commitSpy = jest.spyOn(inventoryService, 'commitForOrder');
         const statusChanges: unknown[] = [];
@@ -518,9 +515,9 @@ describe('POST /payments/webhook', () => {
         // The status change reaches its listener through the outbox, after the response.
         await settleOutboxNudges();
 
-        // 200 either way — a provider reads anything else as a failed delivery and retries harder.
-        expect(first.status).toBe(200);
-        expect(replay.status).toBe(200);
+        // 204 either way — a provider reads anything else as a failed delivery and retries harder.
+        expect(first.status).toBe(204);
+        expect(replay.status).toBe(204);
 
         expect(commitSpy).toHaveBeenCalledTimes(1);
         expect(statusChanges).toHaveLength(1);
@@ -530,7 +527,7 @@ describe('POST /payments/webhook', () => {
     it('accepts an event about an intent it does not know, rather than making the provider retry', async () => {
         const response = await deliver({ id: 'evt_unknown', providerRef: 'fake_pi_nobody' });
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
     });
 });
 
@@ -543,7 +540,7 @@ describe('GET /payments/orders/{orderId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.orderId).toBe(String(order._id));
+        expect(response.body.orderId).toBe(String(order._id));
     });
 
     // The instructions of a bank transfer are the payment's own, served to its buyer while it waits.
@@ -555,13 +552,13 @@ describe('GET /payments/orders/{orderId}', () => {
             .set('Authorization', customerBearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({
+        expect(response.body).toMatchObject({
             status: 'requires_action',
             method: 'bank_transfer',
             nextAction: { type: 'bank_transfer', reference }
         });
-        expect(response.body.data).not.toHaveProperty('transferReference');
-        expect(response.body.data).not.toHaveProperty('payBy');
+        expect(response.body).not.toHaveProperty('transferReference');
+        expect(response.body).not.toHaveProperty('payBy');
     });
 
     it('matches the error contract when no intent exists yet', async () => {
@@ -582,8 +579,8 @@ describe('GET /payments/{id}', () => {
         const response = await api().get(`/payments/${paymentId}`).set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.id).toBe(paymentId);
-        expect(response.body.data).not.toHaveProperty('clientSecret');
+        expect(response.body.id).toBe(paymentId);
+        expect(response.body).not.toHaveProperty('clientSecret');
     });
 
     it('hides another shopper`s payment behind the same 404 as a missing one', async () => {
@@ -610,7 +607,7 @@ describe('GET /payments/{id}', () => {
             .set('Authorization', admin.bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.id).toBe(paymentId);
+        expect(response.body.id).toBe(paymentId);
     });
 
     it('answers 404 for an id that is not one', async () => {
@@ -655,19 +652,19 @@ describe('POST /payments/{id}/refunds — the operator', () => {
             .set('Idempotency-Key', freshKey());
 
         expect(response.status).toBe(201);
-        expect(response.body.data).toMatchObject({ status: 'succeeded', reason: 'goodwill' });
+        expect(response.body).toMatchObject({ status: 'succeeded', reason: 'goodwill' });
         expect(response.headers.location).toBe(
-            `/payments/${paymentId}/refunds/${String(response.body.data.id)}`
+            `/payments/${paymentId}/refunds/${String(response.body.id)}`
         );
         // The payment is read again for the running totals: `status` stays `succeeded` after a
         // refund; `displayStatus` and `amountRefunded` say how much went back.
         const reread = await api().get(`/payments/${paymentId}`).set('Authorization', adminBearer);
-        expect(reread.body.data.status).toBe('succeeded');
-        expect(reread.body.data.displayStatus).toBe('refunded');
+        expect(reread.body.status).toBe('succeeded');
+        expect(reread.body.displayStatus).toBe('refunded');
         const payment = await paymentRepository.findById(paymentId);
         expect(payment!.amountRefunded).toBe(payment!.amount);
         expect(payment!.refunds).toHaveLength(1);
-        expect(reread.body.data.actions).toEqual({
+        expect(reread.body.actions).toEqual({
             pay: false,
             sync: false,
             refund: false,
@@ -695,20 +692,20 @@ describe('POST /payments/{id}/refunds — the operator', () => {
             .send({ amount: half });
 
         expect(response.status).toBe(201);
-        expect(response.body.data).toMatchObject({
+        expect(response.body).toMatchObject({
             status: 'failed',
             failureReason: 'declined',
             amount: half
         });
         expect(response.headers.location).toBe(
-            `/payments/${paymentId}/refunds/${String(response.body.data.id)}`
+            `/payments/${paymentId}/refunds/${String(response.body.id)}`
         );
         // The same key replays the same 201 instead of opening a second record.
         expect(replay.status).toBe(201);
-        expect(replay.body.data.id).toBe(response.body.data.id);
+        expect(replay.body.id).toBe(response.body.id);
         const reread = await api().get(`/payments/${paymentId}`).set('Authorization', adminBearer);
-        expect(reread.body.data.refunds).toHaveLength(1);
-        expect(reread.body.data.actions.settleByHand).toEqual([response.body.data.id]);
+        expect(reread.body.refunds).toHaveLength(1);
+        expect(reread.body.actions.settleByHand).toEqual([response.body.id]);
         setFakeRefundFailure(String(stored?.providerRef), undefined);
     });
 
@@ -731,9 +728,9 @@ describe('POST /payments/{id}/refunds — the operator', () => {
             .send({ amount: (stored?.amount ?? 0) / 4 });
 
         expect(second.status).toBe(201);
-        expect(second.body.data).toMatchObject({ status: 'succeeded' });
+        expect(second.body).toMatchObject({ status: 'succeeded' });
         const reread = await api().get(`/payments/${paymentId}`).set('Authorization', adminBearer);
-        expect(reread.body.data.refunds).toHaveLength(2);
+        expect(reread.body.refunds).toHaveLength(2);
     });
 
     it('is gone at the old order-keyed address', async () => {
@@ -821,7 +818,7 @@ const refundedPayment = async () => {
         .post(`/payments/${paymentId}/refunds`)
         .set('Authorization', adminBearer)
         .set('Idempotency-Key', freshKey());
-    return { buyerBearer, adminBearer, paymentId, refundId: String(created.body.data.id) };
+    return { buyerBearer, adminBearer, paymentId, refundId: String(created.body.id) };
 };
 
 describe('GET /payments/{id}/refunds/{refundId}', () => {
@@ -836,10 +833,10 @@ describe('GET /payments/{id}/refunds/{refundId}', () => {
             .set('Authorization', adminBearer);
 
         expect(own.status).toBe(200);
-        expect(own.body.data).toMatchObject({ id: refundId, status: 'succeeded' });
-        expect(own.body.data).not.toHaveProperty('providerRefundRef');
+        expect(own.body).toMatchObject({ id: refundId, status: 'succeeded' });
+        expect(own.body).not.toHaveProperty('providerRefundRef');
         expect(staff.status).toBe(200);
-        expect(staff.body.data).toHaveProperty('providerRefundRef');
+        expect(staff.body).toHaveProperty('providerRefundRef');
     });
 
     it('answers the same 404 for another shopper, an unknown refund and an unknown payment', async () => {
@@ -883,14 +880,14 @@ const cashRefundOwed = async () => {
         .post(`/payments/orders/${String(order._id)}/offline`)
         .set('Authorization', adminBearer)
         .send({ method: 'cash', reference: 'till-settle' });
-    const paymentId = String(recorded.body.data.id);
+    const paymentId = String(recorded.body.id);
     await api()
         .post(`/payments/${paymentId}/refunds`)
         .set('Authorization', adminBearer)
         .set('Idempotency-Key', freshKey());
     // The refund answers with its own record; the payment is read for what the tests pin on it.
     const refunded = await api().get(`/payments/${paymentId}`).set('Authorization', adminBearer);
-    return { admin, adminBearer, buyerBearer, order, paymentId, refunded: refunded.body.data };
+    return { admin, adminBearer, buyerBearer, order, paymentId, refunded: refunded.body };
 };
 
 describe('POST /payments/{id}/refunds/{refundId}/settle', () => {
@@ -908,10 +905,10 @@ describe('POST /payments/{id}/refunds/{refundId}/settle', () => {
             .set('Authorization', adminBearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.refunds[0].settledByHand).toBe(true);
-        expect(response.body.data.refunds[0].status).toBe('succeeded');
-        expect(response.body.data.displayStatus).toBe('refunded');
-        expect(response.body.data.actions.settleByHand).toEqual([]);
+        expect(response.body.refunds[0].settledByHand).toBe(true);
+        expect(response.body.refunds[0].status).toBe('succeeded');
+        expect(response.body.displayStatus).toBe('refunded');
+        expect(response.body.actions.settleByHand).toEqual([]);
     });
 
     it('answers 409 PAYMENT_REFUND_NOT_OPEN to the second operator', async () => {
@@ -1014,12 +1011,12 @@ describe('POST /payments/orders/{orderId}/offline', () => {
             .send({ method: 'cash', reference: 'till-1' });
 
         expect(response.status).toBe(201);
-        expect(response.headers.location).toBe(`/payments/${String(response.body.data.id)}`);
-        expect(response.body.data.status).toBe('succeeded');
-        expect(response.body.data.provider).toBe('manual');
-        expect(response.body.data.method).toBe('cash');
+        expect(response.headers.location).toBe(`/payments/${String(response.body.id)}`);
+        expect(response.body.status).toBe('succeeded');
+        expect(response.body.provider).toBe('manual');
+        expect(response.body.method).toBe('cash');
         // A succeeded payment answers `actions` without an order read: `pay` is false regardless.
-        expect(response.body.data.actions).toEqual({
+        expect(response.body.actions).toEqual({
             pay: false,
             sync: false,
             refund: true,
@@ -1043,8 +1040,8 @@ describe('POST /payments/orders/{orderId}/offline', () => {
 
         expect(response.status).toBe(200);
         expect(response.headers.location).toBeUndefined();
-        expect(response.body.data.status).toBe('succeeded');
-        expect(response.body.data.provider).toBe('manual');
+        expect(response.body.status).toBe('succeeded');
+        expect(response.body.provider).toBe('manual');
     });
 
     it('matches the error contract for an order that does not exist', async () => {
@@ -1100,7 +1097,7 @@ describe('GET /payments?transferReference=', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items.map((row: { orderId: string }) => row.orderId)).toEqual([
+        expect(response.body.items.map((row: { orderId: string }) => row.orderId)).toEqual([
             String(order._id)
         ]);
     });
@@ -1117,7 +1114,7 @@ describe('GET /payments?transferReference=', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toEqual([]);
+        expect(response.body.items).toEqual([]);
     });
 
     it('answers the same for POST /payments/search', async () => {
@@ -1130,7 +1127,7 @@ describe('GET /payments?transferReference=', () => {
             .send({ transferReference: reference });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items.map((row: { orderId: string }) => row.orderId)).toEqual([
+        expect(response.body.items.map((row: { orderId: string }) => row.orderId)).toEqual([
             String(order._id)
         ]);
     });
@@ -1171,8 +1168,8 @@ describe('the staff Payments page', () => {
             .set('Authorization', adminBearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(1);
-        expect(response.body.data.items[0]).toMatchObject({
+        expect(response.body.items).toHaveLength(1);
+        expect(response.body.items[0]).toMatchObject({
             orderId: String(order._id),
             displayStatus: 'succeeded',
             providerRef: expect.any(String) as string,
@@ -1196,7 +1193,7 @@ describe('the staff Payments page', () => {
                 .set('Authorization', bearer)
                 .then((response) => {
                     expect(response.status).toBe(200);
-                    return (response.body.data.items as { id: string }[]).map((row) => row.id);
+                    return (response.body.items as { id: string }[]).map((row) => row.id);
                 });
 
         expect(await ids('payBy')).toEqual([String(sooner._id), String(later._id)]);
@@ -1213,7 +1210,7 @@ describe('the staff Payments page', () => {
             .send({ displayStatus: 'succeeded', amountMin: 1 });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(1);
+        expect(response.body.items).toHaveLength(1);
     });
 
     it('refuses a customer all four reads', async () => {
@@ -1250,7 +1247,7 @@ describe('the staff Payments page', () => {
         const response = await api().get('/payments/refunds').set('Authorization', adminBearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toEqual([
+        expect(response.body.items).toEqual([
             expect.objectContaining({
                 orderId: String(order._id),
                 status: 'succeeded',
@@ -1266,6 +1263,6 @@ describe('the staff Payments page', () => {
         const response = await api().get('/payments/attention').set('Authorization', adminBearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toEqual({ items: [] });
+        expect(response.body).toEqual({ items: [] });
     });
 });

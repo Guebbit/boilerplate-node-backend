@@ -181,8 +181,8 @@ describe('the availability never carries a number', () => {
         expect(anonymised(nearlyGone.merge, nearlyGone.id)).toEqual(
             anonymised(plenty.merge, plenty.id)
         );
-        expect(nearlyGone.view.data.items[0].availability).toBe('insufficient_stock');
-        expect(nearlyGone.merge.data.lines[0].availability).toBe('insufficient_stock');
+        expect(nearlyGone.view.items[0].availability).toBe('insufficient_stock');
+        expect(nearlyGone.merge.lines[0].availability).toBe('insufficient_stock');
     });
 
     it('has no stock-like field anywhere in either answer', async () => {

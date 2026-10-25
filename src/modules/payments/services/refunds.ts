@@ -902,11 +902,7 @@ const refusedRefundAnswer = (
         .findByIdScoped(paymentId, callerScope(authContext))
         .then((payment) =>
             payment
-                ? generateSuccess(
-                      { payment, refundId: refused.refundId },
-                      201,
-                      t('payments.refund-refused')
-                  )
+                ? generateSuccess({ payment, refundId: refused.refundId }, 201)
                 : paymentNotFound()
         );
 
@@ -940,11 +936,7 @@ const refundFoundPayment = (
     }).then(
         (refunded) =>
             refunded
-                ? generateSuccess(
-                      { payment: refunded.payment, refundId: refunded.refundId },
-                      201,
-                      t(refunded.leftOpen ? 'payments.refund-left-open' : 'payments.refund-success')
-                  )
+                ? generateSuccess({ payment: refunded.payment, refundId: refunded.refundId }, 201)
                 : notRefundable(),
         (error: unknown) => {
             // Only a refusal: any other error means the record may not exist, and stays a 5xx.
@@ -1065,9 +1057,7 @@ export const settleRefundByHand = (
         ).then(
             (final): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
                 final
-                    ? Promise.resolve(
-                          generateSuccess(final, 200, t('payments.refund-settled-by-hand'))
-                      )
+                    ? Promise.resolve(generateSuccess(final, 200))
                     : lostSettleRace(paymentId, refundId)
         );
     });

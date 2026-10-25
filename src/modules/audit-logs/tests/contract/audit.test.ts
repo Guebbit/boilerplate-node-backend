@@ -43,8 +43,8 @@ describe('GET /audit', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(1);
-        expect(response.body.data.items[0].actorRoleName).toBe('admin');
+        expect(response.body.items).toHaveLength(1);
+        expect(response.body.items[0].actorRoleName).toBe('admin');
     });
 
     it('422s a repeated scalar filter instead of silently picking one entry', async () => {

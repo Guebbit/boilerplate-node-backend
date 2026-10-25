@@ -27,8 +27,7 @@ export const postReturnApprove = (request: Request<{ id?: string }>, response: R
             successResponse<Return>(
                 response,
                 returnService.withActions(result.data, authContext),
-                200,
-                result.message
+                200
             );
         })
         .catch(catchAs(response, 'postReturnApprove'));
@@ -50,8 +49,7 @@ export const postReturnDecline = (request: Request<{ id?: string }>, response: R
             successResponse<Return>(
                 response,
                 returnService.withActions(result.data, authContext),
-                200,
-                result.message
+                200
             );
         })
         .catch(catchAs(response, 'postReturnDecline'));

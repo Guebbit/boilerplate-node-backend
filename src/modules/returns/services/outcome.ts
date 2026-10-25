@@ -46,17 +46,7 @@ export type CreateReturnOutcome = ResponseSuccess<ReturnDocument> | ResponseReje
  * @param created - the return that was written
  */
 export const opened = (created: ReturnDocument): CreateReturnOutcome =>
-    generateSuccess(
-        created,
-        201,
-        t(
-            created.kind === 'cancellation'
-                ? 'returns.remainder-cancelled'
-                : created.status === 'closed'
-                  ? 'returns.withdrawn'
-                  : 'returns.requested'
-        )
-    );
+    generateSuccess(created, 201);
 
 /** The 409 for an order a return cannot be opened on, with a stable code the client can act on. */
 export const notReturnable = (): CreateReturnOutcome =>

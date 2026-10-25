@@ -73,7 +73,7 @@ describe('the body media type', () => {
 
         expect(response.status).toBe(415);
         const profile = await api().get('/account').set('Authorization', bearer);
-        expect(profile.body.data.username).toBe(user.username);
+        expect(profile.body.username).toBe(user.username);
     });
 
     it('applies a PATCH sent as application/merge-patch+json', async () => {
@@ -86,7 +86,7 @@ describe('the body media type', () => {
             .send(JSON.stringify({ username: 'merged-name' }));
 
         expect(response.status).toBe(200);
-        expect(response.body.data.username).toBe('merged-name');
+        expect(response.body.username).toBe('merged-name');
     });
 
     it('does not offer merge-patch on a PUT', async () => {
@@ -122,7 +122,7 @@ describe('stock writes replay under an Idempotency-Key', () => {
         expect(first.status).toBe(200);
         expect(second.headers['idempotent-replay']).toBe('true');
         expect(second.body).toEqual(first.body);
-        expect(first.body.data.onHand).toBe(10 + expectedDelta);
+        expect(first.body.onHand).toBe(10 + expectedDelta);
     });
 });
 
@@ -143,7 +143,7 @@ describe('a 201 names the new resource in Location', () => {
         });
 
         expect(response.status).toBe(201);
-        expect(response.headers.location).toBe(`/users/${String(response.body.data.id)}`);
+        expect(response.headers.location).toBe(`/users/${String(response.body.id)}`);
     });
 
     it('sends /feedback/{id} for a contact request', async () => {
@@ -154,7 +154,7 @@ describe('a 201 names the new resource in Location', () => {
         });
 
         expect(response.status).toBe(201);
-        expect(response.headers.location).toBe(`/feedback/${String(response.body.data.id)}`);
+        expect(response.headers.location).toBe(`/feedback/${String(response.body.id)}`);
     });
 
     it('replays the Location with the body when a create is retried under its Idempotency-Key', async () => {
@@ -175,7 +175,7 @@ describe('a 201 names the new resource in Location', () => {
 
         expect(response.status).toBe(201);
         expect(response.headers.location).toBe(
-            `/webhooks/subscriptions/${String(response.body.data.id)}`
+            `/webhooks/subscriptions/${String(response.body.id)}`
         );
     });
 

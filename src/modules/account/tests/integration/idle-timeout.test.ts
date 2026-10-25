@@ -32,7 +32,7 @@ const signInAs = async (role: 'customer' | 'editor', remember?: 'short' | 'mediu
     const login = await api()
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD, transport: 'bearer', remember });
-    const credential = (login.body.data.token ?? login.body.data.sessionToken) as string;
+    const credential = (login.body.token ?? login.body.sessionToken) as string;
     return { user, bearer: `Bearer ${credential}` };
 };
 
@@ -125,9 +125,9 @@ describe.each(MODES)('the staff idle timeout in %s mode', (mode) => {
             .set('Authorization', shopper.bearer);
 
         expect(forStaff.status).toBe(200);
-        expect(forStaff.body.data.idleTimeoutSeconds).toBe(LIMIT);
-        expect(forShopper.body.data).not.toHaveProperty('idleTimeoutSeconds');
-        expect(forShopper.body.data.lastActiveAt).toEqual(expect.any(String));
+        expect(forStaff.body.idleTimeoutSeconds).toBe(LIMIT);
+        expect(forShopper.body).not.toHaveProperty('idleTimeoutSeconds');
+        expect(forShopper.body.lastActiveAt).toEqual(expect.any(String));
     });
 });
 
@@ -289,7 +289,7 @@ describe.each(MODES)('the staff lifetime cap in %s mode', (mode) => {
 
         const response = await api().get('/account/sessions').set('Authorization', bearer);
 
-        const [session] = response.body.data.sessions as {
+        const [session] = response.body.sessions as {
             createdAt: string;
             expiration: string;
         }[];

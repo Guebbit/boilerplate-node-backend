@@ -8,7 +8,7 @@
 # So the rules turned off below are exactly the ones that ask a module to be the whole API. They
 # stay ON for the bundle — `npm run lint:openapi` runs `spectral.yaml` against `openapi.yaml`, where
 # a missing tag or an undeclared scheme is a real defect. Everything else, including the repo's own
-# operationId and envelope rules, applies here unchanged.
+# operationId and success-body rules, applies here unchanged.
 
 extends:
     - './spectral.yaml'

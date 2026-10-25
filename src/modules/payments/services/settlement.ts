@@ -447,11 +447,8 @@ export const settlementResponse = ({
         ]);
 
     // In flight is a success on the wire, not a refusal: the browser has a next step to take and
-    // a 4xx would tell it to stop. The message says which of the two it is looking at.
-    if (payment.status !== 'succeeded')
-        return generateSuccess(payment, 200, t(`payments.${payment.status}`));
-
-    return generateSuccess(payment, 200, t('payments.confirm-success'));
+    // a 4xx would tell it to stop. The payment's `status` says which of the two it is looking at.
+    return generateSuccess(payment, 200);
 };
 
 /**

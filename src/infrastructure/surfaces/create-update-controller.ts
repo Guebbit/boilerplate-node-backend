@@ -180,7 +180,7 @@ const pipelineOf =
                     // The saved row's new tag, so the caller's next edit needs no re-read.
                     setEtag(response, result.data);
                     return Promise.resolve(present(result.data, request)).then((shaped) => {
-                        successResponse(response, shaped, 200, result.message);
+                        successResponse(response, shaped, 200);
                     });
                 })
                 .catch(catchAs(response, operation))

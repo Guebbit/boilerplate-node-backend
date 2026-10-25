@@ -68,7 +68,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '../access/openapi.yaml#/components/schemas/AbilitiesEnvelope'
+                                $ref: '../access/openapi.yaml#/components/schemas/Abilities'
 
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
     # --------- Authentication and profile ---------
@@ -88,7 +88,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AccountEnvelope'
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Account'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
         put:
             tags: [Account]
@@ -112,7 +112,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AccountEnvelope'
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Account'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # Changing the email to an address another account already holds.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
@@ -145,7 +145,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AccountEnvelope'
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Account'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # Changing the email to an address another account already holds.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
@@ -176,7 +176,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AccountDeletionEnvelope'
+                                $ref: '#/components/schemas/AccountDeletion'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
@@ -189,7 +189,7 @@ paths:
             security:
                 - bearerAuth: []
             responses:
-                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
@@ -207,7 +207,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/EmailVerificationRequestedEnvelope'
+                                $ref: '#/components/schemas/EmailVerificationRequested'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # `credentialLimiters` sits in front of this route, and the service refuses a send
                 # inside the previous one's cooldown — see routes.ts.
@@ -231,14 +231,14 @@ paths:
             responses:
                 '200':
                     description: |
-                        Password changed. `data` normally carries a fresh access token for this
-                        session, but is ABSENT on the rare degraded success where the re-mint
+                        Password changed. The body normally carries a fresh access token for this
+                        session, but is `{}` on the rare degraded success where the re-mint
                         itself fails after the password write already committed — see B23 on
-                        `SessionRenewedEnvelope`.
+                        `AuthTokens`.
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/SessionRenewedEnvelope'
+                                $ref: '#/components/schemas/AuthTokens'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # A wrong current password is a 422 with a translated message, NOT a 401: a 401
                 # here would read as "your token expired" to every client interceptor and log
@@ -267,7 +267,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/PasswordCheckEnvelope'
+                                $ref: '#/components/schemas/PasswordCheck'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
@@ -287,7 +287,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ReauthMethodsEnvelope'
+                                $ref: '#/components/schemas/ReauthMethods'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
@@ -310,7 +310,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AuthTokensEnvelope'
+                                $ref: '#/components/schemas/AuthTokens'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # A wrong password or code, or a method the account does not have, is a 422 with a
                 # translated message, NOT a 401 — same reasoning as changePassword above: a 401 here
@@ -337,7 +337,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/TwoFactorDeliveryEnvelope'
+                                $ref: '#/components/schemas/TwoFactorDelivery'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
@@ -357,7 +357,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/TwoFactorStatusEnvelope'
+                                $ref: '#/components/schemas/TwoFactorStatus'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
@@ -383,7 +383,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/TwoFactorSetupEnvelope'
+                                $ref: '#/components/schemas/TwoFactorSetup'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # 422 rather than 403 for a method the account cannot enroll (an unverified email
@@ -408,7 +408,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/TwoFactorDeliveryEnvelope'
+                                $ref: '#/components/schemas/TwoFactorDelivery'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -437,7 +437,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/TwoFactorConfirmEnvelope'
+                                $ref: '#/components/schemas/TwoFactorConfirmed'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -462,12 +462,12 @@ paths:
                     description: >-
                         Two-factor authentication is off. The change revoked every session, this one
                         included, and replaced it. A bearer client of a `cookie`-mode deployment
-                        has no cookie to refresh, so `data.sessionToken` carries its replacement
+                        has no cookie to refresh, so `sessionToken` carries its replacement
                         `ses_…` id: the old one no longer works.
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/SessionRenewedEnvelope'
+                                $ref: '#/components/schemas/AuthTokens'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -493,11 +493,11 @@ paths:
                     description: >-
                         The method is removed. The change revoked every session, this one included,
                         and replaced it. A bearer client of a `cookie`-mode deployment gets its
-                        replacement `ses_…` id in `data.sessionToken`: the old one no longer works.
+                        replacement `ses_…` id in `sessionToken`: the old one no longer works.
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/SessionRenewedEnvelope'
+                                $ref: '#/components/schemas/AuthTokens'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -523,7 +523,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/TwoFactorBackupCodesRegeneratedEnvelope'
+                                $ref: '#/components/schemas/TwoFactorBackupCodesRegenerated'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # No factor armed at all — there is nothing to regenerate a recovery list for.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -537,7 +537,7 @@ paths:
             operationId: logout
             security: []
             responses:
-                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -564,7 +564,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/SessionsEnvelope'
+                                $ref: '#/components/schemas/SessionsResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
@@ -575,7 +575,7 @@ paths:
             security:
                 - bearerAuth: []
             responses:
-                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
@@ -600,7 +600,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/SessionActivityEnvelope'
+                                $ref: '#/components/schemas/SessionActivity'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
@@ -629,7 +629,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/SessionEnvelope'
+                                $ref: '#/components/schemas/Session'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -654,7 +654,7 @@ paths:
                       $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                   description: Session identifier from `GET /account/sessions`
             responses:
-                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # Well-formed session id that matches none of the caller's live sessions.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -674,7 +674,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/EmailVerificationRequestedEnvelope'
+                                $ref: '#/components/schemas/EmailVerificationRequested'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # The account is already verified — there is nothing to send.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
@@ -695,7 +695,7 @@ paths:
                         schema:
                             $ref: '#/components/schemas/VerifyEmailConfirmRequest'
             responses:
-                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 # `credentialLimiters` sits in front of this route — see routes.ts.
@@ -716,7 +716,7 @@ paths:
                         schema:
                             $ref: '#/components/schemas/VerifyEmailConfirmRequest'
             responses:
-                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
                 # The new address was claimed by another account between the request and this
                 # confirm — the same race `PUT /account` itself declares 409 for.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
@@ -740,7 +740,7 @@ paths:
                         schema:
                             $ref: '#/components/schemas/VerifyEmailConfirmRequest'
             responses:
-                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -768,7 +768,7 @@ paths:
                         schema:
                             $ref: '#/components/schemas/AccountRestoreRequest'
             responses:
-                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 # `credentialLimiters` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
@@ -802,7 +802,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AuthTokensEnvelope'
+                                $ref: '#/components/schemas/AuthTokens'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 # `credentialLimiters` sits in front of this route — see routes.ts.
@@ -827,7 +827,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/SessionConfigEnvelope'
+                                $ref: '#/components/schemas/SessionConfig'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
@@ -862,7 +862,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/LoginResponseEnvelope'
+                                $ref: '#/components/schemas/LoginOutcome'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 # `credentialLimiters` sits in front of this route — see routes.ts.
@@ -888,7 +888,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/LoginTwoFactorResponseEnvelope'
+                                $ref: '#/components/schemas/LoginTwoFactorOutcome'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # A wrong code is a 422, same reasoning as /account/reauth: a 401 here would read
                 # as an expired challenge and send a caller back to /account/login for no reason.
@@ -917,7 +917,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/TwoFactorDeliveryEnvelope'
+                                $ref: '#/components/schemas/TwoFactorDelivery'
                 # An expired or forged challenge is a 401.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # A method the account has not armed and a method that does not exist answer alike:
@@ -939,7 +939,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/OAuthProvidersEnvelope'
+                                $ref: '#/components/schemas/OAuthProviders'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
@@ -957,7 +957,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/OAuthLinksEnvelope'
+                                $ref: '#/components/schemas/OAuthLinks'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
@@ -1007,7 +1007,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/OAuthLinkStartEnvelope'
+                                $ref: '#/components/schemas/OAuthLinkStart'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
@@ -1034,7 +1034,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/OAuthLinksEnvelope'
+                                $ref: '#/components/schemas/OAuthLinks'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -1145,7 +1145,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AccountEnvelope'
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Account'
                 # The BODY is identical when rung 2 of the anti-automation ladder refuses the
                 # address: a fabricated profile from a document that was never saved, so a script
                 # gets nothing to iterate on. Only the refresh cookie tells the two apart, since
@@ -1178,7 +1178,7 @@ paths:
                         schema:
                             $ref: '#/components/schemas/PasswordResetRequest'
             responses:
-                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
                 # A human-challenge provider is active and the caller's token is missing or refused.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -1200,7 +1200,7 @@ paths:
                         schema:
                             $ref: '#/components/schemas/PasswordResetConfirmRequest'
             responses:
-                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 # `credentialLimiters` sits in front of this route — see routes.ts.
@@ -1232,7 +1232,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/RefreshTokenEnvelope'
+                                $ref: '#/components/schemas/RefreshTokenResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # `cookie` mode: there is no refresh token to rotate.
@@ -1272,7 +1272,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AccountExportRequestEnvelope'
+                                $ref: '#/components/schemas/AccountExportRequest'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -1339,20 +1339,6 @@ components:
                         `building` on a fresh request. A request never answers `ready` or `failed`:
                         asking again after either REPLACES the export with a new `building` one.
 
-        AccountExportRequestEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/AccountExportRequest'
-
         OAuthProviders:
             type: object
             additionalProperties: false
@@ -1386,20 +1372,6 @@ components:
                     items:
                         $ref: '#/components/schemas/OAuthLink'
 
-        OAuthLinksEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/OAuthLinks'
-
         OAuthLinkStart:
             type: object
             additionalProperties: false
@@ -1411,82 +1383,11 @@ components:
                     maxLength: 2048
                     description: The provider's consent screen, with the state and PKCE challenge of this attempt. Navigate the browser to it.
 
-        OAuthLinkStartEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/OAuthLinkStart'
-
-        OAuthProvidersEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/OAuthProviders'
-
-        AuthTokensEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/AuthTokens'
-
         # The 200 of every change that replaces the caller's own session: the password change and
-        # the two factor removals. `data` is absent when there is nothing new to hand back (a
+        # the two factor removals. The body is `{}` when there is nothing new to hand back (a
         # browser's cookie was refreshed in place) and on the rare degraded success where the
         # re-mint itself failed — the write and the session revoke already committed by then, so
-        # a 500 would misreport a change that DID succeed. `reauth` and `loginTwoFactor` never
-        # degrade this way (see their controllers), so they keep the stricter AuthTokensEnvelope.
-        SessionRenewedEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/AuthTokens'
-
-        RefreshTokenEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/RefreshTokenResponse'
-
+        # a 500 would misreport a change that DID succeed. Every field is optional for that reason.
         AuthTokens:
             type: object
             additionalProperties: false
@@ -1571,20 +1472,6 @@ components:
                 - $ref: '#/components/schemas/DeletionPending'
             description: A full session (AuthTokens), or the offer to restore an account inside the grace of its own deletion (DeletionPending) once its second factor passed.
 
-        LoginTwoFactorResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/LoginTwoFactorOutcome'
-
         LoginRestoreRequest:
             type: object
             additionalProperties: false
@@ -1598,20 +1485,6 @@ components:
                     $ref: '#/components/schemas/RememberTier'
                 transport:
                     $ref: '#/components/schemas/SessionTransport'
-
-        LoginResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/LoginOutcome'
 
         LoginTwoFactorRequest:
             type: object
@@ -1698,20 +1571,6 @@ components:
                     type: integer
                     description: How many unused backup codes are left. Zero with `enabled` true is the state worth warning about — a lost device then means admin-assisted recovery.
 
-        TwoFactorStatusEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/TwoFactorStatus'
-
         TwoFactorSetup:
             type: object
             additionalProperties: false
@@ -1740,20 +1599,6 @@ components:
                     format: date-time
                     description: When the delivered code stops being accepted. Absent unless `delivers`.
 
-        TwoFactorSetupEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/TwoFactorSetup'
-
         TwoFactorDelivery:
             type: object
             additionalProperties: false
@@ -1773,20 +1618,6 @@ components:
                     format: date-time
                     description: When this code stops being accepted.
 
-        TwoFactorDeliveryEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/TwoFactorDelivery'
-
         EmailVerificationRequested:
             type: object
             additionalProperties: false
@@ -1795,20 +1626,6 @@ components:
                 resendAfter:
                     type: integer
                     description: Seconds before another verification email may be requested. A client counts down from this rather than inventing its own cooldown, so it never disagrees with the server.
-
-        EmailVerificationRequestedEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/EmailVerificationRequested'
 
         TwoFactorSetupRequest:
             type: object
@@ -1866,20 +1683,6 @@ components:
                         the old id no longer works. Absent otherwise (a browser's cookie was
                         refreshed in place).
 
-        TwoFactorConfirmEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/TwoFactorConfirmed'
-
         TwoFactorBackupCodesRegenerated:
             type: object
             additionalProperties: false
@@ -1894,20 +1697,6 @@ components:
                     type: integer
                     description: How many unused backup codes the account now holds — `BACKUP_CODE_COUNT`, fresh off a regenerate.
 
-        TwoFactorBackupCodesRegeneratedEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/TwoFactorBackupCodesRegenerated'
-
         LoginRequest:
             type: object
             additionalProperties: false
@@ -1921,34 +1710,6 @@ components:
                     $ref: '#/components/schemas/RememberTier'
                 transport:
                     $ref: '#/components/schemas/SessionTransport'
-
-        SessionConfigEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/SessionConfig'
-
-        SessionActivityEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/SessionActivity'
 
         SessionActivity:
             type: object
@@ -2088,20 +1849,6 @@ components:
                     description: >-
                         When the account is erased unless restored before. At most one calendar
                         month after `requestedAt`, at 00:00 UTC at the latest.
-
-        AccountDeletionEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/AccountDeletion'
 
         # Self-service profile update. Deliberately narrower than `UpdateUserRequest`: no
         # `admin`, no `active`, no `password` — role and account state are the admin
@@ -2306,20 +2053,6 @@ components:
                         $ref: '#/components/schemas/ReauthMethod'
                     description: The methods this account can use now, in the order to offer them. Empty means none can.
 
-        ReauthMethodsEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/ReauthMethods'
-
         PasswordCheckRequest:
             type: object
             additionalProperties: false
@@ -2349,20 +2082,6 @@ components:
                         How many times HIBP has seen this exact password. Present only when HIBP
                         is what caught it — never for a bundled-list hit, and never when rung 2 is
                         disabled or unreachable.
-
-        PasswordCheckEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/PasswordCheck'
 
         VerifyEmailConfirmRequest:
             type: object
@@ -2445,34 +2164,6 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/Session'
-
-        SessionEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/Session'
-
-        SessionsEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/SessionsResponse'
 
         Password:
             type: string

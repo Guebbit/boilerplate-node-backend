@@ -1,9 +1,5 @@
 {
     "addresses": {
-        "added": "Address saved.",
-        "updated": "Address updated.",
-        "default-set": "Default address updated.",
-        "removed": "Address removed.",
         "not-found": "The requested address was not found",
         "book-full": "Your address book is full. Remove an address before adding another."
     }

@@ -139,7 +139,7 @@ describe('GET /returns/{id}', () => {
             .post('/returns')
             .set('Authorization', customer.bearer)
             .send({ orderId, reason: 'withdrawal' });
-        const returnId = String(opened.body.data.id);
+        const returnId = String(opened.body.id);
         auditSpy.mockClear();
 
         await api().get(`/returns/${returnId}`).set('Authorization', customer.bearer);

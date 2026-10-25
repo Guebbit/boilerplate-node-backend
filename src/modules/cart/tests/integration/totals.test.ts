@@ -38,7 +38,7 @@ describe('the cart total is the amount the order and the intent will carry', () 
         const checkout = await checkoutAs(bearer);
         expect(checkout.status).toBe(201);
 
-        expect(checkout.body.data.totalPrice).toBe(total);
-        expect(cart.body.data.summary.totalPrice).toBe(total);
+        expect(checkout.body.totalPrice).toBe(total);
+        expect(cart.body.summary.totalPrice).toBe(total);
     });
 });

@@ -23,7 +23,7 @@ export const postVerifyRequest = (request: Request, response: Response) => {
         .requestEmailVerificationFor(id, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse(response, result.data, result.status, result.message);
+            successResponse(response, result.data, result.status);
         })
         .catch(catchAs(response, 'postVerifyRequest'));
 };

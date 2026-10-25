@@ -10,7 +10,6 @@ import type { AuthTokens, TwoFactorCodeRequest } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { parseBody, refused, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
-import { t } from '@infrastructure/i18n';
 import { twoFactorService } from '../services';
 import { remintSession, sessionSnapshotOf } from '../session/session';
 import { authTwoFactorDisableTotal } from '../metrics';
@@ -56,12 +55,7 @@ export const post2faMethodRemove = (
                         withProofs(amr, AMR.otp),
                         snapshot
                     ).then((issued) => {
-                        successResponse<AuthTokens | undefined>(
-                            response,
-                            issued.sessionToken ? issued : undefined,
-                            200,
-                            t('account.two-factor.method-removed')
-                        );
+                        successResponse<AuthTokens>(response, issued, 200);
                     });
                 })
         )

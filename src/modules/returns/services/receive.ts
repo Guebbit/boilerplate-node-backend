@@ -275,7 +275,7 @@ const receiveFor = (
                 });
                 return refundAndClose(received, opened, context);
             })
-            .then((after) => generateSuccess(after, 200, t('returns.received')));
+            .then((after) => generateSuccess(after, 200));
     });
 
 /**

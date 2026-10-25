@@ -29,8 +29,8 @@ export const deleteAddress = (request: Request<{ addressId: string }>, response:
         .then((result) => {
             if (refused(response, result)) return;
 
-            const { data, message } = result;
-            successResponse<AddressesResponse>(response, data, 200, message);
+            const { data } = result;
+            successResponse<AddressesResponse>(response, data, 200);
         })
         .catch(catchAs(response, 'deleteAddress'));
 };

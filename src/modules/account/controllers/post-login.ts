@@ -7,7 +7,6 @@
 
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { t } from '@infrastructure/i18n';
 import { isRestorable } from '@modules/users';
 import { accountService, twoFactorService } from '../services';
 import { RefreshTokenExpiryTime } from '../session/config';
@@ -94,12 +93,7 @@ export const postLogin = (
                 return twoFactorService
                     .buildLoginChallenge(data, [AMR.password])
                     .then((challenge) => {
-                        successResponse<LoginOutcome>(
-                            response,
-                            challenge,
-                            200,
-                            t('account.login.second-factor-required')
-                        );
+                        successResponse<LoginOutcome>(response, challenge, 200);
                     });
             }
 
@@ -110,12 +104,7 @@ export const postLogin = (
              */
             if (isRestorable(data)) {
                 return accountService.buildDeletionPending(data, [AMR.password]).then((pending) => {
-                    successResponse<LoginOutcome>(
-                        response,
-                        pending,
-                        200,
-                        t('account.login.deletion-pending')
-                    );
+                    successResponse<LoginOutcome>(response, pending, 200);
                 });
             }
 
@@ -129,12 +118,7 @@ export const postLogin = (
                     // A completed login marks this browser familiar for the account, so a
                     // lockout an attacker caused cannot keep the owner out.
                     rememberDevice(request, response, data.email);
-                    successResponse<LoginOutcome>(
-                        response,
-                        issued,
-                        200,
-                        t('account.login.success')
-                    );
+                    successResponse<LoginOutcome>(response, issued, 200);
                 })
             );
         })

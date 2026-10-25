@@ -110,7 +110,7 @@ const actionsFor = async (caller: Caller, orderId: string): Promise<OrderActions
     const response = await api().get(`/orders/${orderId}`).set('Authorization', caller.bearer);
     if (response.status !== 200) return undefined;
 
-    return (response.body as { data: { actions?: OrderActions } }).data.actions;
+    return (response.body as { actions?: OrderActions }).actions;
 };
 
 /** Why the button is off for this caller, when the server says. */

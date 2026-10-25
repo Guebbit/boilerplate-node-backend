@@ -29,7 +29,7 @@ export const putBackorderLimit = (request: Request<{ productId?: string }>, resp
         .setBackorderLimit(productId, body.backorderLimit, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse<InventoryLevel>(response, result.data, 200, result.message);
+            successResponse<InventoryLevel>(response, result.data, 200);
         })
         .catch(catchAs(response, 'putBackorderLimit'));
 };

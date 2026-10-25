@@ -359,8 +359,8 @@ operators settle at once settles once; the loser answers 409 `PAYMENT_REFUND_NOT
 write included, carries `PaymentActions`: `pay` (confirm, or take a waiting transfer over with a
 card when a provider is configured), `sync` (finish an in-flight payment at the provider; narrower
 than its route on purpose, and never true together with `pay`), `refund` (`create:Refund`, a
-`succeeded` payment, and something left: a refund still open counts as taken, so a card refund
-awaiting the sweep is not offered again) and `settleByHand`. `confirm`, `sync` and `intent` read the
+`succeeded` payment, and something left: a refund still open counts against what is left but does
+not hide the control while money remains) and `settleByHand`. `confirm`, `sync` and `intent` read the
 order for `pay`; `offline` and `refund` only ever return a `succeeded` payment, where `pay` is false
 whatever the order says, so they read nothing.
 

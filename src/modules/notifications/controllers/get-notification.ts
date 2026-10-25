@@ -24,7 +24,7 @@ export const getNotification = (request: Request<{ id: string }>, response: Resp
         .then((result) => {
             if (refused(response, result)) return;
 
-            successResponse<Notification>(response, result.data, 200, result.message);
+            successResponse<Notification>(response, result.data, 200);
         })
         .catch(catchAs(response, 'getNotificationById'));
 };

@@ -31,8 +31,8 @@ export const postAddress = (
         .create(id, body)
         .then((result) => {
             if (refused(response, result)) return;
-            const { data, message } = result;
-            createdResponse<Address>(response, data, `/account/addresses/${data.id}`, message);
+            const { data } = result;
+            createdResponse<Address>(response, data, `/account/addresses/${data.id}`);
         })
         .catch(catchAs(response, 'postAddress'));
 };

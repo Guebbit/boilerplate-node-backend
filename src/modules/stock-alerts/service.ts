@@ -59,7 +59,7 @@ const ask = (
         return stockAlertRepository
             .ask(userId, productId)
             .then(() => list(userId))
-            .then((view) => generateSuccess(view, 200, t('stock-alerts.asked')));
+            .then((view) => generateSuccess(view, 200));
     });
 
 /**
@@ -74,7 +74,7 @@ const cancel = (
 ): Promise<ResponseSuccess<StockAlertsResponse> | ResponseReject> =>
     stockAlertRepository.cancel(userId, productId).then((removed) => {
         if (!removed) return generateReject(404, [t('stock-alerts.not-found')]);
-        return list(userId).then((view) => generateSuccess(view, 200, t('stock-alerts.cancelled')));
+        return list(userId).then((view) => generateSuccess(view, 200));
     });
 
 /**

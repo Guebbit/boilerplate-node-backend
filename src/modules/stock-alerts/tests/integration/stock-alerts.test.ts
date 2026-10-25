@@ -72,8 +72,8 @@ describe('POST /stock-alerts', () => {
 
         expect(first.status).toBe(200);
         expect(second.status).toBe(200);
-        expect(second.body.data.items).toHaveLength(1);
-        expect(second.body.data.items[0].productId).toBe(productId);
+        expect(second.body.items).toHaveLength(1);
+        expect(second.body.items[0].productId).toBe(productId);
         expect(await stockAlertModel.countDocuments()).toBe(1);
     });
 
@@ -142,7 +142,7 @@ describe('DELETE /stock-alerts/:productId and GET /stock-alerts', () => {
         const listed = await api().get('/stock-alerts').set('Authorization', bearer);
 
         expect([cancelled.status, again.status]).toEqual([200, 404]);
-        expect(listed.body.data.items).toEqual([]);
+        expect(listed.body.items).toEqual([]);
     });
 
     it('lists only the caller’s own requests, newest first', async () => {
@@ -166,9 +166,10 @@ describe('DELETE /stock-alerts/:productId and GET /stock-alerts', () => {
 
         const listed = await api().get('/stock-alerts').set('Authorization', mine.bearer);
 
-        expect(
-            listed.body.data.items.map(({ productId }: { productId: string }) => productId)
-        ).toEqual([second, first]);
+        expect(listed.body.items.map(({ productId }: { productId: string }) => productId)).toEqual([
+            second,
+            first
+        ]);
     });
 });
 

@@ -46,7 +46,7 @@ const awaiting = async (staff: string) =>
             .query({ displayStatus: 'incomplete', method: 'bank_transfer' })
             .set('Authorization', staff),
         ListPayments200Response
-    ).data.items.map(({ orderId }) => orderId);
+    ).items.map(({ orderId }) => orderId);
 
 describe('an abandoned 3-D Secure challenge', () => {
     it('is expired by the sweep: stock back, order cancelled, shopper told', async () => {

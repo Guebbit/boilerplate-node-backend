@@ -115,21 +115,21 @@ const priceThroughHttp = async (
     const intent = await api()
         .post('/payments')
         .set('Authorization', bearer)
-        .send({ orderId: checkout.body.data.id })
+        .send({ orderId: checkout.body.id })
         .expect(201);
     // Each basket leaves an unpaid order, and a shopper may hold only so many open at once
     // (`CART_OPEN_ORDER_LIMIT_REACHED`): cancel it so the next basket can be placed by the same shopper.
     // A shopper's OWN cancels pause their checkout (purchase hold), so a shopper reused across
     // baskets is cancelled for by someone else.
     await api()
-        .post(`/orders/${String(checkout.body.data.id)}/cancel`)
+        .post(`/orders/${String(checkout.body.id)}/cancel`)
         .set('Authorization', canceller)
         .expect(200);
 
     return {
-        cart: cart.body.data.summary,
-        order: checkout.body.data.totalPrice,
-        intent: intent.body.data.amount
+        cart: cart.body.summary,
+        order: checkout.body.totalPrice,
+        intent: intent.body.amount
     };
 };
 

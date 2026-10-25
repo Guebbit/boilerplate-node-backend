@@ -126,9 +126,7 @@ export const planModule = (options: ScaffoldOptions): ScaffoldPlan => {
 export const collidingSchemas = (names: ModuleNames, taken: ReadonlySet<string>): string[] =>
     [
         names.entity,
-        `${names.entity}Envelope`,
         `${names.plural}Response`,
-        `${names.plural}ResponseEnvelope`,
         `Create${names.entity}Request`,
         `Replace${names.entity}Request`,
         `Update${names.entity}Request`

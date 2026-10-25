@@ -27,7 +27,7 @@ export const postStockAlerts = (
         .ask(request.authContext!.id, body.productId)
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse<StockAlertsResponse>(response, result.data, 200, result.message);
+            successResponse<StockAlertsResponse>(response, result.data, 200);
         })
         .catch(catchAs(response, 'createStockAlert'));
 };

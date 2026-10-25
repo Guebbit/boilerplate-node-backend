@@ -31,8 +31,8 @@ export const putAddressDefault = (request: Request<{ addressId: string }>, respo
         .then((result) => {
             if (refused(response, result)) return;
 
-            const { data, message } = result;
-            successResponse<Address>(response, data, 200, message);
+            const { data } = result;
+            successResponse<Address>(response, data, 200);
         })
         .catch(catchAs(response, 'putAddressDefault'));
 };

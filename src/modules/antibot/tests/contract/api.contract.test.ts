@@ -54,7 +54,7 @@ describe('GET /antibot/config', () => {
         const response = await api().get('/antibot/config');
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toEqual({
+        expect(response.body).toEqual({
             provider: 'none',
             parameters: {},
             rungs: { identityBudgets: true, emailPolicy: 'off' }
@@ -68,8 +68,8 @@ describe('GET /antibot/config', () => {
         const response = await api().get('/antibot/config');
 
         expect(response.status).toBe(200);
-        expect(response.body.data.provider).toBe('turnstile');
-        expect(response.body.data.parameters.siteKey).toBe('site-key-for-the-browser');
+        expect(response.body.provider).toBe('turnstile');
+        expect(response.body.parameters.siteKey).toBe('site-key-for-the-browser');
     });
 
     it("publishes rung 2's active posture alongside rung 3's provider", async () => {
@@ -78,7 +78,7 @@ describe('GET /antibot/config', () => {
         const response = await api().get('/antibot/config');
 
         expect(response.status).toBe(200);
-        expect(response.body.data.rungs).toEqual({ identityBudgets: true, emailPolicy: 'mx' });
+        expect(response.body.rungs).toEqual({ identityBudgets: true, emailPolicy: 'mx' });
     });
 
     it('answers 500 rather than falling back when the provider name is unknown', async () => {

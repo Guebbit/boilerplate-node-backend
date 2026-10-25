@@ -31,8 +31,7 @@ export const postReturnReceive = (request: Request<{ id?: string }>, response: R
             successResponse<Return>(
                 response,
                 returnService.withActions(result.data, authContext),
-                200,
-                result.message
+                200
             );
         })
         .catch(catchAs(response, 'postReturnReceive'));

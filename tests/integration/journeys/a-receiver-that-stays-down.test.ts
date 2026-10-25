@@ -63,7 +63,7 @@ it('switches itself off after five dead chains and three failing days, then star
         .set('Authorization', await loginBearer(admin.email))
         .send({ url: `${endpoint.url}/hook`, eventTypes: ['order.created'] })
         .expect(201);
-    const subscriptionId = String(subscribed.body.data.id);
+    const subscriptionId = String(subscribed.body.id);
 
     /** The subscription as its owner lists it. */
     const subscription = async () => {
@@ -72,7 +72,7 @@ it('switches itself off after five dead chains and three failing days, then star
                 .get('/webhooks/subscriptions')
                 .set('Authorization', await loginBearer(admin.email)),
             ListWebhookSubscriptions200Response
-        ).data;
+        );
         return items.find(({ id }) => id === subscriptionId);
     };
 
@@ -106,7 +106,7 @@ it('switches itself off after five dead chains and three failing days, then star
             .query({ pageSize: 100 })
             .set('Authorization', await loginBearer(admin.email)),
         ListAuditEntries200Response
-    ).data.items;
+    ).items;
     expect(
         audit.filter(({ action }) => action === 'system.webhook_subscription.auto_disabled')
     ).toHaveLength(1);

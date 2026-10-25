@@ -46,7 +46,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ApiKeysResponseEnvelope'
+                                $ref: '#/components/schemas/ApiKeysResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -88,7 +88,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ApiKeyCreatedEnvelope'
+                                $ref: '#/components/schemas/ApiKeyCreated'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -110,7 +110,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ApiKeyEnvelope'
+                                $ref: '#/components/schemas/ApiKey'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -128,7 +128,7 @@ paths:
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
-                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -266,32 +266,3 @@ components:
                     format: date-time
                     description: The latest `expiresAt` a mint accepts right now (one calendar year from this response). A later one is refused with 422, so a form can bound its date picker without copying the rule.
 
-        ApiKeyEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess' }
-                status: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus' }
-                message: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage' }
-                data: { $ref: '#/components/schemas/ApiKey' }
-
-        ApiKeyCreatedEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess' }
-                status: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus' }
-                message: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage' }
-                data: { $ref: '#/components/schemas/ApiKeyCreated' }
-
-        ApiKeysResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess' }
-                status: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus' }
-                message: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage' }
-                data: { $ref: '#/components/schemas/ApiKeysResponse' }

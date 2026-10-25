@@ -3,8 +3,8 @@
  * The order-controller success tail, shared by every write and the single-order read: hydrate the
  * order the service handed back with this caller's `actions`, then answer with it. Kept out of
  * `services/scope.ts` on purpose — `withActions` stays framework-free, and the `Response`/status
- * split is where these controllers genuinely differ (create's 201, cancel's message), so only the
- * hydrate-then-send shape is shared; each call site still states its own status and message.
+ * split is where these controllers genuinely differ (create's 201), so only the
+ * hydrate-then-send shape is shared; each call site still states its own status.
  */
 
 import type { Response } from 'express';
@@ -20,7 +20,7 @@ import { catchAs } from '@infrastructure/http/controller';
 type OrderForResponse = Parameters<typeof orderService.withActions>[0];
 
 /**
- * Hydrate `order` with `authContext`'s `actions` and send it as the success envelope.
+ * Hydrate `order` with `authContext`'s `actions` and send it as the response body.
  *
  * Owns its own `.catch`, with the SAME operation name each call site already passes its own
  * chain's final `.catch` — `withActions` failing is exactly as much this operation's failure as
@@ -31,20 +31,18 @@ type OrderForResponse = Parameters<typeof orderService.withActions>[0];
  * @param authContext - whose actions to compute, from `request.authContext`
  * @param context - the operation name for `catchAs`, matching this controller's own outer `.catch`
  * @param status - HTTP status, forwarded to `successResponse` (200 by default)
- * @param message - an optional message alongside the order
  */
 export const respondWithOrder = (
     response: Response,
     order: OrderForResponse,
     authContext: AuthContext | undefined,
     context: string,
-    status?: number,
-    message?: string
+    status?: number
 ): Promise<void> =>
     orderService
         .withActions(order, authContext)
         .then((resolved) => {
             // A 201 always names the new order (RFC 9110 §9.3.3).
-            createdOrOk<Order>(response, resolved, status, `/orders/${resolved.id}`, message);
+            createdOrOk<Order>(response, resolved, status, `/orders/${resolved.id}`);
         })
         .catch(catchAs(response, context));
