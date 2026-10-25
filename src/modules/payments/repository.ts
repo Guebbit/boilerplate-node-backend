@@ -705,7 +705,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         ]),
 
     /**
-     * Payments with a refund still open, oldest first — the refund sweep's own scan.
+     * Card payments with a refund still open, oldest first — the refund sweep's own scan.
      * `updatedBefore` keeps it off a refund whose request is still in flight this very second.
      *
      * @param updatedBefore - only payments untouched since at least this instant
@@ -715,6 +715,9 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
     findWithOpenRefunds: (updatedBefore: Date, limit: number) =>
         paymentModel
             .find({
+                // A hand-paid refund has no provider to resend to; left in, 200 of them would
+                // fill the batch and no card refund would ever be retried.
+                provider: { $ne: MANUAL_PROVIDER },
                 refunds: { $elemMatch: { status: { $in: OPEN_REFUND_STATUSES } } },
                 updatedAt: { $lte: updatedBefore }
             })

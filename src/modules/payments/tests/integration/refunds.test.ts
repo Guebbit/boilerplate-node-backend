@@ -440,6 +440,32 @@ describe('a refund after one the provider keeps refusing', () => {
         }));
 });
 
+describe('the refund sweep', () => {
+    it('is not starved by a full batch of hand-paid refunds', () =>
+        withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
+            const { orderId } = await paidOrder();
+            jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
+            await expect(refund(orderId, { amount: 30 })).rejects.toThrow('down');
+            // 201 hand-paid payments with an open refund, all older than the card one.
+            // `providerRef` is unique and a hand-paid payment has none.
+            const stored = await paymentOf(orderId);
+            const { providerRef: _providerRef, ...card } = stored.toObject();
+            const handPaid = Array.from({ length: 201 }, () => ({
+                ...card,
+                _id: new Types.ObjectId(),
+                orderId: new Types.ObjectId(),
+                provider: 'manual',
+                updatedAt: new Date(0)
+            }));
+            await paymentModel.collection.insertMany(handPaid);
+
+            expect(await paymentService.retryOpenRefunds()).toBe(1);
+
+            const after = await paymentOf(orderId);
+            expect(after.refunds[0].status).toBe('succeeded');
+        }));
+});
+
 describe('cancelling an order that was already partly refunded', () => {
     it('returns only what is left', async () => {
         const { user, orderId } = await paidOrder();
