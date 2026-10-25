@@ -47,6 +47,31 @@ const getClient = (): PostHog => {
     return _client;
 };
 
+/** Upper bound on the erasure call, so a hung PostHog fails the attempt and the relay retries. */
+const FORGET_TIMEOUT_MS = 10_000;
+
+/** What `persons/bulk_delete` answers: how many persons matched, and any it could not delete. */
+interface BulkDeleteResponse {
+    persons_found?: number;
+    deletion_errors?: unknown[];
+}
+
+/**
+ * The management-API settings erasure needs, or `undefined` when any of the three is unset.
+ * Separate from the capture keys: deleting needs a personal key with `person:write`, on a
+ * host that differs from the ingestion one.
+ */
+const readErasureConfig = ():
+    | { apiKey: string; projectId: string; apiHost: string }
+    | undefined => {
+    const {
+        NODE_POSTHOG_PERSONAL_API_KEY: apiKey,
+        NODE_POSTHOG_PROJECT_ID: projectId,
+        NODE_POSTHOG_API_HOST: apiHost
+    } = analyticsConfig();
+    return apiKey && projectId && apiHost ? { apiKey, projectId, apiHost } : undefined;
+};
+
 /** Warn once, not per event: a misconfigured provider would otherwise fill the log with itself. */
 let warnedAboutConfiguration = false;
 
@@ -83,6 +108,42 @@ export const posthogAnalyticsProvider: AnalyticsProvider = {
                 ...event.properties,
                 ...(event.traceId ? { trace_id: event.traceId } : {})
             }
+        });
+    },
+
+    /**
+     * Delete the person and, with `delete_events`, every event keyed to it. A no-op without the
+     * three erasure knobs: capture keeps working, only the deletion is skipped.
+     * `persons_found: 0` resolves, so a replayed erasure is harmless.
+     * https://posthog.com/docs/api/persons#post-api-projects-project_id-persons-bulk_delete
+     *
+     * @throws {Error} on a non-2xx answer or a non-empty `deletion_errors`
+     */
+    forget(distinctId: string): Promise<void> {
+        const config = readErasureConfig();
+        if (!config) return Promise.resolve();
+
+        // Bearer: a PERSONAL api key (not the `phc_` project key), scope `person:write`.
+        // `distinct_ids` matches on the id we sent; `delete_events` also queues the person's
+        // events for PostHog's batch deletion.
+        return fetch(
+            `${config.apiHost}/api/projects/${encodeURIComponent(config.projectId)}/persons/bulk_delete/`,
+            {
+                method: 'POST',
+                signal: AbortSignal.timeout(FORGET_TIMEOUT_MS),
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${config.apiKey}`
+                },
+                body: JSON.stringify({ distinct_ids: [distinctId], delete_events: true })
+            }
+        ).then((response) => {
+            if (!response.ok)
+                throw new Error(`PostHog person deletion refused with status ${response.status}`);
+            return (response.json() as Promise<BulkDeleteResponse>).then((body) => {
+                if (body.deletion_errors?.length)
+                    throw new Error('PostHog reported errors deleting the person');
+            });
         });
     },
 

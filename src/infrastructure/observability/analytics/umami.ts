@@ -149,6 +149,11 @@ export const umamiAnalyticsProvider: AnalyticsProvider = {
             });
     },
 
+    // Umami never receives the account id (see `buildEventData`), so no event is keyed to it.
+    forget(): Promise<void> {
+        return Promise.resolve();
+    },
+
     /**
      * Nothing to flush: each event is its own request, launched as it happens. In-flight
      * requests are deliberately not awaited — the shutdown chain is on a clock, and an analytics

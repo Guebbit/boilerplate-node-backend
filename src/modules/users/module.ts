@@ -17,11 +17,13 @@ import {
     resolvePersonalDataMinimisers,
     type AppModule
 } from '@kernel/registry';
+import { onDomainEvent } from '@kernel/events';
+import { resolveAnalyticsProvider } from '@infrastructure/observability/analytics';
 import { router } from './routes';
 import { userRepository } from './repository';
 import { userService } from './services';
 import { setPersonalDataErasers, setPersonalDataMinimisers } from './erasure-registry';
-import './events';
+import { USER_ERASED } from './events';
 import { usersConfig } from './config';
 import { usersJobs } from './jobs';
 
@@ -46,6 +48,13 @@ export default {
     locales: path.join(__dirname, 'locales'),
     templates: path.join(__dirname, 'templates'),
     jobs: usersJobs,
+    subscribe: () => {
+        /*
+         * The account is gone; the analytics provider may still hold its id. A rejection fails the
+         * dispatch, so the outbox retries it and parks it `dead` (alerting) rather than losing it.
+         */
+        onDomainEvent(USER_ERASED, ({ userId }) => resolveAnalyticsProvider().forget(userId));
+    },
     /*
      * `account`'s signup and profile-update flows write through this same `userRepository` —
      * there is no separate `users` collection for them to register their own target under.

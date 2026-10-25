@@ -497,6 +497,95 @@ describe('the posthog provider', () => {
     });
 });
 
+// ─── Erasure (`forget`) ───────────────────────────────────────────────────────
+
+/** The three knobs PostHog's persons API needs, on top of the capture ones. */
+const configurePostHogErasure = () => {
+    configurePostHog();
+    setEnvironment({ NODE_POSTHOG_PERSONAL_API_KEY: 'phx_personal' });
+    setEnvironment({ NODE_POSTHOG_PROJECT_ID: '1234' });
+    setEnvironment({ NODE_POSTHOG_API_HOST: 'https://eu.posthog.com' });
+};
+
+describe('forget', () => {
+    afterEach(() => {
+        setEnvironment({ NODE_POSTHOG_PERSONAL_API_KEY: undefined });
+        setEnvironment({ NODE_POSTHOG_PROJECT_ID: undefined });
+        setEnvironment({ NODE_POSTHOG_API_HOST: undefined });
+    });
+
+    it('posts a bulk_delete for the id, with events, as the personal key', async () => {
+        configurePostHogErasure();
+        (fetch as jest.Mock).mockResolvedValue({
+            ok: true,
+            status: 202,
+            json: () => Promise.resolve({ persons_found: 1, deletion_errors: [] })
+        });
+
+        await resolveAnalyticsProvider().forget('user-1');
+
+        const [url, init] = (fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
+        expect(url).toBe('https://eu.posthog.com/api/projects/1234/persons/bulk_delete/');
+        expect(init.method).toBe('POST');
+        expect(init.headers).toMatchObject({ Authorization: 'Bearer phx_personal' });
+        expect(JSON.parse(init.body as string)).toEqual({
+            distinct_ids: ['user-1'],
+            delete_events: true
+        });
+    });
+
+    it('resolves when PostHog knows no such person, so a replay is harmless', async () => {
+        configurePostHogErasure();
+        (fetch as jest.Mock).mockResolvedValue({
+            ok: true,
+            status: 202,
+            json: () => Promise.resolve({ persons_found: 0, deletion_errors: [] })
+        });
+
+        await expect(resolveAnalyticsProvider().forget('gone')).resolves.toBeUndefined();
+    });
+
+    it('rejects on deletion_errors, so the outbox retries', async () => {
+        configurePostHogErasure();
+        (fetch as jest.Mock).mockResolvedValue({
+            ok: true,
+            status: 202,
+            json: () => Promise.resolve({ persons_found: 1, deletion_errors: [{ id: 'x' }] })
+        });
+
+        await expect(resolveAnalyticsProvider().forget('user-1')).rejects.toThrow(/errors/);
+    });
+
+    it.each([429, 500])('rejects on a %i answer', async (status) => {
+        configurePostHogErasure();
+        (fetch as jest.Mock).mockResolvedValue({ ok: false, status });
+
+        await expect(resolveAnalyticsProvider().forget('user-1')).rejects.toThrow(String(status));
+    });
+
+    it.each([
+        'NODE_POSTHOG_PERSONAL_API_KEY',
+        'NODE_POSTHOG_PROJECT_ID',
+        'NODE_POSTHOG_API_HOST'
+    ] as const)('makes no call, and no noise, without %s', async (knob) => {
+        configurePostHogErasure();
+        setEnvironment({ [knob]: undefined });
+
+        await expect(resolveAnalyticsProvider().forget('user-1')).resolves.toBeUndefined();
+
+        expect(fetch).not.toHaveBeenCalled();
+        expect(mockLoggerWarn).not.toHaveBeenCalled();
+    });
+
+    it.each(['umami', 'none'])('does nothing under %s', async (name) => {
+        setEnvironment({ NODE_ANALYTICS_PROVIDER: name });
+
+        await expect(resolveAnalyticsProvider().forget('user-1')).resolves.toBeUndefined();
+
+        expect(fetch).not.toHaveBeenCalled();
+    });
+});
+
 // ─── The `none` provider ──────────────────────────────────────────────────────
 
 describe('the none provider', () => {
