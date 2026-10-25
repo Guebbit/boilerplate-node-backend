@@ -72,7 +72,8 @@ this middleware owns, and decides whether the request is even a candidate for th
 files, so an image keeps its year-long cache), and the rules below overwrite it on the routes that
 opt in. A response is uncacheable unless a route says it is, so a secret in one (`POST /api-keys`,
 a webhook secret, an audit page) cannot be kept by a shared cache or a browser's disk because an
-opt-in was forgotten.
+opt-in was forgotten. An error answer is `no-store` too, whatever the route set before it failed
+(`rejectResponse`).
 
 - A cached POST (`POST /x/search`, keyed the same as its GET twin) is a SERVER-side arrangement
   only — the wire always says `no-store`, since a shared cache holding a POST response could

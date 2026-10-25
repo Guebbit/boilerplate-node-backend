@@ -395,6 +395,9 @@ export const rejectResponse = (
     // API takes. A guard that names a more specific one (`error="invalid_token"`) sets it first.
     if (status === 401 && !response.hasHeader('WWW-Authenticate'))
         response.setHeader('WWW-Authenticate', 'Bearer realm="api"');
+    // An error is a fact about one request, never about the resource: no browser or CDN may keep
+    // it. Overwrites what `setCache` set before the controller failed (a public max-age on a 5xx).
+    response.setHeader('Cache-Control', 'no-store');
     // Set before `.json()`, which only defaults the type when none is set: an export route's
     // earlier `text/csv` would otherwise leak onto its own error. An error is never an attachment.
     response.setHeader('Content-Type', PROBLEM_MEDIA_TYPE);

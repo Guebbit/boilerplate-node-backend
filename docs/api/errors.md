@@ -69,6 +69,7 @@ the language is negotiated before the request is parsed.
 
 | Status | Header | Value |
 | --- | --- | --- |
+| every | `Cache-Control` | `no-store`: an error is never kept by a browser or a CDN, even on a route that caches its success |
 | 401 | `WWW-Authenticate` | `Bearer realm="api"`, or the specific challenge a guard sets (`error="invalid_token"`, `error="insufficient_user_authentication"` for a step-up) |
 | 405 | `Allow` | the methods the path does answer |
 | 429 | `Retry-After` | whole seconds until the budget resets |

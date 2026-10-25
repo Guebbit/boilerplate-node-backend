@@ -470,6 +470,14 @@ describe('rejectResponse', () => {
         expect(setHeader).not.toHaveBeenCalledWith('Retry-After', expect.anything());
     });
 
+    it('marks every error no-store, whatever a route set before it failed', () => {
+        const response = makeResponseStub();
+
+        rejectResponse(response, 503);
+
+        expect(response.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store');
+    });
+
     it('sets the Bearer challenge on a 401 that names none', () => {
         const response = makeResponseStub();
 
