@@ -45,12 +45,7 @@ export const postLoginTwoFactorSend = (
                 return;
             }
             authTwoFactorCodeSentTotal.inc({ method, status: 'success' });
-            successResponse<TwoFactorDelivery>(
-                response,
-                result.data,
-                200,
-                t('account.two-factor.code-sent')
-            );
+            successResponse<TwoFactorDelivery>(response, result.data, 200);
         })
         .catch((error: unknown) => {
             authTwoFactorCodeSentTotal.inc({ method, status: 'failure' });

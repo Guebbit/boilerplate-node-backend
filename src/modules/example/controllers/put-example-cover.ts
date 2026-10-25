@@ -38,7 +38,7 @@ export const putExampleCover = namedHandler(
             .then((result) => {
                 if (refused(response, result)) return;
                 claimUpload(request);
-                successResponse(response, result.data, 200, result.message);
+                successResponse(response, result.data, 200);
             })
             .catch(catchAs(response, 'putExampleCover'));
     }

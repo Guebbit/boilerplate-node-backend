@@ -39,7 +39,7 @@ export const postEmailChangeConfirm = (
                 return;
             }
             authEmailChangeConfirmTotal.inc({ status: 'success' });
-            successResponse(response, undefined, result.status, result.message);
+            successResponse(response, undefined, result.status);
         })
         .catch((error: unknown) => {
             authEmailChangeConfirmTotal.inc({ status: 'failure' });

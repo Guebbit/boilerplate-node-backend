@@ -190,7 +190,7 @@ export const setPurchaseHold = (
                     targetId: id,
                     metadata: { until: input.until.toISOString() }
                 });
-                return generateSuccess(saved, 200, t('users.purchase-hold-set'));
+                return generateSuccess(saved, 200);
             });
         });
     });
@@ -236,7 +236,7 @@ export const liftPurchaseHold = (
                     targetId: id,
                     metadata: { inForce: wasInForce }
                 });
-                return generateSuccess(saved, 200, t('users.purchase-hold-lifted'));
+                return generateSuccess(saved, 200);
             });
         });
     });

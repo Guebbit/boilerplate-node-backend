@@ -27,7 +27,7 @@ export const getAddress = (request: Request<{ addressId: string }>, response: Re
         .get(id, addressId)
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse<Address>(response, result.data, 200, result.message);
+            successResponse<Address>(response, result.data, 200);
         })
         .catch(catchAs(response, 'getAddress'));
 };

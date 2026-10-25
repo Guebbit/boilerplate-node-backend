@@ -84,14 +84,14 @@ export const notificationDelete = (
         if (!deleted) return generateReject(404, [t('notifications.not-found')]);
 
         publishToUser(userId, NOTIFICATIONS_CHANNELS.DELETED, { all: false, ids: [id] });
-        return generateSuccess(undefined, 200, t('notifications.deleted'));
+        return generateSuccess(undefined, 200);
     });
 
 /** Empty the caller's inbox. Emptying an empty one is the state they asked for, so it succeeds. */
 export const notificationsDismissAll = (userId: string): Promise<ResponseSuccess<undefined>> =>
     notificationRepository.deleteByUserId(userId).then(() => {
         publishToUser(userId, NOTIFICATIONS_CHANNELS.DELETED, { all: true, ids: [] });
-        return generateSuccess(undefined, 200, t('notifications.dismissed-all'));
+        return generateSuccess(undefined, 200);
     });
 
 /** Mark every unread notification of the caller read, as of now. */
@@ -99,7 +99,7 @@ export const notificationsReadAll = (userId: string): Promise<ResponseSuccess<un
     const readAt = new Date();
     return notificationRepository.markAllRead(userId, readAt).then(() => {
         publishToUser(userId, NOTIFICATIONS_CHANNELS.READ, { readAt: readAt.toISOString() });
-        return generateSuccess(undefined, 200, t('notifications.read-all'));
+        return generateSuccess(undefined, 200);
     });
 };
 

@@ -38,7 +38,7 @@ export const postEmailChangeUndo = (
                 return;
             }
             authEmailChangeUndoTotal.inc({ status: 'success' });
-            successResponse(response, undefined, result.status, result.message);
+            successResponse(response, undefined, result.status);
         })
         .catch((error: unknown) => {
             authEmailChangeUndoTotal.inc({ status: 'failure' });

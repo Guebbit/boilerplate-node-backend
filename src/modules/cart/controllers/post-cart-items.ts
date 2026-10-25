@@ -4,7 +4,6 @@
  */
 
 import type { Request, Response } from 'express';
-import { t } from '@infrastructure/i18n';
 import { AddCartItemBody } from '@api/schemas.zod';
 import { cartService } from '../services';
 import { successResponse } from '@infrastructure/http/response';
@@ -37,7 +36,7 @@ export const postCartItems = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            successResponse<CartResponse>(response, result.data, 200, t('cart.product-added'));
+            successResponse<CartResponse>(response, result.data, 200);
         })
         .catch(catchAs(response, 'addCartItem'));
 };

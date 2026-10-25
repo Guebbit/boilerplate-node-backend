@@ -26,7 +26,7 @@ export const deleteExample = (request: Request<{ id: string }>, response: Respon
         .removeById(id, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse(response, undefined, 200, result.message);
+            successResponse(response, undefined, 200);
         })
         .catch(catchAs(response, 'deleteExample'));
 };

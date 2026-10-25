@@ -5,7 +5,6 @@
  */
 
 import type { Request, Response } from 'express';
-import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { ChangePasswordBody } from '@api/schemas.zod';
 import { successResponse } from '@infrastructure/http/response';
@@ -71,12 +70,7 @@ export const postPasswordChange = (
             return reissueSession(request, response, id, { amr: [AMR.password], snapshot })
                 .then((issued) => {
                     authPasswordChangeTotal.inc({ status: 'success' });
-                    successResponse<AuthTokens>(
-                        response,
-                        issued,
-                        200,
-                        t('account.password-change.success')
-                    );
+                    successResponse<AuthTokens>(response, issued, 200);
                 })
                 .catch((error: unknown) => {
                     // Still a real fact worth finding — a swallowed re-mint failure had no
@@ -87,7 +81,7 @@ export const postPasswordChange = (
                         error
                     });
                     authPasswordChangeTotal.inc({ status: 'success' });
-                    successResponse(response, undefined, 200, t('account.password-change.success'));
+                    successResponse(response, undefined, 200);
                 });
         })
         .catch((error: unknown) => {

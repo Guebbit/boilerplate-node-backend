@@ -53,11 +53,10 @@ describe('generateSuccess', () => {
         expect(response.message).toBe('');
     });
 
-    it('honours an explicit status and message', () => {
-        const response = generateSuccess({ id: 'x' }, 201, 'Created');
+    it('honours an explicit status', () => {
+        const response = generateSuccess({ id: 'x' }, 201);
 
         expect(response.status).toBe(201);
-        expect(response.message).toBe('Created');
     });
 
     it('carries no errors key at runtime', () => {
@@ -301,13 +300,13 @@ describe('successResponse', () => {
     it('applies the same status to the HTTP response and the body', () => {
         const response = makeResponseStub();
 
-        successResponse(response, { id: 'x' }, 201, 'Created');
+        successResponse(response, { id: 'x' }, 201);
 
         // Written twice on purpose, so the two can never disagree — a proxy that rewrites the
         // HTTP status still leaves the body's copy intact.
         expect(response.status).toHaveBeenCalledWith(201);
         expect(response.json).toHaveBeenCalledWith(
-            expect.objectContaining({ success: true, status: 201, message: 'Created' })
+            expect.objectContaining({ success: true, status: 201 })
         );
     });
 
@@ -334,25 +333,21 @@ describe('createdOrOk', () => {
     it('answers 201 and names the new resource when the call created it', () => {
         const { response, location } = stubWithLocation();
 
-        createdOrOk(response, { id: 'x' }, 201, '/things/x', 'Made');
+        createdOrOk(response, { id: 'x' }, 201, '/things/x');
 
         expect(location).toHaveBeenCalledWith('/things/x');
         expect(response.status).toHaveBeenCalledWith(201);
-        expect(response.json).toHaveBeenCalledWith(
-            expect.objectContaining({ status: 201, message: 'Made' })
-        );
+        expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ status: 201 }));
     });
 
     it('answers the given status without a Location when nothing was created', () => {
         const { response, location } = stubWithLocation();
 
-        createdOrOk(response, { id: 'x' }, 200, '/things/x', 'Grew');
+        createdOrOk(response, { id: 'x' }, 200, '/things/x');
 
         expect(location).not.toHaveBeenCalled();
         expect(response.status).toHaveBeenCalledWith(200);
-        expect(response.json).toHaveBeenCalledWith(
-            expect.objectContaining({ status: 200, message: 'Grew' })
-        );
+        expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ status: 200 }));
     });
 
     it('answers 200 when the status is unset', () => {

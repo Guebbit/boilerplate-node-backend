@@ -16,7 +16,7 @@ export const postReadAll = (request: Request, response: Response) => {
     return notificationsService
         .readAll(request.authContext!.id)
         .then((result) => {
-            successResponse(response, result.data, 200, result.message);
+            successResponse(response, result.data, 200);
         })
         .catch(catchAs(response, 'readAllNotifications'));
 };

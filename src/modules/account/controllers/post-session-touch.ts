@@ -7,7 +7,6 @@
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { catchAs } from '@infrastructure/http/controller';
-import { t } from '@infrastructure/i18n';
 import type { SessionActivity } from '@types';
 import { idleLimitMilliseconds } from '../session/idle';
 
@@ -26,8 +25,7 @@ export const postSessionTouch = (request: Request, response: Response) =>
                     lastActiveAt: new Date().toISOString(),
                     ...(limitMilliseconds > 0 && { idleTimeoutSeconds: limitMilliseconds / 1000 })
                 },
-                200,
-                t('account.session-touched')
+                200
             );
         })
         .catch(catchAs(response, 'postSessionTouch'));

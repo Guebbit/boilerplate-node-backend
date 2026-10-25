@@ -1,13 +1,9 @@
 {
     "account": {
         "session-idle": "La sessione è terminata per inattività. Accedi di nuovo.",
-        "session-touched": "Sessione aggiornata.",
         "login": {
             "wrong-data": "Email o password non validi.",
-            "deletion-pending": "Questo account è in programma per l'eliminazione. Ripristinalo per accedere.",
-            "restore-challenge-invalid": "Questo tentativo di ripristino è scaduto. Accedi di nuovo.",
-            "second-factor-required": "Autenticazione a due fattori richiesta.",
-            "success": "Autenticazione riuscita."
+            "restore-challenge-invalid": "Questo tentativo di ripristino è scaduto. Accedi di nuovo."
         },
         "signup": {
             "email-already-used": "L'email è già stata utilizzata.",
@@ -15,26 +11,19 @@
             "terms-not-accepted": "Devi accettare i Termini di Servizio e confermare di aver letto l'Informativa sulla Privacy per registrarti."
         },
         "reset": {
-            "token-not-found": "Token non valido o scaduto, riprova.",
-            "email-sent": "È stata inviata un'email con un link, clicca per reimpostare la password.",
-            "success": "Password modificata, accedi con la nuova password."
+            "token-not-found": "Token non valido o scaduto, riprova."
         },
         "delete": {
-            "scheduled": "Il tuo account è bloccato e verrà cancellato alla data indicata, a meno che tu non lo ripristini prima.",
-            "restored": "Il tuo account è stato ripristinato. Accedi per usarlo di nuovo.",
             "token-not-found": "Token non valido o scaduto, riprova."
         },
         "update": {
-            "success": "Profilo aggiornato.",
             "email-already-used": "L'email è già stata utilizzata."
         },
         "password-change": {
-            "wrong-current": "La password attuale non è corretta.",
-            "success": "Password modificata."
+            "wrong-current": "La password attuale non è corretta."
         },
         "reauth": {
             "wrong-password": "La password non è corretta.",
-            "success": "Identità confermata.",
             "no-password": "Questo account non ha una password. Richiedi invece un codice via email.",
             "method-unavailable": "Questo modo di confermare non è disponibile per questo account.",
             "wrong-code": "Quel codice non ha funzionato. Controllalo e riprova."
@@ -48,41 +37,23 @@
             "not-delivered": "Questo metodo non invia codici: leggilo dal tuo dispositivo.",
             "email-unverified": "Conferma il tuo indirizzo email prima di usarlo come secondo fattore.",
             "resend-too-soon": "Un codice è stato appena inviato. Attendi prima di richiederne un altro.",
-            "method-added": "Il secondo fattore è ora attivo.",
-            "method-removed": "Il secondo fattore è stato rimosso.",
-            "disabled": "L'autenticazione a due fattori è ora disattivata.",
-            "backup-codes-regenerated": "I codici di backup sono stati rigenerati. Quelli vecchi non sono più validi.",
-            "code-sent": "Ti abbiamo inviato un codice.",
             "locked": "Troppi codici errati. I controlli in due passaggi su questo account sono sospesi per un po': riprova più tardi.",
             "challenge-invalid": "Questo tentativo di accesso è scaduto. Effettua di nuovo l'accesso."
         },
-        "logout": {
-            "success": "Disconnessione effettuata.",
-            "all-success": "Disconnessione effettuata da tutti i dispositivi."
-        },
         "sessions": {
-            "revoked": "Sessione revocata.",
             "not-found": "Sessione non trovata."
         },
         "export": {
-            "requested": "Esportazione richiesta. Ti invieremo un link via email quando sarà pronta.",
             "not-found": "Esportazione non trovata."
         },
         "verify": {
-            "email-sent": "È stata inviata un'email di verifica, clicca sul link per confermare il tuo indirizzo.",
             "already-verified": "Questo account è già verificato.",
             "resend-too-soon": "Un'email di verifica è stata appena inviata. Attendi un momento prima di richiederne un'altra.",
-            "token-not-found": "Token non valido o scaduto, riprova.",
-            "success": "Indirizzo email verificato."
+            "token-not-found": "Token non valido o scaduto, riprova."
         },
         "email-change": {
             "too-soon": "Una modifica dell'email è appena stata richiesta. Attendi un momento prima di richiederne un'altra.",
-            "token-not-found": "Token non valido o scaduto, riprova.",
-            "success": "Indirizzo email modificato.",
-            "undone": "La modifica dell'email è stata annullata e tutti i dispositivi sono stati disconnessi.",
-            "cancelled": "La modifica dell'indirizzo email in sospeso è stata annullata.",
-            "resent": "Un nuovo link di conferma è stato inviato al nuovo indirizzo.",
-            "nothing-pending": "Non c'è nessuna modifica dell'indirizzo email in sospeso."
+            "token-not-found": "Token non valido o scaduto, riprova."
         },
         "email": {
             "greeting-anonymous": "Ciao!",
@@ -224,7 +195,6 @@
             "unknown-provider": "Questo metodo di accesso non è disponibile.",
             "invalid-state": "Questo tentativo di accesso è scaduto. Riprova.",
             "invalid-verifier": "Questo tentativo di accesso è scaduto. Riprova.",
-            "link-removed": "Quel metodo di accesso è stato scollegato.",
             "link-not-found": "Quel metodo di accesso non è collegato al tuo account."
         }
     }

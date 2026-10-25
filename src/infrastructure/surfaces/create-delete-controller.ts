@@ -79,7 +79,7 @@ export const createDeleteController = ({ entity, remove, notFoundKey }: DeleteCo
                 // Sends the error envelope and stops here if the service refused.
                 if (refused(response, result)) return;
 
-                successResponse(response, undefined, 200, result.message);
+                successResponse(response, undefined, 200);
             })
             .catch(catchAs(response, operation));
     });

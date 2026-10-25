@@ -529,9 +529,7 @@ describe('what receiving answers and announces', () => {
 
         const result = await returnService.receiveReturn(id, {}, callerContextAs('admin'));
 
-        expect(result.success && result.message).toBe(
-            'Return received — the goods are back on sale.'
-        );
+        expect(result.success && result.data?.status).toBe('closed');
         expect(heard).toEqual([{ returnId: id, orderId: fixture.orderId }]);
     });
 

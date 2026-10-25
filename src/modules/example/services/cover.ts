@@ -77,7 +77,7 @@ const applyCover = (
             });
             return presentForCaller(saved, context);
         })
-        .then((shaped) => generateSuccess(shaped, 200, t('example.cover-changed')));
+        .then((shaped) => generateSuccess(shaped, 200));
 };
 
 /**

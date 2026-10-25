@@ -22,7 +22,7 @@ export const deleteStockAlert = (request: Request<{ productId: string }>, respon
         .cancel(request.authContext!.id, productId)
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse<StockAlertsResponse>(response, result.data, 200, result.message);
+            successResponse<StockAlertsResponse>(response, result.data, 200);
         })
         .catch(catchAs(response, 'deleteStockAlert'));
 };

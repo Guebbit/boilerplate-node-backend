@@ -57,7 +57,7 @@ export const postPaymentWebhook = (request: Request, response: Response) => {
                 .parseWebhook(rawBody, String(headers[WEBHOOK_SIGNATURE_HEADER] ?? ''))
                 .then((event) => paymentService.applyWebhookDelivery(event))
                 .then(() => {
-                    successResponse(response, undefined, 200, t('payments.webhook-accepted'));
+                    successResponse(response, undefined, 200);
                 });
         })
         .catch((error: unknown) => {

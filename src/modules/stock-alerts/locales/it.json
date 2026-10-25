@@ -1,7 +1,5 @@
 {
     "stock-alerts": {
-        "asked": "Ti avviseremo quando questo prodotto sarà di nuovo disponibile.",
-        "cancelled": "Richiesta annullata.",
         "product-not-found": "Il prodotto richiesto non è stato trovato",
         "not-found": "Non hai una richiesta per questo prodotto.",
         "already-buyable": "Questo prodotto si può ordinare adesso.",

@@ -43,7 +43,7 @@ export const deleteSession = (request: Request<{ sessionId: string }>, response:
                 destroySessionCookie(response);
             }
 
-            successResponse<undefined>(response, undefined, 200, t('account.sessions.revoked'));
+            successResponse<undefined>(response, undefined, 200);
         })
         .catch(catchAs(response, 'deleteSession'));
 };

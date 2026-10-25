@@ -36,7 +36,7 @@ export const postVerifyConfirm = (
                 return;
             }
             authEmailVerifyTotal.inc({ status: 'success' });
-            successResponse(response, undefined, result.status, result.message);
+            successResponse(response, undefined, result.status);
         })
         .catch((error: unknown) => {
             authEmailVerifyTotal.inc({ status: 'failure' });

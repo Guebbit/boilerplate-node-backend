@@ -25,7 +25,7 @@ export const deleteWebhookSubscription = (request: Request<{ id: string }>, resp
         .removeSubscription(id, tenantCallerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse(response, undefined, 200, result.message);
+            successResponse(response, undefined, 200);
         })
         .catch(catchAs(response, 'deleteWebhookSubscription'));
 };

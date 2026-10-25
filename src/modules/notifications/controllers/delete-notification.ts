@@ -23,7 +23,7 @@ export const deleteNotification = (request: Request<{ id: string }>, response: R
         .then((result) => {
             if (refused(response, result)) return;
 
-            successResponse(response, result.data, 200, result.message);
+            successResponse(response, result.data, 200);
         })
         .catch(catchAs(response, 'deleteNotificationById'));
 };

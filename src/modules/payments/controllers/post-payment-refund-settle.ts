@@ -34,8 +34,7 @@ export const postPaymentRefundSettle = (
             successResponse<Payment>(
                 response,
                 paymentService.withActions(result.data, undefined, request.authContext),
-                200,
-                result.message
+                200
             );
         })
         .catch(catchAs(response, 'postPaymentRefundSettle'));

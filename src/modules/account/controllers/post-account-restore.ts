@@ -29,7 +29,7 @@ export const postAccountRestore = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            successResponse<undefined>(response, undefined, result.status, result.message);
+            successResponse<undefined>(response, undefined, result.status);
         })
         .catch((error: unknown) => {
             // Same interpreter every other write path answers through.

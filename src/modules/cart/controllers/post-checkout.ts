@@ -5,7 +5,6 @@
  */
 
 import type { Request, Response } from 'express';
-import { t } from '@infrastructure/i18n';
 import { CheckoutBody } from '@api/schemas.zod';
 import { cartService } from '../services';
 import { createdResponse } from '@infrastructure/http/response';
@@ -40,12 +39,7 @@ export const postCheckout = (request: Request, response: Response) => {
             return orderService.withActions(result.data, request.authContext).then((order) => {
                 // The order itself, as `POST /orders` answers it: a 201 describes the resource it
                 // created, and the confirmation copy is the envelope's own `message`.
-                createdResponse<Order>(
-                    response,
-                    order,
-                    `/orders/${order.id}`,
-                    t('orders.creation-success')
-                );
+                createdResponse<Order>(response, order, `/orders/${order.id}`);
             });
         })
         .catch((error: unknown) => {
