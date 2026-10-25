@@ -49,7 +49,7 @@ describe('translating an example’s title through /locales', () => {
             .send({ it: { fields: { title: 'Ciao' } } });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.translations[0]).toMatchObject({
+        expect(response.body.translations[0]).toMatchObject({
             locale: 'it',
             fields: { title: 'Ciao' }
         });

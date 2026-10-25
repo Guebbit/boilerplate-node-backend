@@ -62,9 +62,9 @@ describe('order PII at rest', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.shippingAddress).toMatchObject(SHIPPING);
-        expect(response.body.data.billingAddress).toMatchObject({ street: BILLING.street });
-        expect(response.body.data.notes).toBe(NOTES);
+        expect(response.body.shippingAddress).toMatchObject(SHIPPING);
+        expect(response.body.billingAddress).toMatchObject({ street: BILLING.street });
+        expect(response.body.notes).toBe(NOTES);
     });
 
     it('decrypts in search results and the account export', async () => {

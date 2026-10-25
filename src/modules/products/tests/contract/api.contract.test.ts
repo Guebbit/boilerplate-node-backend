@@ -31,16 +31,14 @@ describe('GET /products — the filters it now publishes', () => {
         const { bearer } = await authenticateAs('admin');
         const staff = await api().get('/products?title=Walnut').set('Authorization', bearer);
         expect(staff.status).toBe(200);
-        expect(staff.body.data.items.map((p: { title: string }) => p.title).toSorted()).toEqual([
+        expect(staff.body.items.map((p: { title: string }) => p.title).toSorted()).toEqual([
             'Walnut desk',
             'Walnut prototype'
         ]);
 
         const stranger = await api().get('/products?title=Walnut');
         expect(stranger.status).toBe(200);
-        expect(stranger.body.data.items.map((p: { title: string }) => p.title)).toEqual([
-            'Walnut desk'
-        ]);
+        expect(stranger.body.items.map((p: { title: string }) => p.title)).toEqual(['Walnut desk']);
 
         /*
          * The invariant, asserted rather than the page shape: a stranger asking for the unlisted
@@ -51,7 +49,7 @@ describe('GET /products — the filters it now publishes', () => {
          */
         const asking = await api().get('/products?active=false');
         expect(asking.status).toBe(200);
-        expect(asking.body.data.items.map((p: { title: string }) => p.title)).not.toContain(
+        expect(asking.body.items.map((p: { title: string }) => p.title)).not.toContain(
             'Walnut prototype'
         );
     });
@@ -76,14 +74,14 @@ describe('GET /products', () => {
     it('matches the contract when the list is empty', async () => {
         const response = await api().get('/products');
 
-        expect(response.body.data.items).toHaveLength(0);
+        expect(response.body.items).toHaveLength(0);
     });
 
     it('matches the contract for a paginated request', async () => {
         await Promise.all([createProduct(), createProduct(), createProduct()]);
         const response = await api().get('/products?page=1&pageSize=2');
 
-        expect(response.body.data.items).toHaveLength(2);
+        expect(response.body.items).toHaveLength(2);
     });
 
     // openapi.yaml declares `minimum: 1` / `maximum: 100` on these; an endpoint that quietly
@@ -105,8 +103,8 @@ describe('GET /products', () => {
         const response = await api().get('/products?page=&pageSize=');
 
         expect(response.status).toBe(200);
-        expect(response.body.data.meta.page).toBe(1);
-        expect(response.body.data.meta.pageSize).toBe(10);
+        expect(response.body.meta.page).toBe(1);
+        expect(response.body.meta.pageSize).toBe(10);
     });
 
     // Tier A: `id` is a batch filter. `?id=` repeated validates against the widened array schema;
@@ -117,7 +115,7 @@ describe('GET /products', () => {
 
         const repeated = await api().get(`/products?id=${String(one._id)}&id=${String(other._id)}`);
         expect(repeated.status).toBe(200);
-        expect(repeated.body.data.items.map((p: { id: string }) => p.id).toSorted()).toEqual(
+        expect(repeated.body.items.map((p: { id: string }) => p.id).toSorted()).toEqual(
             [String(one._id), String(other._id)].toSorted()
         );
 
@@ -140,7 +138,7 @@ describe('GET /products', () => {
         const response = await api().get(`/products?id=${String(one._id)}&id=${String(one._id)}`);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(1);
+        expect(response.body.items).toHaveLength(1);
     });
 
     // `$in` casts every element — one malformed id anywhere in the batch is a 422 about the
@@ -196,8 +194,8 @@ describe('POST /products/search', () => {
     });
 });
 
-const titlesOf = (response: { body: { data: { items: { title: string }[] } } }) =>
-    response.body.data.items.map((product) => product.title);
+const titlesOf = (response: { body: { items: { title: string }[] } }) =>
+    response.body.items.map((product) => product.title);
 
 describe('sort — GET /products?sort= and POST /products/search { sort }', () => {
     beforeEach(async () => {
@@ -312,7 +310,7 @@ describe('GET /products/{id}', () => {
             const product = await createProduct();
             const response = await api().get(`/products/${String(product._id)}`);
 
-            expect(response.body.data.currency).toBe('GBP');
+            expect(response.body.currency).toBe('GBP');
         }));
 });
 
@@ -333,7 +331,7 @@ describe('DELETE /products/{id}', () => {
             .delete(`/products/${String(product._id)}`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(await stored(String(product._id))).not.toBeNull();
     });
 
@@ -345,7 +343,7 @@ describe('DELETE /products/{id}', () => {
             .delete(`/products/${String(product._id)}?hardDelete=false`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(await stored(String(product._id))).not.toBeNull();
     });
 
@@ -357,7 +355,7 @@ describe('DELETE /products/{id}', () => {
             .delete(`/products/${String(product._id)}?hardDelete=true`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(await stored(String(product._id))).toBeNull();
     });
 
@@ -391,7 +389,7 @@ describe('DELETE /products/{id}', () => {
                 .set('Authorization', bearer)
                 .send({ id: String(product._id), hardDelete: body });
 
-            expect(response.status).toBe(200);
+            expect(response.status).toBe(204);
             expect(await stored(String(product._id))).toBeNull();
         });
 
@@ -436,7 +434,7 @@ describe('DELETE /products/{id}/hard', () => {
             .delete(`/products/${String(product._id)}/hard`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(await stored(String(product._id))).toBeNull();
     });
 
@@ -449,7 +447,7 @@ describe('DELETE /products/{id}/hard', () => {
             .delete(`/products/${String(product._id)}/hard?hardDelete=false`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(await stored(String(product._id))).toBeNull();
     });
 });
@@ -462,8 +460,8 @@ describe('GET /products/categories', () => {
         const response = await api().get('/products/categories');
 
         expect(response.status).toBe(200);
-        expect(response.body.data.categories).toEqual([{ name: 'pets', count: 1 }]);
-        expect(response.body.data.tags).toEqual([{ name: 'cute', count: 1 }]);
+        expect(response.body.categories).toEqual([{ name: 'pets', count: 1 }]);
+        expect(response.body.tags).toEqual([{ name: 'cute', count: 1 }]);
     });
 
     it('keeps its own cache header over the no-store default', async () => {
@@ -476,7 +474,7 @@ describe('GET /products/categories', () => {
         const response = await api().get('/products/categories');
 
         expect(response.status).toBe(200);
-        expect(response.body.data.categories).toEqual([]);
+        expect(response.body.categories).toEqual([]);
     });
 });
 
@@ -518,14 +516,13 @@ describe('DELETE /products/{id} repeated', () => {
         await api().delete(path).set('Authorization', bearer);
         const retried = await api().delete(path).set('Authorization', bearer);
 
-        expect(retried.status).toBe(200);
+        expect(retried.status).toBe(204);
         expect((await stored(String(product._id)))!.deletedAt).toBeInstanceOf(Date);
     });
 });
 
 /** The ids on one page of a product listing. */
-const idsOf = (body: { data: { items: { id: string }[] } }) =>
-    body.data.items.map((item) => item.id);
+const idsOf = (body: { items: { id: string }[] }) => body.items.map((item) => item.id);
 
 describe('GET /products?deleted=', () => {
     it('lists only soft-deleted products for true, and only live ones for false', async () => {
@@ -548,7 +545,7 @@ describe('GET /products?deleted= — for a caller who may not see deleted rows',
         const response = await api().get('/products?deleted=true');
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toEqual([]);
+        expect(response.body.items).toEqual([]);
     });
 });
 
@@ -563,7 +560,7 @@ describe('DELETE /products — the id in the body', () => {
             .set('Authorization', bearer)
             .send({ id: String(product._id) });
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         const stored = await productRepository.findById(String(product._id));
         expect(stored?.deletedAt).toBeInstanceOf(Date);
     });
@@ -578,7 +575,7 @@ describe('DELETE /products — the id in the body', () => {
             .set('Authorization', bearer)
             .send({ id: String(target._id) });
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         const [hit, spared] = await Promise.all([
             productRepository.findById(String(target._id)),
             productRepository.findById(String(decoy._id))

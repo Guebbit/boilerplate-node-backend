@@ -89,7 +89,6 @@ interface AdminStockTransition {
     allocates?: boolean;
     auditAction: (typeof inventoryAuditActions)[keyof typeof inventoryAuditActions];
     buildAuditMetadata: (level: InventoryLevel) => Record<string, unknown>;
-    successMessageKey: string;
 }
 
 /**
@@ -105,8 +104,7 @@ const applyAdminStockTransition = ({
     onFailure,
     allocates = false,
     auditAction,
-    buildAuditMetadata,
-    successMessageKey
+    buildAuditMetadata
 }: AdminStockTransition): Promise<ResponseSuccess<InventoryLevel> | ResponseReject> =>
     // Checked BEFORE the write: `conditionFor`'s `receive` case is `{}` (any row matches, or a
     // fresh one is created), so an unknown product would otherwise still get a level row AND a
@@ -136,7 +134,7 @@ const applyAdminStockTransition = ({
                     metadata: buildAuditMetadata(level)
                 });
 
-                return generateSuccess(level, 200, t(successMessageKey));
+                return generateSuccess(level, 200);
             });
         });
     });
@@ -166,8 +164,7 @@ export const receive = (
         context,
         allocates: true,
         auditAction: inventoryAuditActions.ADMIN_STOCK_RECEIVED,
-        buildAuditMetadata: (level) => ({ quantity, onHand: level.onHand }),
-        successMessageKey: 'inventory.receive-success'
+        buildAuditMetadata: (level) => ({ quantity, onHand: level.onHand })
     });
 
 /**
@@ -213,8 +210,7 @@ export const adjust = (
                 ]);
             }),
         auditAction: inventoryAuditActions.ADMIN_STOCK_ADJUSTED,
-        buildAuditMetadata: (level) => ({ delta, note, onHand: level.onHand }),
-        successMessageKey: 'inventory.adjust-success'
+        buildAuditMetadata: (level) => ({ delta, note, onHand: level.onHand })
     });
 
 /**
@@ -268,7 +264,7 @@ export const setBackorderLimit = (
                         metadata
                     });
 
-                    return generateSuccess(level, 200, t('inventory.backorder-limit-success'));
+                    return generateSuccess(level, 200);
                 })
         );
     });

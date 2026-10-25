@@ -4,7 +4,7 @@
  */
 
 import type { Request, Response } from 'express';
-import { successResponse } from '@infrastructure/http/response';
+import { noContentResponse } from '@infrastructure/http/response';
 import { catchAs } from '@infrastructure/http/controller';
 import { notificationsService } from '../services';
 
@@ -15,8 +15,8 @@ import { notificationsService } from '../services';
 export const postDismissAll = (request: Request, response: Response) => {
     return notificationsService
         .dismissAll(request.authContext!.id)
-        .then((result) => {
-            successResponse(response, result.data, 200, result.message);
+        .then(() => {
+            noContentResponse(response);
         })
         .catch(catchAs(response, 'dismissAllNotifications'));
 };

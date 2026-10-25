@@ -99,7 +99,7 @@ start anything that transitively requires an already-exited container. Generatin
 ```bash
 export COMPOSE_PROJECT_NAME=brava
 docker compose --env-file "clients/brava/.env" -f docker-compose.production.yml up -d
-curl http://127.0.0.1:3102/products   # {"data":{"items":[],...}} — brava has never heard of acme
+curl http://127.0.0.1:3102/products   # {"items":[],...} — brava has never heard of acme
 ```
 
 Verified directly against both databases, not just the API: `acme`'s `users`/`orders` collections

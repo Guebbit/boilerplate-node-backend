@@ -69,7 +69,7 @@ export const reorderIntoCart = (
                     ]);
 
                 return cartGetForBadge(userId).then((cart) =>
-                    generateSuccess({ cart, lines }, 200, t('cart.reorder.success'))
+                    generateSuccess({ cart, lines }, 200)
                 );
             });
         })

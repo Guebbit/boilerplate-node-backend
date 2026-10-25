@@ -1,12 +1,7 @@
 {
     "users": {
         "not-found": "L'utente richiesto non è stato trovato.",
-        "hard-deleted": "L'utente è stato eliminato definitivamente.",
-        "soft-deleted": "L'utente è stato eliminato logicamente (disattivato).",
-        "restored": "Utente ripristinato. Le sue sessioni restano disconnesse.",
         "not-deleted": "Questo utente non è eliminato.",
-        "activated": "Utente attivato. Può accedere di nuovo.",
-        "deactivated": "Utente disattivato. Tutte le sue sessioni sono state chiuse.",
         "already-active": "Questo utente è già attivo.",
         "already-inactive": "Questo utente è già disattivato.",
         "purchase-hold-not-set": "Questo utente non ha alcun blocco acquisti o segnalazione da rimuovere.",
@@ -16,8 +11,6 @@
         "not-warned": "Questo account non è mai stato avvisato dell'inattività, quindi il processo non può eliminarlo.",
         "inactive-staff-account": "Un account con un ruolo di staff non viene mai eliminato dal processo di inattività.",
         "role-not-assignable": "Questo ruolo non esiste o non può essere assegnato a un account.",
-        "purchase-hold-set": "Blocco acquisti impostato. Il checkout resta chiuso per questo account fino alla data indicata, o finché non viene tolto.",
-        "purchase-hold-lifted": "Blocco acquisti tolto.",
         "purchase-hold-until-past": "La data di fine deve essere nel futuro.",
         "email": {
             "purchase-hold": {

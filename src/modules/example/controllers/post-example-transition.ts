@@ -31,7 +31,7 @@ export const postExampleTransition = namedHandler(
             .transitionById(id, body.to, callerContextOf(request))
             .then((result) => {
                 if (refused(response, result)) return;
-                successResponse(response, result.data, 200, result.message);
+                successResponse(response, result.data, 200);
             })
             .catch(catchAs(response, 'postExampleTransition'));
     }

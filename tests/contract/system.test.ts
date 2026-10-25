@@ -1,8 +1,7 @@
 /**
- * Contract tests for the system routes and the shared error envelopes.
+ * Contract tests for the system routes and the shared error documents.
  *
- * `GET /` was typed as `MessageResponse` while actually returning `data: { status: 'ok' }`;
- * hardening the spec surfaced that, and it is now `HealthPingEnvelope`.
+ * `GET /` answers `{ status: 'ok' }`, declared as `HealthPing`.
  */
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
@@ -17,7 +16,7 @@ describe('GET /', () => {
         const response = await api().get('/');
 
         expect(response.status).toBe(200);
-        expect(response.body.data.status).toBe('ok');
+        expect(response.body.status).toBe('ok');
     });
 });
 

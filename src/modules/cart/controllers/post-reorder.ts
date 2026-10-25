@@ -29,7 +29,7 @@ export const postReorder = (request: Request<{ orderId: string }>, response: Res
         .then((result) => {
             if (refused(response, result)) return;
 
-            successResponse<ReorderResponse>(response, result.data, 200, result.message);
+            successResponse<ReorderResponse>(response, result.data, 200);
         })
         .catch(catchAs(response, 'postReorder'));
 };

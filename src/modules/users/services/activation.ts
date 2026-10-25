@@ -81,7 +81,7 @@ export const activate = (
                 targetType: 'user',
                 targetId: id
             });
-            return generateSuccess(saved, 200, t('users.activated'));
+            return generateSuccess(saved, 200);
         });
     });
 
@@ -137,6 +137,6 @@ export const deactivate = (
                 ...buildAnalyticsBase(context),
                 event: usersAnalyticsEvents.USER_DEACTIVATED
             });
-            return generateSuccess(saved, 200, t('users.deactivated'));
+            return generateSuccess(saved, 200);
         });
     });

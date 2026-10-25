@@ -30,7 +30,7 @@ const authenticateAnotherUser = async () => {
     const response = await api()
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD });
-    return { user, bearer: `Bearer ${String(response.body.data.token)}` };
+    return { user, bearer: `Bearer ${String(response.body.token)}` };
 };
 
 // No real Chromium in the test environment — same stub `orders`' own contract suite used before
@@ -247,14 +247,14 @@ describe('GET /orders/{id} — the actions.invoice flag', () => {
         const before = await api()
             .get(`/orders/${String(order._id)}`)
             .set('Authorization', bearer);
-        expect(before.body.data.actions.invoice).toBe(false);
+        expect(before.body.actions.invoice).toBe(false);
 
         await orderService.markPaid(String(order._id));
 
         const after = await api()
             .get(`/orders/${String(order._id)}`)
             .set('Authorization', bearer);
-        expect(after.body.data.actions.invoice).toBe(true);
+        expect(after.body.actions.invoice).toBe(true);
     });
 });
 
@@ -269,7 +269,7 @@ describe('GET /orders/{id}/credit-notes', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toEqual([]);
+        expect(response.body).toEqual({ items: [] });
     });
 
     it("refuses someone else's order with 404", async () => {
@@ -313,7 +313,7 @@ describe('the credit notes of an order the caller may read but not its money', (
             .set('Authorization', warehouse.bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toEqual([]);
+        expect(response.body).toEqual({ items: [] });
     });
 
     it('answers the warehouse a download with the same 404 a stranger gets', async () => {
@@ -337,7 +337,7 @@ describe('the credit notes of an order the caller may read but not its money', (
             .set('Authorization', support.bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toHaveLength(1);
+        expect(response.body.items).toHaveLength(1);
     });
 });
 

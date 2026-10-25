@@ -12,7 +12,6 @@ import type { CallerContext } from '@types';
 import { systemCallerContext } from '@kernel/permissions';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { t } from '@infrastructure/i18n';
 import {
     generateSuccess,
     type ResponseReject,
@@ -175,7 +174,7 @@ export const restoreAccountByLink = (
         user
             ? restoreAccount(user, 'link', context).then((restored) =>
                   restored
-                      ? generateSuccess(undefined, 200, t('account.delete.restored'))
+                      ? generateSuccess(undefined, 200)
                       : refuseLink(context, 'account_restore', 'account.delete.token-not-found')
               )
             : refuseLink(context, 'account_restore', 'account.delete.token-not-found')

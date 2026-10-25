@@ -55,7 +55,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/WebhookSubscriptionsResponseEnvelope'
+                                $ref: '#/components/schemas/WebhookSubscriptionsResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -90,7 +90,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/WebhookSubscriptionCreatedEnvelope'
+                                $ref: '#/components/schemas/WebhookSubscriptionCreated'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # The shop is at its subscription cap — `errors[].code` is
@@ -118,7 +118,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/WebhookSubscriptionEnvelope'
+                                $ref: '#/components/schemas/WebhookSubscription'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -148,7 +148,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/WebhookSubscriptionEnvelope'
+                                $ref: '#/components/schemas/WebhookSubscription'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -182,7 +182,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/WebhookSubscriptionEnvelope'
+                                $ref: '#/components/schemas/WebhookSubscription'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -199,7 +199,7 @@ paths:
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
-                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -227,7 +227,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/WebhookSubscriptionEnvelope'
+                                $ref: '#/components/schemas/WebhookSubscription'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -256,7 +256,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/WebhookSubscriptionEnvelope'
+                                $ref: '#/components/schemas/WebhookSubscription'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -290,7 +290,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/WebhookSubscriptionCreatedEnvelope'
+                                $ref: '#/components/schemas/WebhookSubscriptionCreated'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -321,7 +321,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/WebhookSubscriptionEnvelope'
+                                $ref: '#/components/schemas/WebhookSubscription'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -356,7 +356,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/WebhookDeliveriesResponseEnvelope'
+                                $ref: '#/components/schemas/WebhookDeliveriesResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -379,7 +379,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/WebhookDeliveryEnvelope'
+                                $ref: '#/components/schemas/WebhookDelivery'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -409,7 +409,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/WebhookDeliveryEnvelope'
+                                $ref: '#/components/schemas/WebhookDelivery'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -438,7 +438,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/WebhookEventCatalogueResponseEnvelope'
+                                $ref: '#/components/schemas/WebhookEventCatalogueResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -747,67 +747,13 @@ components:
                 meta:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
 
-        WebhookSubscriptionCreatedEnvelope:
+        WebhookEventCatalogueResponse:
             type: object
             additionalProperties: false
-            required: [success, status, message, data]
+            required: [items]
             properties:
-                success: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess' }
-                status: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus' }
-                message: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage' }
-                data: { $ref: '#/components/schemas/WebhookSubscriptionCreated' }
-
-        # For every response that never carries a one-time secret (replace, update, drop-secret).
-        # `WebhookSubscriptionCreatedEnvelope`'s `data` schema advertises `secret`/`newSecret` on
-        # every response that uses it; those three don't send either field.
-        WebhookSubscriptionEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess' }
-                status: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus' }
-                message: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage' }
-                data: { $ref: '#/components/schemas/WebhookSubscription' }
-
-        WebhookSubscriptionsResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess' }
-                status: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus' }
-                message: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage' }
-                data: { $ref: '#/components/schemas/WebhookSubscriptionsResponse' }
-
-        WebhookDeliveryEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess' }
-                status: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus' }
-                message: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage' }
-                data: { $ref: '#/components/schemas/WebhookDelivery' }
-
-        WebhookDeliveriesResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess' }
-                status: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus' }
-                message: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage' }
-                data: { $ref: '#/components/schemas/WebhookDeliveriesResponse' }
-
-        WebhookEventCatalogueResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess' }
-                status: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus' }
-                message: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage' }
-                data:
+                items:
                     type: array
-                    items: { $ref: '#/components/schemas/WebhookEventCatalogueEntry' }
+                    items:
+                        $ref: '#/components/schemas/WebhookEventCatalogueEntry'
+

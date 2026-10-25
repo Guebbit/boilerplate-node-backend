@@ -45,12 +45,12 @@ const signIn = (email: string, password = PLAIN_PASSWORD) =>
 /** Enrolls and confirms TOTP for an account that is NOT yet locked; returns the secret. */
 const armTotp = async (email: string): Promise<string> => {
     const login = await signIn(email);
-    const bearer = `Bearer ${login.body.data.token as string}`;
+    const bearer = `Bearer ${login.body.token as string}`;
     const setup = await api()
         .post('/account/2fa/methods/totp/setup')
         .set('Authorization', bearer)
         .send();
-    const { secret } = setup.body.data as { secret: string };
+    const { secret } = setup.body as { secret: string };
     await api()
         .post('/account/2fa/methods/totp/confirm')
         .set('Authorization', bearer)
@@ -65,7 +65,7 @@ describe('POST /account/login for an account in its deletion grace', () => {
         const response = await signIn(user.email);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toEqual({
+        expect(response.body).toEqual({
             deletionPending: true,
             challenge: expect.any(String),
             expiresAt: expect.any(String),
@@ -104,7 +104,7 @@ describe('POST /account/login for an account in its deletion grace', () => {
 const claimCheck = async (email = 'pending@example.com'): Promise<string> => {
     const user = await pendingAccount({ email });
     const response = await signIn(user.email);
-    return response.body.data.challenge as string;
+    return response.body.challenge as string;
 };
 
 describe('POST /account/login/restore', () => {
@@ -116,7 +116,7 @@ describe('POST /account/login/restore', () => {
         expect(response.status).toBe(200);
         const profile = await api()
             .get('/account')
-            .set('Authorization', `Bearer ${response.body.data.token as string}`);
+            .set('Authorization', `Bearer ${response.body.token as string}`);
         expect(profile.status).toBe(200);
         const stored = await userRepository.findOne({ email: 'pending@example.com' });
         expect(stored?.deletedAt).toBeUndefined();
@@ -175,13 +175,13 @@ describe('a pending account with a second factor', () => {
         const first = await signIn(user.email);
         const second = await api()
             .post('/account/login/2fa')
-            .send({ challenge: first.body.data.challenge, code: await codeFor(secret, 1) });
+            .send({ challenge: first.body.challenge, code: await codeFor(secret, 1) });
         const restored = await api()
             .post('/account/login/restore')
-            .send({ challenge: second.body.data.challenge });
+            .send({ challenge: second.body.challenge });
 
-        expect(first.body.data.mfaRequired).toBe(true);
-        expect(second.body.data.deletionPending).toBe(true);
+        expect(first.body.mfaRequired).toBe(true);
+        expect(second.body.deletionPending).toBe(true);
         // Only the spent MFA cookie is cleared; no session cookie exists.
         expect(setCookie(second, '__Host-session')).toBeUndefined();
         expect(restored.status).toBe(200);

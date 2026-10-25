@@ -47,8 +47,8 @@ describe('GET /api-keys', () => {
         const response = await api().get('/api-keys').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items.length).toBeGreaterThan(0);
-        for (const item of response.body.data.items) {
+        expect(response.body.items.length).toBeGreaterThan(0);
+        for (const item of response.body.items) {
             expect(item.secret).toBeUndefined();
         }
     });
@@ -66,8 +66,8 @@ describe('GET /api-keys', () => {
 
         const response = await api().get('/api-keys').set('Authorization', bearer);
 
-        expect(response.body.data.items[0].status).toBe('active');
-        expect(new Date(response.body.data.maxExpiresAt).getTime()).toBeGreaterThan(
+        expect(response.body.items[0].status).toBe('active');
+        expect(new Date(response.body.maxExpiresAt).getTime()).toBeGreaterThan(
             Date.now() + 364 * 24 * 3_600_000
         );
     });
@@ -95,7 +95,7 @@ const mintOne = async (bearer: string): Promise<string> => {
             permissions: ['read:WebhookSubscription'],
             expiresAt: IN_A_WEEK()
         });
-    return String(created.body.data.id);
+    return String(created.body.id);
 };
 
 describe('GET /api-keys/:id', () => {
@@ -106,12 +106,12 @@ describe('GET /api-keys/:id', () => {
         const response = await api().get(`/api-keys/${id}`).set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({
+        expect(response.body).toMatchObject({
             id,
             name: 'one to read back',
             status: 'active'
         });
-        expect(response.body.data.secret).toBeUndefined();
+        expect(response.body.secret).toBeUndefined();
     });
 
     it('answers 404 for an unknown id and a malformed one alike', async () => {
@@ -150,9 +150,9 @@ describe('POST /api-keys', () => {
             });
 
         expect(response.status).toBe(201);
-        expect(typeof response.body.data.secret).toBe('string');
-        expect(response.body.data.secret.startsWith('sk_')).toBe(true);
-        expect(response.body.data.permissions).toEqual(['read:WebhookSubscription']);
+        expect(typeof response.body.secret).toBe('string');
+        expect(response.body.secret.startsWith('sk_')).toBe(true);
+        expect(response.body.permissions).toEqual(['read:WebhookSubscription']);
     });
 
     it('answers no-store: the one-time secret is never kept by a cache', async () => {
@@ -264,10 +264,10 @@ describe('DELETE /api-keys/:id', () => {
             });
 
         const response = await api()
-            .delete(`/api-keys/${String(created.body.data.id)}`)
+            .delete(`/api-keys/${String(created.body.id)}`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
     });
 
     it('404s an id from outside this admin’s reach', async () => {

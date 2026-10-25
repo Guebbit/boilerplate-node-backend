@@ -5,7 +5,7 @@
  */
 
 import type { Request, Response } from 'express';
-import { successResponse } from '@infrastructure/http/response';
+import { noContentResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { requireId } from '@infrastructure/http/ids';
 import { localeService } from '../services';
@@ -32,7 +32,7 @@ export const deleteLocaleEntry = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            return successResponse(response, undefined);
+            return noContentResponse(response);
         })
         .catch(catchAs(response, 'deleteLocaleEntry'));
 };

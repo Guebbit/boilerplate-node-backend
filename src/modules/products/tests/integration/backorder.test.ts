@@ -37,7 +37,7 @@ describe('GET /products/:id', () => {
 
         const response = await api().get(`/products/${id}`);
 
-        expect(response.body.data).toMatchObject({
+        expect(response.body).toMatchObject({
             backorder: true,
             buyable: true,
             inStock: false,
@@ -52,7 +52,7 @@ describe('GET /products/:id', () => {
 
         const response = await api().get(`/products/${String(product._id)}`);
 
-        expect(response.body.data.backorder).toBe(false);
+        expect(response.body.backorder).toBe(false);
     });
 
     it('reads sold out once the restock date has passed, with nothing run', async () => {
@@ -60,7 +60,7 @@ describe('GET /products/:id', () => {
 
         const response = await api().get(`/products/${id}`);
 
-        expect(response.body.data).toMatchObject({
+        expect(response.body).toMatchObject({
             backorder: false,
             inStock: false,
             buyable: false
@@ -72,7 +72,7 @@ describe('GET /products/:id', () => {
 
         const response = await api().get(`/products/${id}`);
 
-        expect(response.body.data).toMatchObject({ preorder: true, backorder: false });
+        expect(response.body).toMatchObject({ preorder: true, backorder: false });
     });
 
     it('stops being open when the cap is full', async () => {
@@ -81,7 +81,7 @@ describe('GET /products/:id', () => {
 
         const response = await api().get(`/products/${id}`);
 
-        expect(response.body.data.backorder).toBe(false);
+        expect(response.body.backorder).toBe(false);
     });
 });
 
@@ -101,9 +101,9 @@ describe('PATCH /products/:id', () => {
             .set('Authorization', bearer)
             .send({ restockDate: null });
 
-        expect(set.body.data).toMatchObject({ allowBackorder: true, restockDate });
-        expect(cleared.body.data.restockDate).toBeUndefined();
-        expect(cleared.body.data.allowBackorder).toBe(true);
+        expect(set.body).toMatchObject({ allowBackorder: true, restockDate });
+        expect(cleared.body.restockDate).toBeUndefined();
+        expect(cleared.body.allowBackorder).toBe(true);
     });
 
     it('refuses a date more than a year ahead and writes nothing', async () => {
@@ -130,7 +130,7 @@ describe('PATCH /products/:id', () => {
             .send({ allowBackorder: true, restockDate: inDays(-5) });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.backorder).toBe(false);
+        expect(response.body.backorder).toBe(false);
     });
 });
 

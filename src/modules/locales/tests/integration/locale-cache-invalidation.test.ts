@@ -99,7 +99,7 @@ describe('an admin write invalidates the cached public dictionary', () => {
         // First read renders from Mongo and stores the response under the `locales` tag.
         const first = await api().get('/locales/pt/messages');
         expect(first.headers['x-cache']).toBe('MISS');
-        expect(first.body.data.messages).toEqual({ cart: { title: 'Carrinho' } });
+        expect(first.body.messages).toEqual({ cart: { title: 'Carrinho' } });
 
         /*
          * Second read is served from the store. Asserted explicitly, because it is what makes the
@@ -109,7 +109,7 @@ describe('an admin write invalidates the cached public dictionary', () => {
         expect(cached.headers['x-cache']).toBe('HIT');
 
         const listed = await api().get('/locales/pt/entries').set('Authorization', bearer);
-        const entryId = listed.body.data.items[0].id;
+        const entryId = listed.body.items[0].id;
 
         await api()
             .put(`/locales/pt/apps/demo-fe/entries/${entryId}`)
@@ -120,7 +120,7 @@ describe('an admin write invalidates the cached public dictionary', () => {
         // hour-old copy.
         const afterEdit = await api().get('/locales/pt/messages');
         expect(afterEdit.headers['x-cache']).toBe('MISS');
-        expect(afterEdit.body.data.messages).toEqual({ cart: { title: 'O seu carrinho' } });
+        expect(afterEdit.body.messages).toEqual({ cart: { title: 'O seu carrinho' } });
     });
 
     it('clears the manifest too, so a new language is visible immediately', async () => {
@@ -141,7 +141,7 @@ describe('an admin write invalidates the cached public dictionary', () => {
         const afterCreate = await api().get('/locales');
 
         expect(afterCreate.headers['x-cache']).toBe('MISS');
-        expect(afterCreate.body.data.locales.some(({ tag }: { tag: string }) => tag === 'pt')).toBe(
+        expect(afterCreate.body.locales.some(({ tag }: { tag: string }) => tag === 'pt')).toBe(
             true
         );
     });
@@ -159,13 +159,13 @@ describe('the cached dictionary is per app', () => {
             .send({ key: 'cart.title', value: 'Quiosque' });
 
         const warm = await api().get('/locales/pt/messages?app=demo-fe');
-        expect(warm.body.data.messages).toEqual({ cart: { title: 'Carrinho' } });
+        expect(warm.body.messages).toEqual({ cart: { title: 'Carrinho' } });
         const again = await api().get('/locales/pt/messages?app=demo-fe');
         expect(again.headers['x-cache']).toBe('HIT');
 
         const other = await api().get('/locales/pt/messages?app=kiosk');
 
         expect(other.headers['x-cache']).toBe('MISS');
-        expect(other.body.data.messages).toEqual({ cart: { title: 'Quiosque' } });
+        expect(other.body.messages).toEqual({ cart: { title: 'Quiosque' } });
     });
 });

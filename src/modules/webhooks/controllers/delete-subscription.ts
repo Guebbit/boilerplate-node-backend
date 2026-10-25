@@ -6,7 +6,7 @@
  */
 
 import type { Request, Response } from 'express';
-import { successResponse } from '@infrastructure/http/response';
+import { noContentResponse } from '@infrastructure/http/response';
 import { tenantCallerContextOf } from '@infrastructure/http/request';
 import { requireId } from '@infrastructure/http/ids';
 import { catchAs, refused } from '@infrastructure/http/controller';
@@ -25,7 +25,7 @@ export const deleteWebhookSubscription = (request: Request<{ id: string }>, resp
         .removeSubscription(id, tenantCallerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse(response, undefined, 200, result.message);
+            noContentResponse(response);
         })
         .catch(catchAs(response, 'deleteWebhookSubscription'));
 };

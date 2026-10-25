@@ -1,13 +1,9 @@
 {
     "account": {
         "session-idle": "Your session ended after a period of inactivity. Please sign in again.",
-        "session-touched": "Session refreshed.",
         "login": {
             "wrong-data": "Invalid email or password.",
-            "deletion-pending": "This account is scheduled for deletion. Restore it to sign in.",
-            "restore-challenge-invalid": "This restore attempt has expired. Please sign in again.",
-            "second-factor-required": "Two-factor authentication required.",
-            "success": "Authentication successful."
+            "restore-challenge-invalid": "This restore attempt has expired. Please sign in again."
         },
         "signup": {
             "email-already-used": "Email was already used.",
@@ -15,26 +11,19 @@
             "terms-not-accepted": "You must accept the Terms of Service and confirm you have read the Privacy Policy to register."
         },
         "reset": {
-            "token-not-found": "Invalid or expired token, please try again.",
-            "email-sent": "An email with a link was sent, click to reset password.",
-            "success": "Password changed, login with the new password."
+            "token-not-found": "Invalid or expired token, please try again."
         },
         "delete": {
-            "scheduled": "Your account is locked and will be erased on the date shown, unless you restore it before.",
-            "restored": "Your account is restored. Sign in to use it again.",
             "token-not-found": "Invalid or expired token, please try again."
         },
         "update": {
-            "success": "Profile updated.",
             "email-already-used": "Email was already used."
         },
         "password-change": {
-            "wrong-current": "The current password is incorrect.",
-            "success": "Password changed."
+            "wrong-current": "The current password is incorrect."
         },
         "reauth": {
             "wrong-password": "The password is incorrect.",
-            "success": "Identity confirmed.",
             "no-password": "This account has no password. Request a code by email instead.",
             "method-unavailable": "That way of confirming isn't available for this account.",
             "wrong-code": "That code didn't work. Check it and try again."
@@ -48,41 +37,23 @@
             "not-delivered": "That method doesn't send codes — read it off your device instead.",
             "email-unverified": "Confirm your email address before using it as a second factor.",
             "resend-too-soon": "A code was just sent. Wait a moment before asking for another.",
-            "method-added": "That second factor is now armed.",
-            "method-removed": "That second factor has been removed.",
-            "disabled": "Two-factor authentication is now off.",
-            "backup-codes-regenerated": "Your backup codes have been regenerated. The old ones no longer work.",
-            "code-sent": "We've sent you a code.",
             "locked": "Too many wrong codes. Two-factor checks on this account are paused for a while; try again later.",
             "challenge-invalid": "This login attempt has expired. Please sign in again."
         },
-        "logout": {
-            "success": "Logged out.",
-            "all-success": "Logged out from all devices."
-        },
         "sessions": {
-            "revoked": "Session revoked.",
             "not-found": "Session not found."
         },
         "export": {
-            "requested": "Export requested. We will email you a link when it is ready.",
             "not-found": "Export not found."
         },
         "verify": {
-            "email-sent": "A verification email has been sent, click the link to confirm your address.",
             "already-verified": "This account is already verified.",
             "resend-too-soon": "A verification email was just sent. Please wait a moment before asking for another.",
-            "token-not-found": "Invalid or expired token, please try again.",
-            "success": "Email address verified."
+            "token-not-found": "Invalid or expired token, please try again."
         },
         "email-change": {
             "too-soon": "An email change was just requested. Please wait a moment before requesting another.",
-            "token-not-found": "Invalid or expired token, please try again.",
-            "success": "Email address changed.",
-            "undone": "The email change was undone and every device was signed out.",
-            "cancelled": "The pending email change was cancelled.",
-            "resent": "A new confirmation link was sent to the new address.",
-            "nothing-pending": "There is no pending email change."
+            "token-not-found": "Invalid or expired token, please try again."
         },
         "email": {
             "greeting-anonymous": "Hello!",
@@ -224,7 +195,6 @@
             "unknown-provider": "This sign-in method isn't available.",
             "invalid-state": "This sign-in attempt has expired. Please try again.",
             "invalid-verifier": "This sign-in attempt has expired. Please try again.",
-            "link-removed": "That sign-in method was disconnected.",
             "link-not-found": "That sign-in method is not connected to your account."
         }
     }

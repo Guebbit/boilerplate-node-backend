@@ -71,12 +71,7 @@ export const postLoginTwoFactor = (
                     .then((pending) => {
                         authTwoFactorChallengeTotal.inc({ status: 'success' });
                         destroyMfaChallengeCookie(response);
-                        successResponse<LoginTwoFactorOutcome>(
-                            response,
-                            pending,
-                            200,
-                            t('account.login.deletion-pending')
-                        );
+                        successResponse<LoginTwoFactorOutcome>(response, pending, 200);
                     });
             }
 
@@ -91,12 +86,7 @@ export const postLoginTwoFactor = (
                     destroyMfaChallengeCookie(response);
                     // The login is only complete here, so the browser becomes familiar here.
                     rememberDevice(request, response, user.email);
-                    successResponse<LoginTwoFactorOutcome>(
-                        response,
-                        issued,
-                        200,
-                        t('account.login.success')
-                    );
+                    successResponse<LoginTwoFactorOutcome>(response, issued, 200);
                 })
             );
         })

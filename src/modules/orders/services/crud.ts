@@ -172,7 +172,7 @@ export const create = async (
 
     recordCreated(order, context);
 
-    return generateSuccess(order, 201, t('orders.creation-success'));
+    return generateSuccess(order, 201);
 };
 
 /**

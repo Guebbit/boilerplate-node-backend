@@ -56,7 +56,7 @@ export const postPaymentConfirm = (request: Request<{ id?: string }>, response: 
             return paymentService
                 .presentWithActions(result.data, request.authContext)
                 .then((payment) => {
-                    successResponse<Payment>(response, payment, 200, result.message);
+                    successResponse<Payment>(response, payment, 200);
                 });
         })
         .catch(catchAs(response, 'postPaymentConfirm'));

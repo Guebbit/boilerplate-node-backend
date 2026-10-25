@@ -44,13 +44,13 @@ describe('POST /returns', () => {
             .send({ orderId, reason: 'withdrawal' });
 
         expect(response.status).toBe(201);
-        expect(response.headers.location).toBe(`/returns/${String(response.body.data.id)}`);
-        expect(response.body.data).toMatchObject({
+        expect(response.headers.location).toBe(`/returns/${String(response.body.id)}`);
+        expect(response.body).toMatchObject({
             status: 'approved',
             reason: 'withdrawal',
             orderId
         });
-        expect(response.body.data.actions).toEqual({
+        expect(response.body.actions).toEqual({
             approve: false,
             decline: false,
             receive: false
@@ -66,22 +66,22 @@ describe('POST /returns', () => {
             .send({ orderId, reason: 'withdrawal' });
 
         expect(response.status).toBe(201);
-        expect(response.headers.location).toBe(`/returns/${String(response.body.data.id)}`);
-        expect(response.body.data).toMatchObject({
+        expect(response.headers.location).toBe(`/returns/${String(response.body.id)}`);
+        expect(response.body).toMatchObject({
             status: 'closed',
             reason: 'withdrawal',
             orderId,
             lines: []
         });
-        expect(response.body.data.actions).toEqual({
+        expect(response.body.actions).toEqual({
             approve: false,
             decline: false,
             receive: false
         });
 
         const order = await api().get(`/orders/${orderId}`).set('Authorization', bearer);
-        expect(order.body.data).toMatchObject({ status: 'cancelled' });
-        expect(order.body.data.actions.withdraw).toBe(false);
+        expect(order.body).toMatchObject({ status: 'cancelled' });
+        expect(order.body.actions.withdraw).toBe(false);
     });
 
     it('lists the withdrawal on the order afterwards, which is how the order page shows it', async () => {
@@ -94,8 +94,8 @@ describe('POST /returns', () => {
         const list = await api().get('/returns').query({ orderId }).set('Authorization', bearer);
 
         expect(list.status).toBe(200);
-        expect(list.body.data.items).toHaveLength(1);
-        expect(list.body.data.items[0]).toMatchObject({ status: 'closed', reason: 'withdrawal' });
+        expect(list.body.items).toHaveLength(1);
+        expect(list.body.items[0]).toMatchObject({ status: 'closed', reason: 'withdrawal' });
     });
 
     it('refuses more units than the order held with 422 RETURN_LINES_INVALID', async () => {
@@ -167,13 +167,13 @@ describe('GET /returns and GET /returns/{id}', () => {
 
         const list = await api().get('/returns').query({ orderId }).set('Authorization', bearer);
         const one = await api()
-            .get(`/returns/${String(created.body.data.id)}`)
+            .get(`/returns/${String(created.body.id)}`)
             .set('Authorization', bearer);
 
         expect(list.status).toBe(200);
-        expect(list.body.data.items).toHaveLength(1);
+        expect(list.body.items).toHaveLength(1);
         expect(one.status).toBe(200);
-        expect(one.body.data.note).toBe('Cracked');
+        expect(one.body.note).toBe('Cracked');
     });
 
     it('takes a comma-separated sort and refuses a field outside the enum', async () => {
@@ -197,7 +197,7 @@ describe('GET /returns and GET /returns/{id}', () => {
         const { bearer: strangerBearer } = await authenticateAsRole('customer');
 
         const response = await api()
-            .get(`/returns/${String(created.body.data.id)}`)
+            .get(`/returns/${String(created.body.id)}`)
             .set('Authorization', strangerBearer);
 
         expect(response.status).toBe(404);
@@ -222,7 +222,7 @@ const requested = async () => {
         .set('Authorization', bearer)
         .send({ orderId, reason: 'defective' });
     const { bearer: manager } = await authenticateAsRole('manager');
-    return { customer: bearer, manager, id: String(created.body.data.id) };
+    return { customer: bearer, manager, id: String(created.body.id) };
 };
 
 describe('POST /returns/{id}/approve and /decline', () => {
@@ -236,7 +236,7 @@ describe('POST /returns/{id}/approve and /decline', () => {
             .send({ reason: 'Too late' });
 
         expect(first.status).toBe(200);
-        expect(first.body.data.status).toBe('approved');
+        expect(first.body.status).toBe('approved');
         expect(second.status).toBe(409);
         expect(second.body.errors[0].code).toBe('RETURN_NOT_DECIDABLE');
     });
@@ -250,7 +250,7 @@ describe('POST /returns/{id}/approve and /decline', () => {
             .send({ reason: 'Worn' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({ status: 'declined', declineReason: 'Worn' });
+        expect(response.body).toMatchObject({ status: 'declined', declineReason: 'Worn' });
     });
 
     it('requires a reason to decline: 422', async () => {
@@ -283,7 +283,7 @@ const withdrawn = async () => {
         .set('Authorization', bearer)
         .send({ orderId, reason: 'withdrawal' });
     const { bearer: warehouse } = await authenticateAsRole('warehouse');
-    return { customer: bearer, warehouse, id: String(created.body.data.id) };
+    return { customer: bearer, warehouse, id: String(created.body.id) };
 };
 
 describe('POST /returns/{id}/receive', () => {
@@ -297,8 +297,8 @@ describe('POST /returns/{id}/receive', () => {
 
         expect(response.status).toBe(200);
         // No payment stands behind a hand-built fixture order, so there is nothing to wait for.
-        expect(response.body.data.status).toBe('closed');
-        expect(response.body.data.receivedAt).toEqual(expect.any(String));
+        expect(response.body.status).toBe('closed');
+        expect(response.body.receivedAt).toEqual(expect.any(String));
     });
 
     // `receive:Return` carries `stepUp: critical` on the key: receiving pays the customer back.
@@ -404,7 +404,7 @@ describe('GET /returns/options', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({
+        expect(response.body).toMatchObject({
             orderId,
             currency: 'EUR',
             returnable: [{ quantity: 1 }],
@@ -446,8 +446,8 @@ describe('POST /returns — kind: cancellation', () => {
             .send({ orderId, reason: 'withdrawal', kind: 'cancellation', fulfillmentOrderId });
 
         expect(response.status).toBe(201);
-        expect(response.headers.location).toBe(`/returns/${String(response.body.data.id)}`);
-        expect(response.body.data).toMatchObject({
+        expect(response.headers.location).toBe(`/returns/${String(response.body.id)}`);
+        expect(response.body).toMatchObject({
             kind: 'cancellation',
             status: 'closed',
             fulfillmentOrderId,
@@ -456,7 +456,7 @@ describe('POST /returns — kind: cancellation', () => {
         });
         // The order moved on with it: nothing remains, one shipment is still out.
         const order = await api().get(`/orders/${orderId}`).set('Authorization', bearer);
-        expect(order.body.data).toMatchObject({ status: 'shipped', fulfillmentStatus: 'shipped' });
+        expect(order.body).toMatchObject({ status: 'shipped', fulfillmentStatus: 'shipped' });
     });
 
     it('refuses a cancellation that names no fulfillment order with 422 RETURN_CANCELLATION_INVALID', async () => {
@@ -497,7 +497,7 @@ describe('POST /returns — kind: cancellation', () => {
 
         expect(refused.status).toBe(403);
         expect(allowed.status).toBe(201);
-        expect(allowed.body.data).toMatchObject({ kind: 'cancellation', reason: 'other' });
+        expect(allowed.body).toMatchObject({ kind: 'cancellation', reason: 'other' });
     });
 });
 
@@ -574,7 +574,7 @@ describe('POST /returns — a staff cancellation asks a fresh session, the buyer
             .send({ orderId, reason: 'withdrawal', kind: 'cancellation', fulfillmentOrderId });
 
         expect(response.status).toBe(201);
-        expect(response.body.data).toMatchObject({ reason: 'withdrawal', kind: 'cancellation' });
+        expect(response.body).toMatchObject({ reason: 'withdrawal', kind: 'cancellation' });
     });
 
     it.each([

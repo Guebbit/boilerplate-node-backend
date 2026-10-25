@@ -28,7 +28,7 @@ export const postPaymentSync = (request: Request<{ id?: string }>, response: Res
             return paymentService
                 .presentWithActions(result.data, request.authContext)
                 .then((payment) => {
-                    successResponse<Payment>(response, payment, 200, result.message);
+                    successResponse<Payment>(response, payment, 200);
                 });
         })
         .catch(catchAs(response, 'postPaymentSync'));

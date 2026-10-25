@@ -15,6 +15,6 @@ describe('a j: cookie on a credential route', () => {
             .post('/account/logout')
             .set('Cookie', `jwt=${encodeURIComponent('j:{"$ne":null}')}`);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
     });
 });

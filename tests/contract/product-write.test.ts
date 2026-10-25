@@ -55,7 +55,7 @@ describe('POST /products', () => {
             });
 
         expect(response.status).toBe(201);
-        expect(response.body.data.title).toBe('Memory Foam Bed');
+        expect(response.body.title).toBe('Memory Foam Bed');
     });
 
     it('rejects a four-character title, the contract declares five', async () => {
@@ -101,12 +101,12 @@ describe('POST /products', () => {
                 price: 12,
                 translations: { en: { title: 'Cedar Chew Toy', description: 'Durable' } }
             });
-        const id = String(response.body.data.id);
+        const id = String(response.body.id);
         await settleOutboxNudges();
 
         expect(response.status).toBe(201);
         const empty = await api().get(`/products/${id}`).set('Authorization', bearer);
-        expect(empty.body.data.onHand).toBe(0);
+        expect(empty.body.onHand).toBe(0);
 
         const received = await api()
             .post(`/inventory/levels/${id}/receive`)
@@ -119,9 +119,9 @@ describe('POST /products', () => {
             .set('Authorization', bearer);
 
         expect(received.status).toBe(200);
-        expect(read.body.data.onHand).toBe(7);
-        expect(movements.body.data.items).toHaveLength(1);
-        expect(movements.body.data.items[0]).toMatchObject({
+        expect(read.body.onHand).toBe(7);
+        expect(movements.body.items).toHaveLength(1);
+        expect(movements.body.items[0]).toMatchObject({
             reason: 'receive',
             onHandDelta: 7,
             reservedDelta: 0
@@ -163,8 +163,8 @@ describe('PUT /products/{id}', () => {
             });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.price).toBe(15);
-        expect(response.body.data.title).toBe('Bed, replaced');
+        expect(response.body.price).toBe(15);
+        expect(response.body.title).toBe('Bed, replaced');
     });
 
     // `releaseDate` is part of the replaced representation too: omitting it clears it, so a
@@ -193,7 +193,7 @@ describe('PUT /products/{id}', () => {
             });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.preorder).toBe(false);
+        expect(response.body.preorder).toBe(false);
         const after = await productRepository.findById(String(product._id));
         expect(after?.releaseDate).toBeUndefined();
     });
@@ -224,7 +224,7 @@ describe('PUT /products/{id}', () => {
                 price: 10,
                 translations: { en: { title: 'Dog Bed' }, it: { title: 'Cuccia' } }
             });
-        const id = String(created.body.data.id);
+        const id = String(created.body.id);
 
         const response = await api()
             .put(`/products/${id}`)
@@ -241,7 +241,7 @@ describe('PUT /products/{id}', () => {
         const admin = await api().get(`/products/${id}/admin`).set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(Object.keys(admin.body.data.translations)).toEqual(['en']);
+        expect(Object.keys(admin.body.translations)).toEqual(['en']);
     });
 
     it('refuses a PUT whose translations leave out the fallback locale', async () => {
@@ -302,8 +302,8 @@ describe('PATCH /products/{id}', () => {
             .send({ price: 15, translations: { en: { title: 'Bed, revised' } } });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.price).toBe(15);
-        expect(response.body.data.title).toBe('Bed, revised');
+        expect(response.body.price).toBe(15);
+        expect(response.body.title).toBe('Bed, revised');
     });
 
     // The write route stacks `update:Product` AND `update:Translation`. No preset role
@@ -320,7 +320,7 @@ describe('PATCH /products/{id}', () => {
             .send({ price: 999 });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.price).toBe(999);
+        expect(response.body.price).toBe(999);
     });
 
     // `taxClass: null` means "back to the shop's standard rate", the same as every other
@@ -335,7 +335,7 @@ describe('PATCH /products/{id}', () => {
             .send({ taxClass: null });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.taxClass).toBeUndefined();
+        expect(response.body.taxClass).toBeUndefined();
     });
 
     // The factory now validates PATCH against `zodProductUpdateSchema` directly, and
@@ -366,7 +366,7 @@ const seeded = async () => {
             price: 10,
             translations: { en: { title: 'Cozy Bed', description: 'Extra support' } }
         });
-    return { bearer, id: String(created.body.data.id) };
+    return { bearer, id: String(created.body.id) };
 };
 
 /** The whole `en` entry as the editor's form would read it back. */
@@ -374,7 +374,7 @@ const readEnglish = (bearer: string, id: string) =>
     api()
         .get(`/products/${id}/admin`)
         .set('Authorization', bearer)
-        .then((response) => response.body.data.translations.en as Record<string, unknown>);
+        .then((response) => response.body.translations.en as Record<string, unknown>);
 
 describe('PATCH /products/{id} translations, field by field (RFC 7396)', () => {
     it('changes only the field named — the description and its mirrored column stay', async () => {
@@ -386,7 +386,7 @@ describe('PATCH /products/{id} translations, field by field (RFC 7396)', () => {
             .send({ translations: { en: { title: 'Cozy Bed XL' } } });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.description).toBe('Extra support');
+        expect(response.body.description).toBe('Extra support');
         expect(await readEnglish(bearer, id)).toEqual({
             title: 'Cozy Bed XL',
             description: 'Extra support'
@@ -402,7 +402,7 @@ describe('PATCH /products/{id} translations, field by field (RFC 7396)', () => {
             .send({ translations: { en: { description: null } } });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.description).toBe('');
+        expect(response.body.description).toBe('');
         expect(await readEnglish(bearer, id)).toEqual({ title: 'Cozy Bed' });
     });
 
@@ -474,11 +474,11 @@ describe('the generic translator door follows the product rules (bug W9)', () =>
             .set('Authorization', bearer)
             .send({ en: { fields: { title: 'Cozy Bed XXL' } } });
 
-        expect(merged.body.data.translations[0].fields).toEqual({
+        expect(merged.body.translations[0].fields).toEqual({
             title: 'Cozy Bed XL',
             description: 'Extra support'
         });
-        expect(replaced.body.data.translations[0].fields).toEqual({ title: 'Cozy Bed XXL' });
+        expect(replaced.body.translations[0].fields).toEqual({ title: 'Cozy Bed XXL' });
     });
 });
 
@@ -496,7 +496,7 @@ describe('SKU', () => {
             });
 
         expect(response.status).toBe(201);
-        expect(response.body.data.sku).toBe('DOG-BED-15KG');
+        expect(response.body.sku).toBe('DOG-BED-15KG');
     });
 
     // Unique across the catalogue, not per request — the sparse unique index
@@ -524,7 +524,7 @@ describe('SKU', () => {
             .send({ sku: null });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.sku).toBeUndefined();
+        expect(response.body.sku).toBeUndefined();
     });
 });
 
@@ -547,7 +547,7 @@ describe('VAT rate type', () => {
                 });
 
             expect(response.status).toBe(201);
-            expect(response.body.data.rateType).toBe(rateType);
+            expect(response.body.rateType).toBe(rateType);
         }
     );
 
@@ -567,7 +567,7 @@ describe('VAT rate type', () => {
             .send({ rateType: null });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.rateType).toBeUndefined();
+        expect(response.body.rateType).toBeUndefined();
     });
 });
 
@@ -583,11 +583,11 @@ describe('GET /products/{id}/admin', () => {
             });
 
         const response = await api()
-            .get(`/products/${String(created.body.data.id)}/admin`)
+            .get(`/products/${String(created.body.id)}/admin`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.translations.en.title).toBe('Memory Foam Bed');
+        expect(response.body.translations.en.title).toBe('Memory Foam Bed');
     });
 });
 
@@ -612,19 +612,19 @@ describe('the stock counters on the product writes follow read:StockLevel', () =
             .send(bodyTitled('Admin desk'));
 
         expect(byEditor.status).toBe(201);
-        expect(COUNTERS.filter((field) => field in byEditor.body.data)).toEqual([]);
+        expect(COUNTERS.filter((field) => field in byEditor.body)).toEqual([]);
         expect(byAdmin.status).toBe(201);
 
         // The stock level opens through the outbox, so both are read once the relay has run.
         await settleOutboxNudges();
         const editorRead = await api()
-            .get(`/products/${String(byEditor.body.data.id)}`)
+            .get(`/products/${String(byEditor.body.id)}`)
             .set('Authorization', editor.bearer);
         const adminRead = await api()
-            .get(`/products/${String(byAdmin.body.data.id)}`)
+            .get(`/products/${String(byAdmin.body.id)}`)
             .set('Authorization', admin.bearer);
-        expect(editorRead.body.data.inStock).toBe(false);
-        expect(adminRead.body.data).toMatchObject({ onHand: 0, available: 0 });
+        expect(editorRead.body.inStock).toBe(false);
+        expect(adminRead.body).toMatchObject({ onHand: 0, available: 0 });
     });
 
     it('hides them on the editor’s all-languages read, and shows them to a stock reader', async () => {
@@ -639,9 +639,9 @@ describe('the stock counters on the product writes follow read:StockLevel', () =
             .get(`/products/${product.id}/admin`)
             .set('Authorization', admin.bearer);
 
-        expect(COUNTERS.filter((field) => field in byEditor.body.data)).toEqual([]);
-        expect(byEditor.body.data.inStock).toBe(true);
-        expect(byAdmin.body.data).toMatchObject({ onHand: 9, available: 9 });
+        expect(COUNTERS.filter((field) => field in byEditor.body)).toEqual([]);
+        expect(byEditor.body.inStock).toBe(true);
+        expect(byAdmin.body).toMatchObject({ onHand: 9, available: 9 });
     });
 });
 
@@ -662,8 +662,8 @@ describe('product states: `purchasable`', () => {
                 translations: { en: { title: 'Off-sale Dog Bed' } }
             });
 
-        expect(plain.body.data.purchasable).toBe(true);
-        expect(offSale.body.data.purchasable).toBe(false);
+        expect(plain.body.purchasable).toBe(true);
+        expect(offSale.body.purchasable).toBe(false);
     });
 
     it('round-trips through PATCH without touching `active`', async () => {
@@ -676,7 +676,7 @@ describe('product states: `purchasable`', () => {
             .send({ purchasable: false });
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({ purchasable: false, active: true });
+        expect(response.body).toMatchObject({ purchasable: false, active: true });
     });
 
     it('is part of the replaced representation: a PUT without it is refused', async () => {

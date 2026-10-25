@@ -11,14 +11,9 @@
         "nothing-returnable": "Nulla di questo ordine resta da rendere.",
         "not-decidable": "Questo reso è già stato deciso.",
         "not-receivable": "Questo reso non sta aspettando la merce.",
-        "requested": "Reso richiesto.",
         "cancellation-invalid": "Un annullamento deve indicare l'ordine di evasione da annullare e non inviare righe: si annulla tutto il resto.",
         "cancellation-withdrawal-buyer-only": "Solo l'acquirente dell'ordine può annullare come recesso: il personale annulla con un altro motivo.",
         "nothing-to-cancel": "Qui non resta nulla da annullare. Se non è ancora partito nulla, annulla l'intero ordine.",
-        "remainder-cancelled": "Ciò che non era ancora partito è annullato — i tuoi soldi stanno tornando.",
-        "withdrawn": "Recesso ricevuto — l'ordine è annullato e il tuo denaro sta tornando.",
-        "approved": "Reso approvato.",
-        "declined": "Reso rifiutato.",
         "email": {
             "greeting": "Ciao, {{name}}!",
             "postage-consumer": "La restituzione della merce è a tuo carico.",
@@ -45,7 +40,6 @@
                 "body": "Abbiamo ricevuto il tuo reso per l'ordine {{order}} e rimborsato {{amount}}."
             }
         },
-        "received": "Reso ricevuto — la merce è di nuovo in vendita.",
         "deduction-too-high": "La trattenuta per la gestione supera il valore del rimborso."
     }
 }

@@ -116,14 +116,13 @@ export const remove = (
                     targetId: id,
                     metadata: { hardDelete: true }
                 });
-                return generateSuccess(undefined, 200, t('orders.hard-deleted'));
+                return generateSuccess(undefined, 200);
             }
         );
 
     // SOFT delete — the default path for an order, which is a financial record. Already
     // deleted: nothing to do. DELETE must be safe to retry; undoing it is `restoreById`.
-    if (order.deletedAt)
-        return Promise.resolve(generateSuccess(order, 200, t('orders.soft-deleted')));
+    if (order.deletedAt) return Promise.resolve(generateSuccess(order, 200));
 
     // Hidden means finished: a hidden open order could still be paid or shipped while its buyer
     // can neither see, cancel nor withdraw it. Cancel first (which refunds), then hide.
@@ -138,7 +137,7 @@ export const remove = (
             targetId: id,
             metadata: { hardDelete: false }
         });
-        return generateSuccess(saved, 200, t('orders.soft-deleted'));
+        return generateSuccess(saved, 200);
     });
 };
 
@@ -165,7 +164,7 @@ export const restoreById = (
                 targetType: 'order',
                 targetId: id
             });
-            return generateSuccess(saved, 200, t('orders.restored'));
+            return generateSuccess(saved, 200);
         });
     });
 

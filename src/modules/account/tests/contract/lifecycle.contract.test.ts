@@ -70,7 +70,7 @@ describe('DELETE /account and POST /account/restore', () => {
             .post('/account/restore')
             .send({ token: mailedToken('account.deletion-scheduled') });
 
-        expect(restore.status).toBe(200);
+        expect(restore.status).toBe(204);
         const restored = await userRepository.findById(String(user._id));
         expect(restored?.deletedAt).toBeUndefined();
     });
@@ -89,7 +89,7 @@ describe('POST /account/password/reset', () => {
         const response = await api().post('/account/password/reset').send({ email: user.email });
         await queued('account.reset-request');
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(mailedToken('account.reset-request')).toEqual(expect.any(String));
     });
 
@@ -183,7 +183,7 @@ describe('DELETE /account/sessions', () => {
 
         const response = await api().delete('/account/sessions').set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(await sessionRowsOf(String(user._id))).toEqual([]);
     });
 });

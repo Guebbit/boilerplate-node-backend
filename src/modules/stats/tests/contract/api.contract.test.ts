@@ -48,7 +48,7 @@ describe('GET /stats/*', () => {
 
         const response = await api().get('/stats/limits').set('Authorization', bearer);
 
-        expect(response.body.data).toEqual({ maxRangeDays: 731, maxBuckets: 400 });
+        expect(response.body).toEqual({ maxRangeDays: 731, maxBuckets: 400 });
     });
 
     it('answers 404 for a product id that is not an id', async () => {

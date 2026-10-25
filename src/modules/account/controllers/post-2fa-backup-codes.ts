@@ -10,7 +10,6 @@ import type { TwoFactorBackupCodesRegenerated, TwoFactorCodeRequest } from '@typ
 import { successResponse } from '@infrastructure/http/response';
 import { parseBody, refused, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
-import { t } from '@infrastructure/i18n';
 import { twoFactorService } from '../services';
 import { authTwoFactorBackupCodesRegenerateTotal } from '../metrics';
 
@@ -39,12 +38,7 @@ export const post2faBackupCodes = (
             }
 
             authTwoFactorBackupCodesRegenerateTotal.inc({ status: 'success' });
-            successResponse<TwoFactorBackupCodesRegenerated>(
-                response,
-                result.data,
-                200,
-                t('account.two-factor.backup-codes-regenerated')
-            );
+            successResponse<TwoFactorBackupCodesRegenerated>(response, result.data, 200);
         })
         .catch(catchAs(response, 'post2faBackupCodes'));
 };

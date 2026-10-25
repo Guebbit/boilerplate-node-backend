@@ -7,7 +7,7 @@
 import type { Request, Response } from 'express';
 import { RestoreAccountBody } from '@api/schemas.zod';
 import { accountService } from '../services';
-import { successResponse } from '@infrastructure/http/response';
+import { noContentResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { AccountRestoreRequest } from '@types';
 import { parseBody, refused } from '@infrastructure/http/controller';
@@ -29,7 +29,7 @@ export const postAccountRestore = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            successResponse<undefined>(response, undefined, result.status, result.message);
+            noContentResponse(response);
         })
         .catch((error: unknown) => {
             // Same interpreter every other write path answers through.

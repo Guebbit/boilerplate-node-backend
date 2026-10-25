@@ -5,10 +5,9 @@
  */
 
 import type { Request, Response } from 'express';
-import { successResponse } from '@infrastructure/http/response';
+import { noContentResponse } from '@infrastructure/http/response';
 import { refused, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
-import { t } from '@infrastructure/i18n';
 import { accountService } from '../services';
 
 /**
@@ -23,12 +22,7 @@ export const cancelPendingEmail = (request: Request, response: Response) => {
         .cancelPendingEmailChange(id, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse<undefined>(
-                response,
-                undefined,
-                200,
-                t('account.email-change.cancelled')
-            );
+            noContentResponse(response);
         })
         .catch(catchAs(response, 'cancelPendingEmail'));
 };

@@ -30,7 +30,6 @@ import { publishToQueue } from '@infrastructure/adapters/queue';
 import { settleWithin } from '@infrastructure/runtime/settle';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { t } from '@infrastructure/i18n';
 import { userService } from '@modules/users';
 import { withOwnAccount } from './caller';
 import { WORKER_CHANNELS } from '@types';
@@ -210,11 +209,7 @@ export const requestExport = (
                 };
 
                 return (created ? dispatch(job) : Promise.resolve()).then(() =>
-                    generateSuccess<AccountExportRequest>(
-                        presentExportRequest(row),
-                        202,
-                        t('account.export.requested')
-                    )
+                    generateSuccess<AccountExportRequest>(presentExportRequest(row), 202)
                 );
             }),
         // No credentials needed: the export reads the profile, never a secret.

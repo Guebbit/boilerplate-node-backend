@@ -85,6 +85,6 @@ describe('a restore never strands the tenant cache', () => {
         const response = await api().get('/account/abilities').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.tenantId).toBe(DEPLOYMENT_TENANT_ID);
+        expect(response.body.tenantId).toBe(DEPLOYMENT_TENANT_ID);
     });
 });

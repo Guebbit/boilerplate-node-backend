@@ -796,15 +796,7 @@ const refundFoundPayment = (
     return performRefund(String(payment.orderId), context, {
         amount: body.amount,
         reason: 'goodwill'
-    }).then((refunded) =>
-        refunded
-            ? generateSuccess(
-                  refunded.payment,
-                  200,
-                  t(refunded.leftOpen ? 'payments.refund-left-open' : 'payments.refund-success')
-              )
-            : notRefundable()
-    );
+    }).then((refunded) => (refunded ? generateSuccess(refunded.payment, 200) : notRefundable()));
 };
 
 /**
@@ -888,9 +880,7 @@ export const settleRefundByHand = (
 
         // `null` is the loser of a two-staff race: the conditional write found it settled already.
         return settleRefund(payment, refund, { refundedByHand: true }, context).then((final) =>
-            final
-                ? generateSuccess(final, 200, t('payments.refund-settled-by-hand'))
-                : handRefundNotOpen()
+            final ? generateSuccess(final, 200) : handRefundNotOpen()
         );
     });
 

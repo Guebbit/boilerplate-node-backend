@@ -14,7 +14,7 @@ describe('GET /shop', () => {
 
         expect(response.status).toBe(200);
         // `tests/support/setup-environment.ts` sets the identity; the rest are defaults.
-        expect(response.body.data).toEqual({
+        expect(response.body).toEqual({
             legalName: 'Guebbit Demo Shop Srl',
             street: 'Via Roma 1',
             city: 'Milano',
@@ -48,7 +48,7 @@ describe('GET /shop', () => {
             async () => {
                 const response = await api().get('/shop');
 
-                expect(response.body.data).toMatchObject({
+                expect(response.body).toMatchObject({
                     currency: 'JPY',
                     shipToCountries: ['IT', 'FR'],
                     vatNumber: 'IT12345678901',
@@ -61,7 +61,7 @@ describe('GET /shop', () => {
         withEnvironmentOverrides({ NODE_TERMS_VERSION: '2026-10' }, async () => {
             const response = await api().get('/shop');
 
-            expect(response.body.data).toMatchObject({ termsVersion: '2026-10' });
+            expect(response.body).toMatchObject({ termsVersion: '2026-10' });
         }));
 
     it('never publishes the shop time zone', async () => {
@@ -74,7 +74,7 @@ describe('GET /shop', () => {
         withEnvironmentOverrides({ NODE_SHOP_VAT_NUMBER: '' }, async () => {
             const response = await api().get('/shop');
 
-            expect(response.body.data).not.toHaveProperty('vatNumber');
+            expect(response.body).not.toHaveProperty('vatNumber');
         }));
 
     it('reports the trade register and the registration number when the shop has them', () =>
@@ -86,7 +86,7 @@ describe('GET /shop', () => {
             async () => {
                 const response = await api().get('/shop');
 
-                expect(response.body.data).toMatchObject({
+                expect(response.body).toMatchObject({
                     tradeRegister: 'Registro Imprese di Bologna',
                     registrationNumber: 'BO-123456'
                 });
@@ -99,8 +99,8 @@ describe('GET /shop', () => {
             async () => {
                 const response = await api().get('/shop');
 
-                expect(response.body.data).not.toHaveProperty('tradeRegister');
-                expect(response.body.data).not.toHaveProperty('registrationNumber');
+                expect(response.body).not.toHaveProperty('tradeRegister');
+                expect(response.body).not.toHaveProperty('registrationNumber');
             }
         ));
 });

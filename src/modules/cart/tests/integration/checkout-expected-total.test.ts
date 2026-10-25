@@ -45,7 +45,7 @@ describe('POST /cart/checkout and the total the buyer was shown', () => {
         const response = await checkoutAs(bearer);
 
         expect(response.status).toBe(201);
-        expect(response.body.data.totalPrice).toBe(20);
+        expect(response.body.totalPrice).toBe(20);
     });
 
     it('refuses with both totals when the price moved after the cart was read', async () => {
@@ -74,7 +74,7 @@ describe('POST /cart/checkout and the total the buyer was shown', () => {
         await expect(countOrders()).resolves.toBe(0);
         await expect(countersOf(product._id)).resolves.toMatchObject({ reserved: 0 });
         const cart = await api().get('/cart').set('Authorization', bearer);
-        expect(cart.body.data.items).toHaveLength(1);
+        expect(cart.body.items).toHaveLength(1);
     });
 
     it('lets the buyer confirm the new total: naming it places the order', async () => {
@@ -90,7 +90,7 @@ describe('POST /cart/checkout and the total the buyer was shown', () => {
             expectedTotal: response.body.errors[0].details.actual as Record<string, unknown>
         });
         expect(confirmed.status).toBe(201);
-        expect(confirmed.body.data.totalPrice).toBe(24);
+        expect(confirmed.body.totalPrice).toBe(24);
     });
 
     it('refuses a total named in another currency, even with the same amount', async () => {

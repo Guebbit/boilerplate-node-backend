@@ -21,5 +21,5 @@ export const createLanguage = async (
                 JSON.stringify(response.body)
         );
 
-    return response.body.data.tag as string;
+    return response.body.tag as string;
 };

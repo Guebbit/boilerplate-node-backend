@@ -30,7 +30,7 @@ export const getReturnById = (request: Request<{ id?: string }>, response: Respo
                 targetType: 'return',
                 targetId: id
             });
-            successResponse<Return>(response, result.data, 200, result.message);
+            successResponse<Return>(response, result.data, 200);
         })
         .catch(catchAs(response, 'getReturnById'));
 };

@@ -33,8 +33,8 @@ const shipmentActionsFor = (
         .set('Authorization', bearer)
         .then(
             (response) =>
-                (response.body as { data?: { shipments?: { actions: ShipmentActions }[] } }).data
-                    ?.shipments?.[0]?.actions
+                (response.body as { shipments?: { actions: ShipmentActions }[] }).shipments?.[0]
+                    ?.actions
         );
 
 describe('ShipmentActions.update and forceDeliver', () => {

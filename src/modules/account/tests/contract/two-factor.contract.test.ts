@@ -76,12 +76,12 @@ const armTotp = async (session: Session) => {
         .post('/account/2fa/methods/totp/setup')
         .set('Authorization', bearer)
         .send();
-    const { secret } = setup.body.data as { secret: string };
+    const { secret } = setup.body as { secret: string };
     const confirm = await api()
         .post('/account/2fa/methods/totp/confirm')
         .set('Authorization', bearer)
         .send({ code: await codeFor(secret, 0) });
-    backupCodesOf.set(secret, confirm.body.data.backupCodes as string[]);
+    backupCodesOf.set(secret, confirm.body.backupCodes as string[]);
     await forgetSessionEpoch(bearer);
     await carryOn(session);
     return secret;
@@ -119,9 +119,7 @@ describe('GET /account/2fa', () => {
         const response = await api().get('/account/2fa').set('Authorization', session.bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.methods.map((m: { method: string }) => m.method)).toEqual([
-            'totp'
-        ]);
+        expect(response.body.methods.map((m: { method: string }) => m.method)).toEqual(['totp']);
     });
 });
 
@@ -136,7 +134,7 @@ describe('POST /account/2fa/backup-codes', () => {
             .send({ code: await codeFor(secret, 1) });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.backupCodes.length).toBeGreaterThan(0);
+        expect(response.body.backupCodes.length).toBeGreaterThan(0);
     });
 
     it('matches the error contract for a wrong code', async () => {
@@ -193,7 +191,7 @@ describe('POST /account/2fa/disable', () => {
         await forgetSessionEpoch(session.bearer);
         await carryOn(session);
         const status = await api().get('/account/2fa').set('Authorization', session.bearer);
-        expect(status.body.data.methods).toEqual([]);
+        expect(status.body.methods).toEqual([]);
     });
 
     it('is gone at the old DELETE addresses', async () => {
@@ -225,10 +223,10 @@ describe('POST /account/login/2fa/send', () => {
 
         const response = await api()
             .post('/account/login/2fa/send')
-            .send({ challenge: login.body.data.challenge as string, method: 'email' });
+            .send({ challenge: login.body.challenge as string, method: 'email' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.sentTo).toBe('a***a@example.com');
+        expect(response.body.sentTo).toBe('a***a@example.com');
     });
 
     it('matches the error contract for a challenge nobody issued', async () => {
@@ -251,7 +249,7 @@ describe('POST /account/2fa/methods/{method}/send', () => {
             .send();
 
         expect(response.status).toBe(200);
-        expect(response.body.data.sentTo).toBe('a***a@example.com');
+        expect(response.body.sentTo).toBe('a***a@example.com');
     });
 
     it('matches the error contract for a method that is not armed', async () => {
