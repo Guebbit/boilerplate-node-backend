@@ -157,24 +157,30 @@ describe('who may read what', () => {
     });
 });
 
-describe('getPublishedById', () => {
-    it('reads a published example for anyone', async () => {
+describe('getById on a published example', () => {
+    it('reads it for anyone, a stranger and an anonymous caller included', async () => {
         const { user } = await aCustomer();
+        const { context: stranger } = await aCustomer('grace');
         const published = await createExample({ userId: user.id, status: ExampleStatus.published });
 
-        expect(await exampleService.getPublishedById(String(published._id))).toMatchObject({
+        expect(await exampleService.getById(String(published._id), stranger)).toMatchObject({
+            status: ExampleStatus.published
+        });
+        expect(
+            await exampleService.getById(String(published._id), testCallerContext)
+        ).toMatchObject({
             status: ExampleStatus.published
         });
     });
 
     it.each([ExampleStatus.draft, ExampleStatus.archived])(
-        'answers null for a %s one, the same as a missing id',
+        'answers null for a stranger asking about a %s one, the same as a missing id',
         async (status) => {
             const { user } = await aCustomer();
             const hidden = await createExample({ userId: user.id, status });
 
-            expect(await exampleService.getPublishedById(String(hidden._id))).toBeNull();
-            expect(await exampleService.getPublishedById(MISSING_ID)).toBeNull();
+            expect(await exampleService.getById(String(hidden._id), testCallerContext)).toBeNull();
+            expect(await exampleService.getById(MISSING_ID, testCallerContext)).toBeNull();
         }
     );
 });
@@ -579,7 +585,7 @@ describe('actions on rows', () => {
         expect(read?.actions).toEqual({ transitions: [], update: false, delete: false });
     });
 
-    it('gives the author the moves from the current status, and the public read none', async () => {
+    it("gives the author the moves from the current status, and a stranger's read none", async () => {
         const { user, context } = await aCustomer();
         const mine = await createExample({
             userId: user.id,
@@ -588,14 +594,15 @@ describe('actions on rows', () => {
         });
 
         const own = await exampleService.getById(String(mine._id), context);
-        const publicRead = await exampleService.getPublishedById(String(mine._id));
+        const { context: stranger } = await aCustomer('grace');
+        const strangerRead = await exampleService.getById(String(mine._id), stranger);
 
         expect(own?.actions).toEqual({
             transitions: [ExampleStatus.archived],
             update: true,
             delete: true
         });
-        expect(publicRead?.actions).toBeUndefined();
+        expect(strangerRead?.actions).toBeUndefined();
     });
 
     it('puts the actions on every row of a search', async () => {

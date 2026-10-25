@@ -8,7 +8,7 @@
  * See: docs/theory/layers.md
  */
 
-import { create, getById, getPublishedById, removeById, search, updateById } from './crud';
+import { create, getById, removeById, search, updateById } from './crud';
 import { setCover } from './cover';
 import { transitionById } from './transition';
 
@@ -16,7 +16,6 @@ import { transitionById } from './transition';
 export const exampleService = {
     create,
     getById,
-    getPublishedById,
     search,
     updateById,
     removeById,

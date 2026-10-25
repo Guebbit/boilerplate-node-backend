@@ -2,7 +2,7 @@
  * @module
  * In any module: requests the contract cannot describe, which the generated API client
  * collection runs as probes (`scripts/contracts/client-collections-bundle.ts` owns what a probe is).
- * Here: an unreachable published id, a malformed id on a write, and a move of an absent example.
+ * Here: an unreachable id read anonymously, a malformed id on a write, and a move of an absent example.
  * Delete it if: every refusal the module has is reachable from its contract.
  *
  * See: docs/api/contract-fragmentation.md
@@ -13,10 +13,10 @@ import type { Probe } from '@guebbit/openapi-runnable-collections';
 /** The example module's probe collection. */
 export const probes: Probe[] = [
     {
-        name: 'Probe: read a published example that does not exist',
-        why: `The public door answers 404 for an id nobody holds, exactly as it does for a draft: a stranger must not be able to tell the two apart. The contract can describe the 404 but not a request that earns one.`,
+        name: 'Probe: read an example that does not exist, with no credentials',
+        why: `The open read answers 404 for an id nobody holds, exactly as it does for someone else's draft: a stranger must not be able to tell the two apart. The contract can describe the 404 but not a request that earns one.`,
         method: 'GET',
-        path: '/examples/published/000000000000000000000000'
+        path: '/examples/000000000000000000000000'
     },
     {
         name: 'Probe: move an example that does not exist',

@@ -86,8 +86,8 @@ connected one.
 
 ### 5 · `src/modules/example/routes.ts` — the URL surface
 
-**Take away:** two things that are easy to miss. The gate is **positional**: the one public route
-(`GET /published/:id`) sits above `router.use(getAuth, …)` and everything below it is signed-in,
+**Take away:** two things that are easy to miss. The gate is **positional**: the one open read
+(`GET /examples/:id`, a published example is anyone's) sits above `router.use(getAuth, …)` and everything below it is signed-in,
 purely by where it was typed. And static segments (`/search`) are declared **before** `/:id` or
 Express matches them as ids. Several routes also point at the same controller on purpose — `GET
 /examples` and `POST /examples/search` are one handler.
