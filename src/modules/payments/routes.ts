@@ -6,7 +6,7 @@
  * would only stop deliveries arriving, not make it safer), and `GET /methods`, which is
  * pre-purchase information exactly like `GET /delivery/methods`.
  *
- * Admin-only:    the refund and the offline record — a self-service withdrawal, or a
+ * Admin-only:    the refund and the order payment record (`./order-routes.ts`) — a self-service withdrawal, or a
  *                self-reported "I paid", if left open to any caller,
  *                versus an intent or confirm locked to admins being a checkout nobody can
  *                complete.
@@ -51,7 +51,6 @@ import { getRefund } from './controllers/get-refund';
 import { getPaymentByOrder } from './controllers/get-payment-by-order';
 import { postPaymentRefund } from './controllers/post-payment-refund';
 import { postPaymentRefundSettle } from './controllers/post-payment-refund-settle';
-import { postPaymentOffline } from './controllers/post-payment-offline';
 import { getPaymentMethods } from './controllers/get-payment-methods';
 import { getPayments } from './controllers/get-payments';
 import { getRefunds } from './controllers/get-refunds';
@@ -130,15 +129,6 @@ router.post(
     requirePermission('create', 'Refund'),
     idempotencyKey,
     postPaymentRefundSettle
-);
-
-// POST /payments/orders/:orderId/offline — the admin recording money by hand. Same `stepUp`
-// arrangement as the refund: `create:Payment` carries it in `shared/authorization-keys.yaml`.
-router.post(
-    '/orders/:orderId/offline',
-    requirePermission('create', 'Payment'),
-    idempotencyKey,
-    postPaymentOffline
 );
 
 // POST /payments/:id/confirm — the payment form's submit. The three velocity limiters and the

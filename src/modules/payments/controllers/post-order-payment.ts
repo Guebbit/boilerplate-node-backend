@@ -1,6 +1,6 @@
 /**
  * @module
- * POST /payments/orders/:orderId/offline
+ * POST /orders/:id/payments
  * An admin recording money the card provider never saw. Admin-only at the route
  * (`create:Payment`); the audit and analytics events fire from the service once settlement
  * actually lands, same as the confirm.
@@ -9,21 +9,20 @@
 import type { Request, Response } from 'express';
 import type { Payment } from '@types';
 import { createdOrOk } from '@infrastructure/http/response';
-import { RecordOfflinePaymentBody } from '@api/schemas.zod';
+import { RecordOrderPaymentBody } from '@api/schemas.zod';
 import { paymentService } from '../services';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { requireId } from '@infrastructure/http/ids';
 
-/** Handles `POST /payments/orders/:orderId/offline`. */
-export const postPaymentOffline = (request: Request<{ orderId?: string }>, response: Response) => {
+/** Handles `POST /orders/:id/payments`. */
+export const postOrderPayment = (request: Request<{ id?: string }>, response: Response) => {
     const orderId = requireId(request, response, {
-        notFound: 'payments.order-not-found',
-        name: 'orderId'
+        notFound: 'payments.order-not-found'
     });
     if (!orderId) return;
 
-    const body = parseBody(RecordOfflinePaymentBody, request.body, response);
+    const body = parseBody(RecordOrderPaymentBody, request.body, response);
     if (!body) return;
 
     return paymentService
@@ -36,5 +35,5 @@ export const postPaymentOffline = (request: Request<{ orderId?: string }>, respo
             // 201 when a row was inserted; 200 when this converted an unpaid card intent's row.
             createdOrOk<Payment>(response, payment, result.status, `/payments/${payment.id}`);
         })
-        .catch(catchAs(response, 'postPaymentOffline'));
+        .catch(catchAs(response, 'postOrderPayment'));
 };

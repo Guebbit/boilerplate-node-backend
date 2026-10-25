@@ -816,7 +816,7 @@ const cashRefundOwed = async () => {
     const { bearer: adminBearer, user: admin } = await authenticateAs('admin');
     const { bearer: buyerBearer, order } = await authenticateWithOrder();
     const recorded = await api()
-        .post(`/payments/orders/${String(order._id)}/offline`)
+        .post(`/orders/${String(order._id)}/payments`)
         .set('Authorization', adminBearer)
         .send({ method: 'cash', reference: 'till-settle' });
     const paymentId = String(recorded.body.id);
@@ -929,7 +929,7 @@ describe('the money doors ask a fresh session of an operator', () => {
         );
 
         const response = await api()
-            .post(`/payments/orders/${String(order._id)}/offline`)
+            .post(`/orders/${String(order._id)}/payments`)
             .set('Authorization', bearer)
             .send({ method: 'cash', reference: 'stale-till' });
 
@@ -939,13 +939,13 @@ describe('the money doors ask a fresh session of an operator', () => {
     });
 });
 
-describe('POST /payments/orders/{orderId}/offline', () => {
+describe('POST /orders/{id}/payments', () => {
     it('matches the contract for recording money by hand', async () => {
         const { bearer: adminBearer } = await authenticateAs('admin');
         const { order } = await authenticateWithOrder();
 
         const response = await api()
-            .post(`/payments/orders/${String(order._id)}/offline`)
+            .post(`/orders/${String(order._id)}/payments`)
             .set('Authorization', adminBearer)
             .send({ method: 'cash', reference: 'till-1' });
 
@@ -973,7 +973,7 @@ describe('POST /payments/orders/{orderId}/offline', () => {
             .send({ orderId: String(order._id) });
 
         const response = await api()
-            .post(`/payments/orders/${String(order._id)}/offline`)
+            .post(`/orders/${String(order._id)}/payments`)
             .set('Authorization', adminBearer)
             .send({ method: 'cash', reference: 'till-2' });
 
@@ -987,7 +987,7 @@ describe('POST /payments/orders/{orderId}/offline', () => {
         const { bearer } = await authenticateAs('admin');
 
         const response = await api()
-            .post(`/payments/orders/${MISSING_ID}/offline`)
+            .post(`/orders/${MISSING_ID}/payments`)
             .set('Authorization', bearer)
             .send({ method: 'cash' });
 
@@ -999,7 +999,7 @@ describe('POST /payments/orders/{orderId}/offline', () => {
         const { order } = await authenticateWithOrder();
 
         const response = await api()
-            .post(`/payments/orders/${String(order._id)}/offline`)
+            .post(`/orders/${String(order._id)}/payments`)
             .set('Authorization', bearer)
             .send({ method: 'crypto' });
 
@@ -1010,12 +1010,12 @@ describe('POST /payments/orders/{orderId}/offline', () => {
         const { bearer } = await authenticateAs('admin');
         const { order } = await authenticateWithOrder();
         await api()
-            .post(`/payments/orders/${String(order._id)}/offline`)
+            .post(`/orders/${String(order._id)}/payments`)
             .set('Authorization', bearer)
             .send({ method: 'cash' });
 
         const response = await api()
-            .post(`/payments/orders/${String(order._id)}/offline`)
+            .post(`/orders/${String(order._id)}/payments`)
             .set('Authorization', bearer)
             .send({ method: 'cash' });
 

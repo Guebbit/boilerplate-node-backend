@@ -16,6 +16,7 @@ jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
 );
 
 import { router } from '@modules/payments/routes';
+import { orderRouter } from '@modules/payments/order-routes';
 
 /** The one route in front of the auth wall that authenticates by signing its own body. */
 const WEBHOOK = 'POST /webhook';
@@ -44,7 +45,6 @@ describe('payment routes', () => {
             'GET /:id',
             'GET /:id/refunds/:refundId',
             'POST /:id/refunds/:refundId/settle',
-            'POST /orders/:orderId/offline',
             'POST /:id/confirm',
             'POST /:id/sync'
         ]);
@@ -81,7 +81,7 @@ describe('payment routes', () => {
         expect(routeSignatures(router).indexOf(WEBHOOK)).toBe(0);
     });
 
-    it('admin-guards the staff reads, the refund and its hand settlement, and the offline record, and nothing else', () => {
+    it('admin-guards the staff reads, the refund and its hand settlement, and nothing else', () => {
         // The three routes an operator drives instead of a customer's own checkout — money moving
         // back out, a claim that money moved in some way the provider never saw, or finding the
         // order that claim is about. The shopper's keys are excluded: `update:Cart` and
@@ -100,8 +100,7 @@ describe('payment routes', () => {
             'GET /refunds',
             'GET /attention',
             'POST /:id/refunds',
-            'POST /:id/refunds/:refundId/settle',
-            'POST /orders/:orderId/offline'
+            'POST /:id/refunds/:refundId/settle'
         ]);
     });
 
@@ -142,14 +141,14 @@ describe('payment routes', () => {
         expect(withoutHandler('POST /:id/confirm')).not.toContain(INTENT_BUDGET);
     });
 
-    it('declares the offline record before the bare /:id routes', () => {
-        // `/orders/:orderId/offline` is three segments and `/:id/confirm` is two, so they cannot
-        // collide today. The ordering is the convention this module states, and asserting it stops
-        // a two-segment admin route added later from being shadowed.
-        const paths = routeSignatures(router);
-
-        expect(paths.indexOf('POST /orders/:orderId/offline')).toBeLessThan(
-            paths.indexOf('POST /:id/confirm')
-        );
+    it('mounts the order payment door under /orders, admin-guarded and idempotent', () => {
+        expect(routeSignatures(orderRouter)).toEqual(['POST /:id/payments']);
+        expect(guardsOn(orderRouter, 'POST /:id/payments')).toEqual([
+            'getAuth',
+            'isAuth',
+            'requirePermissionGuard',
+            'idempotencyKey',
+            'postOrderPayment'
+        ]);
     });
 });

@@ -442,12 +442,12 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /payments/orders/{orderId}/offline:
+    /orders/{id}/payments:
         post:
             tags: [Payments]
-            summary: Record a payment that arrived outside the provider
+            summary: Record a payment on an order
             description: >-
-                An admin recording money the card provider never saw — cash at the counter, a
+                The payment is a child of the order: Solidus' `POST /api/orders/{number}/payments`. An admin recording money the card provider never saw — cash at the counter, a
                 phone order paid by transfer, a bank transfer that landed. Recording one's own order is
                 allowed and the audit row is flagged `ownOrder`. Writes the payment as
                 `manual` and runs it through the same settlement `POST /payments/{id}/confirm`
@@ -466,11 +466,11 @@ paths:
                 Requires a session that has re-proved itself within the last few minutes — a
                 valid-but-stale token answers 401 with `errors[].code` `REAUTH_REQUIRED`, and the
                 caller re-authenticates and retries the same request.
-            operationId: recordOfflinePayment
+            operationId: recordOrderPayment
             security:
                 - bearerAuth: []
             parameters:
-                - $ref: '../orders/openapi.yaml#/components/parameters/OrderIdPathParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                   description: The order the money arrived for. Must still be `pending`
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
@@ -802,7 +802,7 @@ components:
                     description: >-
                         Which provider implementation handled it — the name the deployment registered
                         (`NODE_PAYMENT_PROVIDER`), or `manual` for a payment recorded by hand
-                        (`POST /payments/orders/{orderId}/offline`).
+                        (`POST /orders/{id}/payments`).
                 method:
                     type: string
                     enum: [card, bank_transfer, cash, other]
@@ -815,7 +815,7 @@ components:
                     maxLength: 120
                     description: >-
                         Free text identifying an offline payment — a bank transaction id, a receipt
-                        number. Set only by `POST /payments/orders/{orderId}/offline`; absent from a
+                        number. Set only by `POST /orders/{id}/payments`; absent from a
                         card payment.
                 receivedAt:
                     type: string

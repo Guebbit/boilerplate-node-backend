@@ -79,7 +79,7 @@ source of truth, so — like every other durable, TTL-bound collection in this r
 | `POST /cart/checkout`                                                                     | Places the order; a retry after a lost response must replay it, never place a second.            |
 | `POST /cart/merge`                                                                        | A retry must not add the guest's quantities twice.                                               |
 | `POST /payments/{id}/confirm`                                                             | Charges the card.                                                                                |
-| `POST /payments/orders/{orderId}/offline`                                                 | An admin recording money by hand; a repeat must not record it twice.                             |
+| `POST /orders/{id}/payments`                                                              | An admin recording money by hand; a repeat must not record it twice.                             |
 | `POST /payments/{id}/refunds`                                                             | Returns money — a double submit must refund once. The key is REQUIRED: no header, a 400.         |
 | `POST /returns`, `POST /returns/{id}/receive`                                             | A retried return request or receipt must replay, not open or receive twice.                      |
 | `POST /inventory/levels/{productId}/receive`, `POST /inventory/levels/{productId}/adjust` | Stock never moves twice for one delivery or one correction.                                      |

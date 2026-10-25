@@ -137,7 +137,7 @@ cancel lifecycle itself (`statusesLeadingTo`, `orders/domain/lifecycle.ts`) has 
 Two different questions, asked at two different moments, both owned by `orders`:
 
 - **The pre-check** — `orders.isPayable(order.status)` — gates every door that could open a new
-  payment: `POST /payments`, `POST /payments/orders/{orderId}/offline`, and `getForOrder`'s
+  payment: `POST /payments`, `POST /orders/{id}/payments`, and `getForOrder`'s
   `PaymentActions.pay`. `pending` only; a `paid` order answers `false` even though `system` may
   still write a `paid → paid` echo underneath it (the payment webhook's own retries) — that echo is
   not a fresh offer to pay. This module never compares a status literal to decide whether to open a
@@ -301,7 +301,7 @@ payment, because a confirm is itself a new attempt: card A refused, then card B 
 `payment.failed` rows. A confirm that loses the race to the webhook answers the payment as the
 winner left it, not the copy it read first.
 
-`POST /payments/orders/{orderId}/offline` (below) is a fourth way to reach `succeeded`, alongside
+`POST /orders/{id}/payments` (below) is a fourth way to reach `succeeded`, alongside
 confirm, sync and the webhook — it calls the exact same `settlePayment`, so nothing about this
 diagram's terminal states or their guards changes for it.
 
@@ -313,7 +313,7 @@ way — cash at the counter, a phone order paid by bank transfer — on a still-
 ```mermaid
 sequenceDiagram
     actor Admin
-    participant API as POST /payments/orders/:orderId/offline
+    participant API as POST /orders/:id/payments
     participant Pay as payments
     participant Set as settlePayment
     Admin->>API: method, reference?, receivedAt?
@@ -457,7 +457,7 @@ payment carries everything the buyer and the operator need, and the order carrie
 ```mermaid
 stateDiagram-v2
     [*] --> requires_action: order.created, paymentMethod = bank_transfer<br/>RF reference + payBy, hand-recorded
-    requires_action --> succeeded: admin records the transfer<br/>POST /payments/orders/:orderId/offline
+    requires_action --> succeeded: admin records the transfer<br/>POST /orders/:id/payments
     requires_action --> requires_confirmation: the buyer pays by card instead<br/>(same row, reference kept)
     requires_action --> cancelled: order cancelled, or payBy passed with no money
     cancelled --> succeeded: a late transfer is recorded<br/>(the order is gone: the refund record stays open)
@@ -513,7 +513,7 @@ flowchart LR
     C["Customer pays, writes the code<br/>RF18 5390 0754 in the transfer"] --> B["Bank website<br/>shows the incoming transfer"]
     B --> A["Admin reads the code,<br/>pastes it into the app"]
     A --> L["GET /payments?transferReference=<br/>finds the payment, whose orderId is the order"]
-    L --> P["POST .../offline<br/>marks it paid — settlePayment, as usual"]
+    L --> P["POST .../payments<br/>marks it paid — settlePayment, as usual"]
 ```
 
 - **The reference is an ISO 11649 "RF" creditor reference** — the standard SEPA reference field,
@@ -528,10 +528,10 @@ flowchart LR
   one and is not reachable through this filter; an admin finds it by id through the normal order
   search instead. No raw-id fallback: a raw order id is not a reference and finds nothing.
 - **No new settlement code.** The admin screen filters the payments list by the code, then the existing `POST
-/payments/orders/{orderId}/offline` — the same `pending → paid` move, stock commit, and events any
+/orders/{id}/payments` — the same `pending → paid` move, stock commit, and events any
   other offline record already goes through.
 - **A transfer that arrives after its order was cancelled is recorded, not refused.** The filter
-  still finds the payment (its cancelled payment is kept), and `POST .../offline` takes the money onto
+  still finds the payment (its cancelled payment is kept), and `POST .../payments` takes the money onto
   that payment. The order cannot be paid any more, so the settlement owes the money straight back:
   the payment reads `succeeded`, its refund record stays open (a hand-paid refund is returned by
   the operator, off-system, and marked done), and the order stays cancelled with no stock touched.

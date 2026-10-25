@@ -1257,7 +1257,7 @@ components:
                 recordPayment:
                     type: boolean
                     description: >-
-                        Whether `POST /payments/orders/{orderId}/offline` would be accepted for this
+                        Whether `POST /orders/{id}/payments` would be accepted for this
                         caller: an operator recording money that arrived another way. True while
                         the order is still awaiting payment and the caller holds the key that records
                         one. A buyer's own step is `pay`; a buyer who is staff may also record.

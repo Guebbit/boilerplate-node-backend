@@ -175,7 +175,7 @@ const ACTS: Act[] = [
         flag: (actions) => actions.recordPayment,
         door: (caller, orderId) =>
             api()
-                .post(`/payments/orders/${orderId}/offline`)
+                .post(`/orders/${orderId}/payments`)
                 .set('Authorization', caller.bearer)
                 .send({ method: 'cash', reference: 'till' })
     }

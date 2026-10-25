@@ -13,6 +13,7 @@ import type { AppModule, PublicEventTarget } from '@kernel/registry';
 import { onDomainEvent, type DomainEventMap } from '@kernel/events';
 import { ORDER_CANCELLED, ORDER_CREATED } from '@modules/orders';
 import { router } from './routes';
+import { orderRouter } from './order-routes';
 import { paymentService } from './services';
 import { cancelOpenIntentForOrder } from './services/intent';
 import { refundForOrder } from './services/refunds';
@@ -63,7 +64,11 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
 /** This module's manifest entry: routes, the cancel-refund subscription, and locales. */
 export default {
     name: 'payments',
-    mounts: [{ basePath: '/payments', routes: router }],
+    mounts: [
+        { basePath: '/payments', routes: router },
+        // `POST /orders/{id}/payments`: the order's URL, payments' own key.
+        { basePath: '/orders', routes: orderRouter }
+    ],
     jobs: paymentsJobs,
     publicEvents,
     /** The webhook and card-testing budgets — see `./rate-limits.ts`. */

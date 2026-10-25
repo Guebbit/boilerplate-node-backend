@@ -191,7 +191,7 @@ export const recordOfflinePayment = (
     orderId: string,
     method: string
 ): Promise<void> =>
-    owner.call('POST', `/payments/orders/${orderId}/offline`, { method }).then(() => undefined);
+    owner.call('POST', `/orders/${orderId}/payments`, { method }).then(() => undefined);
 
 /**
  * Move a paid order into `processing`, as an operator would: the warehouse's own door,
