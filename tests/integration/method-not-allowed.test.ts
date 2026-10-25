@@ -21,6 +21,14 @@ describe('a wrong method on a known path', () => {
         expect(response.body).toMatchObject({ title: 'Method Not Allowed', status: 405 });
     });
 
+    it('answers 405 on a literal path that a templated sibling would otherwise catch', async () => {
+        // `/products/{id}` also reads `categories` as an id: without the pre-router guard this is a 404.
+        const response = await api().delete('/products/categories');
+
+        expect(response.status).toBe(405);
+        expect(response.headers.allow).toBe('GET, HEAD');
+    });
+
     it('answers 405 on a system route too', async () => {
         const response = await api().post('/livez');
 

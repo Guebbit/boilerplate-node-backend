@@ -33,9 +33,10 @@ interface Outcome {
  *
  * @param method - the request method
  * @param path - the request path
+ * @param literalOnly - the mount that runs before the routers
  * @returns the status and `Allow` it answered with, or `passed` when it let the request on
  */
-const run = (method: string, path: string): Outcome => {
+const run = (method: string, path: string, literalOnly = false): Outcome => {
     // `path` is a getter on express's prototype, so it is redefined on the instance, not assigned.
     const request = Object.defineProperties(Object.create(express.request) as Request, {
         method: { value: method },
@@ -55,7 +56,7 @@ const run = (method: string, path: string): Outcome => {
         json: () => response
     });
 
-    methodNotAllowed(TABLE, new Set(['things']))(request, response, () => {
+    methodNotAllowed(TABLE, new Set(['things']), literalOnly)(request, response, () => {
         outcome.passed = true;
     });
     return outcome;
@@ -102,6 +103,19 @@ describe('methodNotAllowed', () => {
         expect(run('GET', '/things/search')).toMatchObject({
             status: 405,
             allow: 'DELETE, PATCH, POST, PUT'
+        });
+    });
+
+    describe('before the routers (literal paths only)', () => {
+        it('judges a literal path by its own methods, not the templated path it also matches', () => {
+            expect(run('DELETE', '/things/search', true)).toMatchObject({
+                status: 405,
+                allow: 'POST'
+            });
+        });
+
+        it('leaves a templated path to the routers', () => {
+            expect(run('GET', '/things/abc', true).passed).toBe(true);
         });
     });
 });

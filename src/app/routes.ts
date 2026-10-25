@@ -41,6 +41,14 @@ export const installRoutes = (app: Express): void => {
     });
 
     /**
+     * 405 + `Allow` for a literal contract path (no `{param}`) asked with a method it does not
+     * declare. Before the routers: otherwise `DELETE /products/categories` reaches the
+     * `/products/:id` handler and answers 404, where the contract matches the literal path first.
+     */
+    const servedModules = new Set(enabledModules.map(({ name }) => name));
+    app.use(methodNotAllowed(OPERATION_ROUTES, servedModules, true));
+
+    /**
      * Registered modules, each at the base path its own manifest declares.
      *
      * A module without a router is skipped rather than treated as an error: `access` owns the
@@ -61,7 +69,7 @@ export const installRoutes = (app: Express): void => {
      * 405 + `Allow` for a contract path asked with another method; anything else falls through
      * to the 404 below. Only the modules this build mounts count as known paths.
      */
-    app.use(methodNotAllowed(OPERATION_ROUTES, new Set(enabledModules.map(({ name }) => name))));
+    app.use(methodNotAllowed(OPERATION_ROUTES, servedModules));
 
     /**
      * 404 handler — unmatched routes.
