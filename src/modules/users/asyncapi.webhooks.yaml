@@ -16,6 +16,14 @@ channels:
         messages:
             UserErasedEvent:
                 $ref: '#/components/messages/UserErasedEvent'
+    user.updated:
+        address: user.updated
+        description: A personal-data field of an account was rectified.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            UserUpdatedEvent:
+                $ref: '#/components/messages/UserUpdatedEvent'
 operations:
     webhookUserErased:
         action: send
@@ -30,6 +38,19 @@ operations:
             that `userId`.
         messages:
             - $ref: '#/channels/user.erased/messages/UserErasedEvent'
+    webhookUserUpdated:
+        action: send
+        channel:
+            $ref: '#/channels/user.updated'
+        summary: A person's username, email, phone, website or picture changed.
+        description: >-
+            Fired once per committed change, from an admin edit, the owner's own profile edit, an
+            email-change confirmation and its undo. `changed` names the fields that moved and never
+            carries a value, so a recipient refetches the account through the API. A request that
+            resends what is stored, an email-change request not yet confirmed, a change of
+            preferences (locale, consent) and the address book fire nothing.
+        messages:
+            - $ref: '#/channels/user.updated/messages/UserUpdatedEvent'
 components:
     messages:
         UserErasedEvent:
@@ -39,6 +60,13 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/UserErasedEnvelope'
+        UserUpdatedEvent:
+            name: UserUpdatedEvent
+            title: User updated
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/UserUpdatedEnvelope'
     schemas:
         UserIdPayload:
             type: object
@@ -65,4 +93,43 @@ components:
                     format: date-time
                 data:
                     $ref: '#/components/schemas/UserIdPayload'
+            additionalProperties: false
+        UserUpdatedPayload:
+            type: object
+            required:
+                - userId
+                - changed
+            properties:
+                userId:
+                    type: string
+                changed:
+                    type: array
+                    minItems: 1
+                    items:
+                        title: UserChangedField
+                        type: string
+                        enum:
+                            - username
+                            - email
+                            - phone
+                            - website
+                            - imageUrl
+            additionalProperties: false
+        UserUpdatedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: UserUpdatedEventType
+                    type: string
+                    enum:
+                        - user.updated
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/UserUpdatedPayload'
             additionalProperties: false

@@ -300,20 +300,18 @@ it. There is no reason field: the audit row records who.
 
 ## Webhook events
 
-Erasing a person tells connected tools (GDPR Art. 19): the `user.erased` webhook, `data: { userId }`.
-Ids only, so the delivery log never holds a fresh copy of an erased person's address.
+Erasing or rectifying a person tells connected tools (GDPR Art. 19). Ids and field names only, never
+a value, so the delivery log never holds a fresh copy of the person's data.
 
-| Fires on                                                                         | Does not fire on                                         |
-| -------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| admin hard delete, the purge after the grace, the inactivity erase (same commit) | the lock, the grace starting, a soft delete              |
-|                                                                                  | a restore that wins the claim (the erasure is abandoned) |
+| Webhook        | `data`                  | Fires on                                                                                                                               | Does not fire on                                                                                                                                                             |
+| -------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user.erased`  | `{ userId }`            | admin hard delete, the purge after the grace, the inactivity erase (same commit)                                                       | the lock, the grace starting, a soft delete, a restore that wins the claim                                                                                                   |
+| `user.updated` | `{ userId, changed[] }` | a username, phone, website or picture that really moved (admin or owner edit); an email-change confirmation and its undo (`['email']`) | a resent value, an email-change request not yet confirmed, locale or consent, the address book, a role-only edit. A phone is compared as plaintext, not as stored ciphertext |
 
-A recipient that syncs customers stores our `userId` and drops what it holds under it. The
+`user.updated` is projected from the outbox event `user.profile_changed`, written in the save's own
+transaction (`services/update.ts`, `services/credentials.ts`). A recipient that syncs customers
+stores our `userId`, drops what it holds on `user.erased`, and refetches on `user.updated`. The
 catalogue and the delivery pipeline are [`webhooks`](./webhooks.md).
-
-The erase cascade also forgets a staff member's name where it only pointed: `purchaseHold.setBy` on
-another buyer is unset before the row goes, and `webhooks` and `locales` do the same for the
-subscription owner and the translator. The rows stay, the person goes.
 
 ## What this module adds to the data export
 

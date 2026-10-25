@@ -11,7 +11,7 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { encryptPii } from '@infrastructure/security/pii-encryption';
+import { decryptPii, encryptPii } from '@infrastructure/security/pii-encryption';
 import { imageStore, applyImageWriteback } from '@infrastructure/adapters/image-store';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
 import { rearmPrecondition } from '@infrastructure/persistence/versioning';
@@ -19,10 +19,12 @@ import { withTransaction } from '@infrastructure/runtime/database';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { CallerContext, UpdateUserByIdRequest, WithServerImage } from '@types';
 import { accessService } from '@modules/access';
+import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { phoneAad, type UserDocument } from '../model';
 import { userRepository } from '../repository';
 import { usersAuditActions } from '../audit';
+import { USER_PROFILE_CHANGED, type UserChangedField } from '../events';
 import { enqueueIfPending } from './image';
 import { userAuditChanges } from './audit-changes';
 import { roleRefusalReject } from './role-refusal';
@@ -62,6 +64,8 @@ export const update = (
     /** {@link SaveHook}: a write that must commit with this save, from the one caller that has one. */
     alsoInSave?: SaveHook
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
+    // Read before anything is assigned onto the document.
+    const changed = rectifiedFields(user, data);
     if (data.username !== undefined) user.username = data.username;
     // `role` is not written here — there is no column, only the membership,
     // written below in `saveWithRole` once the rest of the document has saved.
@@ -86,8 +90,76 @@ export const update = (
         user.analyticsConsentAt = new Date();
     }
 
-    return saveWithRole(user, role, context, oldImageUrl, alsoInSave);
+    return saveWithRole(
+        user,
+        role,
+        context,
+        oldImageUrl,
+        announcing(user, changed, alsoInSave)
+    ).then((result) => {
+        // After the commit, never inside it: the relay reads rows that are already durable.
+        if (result.success && changed.length > 0) nudgeOutbox();
+        return result;
+    });
 };
+
+/**
+ * Which personal-data fields a change-set really moves (GDPR Art. 19: only a rectification is
+ * announced, so a PUT that resends what is stored says nothing).
+ *
+ * The phone is stored encrypted under a random IV, so two equal numbers never match as stored.
+ * The plaintexts are compared instead. Call it BEFORE the change-set is assigned.
+ *
+ * @param user - the loaded account, not yet changed
+ * @param data - the change-set; an absent key leaves the field alone, `null` clears it
+ */
+const rectifiedFields = (
+    user: UserDocument,
+    data: Pick<Parameters<typeof update>[1], 'username' | 'phone' | 'website' | 'imageUrl'>
+): UserChangedField[] => {
+    const storedPhone = user.phone
+        ? decryptPii(user.phone, phoneAad(user.id), 'user phone')
+        : undefined;
+    // Mirrors `applyImageWriteback`: `null` removes, an empty or equal url leaves it alone.
+    const imageMoved =
+        data.imageUrl === null
+            ? user.imageUrl !== undefined
+            : !!data.imageUrl && data.imageUrl !== user.imageUrl;
+    const moved: Record<Exclude<UserChangedField, 'email'>, boolean> = {
+        username: data.username !== undefined && data.username !== user.username,
+        phone: data.phone !== undefined && (data.phone ?? undefined) !== storedPhone,
+        website: data.website !== undefined && (data.website ?? undefined) !== user.website,
+        imageUrl: imageMoved
+    };
+    return (Object.keys(moved) as Exclude<UserChangedField, 'email'>[]).filter(
+        (field) => moved[field]
+    );
+};
+
+/**
+ * The caller's own save hook, plus the `user.profile_changed` outbox row when a field moved, so
+ * the announcement commits with the rectification or not at all.
+ *
+ * @param user - the account being saved
+ * @param changed - {@link rectifiedFields}' answer
+ * @param alsoInSave - the caller's own hook, kept first so its row lands first
+ */
+const announcing = (
+    user: UserDocument,
+    changed: UserChangedField[],
+    alsoInSave?: SaveHook
+): SaveHook | undefined =>
+    changed.length === 0
+        ? alsoInSave
+        : (session) =>
+              Promise.resolve(alsoInSave?.(session)).then(() =>
+                  enqueueOutboxEvent(
+                      USER_PROFILE_CHANGED,
+                      { userId: user.id, changed },
+                      user.id,
+                      session
+                  )
+              );
 
 /**
  * Another write that joins an update's transaction, so it commits with the document or not at all.

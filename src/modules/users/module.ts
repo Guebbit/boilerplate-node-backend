@@ -24,7 +24,7 @@ import { router } from './routes';
 import { userRepository } from './repository';
 import { userService } from './services';
 import { setPersonalDataErasers, setPersonalDataMinimisers } from './erasure-registry';
-import { USER_ERASED } from './events';
+import { USER_ERASED, USER_PROFILE_CHANGED } from './events';
 import { usersConfig } from './config';
 import { usersJobs } from './jobs';
 
@@ -49,6 +49,13 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
         toPublicEvent: (payload: DomainEventMap[typeof USER_ERASED]) => ({
             eventType: 'user.erased',
             data: { userId: payload.userId }
+        })
+    },
+    [USER_PROFILE_CHANGED]: {
+        toPublicEvent: (payload: DomainEventMap[typeof USER_PROFILE_CHANGED]) => ({
+            eventType: 'user.updated',
+            // Names only: the new values would put a fresh copy of the person's data in the log.
+            data: { userId: payload.userId, changed: payload.changed }
         })
     }
 };
