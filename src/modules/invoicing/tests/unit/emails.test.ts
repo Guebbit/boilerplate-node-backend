@@ -106,6 +106,22 @@ describe('buildDocumentView', () => {
     });
 });
 
+describe('buildDocumentView — the erased buyer', () => {
+    it('says why the buyer is missing once the block was removed on purpose', () => {
+        const erased = buildDocumentView('en', {
+            ...DOCUMENT,
+            buyerErasedAt: new Date('2030-01-01T00:00:00Z')
+        });
+
+        expect(erased.buyerErasedNotice).toEqual(expect.any(String));
+        expect(erased.billing).toBeUndefined();
+    });
+
+    it('prints no notice for a document that never had a buyer', () => {
+        expect(buildDocumentView('en', DOCUMENT).buyerErasedNotice).toBeUndefined();
+    });
+});
+
 describe('buildDocumentView — the VAT block', () => {
     it("re-derives each line's net/tax/gross from its own frozen unitPrice/taxRate/quantity, never a float multiply", () => {
         // 19.99 × 5 is 99.94999999999999 in IEEE 754, not 99.95 — a naive re-multiply here would

@@ -18,6 +18,7 @@ import {
     creditNoteNumberCounterModel
 } from './model';
 import type { FrozenTaxDocument, InvoiceDocument, CreditNoteDocument } from './model';
+import type { InvoiceDocumentKind } from './pii';
 
 /**
  * The invoice for an order, if one has been issued.
@@ -158,11 +159,73 @@ const insertCreditNote = (
 ): Promise<CreditNoteDocument> =>
     creditNoteModel.create([fields], { session }).then(([creditNote]) => creditNote);
 
+/** What the retention rule reads from a document that still holds a buyer block. */
+export interface BuyerBearingDocument {
+    _id: Types.ObjectId;
+    issuedAt: Date;
+    timezone: string;
+}
+
+/**
+ * The buyer sweep's two queries over one collection. Generic over the model, as `sumDocuments`
+ * is, because a union of the two model types does not type-check in Mongoose.
+ *
+ * @param model - the invoice or credit-note collection
+ */
+const buyerSweepOf = <TDocument extends Document>(model: Model<TDocument>) => ({
+    // Reads the `issuedAt` index; the exact due rule runs on what comes back.
+    findBefore: (bound: Date): Promise<BuyerBearingDocument[]> =>
+        model
+            .find({ issuedAt: { $lt: bound }, billingAddress: { $exists: true } })
+            .select('issuedAt timezone')
+            .lean<BuyerBearingDocument[]>()
+            .exec(),
+    // The filter repeats "still has a block", so a second or racing run changes nothing.
+    erase: (ids: Types.ObjectId[], at: Date): Promise<number> =>
+        model
+            .updateMany(
+                { _id: { $in: ids }, billingAddress: { $exists: true } },
+                { $unset: { billingAddress: 1 }, $set: { buyerErasedAt: at } }
+            )
+            .exec()
+            .then(({ modifiedCount }) => modifiedCount)
+});
+
+/** The buyer sweep of each collection, by kind. */
+const buyerSweeps = {
+    invoice: buyerSweepOf(invoiceModel),
+    'credit-note': buyerSweepOf(creditNoteModel)
+};
+
+/**
+ * Documents issued before `bound` that still hold a buyer block.
+ *
+ * @param kind - which collection
+ * @param bound - exclusive upper bound on `issuedAt`
+ */
+const findBuyerBearingBefore = (
+    kind: InvoiceDocumentKind,
+    bound: Date
+): Promise<BuyerBearingDocument[]> => buyerSweeps[kind].findBefore(bound);
+
+/**
+ * Unsets the buyer block of the given documents and stamps when.
+ *
+ * @param kind - which collection
+ * @param ids - the documents to blank
+ * @param at - the moment recorded as `buyerErasedAt`
+ * @returns how many documents were changed
+ */
+const eraseBuyers = (kind: InvoiceDocumentKind, ids: Types.ObjectId[], at: Date): Promise<number> =>
+    buyerSweeps[kind].erase(ids, at);
+
 /** Invoicing's own repository — no generic CRUD, see the module docblock. */
 export const invoicingRepository = {
     reencryptInvoices: reencryptOf(invoiceModel),
     reencryptCreditNotes: reencryptOf(creditNoteModel),
     findInvoiceByOrderId,
+    findBuyerBearingBefore,
+    eraseBuyers,
     sumInvoices: (window: ReportWindow) => sumDocuments(invoiceModel, window),
     sumCreditNotes: (window: ReportWindow) => sumDocuments(creditNoteModel, window),
     insertInvoice,

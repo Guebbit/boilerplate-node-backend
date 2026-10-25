@@ -8,6 +8,7 @@
             "title": "Invoice",
             "credit-note-title": "Credit note",
             "reversal-notice": "This credit note reverses invoice {{number}}.",
+            "buyer-erased": "The buyer's personal data was removed once its legal retention period ended.",
             "number": "No. {{number}}",
             "date": "Date: {{date}}",
             "vat": {

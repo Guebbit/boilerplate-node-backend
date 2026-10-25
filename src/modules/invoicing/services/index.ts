@@ -13,8 +13,10 @@ import { invoiceForCaller, creditNotesForCaller, creditNoteForCaller } from './f
 import { moneyBuckets } from './stats';
 
 import { reencryptInvoices } from './reencrypt';
+import { eraseDueBuyers } from './retention';
 
 export type { RefundedInput } from './issue-credit-note';
+export type { BuyerErasureReport } from './retention';
 export type { DocumentTotals, MoneyBucket } from './stats';
 
 /** The module's one door — every operation, so a sibling or a test reaches one place. */
@@ -29,5 +31,6 @@ export const invoicingService = {
     renderInvoicePdf,
     renderCreditNotePdf,
     moneyBuckets,
-    reencryptInvoices
+    reencryptInvoices,
+    eraseDueBuyers
 };

@@ -8,6 +8,7 @@
             "title": "Fattura",
             "credit-note-title": "Nota di credito",
             "reversal-notice": "Questa nota di credito storna la fattura {{number}}.",
+            "buyer-erased": "I dati personali dell'acquirente sono stati rimossi al termine del periodo legale di conservazione.",
             "number": "N. {{number}}",
             "date": "Data: {{date}}",
             "vat": {
