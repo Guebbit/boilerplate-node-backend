@@ -20,7 +20,7 @@ import { catchAs } from '@infrastructure/http/controller';
 type OrderForResponse = Parameters<typeof orderService.withActions>[0];
 
 /**
- * Hydrate `order` with `authContext`'s `actions` and send it as the success envelope.
+ * Hydrate `order` with `authContext`'s `actions` and send it as the response body.
  *
  * Owns its own `.catch`, with the SAME operation name each call site already passes its own
  * chain's final `.catch` — `withActions` failing is exactly as much this operation's failure as

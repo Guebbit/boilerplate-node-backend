@@ -2,7 +2,7 @@
  * @module
  * Contract tests for /notifications.
  *
- * Every route answers one of two shapes — the inbox, or the plain success envelope — so these
+ * Every route answers one of two shapes — the inbox, or a 204 with no body — so these
  * assertions exist to make sure each contract branch is reached over HTTP, including the refusals.
  * The ownership and cap rules are in the integration suite. `GET /notifications/stream` is an
  * endless SSE stream, read here only as far as the one frame each test needs.

@@ -38,7 +38,7 @@ export interface ResponseSuccess<T> extends ResponseNeutral {
     success: true;
     /** Generic payload — the endpoint's actual result. Always present; a service with nothing to return passes `undefined` as `T`. */
     data: T;
-    /** Forbids constructing a success envelope that also carries errors — a check `success: true` alone cannot make. */
+    /** Forbids constructing a success result that also carries errors — a check `success: true` alone cannot make. */
     errors: never;
 }
 
