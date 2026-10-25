@@ -6,7 +6,6 @@ info:
 x-error-codes:
     LOCALE_LANGUAGE_NOT_FOUND: { status: 404, description: 'No language is registered under that tag.' }
     LOCALE_LANGUAGE_EXISTS: { status: 409, description: 'A language is already registered under that tag.' }
-    LOCALE_LANGUAGE_ACTIVE: { status: 409, description: 'The language is still switched on — deactivate it before deleting it.' }
     LOCALE_LANGUAGE_IS_FALLBACK: { status: 409, description: 'The deployment''s fallback language cannot be deactivated or deleted: every translatable row''s source lives there.' }
     LOCALE_LANGUAGE_ALREADY_ACTIVE: { status: 409, description: 'The language is already switched on.' }
     LOCALE_LANGUAGE_ALREADY_INACTIVE: { status: 409, description: 'The language is already switched off.' }
@@ -283,12 +282,10 @@ paths:
             description: |
                 Removes the language AND every entry translated into it.
 
-                Refuses with 409 `LOCALE_LANGUAGE_ACTIVE` while the language is still active, and
-                with 409 `LOCALE_LANGUAGE_IS_FALLBACK` for the deployment's fallback language. The
-                two steps are deliberate: this destroys a day's translation work, and a mis-click
-                should cost a toggle rather than the work. `POST /locales/{locale}/deactivate`
-                first, then delete. `actions.delete` on the language says whether it would be
-                accepted now.
+                Refuses with 409 `LOCALE_LANGUAGE_IS_FALLBACK` for the deployment's fallback
+                language. An active language is deleted directly: the server does not require a
+                deactivate first, a client that wants a confirm step adds it. `actions.delete` on
+                the language says whether it would be accepted now.
             operationId: deleteLocale
             security:
                 - bearerAuth: []
@@ -957,11 +954,10 @@ components:
 
         LanguageDeleteBlockedReason:
             type: string
-            enum: [still_active, fallback]
+            enum: [fallback]
             description: >-
                 Why `actions.delete` is false for a caller who holds `delete:Locale` and could
-                otherwise act. `still_active`: switch it off first (`actions.deactivate`).
-                `fallback`: the deployment's fallback language can never be deleted. Absent when
+                otherwise act. `fallback`: the deployment's fallback language can never be deleted. Absent when
                 the caller lacks the permission (the control is hidden, not explained) or when
                 `delete` is true.
 
@@ -994,8 +990,8 @@ components:
                     type: boolean
                     description: >-
                         Whether `DELETE /locales/{locale}` would be accepted: the caller holds
-                        `delete:Locale`, a registered row exists, the language is off, and it is
-                        not the deployment's fallback.
+                        `delete:Locale`, a registered row exists, and it is not the deployment's
+                        fallback.
                 deleteBlocked:
                     $ref: '#/components/schemas/LanguageDeleteBlockedReason'
 

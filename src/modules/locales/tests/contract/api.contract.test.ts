@@ -553,7 +553,7 @@ describe('actions on a language', () => {
         });
     });
 
-    it('tells an admin what each language can do, and why delete is blocked', async () => {
+    it('tells an admin what each language can do', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
         await createLanguage(bearer, {
@@ -569,8 +569,7 @@ describe('actions on a language', () => {
             update: true,
             activate: false,
             deactivate: true,
-            delete: false,
-            deleteBlocked: 'still_active'
+            delete: true
         });
         expect(flagsOf(asAdmin, 'fr')).toEqual({
             update: true,
@@ -608,20 +607,10 @@ describe('actions on a language', () => {
 });
 
 describe('DELETE /locales/:locale', () => {
-    it('refuses while the language is still active', async () => {
-        const { bearer } = await authenticateAs('admin');
-        await createLanguage(bearer);
-
-        const response = await api().delete('/locales/pt').set('Authorization', bearer);
-
-        expect(response.status).toBe(409);
-    });
-
-    it('matches the contract once the language is inactive, and takes its entries', async () => {
+    it('matches the contract for an active language, and takes its entries', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
         await createEntry(bearer, 'pt', 'cart.title', 'Carrinho');
-        await api().post('/locales/pt/deactivate').set('Authorization', bearer);
 
         const response = await api().delete('/locales/pt').set('Authorization', bearer);
 

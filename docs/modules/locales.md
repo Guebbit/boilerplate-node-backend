@@ -106,7 +106,7 @@ the initial value.
 
 Every `Language` and every manifest row carries `actions` (`update`, `activate`, `deactivate`,
 `delete`, and `deleteBlocked` when a caller allowed to delete could not yet), computed in
-`services/actions.ts` so a client never restates the two-step. The manifest is publicly cached, so
+`services/actions.ts` so a client never restates the rules. The manifest is publicly cached, so
 only a caller answered outside that cache (`display:Locale`) gets a flag set to `true`; a visitor's
 answer carries them all `false`. A language that is only a deployed file has no row to switch, so
 its flags are `false` for everyone.

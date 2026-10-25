@@ -235,8 +235,7 @@ export const deactivateLanguage = (tag: string, context?: CallerContext) =>
 /**
  * Remove a language and everything translated into it.
  *
- * Refuses while still active — the two-step is the whole safeguard: this destroys days of work,
- * and an accidental `DELETE` should cost a toggle first, not the work itself.
+ * An active language is deleted directly; a confirm step is the client's job.
  */
 export const removeLanguage = (
     tag: string,
@@ -246,14 +245,6 @@ export const removeLanguage = (
 > =>
     localeRepository.findByTag(tag).then((language) => {
         if (!language) return languageNotFound();
-
-        if (language.active)
-            return generateReject(409, [
-                {
-                    code: ERROR_CODES.LOCALE_LANGUAGE_ACTIVE,
-                    message: t('locales.error-language-active')
-                }
-            ]);
 
         const fallbackRefusal = rejectFallbackLocale(tag);
         if (fallbackRefusal) return fallbackRefusal;

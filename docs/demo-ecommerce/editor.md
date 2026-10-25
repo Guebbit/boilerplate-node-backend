@@ -90,6 +90,10 @@ can keep writing into it, shoppers never see it, and anyone who had it saved get
 language, in the page and in the emails. Switching it back on needs no deploy and takes effect on the
 next page load.
 
+**Off** hides a language and keeps the work; **Delete** destroys the language and every string
+translated into it. Delete works on a live language too, so a language that is on loses its
+visitors at once. The confirm says so.
+
 A language added by hand has no translation file for the shop's own error messages, so those few
 messages show in the default language until a developer adds the file. Everything the editor
 writes (screens, product names) shows in the new language straight away.

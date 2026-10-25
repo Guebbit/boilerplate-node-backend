@@ -251,25 +251,8 @@ describe('importEntries', () => {
 });
 
 describe('deleting a language', () => {
-    it('refuses while it is still active', async () => {
-        await givenLanguage('es', { 'cart.title': 'Carrito' });
-
-        const result = await localeService.removeLanguage('es');
-
-        expect(result.success).toBe(false);
-        expect(result.status).toBe(409);
-        // Nothing was destroyed on the way to the refusal.
-        expect(await localeEntryRepository.listKeys('es', FRONTEND)).toEqual(['cart.title']);
-    });
-
-    it('cascades its entries once it is inactive', async () => {
-        await givenLanguage(
-            'es',
-            { 'cart.title': 'Carrito', 'cart.empty': 'Vacío' },
-            {
-                active: false
-            }
-        );
+    it('deletes an active language and its entries', async () => {
+        await givenLanguage('es', { 'cart.title': 'Carrito', 'cart.empty': 'Vacío' });
 
         const result = await localeService.removeLanguage('es');
 

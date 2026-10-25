@@ -71,21 +71,16 @@ export const languageActions = (
     standing: LanguageStanding
 ): LanguageActions => {
     const isFallback = language.tag === getFallbackLocale();
-    const canDelete = standing.delete && !language.active && !isFallback;
+    const canDelete = standing.delete && !isFallback;
 
     return {
         update: standing.update,
         activate: standing.update && !language.active,
         deactivate: standing.update && language.active && !isFallback,
         delete: canDelete,
-        // A caller who cannot delete at all is not told why a button is missing. The fallback
-        // wins over `still_active`: switching it off would never get it deleted.
-        ...(standing.delete && !canDelete
-            ? {
-                  deleteBlocked: isFallback
-                      ? LanguageDeleteBlockedReason.fallback
-                      : LanguageDeleteBlockedReason.still_active
-              }
+        // A caller who cannot delete at all is not told why a button is missing.
+        ...(standing.delete && isFallback
+            ? { deleteBlocked: LanguageDeleteBlockedReason.fallback }
             : {})
     };
 };
