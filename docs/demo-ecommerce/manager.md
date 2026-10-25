@@ -5,6 +5,10 @@ Running the shop: what is for sale, at what price, and what happens to orders af
 Log in as `manager@example.com`, or as the admin, who can do this job too. The passwords are on
 [Test it yourself](./test-me.md).
 
+::: tip When something goes wrong
+Odd cases that land on you: [an order stuck in processing](./when-something-goes-wrong.md#stuck-in-processing), [fewer on the shelf than promised](./when-something-goes-wrong.md#fewer-on-shelf), [a refund owed by hand](./when-something-goes-wrong.md#refund-owed-by-hand).
+:::
+
 ## An order's life
 
 An order is never edited. It **moves**, one step at a time, and everyone can see where it is:

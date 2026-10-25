@@ -4,6 +4,10 @@ Stock, and getting parcels out of the door.
 
 Log in as `warehouse@example.com`. The password is on [Test it yourself](./test-me.md).
 
+::: tip When something goes wrong
+Odd cases that land on you: [fewer on the shelf than promised](./when-something-goes-wrong.md#fewer-on-shelf), [an order stuck in processing](./when-something-goes-wrong.md#stuck-in-processing), [shipped but not arrived](./when-something-goes-wrong.md#shipped-not-arrived).
+:::
+
 ## The one rule
 
 **Nobody types a stock number in directly.** Not the manager, not the shop, not anyone.

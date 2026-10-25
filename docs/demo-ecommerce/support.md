@@ -4,6 +4,10 @@ Messages from people, accounts that need help, and knowing whether the shop is a
 
 Log in as `support@example.com`. The password is on [Test it yourself](./test-me.md).
 
+::: tip When something goes wrong
+When a buyer asks where their parcel is: [shipped but not arrived](./when-something-goes-wrong.md#shipped-not-arrived), [an order stuck in processing](./when-something-goes-wrong.md#stuck-in-processing).
+:::
+
 ## The contact form
 
 Anyone can send a message — no account needed. Along with signing up and logging in, it is one of the few things a complete stranger can write to.

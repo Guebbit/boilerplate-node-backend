@@ -6,6 +6,10 @@ to go back.
 Log in as `moderator@example.com` — a real, narrower account, not the owner's. The password is
 on [Test it yourself](./test-me.md).
 
+::: tip When something goes wrong
+Odd cases that land on you: [a refund owed by hand](./when-something-goes-wrong.md#refund-owed-by-hand), [a transfer for a cancelled order](./when-something-goes-wrong.md#late-transfer).
+:::
+
 ## Key families, three jobs
 
 | Key                                                         | Buys                                                      |

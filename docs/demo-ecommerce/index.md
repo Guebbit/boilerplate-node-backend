@@ -163,17 +163,18 @@ declined" path can be shown on demand.
 
 ## Which page do you want
 
-| You are…                                              | Read                             |
-| ----------------------------------------------------- | -------------------------------- |
-| Wondering what a customer experiences                 | [The customer](./shopper.md)     |
-| Running the shop — products, prices, orders           | [The shop manager](./manager.md) |
-| Looking after stock and getting parcels out           | [The warehouse](./warehouse.md)  |
-| Answering emails, resets, complaints                  | [The support desk](./support.md) |
-| Writing and photographing products, and pricing them  | [The editor](./editor.md)        |
-| Translating the shop's screens, and a product's words | [The editor](./editor.md)        |
-| Handling accounts, disputed orders and refunds        | [The moderator](./moderator.md)  |
-| Wanting to log in and click around                    | [Test it yourself](./test-me.md) |
-| A developer who took a wrong turn                     | [Modules](../modules/)           |
+| You are…                                              | Read                                                        |
+| ----------------------------------------------------- | ----------------------------------------------------------- |
+| Wondering what a customer experiences                 | [The customer](./shopper.md)                                |
+| Running the shop — products, prices, orders           | [The shop manager](./manager.md)                            |
+| Looking after stock and getting parcels out           | [The warehouse](./warehouse.md)                             |
+| Answering emails, resets, complaints                  | [The support desk](./support.md)                            |
+| Writing and photographing products, and pricing them  | [The editor](./editor.md)                                   |
+| Translating the shop's screens, and a product's words | [The editor](./editor.md)                                   |
+| Handling accounts, disputed orders and refunds        | [The moderator](./moderator.md)                             |
+| Something odd happened and you need the fix           | [When something goes wrong](./when-something-goes-wrong.md) |
+| Wanting to log in and click around                    | [Test it yourself](./test-me.md)                            |
+| A developer who took a wrong turn                     | [Modules](../modules/)                                      |
 
 ## Opening it yourself
 
