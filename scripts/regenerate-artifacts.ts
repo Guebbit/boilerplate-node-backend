@@ -90,6 +90,13 @@ const STEPS: readonly Step[] = [
         because: 'src/types/asyncapi.generated.ts, from the full asyncapi.yaml'
     },
     {
+        name: 'shared rule schemas',
+        command: ['tsx', 'scripts/contracts/generate-shared-rule-schemas.ts'],
+        checks: true,
+        because:
+            'shared/rules/schemas/*.schema.json, the JSON Schema form of each shared rules file — the PHP twin validates with it, so it is committed beside the data'
+    },
+    {
         name: 'module graph',
         command: ['tsx', 'scripts/docs/generate-module-graph.ts'],
         checks: true,

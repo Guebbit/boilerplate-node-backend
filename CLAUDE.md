@@ -22,6 +22,19 @@ verifies all of it. The pre-commit hook runs it with
 
 See: `docs/api/contract-fragmentation.md`, `docs/api/regenerating.md`
 
+## Changing a shared rule
+
+A rule that is a table, list or set of numbers both backends need lives in `shared/rules/*.yaml`,
+checked by a Zod schema under `src/infrastructure/config/shared-rules/`. Logic that must answer
+the same in both lives as `shared/cases/*.cases.yaml`.
+
+1. Edit the YAML.
+2. `npm run regenerate` (rewrites `shared/rules/schemas/*.schema.json`).
+3. Add or adjust the cases; their count is pinned in the test.
+4. Never edit the twin's copy from here.
+
+See: `docs/theory/shared-rules.md`
+
 ## TypeScript
 
 Every rule in this section is machine-checked — `tseslint.configs.strictTypeChecked` plus the

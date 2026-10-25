@@ -71,6 +71,7 @@ export default withMermaid(
                             { text: 'Authorization', link: '/theory/authorization' },
                             { text: 'Sessions', link: '/theory/sessions' },
                             { text: 'Tenancy', link: '/theory/tenancy' },
+                            { text: 'Shared rules', link: '/theory/shared-rules' },
                             { text: 'Data Protection', link: '/theory/data-protection' },
                             { text: 'Data Retention', link: '/theory/data-retention' },
                             {
