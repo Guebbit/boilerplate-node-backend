@@ -118,6 +118,6 @@ describe('the gate it guards, end to end on one guarded route', () => {
 
         const response = await api().post('/feedback/contact').send(CONTACT_PAYLOAD);
 
-        expect(response.status).toBe(401);
+        expect(response.status).toBe(403);
     });
 });

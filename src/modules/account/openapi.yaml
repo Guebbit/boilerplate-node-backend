@@ -864,6 +864,8 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/LoginOutcome'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # Once half the failure budget is spent a human-check token is required: 403.
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 # `credentialLimiters` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
@@ -1151,10 +1153,10 @@ paths:
                 # gets nothing to iterate on. Only the refresh cookie tells the two apart, since
                 # a refusal has no account to mint a session for.
                 # Also answered when a human-challenge provider is active and the caller's
-                # token is missing or refused — see antibot/openapi.yaml.
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # token is missing or refused — a 403, see antibot/openapi.yaml.
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # Signing up with an email that is already registered, or `Idempotency-Key` naming a
-                # request still in flight. A spent challenge token is a 401 `ANTIBOT_VERIFICATION_FAILED`.
+                # request still in flight. A spent challenge token is a 403 `ANTIBOT_VERIFICATION_FAILED`.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 # Also answered when `Idempotency-Key` was already used with a different body.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -1180,7 +1182,7 @@ paths:
             responses:
                 '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
                 # A human-challenge provider is active and the caller's token is missing or refused.
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 # `resetRequestLimiters` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }

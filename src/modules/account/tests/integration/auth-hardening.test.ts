@@ -188,7 +188,7 @@ describe('loginChallengeGate — rung 3 on the block budget too', () => {
         expect([first.status, second.status]).toEqual([401, 401]);
         const response = await attempt('c@example.com');
 
-        expect(response.status).toBe(401);
+        expect(response.status).toBe(403);
         expect(response.body.errors[0].code).toBe('ANTIBOT_VERIFICATION_FAILED');
     });
 });
@@ -231,7 +231,7 @@ describe('loginChallengeGate — rung 3 only once the identity budget is mostly 
 
         const response = await attempt(); // third: two failures on record, exactly half of four
 
-        expect(response.status).toBe(401);
+        expect(response.status).toBe(403);
         expect(response.body.errors[0].code).toBe('ANTIBOT_VERIFICATION_FAILED');
     });
 });

@@ -41,7 +41,7 @@ describe('humanChallengeGate', () => {
         expect(header).not.toHaveBeenCalled();
     });
 
-    it('refuses with 401 when a provider is selected and no token is sent', () => {
+    it('refuses with 403 when a provider is selected and no token is sent', () => {
         setEnvironment({ NODE_ANTIBOT_PROVIDER: 'turnstile' });
         const response = makeResponseStub();
         const next = jest.fn();
@@ -49,7 +49,7 @@ describe('humanChallengeGate', () => {
         humanChallengeGate(makeRequest(), response, next);
 
         expect(next).not.toHaveBeenCalled();
-        expect(response.status).toHaveBeenCalledWith(401);
+        expect(response.status).toHaveBeenCalledWith(403);
     });
 
     it('calls next() when the provider vouches for the token', async () => {
@@ -81,7 +81,7 @@ describe('humanChallengeGate', () => {
         expect(fetchSpy.mock.calls[0][1]).toMatchObject({ redirect: 'error' });
         // Too long to read: a refusal, never a pass — even though the body said `success: true`.
         expect(next).not.toHaveBeenCalled();
-        expect(response.status).toHaveBeenCalledWith(401);
+        expect(response.status).toHaveBeenCalledWith(403);
     });
 
     it.each([
@@ -103,7 +103,7 @@ describe('humanChallengeGate', () => {
         });
 
         expect(next).not.toHaveBeenCalled();
-        expect(response.status).toHaveBeenCalledWith(401);
+        expect(response.status).toHaveBeenCalledWith(403);
     });
 
     it('refuses when the provider throws rather than answering — never a pass', async () => {
@@ -117,6 +117,6 @@ describe('humanChallengeGate', () => {
         await new Promise(process.nextTick);
 
         expect(next).not.toHaveBeenCalled();
-        expect(response.status).toHaveBeenCalledWith(401);
+        expect(response.status).toHaveBeenCalledWith(403);
     });
 });

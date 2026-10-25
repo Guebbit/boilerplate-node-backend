@@ -16,7 +16,7 @@ export type AntibotRung = 'rate-limit' | 'email-policy' | 'human-challenge';
  * Warn-logs a refusal in the one shared shape. Takes `method`/`path`/`status` rather than a full
  * `Request`/`Response` so rung 2's email-policy check — read from inside a service, not a
  * middleware — can call it too. `status` is whatever the caller actually answers: usually a
- * refusal (429, 401), but rung 2's own 201 ruse logs its true `status` here precisely because the
+ * refusal (429, 403), but rung 2's own 201 ruse logs its true `status` here precisely because the
  * response lies about it.
  */
 export const logAntibotRefusal = (
@@ -37,7 +37,7 @@ export const logAntibotRefusal = (
 
 /**
  * Logs, then answers through the shared error envelope — never express-rate-limit's own
- * plain-text body. Status/code/message stay the caller's choice: a 429 and a 401 mean genuinely
+ * plain-text body. Status/code/message stay the caller's choice: a 429 and a 403 mean genuinely
  * different things, and collapsing them into one shape would lose that.
  */
 export const refuseAntibot = (

@@ -209,7 +209,7 @@ describe('paymentDeclineChallengeGate — rung 3 only once the account has a dec
 
         const response = await attempt(); // second attempt: one prior decline on record
 
-        expect(response.status).toBe(401);
+        expect(response.status).toBe(403);
         expect(response.body.errors[0].code).toBe('ANTIBOT_VERIFICATION_FAILED');
     });
 });
@@ -301,7 +301,7 @@ describe('the address-block decline budget — card testing spread over many acc
         const third = await decline('account-c');
 
         expect([first.status, second.status]).toEqual([409, 409]);
-        expect(third.status).toBe(401);
+        expect(third.status).toBe(403);
         expect(third.body.errors[0].code).toBe('ANTIBOT_VERIFICATION_FAILED');
     });
 

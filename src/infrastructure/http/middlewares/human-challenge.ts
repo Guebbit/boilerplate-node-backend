@@ -20,7 +20,7 @@ const TOKEN_HEADER = 'antibot-challenge-token';
 
 /** Answers the shared error envelope and logs it — see `antibot-log.ts`. */
 const refuse = (request: Request, response: Response): void => {
-    refuseAntibot('human-challenge', request, response, 401, [
+    refuseAntibot('human-challenge', request, response, 403, [
         {
             code: ERROR_CODES.ANTIBOT_VERIFICATION_FAILED,
             message: t('generic.error-antibot-verification-failed')
