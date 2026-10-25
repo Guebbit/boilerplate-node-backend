@@ -204,17 +204,36 @@ aborts both, so each document leaves exactly one row.
 
 ## Configuration
 
-| Variable                          | Default                 | Meaning                                                                                          |
-| --------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------ |
-| `NODE_EINVOICING_PROVIDER`        | `pdf`                   | Which e-invoicing provider issues a document — see above                                         |
-| `NODE_INVOICING_RATE_LIMIT_MAX`   | `20`                    | Invoice/credit-note renders allowed per window, per ACCOUNT — every hit spawns a Chromium launch |
-| `NODE_INVOICE_PDF_RETENTION_DAYS` | `30`                    | Days a rendered PDF is kept for the next download; `0` stores nothing                            |
-| `NODE_DOCUMENT_STORE_PATH`        | `tmp/storage/documents` | Where those PDFs live — private, plaintext, regenerable; mount a volume                          |
+| Variable                             | Default                 | Meaning                                                                                                     |
+| ------------------------------------ | ----------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `NODE_EINVOICING_PROVIDER`           | `pdf`                   | Which e-invoicing provider issues a document — see above                                                    |
+| `NODE_INVOICING_RATE_LIMIT_MAX`      | `20`                    | Invoice/credit-note renders allowed per window, per ACCOUNT — every hit spawns a Chromium launch            |
+| `NODE_INVOICE_PDF_RETENTION_DAYS`    | `30`                    | Days a rendered PDF is kept for the next download; `0` stores nothing                                       |
+| `NODE_INVOICE_BUYER_RETENTION_YEARS` | `10`                    | Years after the end of the issue year that the buyer block stays on a document; see [Retention](#retention) |
+| `NODE_DOCUMENT_STORE_PATH`           | `tmp/storage/documents` | Where those PDFs live — private, plaintext, regenerable; mount a volume                                     |
 
 The seller's identity (legal name, VAT number, address) is [`shop`'s](./shop.md#the-story): the
 withdrawal notice prints it too, and `orders` cannot import this module. Every getter is read fresh
 per call, so a correction needs no restart. It reaches only the documents issued after it: an
 invoice keeps the seller it was issued with, and a credit note copies the invoice's.
+
+## Retention
+
+The numbered document is the tax record; the buyer on it is not needed forever. The nightly
+`reap:invoices` blanks an invoice's or credit note's buyer block once
+`NODE_INVOICE_BUYER_RETENTION_YEARS` (10) years have passed, counted from the end of the issue
+year in the document's frozen time zone. A credit note runs on its own issue date.
+
+- **Blanked:** `billingAddress` is unset and `buyerErasedAt` is set. The PDF prints one line saying
+  the buyer's data was removed after the legal period.
+- **Kept:** the number, dates, seller, lines, every amount, `orderId`, and a credit note's link to
+  its invoice. Stats and the numbering series are unaffected.
+- **Cached PDF:** `removeDocument` deletes `invoice-<id>.pdf` / `credit-note-<id>.pdf` at once,
+  instead of waiting for `reap:invoice-pdfs`.
+- **Idempotent:** a document without a buyer block is not a candidate, so a second run finds
+  nothing, and `reencrypt` already skips it.
+
+The rule and the reasoning are in [Invoices: the tax clock](../theory/data-retention.md#invoices-the-tax-clock).
 
 ## VAT rounding and the net unit price
 

@@ -38,15 +38,28 @@ describe('localeService.updateLanguage — the audit row', () => {
 
         await localeService.updateLanguage(
             'es',
-            { name: ' Spanish ', active: false },
+            { name: ' Spanish ', direction: 'rtl' },
             testCallerContext
         );
 
         expect(metadataOf(auditSpy, localeAuditActions.ADMIN_LOCALE_UPDATED)).toEqual({
             changes: {
                 name: { from: 'es', to: 'Spanish' },
-                active: { from: true, to: false }
+                direction: { from: 'ltr', to: 'rtl' }
             }
+        });
+    });
+});
+
+describe('localeService.deactivateLanguage — the audit row', () => {
+    it('carries the active flag, old and new', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        await localeRepository.create(makeLocale({ tag: 'es', name: 'es', nativeName: 'es' }));
+
+        await localeService.deactivateLanguage('es', testCallerContext);
+
+        expect(metadataOf(auditSpy, localeAuditActions.ADMIN_LOCALE_DEACTIVATED)).toEqual({
+            changes: { active: { from: true, to: false } }
         });
     });
 });

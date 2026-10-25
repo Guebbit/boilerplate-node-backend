@@ -13,6 +13,8 @@ export const invoicingConfig = defineConfig({
     name: 'invoicing',
     shape: {
         NODE_EINVOICING_PROVIDER: text({ default: 'pdf', case: 'lower' }),
-        NODE_INVOICE_PDF_RETENTION_DAYS: int({ default: 30, min: 0 })
+        NODE_INVOICE_PDF_RETENTION_DAYS: int({ default: 30, min: 0 }),
+        // Years after the end of the issue year that the buyer block stays on a document.
+        NODE_INVOICE_BUYER_RETENTION_YEARS: int({ default: 10, min: 1 })
     }
 });

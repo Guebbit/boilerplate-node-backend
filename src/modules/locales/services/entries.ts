@@ -8,11 +8,11 @@
 import type {
     CreateLocaleEntryRequest,
     LocaleEntry,
-    LocaleEntryInput,
     LocaleImportResult,
     LocaleApp,
-    UpdateLocaleEntryRequest
+    ReplaceLocaleEntryRequest
 } from '@types';
+import { ERROR_CODES } from '@api/error-codes';
 import { t } from '@infrastructure/i18n';
 import {
     generateReject,
@@ -26,8 +26,8 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { auditChanges } from '@infrastructure/observability/audit-changes';
 import { localeAuditActions } from '../audit';
 import { normalizeTag, type LocaleEntryDocument } from '../model';
-import { localeEntryRepository, localeRepository } from '../repository';
-import { findBatchCollision, findDuplicateKey, rejectUnusableKey } from './keys';
+import { localeEntryRepository, localeRepository, type EntryChange } from '../repository';
+import { findBatchCollision, findDuplicateKey, isKeyLengthValid, rejectUnusableKey } from './keys';
 import { languageNotFound, rejectUnknownApp } from './languages';
 import { refreshOverlay } from './overlay';
 
@@ -73,11 +73,12 @@ export const searchEntries = (
 
         /*
          * Scoped to this language, and sorted by key rather than by the shared `createdAt` default:
-         * a translator reads an alphabetical list, and `(locale, key)` is unique, so sorting on it
-         * is already the total order that keeps a row off two pages.
+         * a translator reads an alphabetical list. The unique index is `(locale, app, key)`, so
+         * without an `app` filter one key repeats once per app: `app` breaks that tie, and the
+         * repository closes the order with `_id`.
          */
         return localeEntryRepository
-            .search(filters, { locale: language.tag }, { key: 1 })
+            .search(filters, { locale: language.tag }, { key: 1, app: 1 })
             .then((result) => generateSuccess(result));
     });
 
@@ -109,7 +110,12 @@ export const createEntry = async (
     const existingKeys = await localeEntryRepository.listKeys(language.tag, app);
 
     if (existingKeys.includes(key))
-        return generateReject(409, [t('locales.error-key-exists', { key })]);
+        return generateReject(409, [
+            {
+                code: ERROR_CODES.LOCALE_ENTRY_KEY_EXISTS,
+                message: t('locales.error-key-exists', { key })
+            }
+        ]);
 
     const unusable = rejectUnusableKey(key, existingKeys);
     if (unusable) return unusable;
@@ -161,7 +167,7 @@ export const updateEntry = (
     tag: string,
     app: string,
     entryId: string,
-    payload: UpdateLocaleEntryRequest,
+    payload: ReplaceLocaleEntryRequest,
     context?: CallerContext
 ): Promise<ResponseSuccess<LocaleEntryDocument> | ResponseReject> => {
     const unknownApp = rejectUnknownApp(app);
@@ -230,16 +236,56 @@ export const removeEntry = (
 };
 
 /**
+ * Rejects a bulk import whose keys cannot be stored, before anything is read or written.
+ *
+ * A key outside 1 to 200 characters is a 422, two keys equal once trimmed a 409; an empty
+ * `merge` is a 422 (nothing to change). `null` keys take part: a `null` for a key that is not
+ * stored is a no-op, but a key that could never exist is still a malformed request.
+ */
+const rejectBadBatch = (
+    inputs: readonly EntryChange[],
+    mode: 'replace' | 'merge'
+): ResponseReject | undefined => {
+    if (mode === 'merge' && inputs.length === 0)
+        return generateReject(422, [
+            { code: ERROR_CODES.LOCALE_ENTRIES_EMPTY, message: t('locales.error-entries-empty') }
+        ]);
+
+    const keys = inputs.map(({ key }) => key);
+
+    const badKey = keys.find((key) => !isKeyLengthValid(key));
+    if (badKey !== undefined)
+        return generateReject(422, [
+            {
+                code: ERROR_CODES.LOCALE_ENTRY_KEY_INVALID,
+                message: t('locales.error-key-invalid', { key: badKey })
+            }
+        ]);
+
+    const duplicate = findDuplicateKey(keys);
+    if (duplicate !== undefined)
+        return generateReject(409, [
+            {
+                code: ERROR_CODES.LOCALE_ENTRY_KEY_EXISTS,
+                message: t('locales.error-key-exists', { key: duplicate })
+            }
+        ]);
+
+    return undefined;
+};
+
+/**
  * Bulk import, in either of its two meanings.
  *
  * `replace` deletes keys the body did not name; `merge` leaves them alone — the only difference,
- * kept as one flag rather than two functions. The whole batch validates before anything writes: a
+ * kept as one flag rather than two functions. A `null` value deletes its key under `merge`
+ * (`replace` bodies never carry one). The whole batch validates before anything writes: a
  * half-applied import is worse than a rejected one.
  */
 export const importEntries = async (
     tag: string,
     app: LocaleApp,
-    entries: readonly LocaleEntryInput[],
+    entries: Readonly<Record<string, string | null>>,
     mode: 'replace' | 'merge',
     context?: CallerContext
 ): Promise<ResponseSuccess<LocaleImportResult> | ResponseReject> => {
@@ -249,33 +295,42 @@ export const importEntries = async (
     const unknownApp = rejectUnknownApp(app);
     if (unknownApp) return unknownApp;
 
-    const inputs = entries.map(({ key, value }) => ({ key: key.trim(), value }));
-    const keys = inputs.map(({ key }) => key);
+    const inputs: EntryChange[] = Object.entries(entries).map(([key, value]) => ({
+        key: key.trim(),
+        value
+    }));
 
-    const duplicate = findDuplicateKey(keys);
-    if (duplicate !== undefined)
-        return generateReject(409, [t('locales.error-key-exists', { key: duplicate })]);
+    const badBatch = rejectBadBatch(inputs, mode);
+    if (badBatch) return badBatch;
 
-    const batchCollision = findBatchCollision(keys);
+    // A key being deleted is outside every collision check below: it will not exist afterwards.
+    const written = inputs.filter(({ value }) => value !== null).map(({ key }) => key);
+    const deleted = new Set(inputs.filter(({ value }) => value === null).map(({ key }) => key));
+
+    const batchCollision = findBatchCollision(written);
     if (batchCollision)
         return generateReject(409, [
-            t('locales.error-key-collision', {
-                key: batchCollision[0],
-                existing: batchCollision[1]
-            })
+            {
+                code: ERROR_CODES.LOCALE_ENTRY_KEY_COLLISION,
+                message: t('locales.error-key-collision', {
+                    key: batchCollision[0],
+                    existing: batchCollision[1]
+                })
+            }
         ]);
 
     /*
      * What the batch will have to coexist with once it lands. For a replace that is nothing —
      * every stored key it does not name is about to be deleted — and for a merge it is the stored
-     * keys the batch leaves standing. Checking the batch against keys it is about to overwrite
-     * would refuse imports that are perfectly consistent with themselves.
+     * keys the batch neither writes nor deletes. Checking the batch against keys it is about to
+     * overwrite or remove would refuse imports that are perfectly consistent with themselves.
      */
-    const incoming = new Set(keys);
+    const incoming = new Set(written);
     const stored = await localeEntryRepository.listKeys(language.tag, app);
-    const survivors = mode === 'replace' ? [] : stored.filter((key) => !incoming.has(key));
+    const survivors =
+        mode === 'replace' ? [] : stored.filter((key) => !incoming.has(key) && !deleted.has(key));
 
-    for (const key of keys) {
+    for (const key of written) {
         const unusable = rejectUnusableKey(key, survivors);
         if (unusable) return unusable;
     }

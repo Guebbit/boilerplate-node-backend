@@ -365,12 +365,39 @@ describe('deactivating a language', () => {
     it('refuses to deactivate the fallback locale', async () => {
         await givenLanguage(FALLBACK);
 
-        const result = await localeService.updateLanguage(FALLBACK, { active: false });
+        const result = await localeService.deactivateLanguage(FALLBACK);
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(409);
         const stored = await localeRepository.findByTag(FALLBACK);
         expect(stored?.active).toBe(true);
+    });
+
+    it('switches another language off, then back on', async () => {
+        await givenLanguage('es');
+
+        const off = await localeService.deactivateLanguage('es');
+        const on = await localeService.activateLanguage('es');
+
+        expect(off.data?.active).toBe(false);
+        expect(on.data?.active).toBe(true);
+    });
+
+    it('409s on a move to the state the language is already in', async () => {
+        await givenLanguage('es');
+        await givenLanguage('fr', {}, { active: false });
+
+        const alreadyOn = await localeService.activateLanguage('es');
+        const alreadyOff = await localeService.deactivateLanguage('fr');
+
+        expect([alreadyOn.status, alreadyOff.status]).toEqual([409, 409]);
+    });
+
+    it('404s for a language nobody registered', async () => {
+        const activated = await localeService.activateLanguage('zz');
+        const deactivated = await localeService.deactivateLanguage('zz');
+
+        expect([activated.status, deactivated.status]).toEqual([404, 404]);
     });
 
     it('leaves the fallback locale updatable on every other field', async () => {
@@ -581,10 +608,7 @@ describe('importEntries, through the service', () => {
         const result = await localeService.importEntries(
             'es',
             FRONTEND,
-            [
-                { key: 'products.list', value: 'Lista' },
-                { key: 'products.list.title', value: 'Catálogo' }
-            ],
+            { 'products.list': 'Lista', 'products.list.title': 'Catálogo' },
             'merge'
         );
 
@@ -598,7 +622,7 @@ describe('importEntries, through the service', () => {
         const result = await localeService.importEntries(
             'es',
             FRONTEND,
-            [{ key: 'products.list', value: 'Lista' }],
+            { 'products.list': 'Lista' },
             'merge'
         );
 
@@ -617,7 +641,7 @@ describe('importEntries, through the service', () => {
         const result = await localeService.importEntries(
             'es',
             FRONTEND,
-            [{ key: 'products.list', value: 'Lista' }],
+            { 'products.list': 'Lista' },
             'replace'
         );
 
@@ -625,20 +649,77 @@ describe('importEntries, through the service', () => {
         expect(await localeEntryRepository.listKeys('es', FRONTEND)).toEqual(['products.list']);
     });
 
-    it('refuses a batch naming one key twice', async () => {
+    it('refuses two keys that are the same once trimmed', async () => {
         await givenLanguage('es');
 
         const result = await localeService.importEntries(
             'es',
             FRONTEND,
-            [
-                { key: 'cart.title', value: 'Carrito' },
-                { key: 'cart.title', value: 'Tu carrito' }
-            ],
+            { 'cart.title': 'Carrito', ' cart.title': 'Tu carrito' },
             'merge'
         );
 
         expect(result.status).toBe(409);
+    });
+
+    it.each([
+        ['empty once trimmed', '   '],
+        ['longer than 200 characters', 'k'.repeat(201)]
+    ])('refuses a key that is %s, even when its value is null', async (_label, key) => {
+        await givenLanguage('es');
+
+        const result = await localeService.importEntries('es', FRONTEND, { [key]: null }, 'merge');
+
+        expect(result.status).toBe(422);
+    });
+
+    it('refuses an empty merge', async () => {
+        await givenLanguage('es', { 'cart.title': 'Carrito' });
+
+        const result = await localeService.importEntries('es', FRONTEND, {}, 'merge');
+
+        expect(result.status).toBe(422);
+    });
+
+    it('deletes the keys a merge sets to null and keeps the rest', async () => {
+        await givenLanguage('es', { 'cart.title': 'Carrito', 'cart.empty': 'Vacío' });
+
+        const result = await localeService.importEntries(
+            'es',
+            FRONTEND,
+            { 'cart.empty': null },
+            'merge'
+        );
+
+        expect(result.data).toMatchObject({ created: 0, updated: 0, removed: 1 });
+        expect(await localeEntryRepository.listKeys('es', FRONTEND)).toEqual(['cart.title']);
+    });
+
+    it('treats a null for a key that is not stored as a no-op that leaves the revision alone', async () => {
+        await givenLanguage('es', { 'cart.title': 'Carrito' });
+
+        const result = await localeService.importEntries(
+            'es',
+            FRONTEND,
+            { 'cart.gone': null },
+            'merge'
+        );
+
+        expect(result.data).toEqual({ created: 0, updated: 0, removed: 0, revision: 0 });
+    });
+
+    it('lets a merge delete a key and write one that would have collided with it', async () => {
+        await givenLanguage('es', { 'products.list.title': 'Catálogo' });
+
+        const result = await localeService.importEntries(
+            'es',
+            FRONTEND,
+            { 'products.list.title': null, 'products.list': 'Lista' },
+            'merge'
+        );
+
+        expect(result.success).toBe(true);
+        expect(await localeEntryRepository.listKeys('es', FRONTEND)).toEqual(['products.list']);
     });
 
     it('reports the revision the import produced, so a client need not re-read the manifest', async () => {
@@ -647,7 +728,7 @@ describe('importEntries, through the service', () => {
         const result = await localeService.importEntries(
             'es',
             FRONTEND,
-            [{ key: 'cart.title', value: 'Carrito' }],
+            { 'cart.title': 'Carrito' },
             'merge'
         );
 
@@ -682,6 +763,32 @@ describe('searchEntries', () => {
         const result = await localeService.searchEntries('es');
 
         expect(result.data?.items.map(({ key }) => key)).toEqual(['a.key', 'b.key', 'c.key']);
+    });
+
+    // The same key lives once per app, so `key` alone ties. The order is key, then app, and a page
+    // boundary inside a tie neither repeats nor skips a row.
+    it('breaks a key shared by two apps by app, across a page boundary', async () => {
+        await givenLanguage('es');
+        for (const key of ['a.key', 'b.key', 'c.key']) {
+            await givenEntry('es', FRONTEND, key, 'fe');
+            await givenEntry('es', BACKEND, key, 'be');
+        }
+
+        const pages = await Promise.all(
+            [1, 2, 3].map((page) => localeService.searchEntries('es', { page, pageSize: 2 }))
+        );
+        const rows = pages.flatMap((result) =>
+            (result.data?.items ?? []).map(({ key, app }) => `${key}@${app}`)
+        );
+
+        expect(rows).toEqual([
+            `a.key@${BACKEND}`,
+            `a.key@${FRONTEND}`,
+            `b.key@${BACKEND}`,
+            `b.key@${FRONTEND}`,
+            `c.key@${BACKEND}`,
+            `c.key@${FRONTEND}`
+        ]);
     });
 
     it('404s for a language that does not exist', async () => {
@@ -779,9 +886,10 @@ describe('createLanguage and updateLanguage', () => {
     it('leaves alone every field an update does not mention', async () => {
         await givenLanguage('es');
 
-        const result = await localeService.updateLanguage('es', { active: false });
+        const result = await localeService.updateLanguage('es', { direction: 'rtl' });
 
-        expect(result.data?.active).toBe(false);
+        expect(result.data?.direction).toBe('rtl');
+        expect(result.data?.active).toBe(true);
         expect(result.data?.name).toBe('es');
         expect(result.data?.nativeName).toBe('es');
     });

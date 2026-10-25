@@ -186,6 +186,20 @@ export const addRegexFilter = (
 export const DEFAULT_SORT: Record<string, 1 | -1> = { createdAt: -1, _id: -1 };
 
 /**
+ * Closes a sort with `_id`, so the order is total.
+ *
+ * Every query that applies `skip` needs one: a sort on a non-unique key leaves tied documents in an
+ * order MongoDB may change between two queries, and a page boundary inside a tie repeats or skips
+ * rows (see {@link DEFAULT_SORT}). A sort that already names `_id` is returned unchanged, so a
+ * caller's own direction wins.
+ *
+ * @param sort - the sort a caller chose
+ * @returns the same sort, ending in `_id` (descending when it had to be added)
+ */
+export const withTiebreaker = (sort: Record<string, 1 | -1>): Record<string, 1 | -1> =>
+    '_id' in sort ? sort : { ...sort, _id: -1 };
+
+/**
  * Case-insensitive, accent-tolerant ordering for a caller-chosen sort: without it "apple" files
  * after "Zebra", which no shopper expects from a Title column.
  * https://www.mongodb.com/docs/manual/reference/collation/
@@ -218,7 +232,7 @@ export const resolveSort = (
         // The first mention of a field wins: `price,-price` cannot mean both.
         if (path !== undefined && !(path in sort)) sort[path] = descending ? -1 : 1;
     }
-    return Object.keys(sort).length > 0 ? { ...sort, _id: -1 } : undefined;
+    return Object.keys(sort).length > 0 ? withTiebreaker(sort) : undefined;
 };
 
 /**

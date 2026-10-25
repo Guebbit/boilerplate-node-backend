@@ -33,5 +33,9 @@ export const { replace: replaceLocale, update: updateLocale } = createUpdateCont
     idFrom: (request) => String(request.params.locale),
     update: (tag, changes, request) =>
         localeService.updateLanguage(tag, changes, callerContextOf(request)),
-    present: (row) => presentLocale(row)
+    present: (row, request) =>
+        presentLocale(
+            row,
+            localeService.languageActions(row, localeService.standingOn(request.caller))
+        )
 });

@@ -27,7 +27,6 @@ interface SchemaShape {
  * name, so stripping either leaves the same remainder for a matched pair.
  *
  * Multipart: excluded — the factory validates the JSON-shaped schema for both content types.
- * `Merge*`:  `locales`' bulk entry replace, a deliberately separate convention.
  */
 const REPLACE_OR_UPDATE = /^(Replace|Update)(.+)Request$/;
 
@@ -80,6 +79,7 @@ describe('Replace/Update schema parity', () => {
             Address: 'addresses',
             Example: 'example',
             Locale: 'locales',
+            LocaleEntries: 'locales',
             OrderById: 'orders',
             Product: 'products',
             UserById: 'users',

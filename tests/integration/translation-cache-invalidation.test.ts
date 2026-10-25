@@ -134,19 +134,13 @@ describe('switching a language off or on re-renders the cached products', () => 
         expect(await readInItalian(id)).toMatchObject({ cache: 'HIT' });
 
         // Switching it on must not leave the cached fallback served in its place.
-        const on = await api()
-            .patch('/locales/it')
-            .set('Authorization', bearer)
-            .send({ active: true });
+        const on = await api().post('/locales/it/activate').set('Authorization', bearer);
         expect(on.status).toBe(200);
         expect(await readInItalian(id)).toEqual({ title: 'Cuccia', cache: 'MISS' });
         expect(await readInItalian(id)).toMatchObject({ cache: 'HIT' });
 
         // Switching it off must not leave the cached Italian served for up to an hour.
-        const off = await api()
-            .patch('/locales/it')
-            .set('Authorization', bearer)
-            .send({ active: false });
+        const off = await api().post('/locales/it/deactivate').set('Authorization', bearer);
         expect(off.status).toBe(200);
         expect(await readInItalian(id)).toEqual({ title: 'Old title', cache: 'MISS' });
     });

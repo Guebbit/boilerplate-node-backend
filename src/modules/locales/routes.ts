@@ -20,6 +20,7 @@ import { getLocaleMessages } from './controllers/get-locale-messages';
 import { getLocaleApps } from './controllers/get-locale-apps';
 import { createLocale } from './controllers/create-locale';
 import { replaceLocale, updateLocale } from './controllers/update-locale';
+import { activateLocale, deactivateLocale } from './controllers/activate-locale';
 import { deleteLocale } from './controllers/delete-locale';
 import {
     getLocaleEntries,
@@ -28,9 +29,9 @@ import {
 } from './controllers/get-locale-entries';
 import {
     createLocaleEntry,
-    updateLocaleEntry,
+    replaceLocaleEntry,
     replaceLocaleEntries,
-    mergeLocaleEntries
+    updateLocaleEntries
 } from './controllers/write-locale-entries';
 import { deleteLocaleEntry } from './controllers/delete-locale-entry';
 import { getEntityTranslations } from './controllers/get-entity-translations';
@@ -122,6 +123,25 @@ router.patch(
     updateLocale
 );
 
+// POST /locales/:locale/activate and /deactivate — switch a language on or off. `update:Locale`
+// like the edit: it was the same PATCH until `active` left the body.
+router.post(
+    '/:locale/activate',
+    getAuth,
+    isAuthOrCredential,
+    requirePermission('update', 'Locale'),
+    invalidateCache(['locales']),
+    activateLocale
+);
+router.post(
+    '/:locale/deactivate',
+    getAuth,
+    isAuthOrCredential,
+    requirePermission('update', 'Locale'),
+    invalidateCache(['locales']),
+    deactivateLocale
+);
+
 // DELETE /locales/:locale — remove a language (the fallback one cannot be removed).
 router.delete(
     '/:locale',
@@ -180,7 +200,7 @@ router.patch(
     isAuthOrCredential,
     requirePermission('update', 'Locale'),
     invalidateCache(['locales']),
-    mergeLocaleEntries
+    updateLocaleEntries
 );
 
 // GET /locales/:locale/apps/:app/entries/:entryId — one entry, guarded like the list it comes from.
@@ -199,7 +219,7 @@ router.put(
     isAuthOrCredential,
     requirePermission('update', 'Locale'),
     invalidateCache(['locales']),
-    updateLocaleEntry
+    replaceLocaleEntry
 );
 
 // DELETE /locales/:locale/apps/:app/entries/:entryId — remove one entry.

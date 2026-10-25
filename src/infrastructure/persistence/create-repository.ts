@@ -19,6 +19,7 @@ import {
     addRegexFilter,
     toSearchPattern,
     DEFAULT_SORT,
+    withTiebreaker,
     SORT_COLLATION,
     sortOf,
     type PaginatedMeta
@@ -374,7 +375,8 @@ export function createRepository<TDocument extends Document, TWire>(
     const findAll = (
         where: QueryFilter<TDocument> = {},
         // `sort` defaults to `DEFAULT_SORT` because this applies `skip`, and a non-unique sort
-        // makes which documents a page contains undefined.
+        // makes which documents a page contains undefined. A caller's own sort is closed with
+        // `_id` below, so no caller has to remember to.
         {
             sort = DEFAULT_SORT,
             collated = false,
@@ -386,7 +388,7 @@ export function createRepository<TDocument extends Document, TWire>(
         // Query#collation: string comparison rules for the sort; the default binary order stays
         // for every read that did not ask for one.
         if (collated) query.collation(SORT_COLLATION);
-        return query.sort(sort).skip(skip).limit(limit).exec();
+        return query.sort(withTiebreaker(sort)).skip(skip).limit(limit).exec();
     };
 
     /** Count the documents matching a filter. */

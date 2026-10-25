@@ -55,7 +55,6 @@ rules:
     #
     # Allowlisted, an idempotent single-field PUT whose one editable property is set outright
     # rather than merged, so PUT is the correct verb even though the name reads as "update":
-    #   - updateLocaleEntry: the entry's key is not editable, so `value` is its whole surface.
     verb-replace-is-put:
         description: 'operationId matching ^replace must be a PUT operation — see the allowlist above this rule if a genuine exception is needed.'
         severity: error
@@ -67,7 +66,7 @@ rules:
     verb-update-is-patch:
         description: 'operationId matching ^update must be a PATCH operation — see the allowlist above this rule if a genuine exception is needed.'
         severity: error
-        given: "$.paths[*][?(@property != 'patch' && @.operationId && @.operationId.match(/^update/) && @.operationId != 'updateLocaleEntry')]"
+        given: "$.paths[*][?(@property != 'patch' && @.operationId && @.operationId.match(/^update/))]"
         then:
             field: operationId
             function: falsy

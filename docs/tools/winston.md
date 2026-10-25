@@ -191,7 +191,9 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `inventory`      | `ADMIN_STOCK_RECEIVED`                       | `admin.stock.received`                       | —                      |
 | `invoicing`      | `ADMIN_CREDIT_NOTE_VIEWED`                   | `admin.credit_note.viewed`                   | `credit_note`          |
 | `invoicing`      | `ADMIN_INVOICE_VIEWED`                       | `admin.invoice.viewed`                       | `invoice`              |
+| `locales`        | `ADMIN_LOCALE_ACTIVATED`                     | `admin.locale.activated`                     | `locale`               |
 | `locales`        | `ADMIN_LOCALE_CREATED`                       | `admin.locale.created`                       | `locale`               |
+| `locales`        | `ADMIN_LOCALE_DEACTIVATED`                   | `admin.locale.deactivated`                   | `locale`               |
 | `locales`        | `ADMIN_LOCALE_DELETED`                       | `admin.locale.deleted`                       | `locale`               |
 | `locales`        | `ADMIN_LOCALE_ENTRY_CREATED`                 | `admin.locale_entry.created`                 | `locale_entry`         |
 | `locales`        | `ADMIN_LOCALE_ENTRY_DELETED`                 | `admin.locale_entry.deleted`                 | `locale_entry`         |

@@ -3,7 +3,7 @@
  * The write routes on a language's entries: one key at a time, plus two bulk imports. The app is
  * a path segment (`/locales/:locale/apps/:app/entries`), so a PUT replaces exactly what the
  * GET on the same URI lists. The bulk routes are two methods rather than one route with a flag —
- * PUT replaces (what isn't sent is deleted), PATCH merges (what isn't sent is left alone) — so a
+ * PUT replaces (what isn't sent is deleted), PATCH merges (what isn't sent is left alone, `null` deletes) — so a
  * mis-set boolean can't silently empty a dictionary.
  */
 
@@ -11,18 +11,17 @@ import type { Request, Response } from 'express';
 import type { ZodType } from 'zod';
 import {
     CreateLocaleEntryBody,
-    MergeLocaleEntriesBody,
+    UpdateLocaleEntriesBody,
     ReplaceLocaleEntriesBody,
-    UpdateLocaleEntryBody
+    ReplaceLocaleEntryBody
 } from '@api/schemas.zod';
 import type {
     CreateLocaleEntryRequest,
     LocaleEntry,
-    LocaleEntryInput,
     LocaleImportResult,
-    MergeLocaleEntriesRequest,
+    UpdateLocaleEntriesRequest,
     ReplaceLocaleEntriesRequest,
-    UpdateLocaleEntryRequest
+    ReplaceLocaleEntryRequest
 } from '@types';
 import { successResponse, createdResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -62,11 +61,11 @@ export const createLocaleEntry = (
  * Edit one value. The key is not editable — it's the identity a client looks the string
  * up by, so changing it is a delete plus an add, not an update.
  */
-export const updateLocaleEntry = (
+export const replaceLocaleEntry = (
     request: Request<
         { locale: string; app: string; entryId: string },
         unknown,
-        UpdateLocaleEntryRequest
+        ReplaceLocaleEntryRequest
     >,
     response: Response
 ) => {
@@ -76,7 +75,7 @@ export const updateLocaleEntry = (
     });
     if (!entryId) return;
 
-    const body = parseBody(UpdateLocaleEntryBody, request.body, response);
+    const body = parseBody(ReplaceLocaleEntryBody, request.body, response);
     if (!body) return;
 
     return localeService
@@ -92,7 +91,7 @@ export const updateLocaleEntry = (
 
             return successResponse<LocaleEntry>(response, presentLocaleEntry(result.data));
         })
-        .catch(catchAs(response, 'updateLocaleEntry'));
+        .catch(catchAs(response, 'replaceLocaleEntry'));
 };
 
 /**
@@ -103,12 +102,12 @@ export const updateLocaleEntry = (
  * @returns the express handler
  */
 const importEntries =
-    (mode: 'replace' | 'merge', schema: ZodType<{ entries: LocaleEntryInput[] }>) =>
+    (mode: 'replace' | 'merge', schema: ZodType<{ entries: Record<string, string | null> }>) =>
     (
         request: Request<
             { locale: string; app: string },
             unknown,
-            ReplaceLocaleEntriesRequest | MergeLocaleEntriesRequest
+            ReplaceLocaleEntriesRequest | UpdateLocaleEntriesRequest
         >,
         response: Response
     ) => {
@@ -128,7 +127,9 @@ const importEntries =
 
                 return successResponse<LocaleImportResult>(response, result.data);
             })
-            .catch(catchAs(response, `${mode}LocaleEntries`));
+            .catch(
+                catchAs(response, mode === 'merge' ? 'updateLocaleEntries' : 'replaceLocaleEntries')
+            );
     };
 
 /**
@@ -139,6 +140,7 @@ export const replaceLocaleEntries = importEntries('replace', ReplaceLocaleEntrie
 
 /**
  * PATCH /locales/:locale/apps/:app/entries (admin)
- * Upsert what is sent, leave the rest alone. Nothing is ever deleted by this route.
+ * JSON merge patch over the app's key-to-text map: a string upserts, `null` deletes, a key the
+ * body does not name is left alone.
  */
-export const mergeLocaleEntries = importEntries('merge', MergeLocaleEntriesBody);
+export const updateLocaleEntries = importEntries('merge', UpdateLocaleEntriesBody);
