@@ -43,7 +43,7 @@ flowchart TD
 
 ### Create → 201
 
-- The body answered is the created resource, in the usual envelope — a checkout answers the order
+- The body answered is the created resource itself ([Success Responses](./responses.md)) — a checkout answers the order
   itself, an address write answers the address.
 - `Location` names the new resource's URI (RFC 9110 §9.3.3) — `Location: /products/{id}`. The
   contract declares it `required` on every 201, and the shared response check
@@ -291,6 +291,7 @@ A create body declares no `'null'` type — there is nothing to clear yet, so `n
 | --- | --- |
 | 200 | an update, an action, a search, an idempotent refresh |
 | 201 | a create — something new exists, and `Location` says where |
+| 204 | a delete, a logout, a confirm step: done, nothing to say, no body — see [No content](./responses.md#no-content) |
 | 404 | the target does not exist (or the caller may not know it does) |
 | 409 | the write conflicts with the current state — a duplicate, a lifecycle refusal, an action whose target state is already reached, a cap reached (`WEBHOOK_SUBSCRIPTION_LIMIT_REACHED`: deleting a record would let the same request through) |
 | 412 | an `If-Match` that no longer matches — see [Conditional writes](#conditional-writes-etag-and-if-match) |
