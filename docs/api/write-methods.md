@@ -156,7 +156,8 @@ A row the caller may not see, an unknown id and a malformed one are the same 404
 
 A POST is not idempotent: sent twice, it may create twice. Every POST that moves money, stock or
 an account takes an `Idempotency-Key` — orders, checkout, payments, stock receipts and
-adjustments. See [Idempotency](../tools/idempotency.md).
+adjustments. The exception is `POST /payments`, which takes none: asking again refreshes the same
+intent. See [Idempotency](../tools/idempotency.md).
 
 ## PUT — replace
 
@@ -251,6 +252,9 @@ A path the contract declares, asked with a method it does not give it, answers *
 - **`Allow` is sorted**, with HEAD beside GET. `OPTIONS` is never judged: the CORS layer answers
   a preflight before any route runs.
 - **A trailing slash is the same path.** `/things/` reads as `/things`.
+- **A literal path wins over a templated one.** `DELETE /products/categories` would otherwise
+  read `categories` as the `{id}` of `/products/{id}` and answer 404, so the guard runs a second
+  time before the routers, for paths with no `{param}` only.
 - **A module this build does not serve stays a 404**: its paths are in the table, but nothing is
   mounted to ask.
 - **Not declared per operation.** The 405 belongs to a request that matched no operation, so no
@@ -258,7 +262,8 @@ A path the contract declares, asked with a method it does not give it, answers *
   `x-error-codes`.
 
 The guard is `methodNotAllowed`, built from `api/operation-routes.ts`, which `npm run gen:api`
-derives from the contract's paths and mounted right before the 404 in `src/app/routes.ts`.
+derives from the contract's paths and mounted twice in `src/app/routes.ts`: before the routers
+(literal paths) and right before the 404 (every other path).
 
 ## Empty, `null`, omitted
 
@@ -407,9 +412,10 @@ anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` 
   `createDeleteController` open the precondition for the request; `repository.save` and
   `repository.deleteOne` meet it. A module's service never sees a header.
 - **The body is validated first.** A 422 for a body the schema refuses wins over a 412.
-- **A read never answers `304`.** The tag covers the row's own edits, not what is derived from
-  config (prices, the caller's language), so it validates *writes* only. `If-None-Match` is ignored
-  on these reads.
+- **Only a versioned read can answer `304`.** The tag covers the row's own edits, not what is
+  derived from config (prices, the caller's language), so it validates *writes* only.
+  `If-None-Match` is ignored on these reads. The `privateNoCache` reads (`orders`, `users`,
+  `feedback`) are the exception: Express's own ETag check answers them `304` on no change.
 - **Browsers** may send `If-Match` and read `ETag` cross-origin: both are in the CORS allow and
   expose lists.
 

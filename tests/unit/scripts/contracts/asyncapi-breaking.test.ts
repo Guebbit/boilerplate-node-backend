@@ -39,12 +39,4 @@ describe('breakingChanges', () => {
 
         expect(changes.map(({ path }) => path)).toEqual(['/channels/order.paid']);
     });
-
-    it('acknowledges the order.shipped channel the shipment events replaced', () => {
-        const before = document('0.1.0', { 'order.shipped': {} });
-
-        const changes = breakingChanges(before, document('0.1.0', {}));
-
-        expect(changes).toEqual([]);
-    });
 });

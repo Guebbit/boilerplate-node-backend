@@ -41,7 +41,7 @@ has lapsed. There is no endpoint for it: a manual run is `npm run job reap:previ
 
 > The domain behind these routes: [`products`](../modules/products.md) · routes and middleware: `src/modules/products/routes.ts`
 
-Standard CRUD for the product catalogue. Read endpoints are public and Redis-cached. Write endpoints need `create:Product`, `update:Product` or `delete:Product` respectively, and invalidate the cache on change. Both single-item and bulk operations are supported.
+Standard CRUD for the product catalogue. Read endpoints are public and Redis-cached. Write endpoints need `create:Product`, `update:Product` or `delete:Product` respectively, and invalidate the cache on change.
 
 Stock is read-only on this surface. `onHand`, `reserved` and `available` are serialized on every product, and no product body accepts a counter: an absolute stock write on a form overwrites whatever sold while it was open, so a product's stock, an opening count included, is `POST /inventory/levels/{productId}/receive` or `POST /inventory/levels/{productId}/adjust`, both signed and both audited.
 
@@ -61,7 +61,7 @@ Per-user saved products — ids only, joined client-side like the cart's lines. 
 
 > The domain behind these routes: [`orders`](../modules/orders.md) · routes and middleware: `src/modules/orders/routes.ts`
 
-Orders are normally created via checkout but can also be created manually (a correction, not a sales channel — see [orders](../modules/orders.md#creating-an-order)). Each order has a PDF invoice available for download. Reads are scoped to the caller's own orders unless they hold a wider `orders.*` key, in which case the same route answers for the whole shop — one route, narrowed by the rules rather than branched on a role.
+Orders are normally created via checkout but can also be created manually (a correction, not a sales channel — see [orders](../modules/orders.md#creating-an-order)). Each order has a PDF invoice available for download. Reads are scoped to the caller's own orders unless they hold a wider `read` / `display:Order` permission, in which case the same route answers for the whole shop — one route, narrowed by the rules rather than branched on a role.
 
 `orders` is the only writer of a `status` — `payments` and `delivery` each report a move through it rather than writing the field themselves. `POST /orders/{id}/status-override` and the `forced`/`reason` fields on delivery's own doors are the one exception: an `override:Order` holder correcting a status the ordinary rules refuse, always with a reason, always recorded (see [orders](../modules/orders.md#the-admin-override)).
 
@@ -107,7 +107,7 @@ Both reads page and report `meta.totalItems`, and neither is bounded in the serv
 
 > The domain behind these routes: [`users`](../modules/users.md) · routes and middleware: `src/modules/users/routes.ts`
 
-Full user management, behind `read:User` / `create:User` / `update:User` / `delete:User` per route. Supports individual and bulk operations. The equivalent self-service actions (profile read, account deletion) live under `/account`.
+Full user management, behind `read:User` / `create:User` / `update:User` / `delete:User` per route. The equivalent self-service actions (profile read, account deletion) live under `/account`.
 
 The three `/hard` routes are not extra operations in disguise. Each mounts the same handler as its
 `:id` sibling behind `routeFlag('hardDelete')`, so the destructive variant has a URL of its own —
@@ -163,7 +163,7 @@ Subscription CRUD (`/webhooks/subscriptions`, including secret rotation), the de
 
 > The domain behind these routes: [`api-keys`](../modules/api-keys.md) · routes and middleware: `src/modules/api-keys/routes.ts`
 
-Mint, list and revoke machine credentials (`/api-keys`), each behind an `apikeys.any.*` key. Only a digest of the token is stored.
+Mint, list and revoke machine credentials (`/api-keys`), each behind `read:ApiKey`, `create:ApiKey` or `delete:ApiKey`. Only a digest of the token is stored.
 
 ## Audit
 

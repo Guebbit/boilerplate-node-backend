@@ -67,6 +67,10 @@ flowchart TD
     class D,E effect;
 ```
 
+Lifting asks no confirmation: the account page shows the hold's note and when it was set, and the
+toast says what happened. Lifted by mistake? Pause checkout again: the buyer gets the pause email
+again, and you write a new note.
+
 A **paid** cancellation is never a reason to pause on its own. Place a hold only for abuse, and write
 the note as if the buyer reads it, because they do. → [`orders`](../modules/orders.md#the-purchase-hold)
 
