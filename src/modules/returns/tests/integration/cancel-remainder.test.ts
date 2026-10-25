@@ -399,6 +399,39 @@ describe('the buyer cancelling what has not shipped', () => {
         expect(await returnRepository.findByOrderId(fixture.orderId)).toEqual([]);
         expect(await refundsOf(fixture.orderId)).toEqual([]);
     });
+
+    it('rolls the cancellation back when its refund cannot be recorded', async () => {
+        const fixture = await partlyShipped();
+        jest.spyOn(paymentService, 'openReturnRefund').mockRejectedValueOnce(
+            new Error('no ledger')
+        );
+
+        await expect(buyerCancels(fixture)).rejects.toThrow('no ledger');
+
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(fixture.orderId);
+        expect(fulfillmentOrder.status).toBe('in_progress');
+        expect(await returnRepository.findByOrderId(fixture.orderId)).toEqual([]);
+        expect(await refundsOf(fixture.orderId)).toEqual([]);
+    });
+
+    it('commits the refund record with the closed Return, and leaves a refused send to the sweep', () =>
+        withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
+            const fixture = await partlyShipped();
+            jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
+
+            const cancelled = created(await buyerCancels(fixture));
+
+            expect(cancelled.status).toBe('closed');
+            const before = await paymentService.getForOrder(fixture.orderId, asAdmin());
+            expect(before.success && before.data.refunds[0]).toMatchObject({
+                status: 'failed',
+                returnId: String(cancelled._id)
+            });
+            await paymentService.retryOpenRefunds();
+            expect(await refundsOf(fixture.orderId)).toEqual([
+                { reason: 'cancellation', amount: 10 }
+            ]);
+        }));
 });
 
 /** A staff request to cancel the remainder, with the caller's role. */

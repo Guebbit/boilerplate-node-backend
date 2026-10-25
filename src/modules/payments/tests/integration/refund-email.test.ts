@@ -17,13 +17,12 @@ import { orderService } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
 import { resetDomainEvents } from '@kernel/events';
 import { settleOutboxNudges } from '@kernel/outbox';
-import { paymentService } from '@modules/payments/services';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asCustomer, asAdmin, testCallerContext, callerContextAs } from '@tests/callers';
 import { eventually } from '@tests/eventually';
-import { payByCard } from '@modules/payments/tests/factories';
+import { payByCard, refundForReturn } from '@modules/payments/tests/factories';
 import { paymentRepository } from '../../repository';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -144,7 +143,7 @@ describe('who may return money for a return', () => {
     ])('refuses %s, and no money moves', async (_who, context) => {
         const { orderId } = await paidOrder();
 
-        await expect(paymentService.refundForReturn(orderId, RETURN, context)).rejects.toThrow(
+        await expect(refundForReturn(orderId, RETURN, context)).rejects.toThrow(
             /may not return money/
         );
 
@@ -155,14 +154,14 @@ describe('who may return money for a return', () => {
         const { user, orderId } = await paidOrder();
 
         await expect(
-            paymentService.refundForReturn(orderId, RETURN, callerContextAs('customer', user.id))
+            refundForReturn(orderId, RETURN, callerContextAs('customer', user.id))
         ).rejects.toThrow(/may not return money/);
     });
 
     it("lets the order's own buyer cancel the remainder, which is their withdrawal", async () => {
         const { user, orderId } = await paidOrder();
 
-        const refunded = await paymentService.refundForReturn(
+        const refunded = await refundForReturn(
             orderId,
             { ...RETURN, reason: 'cancellation' },
             callerContextAs('customer', user.id)
@@ -175,7 +174,7 @@ describe('who may return money for a return', () => {
         const { orderId } = await paidOrder();
 
         await expect(
-            paymentService.refundForReturn(
+            refundForReturn(
                 orderId,
                 { ...RETURN, reason: 'cancellation' },
                 callerContextAs('customer', 'a-stranger')
@@ -187,7 +186,7 @@ describe('who may return money for a return', () => {
         const { orderId } = await paidOrder();
 
         await expect(
-            paymentService.refundForReturn(orderId, RETURN, callerContextAs('manager'))
+            refundForReturn(orderId, RETURN, callerContextAs('manager'))
         ).resolves.not.toBeNull();
     });
 });
@@ -196,7 +195,7 @@ describe('a refund that must not mail', () => {
     it("is silent for a return's refund — `returns` closes it with its own notice", async () => {
         const { orderId } = await paidOrder();
 
-        await paymentService.refundForReturn(
+        await refundForReturn(
             orderId,
             { returnId: '64b64c4f4f4f4f4f4f4f4f4f', amount: 50, lines: [], shipping: 0 },
             callerContextAs('manager')

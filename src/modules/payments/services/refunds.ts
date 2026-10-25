@@ -706,13 +706,13 @@ const performCardRefund = (
  * ever gets a record opened and left `pending` ({@link leaveForOperator}), whoever asked.
  *
  * @param orderId - the order whose payment is being returned
- * @param context - present only for a request with a caller (`refundPayment`, `refundForReturn`);
+ * @param context - present only for a request with a caller (`refundPayment`);
  *  the `order.cancelled` listener (`refundForOrder`) has none
  * @param request - the amount and the reason; omitted, it is everything left, for a cancellation
  * @returns the payment as it now stands — always still `succeeded`, whatever was returned (its
  *   `displayStatus` says how much) — and whether the record was left open for an operator; or
  *   `null` when there was nothing to return
- * @internal The step beneath `refundPayment`, `refundForOrder` and `refundForReturn`, which carry
+ * @internal The step beneath `refundPayment` and `refundForOrder`, which carry
  *   the scope and permission checks; it never leaves the barrel.
  */
 export const performRefund = (
@@ -945,29 +945,36 @@ const mayReturnMoney = (
         payment.userId !== undefined &&
         context.caller.id === String(payment.userId));
 
+/** What {@link openReturnRefund} opened. */
+export interface OpenedReturnRefund {
+    /** The record's id, for {@link sendOpenedRefund}. */
+    refundId: string;
+    /** `true` when the payment was paid by hand: nothing to send, an operator pays it back. */
+    byHand: boolean;
+}
+
 /**
- * Give back the money for goods a customer returned, or for a remainder cancelled before it
- * shipped — `returns`' one door into the refund. The amount is clamped to what the payment still
- * has left, so a goodwill refund made earlier (or one racing it) can never make a return over-refund; the refund is
- * recorded as `return` (or `cancellation`) and carries `returnId`, so `returns` can close the
- * return when the money lands — now, or later when the sweep finishes it.
+ * Record the money owed for goods a customer returned, or for a remainder cancelled before it
+ * shipped — `returns`' one door into the refund. It runs INSIDE the return's own transaction, so
+ * the return and what it owes commit together or not at all: nothing durable is ever missing.
  *
- * A provider refusal throws after the refund is recorded as `failed`: the sweep will retry it and
- * `returns` will hear of it then.
+ * The amount is clamped to what the payment still has left, so a goodwill refund made earlier
+ * can never make a return over-refund. The record carries `returnId`, so `returns` can close the
+ * return when the money lands. Sending it is {@link sendOpenedRefund}, after the commit.
  *
  * @param orderId - the returned order
- * @param input - which return this pays for, and whether it is a `return` (the default) or a
- *   remainder `cancellation`, how much (a decimal in the payment's currency), and
- *   which goods and delivery that amount covers — what the credit note credits at their own rates
- * @param context - the staff member who received the goods, audited on the refund
- * @returns the payment as it now stands, and whether the refund was left open for an operator (a
- *   hand-paid payment: the return stays `received` until `settleRefundByHand`); or `null` when
- *   there is nothing to return — no succeeded payment, nothing left of it, or a zero amount
- * @throws Error when money would move and the caller is not one {@link mayReturnMoney} allows; the
- *   refusal is audited as `security.forbidden`. The amount is the caller's word, so the caller must
- *   be one that already judged the return.
+ * @param input - which return this pays for, whether it is a `return` (the default) or a
+ *   remainder `cancellation`, how much (a decimal in the payment's currency), and which goods
+ *   and delivery that amount covers — what the credit note credits at their own rates
+ * @param context - the staff member who received the goods
+ * @param session - the return's transaction
+ * @returns the opened record, or `null` when nothing is owed: no succeeded payment, nothing left
+ *   of it, or a zero amount. Decided before anything is written.
+ * @throws Error when the caller is not one {@link mayReturnMoney} allows (audited as
+ *   `security.forbidden`), or when a racing write moved the payment under this transaction: either
+ *   way the transaction aborts rather than close the return with nothing owed.
  */
-export const refundForReturn = (
+export const openReturnRefund = (
     orderId: string,
     input: {
         returnId: string;
@@ -976,9 +983,10 @@ export const refundForReturn = (
         shipping: number;
         reason?: Extract<RefundReason, 'return' | 'cancellation'>;
     },
-    context: CallerContext
-): Promise<RefundOutcome | null> =>
-    paymentRepository.findByOrderId(orderId).then((payment) => {
+    context: CallerContext,
+    session: ClientSession
+): Promise<OpenedReturnRefund | null> =>
+    paymentRepository.findByOrderId(orderId, undefined, session).then((payment) => {
         if (payment?.status !== REFUNDABLE_PAYMENT_STATUS) return null;
 
         const reason = input.reason ?? 'return';
@@ -989,19 +997,72 @@ export const refundForReturn = (
                 metadata: { reason: 'missing_permission', permission: 'receive:Return' }
             });
             throw new Error(
-                '[payments] refundForReturn: the caller may not return money for a return.'
+                '[payments] openReturnRefund: the caller may not return money for a return.'
             );
         }
 
         if (toMinorUnits(input.amount, payment.currency) <= 0 || remainingOf(payment) <= 0)
             return null;
 
-        return performRefund(orderId, context, {
-            amount: input.amount,
-            capAtRemaining: true,
-            reason,
-            returnId: input.returnId,
-            lines: input.lines,
-            shipping: input.shipping
+        return openRefund(
+            payment,
+            {
+                amount: input.amount,
+                capAtRemaining: true,
+                reason,
+                returnId: input.returnId,
+                lines: input.lines,
+                shipping: input.shipping
+            },
+            context.caller.id,
+            session
+        ).then((opened) => {
+            if (!opened)
+                throw new Error(
+                    '[payments] openReturnRefund: the payment moved under the return; retry.'
+                );
+            return { refundId: String(opened.refund._id), byHand: isHandRecorded(payment) };
         });
     });
+
+/**
+ * Send a refund {@link openReturnRefund} opened, now that the return has committed. A hand-paid
+ * record is only put on file as owed. A card record goes to the provider; a refusal, like any
+ * other error, is logged and left to the sweep, which finds the record by itself.
+ *
+ * @param orderId - the order
+ * @param refundId - the record to send
+ * @param context - the staff member, audited on the refund
+ * @returns `'settled'` when the money went back, else `'open'`
+ */
+export const sendOpenedRefund = (
+    orderId: string,
+    refundId: string,
+    context: CallerContext
+): Promise<'settled' | 'open'> =>
+    paymentRepository
+        .findByOrderId(orderId)
+        .then((payment) => {
+            const refund = payment?.refunds.find((record) => String(record._id) === refundId);
+            if (!payment || !refund) return 'open';
+            if (refund.status === RefundStatus.succeeded) return 'settled';
+            if (refund.status !== RefundStatus.pending) return 'open';
+
+            auditRefundRequested(payment, refund, context);
+            if (isHandRecorded(payment)) {
+                recordOwedByHand(payment, refund, context);
+                return 'open';
+            }
+            return attemptRefund(payment, refund, context)
+                .then((after) => after ?? settledElsewhere(orderId, refund))
+                .then((settled) => (settled ? 'settled' : 'open'));
+        })
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: `Payments: the refund ${refundId} for order ${orderId} is recorded but not settled; the payment sweep retries it`,
+                error
+            });
+            // Stryker restore all
+            return 'open';
+        });

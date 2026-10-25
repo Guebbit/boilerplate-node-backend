@@ -7,9 +7,10 @@
  *   units are never on the shelf behind a return that reads `approved`, nor missing from it behind
  *   one that reads `received`. The move is conditional (`approved` only), which is what makes it —
  *   and so the restock — happen once however many staff click.
- * - **Closed** is a fact about money, and money cannot roll back. The refund is opened on the
- *   payment BEFORE the provider is asked, carrying this return's id; if the provider refuses, the
- *   refund stays open, the payment sweep retries it, and the `PAYMENT_REFUNDED` listener closes the return when the
+ * - **Closed** is a fact about money, and money cannot roll back. The refund RECORD is opened in
+ *   that same transaction, carrying this return's id, so a received return always has its debt
+ *   on file. Only the provider call follows the commit; if it is refused, the record stays open,
+ *   the payment sweep retries it, and the `PAYMENT_REFUNDED` listener closes the return when the
  *   refund finally lands. A return is therefore never stuck `received` for a reason nobody is
  *   retrying.
  *
@@ -17,7 +18,6 @@
  */
 
 import { t } from '@infrastructure/i18n';
-import { logger } from '@infrastructure/adapters/logger';
 import {
     fieldError,
     generateReject,
@@ -32,7 +32,8 @@ import { cheapestStandardShipping } from '@modules/delivery';
 import { ownOrderFlag } from '@modules/access';
 import { buyerIdOf, orderService, sumLineItems } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
-import { paymentService, RefundLeftOpenError } from '@modules/payments';
+import { paymentService } from '@modules/payments';
+import type { OpenedReturnRefund } from '@modules/payments';
 import type { CallerContext } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { returnRepository } from '../repository';
@@ -67,7 +68,13 @@ const notReceivable = (): ResponseReject =>
 type Claimed =
     | { kind: 'deduction-too-high' }
     | { kind: 'lost' }
-    | { kind: 'received'; received: ReturnDocument; breakdown: RefundBreakdown };
+    | {
+          kind: 'received';
+          received: ReturnDocument;
+          breakdown: RefundBreakdown;
+          /** The refund record opened with the receipt, or `null` when nothing is owed. */
+          opened: OpenedReturnRefund | null;
+      };
 
 /**
  * What this return is owed, from its frozen lines and the order's own money — given what the
@@ -113,19 +120,19 @@ const quote = (
 /**
  * The move that IS the receipt: under the order's lock row, quote what is owed — whether this is
  * the return that brings the order whole is decided here, so two receipts racing cannot both take
- * the delivery — then the conditional status claim, the restock and `return.received`, in one
- * transaction.
+ * the delivery — then the conditional status claim, the restock, the refund record and
+ * `return.received`, in one transaction.
  * @param returned - the return
  * @param order - the order it came from
  * @param handlingDeduction - what staff keep back
- * @param actor - the staff member receiving the goods, for the order's timeline
+ * @param context - the staff member receiving the goods, for the order's timeline and the refund
  * @returns what the transaction decided: a refusal of the deduction, a lost race, or the receipt
  */
 const claimAndRestock = (
     returned: ReturnDocument,
     order: OrderDocument,
     handlingDeduction: number,
-    actor: string | null | undefined
+    context: CallerContext
 ): Promise<Claimed> =>
     announceInTransaction(
         async (session): Promise<Claimed> => {
@@ -160,12 +167,27 @@ const claimAndRestock = (
                 String(received.orderId),
                 {
                     type: 'return_received',
-                    actor,
+                    actor: context.caller.id,
                     data: { returnId: String(received._id), refundAmount: verdict.breakdown.total }
                 },
                 session
             );
-            return { kind: 'received', received, breakdown: verdict.breakdown };
+            // Nothing owed (a deduction ate it all, or zero-priced lines) opens no record.
+            const opened =
+                verdict.breakdown.total > 0
+                    ? await paymentService.openReturnRefund(
+                          orderId,
+                          {
+                              returnId: String(received._id),
+                              amount: verdict.breakdown.total,
+                              lines: wireLines(received.lines),
+                              shipping: verdict.breakdown.shipping
+                          },
+                          context,
+                          session
+                      )
+                    : null;
+            return { kind: 'received', received, breakdown: verdict.breakdown, opened };
         },
         // Only a receipt is announced; a refused deduction or a lost race writes nothing.
         (claimed) =>
@@ -182,57 +204,29 @@ const claimAndRestock = (
     );
 
 /**
- * Pay the customer back and finish the return. A provider refusal is logged and left: the refund
- * is on the payment as `failed`, the sweep retries it, and the return closes when it lands. A
- * hand-paid refund is only opened: the return closes when an operator confirms it.
+ * Pay the customer back and finish the return. The refund record exists already (it committed with
+ * the receipt), so a refusal or any error here only leaves it for the sweep: the return closes
+ * when it lands. A hand-paid refund is only on file: the return closes when an operator confirms.
  *
  * @param received - the return, just received
- * @param shipping - the delivery cost inside the refund, so the credit note can rate it apart
+ * @param opened - the refund record opened with the receipt, or `null` when nothing is owed
  * @param context - the staff member, audited on the refund
  * @returns the return as it now stands — `closed` if the money went back, else still `received`
  */
 const refundAndClose = (
     received: ReturnDocument,
-    shipping: number,
+    opened: OpenedReturnRefund | null,
     context: CallerContext
 ): Promise<ReturnDocument> => {
-    const owed = received.refundAmount ?? 0;
     const finish = (): Promise<ReturnDocument> =>
         closeReturn(String(received._id), context.caller.id).then((closed) => closed ?? received);
 
-    // Nothing owed (a deduction ate it all, or zero-priced lines) — there is no money to wait for.
-    if (owed <= 0) return finish();
+    // No record: there is no money to wait for.
+    if (!opened) return finish();
 
-    return (
-        paymentService
-            .refundForReturn(
-                String(received.orderId),
-                {
-                    returnId: String(received._id),
-                    amount: owed,
-                    lines: wireLines(received.lines),
-                    shipping
-                },
-                context
-            )
-            // `null` means there was nothing to return — no succeeded payment, or nothing left of it —
-            // which is as finished as a paid-back refund: there is no money left to wait for.
-            // A refund left open is hand-paid money: the return waits in `received`, and the
-            // `PAYMENT_REFUNDED` listener closes it once an operator confirms the money went back.
-            .then((outcome) => (outcome?.leftOpen ? received : finish()))
-            .catch((error: unknown) => {
-                // Stryker disable all
-                logger.error({
-                    message:
-                        error instanceof RefundLeftOpenError
-                            ? `Returns: the refund for return ${String(received._id)} is not settled yet — the payment sweep retries it, and the return closes when it lands`
-                            : `Returns: the refund for return ${String(received._id)} could not be recorded — no sweep will retry it, a person must refund it`,
-                    error
-                });
-                // Stryker restore all
-                return received;
-            })
-    );
+    return paymentService
+        .sendOpenedRefund(String(received.orderId), opened.refundId, context)
+        .then((state) => (state === 'settled' ? finish() : received));
 };
 
 /**
@@ -252,41 +246,37 @@ const receiveFor = (
     input: ReceiveReturnInput,
     context: CallerContext
 ): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> =>
-    claimAndRestock(returned, order, input.handlingDeduction ?? 0, context.caller.id).then(
-        (claimed) => {
-            if (claimed.kind === 'deduction-too-high')
-                return generateReject(422, [
-                    fieldError(
-                        'handlingDeduction',
-                        t('returns.deduction-too-high'),
-                        ERROR_CODES.RETURN_DEDUCTION_INVALID
-                    )
-                ]);
-            if (claimed.kind === 'lost') return notReceivable();
-
-            const { received, breakdown } = claimed;
-            return inventoryService
-                .refreshStockCacheForProducts(
-                    received.lines.map(({ productId }) => String(productId))
+    claimAndRestock(returned, order, input.handlingDeduction ?? 0, context).then((claimed) => {
+        if (claimed.kind === 'deduction-too-high')
+            return generateReject(422, [
+                fieldError(
+                    'handlingDeduction',
+                    t('returns.deduction-too-high'),
+                    ERROR_CODES.RETURN_DEDUCTION_INVALID
                 )
-                .then(() => syncReturnStatus(String(received.orderId)))
-                .then(() => {
-                    recordAudit(context, {
-                        action: returnsAuditActions.ADMIN_RETURN_RECEIVED,
-                        outcome: 'success',
-                        targetType: 'return',
-                        targetId: id,
-                        metadata: {
-                            orderId: String(received.orderId),
-                            refundAmount: breakdown.total,
-                            ...ownOrderFlag(context, buyerIdOf(order))
-                        }
-                    });
-                    return refundAndClose(received, breakdown.shipping, context);
-                })
-                .then((after) => generateSuccess(after, 200, t('returns.received')));
-        }
-    );
+            ]);
+        if (claimed.kind === 'lost') return notReceivable();
+
+        const { received, breakdown, opened } = claimed;
+        return inventoryService
+            .refreshStockCacheForProducts(received.lines.map(({ productId }) => String(productId)))
+            .then(() => syncReturnStatus(String(received.orderId)))
+            .then(() => {
+                recordAudit(context, {
+                    action: returnsAuditActions.ADMIN_RETURN_RECEIVED,
+                    outcome: 'success',
+                    targetType: 'return',
+                    targetId: id,
+                    metadata: {
+                        orderId: String(received.orderId),
+                        refundAmount: breakdown.total,
+                        ...ownOrderFlag(context, buyerIdOf(order))
+                    }
+                });
+                return refundAndClose(received, opened, context);
+            })
+            .then((after) => generateSuccess(after, 200, t('returns.received')));
+    });
 
 /**
  * Record that a return's goods arrived: restock them, pay the customer back, close the return.

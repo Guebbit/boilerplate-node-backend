@@ -232,7 +232,8 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
     ) => Promise<PaymentDocument | null>;
     findByOrderId: (
         orderId: string,
-        scope?: Record<string, unknown>
+        scope?: Record<string, unknown>,
+        session?: ClientSession
     ) => Promise<PaymentDocument | null>;
     findByProviderRef: (providerRef: string) => Promise<PaymentDocument | null>;
     attachProviderRef: (paymentId: string, providerRef: string) => Promise<PaymentDocument | null>;
@@ -337,9 +338,13 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      *
      * @param orderId - the order
      * @param scope - the caller's scope, or `undefined` for an admin
+     * @param session - the caller's transaction, when the read must see its own writes
      */
-    findByOrderId: (orderId: string, scope?: Record<string, unknown>) =>
-        paymentModel.findOne({ orderId: toObjectId(orderId), ...scope }).exec(),
+    findByOrderId: (orderId: string, scope?: Record<string, unknown>, session?: ClientSession) =>
+        paymentModel
+            .findOne({ orderId: toObjectId(orderId), ...scope })
+            .session(session ?? null)
+            .exec(),
 
     /**
      * The payment a webhook delivery names. UNSCOPED, and the only read here that is: a provider

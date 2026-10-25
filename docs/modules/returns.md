@@ -10,7 +10,7 @@ withdrawal before dispatch becomes), [`inventory`](./inventory.md) (received goo
 delivery a withdrawal refunds), [`access`](./access.md) (the audit flag of an approve or receive on
 the caller's own order) and [`shop`](./shop.md) (where goods come back to, who pays the postage).
 **Breaks if you change** — `orders`' `OrderActions.withdraw`/`withdrawUntil` (the button reads them)
-and `orders`' `withdrawById`; `payments`' `refundForReturn` and the `returnId` on a refund.
+and `orders`' `withdrawById`; `payments`' `openReturnRefund`, `sendOpenedRefund` and the `returnId` on a refund.
 :::
 
 ## Its neighbourhood
@@ -273,8 +273,9 @@ sequenceDiagram
     W->>R: POST /returns/{id}/receive
     R->>R: one transaction
     R->>I: approved → received, and one restock per line
-    Note over R,I: commit — the goods are back on sale
-    R->>P: open a refund carrying the returnId, then ask the provider
+    R->>P: open the refund record, carrying the returnId
+    Note over R,P: commit — the goods are back on sale, the debt is on file
+    R->>P: ask the provider
     alt the money went back
         P-->>R: settled — return closed
     else the provider refused
@@ -284,10 +285,11 @@ sequenceDiagram
 ```
 
 - **Received is a fact about a parcel; closed is a fact about money.** The status move and the
-  restock are ONE transaction, so units are never on the shelf behind a return that reads `approved`
-  nor missing from it behind one that reads `received`. Money cannot roll back, so it is not in it:
-  the refund is opened on the payment first and carries this return's id, so a refund the provider
-  refused is retried by the payment sweep and closes the return when it lands. A return is never stuck
+  restock and the refund RECORD are ONE transaction, so units are never on the shelf behind a return
+  that reads `approved`, and a received return always has its debt on file. Money cannot roll back,
+  so only the provider call is outside it: the record carries this return's id, so a refund the
+  provider refused (or one never sent) is retried by the payment sweep and closes the return when
+  it lands. A return is never stuck
   `received` for a reason nobody is retrying.
 - **Restock happens on `received`, not on refund** — two facts, two moments. No reservation is
   claimed: the order's hold was `committed` at payment and stays that way.
@@ -335,8 +337,8 @@ Why here and not in `delivery`: a remainder cancel moves **money, stock and the 
 only this module already reaches all four. In **one transaction**, under the order's lock row, it
 asks `delivery` to mark the lines (`cancelRemainder`, which also recomputes the order's summary and
 moves its status when that completes it), gives the units back (`orders.releaseStock`, which drives the hold) and
-writes the Return. The refund follows, as on receipt, through `refundForReturn` with
-`reason: cancellation` and the Return's id; a refund the provider refuses stays open for the payment
+writes the Return and opens its refund record (`openReturnRefund`, `reason: cancellation`, the
+Return's id). Only the provider call follows the commit (`sendOpenedRefund`); a refund the provider refuses stays open for the payment
 sweep, and the Return stays closed.
 
 ```mermaid
@@ -353,8 +355,9 @@ sequenceDiagram
     D-->>R: the lines cancelled, the summary updated
     R->>O: releaseStock(lines)
     R->>R: write the Return (closed) · return.requested · return.closed
+    R->>P: openReturnRefund(reason: cancellation, returnId)
     Note over R: commit
-    R->>P: refundForReturn(reason: cancellation, returnId)
+    R->>P: sendOpenedRefund
     P-->>C: the refund's own mail
 ```
 

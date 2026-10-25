@@ -30,7 +30,7 @@ import { asReject } from '@tests/response';
 import { observePort } from '@tests/ports';
 import * as auditPort from '@infrastructure/observability/audit';
 import { asCustomer, asAdmin, callerContextAs } from '@tests/callers';
-import { payByCard, refundForOrder } from '@modules/payments/tests/factories';
+import { payByCard, refundForOrder, refundForReturn } from '@modules/payments/tests/factories';
 
 /* Replaced, not spied on — see `tests/support/ports.ts` for why. */
 jest.mock('@infrastructure/observability/audit', () =>
@@ -414,19 +414,19 @@ describe('a refund after one the provider keeps refusing', () => {
             const input = { lines: [], shipping: 0 };
 
             await expect(
-                paymentService.refundForReturn(
+                refundForReturn(
                     orderId,
                     { ...input, returnId: 'return-a', amount: 30 },
                     callerContextAs('admin')
                 )
-            ).rejects.toThrow('outage');
+            ).resolves.toBe('open');
             await expect(
-                paymentService.refundForReturn(
+                refundForReturn(
                     orderId,
                     { ...input, returnId: 'return-b', amount: 40 },
                     callerContextAs('admin')
                 )
-            ).rejects.toThrow('outage');
+            ).resolves.toBe('open');
 
             const during = await paymentOf(orderId);
             expect(during.refunds.map((entry) => [entry.returnId, entry.status])).toEqual([
@@ -476,7 +476,7 @@ describe('a return refund racing another refund', () => {
             return addRefund(...args);
         });
 
-        const outcome = await paymentService.refundForReturn(
+        const outcome = await refundForReturn(
             orderId,
             { returnId: 'return-a', amount: 100, lines: [], shipping: 0 },
             callerContextAs('admin')
@@ -682,7 +682,7 @@ describe('the request of a refund', () => {
             jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
 
             await expect(
-                paymentService.refundForReturn(
+                refundForReturn(
                     orderId,
                     {
                         returnId: new Types.ObjectId().toString(),
@@ -692,7 +692,7 @@ describe('the request of a refund', () => {
                     },
                     own
                 )
-            ).rejects.toThrow('down');
+            ).resolves.toBe('open');
             await paymentService.retryOpenRefunds();
 
             const rows = requestRows(auditSpy);

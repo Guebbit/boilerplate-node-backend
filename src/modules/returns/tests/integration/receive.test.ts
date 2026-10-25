@@ -552,7 +552,7 @@ describe('what receiving answers and announces', () => {
     it('closes a return worth nothing without asking the provider for a refund', async () => {
         const fixture = await paidAndDelivered();
         const id = await approvedReturn(fixture);
-        const refund = jest.spyOn(paymentService, 'refundForReturn');
+        const refund = jest.spyOn(paymentService, 'openReturnRefund');
 
         const result = await returnService.receiveReturn(
             id,

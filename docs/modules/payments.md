@@ -413,9 +413,9 @@ sequenceDiagram
   all that is still refundable; with an `amount` it returns that part. An `amount` over what is
   left, nothing left included, is a 422 (`PAYMENT_REFUND_EXCEEDS_REMAINING`); with no `amount`,
   nothing left is a 409 (`PAYMENT_NOT_REFUNDABLE`).
-- **A refund can pay for a return.** `refundForReturn` (called by [`returns`](./returns.md) when goods
-  are received) opens a refund with `reason: return` and the return's `returnId`, clamped to what the
-  payment has left. `payment.refunded` carries the `returnId`, so `returns` closes the return when
+- **A refund can pay for a return.** `openReturnRefund` (called by [`returns`](./returns.md) inside its own
+  transaction when goods are received) opens a refund with `reason: return` and the return's `returnId`, clamped to what the
+  payment has left. The record commits with the return; `sendOpenedRefund` asks the provider after. `payment.refunded` carries the `returnId`, so `returns` closes the return when
   the refund lands — including later, when the sweep completes one the provider first refused.
 - **A late payment is named.** Money that lands after the order could no longer be paid (its hold
   expired or it was cancelled) is refunded with `reason: late_payment`, not `cancellation`, so staff
