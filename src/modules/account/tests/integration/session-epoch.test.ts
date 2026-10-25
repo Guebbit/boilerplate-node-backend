@@ -122,7 +122,7 @@ describe('the events that move the epoch', () => {
             .set('Authorization', caller.bearer)
             .set('Cookie', caller.cookie);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(await statusWith(caller.bearer)).toBe(401);
         expect(response.headers['set-cookie']).toEqual(
             expect.arrayContaining([expect.stringMatching(/^__Host-session=;/)])
@@ -202,7 +202,7 @@ describe('the events that move the epoch', () => {
             passwordConfirm: REPLACEMENT_PASSWORD
         });
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         const stored = await userRepository.findByIdWithCredentials(user.id);
         expect(await tokenRowsOf(user.id)).toEqual([]);
         expect(await sessionRowsOf(user.id)).toEqual([]);
@@ -291,7 +291,7 @@ describe('a credential change moves the epoch in its own write', () => {
             .post('/account/email-change/confirm')
             .send({ token: 'confirm-me' });
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(await statusWith(other.bearer)).toBe(401);
     });
 

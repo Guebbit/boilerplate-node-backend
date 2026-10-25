@@ -78,7 +78,7 @@ describe('keys end with the sessions that may be compromised', () => {
         // The event rides the outbox: the relay delivers it right after the commit.
         await settleOutboxNudges();
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(await credentialOf(secret)).toBeUndefined();
     });
 
@@ -95,7 +95,7 @@ describe('keys end with the sessions that may be compromised', () => {
         // The event rides the outbox: the relay delivers it right after the commit.
         await settleOutboxNudges();
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(await credentialOf(secret)).toBeUndefined();
     });
 
@@ -112,7 +112,7 @@ describe('keys end with the sessions that may be compromised', () => {
             .send({ token: 'undo-revokes-keys' });
         await settleOutboxNudges();
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(await credentialOf(secret)).toBeUndefined();
     });
 
@@ -170,7 +170,7 @@ describe('keys wait out a scheduled account deletion', () => {
             .post('/account/restore')
             .send({ token: 'restore-brings-keys-back' });
 
-        expect(restored.status).toBe(200);
+        expect(restored.status).toBe(204);
         expect(await credentialOf(secret)).toBeDefined();
     });
 });

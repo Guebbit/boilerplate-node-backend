@@ -309,7 +309,7 @@ describe('one-time tokens under contention', () => {
         );
 
         expectNoServerErrors(results);
-        expect(countStatus(results, 200)).toBe(1);
+        expect(countStatus(results, 204)).toBe(1);
 
         // And the token is spent, whichever request spent it.
         expect(await tokenTypesOf(user.id)).not.toContain('password');

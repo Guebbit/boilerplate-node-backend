@@ -262,7 +262,7 @@ describe.each(DELETABLE)('conditional DELETE on $name', (resource) => {
             .set('Authorization', bearer)
             .set('If-Match', etagOf(read));
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(await resource.stored(id)).toBeUndefined();
     });
 });

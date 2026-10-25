@@ -106,7 +106,7 @@ describe('account.sessions-revoked through the outbox', () => {
         const response = await resetWith('outbox-reset');
         await settleOutboxNudges();
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(await credentialOf(secret)).toBeDefined();
         expect(await pendingRows()).toHaveLength(1);
 
@@ -124,7 +124,7 @@ describe('account.sessions-revoked through the outbox', () => {
         const response = await api().delete('/account/sessions').set('Authorization', bearer);
         await settleOutboxNudges();
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(await credentialOf(secret)).toBeDefined();
         expect(await pendingRows()).toHaveLength(1);
 

@@ -171,7 +171,7 @@ describe('the reset-confirm mail', () => {
         const response = await resetFor('reset-names-providers');
 
         const mail = mockOutbox.find(({ template }) => template === 'account.reset-confirm');
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(String(mail?.data.providers)).toContain('Google, Github');
     });
 

@@ -137,7 +137,7 @@ describe('POST /account/restore', () => {
 
         const response = await api().post('/account/restore').send({ token });
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(response.get('Set-Cookie')).toBeUndefined();
         const stored = await userRepository.findById(user.id);
         expect(stored?.deletedAt).toBeUndefined();

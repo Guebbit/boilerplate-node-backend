@@ -17,7 +17,6 @@ import {
     AddAddress201Response,
     ApproveReturn200Response,
     Checkout201Response,
-    ConfirmEmailVerification204Response,
     ConfirmPayment200Response,
     CreatePayment201Response,
     CreateReturn201Response,
@@ -79,10 +78,10 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
         Signup201Response
     );
     const verification = await waitForMail(SHOPPER.email, 'account.verify-request');
-    bodyOf(
-        await api().post('/account/email-verification/confirm').send({ token: verification.token }),
-        ConfirmEmailVerification204Response
-    );
+    await api()
+        .post('/account/email-verification/confirm')
+        .send({ token: verification.token })
+        .expect(204);
     const shopper = await loginBearer(SHOPPER.email, SHOPPER.password);
 
     // Two lines, one of quantity 2: 2 x 20 + 30 = 70, and standard shipping is 5 under 100.

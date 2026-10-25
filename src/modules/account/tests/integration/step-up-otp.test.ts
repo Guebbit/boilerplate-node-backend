@@ -265,7 +265,7 @@ describe('undoing an email change', () => {
         const response = await undo(undoToken);
 
         const stored = await userRepository.findByIdWithCredentials(user.id);
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(stored?.email).toBe('old@example.com');
         expect(stored?.previousEmail).toBeUndefined();
         // Every session is ended, the epoch moved: what a thief holds stops working.
@@ -281,7 +281,7 @@ describe('undoing an email change', () => {
             .send({ token: confirmToken });
 
         const stored = await userRepository.findByIdWithCredentials(user.id);
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(stored?.pendingEmail).toBeUndefined();
         expect(stored?.email).toBe('old@example.com');
         expect(confirm.status).toBe(422);
@@ -304,8 +304,8 @@ describe('undoing an email change', () => {
             passwordConfirm: REPLACEMENT_PASSWORD
         });
 
-        expect(reset.status).toBe(200);
-        expect(await statusOf(undo(undoToken))).toBe(200);
+        expect(reset.status).toBe(204);
+        expect(await statusOf(undo(undoToken))).toBe(204);
     });
 
     it('answers 409 when the previous address was meanwhile taken by another account', async () => {
@@ -328,6 +328,6 @@ describe('undoing an email change', () => {
         await requestChange(bearer, 'third@example.com');
 
         expect(await statusOf(undo(undoToken))).toBe(422);
-        expect(await statusOf(undo(tokenOfLastMail('account.email-change-notice')))).toBe(200);
+        expect(await statusOf(undo(tokenOfLastMail('account.email-change-notice')))).toBe(204);
     });
 });

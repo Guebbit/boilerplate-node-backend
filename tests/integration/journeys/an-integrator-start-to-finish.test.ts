@@ -149,7 +149,7 @@ it('delivers every event once, signed, in causal order', async () => {
 
     // Revoking the key ends the integrator's access at once.
     await api().get('/webhooks/subscriptions').set('Authorization', key).expect(200);
-    await api().delete(`/api-keys/${minted.id}`).set('Authorization', admin).expect(200);
+    await api().delete(`/api-keys/${minted.id}`).set('Authorization', admin).expect(204);
     await api().get('/webhooks/subscriptions').set('Authorization', key).expect(401);
 });
 

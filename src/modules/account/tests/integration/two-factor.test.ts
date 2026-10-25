@@ -1373,7 +1373,7 @@ describe('the per-account wrong-code lock', () => {
             passwordConfirm: REPLACEMENT_PASSWORD
         });
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(204);
         expect(await lockStateOf(user.id)).toEqual({ failures: 0, lockedUntil: undefined });
     });
 
