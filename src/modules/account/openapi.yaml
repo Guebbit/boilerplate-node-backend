@@ -1073,7 +1073,7 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # `credentialLimiters` sits in front of this route — see routes.ts. Answered as the
-                # shared JSON error envelope, not a redirect, same as every other limited route.
+                # problem-details body, not a redirect, same as every other limited route.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
 
     /account/oauth/{provider}/callback:
@@ -1112,13 +1112,13 @@ paths:
                 '400':
                     description: Missing or mismatched CSRF state
                     content:
-                        application/json:
+                        application/problem+json:
                             schema:
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ErrorResponse'
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Problem'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # `credentialLimiters` sits in front of this route — see routes.ts. Answered as the
-                # shared JSON error envelope, not a redirect, same as every other limited route.
+                # problem-details body, not a redirect, same as every other limited route.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
 
     /account/signup:

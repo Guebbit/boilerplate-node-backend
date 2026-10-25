@@ -244,9 +244,9 @@ paths:
                 '409':
                     description: The correction would leave fewer units than are already reserved
                     content:
-                        application/json:
+                        application/problem+json:
                             schema:
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ErrorResponse'
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Problem'
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 

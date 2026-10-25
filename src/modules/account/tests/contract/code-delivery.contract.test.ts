@@ -11,6 +11,7 @@ import { setEnvironment, withEnvironmentOverrides } from '@tests/environment';
 import { api, loginBearer } from '@tests/http';
 import { userRepository, createUser } from '@modules/users/tests/factories';
 import { mintSession } from '../factories';
+import { withoutInstance } from '@tests/problem';
 
 /** Every queued mail, newest last — what the recipient would read. */
 const mockOutbox: { template: string; data: Record<string, unknown> }[] = [];
@@ -52,7 +53,7 @@ describe('a deployment whose mail reaches no person', () => {
 
         expect(email.status).toBe(404);
         expect(email.status).toBe(unknown.status);
-        expect(email.body).toEqual(unknown.body);
+        expect(withoutInstance(email.body)).toEqual(withoutInstance(unknown.body));
     });
 
     it('offers step-up no method to an account without a password, and refuses the send', async () => {

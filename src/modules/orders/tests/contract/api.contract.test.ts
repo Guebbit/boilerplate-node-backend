@@ -456,7 +456,7 @@ describe('PUT /orders/{id}', () => {
             .send({ email: 'billing@example.com', ...extra });
 
         expect(response.status).toBe(422);
-        expect(response.body.success).toBe(false);
+        expect(response.type).toBe('application/problem+json');
     });
 
     // PUT names the whole resource: `email` is not clearable (an order always has one), so
@@ -518,7 +518,7 @@ describe('PATCH /orders/{id}', () => {
             .send({ email: 'billing@example.com', ...extra });
 
         expect(response.status).toBe(422);
-        expect(response.body.success).toBe(false);
+        expect(response.type).toBe('application/problem+json');
     });
 });
 

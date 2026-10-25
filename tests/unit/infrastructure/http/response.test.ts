@@ -20,7 +20,7 @@ import {
     fieldError,
     generateReject,
     generateSuccess,
-    resolveErrorMessage,
+    resolveErrorTitle,
     successResponse,
     createdOrOk,
     rejectResponse
@@ -149,17 +149,22 @@ describe('generateReject', () => {
         [401, 'Unauthorized'],
         [403, 'Forbidden'],
         [404, 'Not Found'],
+        [405, 'Method Not Allowed'],
         [409, 'Conflict'],
         [412, 'Precondition Failed'],
-        [422, 'Unprocessable Entity'],
+        [413, 'Content Too Large'],
+        [415, 'Unsupported Media Type'],
+        [422, 'Unprocessable Content'],
         [429, 'Too Many Requests'],
         [500, 'Internal Server Error'],
-        [502, 'Internal Server Error'],
-        [418, 'Request Error'],
-        [499, 'Request Error']
-    ])('%i reads as %s', (status, message) => {
-        expect(generateReject(status).message).toBe(message);
-        expect(resolveErrorMessage(status)).toBe(message);
+        [502, 'Bad Gateway'],
+        [503, 'Service Unavailable'],
+        [418, "I'm a Teapot"],
+        [499, 'Client Error'],
+        [599, 'Server Error']
+    ])('%i is titled %s', (status, title) => {
+        expect(generateReject(status).message).toBe(title);
+        expect(resolveErrorTitle(status)).toBe(title);
     });
 
     /*
@@ -367,12 +372,50 @@ describe('rejectResponse', () => {
 
         expect(response.status).toHaveBeenCalledWith(404);
         expect(response.json).toHaveBeenCalledWith({
-            success: false,
+            type: 'about:blank',
+            title: 'Not Found',
             status: 404,
-            message: 'Not Found',
-            data: undefined,
+            detail: 'No such product',
             errors: [{ code: 'NOT_FOUND', message: 'No such product' }]
         });
+    });
+
+    it('sends application/problem+json and never an attachment', () => {
+        const response = makeResponseStub();
+
+        rejectResponse(response, 404, ['No such product']);
+
+        expect(response.setHeader).toHaveBeenCalledWith('Content-Type', 'application/problem+json');
+        expect(response.removeHeader).toHaveBeenCalledWith('Content-Disposition');
+    });
+
+    it('summarises several errors with the status text, and names the occurrence by request id', () => {
+        const response = makeResponseStub();
+        response.setHeader('x-request-id', '5b0c9a1e-7a3d-4a3e-9c53-0d6b5d5c2e11');
+
+        rejectResponse(response, 422, [
+            fieldError('email', 'Bad email'),
+            fieldError('name', 'Too short')
+        ]);
+
+        expect(response.json).toHaveBeenCalledWith(
+            expect.objectContaining({
+                title: 'Unprocessable Content',
+                detail: t('generic.error-invalid-data'),
+                instance: 'urn:uuid:5b0c9a1e-7a3d-4a3e-9c53-0d6b5d5c2e11'
+            })
+        );
+    });
+
+    it('omits instance when the request carried no id, and never puts success or message in the body', () => {
+        const response = makeResponseStub();
+
+        rejectResponse(response, 500);
+
+        const [body] = response.json.mock.calls[0] as [Record<string, unknown>];
+        expect(body).not.toHaveProperty('instance');
+        expect(body).not.toHaveProperty('success');
+        expect(body).not.toHaveProperty('message');
     });
 
     it('defaults to 400', () => {
@@ -395,6 +438,19 @@ describe('rejectResponse', () => {
         expect(setHeader).toHaveBeenCalledWith('Retry-After', '42');
     });
 
+    it('defaults a 503 to a Retry-After hint, and keeps one a caller set', () => {
+        const fresh = makeResponseStub();
+        const named = makeResponseStub();
+        named.setHeader('Retry-After', '120');
+        named.setHeader.mockClear();
+
+        rejectResponse(fresh, 503);
+        rejectResponse(named, 503);
+
+        expect(fresh.setHeader).toHaveBeenCalledWith('Retry-After', '5');
+        expect(named.setHeader).not.toHaveBeenCalledWith('Retry-After', expect.anything());
+    });
+
     it('sets no Retry-After on a 429 that names no wait, or on another status', () => {
         const response = makeResponseStub();
         const setHeader = jest.fn();
@@ -405,7 +461,7 @@ describe('rejectResponse', () => {
             { code: 'CONFLICT', message: 'No', details: { retryAfter: 5 } }
         ]);
 
-        expect(setHeader).not.toHaveBeenCalled();
+        expect(setHeader).not.toHaveBeenCalledWith('Retry-After', expect.anything());
     });
 
     it('sets the Bearer challenge on a 401 that names none', () => {
@@ -435,7 +491,7 @@ describe('rejectResponse', () => {
         rejectResponse(response, 403, ['Forbidden']);
         rejectResponse(response, 404, ['Not found']);
 
-        expect(response.setHeader).not.toHaveBeenCalled();
+        expect(response.setHeader).not.toHaveBeenCalledWith('WWW-Authenticate', expect.anything());
     });
 
     it('does not throw, so controllers must return it', () => {

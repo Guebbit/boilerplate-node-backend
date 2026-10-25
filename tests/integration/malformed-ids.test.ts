@@ -29,6 +29,7 @@ import {
     setPath,
     type Segment
 } from '@tests/spec-ids';
+import { withoutInstance } from '@tests/problem';
 
 // No real Chromium here: the invoice route with a real order would render, and a missing browser
 // is not what this suite asks about.
@@ -201,7 +202,10 @@ describe('an id in the URL path', () => {
                 // Same code, same copy: nothing tells it from an unknown id. A body that would
                 // have been refused first (422, 409) makes the unknown answer differ in status,
                 // which is exactly why a malformed id must be answered before the body is read.
-                if (unknown.status === 404) expect(malformed.body).toEqual(unknown.body);
+                if (unknown.status === 404)
+                    expect(withoutInstance(malformed.body as object)).toEqual(
+                        withoutInstance(unknown.body as object)
+                    );
             }
         }, 60_000);
     });

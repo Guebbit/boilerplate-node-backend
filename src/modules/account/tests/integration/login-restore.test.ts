@@ -15,6 +15,7 @@ import { registerOAuthProvider } from '../../oauth/providers';
 import { fakeOAuthProvider } from '@scenarios/support/doubles/oauth-fake';
 import { DELETION_RESTORE_TOKEN_TYPE } from '../../token-types';
 import { plantToken, sessionRowsOf } from '../factories';
+import { withoutInstance } from '@tests/problem';
 
 setupTestDb();
 
@@ -83,7 +84,7 @@ describe('POST /account/login for an account in its deletion grace', () => {
         const wrong = await signIn(user.email, 'wrong-Password1!');
 
         expect(wrong.status).toBe(401);
-        expect(wrong.body).toEqual(unknown.body);
+        expect(withoutInstance(wrong.body)).toEqual(withoutInstance(unknown.body));
     });
 
     it('stays a plain 401 for a banned account, and once purgeAt has passed', async () => {
@@ -95,7 +96,7 @@ describe('POST /account/login for an account in its deletion grace', () => {
         const lateResponse = await signIn(late.email);
 
         expect([bannedResponse.status, lateResponse.status]).toEqual([401, 401]);
-        expect(lateResponse.body).toEqual(bannedResponse.body);
+        expect(withoutInstance(lateResponse.body)).toEqual(withoutInstance(bannedResponse.body));
     });
 });
 

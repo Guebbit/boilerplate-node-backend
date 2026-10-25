@@ -300,13 +300,13 @@ describe('rejectDatabaseError', () => {
         expect(response.status).toHaveBeenCalledWith(422);
     });
 
-    it('answers with the status-derived message, naming neither the handler nor the driver', () => {
+    it('answers with the status-derived title, naming neither the handler nor the driver', () => {
         const response = makeResponseStub();
 
         rejectDatabaseError(response, 'getProducts', makeBsonError());
 
         expect(response.json).toHaveBeenCalledWith(
-            expect.objectContaining({ message: 'Unprocessable Entity' })
+            expect.objectContaining({ title: 'Unprocessable Content', status: 422 })
         );
     });
 
@@ -315,7 +315,7 @@ describe('rejectDatabaseError', () => {
          * The detail is not dropped, it is relocated. Both halves are developer-facing — the
          * operation name is internal layout, the detail describes the driver — and the log line is
          * where an operator can act on them and a stranger cannot. This is what makes it safe for
-         * the response body above to say only 'Unprocessable Entity'.
+         * the response body above to say only 'Unprocessable Content'.
          */
         const response = makeResponseStub();
         const error = makeBsonError();
@@ -339,7 +339,7 @@ describe('rejectDatabaseError', () => {
 
         expect(response.status).toHaveBeenCalledWith(500);
         expect(response.json).toHaveBeenCalledWith(
-            expect.objectContaining({ message: 'Internal Server Error' })
+            expect.objectContaining({ title: 'Internal Server Error', status: 500 })
         );
         expect(JSON.stringify(response.json.mock.calls[0][0])).not.toContain('shard-02');
         // `error`, not `warn`: this is the genuine server fault the split exists to still page on.

@@ -101,14 +101,6 @@ export function databaseErrorInterpreter(error: unknown): [number, string] {
     return [500, 'Unknown error'];
 }
 
-/**
- * A rough hint, not a promise — how long a client should wait before retrying a 503. There is no
- * backoff state to read this from (an infra outage's real duration is unknown), so one constant
- * for every 503 is honest about that, rather than inventing a number that looks computed.
- * RFC 9110 §10.2.3.
- */
-const RETRY_AFTER_SECONDS = 5;
-
 /** The one error item every 503 carries, whichever path noticed the outage. */
 const serviceUnavailableError = (): { code: ErrorCode; message: string } => ({
     code: 'SERVICE_UNAVAILABLE',
@@ -116,13 +108,12 @@ const serviceUnavailableError = (): { code: ErrorCode; message: string } => ({
 });
 
 /**
- * Answer a dependency outage: 503, `SERVICE_UNAVAILABLE`, and a `Retry-After` hint — the same
- * answer from the global error handler and from a controller's own `.catch`.
+ * Answer a dependency outage: 503, `SERVICE_UNAVAILABLE` — the same answer from the global
+ * error handler and from a controller's own `.catch`. `rejectResponse` adds the `Retry-After` hint.
  *
  * @param response - the express response
  */
 export const rejectServiceUnavailable = (response: Response) => {
-    response.setHeader('Retry-After', RETRY_AFTER_SECONDS.toString());
     return rejectResponse(response, 503, [serviceUnavailableError()]);
 };
 
@@ -183,7 +174,7 @@ export const rejectDatabaseEnvelope = (context: string, error: unknown) => {
 
     logDatabaseFailure(context, status, detail, error);
 
-    // No `Retry-After` here: an envelope has no response to set it on.
+    // No `Retry-After` here: `rejectResponse` adds it when this envelope is sent.
     return status === 503
         ? generateReject(503, [serviceUnavailableError()])
         : generateReject(status);

@@ -17,7 +17,8 @@ describe('a wrong method on a known path', () => {
         expect(response.status).toBe(405);
         expect(response.headers.allow).toBe('GET, HEAD');
         expect(response.body.errors[0].code).toBe('METHOD_NOT_ALLOWED');
-        expect(response.body.success).toBe(false);
+        expect(response.type).toBe('application/problem+json');
+        expect(response.body).toMatchObject({ title: 'Method Not Allowed', status: 405 });
     });
 
     it('answers 405 on a system route too', async () => {

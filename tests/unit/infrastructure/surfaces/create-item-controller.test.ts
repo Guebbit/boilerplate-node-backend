@@ -22,7 +22,10 @@ const makeRequest = (id: string) =>
 const makeResponse = () =>
     asStub<Response>({
         status: jest.fn().mockReturnThis(),
-        json: jest.fn().mockReturnThis()
+        json: jest.fn().mockReturnThis(),
+        setHeader: jest.fn(),
+        getHeader: jest.fn(),
+        removeHeader: jest.fn()
     });
 
 describe('createItemController — operation naming', () => {
@@ -89,7 +92,9 @@ describe('createItemController — found/not-found round trip, unaffected by han
         await handler(makeRequest(OBJECT_ID), response);
 
         expect(response.status).toHaveBeenCalledWith(404);
-        expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+        expect(response.json).toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'about:blank', status: expect.any(Number) })
+        );
     });
 
     it('answers a malformed id with the same 404, without asking fetch', async () => {

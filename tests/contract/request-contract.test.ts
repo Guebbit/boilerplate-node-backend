@@ -8,7 +8,7 @@
  *
  *   - `validPayload()` → expect 2xx. Catches a validator TIGHTER than its own contract — an
  *     endpoint rejecting a payload the spec declares legal.
- *   - `invalidPayloads()` → each entry expects 422 and a `ValidationErrorResponse`-shaped body.
+ *   - `invalidPayloads()` → each entry expects 422 and a `Problem`-shaped body.
  *     Catches a validator LAXER than its contract — the spec promises a constraint that isn't
  *     enforced.
  *

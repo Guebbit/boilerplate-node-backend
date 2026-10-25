@@ -30,6 +30,7 @@ import { parse as parseYaml } from 'yaml';
 import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
+import { withoutInstance } from '@tests/problem';
 
 setupTestDb();
 
@@ -226,7 +227,9 @@ describe('a body express never parsed', () => {
 
         expect(known.status).toBe(unknown.status);
         expect(known.status).toBeLessThan(500);
-        expect(JSON.stringify(known.body)).toBe(JSON.stringify(unknown.body));
+        expect(JSON.stringify(withoutInstance(known.body))).toBe(
+            JSON.stringify(withoutInstance(unknown.body))
+        );
     });
 
     /** And the same shape still logs in, so the guard did not quietly break the happy path. */
