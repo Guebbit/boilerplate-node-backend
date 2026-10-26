@@ -16,7 +16,7 @@ jest.mock('@kernel/middlewares/authorizations', () =>
 import { router } from '@modules/returns/routes';
 
 describe('returns routes — what is mounted', () => {
-    it('mounts the list, the open, the options, one read, the two decisions and the receipt', () => {
+    it('mounts the list, the open, the options, one read, the two decisions, the receipt and the hand close', () => {
         expect(routeSignatures(router)).toEqual([
             'GET /',
             'POST /',
@@ -24,7 +24,8 @@ describe('returns routes — what is mounted', () => {
             'GET /:id',
             'POST /:id/approve',
             'POST /:id/decline',
-            'POST /:id/receive'
+            'POST /:id/receive',
+            'POST /:id/close'
         ]);
     });
 });
@@ -37,7 +38,8 @@ describe('returns routes — authorization', () => {
         'GET /:id',
         'POST /:id/approve',
         'POST /:id/decline',
-        'POST /:id/receive'
+        'POST /:id/receive',
+        'POST /:id/close'
     ])('%s requires a logged-in caller', (signature) => {
         expect(guardsOn(router, signature)).toContain('isAuth');
     });
@@ -49,7 +51,7 @@ describe('returns routes — authorization', () => {
         }
     );
 
-    it.each(['POST /:id/approve', 'POST /:id/decline', 'POST /:id/receive'])(
+    it.each(['POST /:id/approve', 'POST /:id/decline', 'POST /:id/receive', 'POST /:id/close'])(
         '%s is staff’s alone',
         (signature) => {
             expect(guardsOn(router, signature)).toContain('requirePermissionGuard');

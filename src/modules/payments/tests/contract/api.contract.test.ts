@@ -155,7 +155,8 @@ describe('POST /payments', () => {
             pay: true,
             sync: false,
             refund: false,
-            settleByHand: []
+            settleByHand: [],
+            cancelRefund: []
         });
     });
 
@@ -234,7 +235,8 @@ describe('POST /payments/{id}/confirm', () => {
             pay: false,
             sync: false,
             refund: false,
-            settleByHand: []
+            settleByHand: [],
+            cancelRefund: []
         });
     });
 
@@ -681,7 +683,8 @@ describe('POST /payments/{id}/refunds — the operator', () => {
             pay: false,
             sync: false,
             refund: false,
-            settleByHand: []
+            settleByHand: [],
+            cancelRefund: []
         });
     });
 
@@ -979,6 +982,119 @@ describe('POST /payments/{id}/refunds/{refundId}/settle', () => {
     });
 });
 
+describe('POST /payments/{id}/refunds/{refundId}/cancel', () => {
+    const NOTE = 'refunded in the provider dashboard too';
+
+    it('voids a pending refund: 200 with the failed record, the share released, nothing offered', async () => {
+        const { adminBearer, paymentId, refunded } = await cashRefundOwed();
+        expect(refunded.actions.cancelRefund).toEqual([refunded.refunds[0].id]);
+
+        const response = await api()
+            .post(`/payments/${paymentId}/refunds/${String(refunded.refunds[0].id)}/cancel`)
+            .set('Authorization', adminBearer)
+            .send({ note: NOTE });
+
+        expect(response.status).toBe(200);
+        expect(response.body).toMatchObject({
+            id: refunded.refunds[0].id,
+            status: 'failed',
+            failureReason: 'canceled'
+        });
+        const reread = await api().get(`/payments/${paymentId}`).set('Authorization', adminBearer);
+        expect(reread.body.actions).toMatchObject({
+            refund: true,
+            settleByHand: [],
+            cancelRefund: []
+        });
+        expect(reread.body.displayStatus).toBe('succeeded');
+        const payment = await paymentRepository.findById(paymentId);
+        expect(payment!.amountRefunded).toBe(0);
+    });
+
+    it('answers 409 PAYMENT_REFUND_NOT_OPEN to a second cancel', async () => {
+        const { adminBearer, paymentId, refunded } = await cashRefundOwed();
+        const path = `/payments/${paymentId}/refunds/${String(refunded.refunds[0].id)}/cancel`;
+        await api().post(path).set('Authorization', adminBearer).send({ note: NOTE });
+
+        const response = await api()
+            .post(path)
+            .set('Authorization', adminBearer)
+            .send({ note: NOTE });
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('PAYMENT_REFUND_NOT_OPEN');
+    });
+
+    it('answers 409 PAYMENT_REFUND_IN_FLIGHT for a card refund the provider left unclear', async () => {
+        const { paymentId } = await paidOrder();
+        const { bearer: adminBearer } = await authenticateAs('admin');
+        const stored = await paymentRepository.findById(paymentId);
+        setFakeRefundFailure(String(stored?.providerRef), 'unknown');
+        const refunded = await api()
+            .post(`/payments/${paymentId}/refunds`)
+            .set('Authorization', adminBearer)
+            .set('Idempotency-Key', freshKey())
+            .send({ amount: 5 });
+
+        const response = await api()
+            .post(`/payments/${paymentId}/refunds/${String(refunded.body.id)}/cancel`)
+            .set('Authorization', adminBearer)
+            .send({ note: NOTE });
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('PAYMENT_REFUND_IN_FLIGHT');
+        setFakeRefundFailure(String(stored?.providerRef), undefined);
+    });
+
+    it('refuses a missing or empty note with 422: the audit must say why', async () => {
+        const { adminBearer, paymentId, refunded } = await cashRefundOwed();
+        const path = `/payments/${paymentId}/refunds/${String(refunded.refunds[0].id)}/cancel`;
+
+        const missing = await api().post(path).set('Authorization', adminBearer).send({});
+        const empty = await api().post(path).set('Authorization', adminBearer).send({ note: '' });
+
+        expect(missing.status).toBe(422);
+        expect(empty.status).toBe(422);
+        expect((await paymentRepository.findById(paymentId))!.refunds[0].status).toBe('pending');
+    });
+
+    it('answers 404 for a refund the payment does not carry', async () => {
+        const { adminBearer, paymentId } = await cashRefundOwed();
+
+        const response = await api()
+            .post(`/payments/${paymentId}/refunds/${MISSING_ID}/cancel`)
+            .set('Authorization', adminBearer)
+            .send({ note: NOTE });
+
+        expect(response.status).toBe(404);
+    });
+
+    it('refuses the buyer: only an operator holding create:Refund may void a refund', async () => {
+        const { paymentId, refunded, buyerBearer } = await cashRefundOwed();
+
+        const response = await api()
+            .post(`/payments/${paymentId}/refunds/${String(refunded.refunds[0].id)}/cancel`)
+            .set('Authorization', buyerBearer)
+            .send({ note: NOTE });
+
+        expect(response.status).toBe(403);
+    });
+
+    it('answers a stale session 401 REAUTH_REQUIRED and voids nothing', async () => {
+        const { admin, paymentId, refunded } = await cashRefundOwed();
+        const bearer = await staleBearerFor(admin, 'critical');
+
+        const response = await api()
+            .post(`/payments/${paymentId}/refunds/${String(refunded.refunds[0].id)}/cancel`)
+            .set('Authorization', bearer)
+            .send({ note: NOTE });
+
+        expect(response.status).toBe(401);
+        expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
+        expect((await paymentRepository.findById(paymentId))!.refunds[0].status).toBe('pending');
+    });
+});
+
 describe('the money doors ask a fresh session of an operator', () => {
     afterEach(() => jest.useRealTimers());
 
@@ -1038,7 +1154,8 @@ describe('POST /orders/{id}/payments', () => {
             pay: false,
             sync: false,
             refund: true,
-            settleByHand: []
+            settleByHand: [],
+            cancelRefund: []
         });
     });
 

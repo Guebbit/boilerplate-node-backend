@@ -21,7 +21,13 @@ import {
     applyWebhookDelivery,
     applyWebhookSettlement
 } from './settlement';
-import { refundPayment, openReturnRefund, sendOpenedRefund, settleRefundByHand } from './refunds';
+import {
+    refundPayment,
+    openReturnRefund,
+    sendOpenedRefund,
+    settleRefundByHand,
+    cancelRefund
+} from './refunds';
 import { retryOpenRefunds, reconcileStalePayments } from './effects';
 import { recordOfflinePayment } from './offline';
 import { openTransferPayment } from './transfer';
@@ -75,6 +81,7 @@ export const paymentService = {
     openReturnRefund,
     sendOpenedRefund,
     settleRefundByHand,
+    cancelRefund,
     retryOpenRefunds,
     reconcileStalePayments,
     recordOfflinePayment,

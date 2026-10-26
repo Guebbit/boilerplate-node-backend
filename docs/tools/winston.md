@@ -211,6 +211,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `orders`         | `ORDER_RESTORED`                             | `order.restored`                             | `order`                |
 | `orders`         | `ORDER_STATUS_OVERRIDDEN`                    | `order.status_overridden`                    | `order`                |
 | `orders`         | `ORDER_UPDATED`                              | `order.updated`                              | `order`                |
+| `payments`       | `ADMIN_PAYMENT_REFUND_CANCELED`              | `admin.payment.refund_canceled`              | `order`                |
 | `payments`       | `ADMIN_PAYMENT_REFUND_REQUESTED`             | `admin.payment.refund_requested`             | `order`                |
 | `payments`       | `ADMIN_PAYMENT_REFUND_SETTLED_BY_HAND`       | `admin.payment.refund_settled_by_hand`       | `order`                |
 | `payments`       | `ADMIN_PAYMENT_REFUNDED`                     | `admin.payment.refunded`                     | `order`                |
@@ -225,6 +226,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `products`       | `ADMIN_PRODUCT_RESTORED`                     | `admin.product.restored`                     | `product`              |
 | `products`       | `ADMIN_PRODUCT_UPDATED`                      | `admin.product.updated`                      | `product`              |
 | `returns`        | `ADMIN_RETURN_APPROVED`                      | `admin.return.approved`                      | `return`               |
+| `returns`        | `ADMIN_RETURN_CLOSED`                        | `admin.return.closed`                        | `return`               |
 | `returns`        | `ADMIN_RETURN_DECLINED`                      | `admin.return.declined`                      | `return`               |
 | `returns`        | `ADMIN_RETURN_RECEIVED`                      | `admin.return.received`                      | `return`               |
 | `returns`        | `ADMIN_RETURN_VIEWED`                        | `admin.return.viewed`                        | `return`               |

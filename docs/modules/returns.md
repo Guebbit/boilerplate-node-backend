@@ -83,12 +83,32 @@ stateDiagram-v2
     requested --> declined: staff decline, with a reason
     approved --> received: goods arrive
     received --> closed: the money has gone back
+    received --> closed: staff close it by hand
 ```
 
 Every move is one conditional write from the statuses that may precede it
 (`src/modules/returns/domain/lifecycle.ts`), so two staff members deciding the same request race in
 the database and exactly one wins — the loser is told it was already decided (409). The one move
 that is not conditional is the first: a withdrawal before dispatch is written `closed` at birth.
+
+## Closing a return by hand {#closing-a-return-by-hand}
+
+`POST /returns/{id}/close`, body `{ note }` (optional), moves a `received` return to `closed` when its
+money will not follow the usual way: the refund was canceled
+([payments](./payments.md#cancelling-a-refund)), or the customer was paid outside the shop. It is
+Shopify's `returnClose`.
+
+| What it does                                                                        | What it does not                                             |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `received → closed` in one conditional write                                        | move money, or stock (the restock happened on receipt)       |
+| order timeline `return_closed`, audit `admin.return.closed` (the note is only here) | announce `return.closed`: that mail says the money went back |
+| refresh the order's `returnStatus`                                                  | issue a credit note                                          |
+
+`receive:Return` guards it, the key that receives the goods, with the same fresh-session tier. Any
+other status answers 409 `RETURN_NOT_CLOSABLE`: a `requested` return is declined, not closed.
+`Return.actions.close` says whether it would be accepted. Closing an `approved` return (goods that
+never come) is not offered: a closed return counts as goods back in the order's accounting, which
+would then be wrong.
 
 ## The events
 
@@ -420,7 +440,7 @@ both at once), `return_declined`, `return_received` and `return_closed` on the o
 the return's id, the reason code and, for received and closed, the refund amount. A receipt and the
 close it leads to name the staff member who received the goods; a return the payment sweep closes
 later names no one. The customer's
-`note` and staff's `declineReason` are never copied: `reap:returns` owns their clock. A withdrawal
+`note` and staff's `declineReason` are never copied (nor is the note of a hand close: it stays in the audit row): `reap:returns` owns their clock. A withdrawal
 before dispatch and a cancelled remainder write no return rows, since the order's `cancelled` and
 delivery's `remainder_cancelled` already say it.
 

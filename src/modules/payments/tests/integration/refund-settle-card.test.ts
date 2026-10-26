@@ -177,4 +177,29 @@ describe('what needs attention', () => {
 
         expect(items.map(({ kind }) => kind)).toEqual(['refused_refund']);
     });
+
+    it('carries the 14-day legal deadline on a refused refund that pays a return', async () => {
+        const { orderId, payment } = await refusedRefund('lost_or_stolen_card');
+        await paymentModel.collection.updateOne(
+            { _id: payment._id },
+            { $set: { 'refunds.0.returnId': 'a-return' } }
+        );
+
+        const { items } = await paymentService.listAttention();
+
+        const stored = await paymentRepository.findByOrderId(orderId);
+        const created = stored?.refunds[0].createdAt;
+        expect(new Date(items[0].refundDueBy ?? 0).getTime() - (created?.getTime() ?? 0)).toBe(
+            14 * 24 * 3_600_000
+        );
+    });
+
+    it('shows no deadline on a refused refund that pays no return: only its age', async () => {
+        await refusedRefund('lost_or_stolen_card');
+
+        const { items } = await paymentService.listAttention();
+
+        expect(items[0].refundDueBy).toBeUndefined();
+        expect(items[0].since).toBeDefined();
+    });
 });

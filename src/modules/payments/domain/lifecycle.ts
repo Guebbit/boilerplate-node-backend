@@ -111,6 +111,20 @@ export const OPEN_REFUND_STATUSES: readonly RefundStatus[] = [
 ];
 
 /**
+ * Whether a refund record is still open: asked or being asked (`pending`), or refused and left for
+ * the sweep or an operator (`failed`). A staff-canceled record is `failed` too but closed for good:
+ * it is never sent, never settled and holds no money.
+ *
+ * @param refund - the refund record
+ */
+export const isOpenRefund = (refund: {
+    status: RefundStatus;
+    failureReason?: RefundFailureReason;
+}): boolean =>
+    OPEN_REFUND_STATUSES.includes(refund.status) &&
+    refund.failureReason !== RefundFailureReason.canceled;
+
+/**
  * Refusals that end the retrying: the provider (or the lack of one) gave a definite answer about
  * THIS refund, and asking again will not change it. They show on the attention list at once and
  * are never sent again; the shop pays back another way.
@@ -151,6 +165,35 @@ export const mayBeSettledByHand = (
         : refund.status === RefundStatus.failed &&
           refund.failureReason !== undefined &&
           MONEY_DID_NOT_MOVE_FAILURES.includes(refund.failureReason);
+
+/**
+ * Whether staff may void this refund: the same refunds an operator may report returned by hand,
+ * because both rest on one fact, that the money provably did not move. A `succeeded` refund
+ * moved it; a `pending` card refund or an unclear failure may have.
+ *
+ * @param payment - the payment the refund sits on
+ * @param refund - the refund record
+ */
+export const mayBeCanceled = (
+    payment: { provider: string },
+    refund: { status: RefundStatus; failureReason?: RefundFailureReason }
+): boolean => mayBeSettledByHand(payment, refund);
+
+/** Days the trader has to give the money back after a withdrawal (Directive 2011/83/EU, Art. 13). */
+const WITHDRAWAL_REFUND_DAYS = 14;
+
+/**
+ * The legal deadline to pay a refund back, when it pays for a withdrawal or a return: its creation
+ * plus 14 days. A goodwill or late-payment refund, or the shop's own cancellation of an order, has
+ * no such deadline.
+ *
+ * @param refund - the refund's `createdAt` and the return it pays for, if any
+ * @returns the deadline, or `undefined` when the law sets none
+ */
+export const refundDueBy = (refund: { createdAt: Date; returnId?: string }): Date | undefined =>
+    refund.returnId === undefined
+        ? undefined
+        : new Date(refund.createdAt.getTime() + WITHDRAWAL_REFUND_DAYS * 24 * 60 * 60_000);
 
 /** The longest wait the growing retry delay reaches: a day. */
 const MAX_RETRY_DELAY_MS = 24 * 60 * 60_000;

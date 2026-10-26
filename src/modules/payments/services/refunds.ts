@@ -54,10 +54,12 @@ import { PaymentProviderError } from '../providers';
 import { paymentProviderRegistry } from '../providers/registry';
 import { paymentEffectRetryMinutes } from '../config';
 import { paymentRepository } from '../repository';
-import { PAYMENT_REFUNDED } from '../events';
+import { PAYMENT_REFUNDED, PAYMENT_REFUND_CANCELED } from '../events';
 import type { PaymentDocument, RefundLine, RefundRecord, RefundSettlement } from '../model';
 import {
     isHandRecorded,
+    isOpenRefund,
+    mayBeCanceled,
     mayBeSettledByHand,
     nextRefundAttemptAt,
     OPEN_REFUND_STATUSES,
@@ -332,7 +334,7 @@ export const openRefund = (
  * @param payment - the payment, after a refund just settled
  */
 const isFullyRefunded = (payment: PaymentDocument): boolean =>
-    remainingOf(payment) === 0 && payment.refunds.every((refund) => refund.status === 'succeeded');
+    remainingOf(payment) === 0 && payment.refunds.every((refund) => !isOpenRefund(refund));
 
 /**
  * Tell the rest of the system a refund landed: the log line and the audit row.
@@ -725,7 +727,7 @@ export const settleOpenRefunds = async (
     let settled = false;
 
     for (const refund of payment.refunds) {
-        if (!statuses.includes(refund.status)) continue;
+        if (!statuses.includes(refund.status) || !isOpenRefund(refund)) continue;
         const after = await attemptKeepingGoing(current, refund, context);
         if (!after) continue;
         current = after;
@@ -980,7 +982,7 @@ const handSettlementRefusal = (
     payment: PaymentDocument,
     refund: RefundRecord
 ): ResponseReject | undefined => {
-    if (refund.status === RefundStatus.succeeded) return handRefundNotOpen();
+    if (!isOpenRefund(refund)) return handRefundNotOpen();
     return mayBeSettledByHand(payment, refund) ? undefined : refundInFlight();
 };
 
@@ -1059,6 +1061,153 @@ export const settleRefundByHand = (
                 final
                     ? Promise.resolve(generateSuccess(final, 200))
                     : lostSettleRace(paymentId, refundId)
+        );
+    });
+
+/**
+ * The refusal `cancelRefund` earns before anything is written, if any: the record is closed
+ * already (settled or canceled), or it may have moved money (an attempt running, an unclear
+ * failure).
+ *
+ * @param payment - the payment the refund sits on
+ * @param refund - the record the operator names
+ */
+const cancelRefusal = (
+    payment: PaymentDocument,
+    refund: RefundRecord
+): ResponseReject | undefined => {
+    if (!isOpenRefund(refund)) return handRefundNotOpen();
+    return mayBeCanceled(payment, refund) ? undefined : refundInFlight();
+};
+
+/**
+ * The `payment.refund_canceled` payload: the voided record and the money it held.
+ *
+ * @param payment - the payment after the cancel
+ * @param refund - the record that was voided, as it was read
+ */
+const canceledPayload = (
+    payment: PaymentDocument,
+    refund: RefundRecord
+): DomainEventMap['payment.refund_canceled'] => ({
+    paymentId: String(payment._id),
+    orderId: String(payment.orderId),
+    refundId: String(refund._id),
+    amount: refund.amount,
+    currency: refund.currency
+});
+
+/**
+ * Void one refund and release its share, in the caller's transaction: the conditional write, then
+ * the order's staff-only timeline row. The order's `paymentStatus` stamp needs no recompute: it is
+ * written only when a refund settles, and a record that never settled can neither raise nor lower it.
+ *
+ * @param payment - the payment as read
+ * @param refund - the record being canceled, as read
+ * @param context - the operator
+ * @param session - the transaction both writes join
+ * @returns the payment after the cancel, or `null` when the record or the total moved since the read
+ */
+const writeCancel = (
+    payment: PaymentDocument,
+    refund: RefundRecord,
+    context: CallerContext,
+    session: ClientSession
+): Promise<PaymentDocument | null> =>
+    paymentRepository
+        .cancelRefund(
+            String(payment._id),
+            String(refund._id),
+            { status: refund.status, failureReason: refund.failureReason },
+            {
+                expectedRefunded: payment.amountRefunded,
+                newRefunded: toDecimalAmount(
+                    subtractMoney(
+                        toMinorUnits(payment.amountRefunded, payment.currency),
+                        toMinorUnits(refund.amount, payment.currency)
+                    ),
+                    payment.currency
+                )
+            },
+            session
+        )
+        .then((final) =>
+            final
+                ? orderService
+                      .appendTimeline(
+                          String(final.orderId),
+                          {
+                              type: 'refund_canceled',
+                              actor: context.caller.id,
+                              data: refundRow(refund)
+                          },
+                          session
+                      )
+                      .then(() => final)
+                : null
+        );
+
+/**
+ * `POST /payments/:id/refunds/:refundId/cancel` — staff voiding a refund that must never be paid
+ * (a duplicate, or one the provider's dashboard already covered). Local only: nothing is sent to
+ * the provider, no credit note is issued and the buyer is not mailed, because no money moved.
+ *
+ * A miss on the conditional write means the record or the total moved since the read (a sweep
+ * claimed it, a racing refund opened beside it): the whole check runs again against what is really
+ * there, a few times at most, then the loser is told the record is no longer cancelable.
+ *
+ * @param paymentId - the payment carrying the refund
+ * @param refundId - the refund record to cancel
+ * @param note - why, for the audit row
+ * @param authContext - the caller, for the read that distinguishes 404 from 409
+ * @param context - the operator, audited
+ * @param retriesLeft - how many more times a lost race may re-run the check
+ * @returns the payment as it now stands, or a refusal naming which case it was
+ */
+export const cancelRefund = (
+    paymentId: string,
+    refundId: string,
+    note: string,
+    authContext: AuthContext | undefined,
+    context: CallerContext,
+    retriesLeft = 3
+): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
+    paymentRepository.findByIdScoped(paymentId, callerScope(authContext)).then((payment) => {
+        if (!payment) return paymentNotFound();
+        const refund = payment.refunds.find((record) => String(record._id) === refundId);
+        // The same 404 as an unknown payment: a refund id is read only through its payment.
+        if (!refund) return paymentNotFound();
+
+        const refusal = cancelRefusal(payment, refund);
+        if (refusal) return refusal;
+
+        return announceInTransaction(
+            (session) => writeCancel(payment, refund, context, session),
+            (final) => ({
+                name: PAYMENT_REFUND_CANCELED,
+                payload: canceledPayload(final, refund),
+                aggregateId: String(final.orderId)
+            })
+        ).then(
+            (
+                final
+            ):
+                | ResponseSuccess<PaymentDocument>
+                | Promise<ResponseSuccess<PaymentDocument> | ResponseReject> => {
+                if (final) {
+                    recordAudit(context, {
+                        action: paymentsAuditActions.ADMIN_PAYMENT_REFUND_CANCELED,
+                        outcome: 'success',
+                        targetType: 'order',
+                        targetId: String(final.orderId),
+                        metadata: { refundId, amount: refund.amount, note }
+                    });
+                    return generateSuccess(final, 200);
+                }
+                return retriesLeft > 0
+                    ? cancelRefund(paymentId, refundId, note, authContext, context, retriesLeft - 1)
+                    : Promise.resolve(refundInFlight());
+            }
         );
     });
 
