@@ -1,0 +1,51 @@
+# The mailbox an address delivers to, used only to bucket budgets (never to store or compare accounts).
+# Lowercase (full Unicode, not ASCII-only), trim, drop a `+tag`, and drop dots only for Gmail.
+cases:
+    - name: case is folded
+      email: Ada@Example.com
+      mailbox: ada@example.com
+    - name: surrounding whitespace is trimmed
+      email: "  ada@example.com \n"
+      mailbox: ada@example.com
+    - name: a plus tag is dropped
+      email: ada+shop@example.com
+      mailbox: ada@example.com
+    - name: dots stay on a provider that does not ignore them
+      email: a.d.a@example.com
+      mailbox: a.d.a@example.com
+    - name: dots are dropped on gmail.com
+      email: a.d.a@gmail.com
+      mailbox: ada@gmail.com
+    - name: googlemail.com is delivered to gmail.com
+      email: A.D.A+news@GoogleMail.com
+      mailbox: ada@gmail.com
+    - name: a tag opening the local part is not a tag
+      email: +ada@example.com
+      mailbox: +ada@example.com
+    - name: a bare plus local part stays as it is
+      email: +@example.com
+      mailbox: +@example.com
+    - name: a plus after the last at sign belongs to the domain, not a tag
+      email: ada@exa+mple.com
+      mailbox: ada@exa+mple.com
+    - name: only the first plus starts the tag
+      email: ada+a+b@example.com
+      mailbox: ada@example.com
+    - name: the last at sign splits local part from domain
+      email: ada+x@y@example.com
+      mailbox: ada@example.com
+    - name: a value with no at sign is only lowercased
+      email: Not-An-Address
+      mailbox: not-an-address
+    - name: a value starting with an at sign is only lowercased
+      email: '@Example.com'
+      mailbox: '@example.com'
+    - name: non-ASCII letters are lowercased
+      email: 'ÄDA@Example.com'
+      mailbox: 'äda@example.com'
+    - name: a dotted capital I lowercases to i plus a combining dot
+      email: 'İ@example.com'
+      mailbox: 'i̇@example.com'
+    - name: a Greek capital sigma at the end of a word becomes the final sigma
+      email: 'ΟΔΟΣ@example.com'
+      mailbox: 'οδος@example.com'

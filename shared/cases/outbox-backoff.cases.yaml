@@ -1,0 +1,24 @@
+# Milliseconds to wait after the Nth failed dispatch: 5 s doubling each time, capped at 1 h.
+# `failedAttempts` is 1-based. No jitter.
+cases:
+    - name: the first failure waits the base delay
+      failedAttempts: 1
+      delayMs: 5000
+    - name: the second doubles it
+      failedAttempts: 2
+      delayMs: 10000
+    - name: the third doubles again
+      failedAttempts: 3
+      delayMs: 20000
+    - name: the tenth is still under the cap
+      failedAttempts: 10
+      delayMs: 2560000
+    - name: the eleventh would be 5120000 and is clamped to one hour
+      failedAttempts: 11
+      delayMs: 3600000
+    - name: a hundred failures stay at the cap
+      failedAttempts: 100
+      delayMs: 3600000
+    - name: an exponent so large it overflows a float still returns the cap
+      failedAttempts: 2000
+      delayMs: 3600000

@@ -1,0 +1,117 @@
+# Two header readers.
+#
+#   if-match    How a write reads `If-Match` (RFC 9110 §13.1.1).
+#               expect: unconditional  no header, the write runs without a check
+#                       any            `*`, any current version matches
+#                       tags           exactly the listed entity-tags, quotes and `W/` kept
+#               A header that does not parse gives `tags` with an empty list, so nothing matches
+#               and the write is refused (412) instead of running unconditionally.
+#   request-id  How `x-request-id` is treated. A canonical UUID (any version, either case) is
+#               recorded as the caller's own id; anything else is dropped. The id the service
+#               answers with is a fresh one unless the deployment sits behind a trusted ingress.
+#               `$` must not match before a trailing newline.
+cases:
+    - name: no header means an unconditional write
+      kind: if-match
+      expect: unconditional
+    - name: a star matches any version
+      kind: if-match
+      header: '*'
+      expect: any
+    - name: a star with surrounding spaces still matches any version
+      kind: if-match
+      header: ' * '
+      expect: any
+    - name: one strong tag is kept with its quotes
+      kind: if-match
+      header: '"abc"'
+      expect: tags
+      tags: ['"abc"']
+    - name: a list is split on commas and trimmed
+      kind: if-match
+      header: '"a" , "b"'
+      expect: tags
+      tags: ['"a"', '"b"']
+    - name: a weak tag keeps its prefix, so it never equals a strong one
+      kind: if-match
+      header: 'W/"a"'
+      expect: tags
+      tags: ['W/"a"']
+    - name: an empty quoted tag is a tag
+      kind: if-match
+      header: '""'
+      expect: tags
+      tags: ['""']
+    - name: an unquoted tag does not parse
+      kind: if-match
+      header: abc
+      expect: tags
+      tags: []
+    - name: a star mixed with a tag does not parse
+      kind: if-match
+      header: '*, "a"'
+      expect: tags
+      tags: []
+    - name: a trailing comma does not parse
+      kind: if-match
+      header: '"a",'
+      expect: tags
+      tags: []
+    - name: an empty header does not parse
+      kind: if-match
+      header: ''
+      expect: tags
+      tags: []
+    - name: a canonical UUID is kept as the client id and a fresh id is still issued
+      kind: request-id
+      header: 123e4567-e89b-12d3-a456-426614174000
+      trustedIngress: false
+      clientRequestId: kept
+      requestId: generated
+    - name: an uppercase UUID is accepted
+      kind: request-id
+      header: 123E4567-E89B-12D3-A456-426614174000
+      trustedIngress: false
+      clientRequestId: kept
+      requestId: generated
+    - name: behind a trusted ingress the client id is the request id
+      kind: request-id
+      header: 123e4567-e89b-12d3-a456-426614174000
+      trustedIngress: true
+      clientRequestId: kept
+      requestId: client
+    - name: a malformed id is dropped even behind a trusted ingress
+      kind: request-id
+      header: not-a-uuid
+      trustedIngress: true
+      clientRequestId: dropped
+      requestId: generated
+    - name: a UUID followed by a newline is dropped
+      kind: request-id
+      header: "123e4567-e89b-12d3-a456-426614174000\n"
+      trustedIngress: false
+      clientRequestId: dropped
+      requestId: generated
+    - name: a UUID with trailing text is dropped
+      kind: request-id
+      header: 123e4567-e89b-12d3-a456-426614174000-x
+      trustedIngress: false
+      clientRequestId: dropped
+      requestId: generated
+    - name: a UUID without hyphens is dropped
+      kind: request-id
+      header: 123e4567e89b12d3a456426614174000
+      trustedIngress: false
+      clientRequestId: dropped
+      requestId: generated
+    - name: a non-hex digit is dropped
+      kind: request-id
+      header: 123e4567-e89b-12d3-a456-42661417400g
+      trustedIngress: false
+      clientRequestId: dropped
+      requestId: generated
+    - name: no header means no client id
+      kind: request-id
+      trustedIngress: false
+      clientRequestId: dropped
+      requestId: generated

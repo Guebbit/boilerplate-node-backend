@@ -84,9 +84,18 @@ twin validate the same file without Zod; `npm run check` refuses a stale one.
 
 ## 7 · Today
 
-| File                             | Read by                                                 |
-| -------------------------------- | ------------------------------------------------------- |
-| `rules/log-redaction.yaml`       | `adapters/logger.ts`, `runtime/otel-sdk.ts`             |
-| `rules/password-hash.yaml`       | `security/password-hash.ts`                             |
-| `rules/breached-passwords.txt`   | `security/breached-passwords`                           |
-| `cases/log-redaction.cases.yaml` | `tests/cross-cutting/log-redaction-conformance.test.ts` |
+| File                                        | Read by                                                            |
+| ------------------------------------------- | ------------------------------------------------------------------ |
+| `rules/log-redaction.yaml`                  | `adapters/logger.ts`, `runtime/otel-sdk.ts`                        |
+| `rules/password-hash.yaml`                  | `security/password-hash.ts`                                        |
+| `rules/breached-passwords.txt`              | `security/breached-passwords`                                      |
+| `cases/log-redaction.cases.yaml`            | `tests/cross-cutting/log-redaction-conformance.test.ts`            |
+| `cases/crypto.cases.yaml`                   | `tests/cross-cutting/crypto-conformance.test.ts`                   |
+| `cases/env-booleans.cases.yaml`             | `tests/cross-cutting/env-booleans-conformance.test.ts`             |
+| `cases/money.cases.yaml`                    | `tests/cross-cutting/money-conformance.test.ts`                    |
+| `cases/normalize-email.cases.yaml`          | `tests/cross-cutting/normalize-email-conformance.test.ts`          |
+| `cases/outbox-backoff.cases.yaml`           | `tests/cross-cutting/outbox-backoff-conformance.test.ts`           |
+| `cases/permission-model-version.cases.yaml` | `tests/cross-cutting/permission-model-version-conformance.test.ts` |
+| `cases/rate-limit-keys.cases.yaml`          | `tests/cross-cutting/rate-limit-keys-conformance.test.ts`          |
+| `cases/request-headers.cases.yaml`          | `tests/cross-cutting/request-headers-conformance.test.ts`          |
+| `cases/ssrf.cases.yaml`                     | `tests/cross-cutting/ssrf-conformance.test.ts`                     |
