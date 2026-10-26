@@ -52,6 +52,7 @@ import { purchaseHoldPlacedEmail } from '@modules/users/emails';
 import { buildDocumentView } from '@modules/invoicing/emails';
 import {
     holdNoticeEmail,
+    shipmentLostEmail,
     fulfillmentDelayedEmail,
     shipmentDeliveredEmail,
     shipmentShippedEmail
@@ -204,6 +205,14 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         lines: [{ title: 'Widget', quantity: 1 }],
         withdrawUntil: new Date(Date.UTC(2026, 10, 14))
     }),
+    'delivery.shipment-lost': shipmentLostEmail(locale, 'Ada', {
+        reason: 'lost',
+        lines: [{ title: 'Widget', quantity: 2 }],
+        owed: [{ title: 'Widget', quantity: 1 }],
+        expectedAt: new Date(Date.UTC(2026, 11, 20)),
+        message: 'We will ship it again this week.',
+        orderUrl: 'https://shop.example/orders/an-order-id'
+    }),
     'delivery.hold-notice': holdNoticeEmail(locale, 'Ada', {
         notice: 'check_address',
         message: 'Is the flat number right?',
@@ -267,6 +276,12 @@ const minimalContentFor = (locale: string): Record<string, EmailContent> => ({
     }),
     'delivery.shipment-delivered': shipmentDeliveredEmail(locale, 'Ada', {
         lines: [{ title: 'Widget', quantity: 1 }]
+    }),
+    'delivery.shipment-lost': shipmentLostEmail(locale, 'Ada', {
+        reason: 'damaged',
+        lines: [{ title: 'Widget', quantity: 1 }],
+        owed: [],
+        orderUrl: 'https://shop.example/orders/an-order-id'
     }),
     'delivery.hold-notice': holdNoticeEmail(locale, 'Ada', {
         notice: 'delayed',

@@ -8,7 +8,7 @@
 import type { JobDeclaration } from '@kernel/registry';
 import { logger } from '@infrastructure/adapters/logger';
 import { settleOutboxNudges } from '@kernel/outbox';
-import { scrubHoldNotes } from './services/retention';
+import { scrubHoldNotes, scrubLostNotes } from './services/retention';
 import { runPreorderSweep } from './services/preorder-sweep';
 
 /** The jobs `delivery` owns. */
@@ -17,8 +17,11 @@ export const deliveryJobs: readonly JobDeclaration[] = [
         name: 'reap:delivery',
         schedule: '11 2 * * *',
         summary:
-            "Unsets a fulfillment order's hold note once it has not changed for its retention window.",
-        run: () => scrubHoldNotes()
+            "Unsets a fulfillment order's hold note and a shipment's loss note once they have not changed for their retention window.",
+        run: () =>
+            Promise.all([scrubHoldNotes(), scrubLostNotes()]).then(
+                ([holds, losses]) => holds + losses
+            )
     },
     {
         name: 'sweep:preorders',

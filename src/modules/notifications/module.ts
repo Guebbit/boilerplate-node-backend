@@ -18,7 +18,11 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
 import { CART_LINES_REMOVED, CART_MERGE_REFUSED } from '@modules/cart';
-import { FULFILLMENT_ORDER_DELAYED, FULFILLMENT_ORDER_HOLD_NOTICED } from '@modules/delivery';
+import {
+    FULFILLMENT_ORDER_DELAYED,
+    FULFILLMENT_ORDER_HOLD_NOTICED,
+    SHIPMENT_LOST
+} from '@modules/delivery';
 import { ORDER_PURCHASE_HOLD_PLACED } from '@modules/orders';
 import { WEBHOOK_SUBSCRIPTION_AUTO_DISABLED } from '@modules/webhooks';
 import { WISHLIST_ITEMS_REMOVED } from '@modules/wishlist';
@@ -56,6 +60,7 @@ export default {
             FULFILLMENT_ORDER_HOLD_NOTICED,
             notificationsService.onFulfillmentOrderHoldNoticed
         );
+        onDomainEvent(SHIPMENT_LOST, notificationsService.onShipmentLost);
         onDomainEvent(ORDER_PURCHASE_HOLD_PLACED, notificationsService.onPurchaseHoldPlaced);
         onDomainEvent(
             WEBHOOK_SUBSCRIPTION_AUTO_DISABLED,

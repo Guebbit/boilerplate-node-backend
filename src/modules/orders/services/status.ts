@@ -32,8 +32,8 @@ import {
 } from '../domain';
 import { withdrawalPeriodDays } from '../config';
 
-/** The timeline row each system move leaves. */
-const MOVE_ROW = { process: 'processing', ship: 'shipped' } as const;
+/** The timeline row each system move leaves; `reopen` leaves none, the loss that caused it has its own. */
+const MOVE_ROW = { process: 'processing', ship: 'shipped', reopen: undefined } as const;
 
 /**
  * Write a move and announce it: inside the caller's transaction when it has one (the caller wakes
@@ -67,7 +67,7 @@ const announceMove = (
  */
 const markSystemMove = (
     orderId: string,
-    event: 'process' | 'ship',
+    event: 'process' | 'ship' | 'reopen',
     session?: ClientSession,
     actor?: string | null
 ): Promise<OrderDocument | null> => {
@@ -77,7 +77,10 @@ const markSystemMove = (
         withTimeline(
             (active) =>
                 orderRepository.updateStatusIfIn(orderId, [...from], to, { session: active }),
-            () => [{ type: MOVE_ROW[event], actor }]
+            () => {
+                const type = MOVE_ROW[event];
+                return type ? [{ type, actor }] : [];
+            }
         ),
         () => statusChangedEvent(orderId, from[0], to)
     );
@@ -192,6 +195,21 @@ export const markShipped = (
     session?: ClientSession,
     actor?: string | null
 ): Promise<OrderDocument | null> => markSystemMove(orderId, 'ship', session, actor);
+
+/**
+ * Report that a shipment was reported lost while the order was `shipped`: units are open again, so
+ * the order goes back to `processing`. `delivery`'s lost-parcel act calls this inside its own
+ * transaction, only when the order is `shipped`; from any other status it matches nothing.
+ * @param orderId - the order the lost shipment belongs to
+ * @param session - the act's transaction; this move commits with the loss or not at all
+ * @param actor - the staff member who reported the loss, for the order's history
+ * @returns the order as it now stands, or `null` if it was not `shipped`
+ */
+export const markReopened = (
+    orderId: string,
+    session?: ClientSession,
+    actor?: string | null
+): Promise<OrderDocument | null> => markSystemMove(orderId, 'reopen', session, actor);
 
 /**
  * The timeline row a move into `delivered` leaves: when the withdrawal window closes rides on it,

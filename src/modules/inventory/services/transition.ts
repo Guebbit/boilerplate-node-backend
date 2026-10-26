@@ -75,7 +75,9 @@ export const refreshStockCacheForProducts = async (
  * @param productId - the product whose counters move
  * @param quantity - how many units; signed only for `adjust`
  * @param context - what to record on the row beyond the deltas; `kind` is not recorded, it only
- *   decides which counter a `release`/`expire` gives back (`backordered` for a preorder claim)
+ *   decides which counter a `release`/`expire` gives back (`backordered` for a preorder claim).
+ *   `uncapped` is not recorded either: it lifts the backorder cap for a claim the shop owes (a
+ *   parcel lost after it was sold), which must not be refused for a limit meant for new sales
  * @param session - the caller's transaction. Given one, every read and write joins it, and the
  *   catalogue's stock cache is NOT synced here: that write leaves this module and cannot roll
  *   back, so the caller runs {@link refreshStockCacheForOrder} once its transaction commits
@@ -87,10 +89,10 @@ export const applyTransition = async (
     reason: StockMovementReason,
     productId: string,
     quantity: number,
-    context: { reference?: string; note?: string; kind?: HoldKind } = {},
+    context: { reference?: string; note?: string; kind?: HoldKind; uncapped?: boolean } = {},
     session?: ClientSession
 ): Promise<boolean> => {
-    const { kind = 'stock', ...recorded } = context;
+    const { kind = 'stock', uncapped = false, ...recorded } = context;
     // Only read the product back when this product has no level row yet — the common case (every
     // transition after the first) skips it entirely.
     if (!(await stockLevelRepository.findByProductId(productId, session))) {
@@ -124,7 +126,8 @@ export const applyTransition = async (
         quantity,
         delta,
         session,
-        kind
+        kind,
+        uncapped
     );
     if (!moved) return false;
 

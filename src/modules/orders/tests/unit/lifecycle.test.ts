@@ -116,7 +116,7 @@ describe('who may write `processing`', () => {
         // `src/modules/orders/services/status.ts`'s `markProcessing`.
         for (const actor of EVERY_ACTOR)
             expect(statusesLeadingTo(OrderStatus.processing, actor)).toEqual(
-                actor === 'system' ? [OrderStatus.paid] : []
+                actor === 'system' ? [OrderStatus.paid, OrderStatus.shipped] : []
             );
     });
 
@@ -218,7 +218,17 @@ describe('direction', () => {
             )
         );
 
-        expect(backwards).toEqual([]);
+        // The one backward edge is the lost parcel's `reopen`, and only the system makes it.
+        expect(backwards).toEqual(['system: shipped → processing']);
+    });
+
+    it('makes the backward edge from shipped only, and never lets an override take it', () => {
+        expect(ORDER_EVENTS.reopen).toEqual({
+            from: [OrderStatus.shipped],
+            to: OrderStatus.processing,
+            actors: ['system']
+        });
+        expect(canOverrideTo(OrderStatus.shipped, OrderStatus.processing)).toBe(false);
     });
 });
 
@@ -286,10 +296,16 @@ describe('canProcessOrder', () => {
     });
 
     it('agrees with the statuses that lead to processing as the system', () => {
-        const leadingTo = statusesLeadingTo(OrderStatus.processing, 'system');
+        // `reopen` (from `shipped`) also leads to `processing`, but it is a step back, not the start
+        // of fulfilment.
+        const leadingTo: ReadonlySet<OrderStatus> = new Set(
+            statusesLeadingTo(OrderStatus.processing, 'system').filter(
+                (status) => status !== OrderStatus.shipped
+            )
+        );
 
         for (const status of EVERY_STATUS)
-            expect(canProcessOrder(status)).toBe(leadingTo.includes(status));
+            expect(canProcessOrder(status)).toBe(leadingTo.has(status));
     });
 });
 

@@ -63,6 +63,23 @@
             },
             "cancel-any-time": "You can cancel it from your order page at any time before it ships, and you will be refunded in full. If you are happy to wait, you do not need to do anything.",
             "link-label": "See your order"
+        },
+        "not-losable": "Only a parcel that has left and not arrived can be reported lost or damaged",
+        "lost-superseded": "This parcel cannot be recorded as arrived: its items were already sent again or cancelled",
+        "email-lost": {
+            "meta-title": "Part of your order did not reach you",
+            "greeting": "Hello, {{name}}!",
+            "lost": {
+                "subject": "A parcel of your order was lost",
+                "body": "We are sorry: a parcel with the items below was lost on the way to you."
+            },
+            "damaged": {
+                "subject": "A parcel of your order was damaged",
+                "body": "We are sorry: a parcel with the items below was damaged on the way to you, so we cannot deliver it."
+            },
+            "promise": "We will send it again, or refund you if you prefer. You do not need to do anything.",
+            "owed": "We have to restock part of it; these items are expected around {{date}}:",
+            "link-label": "See your order"
         }
     }
 }

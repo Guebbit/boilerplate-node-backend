@@ -285,6 +285,7 @@ flowchart LR
     PA -->|"system, via<br/>delivery's process door"| PR["processing"]
     PR -->|"system: the shipment that leaves<br/>nothing remaining"| SH["shipped"]
     SH -->|"system: the last shipment arrives"| DE["delivered"]
+    SH -->|"system, the one backward move:<br/>a shipment is reported lost"| PR
     PR -->|"system: a digital fulfilment, or a<br/>remainder cancelled after every<br/>shipment arrived — both moves at once"| DE
     P -.->|"admin · or an expired hold"| CA["cancelled<br/><i>units released</i>"]
     PA -.->|"admin · refund due"| CA
@@ -307,14 +308,15 @@ override all ASK for a move, never assign the field themselves. See
 
 ## Who writes the status
 
-| Move                                        | Who asks                                                                         | Through                                                                                                                                                              |
-| ------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pending` → `paid`                          | `system`                                                                         | `payments`' settlement, on confirm                                                                                                                                   |
-| `paid` → `processing`                       | `system`                                                                         | `POST /orders/{id}/process`, `start:Shipment` — a first shipment or fulfil from `paid` makes it too — or `POST /orders/{id}/status-override`, `override:Order`       |
-| `processing` → `shipped`                    | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/shipments` — only the shipment that leaves **nothing** remaining                                                             |
-| `shipped` → `delivered`                     | `system`                                                                         | `POST /delivery/shipments/{id}/deliver` — only the last arrival, with nothing left to ship                                                                           |
-| `processing` → `delivered`                  | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/fulfill` (digital), or a remainder cancel after every shipment arrived — `markFulfilmentComplete`, the one named double move |
-| `pending`/`paid`/`processing` → `cancelled` | `customer` (own order, `pending`/`paid` only) or an operator (also `processing`) | `POST /orders/{id}/cancel` — **only while nothing has shipped**, conditional on `fulfillment.shipped` in the write's own filter                                      |
+| Move                                        | Who asks                                                                         | Through                                                                                                                                                                          |
+| ------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pending` → `paid`                          | `system`                                                                         | `payments`' settlement, on confirm                                                                                                                                               |
+| `paid` → `processing`                       | `system`                                                                         | `POST /orders/{id}/process`, `start:Shipment` — a first shipment or fulfil from `paid` makes it too — or `POST /orders/{id}/status-override`, `override:Order`                   |
+| `processing` → `shipped`                    | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/shipments` — only the shipment that leaves **nothing** remaining                                                                         |
+| `shipped` → `delivered`                     | `system`                                                                         | `POST /delivery/shipments/{id}/deliver` — only the last arrival, with nothing left to ship                                                                                       |
+| `shipped` → `processing`                    | `system`                                                                         | `POST /delivery/shipments/{id}/lost` — the `reopen` event, the one backward move; `canOverrideTo` stays forward-only, so no override makes it. `order.status_changed` carries it |
+| `processing` → `delivered`                  | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/fulfill` (digital), or a remainder cancel after every shipment arrived — `markFulfilmentComplete`, the one named double move             |
+| `pending`/`paid`/`processing` → `cancelled` | `customer` (own order, `pending`/`paid` only) or an operator (also `processing`) | `POST /orders/{id}/cancel` — **only while nothing has shipped**, conditional on `fulfillment.shipped` in the write's own filter                                                  |
 
 ### The fulfilment summary
 
@@ -468,7 +470,7 @@ keeping a copy of this table.
 | Payment   | `payment_declined`, `refund_issued`, `refund_settled`                                        | yes        |
 | Payment   | `refund_failed` (a failure code, never the provider's wording)                               | no         |
 | Payment   | `refund_canceled` (a refund staff voided; ids and amount only)                               | no         |
-| Shipments | `shipment_shipped`, `shipment_delivered`, `remainder_cancelled`                              | yes        |
+| Shipments | `shipment_shipped`, `shipment_delivered`, `shipment_lost`, `remainder_cancelled`             | yes        |
 | Shipments | `fulfillment_held`, `fulfillment_released` (a hold's reason code)                            | no         |
 | Returns   | `return_requested`, `return_approved`, `return_declined`, `return_received`, `return_closed` | yes        |
 | Documents | `invoice_issued`, `credit_note_issued`                                                       | yes        |

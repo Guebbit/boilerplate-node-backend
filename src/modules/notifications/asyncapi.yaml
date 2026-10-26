@@ -187,6 +187,34 @@ components:
                     type: string
                     maxLength: 500
             additionalProperties: false
+        ShipmentLostParamsPayload:
+            title: ShipmentLostParamsPayload
+            type: object
+            required:
+                - orderId
+                - shipmentId
+                - reason
+            properties:
+                orderId:
+                    type: string
+                shipmentId:
+                    type: string
+                reason:
+                    type: string
+                    enum:
+                        - lost
+                        - damaged
+                message:
+                    type: string
+                    maxLength: 500
+                owed:
+                    type: array
+                    items:
+                        type: string
+                expectedAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
         PurchaseHoldPlacedParamsPayload:
             title: PurchaseHoldPlacedParamsPayload
             type: object
@@ -314,6 +342,46 @@ components:
                         - notifications.fulfillment-held
                 params:
                     $ref: '#/components/schemas/FulfillmentHeldParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationShipmentLostPayload:
+            title: NotificationShipmentLostPayload
+            type: object
+            required:
+                - id
+                - audience
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
+                code:
+                    type: string
+                    enum:
+                        - notifications.shipment-lost
+                params:
+                    $ref: '#/components/schemas/ShipmentLostParamsPayload'
                 severity:
                     type: string
                     enum:
@@ -537,6 +605,7 @@ components:
                 - $ref: '#/components/schemas/NotificationCartMergeRefusedPayload'
                 - $ref: '#/components/schemas/NotificationFulfillmentDelayedPayload'
                 - $ref: '#/components/schemas/NotificationFulfillmentHeldPayload'
+                - $ref: '#/components/schemas/NotificationShipmentLostPayload'
                 - $ref: '#/components/schemas/NotificationStockAlertPayload'
                 - $ref: '#/components/schemas/NotificationStaffPurchaseHoldPlacedPayload'
                 - $ref: '#/components/schemas/NotificationStaffWebhookDisabledPayload'

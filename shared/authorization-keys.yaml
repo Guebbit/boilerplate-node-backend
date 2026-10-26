@@ -326,7 +326,7 @@ rules:
       subject: Shipment
       module: delivery
       scope: tenant
-      description: Cut a shipment from a fulfillment order, record its arrival, correct its tracking code, and hold or release a fulfillment order.
+      description: Cut a shipment from a fulfillment order, record its arrival, correct its tracking code, report a parcel lost or damaged, and hold or release a fulfillment order.
     # Narrower than `update:Order` on purpose: the warehouse may begin work on a paid order
     # without being handed the run of the order record. `paid → processing` is `system`-only in
     # `orders/domain/lifecycle.ts` — this rule gates `POST /orders/{id}/process`, the door
@@ -731,7 +731,7 @@ sets:
 
     - name: DeliveryManagement
       module: delivery
-      description: Cut, correct and record shipments; hold or release a fulfillment order.
+      description: Cut, correct, record and report shipments; hold or release a fulfillment order.
       rules:
           - update:Shipment
     - name: DeliveryStart

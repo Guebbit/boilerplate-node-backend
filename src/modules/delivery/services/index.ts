@@ -4,7 +4,7 @@
  * sibling may use. One file per flow, not one big file; see
  * `docs/theory/layers.md`.
  *
- * Every act (`ship`, `deliver`, `fulfill`, `holds`, `cancel-remainder`) is one transaction —
+ * Every act (`ship`, `deliver`, `lost`, `fulfill`, `holds`, `cancel-remainder`) is one transaction —
  * `act.ts` — that writes the fulfilment records, the order's summary, any status move and the
  * events together. `read.ts` answers the reads, `ensure.ts` makes the fulfillment orders,
  * `override-sync.ts` keeps them in step with an admin override.
@@ -24,6 +24,7 @@ import {
 import { ensureFulfillmentOrders } from './ensure';
 import { shipFulfillmentOrder } from './ship';
 import { deliverShipment } from './deliver';
+import { markShipmentLost } from './lost';
 import { fulfillFulfillmentOrder } from './fulfill';
 import { holdFulfillmentOrder, releaseFulfillmentOrder } from './holds';
 import { editShipmentTracking } from './tracking';
@@ -35,13 +36,14 @@ import { onDateChanged } from './slip';
 import { runPreorderSweep } from './preorder-sweep';
 import { listPreorderFulfillmentOrders, summarizePreorders } from './board';
 import { previewDateImpact } from './release-date-impact';
-import { scrubHoldNotes, scrubDestinations } from './retention';
+import { scrubHoldNotes, scrubLostNotes, scrubDestinations } from './retention';
 import { reencryptShipments } from './reencrypt';
-import { mailShipped, mailDelivered, mailDelayed, mailHoldNoticed } from './notify';
+import { mailShipped, mailDelivered, mailLost, mailDelayed, mailHoldNoticed } from './notify';
 
 export type { RemainderOption } from './read';
 export type { ShipInput } from './ship';
 export type { DeliverInput } from './deliver';
+export type { LostInput } from './lost';
 export type { HoldInput } from './holds';
 export type { RemainderCancel } from './cancel-remainder';
 export type { Split } from './split';
@@ -59,6 +61,7 @@ export const deliveryService = {
     processOrder,
     shipFulfillmentOrder,
     deliverShipment,
+    markShipmentLost,
     fulfillFulfillmentOrder,
     holdFulfillmentOrder,
     releaseFulfillmentOrder,
@@ -79,10 +82,12 @@ export const deliveryService = {
     summarizePreorders,
     previewDateImpact,
     scrubHoldNotes,
+    scrubLostNotes,
     scrubDestinations,
     reencryptShipments,
     mailShipped,
     mailDelivered,
+    mailLost,
     mailDelayed,
     mailHoldNoticed
 };

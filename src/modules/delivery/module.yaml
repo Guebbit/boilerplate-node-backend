@@ -1,4 +1,4 @@
-summary: 'Shipping rates as pure rules, fulfillment orders, the staff doors that cut a shipment, record its arrival and hold or release a fulfillment order, and what a late preorder owes its buyer.'
+summary: 'Shipping rates as pure rules, fulfillment orders, the staff doors that cut a shipment, record its arrival, report it lost and hold or release a fulfillment order, and what a late preorder owes its buyer.'
 subdomain: supporting
 group: shop
 dependsOn:

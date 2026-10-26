@@ -21,6 +21,29 @@ export interface ShipmentEventPayload {
     lines: ShipmentEventLine[];
 }
 
+/** What the buyer is told is still owed after a loss: a product the shelf could not cover. */
+export interface ShipmentLostOwedLine {
+    title: string;
+    quantity: number;
+}
+
+/**
+ * The payload of `shipment.lost`: the shared one, plus the reason and what the buyer is told.
+ * The webhook projects only the shared part and the reason — never `message`, which is free text.
+ */
+export interface ShipmentLostPayload extends ShipmentEventPayload {
+    /** Why the parcel will not arrive. */
+    reason: 'lost' | 'damaged';
+    /** The buyer; absent once the account was erased, so there is no inbox to write to. */
+    userId?: string;
+    /** The sentence staff wrote for the buyer, if any. */
+    message?: string;
+    /** Units the shelf could not cover again; empty when everything ships again from the shelf. */
+    owed: ShipmentLostOwedLine[];
+    /** When the owed units are expected (ISO 8601); present exactly when `owed` is not empty. */
+    expectedAt?: string;
+}
+
 /** The payload of `shipment.shipped`: the shared one, plus what the buyer's mail says. */
 export interface ShipmentShippedPayload extends ShipmentEventPayload {
     /**
@@ -75,6 +98,13 @@ declare module '@kernel/events' {
         /** A shipment arrived. A digital fulfilment fires it right after `shipment.shipped`. */
         'shipment.delivered': ShipmentEventPayload;
 
+        /**
+         * Staff reported a shipment lost or damaged in transit. Written in the transaction of the
+         * act that reopened its units, so it exists exactly when the loss does. This module mails
+         * the buyer from it and `notifications` writes the inbox row.
+         */
+        'shipment.lost': ShipmentLostPayload;
+
         /** Staff put a fulfillment order on hold, or the stock it awaits did not arrive. */
         'fulfillment_order.held': { orderId: string; fulfillmentOrderId: string; reason: string };
 
@@ -106,6 +136,9 @@ export const SHIPMENT_SHIPPED = 'shipment.shipped';
 
 /** See `DomainEventMap['shipment.delivered']` above. */
 export const SHIPMENT_DELIVERED = 'shipment.delivered';
+
+/** See `DomainEventMap['shipment.lost']` above. */
+export const SHIPMENT_LOST = 'shipment.lost';
 
 /** See `DomainEventMap['fulfillment_order.held']` above. */
 export const FULFILLMENT_ORDER_HELD = 'fulfillment_order.held';

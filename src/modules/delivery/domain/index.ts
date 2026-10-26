@@ -42,6 +42,9 @@ export type {
     ActionCandidate
 } from './fulfillment';
 
+export { withLoss, withRestoration, planRestoration, owedDateOf } from './lost';
+export type { LostShipmentFacts, OwedDate, Restoration, RestorableFulfillmentOrder } from './lost';
+
 export { isAwaitingTracking } from './tracking';
 export type { TrackingFacts } from './tracking';
 

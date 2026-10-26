@@ -180,6 +180,12 @@ one thing "in progress" changes is that the customer can no longer cancel the or
 parcel, the same way recording the handover is — not a button standing in for a delivery company's
 own report. → [`delivery`](../modules/delivery.md)
 
+::: tip A parcel that will not arrive
+If the carrier loses a parcel, or it is damaged on the way, press **Report lost / damaged** on the
+shipment instead of creating a new order: the units open again on the same order and you ship them with
+the normal button. → [A parcel lost or damaged](./when-something-goes-wrong.md#lost-parcel)
+:::
+
 ::: tip When the ordinary sequence does not fit
 A parcel scanned against the wrong order, or a correction needed outside the normal pack → ship →
 deliver order, goes through an admin's forced correction instead — see

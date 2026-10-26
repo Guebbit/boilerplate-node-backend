@@ -17,6 +17,7 @@ import {
     shipForOrder,
     shipLinesForOrder,
     releaseLinesForOrder,
+    releaseTopUpForOrder,
     releaseForOrder,
     releaseCommittedForOrder,
     refreshStockCacheForOrder,
@@ -24,6 +25,7 @@ import {
     isStockBoundToOrder,
     isHoldReleased
 } from './holds';
+import { reserveMoreForOrder } from './top-up';
 import { restockReturnedLines } from './returns';
 import { refreshStockCacheForProducts } from './transition';
 import { runReservationSweep } from './sweep';
@@ -40,6 +42,7 @@ import { receive, adjust, setBackorderLimit } from './admin';
 export type { RetakeOutcome } from './holds';
 export type {
     StockLine,
+    TopUp,
     StockShortfall,
     ReserveOutcome,
     StockPosition,
@@ -50,11 +53,13 @@ export type {
 /** The module's one service handle. */
 export const inventoryService = {
     reserveForOrder,
+    reserveMoreForOrder,
     commitForOrder,
     retakeReleasedForOrder,
     shipForOrder,
     shipLinesForOrder,
     releaseLinesForOrder,
+    releaseTopUpForOrder,
     releaseForOrder,
     releaseCommittedForOrder,
     refreshStockCacheForOrder,

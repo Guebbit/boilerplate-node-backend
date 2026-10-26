@@ -63,6 +63,23 @@
             },
             "cancel-any-time": "Puoi annullarlo dalla pagina del tuo ordine in qualsiasi momento prima della spedizione e sarai rimborsato per intero. Se ti va bene aspettare, non devi fare nulla.",
             "link-label": "Vedi il tuo ordine"
+        },
+        "not-losable": "Solo un pacco partito e non ancora arrivato può essere segnalato come smarrito o danneggiato",
+        "lost-superseded": "Questo pacco non può essere registrato come arrivato: i suoi articoli sono già stati rispediti o annullati",
+        "email-lost": {
+            "meta-title": "Una parte del tuo ordine non ti è arrivata",
+            "greeting": "Ciao, {{name}}!",
+            "lost": {
+                "subject": "Un pacco del tuo ordine è andato smarrito",
+                "body": "Ci dispiace: un pacco con gli articoli qui sotto è andato smarrito durante il viaggio verso di te."
+            },
+            "damaged": {
+                "subject": "Un pacco del tuo ordine è stato danneggiato",
+                "body": "Ci dispiace: un pacco con gli articoli qui sotto è stato danneggiato durante il viaggio verso di te, quindi non possiamo consegnarlo."
+            },
+            "promise": "Lo spediremo di nuovo, oppure ti rimborseremo se preferisci. Non devi fare nulla.",
+            "owed": "Dobbiamo rifornire una parte; questi articoli sono attesi intorno al {{date}}:",
+            "link-label": "Vedi il tuo ordine"
         }
     }
 }

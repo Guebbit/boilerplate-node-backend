@@ -17,6 +17,7 @@ import {
     holdNoticeEmail,
     fulfillmentDelayedEmail,
     shipmentDeliveredEmail,
+    shipmentLostEmail,
     shipmentShippedEmail,
     type TrackingVariant
 } from '../emails';
@@ -145,6 +146,46 @@ export const mailDelivered = ({
             // Stryker disable all
             logger.error({
                 message: `Delivery: could not mail the shipment ${shipmentId} arrival`,
+                error
+            });
+            // Stryker restore all
+        });
+
+/**
+ * Tell the buyer a parcel of theirs was reported lost or damaged: a fixed text per reason, what it
+ * carried, the units still owed with the date they are expected, and staff's sentence if there is
+ * one. Always sent: there is no switch, since a buyer who waits for a parcel that will not come
+ * must hear it from the shop. A mail that fails never undoes the loss.
+ *
+ * @param lost - the `shipment.lost` fact
+ */
+export const mailLost = (lost: DomainEventMap['shipment.lost']): Promise<void> =>
+    shipmentRepository
+        .findById(lost.shipmentId)
+        .then((shipment) =>
+            shipment
+                ? orderService.mailBuyerOfOrder(lost.orderId, (order, locale, name) => {
+                      const mail = shipmentLostEmail(locale, name, {
+                          reason: lost.reason,
+                          lines: emailLines(shipment),
+                          owed: lost.owed,
+                          ...(lost.expectedAt ? { expectedAt: new Date(lost.expectedAt) } : {}),
+                          message: lost.message,
+                          orderUrl: orderFrontendLink({ locale, id: String(order._id) })
+                      });
+                      // eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects (it logs its own failure)
+                      void enqueueEmail(
+                          { to: order.email, subject: mail.subject },
+                          mail.template,
+                          mail.data
+                      );
+                  })
+                : undefined
+        )
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: `Delivery: could not mail the loss of shipment ${lost.shipmentId}`,
                 error
             });
             // Stryker restore all

@@ -168,6 +168,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `delivery`       | `ADMIN_ORDER_FULFILLED`                      | `admin.order.fulfilled`                      | `order`                |
 | `delivery`       | `ADMIN_ORDER_FULFILMENT_STARTED`             | `admin.order.fulfilment_started`             | `order`                |
 | `delivery`       | `ADMIN_ORDER_SHIPPED`                        | `admin.order.shipped`                        | `order`                |
+| `delivery`       | `ADMIN_SHIPMENT_LOST`                        | `admin.shipment.lost`                        | `order`                |
 | `delivery`       | `ADMIN_SHIPMENT_TRACKING_EDITED`             | `admin.shipment.tracking_edited`             | `order`                |
 | `example`        | `EXAMPLE_COVER_CHANGED`                      | `example.cover_changed`                      | `example`              |
 | `example`        | `EXAMPLE_CREATED`                            | `example.created`                            | `example`              |

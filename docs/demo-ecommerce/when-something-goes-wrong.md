@@ -17,6 +17,10 @@ note field, and leaves the decision to a person. Each entry below has the same t
 | The shelf holds fewer units than the orders promised                   | [Fewer on the shelf than promised](#fewer-on-shelf)            |
 | An order stays in "being prepared" and nothing moves                   | [An order stuck in processing](#stuck-in-processing)           |
 | A parcel left a long time ago and nobody recorded its arrival          | [Shipped but not arrived](#shipped-not-arrived)                |
+| A parcel was lost, or damaged on the way, and the buyer never got it   | [A parcel lost or damaged](#lost-parcel)                       |
+| A parcel was lost and the shelf has none left to send again            | [Lost, and none left](#lost-none-left)                         |
+| A parcel marked lost has arrived after all                             | [The lost parcel arrived](#lost-parcel-arrived)                |
+| A parcel came back to the shop (returned to sender)                    | [It came back to us](#parcel-came-back)                        |
 
 ::: tip More entries come with their features
 Each entry here describes something the shop does today. When a new tool lands (disputes, a buyer
@@ -266,3 +270,81 @@ recorded, the clock has not started and the buyer's return window is still close
 **Whose job.** The warehouse records; the [support desk](./support.md#where-is-my-order) is who
 hears about it first, from a buyer asking where the parcel is.
 → [`delivery`](../modules/delivery.md#delivering)
+
+## A parcel lost or damaged {#lost-parcel}
+
+**What you see.** The carrier says the parcel is lost, or the buyer says it never came, or it was
+damaged **on the way** and never handed over. The order says **shipped** and the parcel will not
+arrive.
+
+**What to do.**
+
+1. Check the tracking code on the shipment first: the carrier's page is the proof.
+2. On the shipment, press **Report lost / damaged**. Choose _lost_ or _damaged_. _Damaged_ means damaged
+   in transit and never handed over; damage the buyer found after they had the goods is a
+   [return](./support.md), not this.
+3. Write the **message**: this is what the buyer reads, in the mail and on their order. Say what you will
+   do and when ("we are sending a new one on Monday"). The **note** is for your colleagues and the
+   buyer never sees it.
+4. The units are open again on the **same order**. Either **ship them again** with the normal Ship button
+   (the order goes back to _being prepared_ and forward again), or **cancel the rest** and refund the
+   buyer if they would rather have the money.
+5. Claim the loss with the carrier in the carrier's own portal. The shipment, its tracking code and your
+   note are the paper trail.
+
+**Never.** Create a new order for the replacement, or mark the lost parcel as delivered. The shop already
+has the order, the invoice and the payment; a second order would count the sale twice.
+
+::: tip For the accountant
+The shipment with its tracking code and note documents the loss. In Italy goods that went missing are
+presumed sold unless the loss is documented (DPR 441/1997), so keep that record.
+:::
+
+**Whose job.** The warehouse reports and ships again; the manager decides on a refund.
+→ [`delivery`](../modules/delivery.md#lost-in-transit)
+
+## Lost, and none left {#lost-none-left}
+
+**What you see.** After you report a parcel lost, the order shows a second part **waiting for stock**,
+with a date. The shelf had fewer units than the parcel carried.
+
+**What to do.** Nothing is lost by waiting: the units the shelf had are ready to ship now, and the rest
+are owed to this buyer **before** any new customer, in the order of the original payment. The date is the
+product's restock date or, when it has none, thirty days. The buyer is told both in the mail.
+
+1. Ship what the shelf covers (the normal Ship button).
+2. When stock arrives, the rest is released by itself, as for any waiting order.
+3. If the buyer would rather have a refund, cancel the waiting part.
+4. **Check the preorder board** after a loss on a popular product: the owed units count there with the
+   other promises, and they are not limited by the product's backorder limit.
+
+**Whose job.** The warehouse ships; the manager handles a refund.
+→ [`inventory`](../modules/inventory-reservations.md#owed-after-a-loss)
+
+## The lost parcel arrived {#lost-parcel-arrived}
+
+**What you see.** A parcel you reported lost shows up at the buyer's after all (the carrier updates, or
+the buyer writes).
+
+**What to do.** Open the shipment and press **Record arrival**, like any arrival. It works when every unit
+on it is still open: the replacement was not sent and the rest was not cancelled. The shop then counts
+the original parcel as the delivery and gives back the stock it had set aside again.
+
+If the button is gone, the replacement already went (or the rest was cancelled) and the shop refuses to
+count the goods twice. **Ask the buyer to send one back, or let them keep it: that is your call.** If
+units come back to you, [record them as received](./warehouse.md#the-two-things-you-do-by-hand) with a
+note.
+
+**Whose job.** The warehouse records the arrival; the manager decides about the second parcel.
+→ [`delivery`](../modules/delivery.md#the-lost-parcel-turns-up)
+
+## It came back to us {#parcel-came-back}
+
+**What you see.** The carrier returned the parcel to the shop (returned to sender, wrong address, refused).
+
+**What to do.** Record the units as **received** with a note ("returned to sender, parcel 12"), so the
+shelf is true again. Then ship them again with the normal Ship button, or cancel and refund. If the
+parcel was reported lost earlier, ship again from the same order: you do not need to report anything
+else.
+
+**Whose job.** The warehouse.
