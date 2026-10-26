@@ -33,10 +33,9 @@ import {
 } from './controllers/get-preorder-fulfillment-orders';
 
 /**
- * Whether this request is asking to skip the normal gate — the same flag `service.ts`'s
- * `refuseUnearnedForce` reads for its own `override:Order` permission check, so a caller who
- * reaches this far without `forced: true` never pays for a step-up prompt a plain ship/deliver
- * never needed.
+ * Whether this request is asking to force an arrival — the same flag `refuseUnearnedForce` reads
+ * for its own `override:Order` permission check, so a caller who reaches this far without
+ * `forced: true` never pays for a step-up prompt a plain deliver never needed.
  */
 const isForcedRequest = (request: Request): boolean =>
     (request.body as { forced?: boolean } | undefined)?.forced === true;
@@ -101,22 +100,19 @@ router.get(
 );
 
 // POST /delivery/fulfillment-orders/:id/shipments — cuts a shipment; the order moves processing ->
-// shipped only when nothing remains anywhere. `requireFreshAuthWhen` at `override:Order`'s own
-// declared tier: a `forced` write reaches past the ordinary `processing`-only gate, and the
-// service's own permission check has no way to demand a step-up on its own — only a route-mounted
-// guard can challenge before the controller runs.
+// shipped only when nothing remains anywhere. From `paid` the act makes the start move itself, so
+// the service also asks for `start:Shipment` there. No step-up: shipping is an ordinary act.
 router.post(
     '/fulfillment-orders/:id/shipments',
     getAuth,
     isAuth,
     requirePermission('update', 'Shipment'),
-    requireFreshAuthWhen(isForcedRequest, 'critical'),
     postShipFulfillmentOrder
 );
 
 // POST /delivery/fulfillment-orders/:id/fulfill — the digital door: a shipment with no parcel,
-// born delivered. No `forced` variant: there is no gate here for an override to skip past — a
-// physical fulfillment order simply cannot use this door at all.
+// born delivered. Like shipping, it makes the start move itself from `paid`. A physical
+// fulfillment order cannot use this door at all.
 router.post(
     '/fulfillment-orders/:id/fulfill',
     getAuth,
@@ -156,7 +152,7 @@ router.patch(
 );
 
 // POST /delivery/shipments/:id/deliver — records an arrival; on the last one the order moves
-// shipped -> delivered. Same `forced` step-up as the shipping door above.
+// shipped -> delivered. A `forced` arrival asks for a fresh login (`override:Order`'s tier).
 router.post(
     '/shipments/:id/deliver',
     getAuth,

@@ -21,7 +21,7 @@ shop manager (purple).
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
     P["waiting for payment"] -->|"💳 the customer pays"| PA["paid"]
-    PA -->|"🧑‍💼 you start packing"| PR["being prepared"]
+    PA -->|"🧑‍💼 you mark it in progress<br/>(optional: shipping does it)"| PR["being prepared"]
     PR -->|"📦 warehouse records<br/>the last parcel's handover"| SH["shipped"]
     SH -->|"📦 warehouse records<br/>the parcel's arrival"| DE["delivered"]
     P -.->|"customer cancels,<br/>or 15 min passed"| CA["cancelled"]
@@ -40,7 +40,7 @@ One of those steps happens without anyone at the shop pressing anything — the 
 a fact from outside the application, not a button:
 
 - **The warehouse marks it shipped by recording the handover**, not the other way around — they
-  scan or type the tracking code (when the method needs one) into the shipment screen, and THAT is
+  scan or type the tracking code (when the method has one; it may come later) into the shipment screen, and THAT is
   what creates the parcel record, moves the order to **shipped**, and sends the customer their
   tracking email. There is no separate "mark shipped" switch to forget. The door is
   `POST /delivery/fulfillment-orders/{id}/shipments`, and the order moves `processing` to `shipped`
@@ -137,6 +137,18 @@ The demo has one of each, which is why the shop shows 137 products but the manag
 
 "Switched off" is for a seasonal item or one you are still writing the description for.
 → [`products`](../modules/products.md)
+
+::: tip Selling an off-sale item by hand
+An order you raise for a customer (`POST /orders`) may include a product that is hidden or switched
+off for shoppers: no need to flip it live for a minute and back. Only a deleted product is refused.
+:::
+
+## Redirecting the rest of an order
+
+A buyer moved after the first parcel left? On the order page, correct the shipping address: it applies
+to everything not yet shipped (held items and items waiting for stock included). The parcel that
+already left keeps the address it went to, shown on its shipment. The country must be one the shop
+ships to.
 
 ## What you cannot do from here
 

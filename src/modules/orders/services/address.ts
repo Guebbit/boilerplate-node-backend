@@ -1,9 +1,10 @@
 /**
  * @module
- * Staff correcting where an unshipped order ships (`PUT /orders/{id}/shipping-address`): the door
+ * Staff correcting where an order's unsent units ship (`PUT /orders/{id}/shipping-address`): the door
  * a held `incorrect_address` fulfillment order needed, since nothing else could change an address
- * after checkout. Shopify lets staff edit the address of an unfulfilled fulfillment order the same
- * way; the buyer's own self-service edit is a later, optional step.
+ * after checkout. Shopify allows it on a partly fulfilled order too, and Solidus keeps the address a
+ * carton shipped to; here each shipment keeps its own copy. The buyer's own self-service edit is a
+ * later, optional step.
  *
  * The write, its timeline row and nothing else: the address stays encrypted under the order's id,
  * the audit row and the timeline name WHO changed it but never WHAT it says.
@@ -20,6 +21,7 @@ import {
 } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { withTransaction } from '@infrastructure/runtime/database';
+import { shipToCountries } from '@modules/shop';
 import { ERROR_CODES } from '@api/error-codes';
 import type { CallerContext, OrderAddress } from '@types';
 import { ordersAuditActions } from '../audit';
@@ -34,14 +36,25 @@ const locked = (): ResponseReject =>
         { code: ERROR_CODES.ORDER_ADDRESS_LOCKED, message: t('orders.address.locked') }
     ]);
 
+/** The 422 for a country the shop does not ship to: VAT is charged at the shop's own rates. */
+const unsupportedCountry = (): ResponseReject =>
+    generateReject(422, [
+        {
+            code: ERROR_CODES.ORDER_SHIP_TO_COUNTRY_NOT_SUPPORTED,
+            message: t('orders.address.ship-to-country-not-supported')
+        }
+    ]);
+
 /**
- * Replace an order's shipping address while nothing has left.
+ * Replace the shipping address of the units that have not left yet. Parcels already cut keep the
+ * address they went to (each shipment stores its own copy).
  *
  * @param orderId - the order
  * @param address - the corrected address
  * @param context - the staff member, who holds `update:Order` (the route asked)
- * @returns the order as it now stands, a 404 for an unknown one, or a 409 once it shipped or
- *   when it has no shipping address at all (a pickup, a digital order)
+ * @returns the order as it now stands, a 404 for an unknown one, a 422 for a country the shop does
+ *   not ship to, or a 409 once nothing is left to send or when it has no shipping address at all
+ *   (a pickup, a digital order)
  */
 export const correctShippingAddress = (
     orderId: string,
@@ -51,6 +64,8 @@ export const correctShippingAddress = (
     orderRepository.findByIdScoped(orderId).then((order) => {
         if (!order) return generateReject(404, [t('orders.not-found')]);
         if (!canCorrectAddress(order)) return locked();
+        // Checkout refuses the same list: a redirect abroad would break the VAT the order was charged.
+        if (!shipToCountries().includes(address.country)) return unsupportedCountry();
 
         return withTransaction(
             withTimeline(

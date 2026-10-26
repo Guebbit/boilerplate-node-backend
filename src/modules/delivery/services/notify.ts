@@ -17,7 +17,8 @@ import {
     holdNoticeEmail,
     fulfillmentDelayedEmail,
     shipmentDeliveredEmail,
-    shipmentShippedEmail
+    shipmentShippedEmail,
+    type TrackingVariant
 } from '../emails';
 import { shipmentRepository } from '../repository';
 import type { FulfillmentOrderDelayed, FulfillmentOrderHoldNoticed } from '../events';
@@ -79,26 +80,31 @@ export const mailShipped = ({
 
 /**
  * Tell the buyer the tracking code of a shipment changed: the same mail as when it left, with its
- * own subject and an apology for the earlier code. Best effort, after the fix was saved: a queue that
- * is briefly down must not turn a corrected typo into an error.
+ * own subject. `added` is the first code of a parcel that left without one; `corrected` replaces a
+ * code already sent and apologises for it. Best effort, after the save: a queue that is briefly
+ * down must not turn a saved code into an error.
  *
- * @param shipment - the shipment as it now stands, carrying the corrected code
+ * @param shipment - the shipment as it now stands, carrying the new code
+ * @param variant - whether the code is new or replaces one
  */
-export const mailTrackingCorrected = (shipment: ShipmentDocument): Promise<void> =>
+export const mailTrackingChanged = (
+    shipment: ShipmentDocument,
+    variant: TrackingVariant
+): Promise<void> =>
     orderService
         .mailBuyerOfOrder(String(shipment.orderId), (order, locale, name) => {
             const mail = shipmentShippedEmail(locale, name, {
                 lines: emailLines(shipment),
                 trackingCode: shipment.trackingCode,
                 remainingUnits: 0,
-                corrected: true
+                variant
             });
             // eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects (it logs its own failure)
             void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
         })
         .catch((error: unknown) => {
             logger.warn({
-                message: `Delivery: could not mail the corrected code of shipment ${String(shipment._id)}`,
+                message: `Delivery: could not mail the new code of shipment ${String(shipment._id)}`,
                 error
             });
         });

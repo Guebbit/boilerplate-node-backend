@@ -10,8 +10,9 @@
  * fulfillment order.
  *
  * Metadata, where it says more than the target:
- * - shipped, delivered: `forced`, and the operator's `reason` when it was forced (a sanctioned
- *   bypass; the reason is its justification).
+ * - delivered: `forced`, and the operator's `reason` when it was forced (a sanctioned bypass; the
+ *   reason is its justification).
+ * - tracking_edited: `changes.trackingCode` `{from, to}` — only when the code really changed.
  * - held, released: the hold's reason code, never `holdNote` (free text, optional commentary).
  */
 export const deliveryAuditActions = {

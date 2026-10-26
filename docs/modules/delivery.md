@@ -34,6 +34,7 @@ flowchart LR
     delivery --> shop
     inventory -. "inventory.backorder_allocated" .-> delivery
     orders -. "order.cancelled" .-> delivery
+    orders -. "order.redacted" .-> delivery
     orders -. "order.status_changed" .-> delivery
     orders -. "order.status_overridden" .-> delivery
     products -. "product.release_date_changed" .-> delivery
@@ -72,9 +73,11 @@ There is no courier simulation: goods move only when staff record it, through th
 doors.
 
 Each shipping method (`domain/rates.ts`) says whether it is `tracked` — standard is untracked,
-express is tracked, pickup is untracked. `tracked` is what `POST /delivery/fulfillment-orders/{id}/shipments`
-enforces: a tracking code is required for a tracked method, on every shipment, refused with a named
-422 otherwise.
+express is tracked, pickup is untracked. `tracked` means the carrier gives a code the buyer can follow. The ship door never
+requires it: a parcel may leave first and get its code later, with `PATCH /delivery/shipments/{id}`.
+`Shipment.awaitingTracking` is the server's answer to "tracked, still waiting for its code" (a
+physical, `shipped` parcel on a tracked method with none), so a client draws one chip and staff's
+digest counts the same rows.
 
 A method may also declare `minWeight`/`maxWeight`, grams — express caps at 5000g, standard at
 30000g, pickup at neither. Unlike `tracked`, this one IS enforced against the basket: `PUT /cart/shipping-method`
@@ -179,7 +182,7 @@ same zone, so the day staff typed is the day the buyer reads. A product line tha
 | `awaiting_stock`                                     | the grouping rule | **only** the allocation of stock. A hand release would ship goods the ledger never counted out — a consistency guard, not a policy |
 | `incorrect_address`, `high_risk`, `other` (+ a note) | staff, `…/hold`   | staff, `…/release`                                                                                                                 |
 
-A fulfillment order is **never** shipped from `on_hold`, forced or not.
+A fulfillment order is **never** shipped from `on_hold`.
 
 **What the buyer sees is not the reason.** Staff's reason can be an internal call (a risk check), and
 naming it tips off the people a check exists for, so the buyer gets one of three notices, mapped
@@ -402,7 +405,7 @@ sequenceDiagram
     participant I as inventory
     S->>D: POST /fulfillment-orders/{id}/shipments {lines?, trackingCode?}
     Note over D: ONE transaction opens
-    D->>D: refuse early: order status, kind, hold, lines, tracking
+    D->>D: refuse early: order status, kind, hold, lines
     D->>D: claim the fulfillment order by its revision
     D->>D: write the shipment
     D->>O: shipStock(lines)
@@ -430,7 +433,7 @@ cancel is conditional on `fulfillment.shipped` not being set.
 
 ## Shipping
 
-`POST /delivery/fulfillment-orders/{id}/shipments {lines?, trackingCode?, forced?, reason?}` → `201`.
+`POST /delivery/fulfillment-orders/{id}/shipments {lines?, trackingCode?}` → `201`.
 `lines` omitted ships everything that remains. The order moves `processing → shipped` only when the
 shipment leaves **nothing** remaining anywhere; until then it stays `processing`, and its
 `fulfillmentStatus` reads `partially_fulfilled`. Refused:
@@ -438,21 +441,39 @@ shipment leaves **nothing** remaining anywhere; until then it stays `processing`
 | Case                                                                                          | Answer                                          |
 | --------------------------------------------------------------------------------------------- | ----------------------------------------------- |
 | more than remains, a product that is not there, the same twice                                | `422 DELIVERY_LINES_INVALID`                    |
-| a tracked method with no code                                                                 | `422 DELIVERY_TRACKING_CODE_REQUIRED`           |
 | a fulfillment order on hold, closed or cancelled; a cancelled or never-paid (`pending`) order | `409 DELIVERY_NOT_SHIPPABLE`                    |
-| a forced first shipment that finds the order no longer `paid` (it moved meanwhile)            | `409 ORDER_NOT_PAID`                            |
+| a first shipment from `paid` that finds the order no longer `paid` (it moved meanwhile)       | `409 ORDER_NOT_PAID`                            |
+| a `paid` order, for a caller without `start:Shipment` (the act makes the start move itself)   | `403` and a `security.forbidden` audit row      |
 | a digital one                                                                                 | `409 DELIVERY_NOT_PHYSICAL` — fulfil it instead |
-| an order that is not `processing`                                                             | `409 ORDER_NOT_PROCESSING`                      |
+| an order that is neither `processing` nor `paid`                                              | `409 ORDER_NOT_PROCESSING`                      |
 
-### `forced`
+### Where a parcel went
 
-`forced` lets staff skip a step, never a rule: ship from `paid` without `process` (the order then moves
-`paid → processing → …` by itself), or record a delivery without a carrier confirmation. It needs
+The order holds one address: where the units still to send go. Each shipment stores its own copy as
+`destination`, taken when it is cut (`services/cut.ts`, so ship, fulfil and the override's shipments
+all get it), encrypted under the shipment's `_id` (`pii.ts`, same key ring as the order's). Staff can
+therefore redirect the rest of a partly shipped order without rewriting where the first parcel
+went. The copy is personal data of its own: it shows in the account export, follows the key rotation
+(`reencrypt`), and is unset when the order's address is scrubbed (`order.redacted` →
+`scrubDestinations`). A pickup or a digital fulfilment has none.
+
+### Shipping from `paid`
+
+Shipping from `paid` is an ordinary act, not an override: the act makes the `paid → processing` move
+itself, in its own transaction, so the caller holds `update:Shipment` **and** `start:Shipment`.
+`POST /orders/{id}/process` stays as an optional "mark in progress". The digital fulfil door works the
+same way. `processing` has one effect for the buyer: self-cancel closes (it works from `pending` and
+`paid` only); the legal right of withdrawal is not affected.
+
+### `forced` (deliver only)
+
+`forced` on a delivery records an arrival without a carrier confirmation. It needs
 `override:Order` (itself step-up gated, and the route asks for the fresh session before the
 controller runs) and a `reason`. It leaves a `status_overridden` row on the order's [timeline](./orders.md#the-timeline) —
-`orderService.recordForcedFulfilment` appends it without a move of its own — and the shipment is stored with `forced: true`.
+`orderService.recordForcedFulfilment` appends it without a move of its own. `Shipment.forced` is
+different: it marks a shipment cut by an admin status override.
 
-The audit row of a forced ship or delivery carries the `reason` too (an ordinary one says `forced: false`
+The audit row of a forced delivery carries the `reason` too (an ordinary one says `forced: false`
 and nothing else): forcing is a sanctioned bypass, and a record that cannot say why it was allowed
 cannot be investigated alone. The copy dies first — the audit trail keeps 90 days, the timeline text
 1095 ([retention](../theory/data-retention.md)) — and only operators read it. A hold's and a release's
@@ -534,26 +555,26 @@ date this order was expecting, not the product's previous date.
 
 ## Routes and events
 
-| Route                                                      | Key                                | Answers                                                        |
-| ---------------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------- |
-| `GET /delivery/methods`                                    | public                             | the shipping methods and what each costs                       |
-| `GET /delivery/fulfillment-orders` · `/summary`            | `display:Order`                    | [the preorder board](#the-preorder-board)'s two reads          |
-| `GET /delivery/fulfillment-orders/restock-date-impact`     | `update:Product` + `display:Order` | orders a restock-date move would email, before it is saved     |
-| `GET /orders/{id}/fulfillment-orders` · `/shipments`       | the owner, or staff                | `{ items[] }` each, every item with its own `actions`; unpaged |
-| `POST /orders/{id}/process`                                | `start:Shipment`                   | the order, `processing`                                        |
-| `POST /delivery/fulfillment-orders/{id}/shipments`         | `update:Shipment`                  | `201` + the shipment                                           |
-| `POST /delivery/fulfillment-orders/{id}/fulfill`           | `update:Shipment`                  | the shipment, delivered                                        |
-| `POST /delivery/fulfillment-orders/{id}/hold` · `/release` | `update:Shipment`                  | the fulfillment order                                          |
-| `PATCH /delivery/shipments/{id}`                           | `update:Shipment`                  | the shipment, tracking corrected while it is out               |
-| `POST /delivery/shipments/{id}/deliver`                    | `update:Shipment`                  | the shipment                                                   |
+| Route                                                      | Key                                                | Answers                                                        |
+| ---------------------------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------- |
+| `GET /delivery/methods`                                    | public                                             | the shipping methods and what each costs                       |
+| `GET /delivery/fulfillment-orders` · `/summary`            | `display:Order`                                    | [the preorder board](#the-preorder-board)'s two reads          |
+| `GET /delivery/fulfillment-orders/restock-date-impact`     | `update:Product` + `display:Order`                 | orders a restock-date move would email, before it is saved     |
+| `GET /orders/{id}/fulfillment-orders` · `/shipments`       | the owner, or staff                                | `{ items[] }` each, every item with its own `actions`; unpaged |
+| `POST /orders/{id}/process`                                | `start:Shipment`                                   | the order, `processing`                                        |
+| `POST /delivery/fulfillment-orders/{id}/shipments`         | `update:Shipment`                                  | `201` + the shipment                                           |
+| `POST /delivery/fulfillment-orders/{id}/fulfill`           | `update:Shipment` (+ `start:Shipment` from `paid`) | the shipment, delivered                                        |
+| `POST /delivery/fulfillment-orders/{id}/hold` · `/release` | `update:Shipment`                                  | the fulfillment order                                          |
+| `PATCH /delivery/shipments/{id}`                           | `update:Shipment`                                  | the shipment, tracking added or corrected, at any time         |
+| `POST /delivery/shipments/{id}/deliver`                    | `update:Shipment`                                  | the shipment                                                   |
 
 Every button a client draws comes from the record's own `actions` (or `GET /returns/options`): the
 frontend never re-derives a rule. Every staff door asks the key and nothing else: [no rank](../theory/authorization.md#protecting-people).
 
-A forced door has its own flag beside the ordinary one: `forceShip` (the ordinary ship door is closed,
-`override:Order` opens it) and `forceDeliver` (the arrival is open, as for `deliver`, and the caller
-also holds `override:Order`; true beside `deliver`, since forcing only skips the carrier's
-confirmation). `ShipmentActions.update` is the tracking-code edit.
+`FulfillmentOrderActions.ship` and `fulfill` are true on a `paid` order only for a caller who also holds
+`start:Shipment`. The forced arrival has its own flag beside the ordinary one: `forceDeliver` (the
+arrival is open, as for `deliver`, and the caller also holds `override:Order`; true beside `deliver`,
+since forcing only skips the carrier's confirmation). `ShipmentActions.update` is the tracking-code edit.
 
 | Event                                                 | Payload                                                    | Public webhook                 |
 | ----------------------------------------------------- | ---------------------------------------------------------- | ------------------------------ |
@@ -569,8 +590,14 @@ All are written through the outbox **in the act's transaction**. An order shippe
 **Emails**, one per shipment: _shipped_ (its lines, the tracking line when the method carries one, and
 "N more items to follow" while anything remains) when it leaves, and _delivered_ (its lines, and on
 the delivery that completes the order, the date until which the buyer may withdraw) when it arrives.
-Correcting a tracking code (`PATCH /delivery/shipments/{id}`) mails the buyer the same shipped mail with its own
-subject and an apology for the earlier code, only when the code actually changed; best effort, after the fix is saved.
+Setting a tracking code (`PATCH /delivery/shipments/{id}`) mails the buyer the same shipped mail with its
+own subject, only when the code actually changed; best effort, after the save. The first code of a parcel
+that left without one says "your tracking code is ready"; a replacement says it changed, with an apology
+for the earlier code. The audit row records the code before and after.
+
+The code can be set at any time, delivered shipments included: it is most useful later, as dispute
+evidence. A digital shipment never had a carrier and refuses it with `DELIVERY_NOT_PHYSICAL`; the
+shipment stores the fulfillment order's `kind` for that reason.
 
 ## Your data
 

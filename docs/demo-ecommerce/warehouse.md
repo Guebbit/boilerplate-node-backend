@@ -157,14 +157,23 @@ flowchart LR
     class D,E,F,H auto;
 ```
 
-Only one shipping method in the demo (express) needs a tracking code — the others move a parcel
-along with nothing but the record of the handover itself. Either way, the three things after
+Only one shipping method in the demo (express) carries a tracking code — the others move a parcel
+along with nothing but the record of the handover itself.
+
+::: tip The code comes tomorrow
+Ship now and add the code later from the shipment: the parcel shows a "tracking code missing" marker
+until you do, and the customer gets a second mail with the code when you save it. You can fix a wrong
+code the same way, even after the parcel arrived.
+:::
+
+Either way, the three things after
 recording the handover all happen on their own: you do not separately create the parcel, or write
 the status field, or send the email.
 
 ::: tip Starting work on a paid order
-Packing starts with its own action — `POST /orders/{id}/process` — which moves the order
-from paid to `processing`. Nobody sets `processing` directly: the same rule, one step earlier.
+Marking an order in progress — `POST /orders/{id}/process` — is optional: recording the handover of
+a paid order moves it from paid to `processing` by itself (you need the start permission too). The
+one thing "in progress" changes is that the customer can no longer cancel the order themselves.
 :::
 
 **There is no courier simulation.** Recording the arrival is a real action on a real

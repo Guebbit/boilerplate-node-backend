@@ -10,10 +10,9 @@ tags:
 
 x-error-codes:
     DELIVERY_OVERRIDE_REASON_REQUIRED: { status: 422, description: 'A forced shipment or delivery requires a reason and none was supplied.' }
-    DELIVERY_TRACKING_CODE_REQUIRED: { status: 422, description: 'Shipping a tracked method requires a tracking code and none was supplied.' }
     DELIVERY_LINES_INVALID: { status: 422, description: 'A shipment line names a product that is not on the fulfillment order, asks for more than remains of it, or names the same product twice.' }
     DELIVERY_NOT_SHIPPABLE: { status: 409, description: 'The fulfillment order cannot ship now: it is on hold, closed or cancelled, or the order is cancelled, or still `pending` (never paid: start or pay it first).' }
-    DELIVERY_NOT_PHYSICAL: { status: 409, description: 'A digital fulfillment order has nothing to ship; fulfil it instead.' }
+    DELIVERY_NOT_PHYSICAL: { status: 409, description: 'A digital fulfillment order has nothing to ship (fulfil it instead), and a digital shipment has no tracking code to set.' }
     DELIVERY_NOT_DIGITAL: { status: 409, description: 'A physical fulfillment order cannot be fulfilled without a shipment; ship it instead.' }
     DELIVERY_NOT_HOLDABLE: { status: 409, description: 'Only an open or in-progress fulfillment order can be put on hold.' }
     DELIVERY_NOT_RELEASABLE: { status: 409, description: 'The fulfillment order is not on hold, or waits for stock and is released only by the stock arriving.' }
@@ -362,11 +361,14 @@ paths:
                 when this shipment leaves nothing remaining anywhere — until then it stays
                 `processing` and its `fulfillmentStatus` reads `partially_fulfilled`. The shipment, the
                 order's summary, any status move and the events are written in ONE transaction.
-                `trackingCode` is required exactly when the order's shipping method is `tracked`.
+                `trackingCode` is optional: a `tracked` method may get its code later, with
+                `PATCH /delivery/shipments/{id}` (`Shipment.awaitingTracking` says who is still waiting).
                 Refuses a fulfillment order that is on hold, closed or cancelled
                 (`DELIVERY_NOT_SHIPPABLE`), a digital one (`DELIVERY_NOT_PHYSICAL`), and an order that
-                is not `processing` (`ORDER_NOT_PROCESSING`) — unless `forced`, which lets a shipment
-                skip the `start` step from `paid`. Never ships from `on_hold`, forced or not.
+                is neither `processing` nor `paid` (`ORDER_NOT_PROCESSING`). From `paid` it moves the
+                order to `processing` itself, in the same transaction, so it also needs `start:Shipment`
+                (403 without it); `POST /orders/{id}/process` stays as an optional "mark in progress".
+                Never ships from `on_hold`.
             operationId: shipFulfillmentOrder
             security:
                 - bearerAuth: []
@@ -404,7 +406,8 @@ paths:
                 `digital` fulfillment order has nothing to carry, so this is its only door. Refuses
                 a physical one with `DELIVERY_NOT_DIGITAL` (ship it instead). When it leaves nothing
                 remaining and nothing undelivered the order moves to `delivered`, its withdrawal
-                clock counted from payment (digital content, Art. 9(2)(c)).
+                clock counted from payment (digital content, Art. 9(2)(c)). Works from `paid` too: it
+                moves the order to `processing` itself, so it also needs `start:Shipment` (403 without it).
             operationId: fulfillFulfillmentOrder
             security:
                 - bearerAuth: []
@@ -511,7 +514,8 @@ paths:
         patch:
             tags: [Delivery]
             summary: Correct a shipment's tracking code
-            description: Merges the given fields into the shipment — RFC 7396. Only the tracking code can change (a typo), and only while the shipment is still `shipped`. The tracking code of a tracked method cannot be cleared.
+            description: >-
+                Merges the given fields into the shipment — RFC 7396. Only the tracking code can change: added when the parcel left without one, or corrected. Allowed at any time after the shipment left, `shipped` or `delivered`; a digital fulfilment never had a carrier and answers `DELIVERY_NOT_PHYSICAL` (409). The buyer is mailed only when the code really changed — an "added" notice for the first code, a "corrected" one for a replacement. The audit row records the code before and after.
             operationId: updateShipment
             security:
                 - bearerAuth: []
@@ -605,7 +609,7 @@ components:
                     description: Items total at which this method becomes free. Absent — it never does.
                 tracked:
                     type: boolean
-                    description: Whether a parcel sent by this method carries a tracking code. Looked up live by the order's shippingMethod id when it ships — not frozen at checkout — so a rate change also changes what the shipping door requires.
+                    description: Whether the carrier gives a code the buyer can follow for a parcel sent by this method. Looked up live by the order's shippingMethod id — not frozen at checkout. The code may be added at ship time or later.
                 requiresAddress:
                     type: boolean
                     description: Whether this method needs a shipping address to deliver to (a courier does; a counter pickup does not). Checkout enforces it — a basket needing shipping refuses with `CART_ADDRESS_REQUIRED` when the chosen method requires one and none is on file.
@@ -696,7 +700,7 @@ components:
         FulfillmentOrderActions:
             type: object
             additionalProperties: false
-            required: [ship, forceShip, fulfill, hold, release]
+            required: [ship, fulfill, hold, release]
             description: >-
                 What the requesting caller may do to this fulfillment order, decided by the server so
                 a client renders its controls from this. `ship`, `fulfill`, `hold` and `release` are
@@ -704,17 +708,10 @@ components:
             properties:
                 ship:
                     type: boolean
-                    description: Whether `POST /delivery/fulfillment-orders/{id}/shipments` would be accepted — a physical order, open or in progress, with lines remaining.
-                forceShip:
-                    type: boolean
-                    description: >-
-                        Whether `POST /delivery/fulfillment-orders/{id}/shipments` with `forced: true`
-                        would be accepted and the ordinary door would not: the caller holds
-                        `override:Order`, the order is `paid` (or otherwise not yet `processing`) and
-                        the fulfillment order still has units to ship.
+                    description: Whether `POST /delivery/fulfillment-orders/{id}/shipments` would be accepted — a physical order, open or in progress, with lines remaining, on an order that is `processing` — or `paid`, for a caller who also holds `start:Shipment`.
                 fulfill:
                     type: boolean
-                    description: Whether `POST /delivery/fulfillment-orders/{id}/fulfill` would be accepted — a `digital` one, open.
+                    description: Whether `POST /delivery/fulfillment-orders/{id}/fulfill` would be accepted — a `digital` one, open, on an order that is `processing` or `paid` (the latter needs `start:Shipment` too).
                 hold:
                     type: boolean
                     description: Whether `POST /delivery/fulfillment-orders/{id}/hold` would be accepted.
@@ -814,12 +811,12 @@ components:
                         arrival without a carrier confirmation and needs a `reason`.
                 update:
                     type: boolean
-                    description: Whether `PATCH /delivery/shipments/{id}` (the tracking code) would be accepted — still `shipped`.
+                    description: Whether `PATCH /delivery/shipments/{id}` (the tracking code) would be accepted — any physical shipment, shipped or delivered.
 
         Shipment:
             type: object
             additionalProperties: false
-            required: [id, orderId, fulfillmentOrderId, number, status, lines, forced, shippedAt, actions]
+            required: [id, orderId, fulfillmentOrderId, number, status, lines, forced, awaitingTracking, shippedAt, actions]
             description: >-
                 What actually left, at one time, with one tracking code (Shopify's `Fulfillment`).
                 Born `shipped`; a digital fulfilment is born `delivered`.
@@ -845,9 +842,15 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/ShipmentLine'
+                destination:
+                    $ref: '../orders/openapi.yaml#/components/schemas/OrderAddress'
+                    description: Where this parcel went — the order's shipping address as it stood when the shipment was cut, so a later correction of the order's address never rewrites it. Absent for a pickup, a digital fulfilment, and once the order's own address has been scrubbed.
                 forced:
                     type: boolean
-                    description: Whether staff skipped a step to record it (shipped from `paid` without `start`).
+                    description: Whether an admin status override cut this shipment.
+                awaitingTracking:
+                    type: boolean
+                    description: Whether the parcel left on a `tracked` method, is still `shipped` and has no tracking code yet (tracked, still waiting for it). Read-only, decided by the server.
                 shippedAt:
                     type: string
                     format: date-time
@@ -907,6 +910,9 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/ShipmentLine'
+                destination:
+                    $ref: '../orders/openapi.yaml#/components/schemas/OrderAddress'
+                    description: Where this parcel went — the order's shipping address as it stood when the shipment was cut, so a later correction of the order's address never rewrites it. Absent for a pickup, a digital fulfilment, and once the order's own address has been scrubbed.
                 shippedAt:
                     type: string
                     format: date-time
@@ -981,15 +987,7 @@ components:
                     type: string
                     maxLength: 100
                     minLength: 1
-                    description: The carrier's handle on the parcel. Required when the order's shipping method is tracked; optional otherwise.
-                forced:
-                    type: boolean
-                    description: Skip the `start` step — ship from `paid`. The caller must hold `override:Order`, and `reason` is then required. Never ships from `on_hold`.
-                reason:
-                    type: string
-                    maxLength: 1000
-                    minLength: 1
-                    description: Required exactly when `forced` is `true` — why the normal door didn't apply. Recorded on the order's override history.
+                    description: The carrier's handle on the parcel. Optional — for a tracked method, add it now or later with `PATCH /delivery/shipments/{id}`.
 
         DeliverShipmentRequest:
             type: object
@@ -1012,7 +1010,7 @@ components:
                     type: string
                     maxLength: 100
                     minLength: 1
-                    description: The corrected tracking code.
+                    description: The tracking code to set — the first one for a parcel that left without, or a correction.
 
         HoldFulfillmentOrderRequest:
             type: object
