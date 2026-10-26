@@ -1,0 +1,20 @@
+# The permission-model version a client caches its rules by: the first 4 bytes of
+# sha256(sorted rule ids joined by "\n"), read as a big-endian unsigned integer.
+# Sorting is by UTF-16 code unit (JavaScript's default); every id here is BMP text, where that
+# equals byte order, so a twin may sort either way.
+cases:
+    - name: three ids give the digest's first four bytes as an unsigned integer
+      ids: ['read:Product', 'update:Product', 'read:User']
+      version: 4161510200
+    - name: the same set declared in another order gives the same version
+      ids: ['read:User', 'read:Product', 'update:Product']
+      version: 4161510200
+    - name: an empty set hashes the empty string
+      ids: []
+      version: 3820012610
+    - name: one id has no separator to add
+      ids: ['a']
+      version: 3398926610
+    - name: a non-ASCII id sorts after ASCII and is hashed as UTF-8
+      ids: ['ä', 'z', 'a']
+      version: 4167311475

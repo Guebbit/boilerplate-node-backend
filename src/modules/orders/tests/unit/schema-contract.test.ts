@@ -132,11 +132,11 @@ describe('orderSchema — indexes', () => {
         // leaves the old index in production. The `createdAt` DIRECTION serves "newest first"
         // from the index rather than an in-memory sort; getting it wrong is a latency incident.
         expect(indexSpecs(orderSchema)).toEqual([
-            'orders_anonymizeAfter: anonymizeAfter+1',
             'orders_createdAt: createdAt+1',
             'orders_email: email+1',
             'orders_orderNumber: orderNumber+1',
             'orders_paidAt: paidAt+1',
+            'orders_piiClockStartedAt: piiClockStartedAt+1',
             'orders_status_createdAt: status+1, createdAt-1',
             'orders_status_payBy: status+1, payBy+1',
             'orders_userId_createdAt: userId+1, createdAt-1',
@@ -150,11 +150,11 @@ describe('orderSchema — indexes', () => {
         // Both sparse indexes are sparse on purpose: most orders never carry either field, and a
         // dense index would hold every row's absence forever.
         expect(indexOptionSpecs(orderSchema)).toEqual([
-            'orders_anonymizeAfter: sparse=true',
             'orders_createdAt: (none)',
             'orders_email: (none)',
             'orders_orderNumber: unique=true',
             'orders_paidAt: sparse=true',
+            'orders_piiClockStartedAt: sparse=true',
             'orders_status_createdAt: (none)',
             'orders_status_payBy: (none)',
             'orders_userId_createdAt: (none)',

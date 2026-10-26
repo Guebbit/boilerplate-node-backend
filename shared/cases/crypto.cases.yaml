@@ -1,0 +1,149 @@
+# Each side must read what the other wrote. Every key and secret here is TEST-ONLY and public.
+# Ciphertexts were sealed with a fixed IV by independent node:crypto code, so no side proves
+# itself against its own output. `kind` picks the shape of a case.
+#
+#   pseudonym      HMAC-SHA256 under the HKDF subkey `pseudonym/v1/<purpose>`; digest is 64 hex.
+#   subkey         HKDF-SHA256, empty salt, `info` as given, 32 bytes out (hex).
+#   decrypt        `<version>:<iv>:<tag>:<ciphertext>` (hex), AES-256-GCM under the HKDF subkey
+#                  of the ring entry named by the version, `info` = purpose, AAD bound.
+#                  `expect: reject` means the auth tag or the lookup must fail.
+#   verify-password  argon2id PHC string; the stored parameters win over any current default.
+cases:
+    - name: a log pseudonym is the HMAC under the log subkey
+      kind: pseudonym
+      root: shared-cases-root-secret-do-not-use-in-production-0001
+      purpose: log
+      value: ada@example.com
+      digest: 52f11ddffa57a47e91362f72b71810931c645b3be4879fd92d79eb32cc4fe5dd
+    - name: the rate-limit purpose gives an unrelated digest for the same value
+      kind: pseudonym
+      root: shared-cases-root-secret-do-not-use-in-production-0001
+      purpose: rate-limit
+      value: ada@example.com
+      digest: c889538b60d0431154f7dcbe98b7cb70849db79819cb9dfe2b0f0cd7a1b5e326
+    - name: the idempotency purpose gives a third digest
+      kind: pseudonym
+      root: shared-cases-root-secret-do-not-use-in-production-0001
+      purpose: idempotency
+      value: ada@example.com
+      digest: 32ff26ec5f185c60b4fcb431cbc9b59f896f9d00c3b0ed1b9f05b51f9eee452b
+    - name: a non-ASCII value is hashed as its UTF-8 bytes
+      kind: pseudonym
+      root: shared-cases-root-secret-do-not-use-in-production-0001
+      purpose: log
+      value: 'Zoë ☃'
+      digest: 45acf825fc69f53dbd4fd00fc62548394f9b6319dc6cf8d2a4e2a159dbdc183c
+    - name: the pseudonym subkey label carries the scheme version
+      kind: subkey
+      root: shared-cases-root-secret-do-not-use-in-production-0001
+      info: pseudonym/v1/log
+      key: 8d36fbace8abe9041d5318a019018e19c53b38db5adb4dae051ee0342b59281e
+    - name: the pii ring label derives its own key
+      kind: subkey
+      root: shared-cases-root-secret-do-not-use-in-production-0001
+      info: pii
+      key: b6c166bd2773d7e4d18376434fe5e62f8cbf590b6e76ea907ba534b7aa1317e7
+    - name: the totp ring label derives a different key from the same root
+      kind: subkey
+      root: shared-cases-root-secret-do-not-use-in-production-0001
+      info: totp
+      key: 577bfa67ba088db559bdfcf77d6d546907f076d7fdb17c717207f0d5a1775557
+    - name: the webhook-secret ring label derives a fourth key
+      kind: subkey
+      root: shared-cases-root-secret-do-not-use-in-production-0001
+      info: webhook-secret
+      key: 5af9941ab3ca5d6b0ad0ff594cadf8d35784b749557bfc1f0aa4618fd83695a6
+    - name: a pii value opens under its own row and field
+      kind: decrypt
+      ring: [{ version: v1, key: shared-cases-pii-key-one-do-not-use }]
+      purpose: pii
+      aad: users:phone:507f1f77bcf86cd799439011
+      stored: 'v1:000102030405060708090a0b:dc4c35ce6b89624038c5e61d83ceb88e:587387a586390cae97332b5ffd4de4'
+      expect: '+39 333 1234567'
+    - name: the same ciphertext moved to another row is refused
+      kind: decrypt
+      ring: [{ version: v1, key: shared-cases-pii-key-one-do-not-use }]
+      purpose: pii
+      aad: users:phone:507f1f77bcf86cd799439099
+      stored: 'v1:000102030405060708090a0b:dc4c35ce6b89624038c5e61d83ceb88e:587387a586390cae97332b5ffd4de4'
+      expect: reject
+    - name: the same ciphertext read under another purpose is refused
+      kind: decrypt
+      ring: [{ version: v1, key: shared-cases-pii-key-one-do-not-use }]
+      purpose: totp
+      aad: users:phone:507f1f77bcf86cd799439011
+      stored: 'v1:000102030405060708090a0b:dc4c35ce6b89624038c5e61d83ceb88e:587387a586390cae97332b5ffd4de4'
+      expect: reject
+    - name: a ring finds the key by the stamped version, not by position
+      kind: decrypt
+      ring:
+          - { version: v2, key: shared-cases-pii-key-two-do-not-use }
+          - { version: v1, key: shared-cases-pii-key-one-do-not-use }
+      purpose: pii
+      aad: users:phone:507f1f77bcf86cd799439011
+      stored: 'v1:000102030405060708090a0b:dc4c35ce6b89624038c5e61d83ceb88e:587387a586390cae97332b5ffd4de4'
+      expect: '+39 333 1234567'
+    - name: a non-ASCII plaintext round-trips as UTF-8 under the newest key
+      kind: decrypt
+      ring:
+          - { version: v2, key: shared-cases-pii-key-two-do-not-use }
+          - { version: v1, key: shared-cases-pii-key-one-do-not-use }
+      purpose: pii
+      aad: addresses:fullName:507f1f77bcf86cd799439012
+      stored: 'v2:0c0d0e0f1011121314151617:464a7520ce22362ca25a3e37af10eb97:590f2872e85257996f679a0a'
+      expect: Zoë Müller
+    - name: a version the ring no longer holds is refused
+      kind: decrypt
+      ring: [{ version: v2, key: shared-cases-pii-key-two-do-not-use }]
+      purpose: pii
+      aad: users:phone:507f1f77bcf86cd799439011
+      stored: 'v1:000102030405060708090a0b:dc4c35ce6b89624038c5e61d83ceb88e:587387a586390cae97332b5ffd4de4'
+      expect: reject
+    - name: a flipped ciphertext byte fails the auth tag
+      kind: decrypt
+      ring: [{ version: v1, key: shared-cases-pii-key-one-do-not-use }]
+      purpose: pii
+      aad: users:phone:507f1f77bcf86cd799439011
+      stored: 'v1:000102030405060708090a0b:dc4c35ce6b89624038c5e61d83ceb88e:587387a586390cae97332b5ffd4df5'
+      expect: reject
+    - name: a truncated auth tag is refused, not accepted as a short tag
+      kind: decrypt
+      ring: [{ version: v1, key: shared-cases-pii-key-one-do-not-use }]
+      purpose: pii
+      aad: users:phone:507f1f77bcf86cd799439011
+      stored: 'v1:000102030405060708090a0b:dc4c35ce:587387a586390cae97332b5ffd4de4'
+      expect: reject
+    - name: a totp secret opens under the totp ring label
+      kind: decrypt
+      ring: [{ version: v1, key: shared-cases-pii-key-one-do-not-use }]
+      purpose: totp
+      aad: totp:507f1f77bcf86cd799439011
+      stored: 'v1:18191a1b1c1d1e1f20212223:bdea1837ce3664b6f937f662dfb6bf0c:d2620f8c2b62931e1fc2506d0b9ca965'
+      expect: JBSWY3DPEHPK3PXP
+    - name: a webhook secret opens under the webhook-secret ring label
+      kind: decrypt
+      ring: [{ version: v1, key: shared-cases-pii-key-one-do-not-use }]
+      purpose: webhook-secret
+      aad: webhooks:secret:507f1f77bcf86cd799439013
+      stored: 'v1:2425262728292a2b2c2d2e2f:c09ed8ff88cd95aa3d74a34c949280ac:beed43bfa0aff8cfd03521f2b303'
+      expect: whsec_c2VjcmV0
+    - name: an argon2id hash at the current cost verifies
+      kind: verify-password
+      password: correct horse battery staple
+      stored: '$argon2id$v=19$m=19456,t=2,p=1$AAECAwQFBgcICQoLDA0ODw$gYJZtjEAJqjg26xdLmknq8/bB7MiWPrE9hsYuA+SkIU'
+      expect: true
+    - name: a wrong password does not verify
+      kind: verify-password
+      password: correct horse battery stapl
+      stored: '$argon2id$v=19$m=19456,t=2,p=1$AAECAwQFBgcICQoLDA0ODw$gYJZtjEAJqjg26xdLmknq8/bB7MiWPrE9hsYuA+SkIU'
+      expect: false
+    - name: a hash carries its own parameters, so a cheaper old one still verifies
+      kind: verify-password
+      password: 'pässwörd ☃'
+      stored: '$argon2id$v=19$m=64,t=3,p=1$EBESExQVFhcYGRobHB0eHw$t6JKRMAipAP0urxpRI697kVXv89humKCjFbAGASowOs'
+      expect: true
+    - name: a value that is not an argon2id PHC string never verifies
+      kind: verify-password
+      password: correct horse battery staple
+      stored: '$2b$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ01234'
+      expect: false
