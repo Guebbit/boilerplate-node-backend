@@ -42,6 +42,9 @@
                 "body": "Abbiamo ricevuto il tuo reso per l'ordine {{order}} e rimborsato {{amount}}."
             }
         },
-        "deduction-too-high": "La trattenuta per la gestione supera il valore del rimborso."
+        "deduction-too-high": "La trattenuta per la gestione supera il valore del rimborso.",
+        "restock-unknown-product": "Un conteggio da rimettere a magazzino indica un prodotto che non è in questo reso.",
+        "restock-duplicate": "Un conteggio da rimettere a magazzino indica due volte lo stesso prodotto.",
+        "restock-too-many": "Un conteggio da rimettere a magazzino supera quanto contiene la riga."
     }
 }

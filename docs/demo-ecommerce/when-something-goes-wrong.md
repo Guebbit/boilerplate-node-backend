@@ -14,6 +14,7 @@ note field, and leaves the decision to a person. Each entry below has the same t
 | Two refunds were opened by mistake                                     | [Two refunds by mistake](#two-refunds)                         |
 | A return was received but its refund will never come the usual way     | [A return that cannot finish](#return-cannot-finish)           |
 | A return was approved but the buyer never sent the goods               | [The buyer never sent it back](#buyer-never-sent-it)           |
+| A return parcel was lost on its way back to the shop                   | [The return parcel was lost](#return-parcel-lost)              |
 | Money arrived by bank transfer for an order that was already cancelled | [A transfer for a cancelled order](#late-transfer)             |
 | The shelf holds fewer units than the orders promised                   | [Fewer on the shelf than promised](#fewer-on-shelf)            |
 | An order stays in "being prepared" and nothing moves                   | [An order stuck in processing](#stuck-in-processing)           |
@@ -197,7 +198,7 @@ not come back.
 
 ::: warning If the buyer has proof of posting, do not cancel
 A buyer who shows a posting receipt sent the goods; the shop bears the risk of the parcel on its way
-back and the refund is owed. Receive the return with a restock count of 0 instead.
+back and the refund is owed. See [The return parcel was lost](#return-parcel-lost).
 :::
 
 ::: warning A withdrawal has 14 days to send the goods
@@ -208,6 +209,21 @@ original date as `requestedAt`.
 
 **Whose job.** The [manager](./manager.md), the moderator or support: whoever holds `update:Return`.
 → [`returns`](../modules/returns.md#canceling-a-return)
+
+## The return parcel was lost {#return-parcel-lost}
+
+**What you see.** The buyer says they posted the goods back, and shows it. The carrier lost the
+parcel. A return is **approved** and nothing arrives.
+
+**What to do.** Do not cancel. Press **Goods received** and set the restock count of every line to **0**.
+The buyer is refunded, and the units count as back, but nothing goes on sale: there is nothing on
+the shelf.
+
+The shop carries the risk of the parcel until it holds it, so the money is owed. If the parcel
+turns up later and the goods are sellable, use **Receive stock** with a note that it is a repaired or found return.
+
+**Whose job.** Whoever receives returns: the [warehouse](./warehouse.md) or the manager.
+→ [`returns`](../modules/returns.md#what-the-customer-gets-back)
 
 ## A transfer for a cancelled order {#late-transfer}
 

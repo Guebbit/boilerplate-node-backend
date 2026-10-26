@@ -35,6 +35,9 @@ export {
 } from './reasons';
 export type { FrozenDeadlines } from './reasons';
 
+export { resolveRestock } from './restock';
+export type { RestockRequest, RestockVerdict } from './restock';
+
 export { projectReturnStatus } from './status-projection';
 export type { ProjectedReturn, ProjectedReturnStatus } from './status-projection';
 

@@ -356,6 +356,37 @@ describe('POST /returns/{id}/receive', () => {
         });
     });
 
+    it('refuses a restock count for a product the return does not hold with 422 RETURN_RESTOCK_INVALID', async () => {
+        const { warehouse, id } = await withdrawn();
+
+        const response = await api()
+            .post(`/returns/${id}/receive`)
+            .set('Authorization', warehouse)
+            .send({ lines: [{ productId: 'a'.repeat(24), restock: 1 }] });
+
+        expect(response.status).toBe(422);
+        expect(response.body.errors[0]).toMatchObject({
+            code: 'RETURN_RESTOCK_INVALID',
+            details: { field: 'lines.0.restock' }
+        });
+        const stored = await returnRepository.findById(id);
+        expect(stored?.status).toBe('approved');
+    });
+
+    it('takes a restock count of 0 and records it on the line', async () => {
+        const { warehouse, id } = await withdrawn();
+        const read = await returnRepository.findById(id);
+        const productId = String(read?.lines[0]?.productId);
+
+        const response = await api()
+            .post(`/returns/${id}/receive`)
+            .set('Authorization', warehouse)
+            .send({ lines: [{ productId, restock: 0 }] });
+
+        expect(response.status).toBe(200);
+        expect(response.body.lines[0]).toMatchObject({ productId, restocked: 0 });
+    });
+
     it('answers 404 for a return that does not exist', async () => {
         const { bearer } = await authenticateAsRole('warehouse');
 

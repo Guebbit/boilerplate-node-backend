@@ -345,6 +345,18 @@ sequenceDiagram
   `received` for a reason nobody is retrying.
 - **Restock happens on `received`, not on refund** — two facts, two moments. No reservation is
   claimed: the order's hold was `committed` at payment and stays that way.
+- **Staff choose how many units go back on sale.** `POST /returns/{id}/receive` takes
+  `lines: [{ productId, restock }]`, `0 <= restock <= the line's quantity`. A product not listed goes
+  back in full and absent `lines` restocks everything (the Solidus and Shopify default). Only the
+  restocked units reach `restockReturnedLines` and, in the same transaction, the backorder
+  allocation, so a broken unit is never handed to a paying backorder buyer. A line at 0 writes no
+  ledger row. The count is recorded on each line as `restocked`, and the audit row of
+  `admin.return.received` names every line's count. An unknown or repeated product, or a count over
+  the line, is a 422 `RETURN_RESTOCK_INVALID` on `lines.<i>.restock`, checked before anything is
+  written. The refund never reads it. For a hard-deleted product nothing moves, count or no count.
+  A parcel lost on its way back is received with 0 on every line: the shop bears that risk, so the
+  money is owed and nothing goes on the shelf. `restocked` is staff's bookkeeping; the buyer's page
+  does not show it.
 - **The amount** is the returned lines at the price the order froze, plus refundable delivery, less
   an optional handling deduction (Art. 14(2)) staff enter at receipt. It is fixed then and shown as
   `refundAmount`. `src/modules/returns/domain/refund-amount.ts` is pure integer arithmetic.

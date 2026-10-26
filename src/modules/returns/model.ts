@@ -27,6 +27,8 @@ export interface ReturnLine {
     title: string;
     /** The gross unit price the order froze — what a refund of this line is computed from. */
     unitPrice: number;
+    /** How many of {@link quantity} went back on sale at receipt. Absent until the goods are received. */
+    restocked?: number;
 }
 
 /** Return Document interface. */
@@ -83,7 +85,8 @@ const returnLineSchema = new Schema<ReturnLine>(
         productId: { type: Schema.Types.ObjectId, required: true },
         quantity: { type: Number, required: true, min: 1 },
         title: { type: String, required: true },
-        unitPrice: moneyPath({ required: true, nonNegative: true })
+        unitPrice: moneyPath({ required: true, nonNegative: true }),
+        restocked: { type: Number, min: 0 }
     },
     { _id: false }
 );

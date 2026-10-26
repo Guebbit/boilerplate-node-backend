@@ -42,6 +42,9 @@
                 "body": "We received your return for order {{order}} and refunded {{amount}}."
             }
         },
-        "deduction-too-high": "The handling deduction is more than the refund is worth."
+        "deduction-too-high": "The handling deduction is more than the refund is worth.",
+        "restock-unknown-product": "A restock count names a product that is not on this return.",
+        "restock-duplicate": "A restock count names the same product twice.",
+        "restock-too-many": "A restock count is more than the line holds."
     }
 }

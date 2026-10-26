@@ -155,6 +155,7 @@
             "releaseDate": "Release date",
             "remember": "Remember me",
             "requiresShipping": "Requires shipping",
+            "restock": "Restock count",
             "restockDate": "Restock date",
             "resultCount": "Result count",
             "returnStatus": "Return status",

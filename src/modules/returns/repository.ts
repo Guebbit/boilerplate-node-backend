@@ -17,7 +17,10 @@ import {
 import type { StoredReturn } from './presenter';
 import type { ReportWindow } from '@infrastructure/persistence/report';
 
-/** The fields a lifecycle move may stamp in the same write as its status. */
+/**
+ * The fields a lifecycle move may stamp in the same write as its status. A line's `restocked` is
+ * set by its position, as a dotted path (`lines.0.restocked`).
+ */
 export type ReturnStamp = Partial<
     Pick<
         ReturnDocument,
@@ -30,7 +33,8 @@ export type ReturnStamp = Partial<
         | 'closedAt'
         | 'canceledAt'
     >
->;
+> &
+    Partial<Record<`lines.${number}.restocked`, number>>;
 
 /** Return CRUD, plus the conditional status move and the per-order reads. */
 export const returnRepository: Repository<ReturnDocument, StoredReturn> & {

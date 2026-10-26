@@ -15,6 +15,7 @@ import {
     initialStatusFor,
     quantitiesByProduct,
     reasonsOpenAt,
+    resolveRestock,
     returnableLinesOf,
     returnableQuantities,
     takesLastUnit,
@@ -347,5 +348,63 @@ describe('reasonsOpenAt', () => {
 
     it('treats the deadline instant itself as still open', () => {
         expect(reasonsOpenAt({ withdrawUntil: NOW, conformityUntil: NOW }, NOW)).toHaveLength(4);
+    });
+});
+
+describe('resolveRestock', () => {
+    const returned = [
+        { productId: id('a'), quantity: 3 },
+        { productId: id('b'), quantity: 1 }
+    ];
+
+    it('puts everything back when no counts are given', () => {
+        expect(resolveRestock(returned, undefined)).toEqual({ ok: true, restocked: [3, 1] });
+        expect(resolveRestock(returned, [])).toEqual({ ok: true, restocked: [3, 1] });
+    });
+
+    it('puts back the named count and the rest in full, in the line order', () => {
+        expect(resolveRestock(returned, [{ productId: 'b', restock: 0 }])).toEqual({
+            ok: true,
+            restocked: [3, 0]
+        });
+        expect(resolveRestock(returned, [{ productId: 'a', restock: 2 }])).toEqual({
+            ok: true,
+            restocked: [2, 1]
+        });
+    });
+
+    it('accepts exactly the line quantity, and zero', () => {
+        expect(
+            resolveRestock(returned, [
+                { productId: 'a', restock: 3 },
+                { productId: 'b', restock: 0 }
+            ])
+        ).toEqual({ ok: true, restocked: [3, 0] });
+    });
+
+    it('refuses a product the return does not hold, pointing at its entry', () => {
+        expect(
+            resolveRestock(returned, [
+                { productId: 'a', restock: 1 },
+                { productId: 'z', restock: 1 }
+            ])
+        ).toEqual({ ok: false, index: 1, reason: 'unknown-product' });
+    });
+
+    it('refuses a product named twice, at the second entry', () => {
+        expect(
+            resolveRestock(returned, [
+                { productId: 'a', restock: 1 },
+                { productId: 'a', restock: 2 }
+            ])
+        ).toEqual({ ok: false, index: 1, reason: 'duplicate' });
+    });
+
+    it('refuses one more than the line holds', () => {
+        expect(resolveRestock(returned, [{ productId: 'b', restock: 2 }])).toEqual({
+            ok: false,
+            index: 0,
+            reason: 'too-many'
+        });
     });
 });
