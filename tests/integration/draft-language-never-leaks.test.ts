@@ -58,7 +58,7 @@ const productWithDraftFrench = async (overrides: { onHand?: number } = {}) => {
     await givenLocale('fr', { active: false });
     const product = await createProduct({ title: 'Blue mug', ...overrides });
     const id = String(product._id);
-    await localeService.upsertEntityTranslations('product', id, {
+    await localeService.updateEntityTranslations('product', id, {
         it: { fields: { title: 'Tazza blu' } },
         fr: { fields: { title: DRAFT_TITLE } }
     });

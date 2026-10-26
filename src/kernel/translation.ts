@@ -39,7 +39,7 @@ export type TranslationFieldChanges = Record<string, string | null>;
 /**
  * One or more locales for one entity, keyed by locale tag — an object upserts that locale's row,
  * `null` deletes it. The kernel's own vocabulary for what `modules/locales`' contract calls
- * `UpsertTranslationsRequest`: a caller building this needs no import from `src/modules/*`, and
+ * `ReplaceEntityTranslationsRequest`: a caller building this needs no import from `src/modules/*`, and
  * this file keeps working (falling back, see {@link planTranslations}) with `locales` absent.
  */
 export type TranslationBatch = Record<
@@ -96,7 +96,7 @@ export interface TranslationPort {
     ) => Promise<string[]>;
 
     /**
-     * Validates a PATCH-shaped batch — see `UpsertTranslationsRequest` — against the `locales`
+     * Validates a PATCH-shaped batch — see `ReplaceEntityTranslationsRequest` — against the `locales`
      * collection and the registry's declared fields, WITHOUT writing anything. No entity id: every
      * check is about the locale and the field names, never about a specific row, which is what
      * lets a caller creating a new entity in the SAME request (`productService.write`'s

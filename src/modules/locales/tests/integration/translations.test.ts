@@ -1,6 +1,6 @@
 /**
  * @module
- * `getEntityTranslations` / `upsertEntityTranslations` — the translator's door, driven against a
+ * `getEntityTranslations` / `updateEntityTranslations` — the translator's door, driven against a
  * real database. Every property here needs Mongo: the registry lookup, the `locales` collection
  * check, the derived-index-column write on `products`, and the digest a sibling row is stamped
  * with.
@@ -63,7 +63,7 @@ describe('getEntityTranslations', () => {
         await givenLocale('it');
         await givenLocale('de');
         // Written in neither alphabetical nor reverse order, so only a real sort puts them right.
-        await localeService.upsertEntityTranslations('product', id, {
+        await localeService.updateEntityTranslations('product', id, {
             it: { fields: { title: 'Cuccia' } },
             en: { fields: { title: 'Cozy Bed' } },
             de: { fields: { title: 'Hundekorb' } }
@@ -75,9 +75,9 @@ describe('getEntityTranslations', () => {
     });
 });
 
-describe('upsertEntityTranslations', () => {
+describe('updateEntityTranslations', () => {
     it('refuses an unregistered entityType', async () => {
-        const result = await localeService.upsertEntityTranslations('bogus', 'p1', {
+        const result = await localeService.updateEntityTranslations('bogus', 'p1', {
             en: { fields: { title: 'Cozy Bed' } }
         });
 
@@ -88,7 +88,7 @@ describe('upsertEntityTranslations', () => {
     it('refuses a locale that does not exist', async () => {
         const product = await createProduct();
 
-        const result = await localeService.upsertEntityTranslations(
+        const result = await localeService.updateEntityTranslations(
             'product',
             String(product._id),
             {
@@ -102,7 +102,7 @@ describe('upsertEntityTranslations', () => {
     it('refuses a nonexistent entity with 404, writing no rows', async () => {
         const missingId = new Types.ObjectId().toString();
 
-        const result = await localeService.upsertEntityTranslations('product', missingId, {
+        const result = await localeService.updateEntityTranslations('product', missingId, {
             [FALLBACK]: { fields: { title: 'Cozy Bed' } }
         });
 
@@ -118,7 +118,7 @@ describe('upsertEntityTranslations', () => {
         const malformedId = 'not-an-object-id';
 
         await expect(
-            localeService.upsertEntityTranslations('product', malformedId, {
+            localeService.updateEntityTranslations('product', malformedId, {
                 [FALLBACK]: { fields: { title: 'Cozy Bed' } }
             })
         ).rejects.toThrow();
@@ -142,7 +142,7 @@ describe('upsertEntityTranslations', () => {
         });
 
         await expect(
-            localeService.upsertEntityTranslations('product', id, {
+            localeService.updateEntityTranslations('product', id, {
                 [FALLBACK]: { fields: { title: 'Cozy Bed' } }
             })
         ).rejects.toThrow('tag bump failed');
@@ -155,7 +155,7 @@ describe('upsertEntityTranslations', () => {
         const product = await createProduct();
         await givenLocale('it', { active: false });
 
-        const result = await localeService.upsertEntityTranslations(
+        const result = await localeService.updateEntityTranslations(
             'product',
             String(product._id),
             {
@@ -171,7 +171,7 @@ describe('upsertEntityTranslations', () => {
         const product = await createProduct();
         const id = String(product._id);
         await givenLocale('it', { active: false });
-        await localeService.upsertEntityTranslations('product', id, {
+        await localeService.updateEntityTranslations('product', id, {
             it: { fields: { title: 'Cuccia' } }
         });
 
@@ -191,7 +191,7 @@ describe('upsertEntityTranslations', () => {
         const product = await createProduct();
         const id = String(product._id);
         await givenLocale('it', { active: false });
-        await localeService.upsertEntityTranslations('product', id, {
+        await localeService.updateEntityTranslations('product', id, {
             it: { fields: { title: 'Cuccia' } }
         });
         const draft = await localeRepository.findByTag('it');
@@ -219,7 +219,7 @@ describe('upsertEntityTranslations', () => {
             undefined,
             undefined
         );
-        await localeService.upsertEntityTranslations('product', id, {
+        await localeService.updateEntityTranslations('product', id, {
             it: { fields: { title: 'Cuccia' } },
             fr: { fields: { title: 'Brouillon' } }
         });
@@ -266,7 +266,7 @@ describe('upsertEntityTranslations', () => {
         const id = String(product._id);
         await givenLocale('it');
         await givenLocale('fr', { active: false });
-        await localeService.upsertEntityTranslations('product', id, {
+        await localeService.updateEntityTranslations('product', id, {
             it: { fields: { title: 'Cuccia' } },
             fr: { fields: { title: 'Brouillon' } }
         });
@@ -286,7 +286,7 @@ describe('upsertEntityTranslations', () => {
         const fallbackRow = await localeRepository.findOne({ tag: FALLBACK });
         if (fallbackRow) await localeRepository.deleteOne(fallbackRow);
 
-        const result = await localeService.upsertEntityTranslations(
+        const result = await localeService.updateEntityTranslations(
             'product',
             String(product._id),
             {
@@ -300,7 +300,7 @@ describe('upsertEntityTranslations', () => {
     it('refuses a field the registry does not declare for this entityType', async () => {
         const product = await createProduct();
 
-        const result = await localeService.upsertEntityTranslations(
+        const result = await localeService.updateEntityTranslations(
             'product',
             String(product._id),
             {
@@ -314,7 +314,7 @@ describe('upsertEntityTranslations', () => {
     it('refuses an empty fields object rather than treating it as a delete', async () => {
         const product = await createProduct();
 
-        const result = await localeService.upsertEntityTranslations(
+        const result = await localeService.updateEntityTranslations(
             'product',
             String(product._id),
             {
@@ -328,7 +328,7 @@ describe('upsertEntityTranslations', () => {
     it('refuses null on the fallback locale', async () => {
         const product = await createProduct();
 
-        const result = await localeService.upsertEntityTranslations(
+        const result = await localeService.updateEntityTranslations(
             'product',
             String(product._id),
             {
@@ -343,11 +343,11 @@ describe('upsertEntityTranslations', () => {
         const product = await createProduct();
         const id = String(product._id);
         await givenLocale('it');
-        await localeService.upsertEntityTranslations('product', id, {
+        await localeService.updateEntityTranslations('product', id, {
             it: { fields: { title: 'Cuccia' } }
         });
 
-        const result = await localeService.upsertEntityTranslations('product', id, { it: null });
+        const result = await localeService.updateEntityTranslations('product', id, { it: null });
 
         expect(result.success).toBe(true);
         expect(result.data?.translations.map((row) => row.locale)).toEqual([]);
@@ -357,12 +357,12 @@ describe('upsertEntityTranslations', () => {
         const product = await createProduct();
         const id = String(product._id);
         await givenLocale('it');
-        await localeService.upsertEntityTranslations('product', id, {
+        await localeService.updateEntityTranslations('product', id, {
             [FALLBACK]: { fields: { title: 'Cozy Bed' } },
             it: { fields: { title: 'Cuccia' } }
         });
 
-        await localeService.upsertEntityTranslations('product', id, {
+        await localeService.updateEntityTranslations('product', id, {
             [FALLBACK]: { fields: { title: 'Bed, new' } }
         });
 
@@ -376,7 +376,7 @@ describe('upsertEntityTranslations', () => {
         const id = String(product._id);
         await givenLocale('it');
 
-        const result = await localeService.upsertEntityTranslations('product', id, {
+        const result = await localeService.updateEntityTranslations('product', id, {
             it: { fields: { title: 'Cuccia' } },
             xx: { fields: { title: 'Cozy Bed' } } // unregistered locale — the whole batch must fail
         });
@@ -391,7 +391,7 @@ describe('upsertEntityTranslations', () => {
         const id = String(product._id);
         await givenLocale('it');
 
-        await localeService.upsertEntityTranslations('product', id, {
+        await localeService.updateEntityTranslations('product', id, {
             [FALLBACK]: { fields: { title: 'New title', description: 'New description' } },
             it: { fields: { title: 'Titolo nuovo' } }
         });
@@ -406,7 +406,7 @@ describe('upsertEntityTranslations', () => {
         const id = String(product._id);
         await givenLocale('it');
 
-        await localeService.upsertEntityTranslations('product', id, {
+        await localeService.updateEntityTranslations('product', id, {
             it: { fields: { title: 'Titolo' } }
         });
 
@@ -422,10 +422,10 @@ describe('upsertEntityTranslations', () => {
         // The fallback row has to already exist for there to be anything to digest against — in
         // real use it always does, written by `productService.create` before a translator ever
         // opens this door. Two requests here for the same reason.
-        await localeService.upsertEntityTranslations('product', id, {
+        await localeService.updateEntityTranslations('product', id, {
             [FALLBACK]: { fields: { title: 'Cozy Bed' } }
         });
-        await localeService.upsertEntityTranslations('product', id, {
+        await localeService.updateEntityTranslations('product', id, {
             it: { fields: { title: 'Cuccia' } }
         });
 
@@ -442,17 +442,17 @@ describe('upsertEntityTranslations', () => {
         const product = await createProduct();
         const id = String(product._id);
         await givenLocale('it');
-        await localeService.upsertEntityTranslations('product', id, {
+        await localeService.updateEntityTranslations('product', id, {
             [FALLBACK]: { fields: { title: 'Cozy Bed' } }
         });
-        await localeService.upsertEntityTranslations('product', id, {
+        await localeService.updateEntityTranslations('product', id, {
             it: { fields: { title: 'Cuccia' } }
         });
         const rowsBefore = await translationRepository.findEntityTranslations('product', id);
         const digestBefore = rowsBefore.find((row) => row.locale === 'it')?.sourceDigest;
 
         // The source changes, in its OWN request — the Italian row is not named here at all.
-        await localeService.upsertEntityTranslations('product', id, {
+        await localeService.updateEntityTranslations('product', id, {
             [FALLBACK]: { fields: { title: 'Bed, revised' } }
         });
 
@@ -465,7 +465,7 @@ describe('upsertEntityTranslations', () => {
         const product = await createProduct();
         const id = String(product._id);
 
-        await localeService.upsertEntityTranslations('product', id, {
+        await localeService.updateEntityTranslations('product', id, {
             [FALLBACK]: { fields: { title: 'Cozy Bed' } }
         });
 
@@ -478,17 +478,17 @@ describe('upsertEntityTranslations', () => {
 const seededProduct = async () => {
     const product = await createProduct({ title: 'Old title', description: 'Old words' });
     const id = String(product._id);
-    await localeService.upsertEntityTranslations('product', id, {
+    await localeService.updateEntityTranslations('product', id, {
         [FALLBACK]: { fields: { title: 'Cozy Bed', description: 'Extra support' } }
     });
     return id;
 };
 
-describe('upsertEntityTranslations, field by field (RFC 7396)', () => {
+describe('updateEntityTranslations, field by field (RFC 7396)', () => {
     it('changes only the field named, and keeps the row and the column of the others', async () => {
         const id = await seededProduct();
 
-        await localeService.upsertEntityTranslations('product', id, {
+        await localeService.updateEntityTranslations('product', id, {
             [FALLBACK]: { fields: { title: 'Cozy Bed XL' } }
         });
 
@@ -502,7 +502,7 @@ describe('upsertEntityTranslations, field by field (RFC 7396)', () => {
     it('clears one field on null, and the mirrored column with it', async () => {
         const id = await seededProduct();
 
-        const result = await localeService.upsertEntityTranslations('product', id, {
+        const result = await localeService.updateEntityTranslations('product', id, {
             [FALLBACK]: { fields: { description: null } }
         });
 
@@ -516,7 +516,7 @@ describe('upsertEntityTranslations, field by field (RFC 7396)', () => {
     it('refuses a value the product itself would refuse, naming the locale and field', async () => {
         const id = await seededProduct();
 
-        const result = await localeService.upsertEntityTranslations('product', id, {
+        const result = await localeService.updateEntityTranslations('product', id, {
             [FALLBACK]: { fields: { title: 'abc' } }
         });
 
@@ -532,7 +532,7 @@ describe('upsertEntityTranslations, field by field (RFC 7396)', () => {
     ])('refuses %s — a description is cleared with null, a title never', async (_label, fields) => {
         const id = await seededProduct();
 
-        const result = await localeService.upsertEntityTranslations('product', id, {
+        const result = await localeService.updateEntityTranslations('product', id, {
             [FALLBACK]: { fields }
         });
 
@@ -558,7 +558,7 @@ describe('replaceEntityTranslations', () => {
     it('clears a declared field a sent locale leaves out — a PUT states the locale whole', async () => {
         const product = await createProduct({ title: 'Old title', description: 'Old words' });
         const id = String(product._id);
-        await localeService.upsertEntityTranslations('product', id, {
+        await localeService.updateEntityTranslations('product', id, {
             [FALLBACK]: { fields: { title: 'Cozy Bed', description: 'Extra support' } }
         });
 

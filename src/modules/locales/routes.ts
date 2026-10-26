@@ -37,7 +37,7 @@ import { deleteLocaleEntry } from './controllers/delete-locale-entry';
 import { getEntityTranslations } from './controllers/get-entity-translations';
 import {
     replaceEntityTranslations,
-    upsertEntityTranslations
+    updateEntityTranslations
 } from './controllers/write-entity-translations';
 
 /**
@@ -261,5 +261,5 @@ router.patch(
     getAuth,
     isAuthOrCredential,
     requirePermission('update', 'Translation'),
-    upsertEntityTranslations
+    updateEntityTranslations
 );

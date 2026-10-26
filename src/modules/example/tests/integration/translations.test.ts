@@ -33,7 +33,7 @@ describe('translating an example’s title through /locales', () => {
         const response = await api()
             .patch(`/locales/translations/example/${String(example._id)}`)
             .set('Authorization', bearer)
-            .send({ en: { fields: { title: 'After' } } });
+            .send({ en: { fields: { title: 'After' }, origin: 'human' } });
 
         expect(response.status).toBe(200);
         expect(await fieldOf(String(example._id), 'title')).toBe('After');
@@ -46,7 +46,7 @@ describe('translating an example’s title through /locales', () => {
         const response = await api()
             .patch(`/locales/translations/example/${String(example._id)}`)
             .set('Authorization', bearer)
-            .send({ it: { fields: { title: 'Ciao' } } });
+            .send({ it: { fields: { title: 'Ciao' }, origin: 'human' } });
 
         expect(response.status).toBe(200);
         expect(response.body.translations[0]).toMatchObject({
@@ -63,7 +63,7 @@ describe('translating an example’s title through /locales', () => {
         const response = await api()
             .patch(`/locales/translations/example/${String(example._id)}`)
             .set('Authorization', bearer)
-            .send({ it: { fields: { body: 'Not translatable' } } });
+            .send({ it: { fields: { body: 'Not translatable' }, origin: 'human' } });
 
         expect(response.status).toBe(422);
     });
@@ -74,7 +74,7 @@ describe('translating an example’s title through /locales', () => {
         const response = await api()
             .patch(`/locales/translations/example/${'f'.repeat(24)}`)
             .set('Authorization', bearer)
-            .send({ it: { fields: { title: 'Ciao' } } });
+            .send({ it: { fields: { title: 'Ciao' }, origin: 'human' } });
 
         expect(response.status).toBe(404);
     });

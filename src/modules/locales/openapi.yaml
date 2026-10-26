@@ -753,7 +753,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UpsertTranslationsRequest'
+                            $ref: '#/components/schemas/ReplaceEntityTranslationsRequest'
             responses:
                 '200':
                     description: Every locale this entity has a row for, after the write
@@ -795,7 +795,7 @@ paths:
                 declare for this `entityType` — the pointer names the locale, e.g.
                 `translations.it.title`, so an editor with several tabs open can tell which one
                 failed.
-            operationId: upsertEntityTranslations
+            operationId: updateEntityTranslations
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -807,10 +807,10 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/MergeTranslationsRequest'
+                            $ref: '#/components/schemas/UpdateEntityTranslationsRequest'
                     application/merge-patch+json:
                         schema:
-                            $ref: '#/components/schemas/MergeTranslationsRequest'
+                            $ref: '#/components/schemas/UpdateEntityTranslationsRequest'
             responses:
                 '200':
                     description: Every locale this entity has a row for, after the write
@@ -1510,7 +1510,7 @@ components:
                         is never limited to whatever fields the fetched rows happen to carry
                         already.
 
-        UpsertTranslationRequest:
+        ReplaceEntityTranslationsEntry:
             type: object
             additionalProperties: false
             required: [fields]
@@ -1538,13 +1538,14 @@ components:
                     default: human
 
         # `PATCH`'s locale entry — RFC 7396 one level down: only the fields named change.
-        MergeTranslationRequest:
+        UpdateEntityTranslationsEntry:
             type: object
             additionalProperties: false
-            required: [fields]
+            required: [fields, origin]
             description: >-
-                One locale's changes for one entity. `origin` defaults to `human`, as it does on
-                `PUT`.
+                One locale's changes for one entity. `origin` is required: a merge patch has no
+                default to apply to a member it leaves out, and stating who produced the text keeps
+                a machine import from being filed as human work. `PUT` defaults it to `human`.
             properties:
                 fields:
                     type: object
@@ -1559,15 +1560,14 @@ components:
                 origin:
                     allOf:
                         - $ref: '#/components/schemas/TranslationOrigin'
-                    default: human
 
         # `PUT`'s body. An absent locale key is deleted under PUT — that meaning lives in the
         # operation's own description, not here.
-        UpsertTranslationsRequest:
+        ReplaceEntityTranslationsRequest:
             type: object
             additionalProperties:
                 oneOf:
-                    - $ref: '#/components/schemas/UpsertTranslationRequest'
+                    - $ref: '#/components/schemas/ReplaceEntityTranslationsEntry'
                     - type: 'null'
                 description: >-
                     Upserts this locale's row when an object, deletes it when `null`. See the
@@ -1586,12 +1586,12 @@ components:
                         title: Cuccia ortopedica in memory foam
                         description: Un supporto extra per le articolazioni durante il riposo.
 
-        # `PATCH`'s body: the same map, entries per `MergeTranslationRequest`.
-        MergeTranslationsRequest:
+        # `PATCH`'s body: the same map, entries per `UpdateEntityTranslationsEntry`.
+        UpdateEntityTranslationsRequest:
             type: object
             additionalProperties:
                 oneOf:
-                    - $ref: '#/components/schemas/MergeTranslationRequest'
+                    - $ref: '#/components/schemas/UpdateEntityTranslationsEntry'
                     - type: 'null'
                 description: >-
                     Merges into this locale's row when an object, deletes the row when `null`. A
@@ -1603,3 +1603,4 @@ components:
                 it:
                     fields:
                         description: null
+                    origin: human
