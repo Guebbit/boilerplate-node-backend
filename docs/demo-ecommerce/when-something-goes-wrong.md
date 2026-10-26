@@ -12,6 +12,7 @@ note field, and leaves the decision to a person. Each entry below has the same t
 | The card refused to take a refund back                                 | [A card refund the card refused](#card-refund-refused)         |
 | A refund was also made in the provider's own dashboard                 | [Refunded in the dashboard as well](#refund-covered-elsewhere) |
 | Two refunds were opened by mistake                                     | [Two refunds by mistake](#two-refunds)                         |
+| A return was received but its refund will never come the usual way     | [A return that cannot finish](#return-cannot-finish)           |
 | Money arrived by bank transfer for an order that was already cancelled | [A transfer for a cancelled order](#late-transfer)             |
 | The shelf holds fewer units than the orders promised                   | [Fewer on the shelf than promised](#fewer-on-shelf)            |
 | An order stays in "being prepared" and nothing moves                   | [An order stuck in processing](#stuck-in-processing)           |
@@ -142,6 +143,41 @@ There is no such thing as a refund backwards. Cancel the open one, or ask the bu
 
 **Whose job.** The [moderator](./moderator.md) or the admin.
 → [`payments`](../modules/payments.md#cancelling-a-refund)
+
+## A return that cannot finish {#return-cannot-finish}
+
+**What you see.** A return was **received** and its goods are back on the shelf, but it never turns
+**closed**: its refund was cancelled, or the money went back outside the shop, so the shop will
+never see the refund land.
+
+**What to do.** Press **Close return** on the return and, if you like, write why. The return
+becomes closed and the order's history says so.
+
+Closing is bookkeeping only: no money moves, no stock moves, no credit note is issued and the
+buyer is not emailed that their money is back. If money is still owed, settle it first through the
+refund (see [A refund owed by hand](#refund-owed-by-hand)).
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
+flowchart LR
+    A["return received<br/><i>goods back on the shelf</i>"] --> B["refund cancelled<br/>or paid elsewhere"]
+    B --> C["you press<br/>Close return"]
+    C --> D["return closed,<br/>nothing else changes"]
+
+    classDef auto fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef you fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
+    class A,B auto;
+    class C you;
+    class D done;
+```
+
+::: warning A return nobody has received yet is not closed
+A request is approved or declined. Close is for a return whose goods have arrived.
+:::
+
+**Whose job.** Whoever receives returns: the [warehouse](./warehouse.md) or the manager.
+→ [`returns`](../modules/returns.md#closing-a-return-by-hand)
 
 ## A transfer for a cancelled order {#late-transfer}
 

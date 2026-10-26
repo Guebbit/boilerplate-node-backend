@@ -10,6 +10,7 @@
         "line-excluded": "Alcuni di questi beni sono esclusi dal diritto di recesso.",
         "nothing-returnable": "Nulla di questo ordine resta da rendere.",
         "not-decidable": "Questo reso è già stato deciso.",
+        "not-closable": "Questo reso non è stato ricevuto oppure è già chiuso.",
         "not-receivable": "Questo reso non sta aspettando la merce.",
         "cancellation-invalid": "Un annullamento deve indicare l'ordine di evasione da annullare e non inviare righe: si annulla tutto il resto.",
         "cancellation-withdrawal-buyer-only": "Solo l'acquirente dell'ordine può annullare come recesso: il personale annulla con un altro motivo.",
