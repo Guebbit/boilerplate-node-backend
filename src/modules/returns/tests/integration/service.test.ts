@@ -850,12 +850,14 @@ describe('who sees which return', () => {
         expect(actionsOf(stored!, asManager())).toEqual({
             approve: true,
             decline: true,
-            receive: false
+            receive: false,
+            close: false
         });
         expect(actionsOf(stored!, buyer(user))).toEqual({
             approve: false,
             decline: false,
-            receive: false
+            receive: false,
+            close: false
         });
     });
 
@@ -869,7 +871,8 @@ describe('who sees which return', () => {
         expect(actionsOf(stored!, asRole('manager', user.id))).toEqual({
             approve: true,
             decline: true,
-            receive: false
+            receive: false,
+            close: false
         });
     });
 
@@ -881,7 +884,8 @@ describe('who sees which return', () => {
         expect(actionsOf(stored!, asRole('warehouse'))).toEqual({
             approve: false,
             decline: false,
-            receive: true
+            receive: true,
+            close: false
         });
     });
 });
