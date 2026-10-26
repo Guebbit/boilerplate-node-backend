@@ -29,8 +29,8 @@ import { presentIncidentEntry } from './presenter';
  *            written the same entry by the time this runs; losing the queryable copy degrades the
  *            admin dashboard and nothing else.
  * `void`:    marks the floating call as deliberate, and the `.catch()` is what keeps a rejected
- *            write from surfacing as an unhandled rejection — which, unlike the failed write,
- *            would genuinely be able to take the process down.
+ *            write from surfacing as an unhandled rejection: counted and audit-logged in
+ *            production (`app/error-handling.ts`), a failed test under Jest.
  */
 const record = (entry: AuditEntry): void => {
     void auditLogRepository.create(entry as Partial<AuditLogDocument>).catch((error: unknown) => {

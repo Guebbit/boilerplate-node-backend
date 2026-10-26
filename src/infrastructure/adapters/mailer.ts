@@ -225,7 +225,8 @@ const sendInline = (
 /**
  * Queue-aware email dispatch — the function controllers should call. When RabbitMQ is reachable
  * the job is published for async processing; when it's unconfigured, or momentarily unreachable,
- * this falls back to sending inline, at the cost of request latency.
+ * this falls back to sending inline, at the cost of request latency. Never rejects: a failure is
+ * logged and resolved, so a caller may fire and forget.
  *
  * The queue carries template *name* + data, not rendered HTML — rendering happens on the consumer
  * side. Adds nothing to `data`: every string the template prints was already produced by the
@@ -278,9 +279,8 @@ export const enqueueEmail = (
         // Stryker restore all
     });
 
-    // Callers write `void enqueueEmail(...)` — a rejection
-    // here has nobody left to catch it, and would otherwise surface as an unhandled rejection with
-    // no request id and no idea which email was lost. Logged with the two facts needed to find it
+    // Callers fire and forget — a rejection here has nobody left to catch it, and would otherwise
+    // surface as an unhandled rejection with no request id and no idea which email was lost. Logged with the two facts needed to find it
     // (which template, which recipient), then resolved: a lost email is never worth failing the
     // request that triggered it.
     return dispatch.catch((error: unknown) => {

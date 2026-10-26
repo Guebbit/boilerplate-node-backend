@@ -84,6 +84,7 @@ const afterReset = (
         (user.oauthAccounts ?? []).map(({ provider }) => provider)
     );
     // Normal priority: a confirmation, not a link or code anyone is blocked on.
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises -- sendAccountMail never rejects (enqueueEmail logs its own failure)
     void sendAccountMail(user.email, mail, 'normal');
 
     return Promise.resolve(result);

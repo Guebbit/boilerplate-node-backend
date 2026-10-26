@@ -29,6 +29,13 @@ import { rateLimitStoreFallbackTotal } from '@infrastructure/observability/metri
 import { clusterConfig } from '@infrastructure/runtime/config';
 
 /**
+ * A `Store` whose `init` is known to be synchronous. `express-rate-limit` types it
+ * `void | Promise<void>`, which makes every call site look like a floating promise; every store
+ * built here initialises synchronously (the Redis one defers its async work behind its own `.catch`).
+ */
+export type SyncInitStore = Omit<Store, 'init'> & { init: (options: Options) => void };
+
+/**
  * How long every budget skips Redis after a store error, before one request probes it again. Long
  * enough that an outage does not add the 1 s connect timeout to every request, short enough that a
  * recovered Redis is back in service within the minute.
@@ -49,7 +56,7 @@ const breaker = createBreaker(BREAKER_WINDOW_MS);
  * Every other method delegates; `increment` is always first, since nothing decrements or resets a
  * key it hasn't counted.
  */
-const lazyRedisStore = (namespace: string, url: string): Store => {
+const lazyRedisStore = (namespace: string, url: string): SyncInitStore => {
     let inner: RedisStore | undefined;
     let options: Options | undefined;
 
@@ -65,9 +72,9 @@ const lazyRedisStore = (namespace: string, url: string): Store => {
             // `windowMs` is the only one `RedisStore` reads.
             //
             // The `.catch()` is load-bearing: `init()` awaits Lua script loads, so any failure —
-            // Redis unreachable, an unrecognised reply — rejects this fire-and-forget promise. An
-            // uncaught rejection is fatal by default (Node 15+), turning "Redis had a bad moment"
-            // into "the process is gone" — exactly the outage `failoverStore` is written to survive.
+            // Redis unreachable, an unrecognised reply — rejects this fire-and-forget promise. Left
+            // alone it surfaces as an unhandled rejection (counted and audit-logged in production,
+            // a failed test under Jest) with no hint of which store failed.
             //
             // The failed store is also dropped: `RedisStore` keeps the rejected script-load promise
             // and awaits it on every later `increment`, so keeping it would leave this limiter
@@ -118,9 +125,9 @@ const lazyRedisStore = (namespace: string, url: string): Store => {
  */
 const failoverStore = (
     namespace: string,
-    primary: Store,
+    primary: SyncInitStore,
     onStoreError: NonNullable<RateLimitBudget['onStoreError']>
-): Store => {
+): SyncInitStore => {
     const fallback = new MemoryStore();
     // Zero from startup, so the `increase()` alert sees the first fallback after a restart.
     rateLimitStoreFallbackTotal.inc({ namespace }, 0);
@@ -152,7 +159,7 @@ const failoverStore = (
     return {
         init: (received: Options) => {
             fallback.init(received);
-            void primary.init?.(received);
+            primary.init(received);
         },
         increment: (key: string) => route((store) => store.increment(key)),
         decrement: (key: string) => route((store) => store.decrement(key)).then(() => undefined),
@@ -192,7 +199,7 @@ const warnPerProcessCounting = (namespace: string): void => {
 const plainStore = (
     namespace: string,
     onStoreError: NonNullable<RateLimitBudget['onStoreError']>
-): Store => {
+): SyncInitStore => {
     const url = limitsRedisUrl();
 
     if (!url) return new MemoryStore();
@@ -241,7 +248,7 @@ const escalatingStore = (
     namespace: string,
     onStoreError: NonNullable<RateLimitBudget['onStoreError']>,
     escalation: Escalation
-): Store => {
+): SyncInitStore => {
     const levels = Array.from({ length: escalation.doublings + 1 }, (_unused, level) =>
         plainStore(`${namespace}:x${String(level)}`, onStoreError)
     );
@@ -265,9 +272,9 @@ const escalatingStore = (
     return {
         init: (received: Options) => {
             for (const [level, store] of levels.entries())
-                void store.init?.({ ...received, windowMs: received.windowMs * 2 ** level });
+                store.init({ ...received, windowMs: received.windowMs * 2 ** level });
             // Outlasts the longest lockout, so a well-behaved key is forgotten.
-            void strikes.init?.({
+            strikes.init({
                 ...received,
                 windowMs: received.windowMs * 2 ** (escalation.doublings + 1)
             });
@@ -305,7 +312,7 @@ export const rateLimitStore = (
     namespace: string,
     onStoreError: NonNullable<RateLimitBudget['onStoreError']> = 'memory',
     escalation?: Escalation
-): Store => {
+): SyncInitStore => {
     warnPerProcessCounting(namespace);
     const store = escalation
         ? escalatingStore(namespace, onStoreError, escalation)

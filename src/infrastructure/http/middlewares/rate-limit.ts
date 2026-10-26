@@ -17,7 +17,7 @@
 import { isIPv4 } from 'node:net';
 import type { Request, RequestHandler, Response } from 'express';
 import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
-import type { RateLimitInfo, Store } from 'express-rate-limit';
+import type { Options, RateLimitInfo, Store } from 'express-rate-limit';
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { recordAudit, coreAuditActions } from '@infrastructure/observability/audit';
@@ -199,9 +199,8 @@ const chargedStoreOf = (budget: RateLimitBudget): Store => {
 
     const store = rateLimitStore(budget.namespace, budget.onStoreError ?? 'memory');
     // The one option a store reads, replayed here because no `rateLimit()` instance calls `init`.
-    void store.init?.({ windowMs: budgetWindowMs(budget) } as Parameters<
-        NonNullable<Store['init']>
-    >[0]);
+    // Cast: `windowMs` is the only option a store reads; the rest of `Options` is the limiter's.
+    store.init({ windowMs: budgetWindowMs(budget) } as Options);
     chargedStores.set(budget.namespace, store);
     return store;
 };

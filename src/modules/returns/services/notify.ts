@@ -55,6 +55,7 @@ const sendNotice = (
             ...input,
             orderRef: order.orderNumber
         });
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects (it logs its own failure)
         void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
     });
 

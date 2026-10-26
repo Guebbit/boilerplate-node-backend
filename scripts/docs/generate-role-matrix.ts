@@ -34,6 +34,7 @@ import { applyMarkerBlocks } from './marker-block';
 import type { AuthorizationScope, Caller } from '@types';
 import { REPO_ROOT as ROOT } from '../modules-on-disk';
 import { hasFlag } from '../cli';
+import { failScript } from '../fail-script';
 
 /** Report drift instead of rewriting the page — what `complete` runs. */
 const checkOnly = hasFlag('check');
@@ -290,6 +291,8 @@ const run = async (): Promise<number> => {
     return worst;
 };
 
-void run().then((code) => {
-    process.exitCode = code;
-});
+run()
+    .then((code) => {
+        process.exitCode = code;
+    })
+    .catch(failScript);

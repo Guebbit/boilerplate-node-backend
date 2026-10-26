@@ -40,7 +40,7 @@ describe('GET /observability/events', () => {
         expect(streamObservabilityMetrics).toHaveBeenCalledWith(response, expect.any(Function));
     });
 
-    it('wires the recheck to the key and the request the stream connected with', () => {
+    it('wires the recheck to the key and the request the stream connected with', async () => {
         const response = asStub<Response>({});
         const request = cookieRequest();
         jest.mocked(stillHoldsRuleViaCookie).mockResolvedValueOnce(true);
@@ -50,7 +50,7 @@ describe('GET /observability/events', () => {
             Response,
             () => Promise<boolean>
         ];
-        void recheck();
+        await recheck();
 
         expect(stillHoldsRuleViaCookie).toHaveBeenCalledWith(
             request,

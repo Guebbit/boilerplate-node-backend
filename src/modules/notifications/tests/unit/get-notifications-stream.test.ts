@@ -61,7 +61,7 @@ describe('GET /notifications/stream', () => {
         );
     });
 
-    it('wires the recheck to the rule and the request the stream connected with', () => {
+    it('wires the recheck to the rule and the request the stream connected with', async () => {
         const request = admittedRequest();
         jest.mocked(stillHoldsRuleViaCookie).mockResolvedValueOnce(true);
 
@@ -71,7 +71,7 @@ describe('GET /notifications/stream', () => {
             string,
             () => Promise<boolean>
         ];
-        void call[2]();
+        await call[2]();
 
         expect(stillHoldsRuleViaCookie).toHaveBeenCalledWith(request, 'read', 'Notification');
     });
