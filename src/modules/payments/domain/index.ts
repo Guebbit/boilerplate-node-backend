@@ -23,6 +23,11 @@ export {
     mayBeCanceled,
     refundDueBy,
     FINAL_REFUND_FAILURES,
+    UNCLEAR_REFUND_FAILURES,
+    isFinalFailure,
+    isReversed,
+    exceedsRemaining,
+    exceedsBy,
     MONEY_DID_NOT_MOVE_FAILURES,
     mayBeSettledByHand,
     nextRefundAttemptAt

@@ -27,7 +27,7 @@ import { catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { recordSecurityEvent } from '@infrastructure/observability/security-events';
 import { paymentsAuditActions } from '../audit';
-import { resolvePaymentProvider, WebhookRejected, WEBHOOK_SIGNATURE_HEADER } from '../providers';
+import { resolvePaymentProvider, WebhookRejected } from '../providers';
 import { paymentService } from '../services';
 
 /** Handles `POST /payments/webhook`. */
@@ -54,7 +54,7 @@ export const postPaymentWebhook = (request: Request, response: Response) => {
                 return;
             }
             return provider
-                .parseWebhook(rawBody, String(headers[WEBHOOK_SIGNATURE_HEADER] ?? ''))
+                .parseWebhook(rawBody, headers)
                 .then((event) => paymentService.applyWebhookDelivery(event))
                 .then(() => {
                     noContentResponse(response);

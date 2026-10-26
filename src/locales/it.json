@@ -152,6 +152,7 @@
             "receivedTo": "ricevuto fino al",
             "reference": "riferimento",
             "refund": "rimborso",
+            "refundRef": "riferimento del rimborso",
             "releaseDate": "data di uscita",
             "remember": "ricordami",
             "requiresShipping": "richiede spedizione",

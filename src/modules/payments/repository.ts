@@ -136,13 +136,30 @@ const claimableRefund = (now: Date, staleBefore: Date): Record<string, unknown> 
             status: RefundStatus.failed,
             // A canceled record is closed for good, like a final refusal.
             failureReason: { $nin: [...FINAL_REFUND_FAILURES, RefundFailureReason.canceled] },
+            // The provider took it back: owed another way, never sent again.
+            reversedAt: { $exists: false },
             $or: [{ nextAttemptAt: { $exists: false } }, { nextAttemptAt: { $lte: now } }]
         },
         {
             status: RefundStatus.pending,
+            // One the provider holds already is re-read, never re-sent (`rereadableRefund`).
+            providerRefundRef: { $exists: false },
             $or: [{ attemptedAt: { $exists: false } }, { attemptedAt: { $lte: staleBefore } }]
         }
     ]
+});
+
+/**
+ * A refund the provider accepted but has not settled (`pending` with its own refund id): the sweep
+ * asks the provider how it ended instead of sending it again, once its attempt is old enough.
+ *
+ * @param staleBefore - an answer older than this is worth asking about again
+ */
+const rereadableRefund = (staleBefore: Date): Record<string, unknown> => ({
+    status: RefundStatus.pending,
+    providerRefundRef: { $exists: true },
+    reversedAt: { $exists: false },
+    attemptedAt: { $lte: staleBefore }
 });
 
 /** The shape every refund read projects out of the `$unwind`. */
@@ -324,6 +341,18 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         refundId: string,
         window: { now: Date; staleBefore: Date }
     ) => Promise<PaymentDocument | null>;
+    attachRefundRef: (
+        paymentId: string,
+        refundId: string,
+        attempt: Date,
+        providerRefundRef: string
+    ) => Promise<PaymentDocument | null>;
+    reverseRefund: (
+        paymentId: string,
+        refundId: string,
+        reversal: { reason: RefundFailureReason; from: readonly RefundStatus[] },
+        session?: ClientSession
+    ) => Promise<PaymentDocument | null>;
     cancelRefund: (
         paymentId: string,
         refundId: string,
@@ -341,8 +370,11 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
     findOpenRefundRows: (options: {
         manual: boolean;
         openBefore?: Date;
-        /** `final` keeps only refusals that end the retrying, `not-final` leaves them out. */
-        refusal?: 'final' | 'not-final';
+        /**
+         * `final` keeps only refusals that end the retrying, `not-final` leaves them out;
+         * `reversed` keeps only refunds the provider took back. The first two skip the reversed.
+         */
+        refusal?: 'final' | 'not-final' | 'reversed';
         limit: number;
     }) => Promise<RefundRow[]>;
     findWithOpenRefunds: (updatedBefore: Date, limit: number) => Promise<PaymentDocument[]>;
@@ -593,6 +625,9 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                     refunds: {
                         $elemMatch: {
                             _id: toObjectId(refundId),
+                            // Only an operator may settle a record the provider took back: its
+                            // own late success report would walk back the reversal.
+                            ...(fields.settledByHand ? {} : { reversedAt: { $exists: false } }),
                             // The provider's answer must come from the attempt that is still
                             // current; an operator's report (no attempt) takes any open record.
                             ...(fields.attempt
@@ -683,6 +718,74 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                     $unset: { 'refunds.$.nextAttemptAt': 1 }
                 },
                 { returnDocument: 'after' }
+            )
+            .exec(),
+
+    /**
+     * Keep the provider's own id on a refund it accepted but has not settled (`pending` at the
+     * provider). Fenced like a settle: only the attempt that got the answer may write it.
+     *
+     * @param paymentId - the payment
+     * @param refundId - the refund record inside it
+     * @param attempt - the fence token of the attempt that got the answer
+     * @param providerRefundRef - the provider's refund id
+     * @returns the payment as it now stands, or `null` if that attempt was no longer current
+     */
+    attachRefundRef: (paymentId, refundId, attempt, providerRefundRef) =>
+        paymentModel
+            .findOneAndUpdate(
+                {
+                    _id: toObjectId(paymentId),
+                    refunds: {
+                        $elemMatch: {
+                            _id: toObjectId(refundId),
+                            status: RefundStatus.pending,
+                            attemptedAt: attempt,
+                            reversedAt: { $exists: false }
+                        }
+                    }
+                },
+                { $set: { 'refunds.$.providerRefundRef': providerRefundRef } },
+                { returnDocument: 'after' }
+            )
+            .exec(),
+
+    /**
+     * Record that the PROVIDER says this refund failed: the record goes `failed` with the reason
+     * and `reversedAt`, whether it had settled (a bank sent the money back) or was still open (the
+     * provider refused it on its own). Set once: a record already reversed matches nothing, so a
+     * redelivered report changes nothing. `settledAt` goes, the money is not back with the buyer.
+     *
+     * @param paymentId - the payment
+     * @param refundId - the refund record inside it
+     * @param reversal - the closed reason, and the statuses the record may be taken from
+     * @param session - the caller's transaction, when the order stamp and the event commit with it
+     * @returns the payment as it now stands, or `null` if the record was not in a reversible state
+     */
+    reverseRefund: (paymentId, refundId, { reason, from }, session) =>
+        paymentModel
+            .findOneAndUpdate(
+                {
+                    _id: toObjectId(paymentId),
+                    refunds: {
+                        $elemMatch: {
+                            _id: toObjectId(refundId),
+                            status: { $in: [...from] },
+                            reversedAt: { $exists: false },
+                            failureReason: { $ne: RefundFailureReason.canceled }
+                        }
+                    }
+                },
+                {
+                    $set: {
+                        'refunds.$.status': RefundStatus.failed,
+                        'refunds.$.failureReason': reason,
+                        'refunds.$.reversedAt': new Date()
+                    },
+                    $unset: { 'refunds.$.settledAt': 1, 'refunds.$.nextAttemptAt': 1 },
+                    $inc: { 'refunds.$.attempts': 1 }
+                },
+                { returnDocument: 'after', ...(session ? { session } : {}) }
             )
             .exec(),
 
@@ -831,12 +934,14 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                     // A canceled record is closed: it needs nobody, whichever kind is asked for.
                     'refunds.failureReason': {
                         $ne: RefundFailureReason.canceled,
-                        ...(refusal === undefined
-                            ? {}
-                            : {
+                        ...(refusal === 'final' || refusal === 'not-final'
+                            ? {
                                   [refusal === 'final' ? '$in' : '$nin']: [...FINAL_REFUND_FAILURES]
-                              })
-                    }
+                              }
+                            : {})
+                    },
+                    // A refund the provider took back is its own kind of row.
+                    'refunds.reversedAt': { $exists: refusal === 'reversed' }
                 }
             },
             { $sort: { 'refunds.createdAt': 1, 'refunds._id': 1, _id: 1 } },
@@ -860,7 +965,14 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                 provider: { $ne: MANUAL_PROVIDER },
                 // Only records the sweep may actually send: a final refusal, a refund still
                 // waiting out its retry delay, and an attempt in flight must not fill the batch.
-                refunds: { $elemMatch: claimableRefund(new Date(), updatedBefore) },
+                refunds: {
+                    $elemMatch: {
+                        $or: [
+                            claimableRefund(new Date(), updatedBefore),
+                            rereadableRefund(updatedBefore)
+                        ]
+                    }
+                },
                 updatedAt: { $lte: updatedBefore }
             })
             .sort({ updatedAt: 1 })

@@ -38,6 +38,7 @@ import { paymentRepository } from '../repository';
 import {
     CONFIRMABLE_PAYMENT_STATUSES,
     isHandRecorded,
+    REFUNDABLE_PAYMENT_STATUS,
     SETTLEABLE_PAYMENT_STATUSES,
     SUCCESS_SETTLEABLE_PAYMENT_STATUSES
 } from '../domain';
@@ -50,6 +51,7 @@ import {
     performRefund,
     recordOwedByHand
 } from './refunds';
+import { applyRefundWebhook } from './refund-sync';
 import { recordDecline } from './announce';
 import { PAYMENT_SUCCEEDED } from '../events';
 import { notPayable, paymentNotFound } from './errors';
@@ -713,11 +715,37 @@ export const applyWebhookDelivery = (delivery: ProviderWebhookEvent): Promise<vo
     logger.info({
         message: 'Payment webhook received.',
         eventId: event.id,
-        providerRef: event.providerRef
+        providerRef: event.providerRef,
+        refundRef: event.refundRef
     });
     // Stryker restore all
-    return applyWebhookSettlement(event.providerRef);
+    return event.refundRef
+        ? applyRefundDelivery(event.providerRef, event.refundRef)
+        : applyWebhookSettlement(event.providerRef);
 };
+
+/**
+ * Apply a delivery that names a refund: the payment it belongs to is found by its intent, and the
+ * refund's own status is re-read from the provider. A payment that has not succeeded has no refund
+ * a provider could be reporting on, so the delivery is dropped.
+ *
+ * @param providerRef - the intent the delivery names
+ * @param refundRef - the refund the delivery names
+ */
+const applyRefundDelivery = (providerRef: string, refundRef: string): Promise<void> =>
+    paymentRepository.findByProviderRef(providerRef).then((payment) => {
+        if (payment?.status !== REFUNDABLE_PAYMENT_STATUS) {
+            // Stryker disable all
+            logger.warn({
+                message: 'Payment webhook named a refund on a payment that cannot have one.',
+                providerRef,
+                refundRef
+            });
+            // Stryker restore all
+            return undefined;
+        }
+        return applyRefundWebhook(payment, refundRef);
+    });
 
 /**
  * Ask the provider what became of a payment and settle the answer — the step the webhook, the

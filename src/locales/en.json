@@ -152,6 +152,7 @@
             "receivedTo": "Received to",
             "reference": "Reference",
             "refund": "Refund",
+            "refundRef": "Refund reference",
             "releaseDate": "Release date",
             "remember": "Remember me",
             "requiresShipping": "Requires shipping",

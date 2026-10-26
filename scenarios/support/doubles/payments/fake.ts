@@ -12,6 +12,7 @@
  */
 
 import { createHmac } from 'node:crypto';
+import type { IncomingHttpHeaders } from 'node:http';
 import { logger } from '@infrastructure/adapters/logger';
 import type { RefundFailureReason } from '@types';
 import { FINAL_REFUND_FAILURES } from '@modules/payments/domain';
@@ -19,9 +20,11 @@ import {
     PaymentInFlightError,
     PaymentProviderError,
     verifyWebhookSignature,
+    WEBHOOK_SIGNATURE_HEADER,
     WebhookRejected,
     type PaymentProvider,
     type ProviderPaymentState,
+    type ProviderRefundState,
     type ProviderWebhookEvent
 } from '@modules/payments/providers';
 
@@ -158,12 +161,76 @@ export const setFakeRefundTimeout = (providerRef: string, on: boolean): void => 
 /** How long the fake remembers an idempotency key, as Stripe does: a day from its FIRST use. */
 const KEY_WINDOW_MS = 24 * 60 * 60_000;
 
-/** What a key first produced: the refund it made, or the definite error it got. */
+/** What a key first produced: the refund it made (and how far it had got), or the definite error it got. */
 interface KeyedAnswer {
     at: number;
     refundRef?: string;
+    status?: 'pending' | 'succeeded';
     failure?: RefundFailureReason;
 }
+
+/** One refund the fake holds, the way a provider keeps it as an object of its own. */
+interface FakeRefund extends ProviderRefundState {
+    providerRef: string;
+}
+
+/** Every refund the fake made, by the provider's refund id: its own status can change later. */
+const refundObjects = new Map<string, FakeRefund>();
+
+/** Intents whose next refunds are accepted but not settled (Stripe `pending`). */
+const pendingRefundIntents = new Set<string>();
+
+/**
+ * Test lever: refunds on this intent are accepted but stay `pending` at the provider, until
+ * {@link setFakeRefundOutcome} settles them. Pass `false` to let refunds settle at once again.
+ *
+ * @param providerRef - the intent
+ * @param on - `true` to hold refunds pending
+ */
+export const setFakeRefundPending = (providerRef: string, on: boolean): void => {
+    if (on) pendingRefundIntents.add(providerRef);
+    else pendingRefundIntents.delete(providerRef);
+};
+
+/**
+ * Test lever: change what the provider reports for one refund from now on — a `pending` one that
+ * settles, or a settled one that fails.
+ *
+ * @param refundRef - the provider's refund id (`refundRefOfRecord` finds it from our record id)
+ * @param state - the status to report, and the closed reason when it is `failed`
+ * @throws {Error} when the fake made no such refund
+ */
+export const setFakeRefundOutcome = (
+    refundRef: string,
+    state: Pick<ProviderRefundState, 'status' | 'failureReason'>
+): void => {
+    const known = refundObjects.get(refundRef);
+    if (!known) throw new Error(`[fake-psp] no refund ${refundRef}`);
+    known.status = state.status;
+    if (state.failureReason) known.failureReason = state.failureReason;
+    else delete known.failureReason;
+};
+
+/**
+ * Test lever: a refund that settled fails days later, the way a bank sends a payout back.
+ *
+ * @param refundRef - the provider's refund id
+ * @param failureReason - why; `declined` unless said otherwise
+ */
+export const setFakeLateRefundFailure = (
+    refundRef: string,
+    failureReason: RefundFailureReason = 'declined'
+): void => {
+    setFakeRefundOutcome(refundRef, { status: 'failed', failureReason });
+};
+
+/**
+ * The provider's refund id for one of our refund records, once the fake has made it.
+ *
+ * @param refundId - our record id, as stamped on the refund
+ */
+export const refundRefOfRecord = (refundId: string): string | undefined =>
+    refundsByRecord.get(refundId);
 
 /** Answers by idempotency key, replayed within {@link KEY_WINDOW_MS}. */
 const keyedAnswers = new Map<string, KeyedAnswer>();
@@ -266,13 +333,21 @@ export const fakePaymentProvider: PaymentProvider = {
                         `[fake-psp] replayed refusal: ${known.failure}`
                     )
                 );
-            if (known.refundRef) return Promise.resolve({ refundRef: known.refundRef });
+            // The ORIGINAL answer is replayed, not the refund's status now: that is how a key works.
+            if (known.refundRef)
+                return Promise.resolve({
+                    refundRef: known.refundRef,
+                    status: known.status ?? 'succeeded'
+                });
         }
 
         // The adapter duty past the key window: adopt the refund this record already made.
         const made = refundsByRecord.get(refundId);
         if (made && Date.now() - createdAt.getTime() >= KEY_WINDOW_MS)
-            return Promise.resolve({ refundRef: made });
+            return Promise.resolve({
+                refundRef: made,
+                status: refundObjects.get(made)?.status === 'pending' ? 'pending' : 'succeeded'
+            });
 
         const failure = refundFailures.get(providerRef);
         if (failure) {
@@ -295,8 +370,10 @@ export const fakePaymentProvider: PaymentProvider = {
         const refundRef = known
             ? `re_fake_${idempotencyKey}_${String(refundsByRecord.size)}`
             : `re_fake_${idempotencyKey}`;
+        const status = pendingRefundIntents.has(providerRef) ? 'pending' : 'succeeded';
         refundsByRecord.set(refundId, refundRef);
-        keyedAnswers.set(idempotencyKey, { at: Date.now(), refundRef });
+        refundObjects.set(refundRef, { providerRef, status, refundId });
+        keyedAnswers.set(idempotencyKey, { at: Date.now(), refundRef, status });
 
         if (refundTimeouts.delete(providerRef))
             return Promise.reject(
@@ -305,7 +382,19 @@ export const fakePaymentProvider: PaymentProvider = {
                     '[fake-psp] simulated timeout: the refund ran, the answer was lost'
                 )
             );
-        return Promise.resolve({ refundRef });
+        return Promise.resolve({ refundRef, status });
+    },
+
+    retrieveRefund: (refundRef) => {
+        const known = refundObjects.get(refundRef);
+        // Stryker disable next-line all
+        logger.info(`[fake-psp] retrieveRefund ${refundRef} → ${known?.status ?? 'unknown'}`);
+        if (!known)
+            return Promise.reject(
+                new PaymentProviderError('unknown', `[fake-psp] no refund ${refundRef}`)
+            );
+        const { providerRef: _providerRef, ...state } = known;
+        return Promise.resolve(state);
     },
 
     cancel: (providerRef, { reason }) => {
@@ -341,11 +430,17 @@ export const fakePaymentProvider: PaymentProvider = {
      * and that parse is the only guard against `{ "$ne": null }` standing where a `providerRef`
      * string belongs.
      */
-    parseWebhook: (rawBody, signature) =>
+    parseWebhook: (rawBody, headers: IncomingHttpHeaders) =>
         // Inside the chain rather than in front of it: a synchronous throw from a method typed as
         // returning a promise makes every caller need a try/catch as well as a `.catch`.
         Promise.resolve()
-            .then(() => verifyWebhookSignature(rawBody, signature))
+            .then(() =>
+                verifyWebhookSignature(
+                    rawBody,
+                    // One value: a repeated header arrives as an array, which verifies as malformed.
+                    String(headers[WEBHOOK_SIGNATURE_HEADER] ?? '')
+                )
+            )
             .then(() => rawBody.toString('utf8'))
             // `JSON.parse` throws, and the throw lands in this chain's own rejection — so the
             // `.catch` below is what turns an unparseable body into the 400 it is, rather than

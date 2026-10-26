@@ -1000,7 +1000,7 @@ components:
         # Stripe's `failure_reason` shape: a closed list, so the page can translate it.
         RefundFailureReason:
             type: string
-            enum: [declined, insufficient_funds, expired_or_canceled_card, lost_or_stolen_card, provider_removed, provider_unavailable, unknown, canceled]
+            enum: [declined, insufficient_funds, expired_or_canceled_card, lost_or_stolen_card, provider_removed, provider_unavailable, unknown, canceled, disputed]
             description: >-
                 Why the provider last refused a refund, as a closed code. Staff only
                 (`display:Payment`). `unknown` is anything the provider's adapter did not
@@ -1015,6 +1015,10 @@ components:
                 short) and the unclear `provider_unavailable` and `unknown` are retried with a
                 growing delay. An unclear refusal may have gone through, so it is never offered for
                 hand settlement.
+
+                `disputed`: the buyer's bank took the money back in a dispute (chargeback). It is
+                final like the refusals above, and it is never offered for hand settlement: the
+                bank already returned the money.
 
                 `canceled` is not a refusal: staff voided the refund
                 (`POST /payments/{id}/refunds/{refundId}/cancel`). Nothing was sent, it is never
@@ -1313,6 +1317,14 @@ components:
                     type: string
                     maxLength: 200
                     description: Which intent the event is about. Absent for an event this API ignores.
+                refundRef:
+                    type: string
+                    maxLength: 200
+                    description: >-
+                        Which refund the event is about, when it is about one (Stripe's
+                        `refund.updated`, `refund.failed`, `charge.refunded`). Still only a pointer:
+                        the server re-reads that refund's own status from the provider, so a refund
+                        that settled and then bounced is noticed even days later.
 
         CreatePaymentRequest:
             type: object

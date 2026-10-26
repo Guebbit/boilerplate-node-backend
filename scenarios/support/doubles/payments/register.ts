@@ -39,10 +39,12 @@ const lazyFakePaymentProvider: PaymentProvider = {
         loadFakePaymentProvider().then((provider) =>
             provider.refund(providerRef, charge, idempotency)
         ),
+    retrieveRefund: (refundRef) =>
+        loadFakePaymentProvider().then((provider) => provider.retrieveRefund(refundRef)),
     cancel: (providerRef, options) =>
         loadFakePaymentProvider().then((provider) => provider.cancel(providerRef, options)),
-    parseWebhook: (rawBody, signature) =>
-        loadFakePaymentProvider().then((provider) => provider.parseWebhook(rawBody, signature))
+    parseWebhook: (rawBody, headers) =>
+        loadFakePaymentProvider().then((provider) => provider.parseWebhook(rawBody, headers))
 };
 
 /** Puts the fake PSP into the payments registry, under `fake`. */
