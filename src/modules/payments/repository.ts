@@ -11,7 +11,7 @@ import { paymentModel, applyPaymentTransform } from './model';
 import { PaymentStatus, PaymentMethod, RefundStatus } from '@types';
 import { reviveDecimals } from '@infrastructure/persistence/money-field';
 import type { ReportWindow } from '@infrastructure/persistence/report';
-import type { RefundFailureReason, RefundReason } from '@types';
+import { RefundFailureReason, type RefundReason } from '@types';
 import { paymentProviderRegistry } from './providers/registry';
 import type { PaymentDocument, RefundRecord, RefundSettlement } from './model';
 import {
@@ -134,7 +134,8 @@ const claimableRefund = (now: Date, staleBefore: Date): Record<string, unknown> 
     $or: [
         {
             status: RefundStatus.failed,
-            failureReason: { $nin: [...FINAL_REFUND_FAILURES] },
+            // A canceled record is closed for good, like a final refusal.
+            failureReason: { $nin: [...FINAL_REFUND_FAILURES, RefundFailureReason.canceled] },
             $or: [{ nextAttemptAt: { $exists: false } }, { nextAttemptAt: { $lte: now } }]
         },
         {
@@ -322,6 +323,13 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         paymentId: string,
         refundId: string,
         window: { now: Date; staleBefore: Date }
+    ) => Promise<PaymentDocument | null>;
+    cancelRefund: (
+        paymentId: string,
+        refundId: string,
+        observed: { status: RefundStatus; failureReason?: RefundFailureReason },
+        amounts: { expectedRefunded: number; newRefunded: number },
+        session?: ClientSession
     ) => Promise<PaymentDocument | null>;
     searchStaff: (
         filters: object,
@@ -679,6 +687,47 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
             .exec(),
 
     /**
+     * Void one refund: the record goes `failed` with `canceled` and its amount leaves
+     * `amountRefunded`, in ONE write. Conditional on the record still being in the state the caller
+     * read (status and failure reason) and on `amountRefunded` still being what the caller read,
+     * so a sweep that claimed the record, a settle, or a racing refund makes it miss instead of
+     * voiding money that moved or releasing a share twice.
+     *
+     * @param paymentId - the payment
+     * @param refundId - the refund record inside it
+     * @param observed - the status and failure reason the caller read and decided on
+     * @param amounts - `amountRefunded` as read, and as it is once this record's share is released
+     * @param session - the caller's transaction, when the timeline row and the event commit with it
+     * @returns the payment as it now stands, or `null` if the guard no longer held
+     */
+    cancelRefund: (paymentId, refundId, observed, { expectedRefunded, newRefunded }, session) =>
+        paymentModel
+            .findOneAndUpdate(
+                {
+                    _id: toObjectId(paymentId),
+                    status: REFUNDABLE_PAYMENT_STATUS,
+                    amountRefunded: expectedRefunded,
+                    refunds: {
+                        $elemMatch: {
+                            _id: toObjectId(refundId),
+                            status: observed.status,
+                            failureReason: observed.failureReason ?? { $exists: false }
+                        }
+                    }
+                },
+                {
+                    $set: {
+                        amountRefunded: newRefunded,
+                        'refunds.$.status': RefundStatus.failed,
+                        'refunds.$.failureReason': RefundFailureReason.canceled
+                    },
+                    $unset: { 'refunds.$.nextAttemptAt': 1 }
+                },
+                { returnDocument: 'after', ...(session ? { session } : {}) }
+            )
+            .exec(),
+
+    /**
      * One page of the staff payments list, as documents the presenter serializes. `label` is {@link displayStatusFilter}'s query, when asked for.
      *
      * @param filters - the validated filter bag, `page`/`pageSize`/`sort` included
@@ -779,13 +828,15 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                 $match: {
                     'refunds.status': { $in: [...OPEN_REFUND_STATUSES] },
                     ...(openBefore ? { 'refunds.createdAt': { $lte: openBefore } } : {}),
-                    ...(refusal === undefined
-                        ? {}
-                        : {
-                              'refunds.failureReason': {
+                    // A canceled record is closed: it needs nobody, whichever kind is asked for.
+                    'refunds.failureReason': {
+                        $ne: RefundFailureReason.canceled,
+                        ...(refusal === undefined
+                            ? {}
+                            : {
                                   [refusal === 'final' ? '$in' : '$nin']: [...FINAL_REFUND_FAILURES]
-                              }
-                          })
+                              })
+                    }
                 }
             },
             { $sort: { 'refunds.createdAt': 1, 'refunds._id': 1, _id: 1 } },

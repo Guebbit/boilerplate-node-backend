@@ -30,6 +30,11 @@ export const paymentsAuditActions = {
      * provider refund's settlement.
      */
     ADMIN_PAYMENT_REFUND_SETTLED_BY_HAND: 'admin.payment.refund_settled_by_hand',
+    /**
+     * Staff voided a refund that must never be paid (`cancelRefund`), with the note saying why.
+     * The only audit row for it: nothing settled, so `ADMIN_PAYMENT_REFUNDED` is never written.
+     */
+    ADMIN_PAYMENT_REFUND_CANCELED: 'admin.payment.refund_canceled',
     PAYMENT_RECORDED_OFFLINE: 'payment.recorded_offline',
     /**
      * A refund record opened on a hand-paid payment and was left `pending`: the money is

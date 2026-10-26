@@ -10,8 +10,13 @@
  */
 
 import { toMinorUnits } from '@domain-primitives/money';
-import { PaymentDisplayStatus, RefundStatus, type PaymentStatus } from '@types';
-import { OPEN_REFUND_STATUSES } from './lifecycle';
+import {
+    PaymentDisplayStatus,
+    RefundFailureReason,
+    RefundStatus,
+    type PaymentStatus
+} from '@types';
+import { OPEN_REFUND_STATUSES, isOpenRefund } from './lifecycle';
 
 /** The slice of a payment the label reads. */
 export interface DisplayStatusInput {
@@ -19,7 +24,7 @@ export interface DisplayStatusInput {
     amount: number;
     amountRefunded: number;
     currency: string;
-    refunds: readonly { status: RefundStatus }[];
+    refunds: readonly { status: RefundStatus; failureReason?: RefundFailureReason }[];
 }
 
 /**
@@ -34,8 +39,7 @@ export const displayStatusOf = ({
     amountRefunded,
     currency
 }: DisplayStatusInput): PaymentDisplayStatus => {
-    if (refunds.some((refund) => OPEN_REFUND_STATUSES.includes(refund.status)))
-        return PaymentDisplayStatus.refund_pending;
+    if (refunds.some((refund) => isOpenRefund(refund))) return PaymentDisplayStatus.refund_pending;
     if (status === 'succeeded') {
         if (refunds.every((refund) => refund.status !== RefundStatus.succeeded))
             return PaymentDisplayStatus.succeeded;
@@ -49,7 +53,14 @@ export const displayStatusOf = ({
 };
 
 /** A payment holds a refund still open. */
-const HAS_OPEN_REFUND = { refunds: { $elemMatch: { status: { $in: [...OPEN_REFUND_STATUSES] } } } };
+const HAS_OPEN_REFUND = {
+    refunds: {
+        $elemMatch: {
+            status: { $in: [...OPEN_REFUND_STATUSES] },
+            failureReason: { $ne: RefundFailureReason.canceled }
+        }
+    }
+};
 
 /** A payment holds at least one settled refund. */
 const SETTLED_REFUND = { refunds: { $elemMatch: { status: RefundStatus.succeeded } } };
@@ -77,7 +88,15 @@ const FILTERS: Record<PaymentDisplayStatus, Record<string, unknown>> = {
         ]
     },
     [PaymentDisplayStatus.cancelled]: { $and: [{ status: 'cancelled' }, NO_OPEN_REFUND] },
-    [PaymentDisplayStatus.succeeded]: { status: 'succeeded', refunds: { $size: 0 } },
+    // No settled refund and none open: a payment whose only refunds were canceled reads the same
+    // as one never refunded.
+    [PaymentDisplayStatus.succeeded]: {
+        $and: [
+            { status: 'succeeded' },
+            { refunds: { $not: SETTLED_REFUND.refunds } },
+            NO_OPEN_REFUND
+        ]
+    },
     [PaymentDisplayStatus.pending]: { $and: [{ status: 'processing' }, NO_OPEN_REFUND] },
     [PaymentDisplayStatus.failed]: { $and: [{ status: 'declined' }, NO_OPEN_REFUND] },
     [PaymentDisplayStatus.incomplete]: {

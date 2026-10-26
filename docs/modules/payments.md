@@ -511,6 +511,41 @@ and shows on the attention list after `NODE_PAYMENT_ATTENTION_MINUTES`. There is
 provider gone for good is a technician's edit of the record. Staff check the provider's dashboard or
 support first. Rule of thumb for adapter authors: [reading a refusal](./payments-provider-port.md#reading-a-refusal).
 
+### Cancelling a refund {#cancelling-a-refund}
+
+Staff void a refund the shop must never pay (a duplicate opened by mistake, or one the provider's
+dashboard already covered) with `POST /payments/{id}/refunds/{refundId}/cancel`, body `{ note }`.
+The note is required: the audit row says why, as for the status override. `create:Refund` at the
+route, so the same fresh-session tier as creating one. It answers 200 with the `Refund`
+(`status: failed`, `failureReason: canceled`).
+
+It is a local void. Nothing reaches the provider, and none of `payment.refunded`, a credit note or a
+buyer mail happens: no money moved. What it does write, in one transaction:
+
+| Write                | Detail                                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------------------- |
+| the record           | `failed` with `failureReason: canceled`; one conditional write that also takes its share off `amountRefunded` |
+| the order's timeline | `refund_canceled`, staff only: ids and amount, never the note                                                 |
+| the audit row        | `admin.payment.refund_canceled`, with the note                                                                |
+| the domain event     | `payment.refund_canceled`, through the outbox; internal, no webhook carries it                                |
+
+Which refunds may be voided is the hand-settle rule (`mayBeCanceled`), because both rest on the fact
+that the money provably did not move. `PaymentActions.cancelRefund` lists exactly those ids.
+
+| The refund                                                                                                                       | Cancel                             |
+| -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| a hand-paid payment's `pending` one                                                                                              | yes                                |
+| a card refund refused as `declined`, `insufficient_funds`, `expired_or_canceled_card`, `lost_or_stolen_card`, `provider_removed` | yes                                |
+| `succeeded` (the money moved), or already canceled                                                                               | no: 409 `PAYMENT_REFUND_NOT_OPEN`  |
+| a card refund `pending` (an attempt runs) or failed as `provider_unavailable` / `unknown`                                        | no: 409 `PAYMENT_REFUND_IN_FLIGHT` |
+
+A canceled record is closed for good: the refund sweep never claims it (`canceled` is not
+retryable), `isOpenRefund` is false for it, so it is on no attention list and does not make the
+payment read `refund_pending`, and it can be neither settled by hand nor canceled again. A claim by
+the sweep between the read and the write makes the conditional write miss: the check runs again
+against the record as it now stands. The order's `paymentStatus` stamp is written only when a
+refund settles, so a void, which never settled, leaves it as it is.
+
 Every other refund dispatches to the provider named on the payment's own `provider` field — never
 the deployment's currently configured one — so a refund of an older payment still reaches the
 provider that actually took the money even after a deployment switches to another. The provider is
@@ -695,20 +730,20 @@ over the status. `amountRefunded` counts a requested refund as done, so it is co
 `amount` only once no refund is open (then equal means every unit went back). The filter is the label's inverse, and the integration suite checks
 every label both ways.
 
-| Label                | Stored                                                                |
-| -------------------- | --------------------------------------------------------------------- |
-| `incomplete`         | `requires_confirmation`, `requires_action`                            |
-| `pending`            | `processing`                                                          |
-| `succeeded`          | `succeeded`, no refund record                                         |
-| `refund_pending`     | any refund record `pending` or `failed`                               |
-| `partially_refunded` | `succeeded`, at least one settled refund, none open                   |
-| `refunded`           | `succeeded`, a settled refund, none open, `amountRefunded` = `amount` |
-| `failed`             | `declined`                                                            |
-| `cancelled`          | `cancelled`                                                           |
+| Label                | Stored                                                                   |
+| -------------------- | ------------------------------------------------------------------------ |
+| `incomplete`         | `requires_confirmation`, `requires_action`                               |
+| `pending`            | `processing`                                                             |
+| `succeeded`          | `succeeded`, no settled refund and none open (a canceled one is neither) |
+| `refund_pending`     | any refund record `pending` or `failed`, a canceled one excepted         |
+| `partially_refunded` | `succeeded`, at least one settled refund, none open                      |
+| `refunded`           | `succeeded`, a settled refund, none open, `amountRefunded` = `amount`    |
+| `failed`             | `declined`                                                               |
+| `cancelled`          | `cancelled`                                                              |
 
 **What staff see that a payer does not.** `providerRef`, each refund's `providerRefundRef` and a
 failed refund's `failureReason`. The reason is a closed code (`declined`, `insufficient_funds`,
-`expired_or_canceled_card`, `lost_or_stolen_card`, `provider_unavailable`, `unknown`), Stripe's
+`expired_or_canceled_card`, `lost_or_stolen_card`, `provider_unavailable`, `unknown`, and `canceled`, which is not a refusal but a void by staff), Stripe's
 `failure_reason` shape. A provider adapter throws `PaymentProviderError(code, message)`; anything
 else is `unknown`. The provider's own wording goes to the log and is never stored. The fake
 provider's `setFakeRefundFailure` simulates each code.
@@ -744,13 +779,14 @@ see [Bank transfer](#bank-transfer).
 Payments feeds the order's [timeline](./orders.md#the-timeline) through `orderService.appendTimeline`,
 in the transaction of the fact each row describes, so a write that lost its race leaves no row.
 
-| Row                | Written when                                                 | Carries                                    |
-| ------------------ | ------------------------------------------------------------ | ------------------------------------------ |
-| `paid`             | the payment settles (`orders` writes it; payments names how) | `method`: `card`, or what staff recorded   |
-| `payment_declined` | the provider declines an attempt                             | `paymentId`                                |
-| `refund_issued`    | a refund record is opened, before the provider is asked      | `refundId`, `amount`, `currency`, `reason` |
-| `refund_settled`   | the record settles                                           | the same                                   |
-| `refund_failed`    | the provider refuses (staff only)                            | the same, and the closed `failureReason`   |
+| Row                | Written when                                                 | Carries                                     |
+| ------------------ | ------------------------------------------------------------ | ------------------------------------------- |
+| `paid`             | the payment settles (`orders` writes it; payments names how) | `method`: `card`, or what staff recorded    |
+| `payment_declined` | the provider declines an attempt                             | `paymentId`                                 |
+| `refund_issued`    | a refund record is opened, before the provider is asked      | `refundId`, `amount`, `currency`, `reason`  |
+| `refund_settled`   | the record settles                                           | the same                                    |
+| `refund_failed`    | the provider refuses (staff only)                            | the same, and the closed `failureReason`    |
+| `refund_canceled`  | staff void the record (staff only)                           | the same; the note is only in the audit row |
 
 The provider's wording is never copied: it can carry anything, and only the closed code is stored.
 The `actor` is the operator who asked or recorded the money; an automatic refund has none.

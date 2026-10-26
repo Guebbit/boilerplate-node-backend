@@ -66,6 +66,23 @@ declare module '@kernel/events' {
             currency: string;
             full: boolean;
         };
+
+        /**
+         * Staff voided a refund that must never be paid (`./services/refunds.ts`'s `cancelRefund`).
+         * No money moved and none will: the record is closed and its share is refundable again.
+         * Nothing is credited and no webhook carries it; a staff ticket or attention row that
+         * waited on that refund closes on it.
+         *
+         * Delivered through the transactional outbox, written in the transaction that voids the
+         * record: at-least-once, so a listener dedupes on `meta.eventId`.
+         */
+        'payment.refund_canceled': {
+            paymentId: string;
+            orderId: string;
+            refundId: string;
+            amount: number;
+            currency: string;
+        };
     }
 }
 
@@ -77,3 +94,6 @@ export const PAYMENT_FAILED = 'payment.failed';
 
 /** See `DomainEventMap['payment.refunded']` above. */
 export const PAYMENT_REFUNDED = 'payment.refunded';
+
+/** See `DomainEventMap['payment.refund_canceled']` above. */
+export const PAYMENT_REFUND_CANCELED = 'payment.refund_canceled';

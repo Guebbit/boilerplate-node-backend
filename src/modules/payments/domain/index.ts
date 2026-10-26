@@ -19,6 +19,8 @@ export {
     isHandRecorded,
     isOpenTransfer,
     OPEN_REFUND_STATUSES,
+    isOpenRefund,
+    mayBeCanceled,
     FINAL_REFUND_FAILURES,
     MONEY_DID_NOT_MOVE_FAILURES,
     mayBeSettledByHand,

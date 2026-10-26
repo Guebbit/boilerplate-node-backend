@@ -437,6 +437,69 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /payments/{id}/refunds/{refundId}/cancel:
+        post:
+            tags: [Payments]
+            summary: Cancel a refund that must never be paid
+            description: >-
+                A local void for a refund the shop will not pay: a duplicate opened by mistake, or one
+                the provider's dashboard already covered. The record goes `failed` with
+                `failureReason: canceled` and the amount it held returns to what is refundable. Nothing
+                is sent to the provider, no credit note is issued and the buyer is not mailed:
+                the money never moved, so there is nothing to report. The sweep never sends a canceled
+                refund. The note says why, and is kept in the audit row `admin.payment.refund_canceled`
+                with the order's timeline row `refund_canceled` (staff only) and the
+                `payment.refund_canceled` event.
+
+                Which refunds may be canceled: exactly the ones `actions.cancelRefund` lists, the same
+                set as `actions.settleByHand`: a hand-paid (`manual`) payment's `pending` refund, and a
+                card refund the provider refused in a way that proves the money did not move
+                (`RefundFailureReason`: `declined`, `insufficient_funds`, `expired_or_canceled_card`,
+                `lost_or_stolen_card`, `provider_removed`). A `succeeded` refund, or one already
+                canceled, answers 409 `PAYMENT_REFUND_NOT_OPEN`: the money moved, and cancelling it
+                would falsify the books. A card refund that is `pending` (an attempt is running) or
+                `failed` for an unclear reason (`provider_unavailable`, `unknown`) answers 409
+                `PAYMENT_REFUND_IN_FLIGHT`: the money may have moved. Needs `create:Refund`, with the
+                same fresh-session requirement as creating one: a valid-but-stale token answers 401
+                with `errors[].code` `REAUTH_REQUIRED`. `Idempotency-Key` is optional.
+            operationId: cancelRefund
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                  description: The payment carrying the refund
+                - name: refundId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: The refund record to cancel
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CancelRefundRequest'
+            responses:
+                '200':
+                    description: >-
+                        The refund as it now stands (`failed`, `failureReason: canceled`).
+                        `GET /payments/{id}` for the totals and the actions.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Refund'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                # The payment, or a refund with that id on it, does not exist.
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # Not open (`PAYMENT_REFUND_NOT_OPEN`), a card refund with no final answer
+                # (`PAYMENT_REFUND_IN_FLIGHT`), or `Idempotency-Key` names a request still in flight.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /orders/{id}/payments:
         get:
             tags: [Payments]
@@ -907,7 +970,8 @@ components:
                         sweep retries it with the same idempotency key unless the refusal is final,
                         and an operator may report it returned by hand when the money provably did
                         not move (see `RefundFailureReason`); `succeeded` once the money is
-                        confirmed back, or reported back by the operator.
+                        confirmed back, or reported back by the operator. A `failed` refund with
+                        `failureReason: canceled` was voided by staff and is closed for good.
                 reason:
                     $ref: '#/components/schemas/RefundReason'
                 # The return this refund pays for — present when `reason` is `return`, or `cancellation` of a remainder.
@@ -936,7 +1000,7 @@ components:
         # Stripe's `failure_reason` shape: a closed list, so the page can translate it.
         RefundFailureReason:
             type: string
-            enum: [declined, insufficient_funds, expired_or_canceled_card, lost_or_stolen_card, provider_removed, provider_unavailable, unknown]
+            enum: [declined, insufficient_funds, expired_or_canceled_card, lost_or_stolen_card, provider_removed, provider_unavailable, unknown, canceled]
             description: >-
                 Why the provider last refused a refund, as a closed code. Staff only
                 (`display:Payment`). `unknown` is anything the provider's adapter did not
@@ -951,6 +1015,24 @@ components:
                 short) and the unclear `provider_unavailable` and `unknown` are retried with a
                 growing delay. An unclear refusal may have gone through, so it is never offered for
                 hand settlement.
+
+                `canceled` is not a refusal: staff voided the refund
+                (`POST /payments/{id}/refunds/{refundId}/cancel`). Nothing was sent, it is never
+                retried and it can neither be settled by hand nor canceled again.
+
+        CancelRefundRequest:
+            type: object
+            additionalProperties: false
+            required: [note]
+            properties:
+                note:
+                    type: string
+                    minLength: 1
+                    maxLength: 1000
+                    description: >-
+                        Why the refund is voided (who refunded it elsewhere and where, or that it was a
+                        duplicate). Staff-only free text, kept in the audit row and nowhere the buyer
+                        reads.
 
         RefundStatus:
             type: string
@@ -1143,7 +1225,7 @@ components:
         PaymentActions:
             type: object
             additionalProperties: false
-            required: [pay, sync, refund, settleByHand]
+            required: [pay, sync, refund, settleByHand, cancelRefund]
             description: >-
                 What the requesting caller may do to this payment. Money is this module's to answer
                 for; the order's own moves are on `Order.actions`, and a client that needs both
@@ -1192,6 +1274,16 @@ components:
                         that proves the money did not move (`RefundFailureReason`). The server
                         decides; a client never rebuilds this rule. An array because the route
                         takes a target; empty when there is none.
+                cancelRefund:
+                    type: array
+                    items:
+                        $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                    description: >-
+                        The ids of the refunds this caller may void with
+                        `POST /payments/{id}/refunds/{refundId}/cancel`: the same set as
+                        `settleByHand` (money that provably did not move), so a hand-paid `pending`
+                        refund or a card refund refused for a clear reason. The server decides.
+                        Empty when there is none.
 
         PaymentWebhookEvent:
             type: object

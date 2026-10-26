@@ -25,6 +25,7 @@ export type TimelineAudience = 'buyer' | 'staff';
  *   address_corrected: who changed where an order ships is the shop's own business; the buyer sees the
  *     new address on the order itself.
  *   refund_failed: the provider's refusal; the buyer's answer is the refund that settles.
+ *   refund_canceled: staff voided a refund that never moved money; nothing for the buyer to act on.
  */
 export const TIMELINE_AUDIENCE: Readonly<Record<OrderTimelineType, TimelineAudience>> = {
     created: 'buyer',
@@ -38,6 +39,7 @@ export const TIMELINE_AUDIENCE: Readonly<Record<OrderTimelineType, TimelineAudie
     refund_issued: 'buyer',
     refund_settled: 'buyer',
     refund_failed: 'staff',
+    refund_canceled: 'staff',
     shipment_shipped: 'buyer',
     shipment_delivered: 'buyer',
     fulfillment_held: 'staff',

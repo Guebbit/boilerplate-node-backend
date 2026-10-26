@@ -6,19 +6,20 @@ The shop does not guess in a case like these. It shows you what it knows, gives 
 note field, and leaves the decision to a person. Each entry below has the same three parts:
 **what you see**, **what to do**, **whose job it is**.
 
-| Something odd happened                                                 | Go to                                                  |
-| ---------------------------------------------------------------------- | ------------------------------------------------------ |
-| A refund is owed and the money must be paid back by hand               | [A refund owed by hand](#refund-owed-by-hand)          |
-| The card refused to take a refund back                                 | [A card refund the card refused](#card-refund-refused) |
-| Money arrived by bank transfer for an order that was already cancelled | [A transfer for a cancelled order](#late-transfer)     |
-| The shelf holds fewer units than the orders promised                   | [Fewer on the shelf than promised](#fewer-on-shelf)    |
-| An order stays in "being prepared" and nothing moves                   | [An order stuck in processing](#stuck-in-processing)   |
-| A parcel left a long time ago and nobody recorded its arrival          | [Shipped but not arrived](#shipped-not-arrived)        |
+| Something odd happened                                                 | Go to                                                          |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------- |
+| A refund is owed and the money must be paid back by hand               | [A refund owed by hand](#refund-owed-by-hand)                  |
+| The card refused to take a refund back                                 | [A card refund the card refused](#card-refund-refused)         |
+| A refund was also made in the provider's own dashboard                 | [Refunded in the dashboard as well](#refund-covered-elsewhere) |
+| Two refunds were opened by mistake                                     | [Two refunds by mistake](#two-refunds)                         |
+| Money arrived by bank transfer for an order that was already cancelled | [A transfer for a cancelled order](#late-transfer)             |
+| The shelf holds fewer units than the orders promised                   | [Fewer on the shelf than promised](#fewer-on-shelf)            |
+| An order stays in "being prepared" and nothing moves                   | [An order stuck in processing](#stuck-in-processing)           |
+| A parcel left a long time ago and nobody recorded its arrival          | [Shipped but not arrived](#shipped-not-arrived)                |
 
 ::: tip More entries come with their features
-Each entry here describes something the shop does today. When a new tool lands (voiding a refund,
-closing a return, disputes, a buyer who never answers), its entry lands on this page in the same
-change as the tool.
+Each entry here describes something the shop does today. When a new tool lands (disputes, a buyer
+who never answers), its entry lands on this page in the same change as the tool.
 :::
 
 ## A refund owed by hand {#refund-owed-by-hand}
@@ -96,6 +97,51 @@ believe they were paid back and nobody is left to notice.
 
 **Whose job.** Whoever holds the refund permission: the [moderator](./moderator.md) or the admin.
 → [`payments`](../modules/payments.md#when-a-card-refund-cannot-go-back)
+
+## Refunded in the dashboard as well {#refund-covered-elsewhere}
+
+**What you see.** Somebody refunded the buyer straight from the card provider's dashboard, and the
+shop also holds its own refund for the same money. On the payment, that refund reads **open**
+(waiting for you, or **Failed** with a clear reason such as "declined"), and the payment's
+**Cancel refund** button is offered.
+
+**What to do.**
+
+1. Open the provider's dashboard and confirm the money really went back to the buyer.
+2. Press **Cancel refund** on the shop's refund and write who refunded it, and where, in the note.
+
+Cancelling is a void inside the shop only. Nothing is sent to the provider, no credit note is issued
+and the buyer is not emailed: the money never moved from here. The amount becomes refundable again.
+If the refund still reads **provider unavailable** or **no usable reason**, there is no Cancel
+button on purpose: the shop may still be sending it, so wait for its answer first.
+
+::: warning Never cancel a refund the shop already paid
+A refund that reads **succeeded** cannot be cancelled: the money left, and voiding it would make
+the books lie. If it was paid twice, the buyer holds the extra money: ask them for it.
+:::
+
+**Whose job.** Whoever holds the refund permission: the [moderator](./moderator.md) or the admin.
+→ [`payments`](../modules/payments.md#cancelling-a-refund)
+
+## Two refunds by mistake {#two-refunds}
+
+**What you see.** Two partial refunds were opened for the same goods (the Refund button stays
+available on purpose, so a double click can do it). The payment shows both.
+
+**What to do.**
+
+1. Open the payment's **Refunds** tab and read both refunds first.
+2. A duplicate that is still **open** (waiting, or refused for a clear reason): press **Cancel
+   refund** on it, with a note.
+3. A duplicate that already shows **succeeded** is the buyer's money now. Write to them and ask for
+   it back.
+
+::: warning Never refund a negative amount to fix a duplicate
+There is no such thing as a refund backwards. Cancel the open one, or ask the buyer.
+:::
+
+**Whose job.** The [moderator](./moderator.md) or the admin.
+→ [`payments`](../modules/payments.md#cancelling-a-refund)
 
 ## A transfer for a cancelled order {#late-transfer}
 
