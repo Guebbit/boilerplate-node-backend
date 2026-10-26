@@ -338,8 +338,9 @@ downstream of:
 src/modules/<name>/
   module.ts module.yaml index.ts tests/        ALWAYS
   openapi.yaml routes.ts controllers/          IF it serves HTTP (surfaces/* factory first)
-  service.ts                                   DEFAULT
-  services/<use-case>.ts                       REPLACES it past ~300 lines, ~12 members, or two audiences
+  service.ts                                   DEFAULT for a module with no per-record `actions`
+  services/<use-case>.ts                       REPLACES it past ~300 lines, ~12 members, or two audiences;
+                                               the scaffolder starts here: crud.ts + actions.ts + index.ts
   model.ts repository.ts                       IF it owns a collection; every conditional write is a named repository method
   domain/                                      IF a rule is worth a unit test; a 3+-state stored status almost always has one
   events.ts                                    IF it emits: past tense, emitted AFTER the write, with an id
@@ -357,6 +358,20 @@ differences from the shape instead of re-deriving it. `service.ts` REPLACES itse
 past a size the module itself measures, not a line this page enforces twice —
 [Layers](./layers.md#when-service-ts-becomes-services) has the actual thresholds and the split this
 repo has used every time.
+
+### Standards the template carries
+
+Each standard is written once, in the page that owns it, and carried by `example` and by what
+`npm run scaffold:module` writes. A new module that copies either one gets all of them; a change to
+a standard lands in the owning page, the template and the scaffolder in the same commit.
+
+| Standard                                       | Written in                                                                               | Carried as                                                    |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `actions` on every read and write              | [Capabilities](./tactical-ddd.md#2-capabilities-the-server-answers-what-a-client-may-do) | `domain/` rule, `services/actions.ts`, required in the schema |
+| A status change is a door, one per event       | [Write methods](../api/write-methods.md#action-200)                                      | `POST /x/{id}/<event>`, never a field of PUT/PATCH            |
+| A refused lifecycle move is 409 + a code       | [Write methods](../api/write-methods.md)                                                 | `x-error-codes` entry, `details {status}`                     |
+| A resource with an item write has an item read | [Write methods](../api/write-methods.md#an-item-write-has-an-item-read)                  | `GET /x/{id}` through the item factory                        |
+| Every file opens with its role                 | `CLAUDE.md`, Comments                                                                    | the scaffolder's twin-header test against `example`           |
 
 ### Optional capabilities, and the files that carry them
 

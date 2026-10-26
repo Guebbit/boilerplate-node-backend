@@ -324,8 +324,11 @@ flowchart LR
     L --> C["services/actions.ts<br/>the caller half: keys, buyer"]
     C --> A["actions: { cancel, pay, delete, hardDelete, restore, … }"]
     REQ2["GET /orders/{id}/payments"] --> PA["actions: { pay, refund }"]
+    REQ3["GET /examples/{id}, a scaffolded module's GET /x/{id}"] --> E["domain/ rule + services/actions.ts"]
+    E --> EA["actions: { publish, archive, unarchive, update, delete }<br/><i>scaffolded: { update, delete }</i>"]
     A --> UI["client renders controls"]
     PA --> UI
+    EA --> UI
 
     classDef pure fill:#dcfce7,stroke:#16a34a,color:#111827;
     class L pure;
