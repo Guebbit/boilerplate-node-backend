@@ -42,6 +42,15 @@ describe('tickets routes — the positional guard', () => {
         expect(guards).not.toContain('requirePermissionGuard');
     });
 
+    it('recognises a signed-in sender on POST / without requiring one', () => {
+        // `getAuth` resolves the session when there is one; it is not an identity guard, so an
+        // anonymous or expired-token post still goes through as anonymous.
+        const chain = chainOf(router, 'POST /');
+
+        expect(chain).toContain('getAuth');
+        expect(chain.indexOf('getAuth')).toBeLessThan(chain.indexOf('postTicket'));
+    });
+
     it.each(['POST /search', 'GET /', 'GET /:id', 'PATCH /:id', 'DELETE /:id'])(
         '%s sits below the gate and is keyed',
         (signature) => {

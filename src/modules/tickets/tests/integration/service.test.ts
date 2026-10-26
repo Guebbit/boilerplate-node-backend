@@ -443,7 +443,7 @@ describe('removeById', () => {
             expect.objectContaining({
                 action: ticketsAuditActions.ADMIN_TICKET_DELETED,
                 outcome: 'success',
-                targetType: 'tickets',
+                targetType: 'ticket',
                 targetId: String(ticket._id)
             })
         );

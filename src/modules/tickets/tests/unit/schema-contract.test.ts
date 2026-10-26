@@ -48,7 +48,9 @@ describe('ticketSchema', () => {
         // The queue — "what is still open, most recent first" — plus the TTL index below.
         expect(indexSpecs(ticketSchema)).toEqual([
             'createdAt_1: createdAt+1',
-            'status_1_createdAt_-1: status+1, createdAt-1'
+            'email_1: email+1',
+            'status_1_createdAt_-1: status+1, createdAt-1',
+            'subjectId_1: subjectId+1'
         ]);
     });
 
@@ -62,7 +64,9 @@ describe('ticketSchema', () => {
         // appearing on a different index fails here.
         expect(indexOptionSpecs(ticketSchema)).toEqual([
             `createdAt_1: expireAfterSeconds=${RETENTION_SECONDS}`,
-            'status_1_createdAt_-1: (none)'
+            'email_1: (none)',
+            'status_1_createdAt_-1: (none)',
+            'subjectId_1: partialFilterExpression={"subjectId":{"$exists":true}}'
         ]);
     });
 

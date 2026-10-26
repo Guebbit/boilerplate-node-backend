@@ -12,10 +12,12 @@ tags:
 # adds it to `AccountExportResponse`. Removing the module removes the section.
 x-personal-data:
     tickets:
-        required: false
+        required: true
         schema:
             type: array
-            description: Present only when `NODE_EXPORT_INCLUDE_TICKETS=true`.
+            description: >
+                The tickets this person owns: what they sent while signed in, plus what was sent
+                under their verified email address. Always present, empty when there are none.
             items:
                 $ref: '#/components/schemas/ExportTicket'
 
@@ -24,7 +26,11 @@ paths:
         post:
             tags: [Tickets]
             summary: Submit contact request
-            description: Creates a contact ticket and notifies the support mailbox by email.
+            description: >
+                Creates a contact ticket and notifies the support mailbox by email. Open to
+                anyone. A valid session bearer token, when one is sent, records the sender's
+                account on the ticket (`subjectId`), so the account's data export and erasure
+                include it; an absent or expired token files it as anonymous.
             operationId: createContactTicket
             security: []
             parameters:
@@ -227,6 +233,9 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 name:
                     type: string
+                subjectId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                    description: The account the sender was signed in as; absent for an anonymous sender.
                 email:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
                 subject:

@@ -32,7 +32,7 @@ export default {
                     }))
                 ),
             // Joins the caller's own hard-delete transaction — see `eraseMemberships`.
-            erase: accessService.eraseMemberships
+            erase: ({ userId }, session) => accessService.eraseMemberships(userId, session)
         }
     ]
 } satisfies AppModule;

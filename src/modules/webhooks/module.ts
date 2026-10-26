@@ -80,7 +80,7 @@ export default {
         {
             section: 'webhookOwnership',
             collect: () => Promise.resolve(undefined),
-            erase: webhooksService.forgetOwner
+            erase: ({ userId }, session) => webhooksService.forgetOwner(userId, session)
         }
     ]
 } satisfies AppModule;

@@ -21,7 +21,7 @@ import {
     writeExport,
     type AppendExport
 } from '@infrastructure/adapters/export-store';
-import { userService, type UserDocument } from '@modules/users';
+import { personalDataSubjectOf, userService } from '@modules/users';
 import type { AccountExportJobPayload } from '@types';
 import type { PersonalDataSection, PersonalDataSubject } from '@kernel/registry';
 import { exportRetentionMs } from '../config';
@@ -33,17 +33,6 @@ import { sendAccountMail } from './mail';
 
 /** The section every export must hold: an export with no profile is not an answer to anyone. */
 const PROFILE_SECTION = 'profile';
-
-/**
- * Who an export is about, read off the stored account.
- *
- * @param user - the account being exported
- */
-const subjectOf = (user: UserDocument): PersonalDataSubject => ({
-    userId: String(user._id),
-    email: user.email,
-    emailVerified: Boolean(user.verifiedAt)
-});
 
 /**
  * Collect every section in turn and append it to the file as one `"name": value` member of a JSON
@@ -231,7 +220,7 @@ export const runExportJob = (job: AccountExportJobPayload): Promise<boolean> =>
 
             // Two-argument `then`, not `then().catch()`: a failure AFTER the row is ready (the mail)
             // must not reach `fail`, which would delete a good file.
-            return buildAndSettle(subjectOf(user), row)
+            return buildAndSettle(personalDataSubjectOf(user), row)
                 .then(
                     (settled) => afterBuild(job, row, settled),
                     (error: unknown) => fail(job, row, error)

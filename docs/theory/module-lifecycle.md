@@ -209,9 +209,7 @@ export default {
     mounts: [{ basePath: '/tickets', routes: router }],
     // REQUIRED, not optional — a module cannot compile without answering this. 'none' is the
     // explicit, reviewed answer for a module with nothing personal to export.
-    personalData: [
-        { section: 'tickets', collect: (subject) => findOwnTicketsForExport(subject.email) }
-    ],
+    personalData: [{ section: 'tickets', collect: (subject) => findOwnTicketsForExport(subject) }],
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;
 ```

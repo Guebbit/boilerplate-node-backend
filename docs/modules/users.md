@@ -284,6 +284,11 @@ answerable from the log alone, not from remembering which flag an admin clicked.
 [`access`](./access.md#when-the-account-is-erased) is one of the modules in that cascade: the account's roles, tenant and platform, leave in the same
 transaction as the row, so a failed erasure takes no role from an account that stays.
 
+Every erase hook receives the **subject** (`userId`, `email`, `emailVerified`, built once by
+`personalDataSubjectOf` from the stored account), not just the id: a module that also matches rows
+by address, as [`tickets`](./tickets.md) does, needs the address and whether it was proven. The
+cascade still writes exactly one `user.erased` outbox row per erasure, inside the same transaction.
+
 A module's erase hook may hand back work to run once the transaction has committed (`AfterErase`):
 anything that is not a database write, so a rollback could not undo it. `orders` uses it to cancel
 the account's never-paid orders, see [When the account is erased](./orders.md#when-the-account-is-erased).

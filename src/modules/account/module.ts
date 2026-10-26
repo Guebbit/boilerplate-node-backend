@@ -86,14 +86,14 @@ export default {
         {
             section: 'accountExports',
             collect: () => Promise.resolve(undefined),
-            erase: eraseExports
+            erase: ({ userId }, session) => eraseExports(userId, session)
         },
         // Metadata only. Erasing takes the one-time tokens with it: they have no section of
         // their own, being links in flight rather than something an export describes.
         {
             section: 'sessions',
             collect: ({ userId }) => exportSessions(userId),
-            erase: eraseSessionsAndTokens
+            erase: ({ userId }, session) => eraseSessionsAndTokens(userId, session)
         }
     ],
     /*

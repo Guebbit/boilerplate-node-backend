@@ -10,7 +10,7 @@
  */
 
 import { model, Schema } from 'mongoose';
-import type { Document, Model } from 'mongoose';
+import type { Document, Model, Types } from 'mongoose';
 import { TicketCategory, TicketStatus } from '@types';
 import type { Ticket } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
@@ -24,10 +24,11 @@ import { ticketsConfig } from './config';
  */
 const retentionDays = ticketsConfig().NODE_TICKETS_RETENTION_DAYS;
 
-/** Mongoose document type for tickets. Overrides the API-generated
- * Ticket's 'respondedAt'/'createdAt'/'updatedAt' (string vs Date). */
+/** Mongoose document type for tickets. Overrides the API-generated Ticket's
+ * 'respondedAt'/'createdAt'/'updatedAt' (string vs Date) and 'subjectId' (string vs ObjectId). */
 export interface TicketDocument
-    extends Omit<Ticket, 'id' | 'respondedAt' | 'createdAt' | 'updatedAt'>, Document {
+    extends Omit<Ticket, 'id' | 'subjectId' | 'respondedAt' | 'createdAt' | 'updatedAt'>, Document {
+    subjectId?: Types.ObjectId;
     respondedAt?: Date;
     createdAt?: Date;
     updatedAt?: Date;
@@ -41,6 +42,12 @@ export const ticketSchema = new Schema<TicketDocument, TicketModel>(
     {
         name: {
             type: String
+        },
+        // The sender's account when they were signed in; absent for an anonymous sender. Export and
+        // erasure follow it (see `./domain/ownership`).
+        subjectId: {
+            type: Schema.Types.ObjectId,
+            ref: 'User'
         },
         email: {
             type: String,
@@ -80,12 +87,17 @@ export const ticketSchema = new Schema<TicketDocument, TicketModel>(
 
 /*
  * The admin list filters by status and sorts newest-first, which is exactly this key.
- *
- * There is deliberately no index on `email`: the only query that touches it matches
- * case-insensitively and unanchored, and no B-tree index can serve that — the collection is
- * scanned either way, so an index would be write cost buying nothing.
  */
 ticketSchema.index({ status: 1, createdAt: -1 });
+
+/*
+ * The two branches of the data-subject query (`./domain/ownership`): an account's own id, and an
+ * exact verified address. An `$or` is served by an index only when every branch has one. The
+ * staff search on `email` is a case-insensitive unanchored regex that no B-tree serves; it scans
+ * regardless, so these indexes are for the subject query alone.
+ */
+ticketSchema.index({ subjectId: 1 }, { partialFilterExpression: { subjectId: { $exists: true } } });
+ticketSchema.index({ email: 1 });
 
 /*
  * TTL index — Mongo deletes tickets older than the retention window on its own. Its OWN index,

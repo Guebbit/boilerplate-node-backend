@@ -28,7 +28,7 @@ const createContactTicketSchema = CreateContactTicketBody.extend({
 });
 
 /**
- * POST /tickets (public)
+ * POST /tickets (public; a signed-in sender is recognised)
  * Create a ticket and send an email notification to the configured contact mailbox.
  */
 export const postTicket = (
@@ -41,9 +41,13 @@ export const postTicket = (
     /*
      * The support notification is `ticketService.create`'s: who gets told, and in which
      * language, are facts about the ticket rather than about the request that filed it.
+     *
+     * `authContext` is set only for a signed-in session (`getAuth` upstream; an expired token or no
+     * token leaves it unset and the post goes through as anonymous). Its id becomes the ticket's
+     * `subjectId`, so the export and the erasure follow the message to the account.
      */
     return ticketService
-        .create(body)
+        .create(body, request.authContext?.id)
         .then((createdTicket) => {
             const ticketRecord = presentTicket(createdTicket);
             createdResponse<Ticket>(response, ticketRecord, `/tickets/${ticketRecord.id}`);

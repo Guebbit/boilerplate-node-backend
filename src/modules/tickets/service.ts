@@ -32,14 +32,16 @@ import {
     MAX_CONFIGURED_PAGE_SIZE,
     type PaginatedMeta
 } from '@infrastructure/persistence/search';
-import type { Lean } from '@infrastructure/persistence/create-repository';
+import { toObjectId, type Lean } from '@infrastructure/persistence/create-repository';
 import type { CallerContext } from '@types';
+import type { ClientSession } from 'mongoose';
+import type { PersonalDataSubject } from '@kernel/registry';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { auditChanges } from '@infrastructure/observability/audit-changes';
 import { ticketsAuditActions } from './audit';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
-import { initialTicketStatus, shouldStampRespondedAt } from './domain';
+import { initialTicketStatus, ownTicketsFilter, shouldStampRespondedAt } from './domain';
 import { ticketsConfig } from './config';
 import { mailConfig } from '@infrastructure/adapters/config';
 
@@ -67,11 +69,16 @@ const notifyMailbox = (): string =>
  *             or read back. A non-empty value writes the row as `spam` and skips the notification
  *             — the bot still gets its `201`, so it learns nothing, but nobody's inbox hears
  *             about it.
+ * Account:    `subjectId` is the signed-in sender's account, so the export and the erasure follow the
+ *             ticket to the person; absent for an anonymous sender.
  * Disposable: a disposable-inbox domain (`checkEmailPolicy`, off by default) is treated the same
  *             way — filed as `spam`, notification skipped, still a `201`. A visible refusal would
  *             tell a spam script exactly which signal caught it.
  */
-const create = (payload: CreateContactTicketRequest): Promise<TicketDocument> => {
+const create = (
+    payload: CreateContactTicketRequest,
+    subjectId?: string
+): Promise<TicketDocument> => {
     const email = normalizeEmail(payload.email);
     const honeypotFilled = Boolean(payload.website?.trim());
 
@@ -81,6 +88,7 @@ const create = (payload: CreateContactTicketRequest): Promise<TicketDocument> =>
         return ticketRepository
             .create({
                 name: payload.name?.trim() || undefined,
+                ...(subjectId ? { subjectId: toObjectId(subjectId) } : {}),
                 email,
                 subject: payload.subject.trim(),
                 message: payload.message.trim(),
@@ -215,7 +223,7 @@ const updateStatusById = (
             recordAudit(context, {
                 action: ticketsAuditActions.ADMIN_TICKET_STATUS_UPDATED,
                 outcome: 'success',
-                targetType: 'tickets',
+                targetType: 'ticket',
                 targetId: id,
                 metadata
             });
@@ -256,7 +264,7 @@ const removeById = (
             recordAudit(context, {
                 action: ticketsAuditActions.ADMIN_TICKET_DELETED,
                 outcome: 'success',
-                targetType: 'tickets',
+                targetType: 'ticket',
                 targetId: id
             });
             return generateSuccess(undefined);
@@ -264,21 +272,20 @@ const removeById = (
     });
 
 /**
- * A caller's own tickets, matched EXACTLY on `email` — for the account's own data export, behind
- * `NODE_EXPORT_INCLUDE_TICKETS` (the caller decides whether to include this; this function just
- * answers the question correctly once asked). Deliberately `findAll` with a raw filter, not
- * `search`'s `email` spec: that spec is a REGEX for staff free-text search, and a substring match
- * here would hand one person another's ticket whose address happens to contain theirs as a
- * substring. An account and a ticket sharing an address are still only a guess at being the same
- * person — the caller of this function is what decides whether that guess is worth taking.
+ * A person's own tickets — what they sent signed in, plus what was sent under their verified
+ * address (`ownTicketsFilter`). Deliberately `findAll` with a raw filter, not `search`'s `email`
+ * spec: that spec is a REGEX for staff free-text search, and a substring match here would hand
+ * one person another's ticket whose address happens to contain theirs.
+ *
+ * @param subject - who the export is about
  */
-const findOwnTickets = (email: string): Promise<Lean<TicketDocument>[]> =>
+const findOwnTickets = (subject: PersonalDataSubject): Promise<Lean<TicketDocument>[]> =>
     readAll(
         (page) =>
-            ticketRepository.findAll(
-                { email },
-                { skip: (page - 1) * MAX_CONFIGURED_PAGE_SIZE, limit: MAX_CONFIGURED_PAGE_SIZE }
-            ),
+            ticketRepository.findAll(ownTicketsFilter(subject), {
+                skip: (page - 1) * MAX_CONFIGURED_PAGE_SIZE,
+                limit: MAX_CONFIGURED_PAGE_SIZE
+            }),
         MAX_CONFIGURED_PAGE_SIZE
     );
 
@@ -304,13 +311,24 @@ const toExportTicket = (ticket: Lean<TicketDocument>): ExportTicket => ({
 });
 
 /**
- * {@link findOwnTickets}, shaped for the account data export. The `NODE_EXPORT_INCLUDE_TICKETS`
- * gate lives in `module.ts`: whether to call this at all is a wiring decision, not this one's.
+ * {@link findOwnTickets}, shaped for the account data export: exactly the set
+ * {@link eraseOwnTickets} removes.
  *
- * @param email - the caller's own email, matched exactly
+ * @param subject - who the export is about
  */
-const findOwnTicketsForExport = (email: string): Promise<ExportTicket[]> =>
-    findOwnTickets(email).then((tickets) => tickets.map((ticket) => toExportTicket(ticket)));
+const findOwnTicketsForExport = (subject: PersonalDataSubject): Promise<ExportTicket[]> =>
+    findOwnTickets(subject).then((tickets) => tickets.map((ticket) => toExportTicket(ticket)));
+
+/**
+ * Delete every ticket a person owns, open or spam included — the `personalData.erase` hook, run
+ * only inside a hard delete's transaction (never at the reversible lock, so a restore finds every
+ * message).
+ *
+ * @param subject - the erased account
+ * @param session - the erasure's transaction
+ */
+const eraseOwnTickets = (subject: PersonalDataSubject, session: ClientSession): Promise<void> =>
+    ticketRepository.deleteOwned(ownTicketsFilter(subject), session).then(() => undefined);
 
 /** The module's barrel export — used by the controllers in `./controllers`. */
 export const ticketService = {
@@ -320,5 +338,6 @@ export const ticketService = {
     updateStatusById,
     removeById,
     findOwnTickets,
-    findOwnTicketsForExport
+    findOwnTicketsForExport,
+    eraseOwnTickets
 };

@@ -1,8 +1,8 @@
 /**
  * @module
- * Contact requests: anyone may file one, admins read and triage them. Records an email address
- * rather than referencing a user, since the form is open to people with no account — which is
- * also why deleting an account leaves their tickets standing. A leaf in both directions.
+ * Contact requests: anyone may file one, admins read and triage them. A message sent while signed
+ * in records the sender's account; an anonymous one only the address typed. The export and the
+ * erasure take both (see `./domain/ownership`). A leaf in both directions.
  *
  * See: docs/modules/tickets.md
  */
@@ -24,15 +24,11 @@ export default {
     personalData: [
         {
             section: 'tickets',
-            // Matched by email, not id: this form is open to people with no account — so only for
-            // an account that has PROVED the address, since anyone can sign up with someone
-            // else's. `undefined` (not an empty array) when the flag is off or the address is
-            // unproven, so `account`'s assembly omits the key entirely — `tickets` is optional
-            // in the contract precisely because most exports carry none.
-            collect: (subject) =>
-                ticketsConfig().NODE_EXPORT_INCLUDE_TICKETS && subject.emailVerified
-                    ? ticketService.findOwnTicketsForExport(subject.email)
-                    : Promise.resolve(undefined)
+            // Always an array: the section is required in the contract. The set is the one
+            // `erase` removes (`./domain/ownership`).
+            collect: (subject) => ticketService.findOwnTicketsForExport(subject),
+            // Inside the hard-delete transaction only, never at the reversible lock.
+            erase: (subject, session) => ticketService.eraseOwnTickets(subject, session)
         }
     ],
     locales: path.join(__dirname, 'locales'),

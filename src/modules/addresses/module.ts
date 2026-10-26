@@ -32,7 +32,7 @@ export default {
                 addressService.list(subject.userId).then((view) => view.addresses),
             // A destroyed account takes its address book with it, inside the same
             // transaction — see `addressesDeleteByUserId`.
-            erase: addressService.removeByUserId,
+            erase: ({ userId }, session) => addressService.removeByUserId(userId, session),
             // The book is re-enterable convenience data, the first thing an idle account drops.
             minimise: addressService.minimise
         }

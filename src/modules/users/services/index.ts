@@ -86,6 +86,7 @@ import {
 } from './reaper';
 
 export { isAuthenticatable, isRestorable } from '../authenticatable';
+export { personalDataSubjectOf } from './personal-data-subject';
 export type { TwoFactorSecretRing } from './reencrypt';
 export type { ActivePurchaseHold } from './purchase-hold';
 

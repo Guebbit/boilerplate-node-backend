@@ -8,3 +8,4 @@
  */
 
 export { initialTicketStatus, shouldStampRespondedAt } from './lifecycle';
+export { ownTicketsFilter, type OwnTicketsFilter } from './ownership';

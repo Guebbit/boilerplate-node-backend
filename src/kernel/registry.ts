@@ -230,8 +230,8 @@ export interface BrowserEventTarget {
 }
 
 /**
- * Who a data-subject export is about. `email` because one module (`tickets`, tickets are not
- * tied to an account) matches its rows by address, not by id.
+ * Who a data-subject export or erasure is about. `email` because one module (`tickets`: a contact
+ * message can predate the account) also matches its rows by address, not only by id.
  */
 export interface PersonalDataSubject {
     userId: string;
@@ -308,7 +308,7 @@ export interface PersonalDataSection {
     collect: (subject: PersonalDataSubject) => Promise<unknown>;
 
     /**
-     * Erase this section's rows for one user, given the session a hard delete's
+     * Erase this section's rows for one subject, given the session a hard delete's
      * transaction is running in — every write inside must take `{ session }`, or it commits
      * outside the transaction and survives a rollback the rest of the erasure didn't.
      *
@@ -347,7 +347,7 @@ export type AfterErase = () => Promise<void>;
  * Resolves to its {@link AfterErase}, if it has one.
  */
 export type PersonalDataEraser = (
-    userId: string,
+    subject: PersonalDataSubject,
     session: ClientSession
 ) => Promise<AfterErase | undefined> | Promise<void>;
 

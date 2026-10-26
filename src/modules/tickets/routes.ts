@@ -36,7 +36,7 @@ export const router = Router();
  * `humanChallengeGate` next — rung 3, off by default (`NODE_ANTIBOT_PROVIDER`) — before the write it
  * would otherwise refuse just as cheaply after.
  */
-router.post('/', contactLimiters, humanChallengeGate, idempotencyKey, postTicket);
+router.post('/', contactLimiters, humanChallengeGate, getAuth, idempotencyKey, postTicket);
 
 /*
  * Everything below is admin-only. POSITIONAL — guards routes below it, not above — which is why

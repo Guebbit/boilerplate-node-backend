@@ -1,8 +1,8 @@
 /**
  * @module
- * What a hard delete (Art. 17) takes and what it must leave: the address book goes with the
- * account, while the records the law makes the shop keep — invoices, credit notes, returns, the
- * ticket — stay. `personal-data-erasure.test.ts` only checks that a hook is declared; this
+ * What a hard delete (Art. 17) takes and what it must leave: the address book and the contact
+ * tickets go with the account, while the records the law makes the shop keep — invoices, credit
+ * notes, returns — stay. `personal-data-erasure.test.ts` only checks that a hook is declared; this
  * runs the real cascade, so a future "erase everything" change that reaches a tax record fails here.
  *
  * The second block is the user's ask: after a scheduled self-deletion has run, no collection still
@@ -83,7 +83,7 @@ beforeEach(() => {
 afterEach(() => resetDomainEvents());
 
 describe('a hard delete of an account that has bought, been refunded and written in', () => {
-    it('takes the address book and leaves every legal record', async () => {
+    it('takes the address book and the tickets and leaves every legal record', async () => {
         const user = await createUser({ email: 'ada@example.com', verifiedAt: new Date() });
         await giveAddress(user.id);
         const product = await createProduct({ price: 25 });
@@ -129,7 +129,7 @@ describe('a hard delete of an account that has bought, been refunded and written
         expect(await invoiceModel.countDocuments({ orderId })).toBe(1);
         expect(await creditNoteModel.countDocuments({ orderId })).toBe(1);
         expect(await returnModel.countDocuments({ orderId })).toBe(1);
-        expect(await ticketModel.countDocuments({ email: 'ada@example.com' })).toBe(1);
+        expect(await ticketModel.countDocuments({ email: 'ada@example.com' })).toBe(0);
     });
 });
 
@@ -175,9 +175,7 @@ const KEPT_BY_LAW = {
     // Art. 17(3)(b): the paid order is the sale; its buyer is scrubbed once the claim window closes.
     orders: 'paid order, tax law',
     // The invoice freezes the billing address (name and address) for the tax duty.
-    invoices: 'tax law',
-    // A contact message is matched by address, not by account; staff delete it by hand on request.
-    tickets: 'not cascaded (open question E1)'
+    invoices: 'tax law'
 } as const;
 
 describe('a scheduled self-deletion that has run', () => {
@@ -266,6 +264,7 @@ describe('a scheduled self-deletion that has run', () => {
                 'payments',
                 'sessions',
                 'stockalerts',
+                'tickets',
                 'translations',
                 'verificationtokens',
                 'webhooksubscriptions',
@@ -274,6 +273,8 @@ describe('a scheduled self-deletion that has run', () => {
         );
         const loaded = await userRepository.findById(user.id);
         await accountService.scheduleAccountDeletion(loaded!, testCallerContext);
+        // The lock is reversible, so a restore must find the message: it goes at the purge only.
+        expect(await ticketModel.countDocuments({ email })).toBe(1);
         // The app clock reaches the date: the grace is the only thing that decides when.
         await userRepository.updateMany(
             { _id: user.id },

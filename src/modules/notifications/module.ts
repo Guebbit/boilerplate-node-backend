@@ -33,7 +33,7 @@ export default {
             collect: (subject) =>
                 notificationsService.list(subject.userId).then((view) => view.items),
             // Joins the caller's own hard-delete transaction — see `notificationsService.removeByUserId`.
-            erase: notificationsService.removeByUserId
+            erase: ({ userId }, session) => notificationsService.removeByUserId(userId, session)
         }
     ],
     subscribe: () => {

@@ -1,7 +1,7 @@
 # tickets
 
 ::: tip At a glance
-**Owns** — contact requests: anyone may file one, admins read and triage them.
+**Owns** — contact requests: anyone may file one, admins read and triage them. A signed-in sender's account is recorded, so erasure and export follow it.
 **Depends on** — nothing, and nothing depends on it. A leaf in both directions.
 **Breaks if you change** — the `status` enum, which is the whole triage workflow.
 :::
@@ -16,10 +16,15 @@ _Nothing reaches `tickets` and it reaches nothing — no imports either way, no 
 
 ## The story
 
-**It records an email address rather than referencing a user**, because the form is open to people
-who have no account. That one decision explains everything else about this module: it needs nothing
-from [`users`](./users.md), deleting an account leaves that person's tickets standing, and the
-contact form is open to anyone, a stranger's write alongside signup, login, password reset, second-factor login and analytics events.
+**A message follows its sender's account.** The form is open to people with no account, so it
+always records the address typed; when the sender is signed in it also records the account
+(`subjectId`, from the session token the browser sends along — an absent or expired token files the
+message as anonymous). The data export and the erasure take the same set: what was sent signed in,
+plus what was sent under the account's **verified** address (anyone can sign up with a stranger's
+address, so an unproven one matches nothing). The module reaches [`users`](./users.md) only
+through the manifest's `personalData` hook, so it stays a leaf, and the contact form is open to
+anyone, a stranger's write alongside signup, login, password reset, second-factor login and
+analytics events.
 
 A message may carry a **category** (`order`, `cancellation`, `return`, `payment`, `account`,
 `privacy`, `other`) and the order number the visitor typed (`orderNumber`, free text, never checked
@@ -31,8 +36,7 @@ The status enum _is_ the triage workflow: `new → in_progress → resolved`, wi
 that is neither. `adminNotes` is the operator's side of the record: it is served to staff only and
 left out of the data export (Art. 15(4) protects whoever wrote the note). `status` and `respondedAt`
 are the filer's own data, and the export, the filer's only read of a ticket, includes them. The
-`tickets` section is opt-in (`NODE_EXPORT_INCLUDE_TICKETS`, off by default) and matches by email,
-so only an account whose address is verified gets it.
+`tickets` section is always present (an empty array when the person owns none).
 
 ::: tip A leaf in both directions
 Zero dependencies and zero dependents. Together with [`wishlist`](./wishlist.md) it is the pair to
@@ -53,13 +57,15 @@ nothing from the response. That trades an email amplifier for a storage amplifie
 **Retention.** A `createdAt` TTL index (`NODE_TICKETS_RETENTION_DAYS`, default 730 — 24 months)
 deletes tickets on its own; changing the window on a live database needs `npm run db:sync` — a
 restart alone fails the boot — the same caveat [`audit-logs`](./audit-logs.md) carries for the
-identical reason. Erasing a specific
-person's data goes through the existing admin search (`GET /tickets?email=` or
-`POST /tickets/search`) plus `DELETE /tickets/{id}` — a GDPR request names an address, not an id,
-so the operator finds the rows first and deletes them; a dedicated erase-by-email endpoint would be
-a convenience wrapper over that loop. `email` stays unindexed on purpose (see the schema comment):
-the only query touching it is case-insensitive and unanchored, so no B-tree index could serve it
-either way.
+identical reason.
+
+**Erasure.** The module's `personalData.erase` hook deletes every ticket the person owns (open and
+spam ones too), inside the hard-delete transaction: the purge at the end of the grace, an admin
+hard delete, or the inactivity erasure. It never runs at the reversible lock, so a restore finds
+every message. An old address after an email change, or a ticket typed under another address while
+signed out, is not matched: the technician finds those by hand. The set is one pure rule,
+`ownTicketsFilter` in `domain/ownership.ts`, used by both the export and the erasure, so they
+cannot disagree. Two indexes serve it: `{ subjectId }` (partial) and `{ email }`.
 
 ## The pipeline
 
