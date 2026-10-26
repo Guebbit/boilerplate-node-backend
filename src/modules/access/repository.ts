@@ -97,5 +97,12 @@ export const membershipRepository = {
         tenantId: string | null,
         scope: AuthorizationScope
     ): Promise<MembershipDocument[]> =>
-        membershipModel.find({ userId: { $in: userIds }, tenantId, scope }).exec()
+        membershipModel.find({ userId: { $in: userIds }, tenantId, scope }).exec(),
+
+    /** The ids of everyone holding one of these roles in a shop. Served by the `{ tenantId, role }` index. */
+    findUserIdsByRoles: (tenantId: string, roles: readonly string[]): Promise<string[]> =>
+        // https://mongoosejs.com/docs/api/model.html#Model.distinct()
+        membershipModel
+            .distinct('userId', { tenantId, scope: 'tenant', role: { $in: roles } })
+            .exec()
 };

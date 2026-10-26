@@ -136,6 +136,14 @@ exemptions and where each service asks it are on
 [Authorization](../theory/authorization.md#protecting-people); this module owns only the question,
 never the places it is asked.
 
+## Who does the work a set names
+
+`membersHolding(tenantId, sets)` answers "who is this notice for": every member of the shop whose
+role lists one of the permission sets, plus every unrestricted role (admin, by property, never by
+name). An empty list of sets means administrators only. Roles are matched in memory from the shared
+file; the database is asked once, for the members of those roles, through the
+`{ tenantId, role }` index on `membership`. `notifications` is the caller.
+
 ## Who can do what
 
 Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
