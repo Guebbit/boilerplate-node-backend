@@ -11,6 +11,7 @@ src/types/asyncapi.generated.ts
 # afterwards would make that check fail on a file nobody edited. The MODULE documents it is built
 # from are formatted as normal.
 openapi.yaml
+shared/rules/schemas/
 
 # Stryker's own incremental cache — gitignored (see `.gitignore`) but still present on disk
 # between local runs, and written by Stryker, not by anyone typing JSON. Same reasoning as the

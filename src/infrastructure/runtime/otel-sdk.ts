@@ -48,12 +48,15 @@ import {
 import { ExpressInstrumentation } from '@opentelemetry/instrumentation-express';
 import { MongooseInstrumentation } from '@opentelemetry/instrumentation-mongoose';
 import { RedisInstrumentation } from '@opentelemetry/instrumentation-redis';
+import { loadSharedRules } from '../config/shared-rules/load';
+import { logRedactionSchema } from '../config/shared-rules/log-redaction';
 
 /**
  * Query parameters no span may carry in clear: the OAuth callback's one-time `code` and its CSRF
  * `state`, which the HTTP instrumentation otherwise records in the span's URL attributes.
+ * The list is `shared/rules/log-redaction.yaml`'s `traceUrlSecrets`.
  */
-const QUERY_SECRETS = ['code', 'state'];
+const QUERY_SECRETS = loadSharedRules('log-redaction', logRedactionSchema).traceUrlSecrets;
 
 /**
  * `target` (a path plus query) with every {@link QUERY_SECRETS} value replaced by `REDACTED`;
