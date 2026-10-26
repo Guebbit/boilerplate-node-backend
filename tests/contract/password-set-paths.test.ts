@@ -26,7 +26,7 @@ import { REPO_ROOT } from '@tests/paths';
 
 setupTestDb();
 
-// A listed, composition-valid entry in `breached-passwords/list.txt` — same fixture every
+// A listed, composition-valid entry in `shared/rules/breached-passwords.txt` — same fixture every
 // existing breach case in this repo uses, so composition rules alone can't be what refuses it.
 const BREACHED_PASSWORD = 'Password1!';
 

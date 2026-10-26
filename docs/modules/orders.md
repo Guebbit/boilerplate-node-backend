@@ -162,7 +162,11 @@ plus that many days, or at once when account erasure or inactivity minimisation 
 never-paid order is due at once — amounts, line items and dates survive, only the person is gone. An account inactive past `NODE_INACTIVE_MINIMISE_DAYS` starts the same clock through this
 module's `personalData.minimise` hook, keeping its `userId`; a live, active account's orders keep
 their personal fields, since order history is part of the contract
-([why](../theory/data-retention.md#orders-kept-while-the-account-lives)). An admin can still hard-delete an order, but only one that is `cancelled` and was never paid
+([why](../theory/data-retention.md#orders-kept-while-the-account-lives)). Each scrub is announced:
+the sweep works in batches of 500, and a batch scrubs its orders and writes one `order.redacted`
+outbox row each (`data: { orderId }`) in the same transaction, so the
+[webhook](./webhooks.md) exists exactly when the scrub does (GDPR Art. 19). It fires when the data
+goes, not at the erasure, which only detaches `userId`. An admin can still hard-delete an order, but only one that is `cancelled` and was never paid
 (`services/remove.ts`'s `remove`): the cancel owns every end-of-order effect (stock, payment intent,
 `order.cancelled`), so an open order answers 409 `ORDER_NOT_CANCELLED` until it is cancelled. This
 reap is what protects the far more common case, the order nobody ever deletes. An order that was

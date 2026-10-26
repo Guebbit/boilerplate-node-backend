@@ -1,0 +1,42 @@
+# Which log keys are redacted. Run by BEnode and by the PHP twin against their own loggers.
+# Every `redact` case sits next to the `keep` case that bounds it.
+cases:
+    - name: a plain password key is redacted
+      key: password
+      expect: redact
+    - name: camelCase and snake_case spell the same key
+      key: newPassword
+      expect: redact
+    - name: kebab-case HTTP header spells the same key
+      key: x-api-key
+      expect: redact
+    - name: the antibot challenge header is redacted
+      key: Antibot-Challenge-Token
+      expect: redact
+    - name: the device cookie is redacted
+      key: __Host-device
+      expect: redact
+    - name: an OAuth state cookie is redacted
+      key: __Host-oauth_state
+      expect: redact
+    - name: a fragment makes a compound key sensitive
+      key: webhookSecret
+      expect: redact
+    - name: a signature header is redacted by fragment
+      key: x-hub-signature
+      expect: redact
+    - name: the bare key `key` is redacted
+      key: key
+      expect: redact
+    - name: idempotencyKey is NOT eaten by the bare key `key`
+      key: idempotencyKey
+      expect: keep
+    - name: statusCode is kept
+      key: statusCode
+      expect: keep
+    - name: a bare code stays readable to a debugger
+      key: code
+      expect: keep
+    - name: linkCount is NOT eaten by linkurl
+      key: linkCount
+      expect: keep

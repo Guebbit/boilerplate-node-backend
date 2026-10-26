@@ -71,6 +71,14 @@ declare module '@kernel/events' {
             at: string;
             mode: 'status';
         };
+
+        /**
+         * `reap:orders` scrubbed an order's remaining personal data (email, addresses, notes),
+         * committed in the same transaction as the scrub. The erasure itself only detaches `userId`,
+         * so this is the moment the data actually goes. No in-process subscriber; it exists for the
+         * `order.redacted` webhook (GDPR Art. 19).
+         */
+        'order.redacted': { orderId: string };
     }
 }
 
@@ -85,3 +93,6 @@ export const ORDER_CREATED = 'order.created';
 
 /** See `DomainEventMap['order.status_overridden']` above. */
 export const ORDER_STATUS_OVERRIDDEN = 'order.status_overridden';
+
+/** See `DomainEventMap['order.redacted']` above. */
+export const ORDER_REDACTED = 'order.redacted';

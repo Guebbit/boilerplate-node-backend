@@ -32,6 +32,14 @@ channels:
         messages:
             OrderCancelledEvent:
                 $ref: '#/components/messages/OrderCancelledEvent'
+    order.redacted:
+        address: order.redacted
+        description: An order's personal data was scrubbed.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            OrderRedactedEvent:
+                $ref: '#/components/messages/OrderRedactedEvent'
 operations:
     webhookOrderCreated:
         action: send
@@ -65,6 +73,19 @@ operations:
             `payment.refunded`. See `orders/events.ts`.
         messages:
             - $ref: '#/channels/order.cancelled/messages/OrderCancelledEvent'
+    webhookOrderRedacted:
+        action: send
+        channel:
+            $ref: '#/channels/order.redacted'
+        summary: An order's email, addresses and notes were scrubbed.
+        description: >-
+            Fired once per order by the nightly retention sweep (`reap:orders`), in the scrub's own
+            transaction, when the order's personal-data window ends: after the buyer's erasure, or
+            for an inactive account's orders. Not fired at the erasure itself, which only detaches
+            the account. A recipient drops the buyer's email, addresses and notes it holds for
+            `orderId` (GDPR Art. 19). The order row itself is kept as the invoice.
+        messages:
+            - $ref: '#/channels/order.redacted/messages/OrderRedactedEvent'
 components:
     messages:
         OrderCreatedEvent:
@@ -88,6 +109,13 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/OrderCancelledEnvelope'
+        OrderRedactedEvent:
+            name: OrderRedactedEvent
+            title: Order redacted
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/OrderRedactedEnvelope'
     schemas:
         OrderIdPayload:
             type: object
@@ -147,6 +175,24 @@ components:
                     type: string
                     enum:
                         - order.cancelled
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/OrderIdPayload'
+            additionalProperties: false
+        OrderRedactedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: OrderRedactedEventType
+                    type: string
+                    enum:
+                        - order.redacted
                 timestamp:
                     type: string
                     format: date-time

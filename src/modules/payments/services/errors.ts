@@ -44,8 +44,14 @@ export const orderNotFound = (): ResponseReject =>
  * on; any other error means the record may not exist, or its state is unknown.
  */
 export class RefundLeftOpenError extends Error {
-    /** @param cause - what the provider call rejected with; its wording becomes this error's */
-    constructor(cause: unknown) {
+    /**
+     * @param cause - what the provider call rejected with; its wording becomes this error's
+     * @param refundId - the record the refusal left open, so a request can answer with it
+     */
+    constructor(
+        cause: unknown,
+        readonly refundId: string
+    ) {
         super(cause instanceof Error ? cause.message : String(cause), { cause });
         this.name = 'RefundLeftOpenError';
     }

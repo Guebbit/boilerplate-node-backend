@@ -18,7 +18,11 @@ export {
     MANUAL_PROVIDER,
     isHandRecorded,
     isOpenTransfer,
-    OPEN_REFUND_STATUSES
+    OPEN_REFUND_STATUSES,
+    FINAL_REFUND_FAILURES,
+    MONEY_DID_NOT_MOVE_FAILURES,
+    mayBeSettledByHand,
+    nextRefundAttemptAt
 } from './lifecycle';
 
 /** The RF creditor reference a bank-transfer payment carries, and its admin-side parse. */

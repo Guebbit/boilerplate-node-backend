@@ -4,7 +4,9 @@
  */
 
 import { Error as MongooseError, type ClientSession } from 'mongoose';
+import { announceInTransaction } from '@kernel/outbox';
 import { DELIVERED_CODE_FIELDS } from '../model';
+import { USER_PROFILE_CHANGED } from '../events';
 import type { DeliveredCodeSlot, DeliveredCodeState, MfaReservation, UserDocument } from '../model';
 import { userRepository } from '../repository';
 import {
@@ -70,6 +72,22 @@ export const markEmailVerified = (user: UserDocument): Promise<UserDocument> => 
 };
 
 /**
+ * Save an address that really moved, with the `user.profile_changed` outbox row in the same
+ * transaction: the webhook exists exactly when the new address does (GDPR Art. 19).
+ *
+ * @param user - the account, with `email` already assigned
+ */
+const saveAnnouncingEmail = (user: UserDocument): Promise<UserDocument> =>
+    announceInTransaction(
+        (session) => userRepository.save(user, session),
+        (saved) => ({
+            name: USER_PROFILE_CHANGED,
+            payload: { userId: saved.id, changed: ['email'] },
+            aggregateId: saved.id
+        })
+    );
+
+/**
  * Swap a proven `pendingEmail` into `email`, and mark the account verified — the new address just
  * proved itself. Document-only, same split as {@link markEmailVerified}: the caller promotes a
  * still-`unverified` role, since an email change can be the first proof an `unverified` signup
@@ -84,7 +102,7 @@ export const applyEmailChange = (user: UserDocument, newEmail: string): Promise<
     user.verifiedAt = new Date();
     // The address is the recovery channel: whoever held the account under the old one is out now.
     markSessionsEnded(user);
-    return userRepository.save(user);
+    return saveAnnouncingEmail(user);
 };
 
 /**
@@ -99,7 +117,7 @@ export const restorePreviousEmail = (user: UserDocument): Promise<UserDocument> 
     if (user.previousEmail) user.email = user.previousEmail;
     user.previousEmail = undefined;
     user.pendingEmail = undefined;
-    return userRepository.save(user);
+    return saveAnnouncingEmail(user);
 };
 
 /**

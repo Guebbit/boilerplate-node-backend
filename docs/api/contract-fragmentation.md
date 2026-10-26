@@ -412,7 +412,7 @@ internally. That file's header is the full argument. See also
 
 The `webhooks` section is the one section that is not complete on its own. Its file keeps the server
 and the headers schema every event shares; each event is declared by the module that fires it, in
-`src/modules/<module>/asyncapi.webhooks.yaml` (`delivery`, `orders`, `payments`, `returns`, `example`).
+`src/modules/<module>/asyncapi.webhooks.yaml` (`delivery`, `orders`, `payments`, `returns`, `users`, `example`).
 `scripts/contracts/asyncapi-webhook-events.ts` finds those files on disk and
 `withWebhookEvents` folds them into the section before it joins the bundle: one call, in
 `asyncapi-bundles.ts`. The same collision refusal applies, so two modules claiming one event name
@@ -425,6 +425,7 @@ flowchart LR
     O["orders/asyncapi.webhooks.yaml"] --> S
     P["payments/asyncapi.webhooks.yaml"] --> S
     R["returns/asyncapi.webhooks.yaml"] --> S
+    U["users/asyncapi.webhooks.yaml"] --> S
     E["example/asyncapi.webhooks.yaml"] --> S
     S --> B["asyncapi.yaml +<br/>asyncapi.public.yaml"]
 ```

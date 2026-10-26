@@ -16,6 +16,14 @@ import winston from 'winston';
 import { isRelaxedEnvironment, loggingConfig, PERSONAL_FIELD_MODES } from '../runtime/config';
 import { correlationDigest } from '../security/pseudonymise';
 import { toSemanticNames } from './semantic-names';
+import { loadSharedRules } from '../config/shared-rules/load';
+import { logRedactionSchema } from '../config/shared-rules/log-redaction';
+
+/**
+ * The redaction lists, from `shared/rules/log-redaction.yaml` — the file the PHP twin reads too.
+ * Loaded once at import; a malformed file fails the boot.
+ */
+const redactionRules = loadSharedRules('log-redaction', logRedactionSchema);
 
 /** A structured log call's own object form: a `message` plus whatever context goes with it. */
 export type LogFields = Record<string, unknown>;
@@ -55,47 +63,7 @@ export interface Logger {
  * individually rather than sampling — a redaction list is a security policy, and the entries
  * nobody sampled are the ones that leak.
  */
-export const SENSITIVE_FIELDS = new Set([
-    'password',
-    'passwordhash',
-    'confirm_password',
-    'password_confirm',
-    'new_password',
-    'old_password',
-    'current_password',
-    'token',
-    'access_token',
-    'refresh_token',
-    'authorization',
-    'cookie',
-    'set-cookie',
-    'x-api-key',
-    'antibot-challenge-token',
-    'otp',
-    'jwt',
-    '__Host-session',
-    '__Host-device',
-    '__Host-oauth_state',
-    '__Host-oauth_verifier',
-    '__Host-oauth_link',
-    '__Host-oauth_mfa_challenge',
-    'secret',
-    'new_secret',
-    'api_key',
-    'apikey',
-    'private_key',
-    'client_secret',
-    'credit_card',
-    'card_number',
-    'cvv',
-    'ssn',
-    // Exact names only. As substrings they would eat `idempotencyKey`, `statusCode`, `linkCount`.
-    'key',
-    'linkurl',
-    'challenge',
-    'verifier',
-    'iban'
-]);
+export const SENSITIVE_FIELDS = new Set(redactionRules.sensitiveFields);
 
 /**
  * Fragments that make a key sensitive wherever they appear in it, after {@link normalizeKey}.
@@ -107,14 +75,7 @@ export const SENSITIVE_FIELDS = new Set([
  *
  * Exported so the policy test can assert each entry.
  */
-export const SENSITIVE_KEY_FRAGMENTS = [
-    'password',
-    'secret',
-    'token',
-    'signature',
-    'otpauth',
-    'backupcode'
-] as const;
+export const SENSITIVE_KEY_FRAGMENTS = redactionRules.sensitiveKeyFragments;
 
 /**
  * A key as the redaction lists compare it: lowercase, with `_` and `-` dropped. The codebase
@@ -152,7 +113,7 @@ const CIRCULAR = '[Circular]';
  * replaced, and merging the two lists would blur that line the day someone adds a field to one
  * without thinking about which policy it needs.
  */
-export const PERSONAL_FIELDS = new Set(['email', 'to', 'ip', 'phone', 'street', 'zip', 'fullname']);
+export const PERSONAL_FIELDS = new Set(redactionRules.personalFields);
 
 /**
  * How {@link PERSONAL_FIELDS} are treated on the way to a transport, from

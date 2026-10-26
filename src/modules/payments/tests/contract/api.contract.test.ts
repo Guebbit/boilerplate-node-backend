@@ -17,7 +17,7 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { signWebhookPayload, WEBHOOK_SIGNATURE_HEADER } from '@modules/payments/providers';
 import { paymentRepository } from '@modules/payments/repository';
 import { inventoryService } from '@modules/inventory';
-import { setFakeOutcome } from '@scenarios/support/doubles/payments/fake';
+import { setFakeOutcome, setFakeRefundFailure } from '@scenarios/support/doubles/payments/fake';
 import { onDomainEvent } from '@kernel/events';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { ORDER_STATUS_CHANGED } from '@modules/orders';
@@ -685,6 +685,67 @@ describe('POST /payments/{id}/refunds — the operator', () => {
         });
     });
 
+    it('answers 201 with the failed record when the provider refuses, never a 5xx', async () => {
+        const { paymentId } = await paidOrder();
+        const { bearer: adminBearer } = await authenticateAs('admin');
+        const stored = await paymentRepository.findById(paymentId);
+        setFakeRefundFailure(String(stored?.providerRef), 'declined');
+        const half = (stored?.amount ?? 0) / 2;
+        const key = freshKey();
+
+        const response = await api()
+            .post(`/payments/${paymentId}/refunds`)
+            .set('Authorization', adminBearer)
+            .set('Idempotency-Key', key)
+            .send({ amount: half });
+        const replay = await api()
+            .post(`/payments/${paymentId}/refunds`)
+            .set('Authorization', adminBearer)
+            .set('Idempotency-Key', key)
+            .send({ amount: half });
+
+        expect(response.status).toBe(201);
+        expect(response.body).toMatchObject({
+            status: 'failed',
+            failureReason: 'declined',
+            amount: half
+        });
+        expect(response.headers.location).toBe(
+            `/payments/${paymentId}/refunds/${String(response.body.id)}`
+        );
+        // The same key replays the same 201 instead of opening a second record.
+        expect(replay.status).toBe(201);
+        expect(replay.body.id).toBe(response.body.id);
+        const reread = await api().get(`/payments/${paymentId}`).set('Authorization', adminBearer);
+        expect(reread.body.refunds).toHaveLength(1);
+        expect(reread.body.actions.settleByHand).toEqual([response.body.id]);
+        setFakeRefundFailure(String(stored?.providerRef), undefined);
+    });
+
+    it('lets a second partial refund open beside a refused one', async () => {
+        const { paymentId } = await paidOrder();
+        const { bearer: adminBearer } = await authenticateAs('admin');
+        const stored = await paymentRepository.findById(paymentId);
+        setFakeRefundFailure(String(stored?.providerRef), 'lost_or_stolen_card');
+        await api()
+            .post(`/payments/${paymentId}/refunds`)
+            .set('Authorization', adminBearer)
+            .set('Idempotency-Key', freshKey())
+            .send({ amount: (stored?.amount ?? 0) / 2 });
+        setFakeRefundFailure(String(stored?.providerRef), undefined);
+
+        const second = await api()
+            .post(`/payments/${paymentId}/refunds`)
+            .set('Authorization', adminBearer)
+            .set('Idempotency-Key', freshKey())
+            .send({ amount: (stored?.amount ?? 0) / 4 });
+
+        expect(second.status).toBe(201);
+        expect(second.body).toMatchObject({ status: 'succeeded' });
+        const reread = await api().get(`/payments/${paymentId}`).set('Authorization', adminBearer);
+        expect(reread.body.refunds).toHaveLength(2);
+    });
+
     it('is gone at the old order-keyed address', async () => {
         const { order } = await paidOrder();
         const { bearer: adminBearer } = await authenticateAs('admin');
@@ -847,7 +908,7 @@ describe('POST /payments/{id}/refunds/{refundId}/settle', () => {
         const { adminBearer, paymentId, refunded } = await cashRefundOwed();
 
         // The operator refund of a cash payment only opens the record.
-        expect(refunded.refundedByHand).toBeUndefined();
+        expect(refunded.refunds[0].settledByHand).toBeUndefined();
         expect(refunded.refunds[0].status).toBe('pending');
         expect(refunded.actions).toMatchObject({ refund: false });
         expect(refunded.actions.settleByHand).toEqual([refunded.refunds[0].id]);
@@ -857,10 +918,15 @@ describe('POST /payments/{id}/refunds/{refundId}/settle', () => {
             .set('Authorization', adminBearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.refundedByHand).toBe(true);
-        expect(response.body.refunds[0].status).toBe('succeeded');
-        expect(response.body.displayStatus).toBe('refunded');
-        expect(response.body.actions.settleByHand).toEqual([]);
+        // The answer is the refund it settled; totals and actions are the payment's own read.
+        expect(response.body).toMatchObject({
+            id: refunded.refunds[0].id,
+            status: 'succeeded',
+            settledByHand: true
+        });
+        const reread = await api().get(`/payments/${paymentId}`).set('Authorization', adminBearer);
+        expect(reread.body.displayStatus).toBe('refunded');
+        expect(reread.body.actions.settleByHand).toEqual([]);
     });
 
     it('answers 409 PAYMENT_REFUND_NOT_OPEN to the second operator', async () => {

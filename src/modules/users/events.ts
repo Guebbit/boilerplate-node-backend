@@ -5,6 +5,12 @@
  * enumerates domains.
  */
 
+/**
+ * The personal-data fields whose change is announced, named as the audit trail names them
+ * (`services/audit-changes.ts`). Preferences (locale, consent) are not in it.
+ */
+export type UserChangedField = 'username' | 'email' | 'phone' | 'website' | 'imageUrl';
+
 /** Registers this module's event payloads into the kernel's app-wide `DomainEventMap`. */
 declare module '@kernel/events' {
     interface DomainEventMap {
@@ -30,6 +36,12 @@ declare module '@kernel/events' {
          * provider to forget the account id (GDPR Art. 17).
          */
         'user.erased': { userId: string };
+        /**
+         * A personal-data field of an account was rectified, committed with the save that moved it.
+         * Field names only, never values: the outbox row is kept and the delivery log replayable.
+         * No in-process subscriber; it exists for the `user.updated` webhook (GDPR Art. 19).
+         */
+        'user.profile_changed': { userId: string; changed: UserChangedField[] };
     }
 }
 
@@ -44,3 +56,6 @@ export const USER_DELETION_CANCELLED = 'user.deletion-cancelled';
 
 /** See `DomainEventMap['user.erased']` above. */
 export const USER_ERASED = 'user.erased';
+
+/** See `DomainEventMap['user.profile_changed']` above. */
+export const USER_PROFILE_CHANGED = 'user.profile_changed';

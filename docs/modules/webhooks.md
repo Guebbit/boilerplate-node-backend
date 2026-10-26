@@ -86,7 +86,7 @@ the email a disable notice is sent to — never a call back into any publishing 
 
 **The public event catalogue is a contract, not an accident.** Each module that fires a webhook
 declares its own events in `src/modules/<module>/asyncapi.webhooks.yaml` (`delivery`, `orders`,
-`payments`, `returns`, and `example`, the one to copy). This module's `asyncapi.yaml` keeps only what every
+`payments`, `returns`, `users`, and `example`, the one to copy). This module's `asyncapi.yaml` keeps only what every
 event shares: the `subscriberEndpoint` server and the `WebhookHeaders` schema. The bundler merges
 the fragments into the `webhooks` section while this module exists (see
 [Contract Fragmentation](../api/contract-fragmentation.md#module-owned-webhook-events)).
@@ -133,7 +133,7 @@ flowchart LR
 relay is at-least-once, so the subscriber can see one event twice. It keeps the outbox row's id as
 the delivery's `eventId`, and a unique `(subscriptionId, eventId)` index makes the second arrival a
 no-op. A failed fan-out throws, so the relay retries it; subscriptions that already have their row
-are skipped. Every event announced inside a transaction travels this way: `order.created`, `order.cancelled`, the payment settle and decline events, and `return.requested`, `return.received` and `return.closed`.
+are skipped. Every event announced inside a transaction travels this way: `order.created`, `order.cancelled`, the payment settle and decline events, and `return.requested`, `return.received` and `return.closed`. `user.erased`, `user.updated` and `order.redacted` ride the transaction of the write they announce the same way.
 
 The queued message itself carries only `{ deliveryId }` — a Claim Check, not a copy of the
 delivery. The row is the payload's only source of truth once the consumer claims it, which is what

@@ -76,6 +76,23 @@ export interface RefundRecord {
      * is news (the first, or a new reason) or a repeat of the last, and is never published.
      */
     attempts?: number;
+    /**
+     * When the current attempt was claimed (or the record opened). Internal: it is the fence token
+     * of that attempt. A settle or a failure only lands on a `pending` record still carrying the
+     * same value, so a slow old attempt cannot overwrite a newer one.
+     */
+    attemptedAt?: Date;
+    /**
+     * When the sweep may send this `failed` record again (growing delay). Absent on a final
+     * refusal, which is never sent again. Internal.
+     */
+    nextAttemptAt?: Date;
+    /**
+     * `true` when an operator reported this refund's money returned outside the application (a
+     * hand-paid payment's, or a card refund the provider refused). Per refund, because one
+     * hand-settled refund says nothing about the next.
+     */
+    settledByHand?: true;
     /** When the money was confirmed back, or (for a hand-paid one) reported back. */
     settledAt?: Date;
     createdAt: Date;
@@ -87,7 +104,14 @@ export interface RefundRecord {
  */
 export interface RefundSettlement {
     providerRefundRef?: string;
-    refundedByHand?: true;
+    settledByHand?: true;
+    /** The fence token of the attempt that got the provider's answer; absent for a hand settle. */
+    attempt?: Date;
+    /**
+     * The statuses a hand settle may run from, when there is no attempt: `pending` for hand-paid
+     * money, `failed` for a card refund the provider refused. Absent means any open one.
+     */
+    from?: readonly RefundStatus[];
 }
 
 /**
@@ -137,12 +161,6 @@ export interface PaymentDocument extends Document {
     /** The end of the stock hold the transfer instructions quote — a copy of the order's `payBy`. */
     payBy?: Date;
     /**
-     * `true` once a refunded `manual` payment has had its money returned to the customer outside
-     * this application — there is no provider to ask, so this is the operator's own record that it
-     * was done by hand.
-     */
-    refundedByHand?: boolean;
-    /**
      * Everything asked back so far, pending and succeeded both — Stripe's `amount_refunded`. It
      * counts a refund the moment it is opened, which is what stops two racing partial refunds
      * from returning more than the customer paid.
@@ -186,6 +204,9 @@ const refundSchema = new Schema<RefundRecord>(
         providerRefundRef: { type: String },
         failureReason: { type: String, enum: Object.values(RefundFailureReason) },
         attempts: { type: Number, min: 0 },
+        attemptedAt: { type: Date },
+        nextAttemptAt: { type: Date },
+        settledByHand: { type: Boolean },
         settledAt: { type: Date }
     },
     { timestamps: { createdAt: true, updatedAt: false } }
@@ -252,10 +273,6 @@ export const paymentSchema = new Schema<PaymentDocument>(
         payBy: {
             type: Date
         },
-        // Offline-only, and only once refunded — see `refunds.ts`'s dispatch on `provider`.
-        refundedByHand: {
-            type: Boolean
-        },
         amountRefunded: moneyPath({ required: true, nonNegative: true, default: 0 }),
         refunds: {
             type: [refundSchema],
@@ -293,6 +310,8 @@ const REFUND_INTERNAL_KEYS = [
     'idempotencyKey',
     'failureReason',
     'attempts',
+    'attemptedAt',
+    'nextAttemptAt',
     'lines',
     'shipping'
 ] as const;

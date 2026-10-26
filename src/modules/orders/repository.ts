@@ -31,6 +31,8 @@ import type { PipelineStage, QueryFilter, ClientSession } from 'mongoose';
 import { incrementYearlyCounter } from '@infrastructure/persistence/yearly-counter';
 import { encryptOrderPii } from './pii';
 import { ANONYMIZED_EMAIL } from './domain/anonymization';
+import { announceInTransaction } from '@kernel/outbox';
+import { ORDER_REDACTED } from './events';
 import { OrderStatus } from '@types';
 import type { OrderPaymentStatus, OrderReturnStatus } from '@types';
 import type { Order, OrderAddress } from '@types';
@@ -645,8 +647,60 @@ const startPiiClock = (userId: string, retentionDays: number): Promise<number> =
         .then(({ modifiedCount }) => modifiedCount);
 
 /**
+ * How many due orders one scrub transaction takes. Small enough that a backlog never becomes one
+ * long transaction, big enough that the nightly run is a handful of round trips.
+ */
+const SCRUB_BATCH_SIZE = 500;
+
+/**
+ * One batch of {@link scrubDueForAnonymization}: inside one transaction, scrub the orders of `ids`
+ * that are still due and write one `order.redacted` outbox row for each, so the webhook exists
+ * exactly when the scrub does.
+ *
+ * The due filter is repeated on the write: an order another run already scrubbed (its
+ * `anonymizeAfter` is gone) is neither scrubbed nor announced a second time.
+ *
+ * @param ids - the due orders this batch read
+ * @param cutoff - the sweep's cutoff
+ * @returns how many orders the batch scrubbed
+ */
+const scrubBatch = (ids: Types.ObjectId[], cutoff: Date): Promise<number> =>
+    announceInTransaction(
+        (session) =>
+            orderModel
+                .find({ _id: { $in: ids }, anonymizeAfter: { $lte: cutoff } }, { _id: 1 })
+                .session(session)
+                .lean()
+                .exec()
+                .then((due) =>
+                    orderModel
+                        .updateMany(
+                            { _id: { $in: due.map(({ _id }) => _id) } },
+                            {
+                                $set: { email: ANONYMIZED_EMAIL },
+                                $unset: {
+                                    anonymizeAfter: 1,
+                                    notes: 1,
+                                    shippingAddress: 1,
+                                    billingAddress: 1
+                                }
+                            },
+                            { session }
+                        )
+                        .exec()
+                        .then(() => due.map(({ _id }) => String(_id)))
+                ),
+        (scrubbedIds) =>
+            scrubbedIds.map((orderId) => ({
+                name: ORDER_REDACTED,
+                payload: { orderId },
+                aggregateId: orderId
+            }))
+    ).then((scrubbedIds) => scrubbedIds.length);
+
+/**
  * `reap:orders`'s sweep: every order whose `anonymizeAfter` has elapsed loses its
- * remaining PII in one write.
+ * remaining PII, in batches of {@link SCRUB_BATCH_SIZE}, each announced as `order.redacted`.
  *
  * Scrub:      both embedded addresses and `notes` are UNSET; `email` is replaced, since the schema
  *             requires it. Nothing personal survives on the order.
@@ -658,22 +712,32 @@ const startPiiClock = (userId: string, retentionDays: number): Promise<number> =
  * Versioned:  the scrub is an edit, so `updatedAt` moves (no `timestamps: false`) — an open edit
  *             form holding the old ETag is refused instead of putting the email back.
  * Idempotent: `anonymizeAfter` is unset in the same write, so the sparse index it carries no
- *             longer holds the row and the next sweep's `$lte` filter cannot match it again.
+ *             longer holds the row and the next batch's `$lte` filter cannot match it again.
+ * Announced:  one `order.redacted` outbox row per scrubbed order, in the batch's transaction.
  *
  * @param cutoff - orders whose `anonymizeAfter` is at or before this instant are due
  * @returns how many orders were scrubbed
  */
-const scrubDueForAnonymization = (cutoff: Date): Promise<number> =>
-    orderModel
-        .updateMany(
-            { anonymizeAfter: { $lte: cutoff } },
-            {
-                $set: { email: ANONYMIZED_EMAIL },
-                $unset: { anonymizeAfter: 1, notes: 1, shippingAddress: 1, billingAddress: 1 }
-            }
-        )
-        .exec()
-        .then(({ modifiedCount }) => modifiedCount);
+const scrubDueForAnonymization = async (cutoff: Date): Promise<number> => {
+    let total = 0;
+    for (;;) {
+        // The next batch of what is still due; the previous one no longer matches.
+        const due = await orderModel
+            .find({ anonymizeAfter: { $lte: cutoff } }, { _id: 1 })
+            .limit(SCRUB_BATCH_SIZE)
+            .lean()
+            .exec();
+        if (due.length === 0) return total;
+
+        const scrubbed = await scrubBatch(
+            due.map(({ _id }) => _id),
+            cutoff
+        );
+        total += scrubbed;
+        // A batch that scrubbed nothing was taken by a concurrent run; stop rather than spin.
+        if (scrubbed === 0) return total;
+    }
+};
 
 /**
  * The next order-number sequence for `year`: one atomic upsert, so two callers racing the same

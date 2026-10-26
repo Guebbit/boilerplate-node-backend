@@ -94,4 +94,48 @@ describe('a return whose refund the provider refuses', () => {
             const after = await paymentService.getForOrder(orderId, asAdmin());
             expect(after.success && after.data.status).toBe('succeeded');
         }));
+
+    it('fails the whole receipt when the refund cannot be recorded, so a second try can succeed', async () => {
+        const { shirt, orderId, returnId } = await withdrawnOrder();
+        jest.spyOn(paymentService, 'openReturnRefund').mockRejectedValueOnce(
+            new Error('no ledger')
+        );
+
+        await expect(
+            returnService.receiveReturn(returnId, {}, callerContextAs('admin'))
+        ).rejects.toThrow('no ledger');
+
+        // Nothing committed: not received, not restocked, and no debt on file.
+        const stored = await returnRepository.findById(returnId);
+        expect(stored?.status).toBe('approved');
+        expect(await countersOf(shirt._id)).toMatchObject({ onHand: 8 });
+        const payment = await paymentService.getForOrder(orderId, asAdmin());
+        expect(payment.success && payment.data.refunds).toEqual([]);
+
+        const retried = await returnService.receiveReturn(returnId, {}, callerContextAs('admin'));
+        expect(retried.success && retried.data.status).toBe('closed');
+    });
+
+    it('leaves a durable record for the sweep when the work after the commit fails', () =>
+        withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
+            const { orderId, returnId } = await withdrawnOrder();
+            jest.spyOn(inventoryService, 'refreshStockCacheForProducts').mockRejectedValueOnce(
+                new Error('cache down')
+            );
+
+            await expect(
+                returnService.receiveReturn(returnId, {}, callerContextAs('admin'))
+            ).rejects.toThrow('cache down');
+
+            const before = await paymentService.getForOrder(orderId, asAdmin());
+            expect(before.success && before.data.refunds[0]).toMatchObject({
+                status: 'pending',
+                returnId
+            });
+            await paymentService.retryOpenRefunds();
+            await eventually(async () => {
+                const stored = await returnRepository.findById(returnId);
+                return stored?.status === 'closed';
+            });
+        }));
 });

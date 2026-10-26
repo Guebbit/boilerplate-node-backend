@@ -16,7 +16,7 @@ x-error-codes:
     PAYMENT_REFUND_EXCEEDS_REMAINING: { status: 422, description: 'The refund asks for more than the payment still has left to give back.' }
     PAYMENT_ORDER_NOT_PAYABLE: { status: 409, description: 'The order is not in a state that can still accept a payment.' }
     PAYMENT_REFUND_NOT_OPEN: { status: 409, description: 'The refund was already settled (another operator confirmed it first).' }
-    PAYMENT_REFUND_NOT_BY_HAND: { status: 409, description: 'The refund goes back through the card provider and its sweep; an operator cannot mark it returned by hand.' }
+    PAYMENT_REFUND_IN_FLIGHT: { status: 409, description: 'The card refund has no final answer yet (an attempt is running, or the provider did not say whether the money moved), so it cannot be marked returned by hand.' }
     PAYMENT_CARD_NOT_AVAILABLE: { status: 409, description: 'This deployment has no card payment provider, so a card payment cannot be started.' }
 
 # This module's section of the account data export (`POST /account/export`): the bundler
@@ -157,7 +157,7 @@ paths:
                         ConfirmPayment:
                             operationId: confirmPayment
                             parameters:
-                                id: '$response.body#/data/id'
+                                id: '$response.body#/id'
                 '200':
                     description: The order already had an intent; it was refreshed and is ready to confirm
                     content:
@@ -168,7 +168,7 @@ paths:
                         ConfirmPayment:
                             operationId: confirmPayment
                             parameters:
-                                id: '$response.body#/data/id'
+                                id: '$response.body#/id'
                             description: The intent's id is confirmed here to complete the charge.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
@@ -259,9 +259,10 @@ paths:
             summary: Payments that need a person (staff)
             description: >-
                 Only problems still recorded on a document, so a fixed one disappears: refunds
-                open past `NODE_PAYMENT_ATTENTION_MINUTES` (`stale_refund`), and refunds owed by
-                hand on a `manual` payment (`manual_refund_owed`: the sweep never finishes those,
-                so they show at any age). A cancelled order's refund is one of them, because its
+                open past `NODE_PAYMENT_ATTENTION_MINUTES` (`stale_refund`), card refunds the
+                provider refused for good (`refused_refund`: shown at once, the money has to go back
+                another way), and refunds owed by hand on a `manual` payment
+                (`manual_refund_owed`: the sweep never finishes those, so they show at any age). A cancelled order's refund is one of them, because its
                 record opens before the provider is asked. Oldest first, each source capped at
                 100 rows. An amount mismatch is not here: it is an audit row
                 (`payment.amount_mismatch`), not stored state. Needs `display:Payment`.
@@ -293,9 +294,17 @@ paths:
                 the new `Refund` record and its address in `Location`; read the payment again
                 (`GET /payments/{id}`) for the running total. The reservation of the amount is conditional on the payment
                 still having that much left, so a double submit cannot return the money twice — the
-                second call answers 409 (nothing left, which includes a refund still open: a card
-                refund the provider has not confirmed belongs to the refund sweep) or 422 (asks for
-                more than is left).
+                second call answers 409 (nothing left to refund) or 422 (asks for more than is
+                left). A refund still open counts against what is left, so a second partial refund
+                beside it is allowed while money remains.
+
+                The 201 is the answer for every outcome of the record the request wrote; its
+                `status` carries the result. `succeeded`: the money is back. `failed`: the provider
+                refused, the record is kept and counts against what is left, and it is either
+                retried by the refund sweep or, when `actions.settleByHand` lists it, final and
+                waiting for the money to be returned another way. `pending`: hand-paid money
+                waiting for an operator. A refusal is never a 5xx. The reason of a refusal
+                (`failureReason`) is sent to `display:Payment` callers only.
 
                 On a hand-paid payment (cash, a transfer) the record is only OPENED: it stays
                 `pending` and the payment's `actions.settleByHand` lists it, because nobody here
@@ -307,7 +316,7 @@ paths:
                 Requires a session that has re-proved itself within the last few minutes — a
                 valid-but-stale token answers 401 with `errors[].code` `REAUTH_REQUIRED`, and the
                 caller re-authenticates and retries the same request.
-            operationId: refundPaymentByOrder
+            operationId: createRefund
             security:
                 - bearerAuth: []
             parameters:
@@ -321,7 +330,7 @@ paths:
                             $ref: '#/components/schemas/RefundPaymentRequest'
             responses:
                 '201':
-                    description: The refund record just opened. The payment stays `succeeded`; its `displayStatus` says how much of it went back
+                    description: The refund record this request wrote, whatever became of it (`succeeded`, `failed` with its reason, or `pending`). The payment stays `succeeded`; its `displayStatus` says how much of it went back
                     headers:
                         Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
                     content:
@@ -335,6 +344,7 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # Nothing to return: the payment never succeeded, or all of it already went back
                 # (`PAYMENT_NOT_REFUNDABLE`) — or `Idempotency-Key` names a request still in flight.
+                # A provider refusal is not here: it answers 201 with the failed record.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -376,17 +386,22 @@ paths:
             tags: [Payments]
             summary: Mark a hand-paid refund as returned
             description: >-
-                An operator confirming that money already handed back outside the application
-                (cash given back, a bank transfer sent) was returned, on a refund left `pending` by
-                `POST /payments/{id}/refunds`, a cancellation, a received return or a
-                withdrawal. Nothing is sent anywhere: the refund record settles with
-                `refundedByHand`, `payment.refunded` fires as for any refund (the credit note is
-                issued, a return waiting on it closes), and the audit row is
+                An operator confirming that money was handed back outside the application (cash
+                given back, a bank transfer sent). Nothing is sent anywhere: the refund record
+                settles with `settledByHand`, `payment.refunded` fires as for any refund (the credit
+                note is issued, a return waiting on it closes), and the audit row is
                 `admin.payment.refund_settled_by_hand`. The refund is named by its own id, so one
-                payment carrying several open refunds settles each separately. Only a hand-paid
-                (`manual`) payment's refund can be settled this way; a card refund belongs to the
-                provider and its sweep (409 `PAYMENT_REFUND_NOT_BY_HAND`). A refund two operators
-                settle at once settles once, and the loser answers 409
+                payment carrying several open refunds settles each separately.
+
+                Which refunds may be settled: a hand-paid (`manual`) payment's `pending` refund; and
+                a card refund the provider refused in a way that proves the money did not move
+                (`RefundFailureReason`: `declined`, `insufficient_funds`,
+                `expired_or_canceled_card`, `lost_or_stolen_card`, `provider_removed`). The
+                payment's `actions.settleByHand` lists exactly these ids. A card refund that is
+                `pending` (an attempt is running) or `failed` for an unclear reason
+                (`provider_unavailable`, `unknown`) answers 409 `PAYMENT_REFUND_IN_FLIGHT`: the
+                money may have moved, and the sweep settles it from the provider. A refund two
+                operators settle at once settles once, and the loser answers 409
                 `PAYMENT_REFUND_NOT_OPEN`. Needs `create:Refund`, which carries the same fresh-session
                 requirement as the refund itself: a valid-but-stale token answers 401 with
                 `errors[].code` `REAUTH_REQUIRED`. `Idempotency-Key` is optional.
@@ -405,17 +420,19 @@ paths:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             responses:
                 '200':
-                    description: The payment, with that refund `succeeded` and `refundedByHand` set
+                    description: >-
+                        The refund as it now stands (`succeeded`, `settledByHand` set).
+                        `GET /payments/{id}` for the totals and the actions.
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/Payment'
+                                $ref: '#/components/schemas/Refund'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # The payment, or a refund with that id on it, does not exist.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # Already settled (`PAYMENT_REFUND_NOT_OPEN`), a card refund
-                # (`PAYMENT_REFUND_NOT_BY_HAND`), or `Idempotency-Key` names a request still in flight.
+                # Already settled (`PAYMENT_REFUND_NOT_OPEN`), a card refund with no final answer
+                # (`PAYMENT_REFUND_IN_FLIGHT`), or `Idempotency-Key` names a request still in flight.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -570,17 +587,17 @@ paths:
                         SyncPayment:
                             operationId: syncPayment
                             parameters:
-                                id: '$response.body#/data/id'
+                                id: '$response.body#/id'
                             description: An in-flight payment is resolved by re-reading the provider here.
                         RefundPayment:
-                            operationId: refundPaymentByOrder
+                            operationId: createRefund
                             parameters:
-                                orderId: '$response.body#/data/orderId'
+                                orderId: '$response.body#/orderId'
                             description: A succeeded payment can be refunded without touching the order status.
                         CancelOrder:
                             operationId: cancelOrderById
                             parameters:
-                                id: '$response.body#/data/orderId'
+                                id: '$response.body#/orderId'
                             description: A paid order can still be cancelled, which refunds it too.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
@@ -838,14 +855,6 @@ components:
                         When the money actually arrived, as the admin recording it reported —
                         possibly earlier than `createdAt`. Set only by `POST
                         /payments/orders/{orderId}/offline`; absent from a card payment.
-                refundedByHand:
-                    type: boolean
-                    description: >-
-                        `true` once a refunded `manual` payment has had its money returned to the
-                        customer outside this application — there is no provider to ask, so this is
-                        the operator's own record that it was done
-                        (`POST /payments/{id}/refunds/{refundId}/settle`). Set by that route alone.
-                        Absent otherwise.
                 clientSecret:
                     type: string
                     description: >-
@@ -892,10 +901,12 @@ components:
                     allOf:
                         - $ref: '#/components/schemas/RefundStatus'
                     description: >-
-                        `pending` while the provider is being asked; `failed` when it refused — a
-                        sweep retries the same refund with the same idempotency key; `succeeded`
-                        once the money is confirmed back (or, for a hand-paid payment, reported
-                        back by the operator).
+                        `pending` while the provider is being asked (or, on a hand-paid payment,
+                        until an operator reports the money back); `failed` when it refused — the
+                        sweep retries it with the same idempotency key unless the refusal is final,
+                        and an operator may report it returned by hand when the money provably did
+                        not move (see `RefundFailureReason`); `succeeded` once the money is
+                        confirmed back, or reported back by the operator.
                 reason:
                     $ref: '#/components/schemas/RefundReason'
                 # The return this refund pays for — present when `reason` is `return`, or `cancellation` of a remainder.
@@ -905,6 +916,13 @@ components:
                     type: string
                     format: date-time
                     description: When the refund succeeded. Absent while it has not.
+                settledByHand:
+                    type: boolean
+                    description: >-
+                        `true` when an operator reported this refund's money returned outside the
+                        application (`POST /payments/{id}/refunds/{refundId}/settle`): a hand-paid
+                        payment's refund, or a card refund the provider refused. Per refund. Absent
+                        otherwise.
                 providerRefundRef:
                     type: string
                     description: The provider's id for the refund (Stripe's `re_…`). Staff only.
@@ -917,11 +935,21 @@ components:
         # Stripe's `failure_reason` shape: a closed list, so the page can translate it.
         RefundFailureReason:
             type: string
-            enum: [declined, insufficient_funds, expired_or_canceled_card, lost_or_stolen_card, provider_unavailable, unknown]
+            enum: [declined, insufficient_funds, expired_or_canceled_card, lost_or_stolen_card, provider_removed, provider_unavailable, unknown]
             description: >-
                 Why the provider last refused a refund, as a closed code. Staff only
                 (`display:Payment`). `unknown` is anything the provider's adapter did not
                 classify; the raw wording stays in the logs.
+
+                Money did NOT move for `declined`, `insufficient_funds`,
+                `expired_or_canceled_card`, `lost_or_stolen_card` and `provider_removed` (the
+                payment's provider is no longer installed, so nothing was asked): the refund may be
+                marked returned by hand once the money went back another way. `declined`,
+                `expired_or_canceled_card`, `lost_or_stolen_card` and `provider_removed` are final
+                and are not retried; `insufficient_funds` (the shop's own provider balance is
+                short) and the unclear `provider_unavailable` and `unknown` are retried with a
+                growing delay. An unclear refusal may have gone through, so it is never offered for
+                hand settlement.
 
         RefundStatus:
             type: string
@@ -1039,9 +1067,12 @@ components:
 
         PaymentAttentionKind:
             type: string
-            enum: [stale_refund, manual_refund_owed]
+            enum: [stale_refund, refused_refund, manual_refund_owed]
             description: >-
-                `stale_refund` — a provider refund open past the threshold;
+                `stale_refund` — a provider refund open past the threshold, still waiting for the
+                provider's answer or its next retry;
+                `refused_refund` — a card refund the provider refused for good (a final
+                `RefundFailureReason`), shown at once: the money has to go back another way;
                 `manual_refund_owed` — money to hand back outside the system on a `manual` payment.
                 Both are an open refund record on a payment: a cancel or a refund opens it before
                 anything is asked of a provider, so no refund is owed without one.
@@ -1144,8 +1175,9 @@ components:
                         Whether `POST /payments/{id}/refunds` would be accepted: the caller
                         holds `create:Refund`, the payment is `succeeded` and something is left to
                         refund. False once nothing is left (fully refunded, or the rest already asked
-                        back, a refund still open included), which is what greys the control out
-                        rather than letting the operator discover it by clicking. On a hand-paid
+                        back), which is what greys the control out rather than letting the
+                        operator discover it by clicking. A refund still open counts against what
+                        is left but does not hide the control while money remains. On a hand-paid
                         payment the refund only opens a record; `settleByHand` confirms it.
                 settleByHand:
                     type: array
@@ -1154,9 +1186,11 @@ components:
                     description: >-
                         The ids of the refunds this caller may mark as returned with
                         `POST /payments/{id}/refunds/{refundId}/settle`: the caller holds
-                        `create:Refund`, the payment is `succeeded` and hand-paid, and the refund is
-                        `pending`. An array because the route takes a target; empty when there is
-                        none.
+                        `create:Refund`, the payment is `succeeded`, and the refund is either a
+                        hand-paid payment's `pending` one or a card refund `failed` with a reason
+                        that proves the money did not move (`RefundFailureReason`). The server
+                        decides; a client never rebuilds this rule. An array because the route
+                        takes a target; empty when there is none.
 
         PaymentWebhookEvent:
             type: object

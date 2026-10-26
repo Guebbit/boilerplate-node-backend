@@ -15,7 +15,9 @@ import { reauthWindowSeconds } from '@kernel/config';
 import { credentialHolding } from '@tests/credentials';
 import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { settleOutboxNudges } from '@kernel/outbox';
+import { encryptPii } from '@infrastructure/security/pii-encryption';
 import { USER_SETUP_REQUESTED } from '../../events';
+import { phoneAad } from '../../model';
 
 setupTestDb();
 
@@ -189,6 +191,19 @@ describe('POST /users', () => {
     // `tests/contract/password-set-paths.test.ts`: `POST /users` is not one of them.
 });
 
+/**
+ * Store a phone the way production does, encrypted under the account's own binding. The factory
+ * writes plaintext, which no code path ever reads back.
+ *
+ * @param userId - the stored account
+ * @param phone - the plaintext number
+ */
+const storePhone = (userId: string, phone: string) =>
+    userRepository.updateMany(
+        { _id: userId },
+        { $set: { phone: encryptPii(phone, phoneAad(userId)) } }
+    );
+
 describe('PUT /users/{id}', () => {
     // A PUT body IS the new resource (RFC 9110 §9.3.4) — every omitted optional field is
     // cleared, not left alone. `imageUrl` is the exception: it belongs to an upload, so it is
@@ -199,11 +214,11 @@ describe('PUT /users/{id}', () => {
             {
                 username: 'replacefull',
                 email: 'replacefull@example.com',
-                imageUrl: 'https://cdn.example.com/avatars/original.png',
-                phone: '+15551234567'
+                imageUrl: 'https://cdn.example.com/avatars/original.png'
             },
             'customer'
         );
+        await storePhone(target.id, '+15551234567');
 
         const response = await api()
             .put(`/users/${String(target._id)}`)
@@ -320,9 +335,9 @@ describe('PATCH /users/{id}', () => {
         const { bearer } = await authenticateAs('admin');
         const target = await createUser({
             username: 'patchclearsphone',
-            email: 'patchclearsphone@example.com',
-            phone: '+15551234567'
+            email: 'patchclearsphone@example.com'
         });
+        await storePhone(target.id, '+15551234567');
 
         const response = await api()
             .patch(`/users/${String(target._id)}`)

@@ -5,7 +5,7 @@
  */
 
 import ordersModule from '../../module';
-import { ORDER_CANCELLED, ORDER_CREATED, ORDER_STATUS_CHANGED } from '../../events';
+import { ORDER_CANCELLED, ORDER_CREATED, ORDER_REDACTED, ORDER_STATUS_CHANGED } from '../../events';
 
 // `as never`: the slot takes `never` so one registry can hold every module's projections.
 describe('the orders module’s public events', () => {
@@ -41,4 +41,13 @@ describe('the orders module’s public events', () => {
             expect(projected?.data).not.toHaveProperty('refund');
         }
     );
+
+    it('tells subscribers an order was scrubbed, with its id alone', () => {
+        const target = ordersModule.publicEvents[ORDER_REDACTED];
+
+        expect(target.toPublicEvent({ orderId: 'o1' } as never)).toEqual({
+            eventType: 'order.redacted',
+            data: { orderId: 'o1' }
+        });
+    });
 });
