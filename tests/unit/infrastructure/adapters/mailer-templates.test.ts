@@ -35,7 +35,7 @@ import {
     exportFailedEmail,
     exportReadyEmail
 } from '@modules/account/emails';
-import { contactRequestEmail } from '@modules/feedback/emails';
+import { contactRequestEmail } from '@modules/tickets/emails';
 import { examplePublishedEmail } from '@modules/example';
 import {
     orderConfirmEmail,
@@ -76,7 +76,7 @@ describe('the template collection', () => {
         'account.deleted',
         'account.deletion-scheduled',
         'account.restored',
-        'feedback.contact'
+        'tickets.contact'
     ])('resolves %s to a real file', (name) => {
         expect(() => templateFile(name)).not.toThrow();
     });
@@ -236,7 +236,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
     }),
     'webhooks.subscription-disabled': subscriptionDisabledEmail(locale, 'https://example.com/hook'),
     'example.published': examplePublishedEmail(locale, 'Ada', 'A title'),
-    'feedback.contact': contactRequestEmail(locale, {
+    'tickets.contact': contactRequestEmail(locale, {
         name: 'Ada',
         email: 'ada@example.com',
         subject: 'A subject',

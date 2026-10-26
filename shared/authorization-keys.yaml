@@ -364,20 +364,20 @@ rules:
       # proves nothing about how recently its holder typed their password.
       stepUp: critical
 
-    # -- feedback ------------------------------------------------------------------------------
+    # -- tickets ------------------------------------------------------------------------------
     - action: read
-      subject: Feedback
-      module: feedback
+      subject: Ticket
+      module: tickets
       scope: tenant
       description: Read messages sent through the contact form.
     - action: update
-      subject: Feedback
-      module: feedback
+      subject: Ticket
+      module: tickets
       scope: tenant
       description: Change a message's handling status.
     - action: delete
-      subject: Feedback
-      module: feedback
+      subject: Ticket
+      module: tickets
       scope: tenant
       description: Remove a message.
 
@@ -756,17 +756,17 @@ sets:
       rules:
           - receive:Return
 
-    - name: FeedbackDisplay
-      module: feedback
+    - name: TicketDisplay
+      module: tickets
       description: Read contact-form messages.
       rules:
-          - read:Feedback
-    - name: FeedbackManagement
-      module: feedback
+          - read:Ticket
+    - name: TicketManagement
+      module: tickets
       description: Change a message's handling status, or remove it.
       rules:
-          - update:Feedback
-          - delete:Feedback
+          - update:Ticket
+          - delete:Ticket
 
     - name: LocaleStorefront
       module: locales

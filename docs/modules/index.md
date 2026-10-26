@@ -50,7 +50,6 @@ flowchart TD
     cart
     delivery
     example
-    feedback
     inventory
     invoicing
     locales
@@ -64,6 +63,7 @@ flowchart TD
     sitemap
     stats
     stock_alerts["stock-alerts"]
+    tickets
     users
     webhooks
     wishlist
@@ -133,7 +133,7 @@ flowchart TD
     class cart,orders,products core;
     class addresses,delivery,inventory,invoicing,notifications,payments,returns,shop,stats,stock_alerts,wishlist supporting;
     class access,account,api_keys,audit_logs,example,locales,observability,sitemap,users,webhooks generic;
-    class analytics,antibot,feedback isolated;
+    class analytics,antibot,tickets isolated;
 ```
 
 |                 | Reaches                                                                 | Reached by                                                            |
@@ -164,7 +164,7 @@ flowchart TD
 | `webhooks`      | users                                                                   | —                                                                     |
 | `analytics`     | —                                                                       | —                                                                     |
 | `antibot`       | —                                                                       | —                                                                     |
-| `feedback`      | —                                                                       | —                                                                     |
+| `tickets`       | —                                                                       | —                                                                     |
 
 <!-- module-graph:end -->
 
@@ -226,9 +226,9 @@ Ships with every deployment, whatever the project becomes.
 - [`antibot`](./antibot.md) — The human-challenge port, and the endpoint that tells a frontend which provider is active.
 - [`api-keys`](./api-keys.md) — Long-lived programmatic credentials, scoped to the same permission model a session uses.
 - [`audit-logs`](./audit-logs.md) — Owns the audit trail; the read endpoint is its own, the platform operator's view lives in observability.
-- [`feedback`](./feedback.md) — Contact submissions and what an admin does with them.
 - [`locales`](./locales.md) — Language discovery and the API's own message dictionary.
 - [`observability`](./observability.md) — Health, metrics, the platform operator's audit read and the SSE stream.
+- [`tickets`](./tickets.md) — Contact submissions and what an admin does with them.
 - [`users`](./users.md) — Admin-side user management; the self-service half is account.
 - [`webhooks`](./webhooks.md) — Outbound event delivery to a subscriber's own URL.
 

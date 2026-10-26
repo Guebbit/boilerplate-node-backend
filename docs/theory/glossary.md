@@ -90,7 +90,7 @@ language is kept per context rather than shared.
 | **Delivery proof**    | Staff recording that a shipment arrived — the deliver door's own act. The order moves to `delivered` on the last one, and the withdrawal window runs from THAT arrival. No document is captured; the record itself is the proof.                                                                             |
 | **Override**          | A staff correction outside the ordinary sequence, always with a reason: `forced` on a handover or delivery-proof recording (skips a step, still creates the real record), or the status-only override (delivery then brings its records in step, with no email). Never reaches `paid`, never moves backward. |
 
-## `feedback`
+## `tickets`
 
 | Term                | What it means here                                                                                                                                 |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |

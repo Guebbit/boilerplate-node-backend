@@ -57,7 +57,7 @@ process.env.NODE_AUTH_RATE_LIMIT_DEVICE_MAX ??= '10000';
 process.env.NODE_AUTH_RATE_LIMIT_SESSION_MAX ??= '10000';
 
 /**
- * `submissionLimiter` (`POST /feedback/contact`) needs the same treatment, for a sharper reason
+ * `submissionLimiter` (`POST /tickets`) needs the same treatment, for a sharper reason
  * than the credential budgets above: it spends its budget on a SUCCESSFUL request, so — unlike
  * `credentialLimiters`, which only a failing suite run trips — every green contract and fuzz run
  * that posts a contact request more than `SUBMISSION_ADDRESS_BUDGET`'s default (5) times from one

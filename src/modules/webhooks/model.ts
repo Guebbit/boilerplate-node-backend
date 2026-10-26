@@ -216,7 +216,7 @@ export type WebhookDeliveryModel = Model<WebhookDeliveryDocument>;
 
 /**
  * How long a delivery row survives, in days, before Mongo's TTL index removes it. Same pattern as
- * `audit-logs`/`feedback`: read at import time, since the TTL index is created once at startup.
+ * `audit-logs`/`tickets`: read at import time, since the TTL index is created once at startup.
  */
 const deliveryRetentionDays = getWebhookDeliveryRetentionDays();
 

@@ -18,7 +18,7 @@
  *     `controllers/create-order.ts`, while the identical mail for a checkout went out from
  *     `cart/services/checkout.ts`. One fact, two layers, and nothing anywhere said which was
  *     right.
- *   - `feedback` published its support notification from a controller while its sibling `delivery`
+ *   - `tickets` published its support notification from a controller while its sibling `delivery`
  *     published from the service, for no stated reason at all.
  *
  * Every one of those files was individually defensible. What was wrong was the SET, and a set is

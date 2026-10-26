@@ -1,0 +1,386 @@
+openapi: 3.1.0
+info:
+    title: tickets — module contract
+    version: '0.1.0'
+
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: Tickets
+      description: What visitors tell the shop, and the admin queue that reads it.
+
+# This module's section of the account data export (`POST /account/export`): the bundler
+# adds it to `AccountExportResponse`. Removing the module removes the section.
+x-personal-data:
+    tickets:
+        required: false
+        schema:
+            type: array
+            description: Present only when `NODE_EXPORT_INCLUDE_TICKETS=true`.
+            items:
+                $ref: '#/components/schemas/ExportTicket'
+
+paths:
+    /tickets:
+        post:
+            tags: [Tickets]
+            summary: Submit contact request
+            description: Creates a contact ticket and notifies the support mailbox by email.
+            operationId: createContactTicket
+            security: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/AntibotChallengeTokenHeader'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateContactTicketRequest'
+            responses:
+                '201':
+                    description: Created ticket
+                    headers:
+                        Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Ticket'
+                # A human-challenge provider is active and the caller's token is missing or refused.
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                # `Idempotency-Key` names a request still in flight.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                # Also answered when `Idempotency-Key` was already used with a different body.
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                # `contactLimiters` sits in front of this route — see routes.ts.
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        get:
+            tags: [Tickets]
+            summary: List tickets
+            description: Returns tickets for staff review.
+            operationId: listTickets
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            # Query only, and the DTO form of the same filters is `POST /tickets/search`. A body
+            # on a GET has no defined semantics (RFC 9110 9.3.1) and the Fetch spec rejects it
+            # outright, so the paired frontend could never have sent one; worse, `setCache` keys
+            # on the declared query parameters, so a body-borne filter was invisible to the key
+            # and two different filters shared one entry for the cache's whole lifetime.
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+                - name: sort
+                  in: query
+                  required: false
+                  # JSON:API grammar: `?sort=-price,title` — comma-separated, `-` for descending.
+                  style: form
+                  explode: false
+                  schema:
+                      $ref: '#/components/schemas/TicketSort'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/TextParam'
+                - name: email
+                  in: query
+                  required: false
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                - name: status
+                  in: query
+                  required: false
+                  schema:
+                      $ref: '#/components/schemas/TicketStatus'
+                - name: category
+                  in: query
+                  required: false
+                  schema:
+                      $ref: '#/components/schemas/TicketCategory'
+            responses:
+                '200':
+                    description: Ticket list
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TicketsResponse'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /tickets/search:
+        post:
+            tags: [Tickets]
+            summary: Search tickets (DTO-friendly)
+            description: Searches and filters tickets via a JSON request body. Functionally equivalent to `GET /tickets` with query parameters.
+            operationId: searchTickets
+            x-alias-of: listTickets
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SearchTicketsRequest'
+            responses:
+                '200':
+                    description: Ticket search results
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TicketsResponse'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /tickets/{id}:
+        get:
+            tags: [Tickets]
+            summary: Get a ticket
+            description: One ticket of the admin queue, by id. The same rows `GET /tickets` lists, so anyone who may read the list reads any of them. An unknown or malformed id is a 404.
+            operationId: getTicket
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The ticket
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Ticket'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        patch:
+            tags: [Tickets]
+            summary: Update ticket status
+            description: Merges a status and/or notes change into a ticket. There is no PUT, since a triage state is two fields of a bigger record and never the whole resource (RFC 7396, an omitted field is left unchanged, `null` clears `adminNotes`).
+            operationId: updateTicketStatus
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateTicketStatusRequest'
+                    application/merge-patch+json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateTicketStatusRequest'
+            responses:
+                '200':
+                    description: Updated ticket
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Ticket'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        delete:
+            tags: [Tickets]
+            summary: Delete ticket
+            description: Permanently removes the ticket identified by `{id}`.
+            operationId: deleteTicket
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        # The ONE sort grammar, shared with every list (docs/api/sorting.md). `-` sorts
+        # descending; earlier entries rank first; ties end on the id. Text fields sort
+        # case-insensitively.
+        TicketSort:
+            type: array
+            minItems: 1
+            maxItems: 3
+            items:
+                type: string
+                enum: [createdAt, -createdAt, status, -status, email, -email]
+
+        # ---------- tickets — the schemas only this module's paths reference. ----------
+        Ticket:
+            type: object
+            additionalProperties: false
+            required: [id, email, subject, message, status, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                name:
+                    type: string
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                subject:
+                    type: string
+                message:
+                    type: string
+                category:
+                    $ref: '#/components/schemas/TicketCategory'
+                orderNumber:
+                    type: string
+                    description: The order the visitor said this is about, as they typed it. Not checked against any order.
+                status:
+                    $ref: '#/components/schemas/TicketStatus'
+                adminNotes:
+                    type: string
+                respondedAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        # The closed set, written ONCE. Named for the type orval ALREADY derived from the inline
+        # copy on `Ticket.status`, so extracting it renames nothing: the paired frontend
+        # imports `TicketStatus` in five places. A tidier `TicketStatus` would have
+        # been a silent breaking change to a generated type — the duplication is what goes away,
+        # not the name.
+        #
+        # It was written out four times and omitted from a fifth —
+        # `GET /tickets`'s `status` query parameter declared a bare `type: string` while
+        # `POST /tickets/search` declared the enum, so the two spellings of one filter validated
+        # differently. That is the drift a duplicated filter set invites; `$ref` is the answer.
+        TicketStatus:
+            type: string
+            enum: [new, in_progress, resolved, spam]
+
+        # What the visitor says the message is about, so staff can triage without reading it first
+        # (Q-W2 of the withdrawal decision: an order page links to `/contact?category=cancellation`).
+        # `privacy` is the data-protection door (GDPR requests start here). A closed set, written
+        # once, so the form, the inbox filter and the stored value cannot drift.
+        TicketCategory:
+            type: string
+            enum: [order, cancellation, return, payment, account, privacy, other]
+
+        CreateContactTicketRequest:
+            type: object
+            additionalProperties: false
+            required: [email, subject, message]
+            properties:
+                name:
+                    type: string
+                    minLength: 1
+                    maxLength: 120
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                subject:
+                    type: string
+                    minLength: 1
+                    maxLength: 200
+                message:
+                    type: string
+                    minLength: 1
+                    maxLength: 5000
+                category:
+                    $ref: '#/components/schemas/TicketCategory'
+                orderNumber:
+                    type: string
+                    minLength: 1
+                    maxLength: 40
+                    description: The order the visitor says this is about, free text. Not checked against any order.
+                website:
+                    type: string
+                    maxLength: 200
+                    description: >
+                        Honeypot. Hidden in the form and always submitted empty by a real client; a
+                        non-empty value marks the submission as spam. Named for what a scraper
+                        expects to find. Never persisted and never returned — see
+                        `Ticket`, which does not declare it.
+
+        SearchTicketsRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                page:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Page'
+                pageSize:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PageSize'
+                sort:
+                    $ref: '#/components/schemas/TicketSort'
+                text:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Text'
+                status:
+                    $ref: '#/components/schemas/TicketStatus'
+                category:
+                    $ref: '#/components/schemas/TicketCategory'
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+
+        # PATCH /tickets/{id} — RFC 7396: every field optional, omitted means unchanged.
+        UpdateTicketStatusRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                status:
+                    $ref: '#/components/schemas/TicketStatus'
+                # `null` clears the notes. Omitted leaves them unchanged; `''` is invalid.
+                adminNotes:
+                    type: [string, 'null']
+                    minLength: 1
+                    maxLength: 5000
+
+        TicketsResponse:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Ticket'
+                meta:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
+
+        # Used by `POST /account/export` (`shared/contracts/openapi.root.yaml`) — `adminNotes` is
+        # deliberately absent: that field is staff's internal assessment of the ticket, not the
+        # submitter's data, and Art. 15(4) protects the rights of others (whoever wrote the note)
+        # the same way it protects the submitter's own. `toExportTicket` in `service.ts` builds it.
+        ExportTicket:
+            type: object
+            additionalProperties: false
+            required: [id, email, subject, message, status]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                name:
+                    type: string
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                subject:
+                    type: string
+                message:
+                    type: string
+                category:
+                    $ref: '#/components/schemas/TicketCategory'
+                orderNumber:
+                    type: string
+                status:
+                    $ref: '#/components/schemas/TicketStatus'
+                respondedAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time

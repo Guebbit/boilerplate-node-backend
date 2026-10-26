@@ -2,7 +2,7 @@
  * @module
  * What a hard delete (Art. 17) takes and what it must leave: the address book goes with the
  * account, while the records the law makes the shop keep — invoices, credit notes, returns, the
- * feedback ticket — stay. `personal-data-erasure.test.ts` only checks that a hook is declared; this
+ * ticket — stay. `personal-data-erasure.test.ts` only checks that a hook is declared; this
  * runs the real cascade, so a future "erase everything" change that reaches a tax record fails here.
  *
  * The second block is the user's ask: after a scheduled self-deletion has run, no collection still
@@ -18,7 +18,7 @@ import addressesModule from '@modules/addresses/module';
 import invoicingModule from '@modules/invoicing/module';
 import paymentsModule from '@modules/payments/module';
 import returnsModule from '@modules/returns/module';
-import feedbackModule from '@modules/feedback/module';
+import ticketsModule from '@modules/tickets/module';
 import { paymentService } from '@modules/payments';
 import { createProduct } from '@modules/products/tests/factories';
 import { createUser, userRepository } from '@modules/users/tests/factories';
@@ -28,7 +28,7 @@ import { addressBookModel } from '@modules/addresses/model';
 import { giveAddress } from '@modules/addresses/tests/factories';
 import { invoiceModel, creditNoteModel } from '@modules/invoicing/model';
 import { returnModel } from '@modules/returns/model';
-import { feedbackRequestModel } from '@modules/feedback/model';
+import { ticketModel } from '@modules/tickets/model';
 import { eventually } from '@tests/eventually';
 import mongoose from 'mongoose';
 import { TranslationOrigin } from '@types';
@@ -68,7 +68,7 @@ beforeEach(() => {
         paymentsModule,
         invoicingModule,
         returnsModule,
-        feedbackModule,
+        ticketsModule,
         webhooksModule,
         localesModule,
         wishlistModule,
@@ -113,7 +113,7 @@ describe('a hard delete of an account that has bought, been refunded and written
             lines: [{ productId: product._id, quantity: 1, title: 'Shirt', unitPrice: 25 }],
             returnPostage: 'consumer'
         });
-        await feedbackRequestModel.create({
+        await ticketModel.create({
             email: 'ada@example.com',
             subject: 'Hello',
             message: 'A question'
@@ -129,7 +129,7 @@ describe('a hard delete of an account that has bought, been refunded and written
         expect(await invoiceModel.countDocuments({ orderId })).toBe(1);
         expect(await creditNoteModel.countDocuments({ orderId })).toBe(1);
         expect(await returnModel.countDocuments({ orderId })).toBe(1);
-        expect(await feedbackRequestModel.countDocuments({ email: 'ada@example.com' })).toBe(1);
+        expect(await ticketModel.countDocuments({ email: 'ada@example.com' })).toBe(1);
     });
 });
 
@@ -177,7 +177,7 @@ const KEPT_BY_LAW = {
     // The invoice freezes the billing address (name and address) for the tax duty.
     invoices: 'tax law',
     // A contact message is matched by address, not by account; staff delete it by hand on request.
-    feedbackrequests: 'not cascaded (open question E1)'
+    tickets: 'not cascaded (open question E1)'
 } as const;
 
 describe('a scheduled self-deletion that has run', () => {
@@ -251,7 +251,7 @@ describe('a scheduled self-deletion that has run', () => {
             lines: [{ productId: product._id, quantity: 1, title: 'Shirt', unitPrice: 25 }],
             returnPostage: 'consumer'
         });
-        await feedbackRequestModel.create({ email, subject: 'Hello', message: 'A question' });
+        await ticketModel.create({ email, subject: 'Hello', message: 'A question' });
         // The seeds landed: every home below names the account before the purge, so an empty
         // answer afterwards means the cascade worked, not that nothing was ever written.
         expect(await collectionsNaming([user.id.toLowerCase(), email])).toEqual(

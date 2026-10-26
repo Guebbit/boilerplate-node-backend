@@ -22,7 +22,6 @@ import auditLogs from './modules/audit-logs/module';
 import cart from './modules/cart/module';
 import delivery from './modules/delivery/module';
 import example from './modules/example/module';
-import feedback from './modules/feedback/module';
 import inventory from './modules/inventory/module';
 import invoicing from './modules/invoicing/module';
 import locales from './modules/locales/module';
@@ -36,6 +35,7 @@ import shop from './modules/shop/module';
 import sitemap from './modules/sitemap/module';
 import stats from './modules/stats/module';
 import stockAlerts from './modules/stock-alerts/module';
+import tickets from './modules/tickets/module';
 import users from './modules/users/module';
 import webhooks from './modules/webhooks/module';
 import wishlist from './modules/wishlist/module';
@@ -52,7 +52,6 @@ export const enabledModules: AppModule[] = [
     cart,
     delivery,
     example,
-    feedback,
     inventory,
     invoicing,
     locales,
@@ -66,6 +65,7 @@ export const enabledModules: AppModule[] = [
     sitemap,
     stats,
     stockAlerts,
+    tickets,
     users,
     webhooks,
     wishlist
@@ -106,7 +106,6 @@ export type ModuleName =
     | 'cart'
     | 'delivery'
     | 'example'
-    | 'feedback'
     | 'inventory'
     | 'invoicing'
     | 'locales'
@@ -120,6 +119,7 @@ export type ModuleName =
     | 'sitemap'
     | 'stats'
     | 'stock-alerts'
+    | 'tickets'
     | 'users'
     | 'webhooks'
     | 'wishlist';

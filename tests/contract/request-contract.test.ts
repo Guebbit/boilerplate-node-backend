@@ -92,7 +92,7 @@ interface QueryFixture {
 const QUERY_FIXTURES: Partial<Record<string, QueryFixture>> = {
     'GET /audit': { request: adminQuery('/audit') },
     'GET /observability/audit': { request: adminQuery('/observability/audit') },
-    'GET /feedback': { request: adminQuery('/feedback') },
+    'GET /tickets': { request: adminQuery('/tickets') },
     'GET /examples': { request: adminQuery('/examples') },
     'GET /orders': { request: adminQuery('/orders') },
     'GET /users': { request: adminQuery('/users') },
@@ -216,7 +216,7 @@ const STRICT_2XX = new Set([
     'createProduct',
     'createOrder',
     'addCartItem',
-    'createFeedbackRequest',
+    'createContactTicket',
     'signup'
 ]);
 

@@ -119,7 +119,7 @@ describe('the invariants', () => {
         // hand somebody the keys they do not have themselves.
         await expect(
             accessService.assignRole('person-1', String(shop._id), 'tenant', 'admin', [
-                'read:Feedback'
+                'read:Ticket'
             ])
         ).rejects.toThrow(/privilege-escalation/);
     });
@@ -312,7 +312,7 @@ describe('auditing a role change', () => {
                 String(shop._id),
                 'tenant',
                 'admin',
-                ['read:Feedback'],
+                ['read:Ticket'],
                 testCallerContext
             )
         ).rejects.toThrow(AccessInvariantError);
@@ -421,7 +421,7 @@ describe('grantRefusalAudited', () => {
         const refusal = accessService.grantRefusalAudited(
             'tenant',
             'admin',
-            ['read:Feedback'],
+            ['read:Ticket'],
             callerContextAs('moderator')
         );
 
@@ -439,7 +439,7 @@ describe('grantRefusalAudited', () => {
         const refusal = accessService.grantRefusalAudited(
             'tenant',
             'no-such-role',
-            ['read:Feedback'],
+            ['read:Ticket'],
             callerContextAs('moderator')
         );
 
@@ -512,7 +512,7 @@ describe('assertCanGrant', () => {
     });
 
     it('throws the same refusal assignRole would, synchronously rather than as a rejection', () => {
-        expect(() => assertCanGrant('tenant', 'admin', ['read:Feedback'])).toThrow(
+        expect(() => assertCanGrant('tenant', 'admin', ['read:Ticket'])).toThrow(
             /privilege-escalation/
         );
     });

@@ -137,7 +137,7 @@ The item reads, and what each is scoped by:
 | `GET /webhooks/subscriptions/{id}`                     | the shop's own subscriptions                       |
 | `GET /payments/{id}`                                   | the payer's own, or `display:Payment`              |
 | `GET /payments/{id}/refunds/{refundId}`                | the payment's scope; a record it does not hold     |
-| `GET /feedback/{id}`                                   | `read:Feedback`, the list's key                    |
+| `GET /tickets/{id}`                                   | `read:Ticket`, the list's key                    |
 | `GET /api-keys/{id}`                                   | this shop's credentials, `read:ApiKey`             |
 | `GET /account/addresses/{addressId}`                   | the caller's own book                              |
 | `GET /account/sessions/{sessionId}`                    | the caller's own live sessions                     |
@@ -199,7 +199,7 @@ changes — Shopify's `PUT …/addresses/{id}/default.json` is the same shape. A
 answer 201, RFC 9110 §9.3.4, and nothing here has a URL the client may name).
 
 **Offer a PUT only when the body can be the whole resource.** A route that sets two fields of a
-bigger record is a PATCH alone (`PATCH /feedback/{id}`), never a PUT that clears the rest.
+bigger record is a PATCH alone (`PATCH /tickets/{id}`), never a PUT that clears the rest.
 
 **A server may transform.** RFC 9110 lets the stored state differ from the body. Here that is one
 case: `PUT /account`'s `email` becomes `pendingEmail` until the new address is proven.
@@ -249,8 +249,8 @@ in the query or the `/hard` path and a body is refused instead of ignored.
 ## A known path with the wrong method
 
 A path the contract declares, asked with a method it does not give it, answers **405** with an
-`Allow` header (RFC 9110 §15.5.6) — never the catch-all's 404. `DELETE /feedback/{id}` is fine,
-`PUT /feedback/{id}` is a 405 naming `DELETE, PATCH`.
+`Allow` header (RFC 9110 §15.5.6) — never the catch-all's 404. `DELETE /tickets/{id}` is fine,
+`PUT /tickets/{id}` is a 405 naming `DELETE, PATCH`.
 
 - **`Allow` is sorted**, with HEAD beside GET. `OPTIONS` is never judged: the CORS layer answers
   a preflight before any route runs.
@@ -358,7 +358,7 @@ and the bundler adds the header parameter, the 412 and the response header from 
 | the caller's account | `GET /account` | `PUT`, `PATCH /account` |
 | example | `GET /examples/{id}` | `PUT`, `PATCH`, `DELETE /examples/{id}` |
 
-Not versioned: a resource with no item read to take a tag from (feedback, locales, an address
+Not versioned: a resource with no item read to take a tag from (tickets, locales, an address
 inside its book), a resource that has an item read but no `If-Match` (webhook subscriptions) and
 anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declared.
 
@@ -418,7 +418,7 @@ anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` 
 - **Only a versioned read can answer `304`.** The tag covers the row's own edits, not what is
   derived from config (prices, the caller's language), so it validates *writes* only.
   `If-None-Match` is ignored on these reads. The `privateNoCache` reads (`orders`, `users`,
-  `feedback`) are the exception: Express's own ETag check answers them `304` on no change.
+  `tickets`) are the exception: Express's own ETag check answers them `304` on no change.
 - **Browsers** may send `If-Match` and read `ETag` cross-origin: both are in the CORS allow and
   expose lists.
 

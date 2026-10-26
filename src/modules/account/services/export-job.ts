@@ -49,7 +49,7 @@ const subjectOf = (user: UserDocument): PersonalDataSubject => ({
  * Collect every section in turn and append it to the file as one `"name": value` member of a JSON
  * object, then close the object with `exportedAt`.
  *
- * A section resolving `undefined` is omitted (the shape `feedback`'s opt-out uses); one that
+ * A section resolving `undefined` is omitted (the shape `tickets`'s opt-out uses); one that
  * REJECTS fails the whole build — an incomplete Art. 15 answer must never look like a complete one.
  *
  * @param sections - the registered sections, in declaration order
@@ -115,7 +115,7 @@ const mailLink = (job: AccountExportJobPayload): Promise<void> => {
  * Build the file, then move the row to `ready`.
  *
  * @param subject - who the export is about, taken from the stored account and not from the queue
- *   message: the `feedback` section matches by this address, so it must be the account's own
+ *   message: the `tickets` section matches by this address, so it must be the account's own
  * @param row - the `building` row this job fills in
  * @returns the settled row, or `null` when the row was replaced or erased while this ran
  */

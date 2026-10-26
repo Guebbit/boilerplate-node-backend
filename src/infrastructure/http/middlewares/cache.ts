@@ -622,7 +622,7 @@ export const noStore = (request: Request, response: Response, next: NextFunction
 };
 
 /**
- * For a GET whose answer depends on who is asking (`orders`, `users`, `feedback`).
+ * For a GET whose answer depends on who is asking (`orders`, `users`, `tickets`).
  *
  * Server:  never cached — RFC 9111 §3.5 rules out a shared cache storing an authenticated answer,
  *          and a per-caller key only grows the store for one caller's benefit.

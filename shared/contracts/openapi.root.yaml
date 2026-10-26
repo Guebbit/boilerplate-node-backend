@@ -1220,15 +1220,13 @@ paths:
     /users/search:
         $ref: '../../src/modules/users/openapi.yaml#/paths/~1users~1search'
 
-    # ---------- feedback ----------
-    /feedback/contact:
-        $ref: '../../src/modules/feedback/openapi.yaml#/paths/~1feedback~1contact'
-    /feedback:
-        $ref: '../../src/modules/feedback/openapi.yaml#/paths/~1feedback'
-    /feedback/search:
-        $ref: '../../src/modules/feedback/openapi.yaml#/paths/~1feedback~1search'
-    /feedback/{id}:
-        $ref: '../../src/modules/feedback/openapi.yaml#/paths/~1feedback~1{id}'
+    # ---------- tickets ----------
+    /tickets:
+        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets'
+    /tickets/search:
+        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1search'
+    /tickets/{id}:
+        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1{id}'
 
     # ---------- products ----------
     /products:

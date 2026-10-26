@@ -40,7 +40,7 @@ help are the ones who cannot get in. A consequence worth knowing: **deleting som
 not delete their messages** — they were never attached to the account in the first place.
 :::
 
-→ [`feedback`](../modules/feedback.md)
+→ [`tickets`](../modules/tickets.md)
 
 ## "I can't get in"
 
@@ -205,7 +205,7 @@ Worth knowing before promising anything to a customer:
 
 | Word             | In plain terms                                                                                                        |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------- |
-| **Triage**       | Deciding what a new message is and who deals with it. → [`feedback`](../modules/feedback.md)                          |
+| **Triage**       | Deciding what a new message is and who deals with it. → [`tickets`](../modules/tickets.md)                            |
 | **Verified**     | Confirmed their email. Until then an account can shop but not check out.                                              |
 | **Session**      | One signed-in device. → [`account`](../modules/account.md)                                                            |
 | **Audit log**    | The 90-day record of staff actions, read by the moderator and the manager. → [`audit-logs`](../modules/audit-logs.md) |

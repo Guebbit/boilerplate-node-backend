@@ -174,9 +174,6 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `example`        | `EXAMPLE_DELETED`                            | `example.deleted`                            | `example`              |
 | `example`        | `EXAMPLE_STATUS_CHANGED`                     | `example.status_changed`                     | `example`              |
 | `example`        | `EXAMPLE_UPDATED`                            | `example.updated`                            | `example`              |
-| `feedback`       | `ADMIN_FEEDBACK_DELETED`                     | `admin.feedback.deleted`                     | `feedback`             |
-| `feedback`       | `ADMIN_FEEDBACK_STATUS_UPDATED`              | `admin.feedback.status_updated`              | `feedback`             |
-| `feedback`       | `ADMIN_FEEDBACK_VIEWED`                      | `admin.feedback.viewed`                      | —                      |
 | `infrastructure` | `SECURITY_API_KEY_REVOKED`                   | `security.api_key.revoked`                   | —                      |
 | `infrastructure` | `SECURITY_FORBIDDEN`                         | `security.forbidden`                         | —                      |
 | `infrastructure` | `SECURITY_RATE_LIMIT_HIT`                    | `security.rate_limit_hit`                    | —                      |
@@ -231,6 +228,9 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `returns`        | `ADMIN_RETURN_RECEIVED`                      | `admin.return.received`                      | `return`               |
 | `returns`        | `ADMIN_RETURN_VIEWED`                        | `admin.return.viewed`                        | `return`               |
 | `returns`        | `RETURN_REQUESTED`                           | `return.requested`                           | `return`               |
+| `tickets`        | `ADMIN_TICKET_DELETED`                       | `admin.ticket.deleted`                       | `tickets`              |
+| `tickets`        | `ADMIN_TICKET_STATUS_UPDATED`                | `admin.ticket.status_updated`                | `tickets`              |
+| `tickets`        | `ADMIN_TICKET_VIEWED`                        | `admin.ticket.viewed`                        | —                      |
 | `users`          | `ADMIN_USER_BANNED`                          | `admin.user.banned`                          | `user`                 |
 | `users`          | `ADMIN_USER_CREATED`                         | `admin.user.created`                         | `user`                 |
 | `users`          | `ADMIN_USER_ERASED`                          | `admin.user.erased`                          | `user`                 |

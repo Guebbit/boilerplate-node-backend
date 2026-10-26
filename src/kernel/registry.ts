@@ -230,7 +230,7 @@ export interface BrowserEventTarget {
 }
 
 /**
- * Who a data-subject export is about. `email` because one module (`feedback`, tickets are not
+ * Who a data-subject export is about. `email` because one module (`tickets`, tickets are not
  * tied to an account) matches its rows by address, not by id.
  */
 export interface PersonalDataSubject {
