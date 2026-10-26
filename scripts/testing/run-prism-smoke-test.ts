@@ -11,6 +11,7 @@
 
 import { spawn } from 'node:child_process';
 import { REPO_ROOT } from '../modules-on-disk';
+import { failScript } from '../fail-script';
 
 /** Where the mock server listens. Overridable so a busy port doesn't fail the gate. */
 const PORT = Number(process.env.PRISM_PORT ?? 4010);
@@ -107,4 +108,4 @@ const main = async (): Promise<void> => {
     finish(0, `[prism] GET ${PROBE} answered ${response.status} from the spec's own examples.`);
 };
 
-void main();
+main().catch(failScript);

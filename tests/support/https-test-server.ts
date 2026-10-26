@@ -82,10 +82,15 @@ export const startHttpsTestServer = (
     // node:https.createServer: https://nodejs.org/api/https.html#httpscreateserveroptions-requestlistener
     // `key`/`cert` default to this file's throwaway localhost pair — see the module docblock.
     const server: Server = createServer(credentials, (request, response) => {
-        void readBody(request).then((body) => {
-            captured.push({ headers: request.headers, body });
-            respond(response);
-        });
+        readBody(request)
+            .then((body) => {
+                captured.push({ headers: request.headers, body });
+                respond(response);
+            })
+            // A request that errored mid-body has nobody to answer: drop its socket.
+            .catch(() => {
+                response.destroy();
+            });
     });
 
     return new Promise((resolve, reject) => {

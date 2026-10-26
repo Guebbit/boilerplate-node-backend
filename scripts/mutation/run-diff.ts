@@ -27,6 +27,7 @@ import { changedMutable, mutableFiles } from './mutate-scope';
 import { mergeBase } from '../git-base';
 import { REPO_ROOT } from '../modules-on-disk';
 import { flagValue } from '../cli';
+import { failScript } from '../fail-script';
 
 /** The git ref to diff against; `origin/main` unless `--base` says otherwise. */
 const base = flagValue('base') ?? 'origin/main';
@@ -115,13 +116,15 @@ const keepReportWhole = (): void => {
  * concurrency as every other entry point. Calling Stryker directly is how it silently ran without
  * them — docs/tools/mutation-testing.md#worker-heap-cap.
  */
-void runStryker({
+runStryker({
     label: `diff (${files.length} files)`,
     args: ['stryker.json', '--mutate', files.join(','), '--force']
-}).then(({ abortedForOom }) => {
-    if (abortedForOom) process.exit(1);
-    // Graded before the overlay, so the verdict judges this branch's files alone.
-    const verdict = grade();
-    keepReportWhole();
-    process.exit(verdict);
-});
+})
+    .then(({ abortedForOom }) => {
+        if (abortedForOom) process.exit(1);
+        // Graded before the overlay, so the verdict judges this branch's files alone.
+        const verdict = grade();
+        keepReportWhole();
+        process.exit(verdict);
+    })
+    .catch(failScript);

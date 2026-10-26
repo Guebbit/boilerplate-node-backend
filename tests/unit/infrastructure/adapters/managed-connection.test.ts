@@ -278,13 +278,14 @@ describe('stop()', () => {
         const attempt = deferred<FakeHandle | undefined>();
         connect.mockReturnValue(attempt.promise);
 
-        void connection.get();
+        const connecting = connection.get();
         const stopped = connection.stop();
 
         expect(close).not.toHaveBeenCalled();
 
         attempt.resolve({ id: 9, live: true });
         await stopped;
+        await connecting;
 
         expect(close).toHaveBeenCalledWith({ id: 9, live: true });
     });

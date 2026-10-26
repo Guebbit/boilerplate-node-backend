@@ -931,7 +931,10 @@ const handleDelivery = <TPayload>(
             parkInDead(ch, queue, incoming);
         });
     inFlightHandlers.add(settled);
-    void settled.finally(() => inFlightHandlers.delete(settled));
+    // `then(release, release)` cannot reject; `finally` would if the `.catch` above ever threw.
+    // `settled` itself is what `settleWithin` drains, so its outcome is still seen there.
+    const release = () => inFlightHandlers.delete(settled);
+    settled.then(release, release);
 };
 
 /**

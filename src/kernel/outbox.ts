@@ -343,7 +343,9 @@ export const nudgeOutbox = (): void => {
         });
     });
     nudges.add(pass);
-    void pass.finally(() => nudges.delete(pass));
+    // Two-armed `then`: cannot reject. `Promise.all(nudges)` still sees `pass` itself.
+    const release = () => nudges.delete(pass);
+    pass.then(release, release);
 };
 
 /** The outbox row an {@link announceInTransaction} write asks for. */
