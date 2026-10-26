@@ -1,0 +1,29 @@
+# How one word reads as a boolean in an environment variable, a query string or a form field.
+# Trimmed, case-insensitive. `invalid` means "not a boolean word" (a set-and-wrong env value is
+# a boot error, never a silent default); blank also counts as unset one layer above this.
+cases:
+    - { name: '1 is on', word: '1', expect: true }
+    - { name: 'true is on', word: 'true', expect: true }
+    - { name: 'yes is on', word: 'yes', expect: true }
+    - { name: 'on is on', word: 'on', expect: true }
+    - { name: 'case does not matter for on-words', word: 'TrUe', expect: true }
+    - { name: 'case does not matter for yes', word: 'YES', expect: true }
+    - { name: 'surrounding whitespace is trimmed', word: "  On \t", expect: true }
+    - { name: '0 is off', word: '0', expect: false }
+    - { name: 'false is off', word: 'false', expect: false }
+    - { name: 'no is off', word: 'no', expect: false }
+    - { name: 'off is off', word: 'off', expect: false }
+    - { name: 'case does not matter for off-words', word: 'FALSE', expect: false }
+    - { name: 'whitespace around an off-word is trimmed', word: ' No ', expect: false }
+    - { name: 'an empty word is not a boolean', word: '', expect: invalid }
+    - { name: 'blanks are not a boolean', word: '   ', expect: invalid }
+    - { name: 'y is not accepted', word: 'y', expect: invalid }
+    - { name: 'n is not accepted', word: 'n', expect: invalid }
+    - { name: 't is not accepted', word: 't', expect: invalid }
+    - { name: '2 is not accepted', word: '2', expect: invalid }
+    - { name: '-1 is not accepted', word: '-1', expect: invalid }
+    - { name: 'enabled is not accepted', word: 'enabled', expect: invalid }
+    - { name: 'a typo is not guessed at', word: 'truee', expect: invalid }
+    - { name: 'null is not accepted', word: 'null', expect: invalid }
+    - { name: 'an inherited object key is not a word', word: 'constructor', expect: invalid }
+    - { name: 'the prototype key is not a word', word: '__proto__', expect: invalid }
