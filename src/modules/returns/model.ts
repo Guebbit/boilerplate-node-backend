@@ -16,6 +16,7 @@ import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { moneyPath, moneyPlugin } from '@infrastructure/persistence/money-field';
 import {
+    ReturnDeclineReason,
     ReturnKind,
     ReturnOpenedBy,
     ReturnPolicyException,
@@ -68,8 +69,10 @@ export interface ReturnDocument extends Document {
     openedBy: ReturnOpenedBy;
     /** The rules staff waived when they opened it: frozen at creation, empty for a buyer's. */
     policyExceptions: ReturnPolicyException[];
-    /** Why staff declined. Present only on a `declined` return. */
-    declineReason?: string;
+    /** Why staff declined, as a code. Present only on a `declined` return; not free text, so it outlives the reaper. */
+    declineReason?: ReturnDeclineReason;
+    /** What staff wrote to the buyer beside the code (required for `other`). Free text: the reaper unsets it. */
+    declineMessage?: string;
     /** When staff approved or declined it — or, for a withdrawal, when it was opened approved. */
     decidedAt?: Date;
     /** When the goods arrived and went back on sale. */
@@ -148,7 +151,8 @@ export const returnSchema = new Schema<ReturnDocument>(
             type: [{ type: String, enum: Object.values(ReturnPolicyException) }],
             default: []
         },
-        declineReason: { type: String, maxlength: 500 },
+        declineReason: { type: String, enum: Object.values(ReturnDeclineReason) },
+        declineMessage: { type: String, maxlength: 500 },
         decidedAt: { type: Date },
         receivedAt: { type: Date },
         handlingDeduction: moneyPath({ nonNegative: true }),

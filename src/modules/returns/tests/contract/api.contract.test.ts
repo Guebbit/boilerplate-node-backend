@@ -237,7 +237,7 @@ describe('POST /returns/{id}/approve and /decline', () => {
         const second = await api()
             .post(`/returns/${id}/decline`)
             .set('Authorization', manager)
-            .send({ reason: 'Too late' });
+            .send({ reason: 'return_period_ended' });
 
         expect(first.status).toBe(200);
         expect(first.body.status).toBe('approved');
@@ -251,10 +251,14 @@ describe('POST /returns/{id}/approve and /decline', () => {
         const response = await api()
             .post(`/returns/${id}/decline`)
             .set('Authorization', manager)
-            .send({ reason: 'Worn' });
+            .send({ reason: 'no_defect_found', message: 'Worn' });
 
         expect(response.status).toBe(200);
-        expect(response.body).toMatchObject({ status: 'declined', declineReason: 'Worn' });
+        expect(response.body).toMatchObject({
+            status: 'declined',
+            declineReason: 'no_defect_found',
+            declineMessage: 'Worn'
+        });
     });
 
     it('requires a reason to decline: 422', async () => {
@@ -266,6 +270,23 @@ describe('POST /returns/{id}/approve and /decline', () => {
             .send({});
 
         expect(response.status).toBe(422);
+    });
+
+    it('refuses free text where a code is due, and "other" without a message: 422', async () => {
+        const { manager, id } = await requested();
+
+        const freeText = await api()
+            .post(`/returns/${id}/decline`)
+            .set('Authorization', manager)
+            .send({ reason: 'Too late' });
+        const bareOther = await api()
+            .post(`/returns/${id}/decline`)
+            .set('Authorization', manager)
+            .send({ reason: 'other' });
+
+        expect(freeText.status).toBe(422);
+        expect(bareOther.status).toBe(422);
+        expect(bareOther.body.errors[0].details.field).toBe('message');
     });
 
     it('answers 404 for a return that does not exist', async () => {

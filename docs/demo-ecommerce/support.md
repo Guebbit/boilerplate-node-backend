@@ -110,6 +110,13 @@ A defect that appeared within the two years but was reported later is **not** go
 legal guarantee: open it as **Defective goods** with the day the buyer reported it. Some countries
 give more than two years; the same door covers it.
 
+## Declining a return {#declining-a-return}
+
+Pick the reason from the list: the period ended, not returnable, no defect found, or other. The
+buyer reads one sentence in their own language. Write to the buyer only when you pick **Other**; the
+shop then needs your message, because "other" alone tells them nothing.
+→ [`returns`](../modules/returns.md#declining-a-request)
+
 ## Declined by mistake? {#declined-by-mistake}
 
 A decline is final, on purpose: a decision stays a record. To fix a wrong one, open a **new return

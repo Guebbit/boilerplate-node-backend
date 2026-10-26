@@ -38,8 +38,10 @@ export interface ReturnNoticeInput {
     at: Date;
     /** How a withdrawal the shop recorded for them was stated, and when the shop wrote it down. */
     recorded?: { via: string; at: Date };
-    /** Staff's reason, on a decline. */
+    /** The code staff declined with; the sentence is the buyer's own language. */
     declineReason?: string;
+    /** What staff wrote to the buyer beside the code, when they did. */
+    declineMessage?: string | undefined;
     /** What went back, on a closed return. */
     refund?: { amount: number; currency: string };
     /** Where to send the goods, on an approval. */
@@ -57,6 +59,18 @@ const stamp = (locale: string, at: Date): string =>
         timeStyle: 'short',
         timeZone: 'UTC'
     }).format(at);
+
+/**
+ * The decline's reason as the buyer reads it: the code's sentence in their language, then staff's
+ * message when there is one. The message is staff's own words and stays in staff's language.
+ * @param t - the recipient's translator
+ * @param input - the notice's inputs
+ */
+const declineSentence = (t: ReturnType<typeof translator>, input: ReturnNoticeInput): string => {
+    if (!input.declineReason) return '';
+    const sentence = t(`returns.email.decline-reason.${input.declineReason}`);
+    return input.declineMessage ? `${sentence} ${input.declineMessage}` : sentence;
+};
 
 /**
  * A notice about a return or a withdrawal, in the customer's own language.
@@ -84,7 +98,7 @@ export const returnNoticeEmail = (
         date: stamp(locale, input.at),
         recorded: input.recorded ? stamp(locale, input.recorded.at) : '',
         via: input.recorded ? t(`returns.email.via-${input.recorded.via}`) : '',
-        reason: input.declineReason ?? '',
+        reason: declineSentence(t, input),
         amount: input.refund ? formatMoney(locale, input.refund.amount, input.refund.currency) : ''
     };
     // Neither a decline nor a closing says anything about postage — there is nothing left to post.

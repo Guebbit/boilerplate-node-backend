@@ -126,6 +126,7 @@ export const mailReturnDecided = ({
             // A return staff opened for the buyer is dated by the buyer's own request.
             at: found.openedBy === 'staff' ? found.requestedAt : (found.decidedAt ?? new Date()),
             declineReason: found.declineReason,
+            declineMessage: found.declineMessage,
             // Told where to send the goods only when they are being asked for.
             ...(decision === 'approved' ? { returnAddress: returnAddress() } : {})
         })

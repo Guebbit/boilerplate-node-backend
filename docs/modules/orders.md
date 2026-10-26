@@ -469,7 +469,7 @@ keeping a copy of this table.
 | Preorders | `release_date_moved`, `delay_notice_sent`                                                                       | yes        |
 
 A row holds ids, codes and numbers in `data`. Never a sibling's free text: `returns`' `note` and
-`declineReason`, `delivery`'s hold note are reaped on their own clocks, and a copy here would
+`declineMessage`, `delivery`'s hold note are reaped on their own clocks, and a copy here would
 outlive the original. The one free text `orders` owns is an override's reason (`text`).
 
 **GDPR.**

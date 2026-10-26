@@ -34,7 +34,7 @@
             },
             "return-declined": {
                 "subject": "Your return was declined",
-                "body": "We could not accept your return for order {{order}}. Reason: {{reason}}"
+                "body": "We could not accept your return for order {{order}}. {{reason}}"
             },
             "via-phone": "phone",
             "via-email": "email",
@@ -52,6 +52,12 @@
             "return-closed": {
                 "subject": "Your return was refunded",
                 "body": "We received your return for order {{order}} and refunded {{amount}}."
+            },
+            "decline-reason": {
+                "return_period_ended": "The period for returning this order has ended.",
+                "not_returnable": "These goods cannot be returned.",
+                "no_defect_found": "We did not find the defect you described.",
+                "other": "We could not accept it for another reason."
             }
         },
         "deduction-too-high": "The handling deduction is more than the refund is worth.",
@@ -61,6 +67,7 @@
         "statement-forbidden": "This date or channel cannot be given here: the server sets the buyer's own, and a channel belongs to a withdrawal recorded by staff.",
         "statement-required": "A withdrawal recorded for the buyer needs the date they stated it and the channel they used.",
         "statement-future": "The date the buyer stated it cannot be in the future.",
-        "statement-before-order": "The date the buyer stated it cannot be before the order was made."
+        "statement-before-order": "The date the buyer stated it cannot be before the order was made.",
+        "decline-message-required": "Write a message to the buyer: \"other\" alone does not say why."
     }
 }

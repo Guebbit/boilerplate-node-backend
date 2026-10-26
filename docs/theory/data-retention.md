@@ -271,12 +271,14 @@ reason a staff member gave for an override. Everything else on a row is an id, a
 A return carries a required `reason` (`withdrawal`, `defective`, `wrong_item`, `other`) and two
 free-text fields:
 
-| Field           | Written by | Example risk                         |
-| --------------- | ---------- | ------------------------------------ |
-| `note`          | customer   | "call me on 333…" typed into the box |
-| `declineReason` | staff      | an opinion about the customer        |
+| Field            | Written by | Example risk                         |
+| ---------------- | ---------- | ------------------------------------ |
+| `note`           | customer   | "call me on 333…" typed into the box |
+| `declineMessage` | staff      | an opinion about the customer        |
 
-**Why not just a dropdown.** Every large shop keeps an "Other" box (Amazon, Shopify's `OTHER`
+**The decline reason is a dropdown.** A decline carries a code (`return_period_ended`, `not_returnable`, `no_defect_found`, `other`), the buyer's mail turns it into one translated sentence, and a shop can count it. The code is a vocabulary, not a person typing, so it stays when the text goes; only the optional `declineMessage` (required for `other`) is wiped. Unlike a hold's `message`, which is dropped with the hold and never scrubbed because it is something the shop told a customer on a live order, a decline's message is staff's opinion kept on a finished record, so it has an end date.
+
+**Why not just a dropdown for the rest.** Every large shop keeps an "Other" box (Amazon, Shopify's `OTHER`
 reason), and a defect has to be described. Free text shrinks; it never reaches zero. So it needs
 an end date of its own.
 
@@ -300,7 +302,7 @@ text forever.
 
 **Why staff text is the customer's data too.** A staff assessment of a person is that person's
 data ([CJEU Nowak, C-434/16](https://www.scl.org/10098-cjeu-exam-answers-and-examiner-s-comments-are-personal-data/)).
-So the right of access (Art. 15) covers `declineReason`, and the data export carries it. The
+So the right of access (Art. 15) covers `declineMessage` and the decline code beside it, and the data export carries both. The
 staff member's own identity is not disclosed (CJEU Pankki S, C-579/21); it stays in the audit log.
 
 **Not wiped early on erasure.** The text carries the same Art. 17(3)(e) basis as the rest of the
@@ -317,7 +319,7 @@ the `note` (`returns/module.ts`).
 Staff can put a fulfillment order on hold, with a reason from a closed set and an optional **note**
 (`holdNote`, up to 1000 characters). The reason is a vocabulary; the note is a person typing about a
 person: "customer rang twice, sounded drunk", "address looks like a reseller". That is the same shape
-of risk as a return's `declineReason`, so it gets the same treatment: an end date of its own.
+of risk as a return's `declineMessage`, so it gets the same treatment: an end date of its own.
 
 **What happens to it.** `npm run job reap:delivery` unsets `holdNote` once the fulfillment order has not
 changed for `NODE_HOLD_NOTE_RETENTION_DAYS` (one year by default). Lines, status, reason and dates stay:
@@ -330,7 +332,7 @@ window. **Why its own clock.** The order's clock starts only when an account is 
 live customer's note would never go. **Why "since the last change", not "since closing".** A
 fulfillment order held for ever never closes.
 
-The note is in `POST /account/export`, the same rule as a return's `declineReason`: staff's assessment of a
+The note is in `POST /account/export`, the same rule as a return's `declineMessage`: staff's assessment of a
 person is that person's data (CJEU Nowak, C-434/16). Who wrote it is not (CJEU Pankki S, C-579/21), and the
 fulfillment order records no staff id, so none is exported.
 

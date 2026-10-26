@@ -289,7 +289,7 @@ endpoints. "Usable via any HTTP client" is true too (nothing here requires the U
 `rotateSecret`'s response never gets cached client-side.
 
 Delivery payloads carry ids, amounts and the return `reason` code, never a return's free text
-(`note`, `declineReason`). Delivery rows are kept `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS` (30) days.
+(`note`, `declineMessage`). Delivery rows are kept `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS` (30) days.
 
 ## Not wanted? Remove the module
 

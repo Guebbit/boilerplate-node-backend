@@ -25,6 +25,7 @@ export type ReturnStamp = Partial<
     Pick<
         ReturnDocument,
         | 'declineReason'
+        | 'declineMessage'
         | 'decidedAt'
         | 'receivedAt'
         | 'handlingDeduction'
@@ -153,7 +154,7 @@ export const returnRepository: Repository<ReturnDocument, StoredReturn> & {
             .exec(),
 
     /**
-     * Unset the free text (`note`, `declineReason`) on every return not changed since `cutoff` that
+     * Unset the free text (`note`, `declineMessage`) on every return not changed since `cutoff` that
      * still holds some. The filter only matches returns that still hold text, so a rerun matches
      * nothing. `timestamps: false` keeps the wipe from moving `updatedAt`, the very clock this
      * query reads.
@@ -168,9 +169,9 @@ export const returnRepository: Repository<ReturnDocument, StoredReturn> & {
             .updateMany(
                 {
                     updatedAt: { $lte: cutoff },
-                    $or: [{ note: { $exists: true } }, { declineReason: { $exists: true } }]
+                    $or: [{ note: { $exists: true } }, { declineMessage: { $exists: true } }]
                 },
-                { $unset: { note: 1, declineReason: 1 } },
+                { $unset: { note: 1, declineMessage: 1 } },
                 { timestamps: false }
             )
             .exec()

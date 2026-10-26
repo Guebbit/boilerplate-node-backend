@@ -639,7 +639,7 @@ describe('the order timeline of a return', () => {
 
         await returnService.declineReturn(
             String(outcome.data._id),
-            'private opinion of the customer',
+            { reason: 'return_period_ended' },
             callerContextAs('admin', 'admin-1')
         );
 

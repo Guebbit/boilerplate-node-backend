@@ -239,7 +239,11 @@ describe('what cannot be canceled', () => {
     it('refuses a declined return', async () => {
         const fixture = await paidAndDelivered();
         const id = await openedReturn(fixture, 'defective', false);
-        await returnService.declineReturn(id, 'Worn', callerContextAs('admin'));
+        await returnService.declineReturn(
+            id,
+            { reason: 'return_period_ended' },
+            callerContextAs('admin')
+        );
 
         const result = await returnService.cancelReturn(id, undefined, callerContextAs('admin'));
 

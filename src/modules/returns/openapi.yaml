@@ -254,8 +254,12 @@ paths:
             tags: [Returns]
             summary: Decline a return request
             description: >-
-                Staff refuse a `requested` return, saying why — the customer is mailed the reason.
-                Same conditional write as `approve`.
+                Staff refuse a `requested` return with a reason code, and a message to the buyer that
+                `other` requires — the customer is mailed the code's sentence, in their own language,
+                and the message. Same conditional write as `approve`. A decline is final: a mistaken one
+                is fixed by opening a new return for the same lines. A decline is a complaint the shop
+                does not settle, so the mail does not carry the ADR information Directive 2013/11
+                Art. 13(3) asks for; that is the shop's to add.
             operationId: declineReturn
             security:
                 - bearerAuth: []
@@ -453,6 +457,15 @@ components:
                 Why the goods come back. `withdrawal` is the EU right of withdrawal — the same object
                 a faulty-goods return uses, with a legal deadline and an acknowledgement attached.
 
+        ReturnDeclineReason:
+            type: string
+            enum: [return_period_ended, not_returnable, no_defect_found, other]
+            description: >-
+                Why staff declined, as a code the buyer reads in their own language and a shop can count:
+                `return_period_ended` — past the window; `not_returnable` — exempt from returns (an Art. 16
+                exception) or sold as final sale; `no_defect_found` — a guarantee claim where the goods
+                conform; `other` — see the message.
+
         ReturnOpenedBy:
             type: string
             enum: [buyer, staff]
@@ -592,8 +605,14 @@ components:
                         $ref: '#/components/schemas/ReturnPolicyException'
                     description: What staff waived when they opened it. Empty when the buyer opened it, or nothing was waived.
                 declineReason:
+                    $ref: '#/components/schemas/ReturnDeclineReason'
+                declineMessage:
                     type: string
-                    description: Why staff declined. Present only on a `declined` return.
+                    maxLength: 500
+                    description: >-
+                        What staff wrote to the buyer beside the reason code; required when the code is
+                        `other`. Free text, so `reap:returns` unsets it after the retention window; the
+                        code stays.
                 decidedAt:
                     type: string
                     format: date-time
@@ -737,10 +756,14 @@ components:
             required: [reason]
             properties:
                 reason:
+                    $ref: '#/components/schemas/ReturnDeclineReason'
+                message:
                     type: string
                     minLength: 1
                     maxLength: 500
-                    description: What the customer is told. Required — a refusal nobody explains is not one.
+                    description: >-
+                        Text for the buyer, mailed beside the reason. Required when `reason` is `other`
+                        ("other" alone tells the buyer nothing); optional otherwise.
 
         ReturnOptionLine:
             type: object
@@ -863,7 +886,7 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
 
         # Used by `POST /account/export` (`shared/contracts/openapi.root.yaml`) — what the customer
-        # wrote, what staff wrote back (`declineReason`, the customer's own data under Art. 15) and
+        # wrote, what staff wrote back (`declineReason` and `declineMessage`, the customer's own data under Art. 15) and
         # where it stands. The deciding staff member and the frozen unit prices are left out: an
         # export answers "what did I ask for and what was I told", not the shop's working records.
         ExportReturn:
@@ -882,6 +905,8 @@ components:
                 note:
                     type: string
                 declineReason:
+                    $ref: '#/components/schemas/ReturnDeclineReason'
+                declineMessage:
                     type: string
                 lines:
                     type: array

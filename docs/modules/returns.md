@@ -96,6 +96,25 @@ that is not conditional is the first: a withdrawal before dispatch is written `c
 same lines ([Declined by mistake](../demo-ecommerce/support.md#declined-by-mistake)), which is how
 Shopify and Solidus fix it, so a decision stays a record and is never rewritten.
 
+## Declining a request {#declining-a-request}
+
+`POST /returns/{id}/decline` takes a **code** and, when the code is `other`, a **message** (Shopify's
+`declineReason` plus `declineNote`; Solidus' `RefundReason` is a code list too).
+
+| Code                  | Means                                                            |
+| --------------------- | ---------------------------------------------------------------- |
+| `return_period_ended` | past the window                                                  |
+| `not_returnable`      | exempt from returns (an Art. 16 exception) or sold as final sale |
+| `no_defect_found`     | a guarantee claim where the goods conform                        |
+| `other`               | none of these: the message says why, and is required             |
+
+The buyer's mail and page show one sentence per code in **their** language, plus the message when
+there is one (staff's own words stay in staff's language). The code survives the reaper because it is
+not free text; only `declineMessage` is unset by `reap:returns`. The data export carries both. The
+response is `Return.declineReason` (the code) and `Return.declineMessage`; no webhook announces a
+decline. A decline is a complaint the shop does not settle, so ADR Directive 2013/11 Art. 13(3) asks
+the shop to point the buyer to an ADR body: the mail carries none yet, which is the shop's to add.
+
 ## Closing a return by hand {#closing-a-return-by-hand}
 
 `POST /returns/{id}/close`, body `{ note }` (optional), moves a `received` return to `closed` when its
@@ -525,7 +544,7 @@ both at once), `return_declined`, `return_received` and `return_closed` on the o
 the return's id, the reason code and, for received and closed, the refund amount. A receipt and the
 close it leads to name the staff member who received the goods; a return the payment sweep closes
 later names no one. The customer's
-`note` and staff's `declineReason` are never copied (nor is the note of a hand close: it stays in the audit row): `reap:returns` owns their clock. A withdrawal
+`note` and staff's `declineMessage` are never copied (nor is the note of a hand close: it stays in the audit row): `reap:returns` owns their clock. A withdrawal
 before dispatch and a cancelled remainder write no return rows, since the order's `cancelled` and
 delivery's `remainder_cancelled` already say it.
 
@@ -554,10 +573,10 @@ under the lock, so what was quoted is what is refunded unless something moved in
 [`invoicing`](./invoicing.md) does (`personalData.collect`, no `erase`), and no `erase` is needed: `orders`' `detachUserId` already
 breaks the link on the order. That is the Art. 17(3)(b)/(e) retention exemption `invoicing`
 applies — a return is the same kind of legal record. `POST /account/export` carries a `returns`
-section, staff's `declineReason` included: a staff assessment of the customer is the customer's
+section, staff's decline code and `declineMessage` included: a staff assessment of the customer is the customer's
 data under Art. 15.
 
-The free text is the exception to "kept": `npm run job reap:returns` unsets `note` and `declineReason`
+The free text is the exception to "kept": `npm run job reap:returns` unsets `note` and `declineMessage`
 once a return has not changed for `NODE_RETURN_TEXT_RETENTION_DAYS`; status, lines, amounts and
 dates stay. No early wipe on account erasure. The reasoning:
 [Data Retention: free text on returns](../theory/data-retention.md#free-text-on-returns).
@@ -580,10 +599,10 @@ decision of whether the return was owed.
 
 ## Configuration
 
-| Variable                          | Default | Meaning                                                                                  |
-| --------------------------------- | ------- | ---------------------------------------------------------------------------------------- |
-| `NODE_RETURNS_RATE_LIMIT_MAX`     | `20`    | Returns opened per window, per account                                                   |
-| `NODE_RETURN_TEXT_RETENTION_DAYS` | `1095`  | Days without a change before `reap:returns` unsets a return's `note` and `declineReason` |
+| Variable                          | Default | Meaning                                                                                   |
+| --------------------------------- | ------- | ----------------------------------------------------------------------------------------- |
+| `NODE_RETURNS_RATE_LIMIT_MAX`     | `20`    | Returns opened per window, per account                                                    |
+| `NODE_RETURN_TEXT_RETENTION_DAYS` | `1095`  | Days without a change before `reap:returns` unsets a return's `note` and `declineMessage` |
 
 The return address (`NODE_RETURN_ADDRESS_*`) and who pays postage (`NODE_RETURN_POSTAGE_PAYER`) are
 [`shop`'s](./shop.md#configuration). The postage payer is frozen on each return when it opens.

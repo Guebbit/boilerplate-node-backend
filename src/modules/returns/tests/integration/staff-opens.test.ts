@@ -260,7 +260,11 @@ describe('staff opening a return for the buyer', () => {
         );
         if (!mine.success) throw new Error('expected a return');
         const id = String(mine.data._id);
-        await returnService.declineReturn(id, 'Worn', callerContextAs('admin'));
+        await returnService.declineReturn(
+            id,
+            { reason: 'return_period_ended' },
+            callerContextAs('admin')
+        );
         const [auth, context] = staff('support');
 
         const second = await returnService.createReturn(

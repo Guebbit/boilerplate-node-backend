@@ -34,7 +34,7 @@
             },
             "return-declined": {
                 "subject": "Il tuo reso è stato rifiutato",
-                "body": "Non abbiamo potuto accettare il tuo reso per l'ordine {{order}}. Motivo: {{reason}}"
+                "body": "Non abbiamo potuto accettare il tuo reso per l'ordine {{order}}. {{reason}}"
             },
             "via-phone": "telefono",
             "via-email": "email",
@@ -52,6 +52,12 @@
             "return-closed": {
                 "subject": "Il tuo reso è stato rimborsato",
                 "body": "Abbiamo ricevuto il tuo reso per l'ordine {{order}} e rimborsato {{amount}}."
+            },
+            "decline-reason": {
+                "return_period_ended": "Il periodo per rendere questo ordine è terminato.",
+                "not_returnable": "Questi articoli non possono essere resi.",
+                "no_defect_found": "Non abbiamo riscontrato il difetto che hai descritto.",
+                "other": "Non abbiamo potuto accettarlo per un altro motivo."
             }
         },
         "deduction-too-high": "La trattenuta per la gestione supera il valore del rimborso.",
@@ -61,6 +67,7 @@
         "statement-forbidden": "Questa data o questo canale non possono essere indicati qui: il sistema imposta quelli dell'acquirente, e il canale appartiene a un recesso registrato dal personale.",
         "statement-required": "Un recesso registrato per l'acquirente richiede la data in cui l'ha dichiarato e il canale usato.",
         "statement-future": "La data in cui l'acquirente l'ha dichiarato non può essere nel futuro.",
-        "statement-before-order": "La data in cui l'acquirente l'ha dichiarato non può precedere l'ordine."
+        "statement-before-order": "La data in cui l'acquirente l'ha dichiarato non può precedere l'ordine.",
+        "decline-message-required": "Scrivi un messaggio all'acquirente: «altro» da solo non dice il perché."
     }
 }
