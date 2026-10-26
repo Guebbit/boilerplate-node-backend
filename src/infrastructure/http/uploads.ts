@@ -52,7 +52,7 @@ export interface RequestImage {
      * Remove whatever THIS request's upload left behind — quarantine file if still pending, or
      * the promoted image and thumbnail if digested inline — on a path about to answer an error.
      * Never keyed on anything the body named: deleting that would destroy a file this request
-     * didn't create. No-op when nothing was uploaded.
+     * didn't create. No-op when nothing was uploaded. Never rejects.
      */
     deleteUpload: () => Promise<boolean>;
 }

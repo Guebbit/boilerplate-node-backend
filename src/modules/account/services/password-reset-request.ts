@@ -80,6 +80,7 @@ const mailResetLink = (user: UserDocument, context: CallerContext): Promise<bool
                 token
             );
             // High priority: a token-bearing link the user is actively waiting on.
+            // eslint-disable-next-line @typescript-eslint/no-floating-promises -- sendAccountMail never rejects (enqueueEmail logs its own failure)
             void sendAccountMail(user.email, mail);
             return true;
         });
@@ -100,7 +101,8 @@ const mailResetLink = (user: UserDocument, context: CallerContext): Promise<bool
  * Token:    like the restore link of `scheduleAccountDeletion` (`./account-deletion.ts`), its
  *           value never leaves its own file.
  *
- * @returns `true` when a mail was queued, `false` when the address has no account or the lookup failed
+ * @returns `true` when a mail was queued, `false` when the address has no account or the lookup
+ *   failed. Never rejects.
  */
 export const requestPasswordReset = (
     email: string | undefined,
@@ -148,5 +150,6 @@ export const requestAccountSetup = (user: UserDocument): Promise<void> =>
             token
         );
         // High priority: a token-bearing link the user is actively waiting on, not a notification.
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises -- sendAccountMail never rejects (enqueueEmail logs its own failure)
         void sendAccountMail(user.email, mail);
     });

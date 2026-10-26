@@ -63,6 +63,7 @@ const notifyOwnerOfAutoDisable = (subscription: WebhookSubscriptionDocument | nu
                 owner.locale ?? getDefaultLocale(),
                 subscription.url
             );
+            // eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects (it logs its own failure)
             void enqueueEmail({ to: owner.email, subject: mail.subject }, mail.template, mail.data);
         })
         .catch((error: unknown) => {

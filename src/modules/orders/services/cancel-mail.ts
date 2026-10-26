@@ -29,11 +29,13 @@ export const mailOrderCancelled = ({
         if (kind === 'reservation-expiry') {
             if (order.paymentMethod === 'bank_transfer') return;
             const mail = cardHoldExpiredEmail(locale, order);
+            // eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects (it logs its own failure)
             void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
             return;
         }
         // The one thing the buyer cannot see for themselves is what became of their money.
         const mail = orderCancelledEmail(locale, name, order, order.orderNumber, refund);
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects (it logs its own failure)
         void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
     });
 };

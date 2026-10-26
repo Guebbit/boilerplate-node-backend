@@ -46,12 +46,16 @@ import { MODULES_ROOT } from '@tests/paths';
  * un-mocks repositories and services across unrelated suites. A glob knows the folder layout; an
  * import knows the whole application.
  */
-void bootI18n(
+bootI18n(
     readdirSync(MODULES_ROOT)
         .map((name) => path.join(MODULES_ROOT, name, 'locales'))
         .filter((directory) => existsSync(directory)),
     'en'
-);
+).catch((error: unknown) => {
+    // `setupFiles` cannot await. Rethrowing from the handler makes the failure an unhandled
+    // rejection, which Jest pins on the first test, instead of a suite quietly running on raw keys.
+    throw new Error('Test setup: the locale dictionaries could not be loaded.', { cause: error });
+});
 
 /*
  * The other half of `app.ts`'s boot: without it, Zod answers its own English here and the suite

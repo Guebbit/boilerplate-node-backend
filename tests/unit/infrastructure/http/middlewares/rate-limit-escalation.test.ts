@@ -16,7 +16,7 @@ const WINDOW_MS = 1000;
 /** Builds a fresh escalating store on this file's window. */
 const freshStore = (): Store => {
     const store = rateLimitStore('test-escalation', 'memory', { limit: 2, doublings: 3 });
-    void store.init?.({ windowMs: WINDOW_MS } as Parameters<NonNullable<Store['init']>>[0]);
+    store.init({ windowMs: WINDOW_MS } as Parameters<NonNullable<Store['init']>>[0]);
     return store;
 };
 

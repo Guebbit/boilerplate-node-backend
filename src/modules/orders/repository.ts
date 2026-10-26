@@ -559,89 +559,104 @@ const findCancelledIdsOf = (userId: string): Promise<{ paid: string[]; unpaid: s
         }));
 
 /**
- * The per-order PII clock, as an aggregation expression: `max(now, createdAt + retentionDays)`, and
- * `now` itself for a never-paid order. Shared by erasure ({@link detachUserId}) and inactivity
- * minimisation ({@link startPiiClock}), so both stamp the same date for the same order.
- *
- * The `$max` is what stops an order already past its own window from getting a fresh ten years just
- * because the account was erased today. A never-paid order (`paidAt` unset — `pending`, or cancelled
- * before ever reaching `paid`) is due AT ONCE instead: it is no tax record at all, so Art. 17(3)(b)/(e)'s
- * retention reason never applied to it in the first place.
- *
- * @param now - the moment the clock is started
- * @param retentionDays - how many days of PII a PAID order gets from ITS OWN `createdAt`
+ * The knobs of the claim window, in days. See `docs/theory/data-retention.md#orders-after-the-account`.
  */
-const piiClockExpression = (now: Date, retentionDays: number) => ({
-    // `$paidAt` missing evaluates falsy in `$cond`'s own boolean rules —
-    // no `$ifNull` needed. https://www.mongodb.com/docs/manual/reference/operator/aggregation/cond/
-    $cond: {
-        if: '$paidAt',
-        // MongoDB's own `$cond` operator syntax requires this exact key;
-        // it is data for the aggregation pipeline, never awaited as a value.
-        // eslint-disable-next-line unicorn/no-thenable -- see comment above
-        then: {
-            $max: [
-                now,
-                { $dateAdd: { startDate: '$createdAt', unit: 'day', amount: retentionDays } }
-            ]
+export interface PiiClaimWindow {
+    /** Days a delivered order keeps the buyer after its `conformityUntil`. */
+    daysAfterGuarantee: number;
+    /** Days a paid order that ended undelivered keeps the buyer after `paidAt`. */
+    daysUndelivered: number;
+}
+
+/**
+ * Which orders the sweep may scrub at `cutoff`: the clock has started AND the order is past its
+ * claim window. Derived from the order's CURRENT fields on every run, so an order delivered after
+ * its erasure follows `conformityUntil` instead of a date frozen earlier.
+ *
+ * | Order                                   | Due                                  |
+ * | --------------------------------------- | ------------------------------------ |
+ * | never paid                              | at once                              |
+ * | delivered (`conformityUntil` set)       | `conformityUntil` + guarantee days   |
+ * | paid, `cancelled` without delivery      | `paidAt` + undelivered days          |
+ * | paid and still open                     | never (it is still to be fulfilled)  |
+ *
+ * @param cutoff - the sweep's instant
+ * @param window - the two knobs
+ * @returns a Mongo filter
+ */
+const piiDueFilter = (cutoff: Date, window: PiiClaimWindow): QueryFilter<OrderDocument> => ({
+    // The sparse index on the marker is what narrows the scan.
+    piiClockStartedAt: { $exists: true },
+    $or: [
+        { paidAt: { $exists: false } },
+        {
+            conformityUntil: { $exists: true },
+            // $dateAdd: https://www.mongodb.com/docs/manual/reference/operator/aggregation/dateAdd/
+            $expr: {
+                $lte: [
+                    {
+                        $dateAdd: {
+                            startDate: '$conformityUntil',
+                            unit: 'day',
+                            amount: window.daysAfterGuarantee
+                        }
+                    },
+                    cutoff
+                ]
+            }
         },
-        else: now
-    }
+        {
+            conformityUntil: { $exists: false },
+            status: OrderStatus.cancelled,
+            $expr: {
+                $lte: [
+                    {
+                        $dateAdd: {
+                            startDate: '$paidAt',
+                            unit: 'day',
+                            amount: window.daysUndelivered
+                        }
+                    },
+                    cutoff
+                ]
+            }
+        }
+    ]
 });
 
 /**
- * Unset `userId` on every order this account placed, and mark each for
- * `reap:orders` to scrub later — `users`' `personalData.erase` hook. The order row
- * is never touched otherwise: it is the invoice, kept whole until its own `anonymizeAfter`.
- *
- * An aggregation-pipeline update, not a flat `$set`, because the clock runs PER ORDER: a decade-old
- * order is due almost immediately, not ten years from today (see {@link piiClockExpression}).
+ * Unset `userId` on every order this account placed, and start the PII clock on each for
+ * `reap:orders` — `users`' `personalData.erase` hook. The order row is never touched otherwise:
+ * it is the sale record, scrubbed only when {@link piiDueFilter} says its claim window is over.
  *
  * @param userId - the erased account's id
- * @param retentionDays - how many days of PII a PAID order gets from ITS OWN `createdAt`
+ * @param session - the erasure's transaction
  * @returns how many orders were detached
  */
-const detachUserId = (
-    userId: string,
-    retentionDays: number,
-    session?: ClientSession
-): Promise<number> =>
+const detachUserId = (userId: string, session?: ClientSession): Promise<number> =>
     orderModel
         .updateMany(
             { userId: toObjectId(userId) },
-            [
-                {
-                    $set: {
-                        userId: '$$REMOVE',
-                        anonymizeAfter: piiClockExpression(new Date(), retentionDays)
-                    }
-                }
-            ],
-            // `updatePipeline: true` — Mongoose refuses an array update otherwise ("Cannot pass an
-            // array to query updates unless the `updatePipeline` option is set"), since an array
-            // and an update-operator OBJECT are both valid `updateMany` arguments with different
-            // semantics. https://mongoosejs.com/docs/api/query.html#Query.prototype.setUpdate()
-            { timestamps: false, updatePipeline: true, ...(session ? { session } : {}) }
+            { $unset: { userId: 1 }, $min: { piiClockStartedAt: new Date() } },
+            // No `updatedAt` bump: this is bookkeeping, not an edit.
+            { timestamps: false, ...(session ? { session } : {}) }
         )
         .exec()
         .then(({ modifiedCount }) => modifiedCount);
 
 /**
  * Start the PII clock on every order an account placed, keeping its `userId` — `personalData.minimise`
- * for an inactive account. Orders already carrying a clock are left alone, so a rerun is a no-op and
- * an order's date never moves later.
+ * for an inactive account. Orders already carrying a clock are left alone, so a rerun is a no-op.
  *
  * @param userId - the inactive account's id
- * @param retentionDays - how many days of PII a PAID order gets from ITS OWN `createdAt`
  * @returns how many orders were stamped
  */
-const startPiiClock = (userId: string, retentionDays: number): Promise<number> =>
+const startPiiClock = (userId: string): Promise<number> =>
     orderModel
         .updateMany(
-            { userId: toObjectId(userId), anonymizeAfter: { $exists: false } },
-            [{ $set: { anonymizeAfter: piiClockExpression(new Date(), retentionDays) } }],
-            // Pipeline update, no `updatedAt` bump: see `detachUserId`.
-            { timestamps: false, updatePipeline: true }
+            { userId: toObjectId(userId), piiClockStartedAt: { $exists: false } },
+            { $set: { piiClockStartedAt: new Date() } },
+            { timestamps: false }
         )
         .exec()
         .then(({ modifiedCount }) => modifiedCount);
@@ -658,17 +673,18 @@ const SCRUB_BATCH_SIZE = 500;
  * exactly when the scrub does.
  *
  * The due filter is repeated on the write: an order another run already scrubbed (its
- * `anonymizeAfter` is gone) is neither scrubbed nor announced a second time.
+ * `piiClockStartedAt` is gone) is neither scrubbed nor announced a second time.
  *
  * @param ids - the due orders this batch read
  * @param cutoff - the sweep's cutoff
+ * @param window - the claim-window knobs
  * @returns how many orders the batch scrubbed
  */
-const scrubBatch = (ids: Types.ObjectId[], cutoff: Date): Promise<number> =>
+const scrubBatch = (ids: Types.ObjectId[], cutoff: Date, window: PiiClaimWindow): Promise<number> =>
     announceInTransaction(
         (session) =>
             orderModel
-                .find({ _id: { $in: ids }, anonymizeAfter: { $lte: cutoff } }, { _id: 1 })
+                .find({ _id: { $in: ids }, ...piiDueFilter(cutoff, window) }, { _id: 1 })
                 .session(session)
                 .lean()
                 .exec()
@@ -679,7 +695,7 @@ const scrubBatch = (ids: Types.ObjectId[], cutoff: Date): Promise<number> =>
                             {
                                 $set: { email: ANONYMIZED_EMAIL },
                                 $unset: {
-                                    anonymizeAfter: 1,
+                                    piiClockStartedAt: 1,
                                     notes: 1,
                                     shippingAddress: 1,
                                     billingAddress: 1
@@ -699,11 +715,11 @@ const scrubBatch = (ids: Types.ObjectId[], cutoff: Date): Promise<number> =>
     ).then((scrubbedIds) => scrubbedIds.length);
 
 /**
- * `reap:orders`'s sweep: every order whose `anonymizeAfter` has elapsed loses its
+ * `reap:orders`'s sweep: every order {@link piiDueFilter} finds due loses its
  * remaining PII, in batches of {@link SCRUB_BATCH_SIZE}, each announced as `order.redacted`.
  *
- * Scrub:      both embedded addresses and `notes` are UNSET; `email` is replaced, since the schema
- *             requires it. Nothing personal survives on the order.
+ * Scrub:      both embedded addresses (country included: the invoice keeps the place of supply)
+ *             and `notes` are UNSET; `email` is replaced, since the schema requires it.
  * Why unset:  `required` never fires on a bulk update, and a scrubbed row with no address reads
  *             as "none" rather than as a placeholder that looks real. City, zip and country go
  *             too, so no half-address is left to re-identify a buyer.
@@ -711,19 +727,20 @@ const scrubBatch = (ids: Types.ObjectId[], cutoff: Date): Promise<number> =>
  *             encrypted at rest like any other PII (GDPR Art. 32).
  * Versioned:  the scrub is an edit, so `updatedAt` moves (no `timestamps: false`) — an open edit
  *             form holding the old ETag is refused instead of putting the email back.
- * Idempotent: `anonymizeAfter` is unset in the same write, so the sparse index it carries no
+ * Idempotent: `piiClockStartedAt` is unset in the same write, so the sparse index it carries no
  *             longer holds the row and the next batch's `$lte` filter cannot match it again.
  * Announced:  one `order.redacted` outbox row per scrubbed order, in the batch's transaction.
  *
- * @param cutoff - orders whose `anonymizeAfter` is at or before this instant are due
+ * @param cutoff - the instant the claim windows are measured against
+ * @param window - the claim-window knobs
  * @returns how many orders were scrubbed
  */
-const scrubDueForAnonymization = async (cutoff: Date): Promise<number> => {
+const scrubDueForAnonymization = async (cutoff: Date, window: PiiClaimWindow): Promise<number> => {
     let total = 0;
     for (;;) {
         // The next batch of what is still due; the previous one no longer matches.
         const due = await orderModel
-            .find({ anonymizeAfter: { $lte: cutoff } }, { _id: 1 })
+            .find(piiDueFilter(cutoff, window), { _id: 1 })
             .limit(SCRUB_BATCH_SIZE)
             .lean()
             .exec();
@@ -731,7 +748,8 @@ const scrubDueForAnonymization = async (cutoff: Date): Promise<number> => {
 
         const scrubbed = await scrubBatch(
             due.map(({ _id }) => _id),
-            cutoff
+            cutoff,
+            window
         );
         total += scrubbed;
         // A batch that scrubbed nothing was taken by a concurrent run; stop rather than spin.
@@ -853,13 +871,9 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     findManyReferences: (ids: readonly string[]) => Promise<OrderReference[]>;
     findOpenUnpaidIdsOf: (userId: string, session?: ClientSession) => Promise<string[]>;
     findCancelledIdsOf: (userId: string) => Promise<{ paid: string[]; unpaid: string[] }>;
-    detachUserId: (
-        userId: string,
-        retentionDays: number,
-        session?: ClientSession
-    ) => Promise<number>;
-    startPiiClock: (userId: string, retentionDays: number) => Promise<number>;
-    scrubDueForAnonymization: (cutoff: Date) => Promise<number>;
+    detachUserId: (userId: string, session?: ClientSession) => Promise<number>;
+    startPiiClock: (userId: string) => Promise<number>;
+    scrubDueForAnonymization: (cutoff: Date, window: PiiClaimWindow) => Promise<number>;
     incrementOrderNumberCounter: (year: number) => Promise<number>;
 } = {
     ...base,

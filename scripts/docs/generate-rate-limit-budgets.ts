@@ -19,6 +19,7 @@ import { applyMarkerBlocks } from './marker-block';
 import type { RateLimitBudget } from '@types';
 import { REPO_ROOT as ROOT } from '../modules-on-disk';
 import { hasFlag } from '../cli';
+import { failScript } from '../fail-script';
 
 /** Report drift instead of rewriting the page — what `complete` runs. */
 const checkOnly = hasFlag('check');
@@ -55,13 +56,15 @@ const budgetTable = (): string =>
         )
     ].join('\n');
 
-void applyMarkerBlocks({
+applyMarkerBlocks({
     file: PAGE,
     root: ROOT,
     blocks: [{ start: START, end: END, body: budgetTable() }],
     label: 'rate-limit-budgets',
     checkOnly,
     driftSubject: 'the rate-limit manifests'
-}).then((code) => {
-    process.exitCode = code;
-});
+})
+    .then((code) => {
+        process.exitCode = code;
+    })
+    .catch(failScript);

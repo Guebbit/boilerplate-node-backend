@@ -62,6 +62,7 @@ export const mailPaymentReceived = ({
 }: DomainEventMap['payment.succeeded']): Promise<void> =>
     orderService.mailBuyerOfOrder(orderId, (order, locale, name) => {
         const mail = paymentReceivedEmail(locale, name, order, orderId);
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects (it logs its own failure)
         void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
     });
 
@@ -91,6 +92,7 @@ export const mailRefundIssued = ({
                     { amount: refund.amount, currency: refund.currency },
                     completesPayment(payment, refund)
                 );
+                // eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects (it logs its own failure)
                 void enqueueEmail(
                     { to: order.email, subject: mail.subject },
                     mail.template,
@@ -135,6 +137,7 @@ export const mailTransferInstructions = (
                 payBy,
                 String(order._id)
             );
+            // eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects (it logs its own failure)
             void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
         })
         .catch((error: unknown) => {
@@ -156,5 +159,6 @@ export const mailTransferInstructions = (
 export const mailTransferExpired = (orderId: string): Promise<void> =>
     orderService.mailBuyerOfOrder(orderId, (order, locale) => {
         const mail = transferExpiredEmail(locale, order);
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects (it logs its own failure)
         void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
     });

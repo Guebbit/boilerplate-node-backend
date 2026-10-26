@@ -209,7 +209,12 @@ const untilEvent =
         });
         stream.on('close', finish);
         stream.on('end', finish);
-        void onOpen();
+        // A rejected opener ends the response the way a dropped connection would, with the error.
+        onOpen().catch((error: unknown) => {
+            if (settled) return;
+            settled = true;
+            callback(error instanceof Error ? error : new Error(String(error)), text);
+        });
     };
 
 /** The `jwt` session cookie a real login sets — the only credential `EventSource` can carry. */

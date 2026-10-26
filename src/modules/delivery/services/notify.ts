@@ -54,6 +54,7 @@ export const mailShipped = ({
                           trackingCode: shipment.trackingCode,
                           remainingUnits
                       });
+                      // eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects (it logs its own failure)
                       void enqueueEmail(
                           { to: order.email, subject: mail.subject },
                           mail.template,
@@ -92,6 +93,7 @@ export const mailTrackingCorrected = (shipment: ShipmentDocument): Promise<void>
                 remainingUnits: 0,
                 corrected: true
             });
+            // eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects (it logs its own failure)
             void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
         })
         .catch((error: unknown) => {
@@ -124,6 +126,7 @@ export const mailDelivered = ({
                                   ? order.withdrawUntil
                                   : undefined
                       });
+                      // eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects (it logs its own failure)
                       void enqueueEmail(
                           { to: order.email, subject: mail.subject },
                           mail.template,
@@ -157,6 +160,7 @@ export const mailDelayed = (delayed: FulfillmentOrderDelayed): Promise<void> =>
             reason: delayed.reason,
             orderUrl: orderFrontendLink({ locale, id: String(order._id) })
         });
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects (it logs its own failure)
         void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
     });
 
@@ -173,5 +177,6 @@ export const mailHoldNoticed = (held: FulfillmentOrderHoldNoticed): Promise<void
             message: held.message,
             orderUrl: orderFrontendLink({ locale, id: String(order._id) })
         });
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects (it logs its own failure)
         void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
     });

@@ -47,7 +47,7 @@ const addressesOf = (userId: string) => addressService.list(userId).then((view) 
 
 /** The PII clock on one order. */
 const clockOf = (orderId: string) =>
-    orderRepository.findById(orderId).then((order) => order?.anonymizeAfter);
+    orderRepository.findById(orderId).then((order) => order?.piiClockStartedAt);
 
 /** Whether the account carries the minimised marker. */
 const isMinimised = (userId: string) =>
@@ -83,7 +83,7 @@ describe('inactivity minimisation', () => {
         expect(result).toEqual({ minimised: 1, failed: 0 });
         expect(await addressesOf(user.id)).toEqual([]);
         const order = await orderRepository.findById(orderId);
-        expect(order?.anonymizeAfter).toBeInstanceOf(Date);
+        expect(order?.piiClockStartedAt).toBeInstanceOf(Date);
         expect(String(order?.userId)).toBe(user.id);
         const reloaded = await userRepository.findById(user.id);
         expect(reloaded?.email).toBe('quiet@minimise.test');

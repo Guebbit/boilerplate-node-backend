@@ -13,6 +13,7 @@ import { refreshLocaleOverrides } from '@infrastructure/i18n';
  * others catch up on their next scheduled refresh. Called for frontend-app writes too,
  * even though those can't affect the overlay — cheaper than threading the app through.
  */
+// eslint-disable-next-line @typescript-eslint/no-floating-promises -- refreshLocaleOverrides never rejects (it logs and keeps the last overlay)
 export const refreshOverlay = (): void => void refreshLocaleOverrides();
 
 /**

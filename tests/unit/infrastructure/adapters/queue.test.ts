@@ -1075,7 +1075,7 @@ describe('stopQueue() on a live connection', () => {
                 })
         );
         const onMessage = await captureConsumerCallback(handler);
-        void onMessage(delivery({ jobId: 1 }));
+        const consumed = onMessage(delivery({ jobId: 1 }));
         await settle();
         mockModelClose.mockClear();
 
@@ -1087,6 +1087,7 @@ describe('stopQueue() on a live connection', () => {
 
         finish?.(true);
         await stopping;
+        await consumed;
 
         expect(mockAck).toHaveBeenCalled();
         expect(mockModelClose).toHaveBeenCalled();

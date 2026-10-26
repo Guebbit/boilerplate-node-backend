@@ -101,7 +101,7 @@ describe('orders — erasing an account cancels its never-paid orders', () => {
 
         const reloaded = await readOrder(String(order._id));
         expect(reloaded!.userId).toBeUndefined();
-        expect(reloaded!.anonymizeAfter).toBeDefined();
+        expect(reloaded!.piiClockStartedAt).toBeDefined();
     });
 
     it('cancels every never-paid order of the account, not just one', async () => {

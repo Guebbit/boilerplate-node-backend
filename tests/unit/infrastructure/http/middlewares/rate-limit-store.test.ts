@@ -107,7 +107,7 @@ describe('the rate limiter’s Redis connection', () => {
          * does with its two script loads — and exactly one `connect()`.
          */
         const store = rateLimitStore('unit');
-        void store.init?.({ windowMs: 60_000 } as never);
+        store.init({ windowMs: 60_000 } as never);
 
         return Promise.all([store.increment('a'), store.increment('b')]).then(() => {
             expect(connectCalls).toBe(1);
@@ -121,7 +121,7 @@ describe('the rate limiter’s Redis connection', () => {
          * that had done nothing wrong failed too and the limiter passed the request through.
          */
         const store = rateLimitStore('unit');
-        void store.init?.({ windowMs: 60_000 } as never);
+        store.init({ windowMs: 60_000 } as never);
 
         return Promise.all([store.increment('a'), store.increment('b')]).then((results) => {
             expect(results).toHaveLength(2);
@@ -134,7 +134,7 @@ describe('the rate limiter’s Redis connection', () => {
         setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: undefined });
 
         const store = rateLimitStore('unit');
-        void store.init?.({ windowMs: 60_000 } as never);
+        store.init({ windowMs: 60_000 } as never);
 
         return Promise.resolve(store.increment('a')).then(() => {
             expect(connectCalls).toBe(0);

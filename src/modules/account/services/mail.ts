@@ -12,7 +12,8 @@ import { enqueueEmail, type EmailContent } from '@infrastructure/adapters/mailer
 import type { JobPriority } from '@infrastructure/adapters/queue';
 
 /**
- * Queue one of this module's own mails. Defaults to `'high'`: all but two of this module's sends
+ * Queue one of this module's own mails. Never rejects (`enqueueEmail` logs its own failure).
+ * Defaults to `'high'`: all but two of this module's sends
  * are a token-bearing link or a code someone is actively waiting on — the two confirmations that
  * are not (`resetConfirmEmail`, `deleteConfirmEmail`) pass `'normal'` explicitly at their call site.
  * @param to - the recipient address

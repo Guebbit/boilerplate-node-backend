@@ -194,8 +194,8 @@ and Healthchecks.io behave the same way: a silent job stays down until someone d
 
 `orders` and a SETTLED `payments` row must NOT be removed on a timer — both are invoices, kept for
 tax and commercial-law reasons. `orders` carries PII (both addresses, notes, email) that survives
-an account's erasure, so `npm run job reap:orders` past `NODE_ORDER_PII_RETENTION_DAYS` (default 3653
-days) replaces the email and unsets both addresses and the notes — see the script's own header.
+an account's erasure, so `npm run job reap:orders` once an order's claim window has closed
+([rule](../theory/data-retention.md#orders-after-the-account)) replaces the email and unsets both addresses and the notes — see the script's own header.
 The invoices keep their own encrypted copy of the buyer address: they are the legal record. `payments`
 carries none: `cardLast4` is not a PAN, and `amount`/`currency`/`provider` were never personal
 data, so a settled payment is never touched by any timer.

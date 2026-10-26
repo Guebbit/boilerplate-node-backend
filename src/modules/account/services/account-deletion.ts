@@ -94,6 +94,7 @@ export const scheduleAccountDeletion = (
                 token,
                 purgeAt
             );
+            // eslint-disable-next-line @typescript-eslint/no-floating-promises -- sendAccountMail never rejects (enqueueEmail logs its own failure)
             void sendAccountMail(user.email, mail);
             return { requestedAt, purgeAt };
         });
@@ -156,6 +157,7 @@ export const announceRestored = (
         greetableName(user, user.email),
         via === 'staff'
     );
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises -- sendAccountMail never rejects (enqueueEmail logs its own failure)
     void sendAccountMail(user.email, mail);
 };
 

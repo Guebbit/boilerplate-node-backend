@@ -93,6 +93,7 @@ const job = requestedJob();
 // Entry point: run the job, record its outcome under its name (a leased job records through its own
 // lease document, since a skipped run must not read as a success), and close the connections on
 // both paths. See `scripts/run-script.ts`.
+// eslint-disable-next-line @typescript-eslint/no-floating-promises -- runScript never rejects (failure is reported via process.exitCode)
 void runScript(
     job.lease ? undefined : job.name,
     () => execute(job),

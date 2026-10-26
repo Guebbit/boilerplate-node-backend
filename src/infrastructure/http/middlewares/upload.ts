@@ -299,6 +299,7 @@ const releaseUnclaimedUpload = (request: Request, response: Response): void => {
         if (response.statusCode < 400 || request.uploadClaimed) return;
         // `deleteUpload` resolves even when the storage hiccups (image-store.ts), so a failure
         // here is only logged by the store itself.
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises -- deleteUpload never rejects (cleanup failures are swallowed by the image store)
         void readUploadedImage(request).deleteUpload();
     });
 };

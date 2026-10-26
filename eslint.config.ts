@@ -288,6 +288,9 @@ export default tseslint.config(
             'no-console': 'warn',
             'no-debugger': 'warn',
             'no-restricted-syntax': ['error', ...bannedDoubleCasts],
+            // `void p` is checked like `p`: `void` alone hides a rejection.
+            // Handle it at the site, or opt out on the line with a reason.
+            '@typescript-eslint/no-floating-promises': ['error', { ignoreVoid: false }],
             /*
              * A comment may point at `docs/` and nothing else that ends in `.md`. Root-level plan
              * and audit docs are deleted when their change lands, and every comment that named one

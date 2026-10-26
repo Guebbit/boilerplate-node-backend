@@ -17,6 +17,7 @@ import { REPO_ROOT as ROOT } from '../modules-on-disk';
 import { applyMarkerBlocks } from './marker-block';
 import { renderCrontab, renderJobsTable } from './jobs-render';
 import { hasFlag } from '../cli';
+import { failScript } from '../fail-script';
 
 /** Report drift instead of rewriting — what `npm run check` runs. */
 const checkOnly = hasFlag('check');
@@ -69,6 +70,8 @@ const main = async (): Promise<number> => {
     return code === 0 ? 0 : 1;
 };
 
-void main().then((code) => {
-    process.exitCode = code;
-});
+main()
+    .then((code) => {
+        process.exitCode = code;
+    })
+    .catch(failScript);

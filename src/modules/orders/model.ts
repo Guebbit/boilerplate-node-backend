@@ -132,7 +132,7 @@ export interface OrderDocument
     /**
      * Absent on an order whose account was erased. The invoice survives erasure
      * (Art. 17(3)(b)/(e)); the account it belonged to does not, and unlike every other document
-     * here that IS the dangling foreign key, not a bug in it. See `anonymizeAfter`.
+     * here that IS the dangling foreign key, not a bug in it. See `piiClockStartedAt`.
      */
     userId?: Types.ObjectId;
     status: OrderStatus;
@@ -156,13 +156,11 @@ export interface OrderDocument
      */
     currency: string;
     /**
-     * Set alongside `userId` being unset, to `max(now, createdAt + NODE_ORDER_PII_RETENTION_DAYS)`
-     * — an order already past its own window at erasure time is due almost immediately, not given
-     * a fresh retention period. `reap:orders` scrubs the order's remaining PII
-     * (email replaced; both addresses and notes unset) once this elapses; the order row itself is
-     * never deleted.
+     * When erasure or inactivity minimisation started this order's PII clock. Only its presence
+     * matters: `reap:orders` derives the due date from `paidAt`, `status` and `conformityUntil`
+     * on every run. See `docs/theory/data-retention.md#orders-after-the-account`.
      */
-    anonymizeAfter?: Date;
+    piiClockStartedAt?: Date;
     /**
      * The moment `services/status.ts#markPaid` moved this order to `paid` — written in the SAME
      * conditional write as the status move, by whichever caller wins that transition, never
@@ -476,7 +474,7 @@ export const orderSchema = new Schema<OrderDocument>(
         deletedAt: {
             type: Date
         },
-        anonymizeAfter: {
+        piiClockStartedAt: {
             type: Date
         }
     },
@@ -517,7 +515,7 @@ orderSchema.index({ userId: 1, deletedAt: 1 }, { name: 'orders_userId_deletedAt'
  * `reap:orders`'s own sweep — NOT a TTL index: the row must survive, only its PII
  * gets scrubbed, so nothing here may carry `expireAfterSeconds`.
  */
-orderSchema.index({ anonymizeAfter: 1 }, { name: 'orders_anonymizeAfter', sparse: true });
+orderSchema.index({ piiClockStartedAt: 1 }, { name: 'orders_piiClockStartedAt', sparse: true });
 /*
  * The Awaiting-transfer tab: pending orders, nearest `payBy` first.
  */
@@ -614,9 +612,9 @@ const applyOrderProjections = (serialized: Record<string, unknown>) => {
  * through the same logic — see `normalize` in @infrastructure/persistence/create-repository.
  */
 export const applyOrderTransform = applySerialization(orderSchema, {
-    // `anonymizeAfter` is the reaper's own bookkeeping, not part of the `Order` contract — same
+    // `piiClockStartedAt` is the reaper's own bookkeeping, not part of the `Order` contract — same
     // reasoning as `users`' `pendingImageKey`/`inactivityWarnedAt`.
-    omit: ['anonymizeAfter', 'conformityUntil', 'moneyReceivedAt'],
+    omit: ['piiClockStartedAt', 'conformityUntil', 'moneyReceivedAt'],
     after: (serialized) => {
         applyOrderItems(serialized);
         // `currency` is required on the schema, so a serialized order always carries it; the
