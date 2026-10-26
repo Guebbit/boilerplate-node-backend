@@ -173,6 +173,7 @@ let refreshTimer: NodeJS.Timeout | undefined;
  */
 export const startLocaleOverrideRefresh = (): void => {
     if (refreshTimer) return;
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises -- refreshLocaleOverrides never rejects (it logs and keeps the last overlay)
     refreshTimer = setInterval(() => void refreshLocaleOverrides(), getOverrideRefreshMs());
     refreshTimer.unref();
 };

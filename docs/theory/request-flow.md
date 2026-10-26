@@ -185,6 +185,36 @@ service, and the ones worth proving without a database live in `domain/`.
 
 Heavy tasks (email, PDF generation) are pushed to [RabbitMQ](../tools/rabbitmq.md) so the HTTP response returns immediately.
 
+### Fire-and-forget work
+
+A promise nobody awaits (the verification mail after a signup, a cache write) has no caller left to
+catch its rejection. `void p` does not change that: it only discards the value. The lint rule
+`@typescript-eslint/no-floating-promises` runs with `ignoreVoid: false`, so `void p` is checked
+like `p`.
+
+What a lost rejection costs depends on where it happens:
+
+| Where                   | What an unhandled rejection does                                                                                                                 |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Production request path | `handleUnhandledRejection` (`src/app/error-handling.ts`) counts it, audit-logs it and keeps running. The line carries no request id and no user. |
+| Tests                   | No handler is registered, so Jest pins the rejection on the test and fails it.                                                                   |
+| Scripts and early boot  | Node's default: the process crashes.                                                                                                             |
+
+```mermaid
+flowchart TD
+    A[A promise you will not await] --> B{Own .catch, or .then with an onRejected arm?}
+    B -- yes --> OK1[Handled: the rule is satisfied]
+    B -- no --> C{Callee documents "Never rejects."?}
+    C -- yes --> OK2["void + eslint-disable-next-line ... -- why"]
+    C -- no --> D[".catch(log with the user or request context)"]
+```
+
+- Handle it at the site: `.catch((error: unknown) => logger.error({ message, userId, error }))`.
+- Opt out only when the callee cannot reject, and say so on the line:
+  `// eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects`.
+  The callee's JSDoc says "Never rejects." so the reason can be checked.
+- A script's top-level promise ends in `.catch(failScript)` (`scripts/fail-script.ts`).
+
 ### Signals everywhere
 
 [Winston](../tools/winston.md), [Prometheus](../tools/prometheus.md), [OpenTelemetry](../tools/opentelemetry.md), and [Grafana](../tools/grafana.md) make it easier to debug the same request from multiple angles. Each log line carries a `trace_id` that links back to the full trace in Grafana → Tempo.

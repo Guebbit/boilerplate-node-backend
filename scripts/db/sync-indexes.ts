@@ -94,4 +94,5 @@ const sync = async (): Promise<void> => {
 
 // `undefined`: a deploy-time setup script, not a `docker/crontab` job — no expected interval to
 // alert on, so it takes no part in the job-health/metric tracking (`docs/reference/ops.md`).
+// eslint-disable-next-line @typescript-eslint/no-floating-promises -- runScript never rejects (failure is reported via process.exitCode)
 void runScript(undefined, sync, () => connection.close());

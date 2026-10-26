@@ -100,7 +100,7 @@ const runChecked = async (
  * @param cleanup - close whatever `main` opened. Runs on both the success and failure paths.
  *                  Required, not defaulted: every script here opens a connection, and a silent
  *                  no-op default is how one of them would quietly stop closing it
- * @returns a promise that always resolves — failure is reported via `process.exitCode`, so
+ * @returns a promise that never rejects — failure is reported via `process.exitCode`, so
  *          callers do not need their own `.catch`
  */
 export const runScript = (

@@ -56,15 +56,18 @@ export const openSseStream = (response: Response, reverify: () => Promise<boolea
         for (const cleanup of cleanups) cleanup();
     };
 
-    const reverifyTimer = setInterval(() => {
-        void reverify()
-            .catch(() => false)
-            .then((allowed) => {
-                if (allowed) return;
+    // Ends the stream from our side. A rejected re-check also lands here: it counts as "no longer allowed".
+    const endStream = () => {
+        response.end();
+        teardown();
+    };
 
-                response.end();
-                teardown();
-            });
+    const reverifyTimer = setInterval(() => {
+        reverify()
+            .then((allowed) => {
+                if (!allowed) endStream();
+            })
+            .catch(endStream);
     }, REVERIFY_INTERVAL_MS);
 
     // 'close' fires on any disconnect — tab closed, navigation, network drop, proxy timeout.

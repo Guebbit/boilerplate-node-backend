@@ -194,5 +194,11 @@ if (cluster.isPrimary && CLUSTER_ENABLED) {
      * Workers execute `./serve` — `createApp()` built, started, and wired to this
      * worker's own signal handlers. Side-effect only: nothing here needs the instance back.
      */
-    void import('./serve');
+    import('./serve').catch((error: unknown) => {
+        logger.error({
+            message: 'Worker could not load the server.',
+            error: extractErrorMessage(error, String(error))
+        });
+        process.exitCode = 1;
+    });
 }

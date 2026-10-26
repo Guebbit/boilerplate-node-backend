@@ -27,6 +27,7 @@ import { coreAuditActions } from '@infrastructure/observability/audit';
 import { applyMarkerBlocks } from './marker-block';
 import { REPO_ROOT as ROOT, modulesWith } from '../modules-on-disk';
 import { hasFlag } from '../cli';
+import { failScript } from '../fail-script';
 
 /** Report drift instead of rewriting the page — what `complete` runs. */
 const checkOnly = hasFlag('check');
@@ -189,4 +190,4 @@ const main = async (): Promise<void> => {
     });
 };
 
-void main();
+main().catch(failScript);

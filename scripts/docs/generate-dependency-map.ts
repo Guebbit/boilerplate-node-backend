@@ -29,6 +29,7 @@ import {
 import { applyMarkerBlocks } from './marker-block';
 import { REPO_ROOT as ROOT } from '../modules-on-disk';
 import { hasFlag } from '../cli';
+import { failScript } from '../fail-script';
 
 /** Report drift instead of rewriting the page — what `complete` runs. */
 const checkOnly = hasFlag('check');
@@ -317,6 +318,8 @@ const apply = async (): Promise<number> => {
     });
 };
 
-void apply().then((code) => {
-    process.exitCode = code;
-});
+apply()
+    .then((code) => {
+        process.exitCode = code;
+    })
+    .catch(failScript);

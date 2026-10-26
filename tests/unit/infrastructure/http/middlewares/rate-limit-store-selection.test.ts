@@ -243,7 +243,7 @@ describe('rateLimitStore — an init failure fails open instead of crashing (reg
         // `express-rate-limit` calls this on the real Store before any request ever increments it —
         // it is what makes `options` truthy, and so what makes `store()` call `inner.init(options)`
         // at all. Skipping it would test a path the middleware never actually leaves untaken.
-        void store.init?.({ windowMs: 60_000 } as Options);
+        store.init({ windowMs: 60_000 } as Options);
 
         // The regression itself: this must resolve, not crash the process, even though init()
         // above is rejecting on this exact tick.
@@ -266,7 +266,7 @@ describe('rateLimitStore — a failed init does not disable the limiter for good
         setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: 'redis://limits:6379' });
         mockInit.mockRejectedValueOnce(new Error('connection refused'));
         const store = freshStore().rateLimitStore('global');
-        void store.init?.({ windowMs: 60_000 } as Options);
+        store.init({ windowMs: 60_000 } as Options);
 
         await store.increment('key');
         // Let the failed init's `.catch()` drop the broken store.
@@ -308,7 +308,7 @@ describe('rateLimitStore — while the limits Redis is down', () => {
     // The whole point of 4.3: an outage must not switch a security budget off.
     it('counts in memory for a budget that fails secure, so its limit still holds', async () => {
         const store = freshStore().rateLimitStore('credentials-identity', 'memory');
-        void store.init?.({ windowMs: 60_000 } as Options);
+        store.init({ windowMs: 60_000 } as Options);
 
         // Read at once: `MemoryStore` hands back the same record object for one key, which the
         // next increment mutates.
@@ -321,14 +321,14 @@ describe('rateLimitStore — while the limits Redis is down', () => {
 
     it('defaults to failing secure: no policy named means memory', async () => {
         const store = freshStore().rateLimitStore('a-new-budget');
-        void store.init?.({ windowMs: 60_000 } as Options);
+        store.init({ windowMs: 60_000 } as Options);
 
         await expect(store.increment('k')).resolves.toMatchObject({ totalHits: 1 });
     });
 
     it('rejects for a budget that passes, so the limiter lets the request through', async () => {
         const store = freshStore().rateLimitStore('global', 'pass');
-        void store.init?.({ windowMs: 60_000 } as Options);
+        store.init({ windowMs: 60_000 } as Options);
 
         await expect(store.increment('k')).rejects.toThrow('limits Redis is unavailable');
     });
@@ -337,8 +337,8 @@ describe('rateLimitStore — while the limits Redis is down', () => {
         const rateLimitStore = freshStore();
         const login = rateLimitStore.rateLimitStore('credentials-identity', 'memory');
         const signup = rateLimitStore.rateLimitStore('signup-identity', 'memory');
-        void login.init?.({ windowMs: 60_000 } as Options);
-        void signup.init?.({ windowMs: 60_000 } as Options);
+        login.init({ windowMs: 60_000 } as Options);
+        signup.init({ windowMs: 60_000 } as Options);
 
         await login.increment('k');
         const commandsAfterFailure = mockSelectionSendCommand.mock.calls.length;
@@ -350,7 +350,7 @@ describe('rateLimitStore — while the limits Redis is down', () => {
 
     it('counts every operation served without Redis, by budget', async () => {
         const store = freshStore().rateLimitStore('credentials-identity', 'memory');
-        void store.init?.({ windowMs: 60_000 } as Options);
+        store.init({ windowMs: 60_000 } as Options);
         const metrics = freshFallbackCounter();
 
         await store.increment('k');
@@ -366,7 +366,7 @@ describe('rateLimitStore — while the limits Redis is down', () => {
         jest.useFakeTimers({ now: Date.now() });
         try {
             const store = freshStore().rateLimitStore('credentials-identity', 'memory');
-            void store.init?.({ windowMs: 60_000 } as Options);
+            store.init({ windowMs: 60_000 } as Options);
             await store.increment('k');
 
             mockSelectionSendCommand.mockImplementation(() => Promise.resolve(7));

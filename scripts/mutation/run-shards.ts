@@ -39,6 +39,7 @@ import { TARGET_LINES_PER_SHARD, packIntoShards } from './sharding';
 import { runStryker } from './stryker-run';
 import { REPO_ROOT } from '../modules-on-disk';
 import { flagValue, hasFlag } from '../cli';
+import { failScript } from '../fail-script';
 
 /** Where each shard's report is kept between evenings. Under `tmp/`, so it is gitignored. */
 const SHARD_ROOT = path.join(REPO_ROOT, 'tmp', 'reports', 'mutation-shards');
@@ -218,4 +219,6 @@ const main = async (): Promise<number> => {
 };
 
 // Entry point: `main`'s return value is the exit code.
-void main().then((code) => process.exit(code));
+main()
+    .then((code) => process.exit(code))
+    .catch(failScript);

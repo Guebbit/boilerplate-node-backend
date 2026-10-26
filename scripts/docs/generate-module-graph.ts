@@ -35,6 +35,7 @@ import { applyMarkerBlocks } from './marker-block';
 import { readCatalogue, renderModuleList } from './module-catalogue';
 import { MODULES_ROOT, REPO_ROOT as ROOT } from '../modules-on-disk';
 import { hasFlag } from '../cli';
+import { failScript } from '../fail-script';
 
 const checkOnly = hasFlag('check');
 
@@ -346,6 +347,8 @@ const run = async (): Promise<number> => {
     return code;
 };
 
-void run().then((code) => {
-    process.exitCode = code;
-});
+run()
+    .then((code) => {
+        process.exitCode = code;
+    })
+    .catch(failScript);

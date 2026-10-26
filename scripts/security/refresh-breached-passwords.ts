@@ -96,4 +96,5 @@ const main = async (): Promise<void> => {
 
 // `undefined`: run by hand, no scheduler (see this file's own docblock) — not a
 // `docker/crontab` job, so it takes no part in the job-health/metric tracking.
+// eslint-disable-next-line @typescript-eslint/no-floating-promises -- runScript never rejects (failure is reported via process.exitCode)
 void runScript(undefined, main, () => Promise.resolve());

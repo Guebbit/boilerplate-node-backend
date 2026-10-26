@@ -101,5 +101,6 @@ export const mailBuyerOfOrder = (
 export const mailOrderPlaced = ({ orderId }: DomainEventMap['order.created']): Promise<void> =>
     mailBuyerOfOrder(orderId, (order, locale, name) => {
         const mail = orderConfirmEmail(locale, name, order, orderId);
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects (it logs its own failure)
         void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
     });

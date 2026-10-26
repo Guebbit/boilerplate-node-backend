@@ -21,6 +21,7 @@ import { removeSeedImages, removeShopOnlyScenarioFiles } from './demo-remove-sce
 import { formatWithRepoConfig } from './format-text';
 import { writeScenarioRegistries } from './scenario-registry';
 import { REPO_ROOT } from '../modules-on-disk';
+import { failScript } from '../fail-script';
 
 /** Print every step's own report line. */
 const report = (notes: readonly RemovalNote[]): void => {
@@ -48,18 +49,20 @@ report(removeShopOnlyScenarioFiles(REPO_ROOT));
  * Step three: regenerate the registries that listed the deleted files — the one rewrite the strip
  * makes, and a generated one — then say what to do next.
  */
-void writeScenarioRegistries(REPO_ROOT, formatWithRepoConfig).then((written) => {
-    console.info('\n[demo-remove] the scenario registries, rebuilt from what is left:');
-    report(written.map((file) => ({ file, detail: 'regenerated' })));
-    // What the person running this must do next, since the edits above are not yet verified.
-    console.info('\n[demo-remove] done. Next:');
-    console.info(
-        '  1. npm run regenerate   — rebuild the contract bundles and every generated doc page'
-    );
-    console.info(
-        '  2. npm run ts-check     — anything it still reports names the removed modules in a'
-    );
-    console.info(
-        '                            string or a table rather than an import; fix it by hand.'
-    );
-});
+writeScenarioRegistries(REPO_ROOT, formatWithRepoConfig)
+    .then((written) => {
+        console.info('\n[demo-remove] the scenario registries, rebuilt from what is left:');
+        report(written.map((file) => ({ file, detail: 'regenerated' })));
+        // What the person running this must do next, since the edits above are not yet verified.
+        console.info('\n[demo-remove] done. Next:');
+        console.info(
+            '  1. npm run regenerate   — rebuild the contract bundles and every generated doc page'
+        );
+        console.info(
+            '  2. npm run ts-check     — anything it still reports names the removed modules in a'
+        );
+        console.info(
+            '                            string or a table rather than an import; fix it by hand.'
+        );
+    })
+    .catch(failScript);

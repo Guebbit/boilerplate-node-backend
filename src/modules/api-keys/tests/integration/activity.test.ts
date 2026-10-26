@@ -51,12 +51,12 @@ describe('an api key in use', () => {
         expect(resolution).toHaveProperty('ok');
         // The stamp is fire-and-forget: give the write a moment to land.
         let stamp: Date | undefined;
-        await eventually(() => {
-            void stampOf(user.id).then((value) => {
+        await eventually(() =>
+            stampOf(user.id).then((value) => {
                 stamp = value;
-            });
-            return stamp !== undefined;
-        });
+                return stamp !== undefined;
+            })
+        );
         expect(stamp).toBeInstanceOf(Date);
     });
 });
