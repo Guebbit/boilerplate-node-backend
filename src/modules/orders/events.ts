@@ -79,6 +79,21 @@ declare module '@kernel/events' {
          * `order.redacted` webhook (GDPR Art. 19).
          */
         'order.redacted': { orderId: string };
+
+        /**
+         * The shop's cancellation rule paused a buyer's checkout (`./services/purchase-hold.ts`),
+         * emitted once per hold actually taken — a redelivered cancel finds the hold already there
+         * and says nothing. `notifications` turns it into a work notice for the staff who can ban.
+         *
+         * Internal only — no AsyncAPI channel carries it, and no webhook.
+         */
+        'order.purchase_hold_placed': {
+            tenantId: string;
+            /** The buyer whose checkout was paused. */
+            userId: string;
+            /** ISO instant the pause ends by itself. */
+            until: string;
+        };
     }
 }
 
@@ -96,3 +111,6 @@ export const ORDER_STATUS_OVERRIDDEN = 'order.status_overridden';
 
 /** See `DomainEventMap['order.redacted']` above. */
 export const ORDER_REDACTED = 'order.redacted';
+
+/** See `DomainEventMap['order.purchase_hold_placed']` above. */
+export const ORDER_PURCHASE_HOLD_PLACED = 'order.purchase_hold_placed';

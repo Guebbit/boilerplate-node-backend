@@ -40,8 +40,7 @@ import { examplePublishedEmail } from '@modules/example';
 import {
     orderConfirmEmail,
     cardHoldExpiredEmail,
-    orderCancelledEmail,
-    purchaseHoldStaffEmail
+    orderCancelledEmail
 } from '@modules/orders/emails';
 import {
     paymentReceivedEmail,
@@ -59,7 +58,7 @@ import {
 } from '@modules/delivery/emails';
 import { returnNoticeEmail } from '@modules/returns';
 import { backInStockEmail } from '@modules/stock-alerts';
-import { subscriptionDisabledEmail } from '@modules/webhooks';
+import { staffNoticeEmail } from '@modules/notifications/emails';
 import { apiKeyMintedEmail, apiKeysRevokedEmail } from '@modules/api-keys/emails';
 
 // Every case in this file renders against the real collection, the same one `app.ts` builds at
@@ -180,14 +179,6 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         '2026-000041',
         true
     ),
-    'orders.purchase-hold-staff': purchaseHoldStaffEmail(locale, {
-        buyerEmail: 'ada@example.com',
-        userId: '6ad69a48f753b902e5b98dfe',
-        cancelCount: 3,
-        windowDays: 7,
-        kind: 'paused',
-        until: '2026-10-26T22:00:00.000Z'
-    }),
     'users.purchase-hold-placed': purchaseHoldPlacedEmail(locale, {
         until: new Date('2026-10-26T22:00:00.000Z'),
         reason: 'repeated_cancellations',
@@ -234,7 +225,10 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         returnPostage: 'consumer',
         at: new Date('2026-08-06T10:30:00Z')
     }),
-    'webhooks.subscription-disabled': subscriptionDisabledEmail(locale, 'https://example.com/hook'),
+    'notifications.staff-notice': staffNoticeEmail(locale, {
+        code: 'notifications.staff.purchase-hold-placed',
+        params: { userId: '6ad69a48f753b902e5b98dfe', until: '2026-10-26T22:00:00.000Z' }
+    }),
     'example.published': examplePublishedEmail(locale, 'Ada', 'A title'),
     'feedback.contact': contactRequestEmail(locale, {
         name: 'Ada',

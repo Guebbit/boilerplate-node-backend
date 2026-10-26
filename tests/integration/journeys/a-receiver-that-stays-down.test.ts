@@ -5,27 +5,28 @@
  * A subscription points at an endpoint that answers 500 to everything. Each event gets a chain of
  * six attempts along the backoff ladder and then gives up. Five given-up chains in a row are not
  * enough on their own: the subscription must also have been failing for three days. Once both
- * hold it switches itself off, tells its owner, and leaves a system audit row. Switching it back
+ * hold it switches itself off, tells the staff who manage webhooks, and leaves a system audit row. Switching it back
  * on, through its own endpoint, starts a clean streak.
  *
  * Asserts the chain across modules only; the ladder itself has its own tests.
  */
 import '@tests/contract';
-import { ListAuditEntries200Response, ListWebhookSubscriptions200Response } from '@api/schemas.zod';
+import {
+    ListAuditEntries200Response,
+    ListNotifications200Response,
+    ListWebhookSubscriptions200Response
+} from '@api/schemas.zod';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs, loginBearer } from '@tests/http';
 import { advanceDate, freezeDate } from '@tests/clock';
 import { bodyOf } from '@tests/body-of';
 import { drain } from '@tests/drain';
-import { mailsTo, useOutboxMail } from '@tests/journey-mail';
 import { startWebhookReceiver, type WebhookReceiver } from '@tests/webhook-receiver';
 import { newShopper, placeOrder } from '@tests/journey-orders';
 import { webhookSubscriptionRepository } from '@modules/webhooks/repository';
 import { createProduct } from '@modules/products/tests/factories';
 
 setupTestDb();
-
-beforeEach(useOutboxMail);
 
 let receiver: WebhookReceiver | undefined;
 
@@ -76,6 +77,15 @@ it('switches itself off after five dead chains and three failing days, then star
         return items.find(({ id }) => id === subscriptionId);
     };
 
+    /** The work notices of the signed-in admin's bell that say a webhook was disabled. */
+    const disabledNotices = async () =>
+        bodyOf(
+            await api()
+                .get('/notifications')
+                .set('Authorization', await loginBearer(admin.email)),
+            ListNotifications200Response
+        ).items.filter(({ code }) => code === 'notifications.staff.webhook-disabled');
+
     /**
      * One more order, which is one more `order.created` for the endpoint to fail. A shopper of its
      * own each time, because an account may hold only two unpaid orders.
@@ -89,7 +99,7 @@ it('switches itself off after five dead chains and three failing days, then star
     for (let event = 0; event < 5; event += 1) await placeOne();
     await runLadder();
     expect(await subscription()).toMatchObject({ enabled: true, consecutiveFailures: 5 });
-    expect(mailsTo(admin.email, 'webhooks.subscription-disabled')).toHaveLength(0);
+    await expect(disabledNotices()).resolves.toHaveLength(0);
 
     // Three days on, one more dead chain meets both conditions.
     advanceDate(3 * DAY_MS);
@@ -99,7 +109,9 @@ it('switches itself off after five dead chains and three failing days, then star
     // The guard's work, not a pause: the wire says so through `autoDisabledAt`.
     const autoDisabled = await subscription();
     expect(autoDisabled?.autoDisabledAt).toBeDefined();
-    expect(mailsTo(admin.email, 'webhooks.subscription-disabled')).toHaveLength(1);
+    await expect(disabledNotices()).resolves.toMatchObject([
+        { audience: 'staff', params: { subscriptionId } }
+    ]);
     const audit = bodyOf(
         await api()
             .get('/audit')

@@ -13,6 +13,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { setCookie } from '@tests/cookies';
 import { MISSING_ID } from '@tests/ids';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { notificationsService } from '@modules/notifications/services';
 import { createNotification } from '@modules/notifications/tests/factories';
@@ -67,6 +68,55 @@ describe('GET /notifications', () => {
             'notifications.cart-merge-refused',
             'notifications.wishlist-item-removed'
         ]);
+    });
+});
+
+describe('GET /notifications for a work notice', () => {
+    it('matches the contract for both staff variants, shown to a member holding their sets', async () => {
+        const { bearer, user } = await authenticateAs('admin');
+        await createNotification({
+            userId: user.id,
+            body: {
+                code: 'notifications.staff.purchase-hold-placed',
+                params: { userId: MISSING_ID, until: '2026-10-30T09:00:00.000Z' }
+            },
+            staff: { tenantId: DEPLOYMENT_TENANT_ID, sets: ['UserBanning'] }
+        });
+        await createNotification({
+            userId: user.id,
+            body: {
+                code: 'notifications.staff.webhook-disabled',
+                params: { subscriptionId: MISSING_ID }
+            },
+            staff: { tenantId: DEPLOYMENT_TENANT_ID, sets: ['WebhookManagement'] }
+        });
+
+        const response = await api().get('/notifications').set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.items).toHaveLength(2);
+        for (const item of response.body.items) expect(item.audience).toBe('staff');
+        expect(JSON.stringify(response.body)).not.toContain('UserBanning');
+    });
+
+    it('answers 404 for a work notice whose sets the caller no longer holds', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const row = await createNotification({
+            userId: user.id,
+            body: {
+                code: 'notifications.staff.webhook-disabled',
+                params: { subscriptionId: MISSING_ID }
+            },
+            staff: { tenantId: DEPLOYMENT_TENANT_ID, sets: ['WebhookManagement'] }
+        });
+
+        const listed = await api().get('/notifications').set('Authorization', bearer);
+        const single = await api()
+            .get(`/notifications/${String(row._id)}`)
+            .set('Authorization', bearer);
+
+        expect(listed.body.items).toEqual([]);
+        expect(single.status).toBe(404);
     });
 });
 

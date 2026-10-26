@@ -4,14 +4,15 @@
  * payload to the rows to write — the module's `subscribe()` wires them to the bus, and the writing
  * itself stays in `./inbox`.
  *
- * Severity is `warning` throughout: each message says "something you had changed without you
- * asking", which is worth a look and not an error.
+ * Own-message severity is `warning` throughout: each says "something you had changed without you
+ * asking", which is worth a look and not an error. Work notices take theirs from `../staff-routing`.
  */
 
 import { Types } from 'mongoose';
 import type { DomainEventMap } from '@kernel/events';
 import type { NewNotification } from '../repository';
 import { notificationsCreate } from './inbox';
+import { notifyStaff } from './staff';
 
 /** One row per owner of a removed product, all the same message. */
 const removedFor = (
@@ -111,3 +112,27 @@ export const onFulfillmentOrderDelayed = (
                   }
               }
           ]);
+
+/** A buyer's checkout was paused: the staff who can ban hear of it, once per hold taken. */
+export const onPurchaseHoldPlaced = ({
+    tenantId,
+    userId,
+    until
+}: DomainEventMap['order.purchase_hold_placed']): Promise<void> =>
+    notifyStaff({
+        tenantId,
+        body: { code: 'notifications.staff.purchase-hold-placed', params: { userId, until } },
+        dedupeKey: `purchase-hold-placed:${userId}:${until}`
+    });
+
+/** A subscription was switched off: the staff who manage webhooks hear of it, once per disable. */
+export const onWebhookSubscriptionAutoDisabled = ({
+    tenantId,
+    subscriptionId,
+    disabledAt
+}: DomainEventMap['webhook.subscription_auto_disabled']): Promise<void> =>
+    notifyStaff({
+        tenantId,
+        body: { code: 'notifications.staff.webhook-disabled', params: { subscriptionId } },
+        dedupeKey: `webhook-disabled:${subscriptionId}:${disabledAt}`
+    });

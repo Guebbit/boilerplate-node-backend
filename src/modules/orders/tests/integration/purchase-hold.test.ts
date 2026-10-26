@@ -10,17 +10,22 @@ import { createUser, userRepository } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { asAdmin, asCustomer, callerContextAs } from '@tests/callers';
-import { emitDomainEvent, resetDomainEvents } from '@kernel/events';
+import {
+    emitDomainEvent,
+    onDomainEvent,
+    resetDomainEvents,
+    type DomainEventMap
+} from '@kernel/events';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { registerModules } from '@kernel/registry';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { userService } from '@modules/users';
-import { shopIdentity } from '@modules/shop';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { OrderStatus } from '@types';
 import { DAY_MS } from '@domain-primitives/time';
 import { orderService } from '../../services';
-import { ORDER_CANCELLED } from '../../events';
+import { ORDER_CANCELLED, ORDER_PURCHASE_HOLD_PLACED } from '../../events';
 import ordersModule from '../../module';
 import { orderRepository } from '../../repository';
 import { logger } from '@infrastructure/adapters/logger';
@@ -36,8 +41,12 @@ setupTestDb();
 
 beforeEach(() => {
     mockEnqueueEmail.mockReset();
-    // The operator mail chains a `.catch` on the queue's promise, like the contact form's.
+    // The buyer mail chains a `.catch` on the queue's promise, like the contact form's.
     mockEnqueueEmail.mockResolvedValue(undefined);
+    placedFacts.length = 0;
+    onDomainEvent(ORDER_PURCHASE_HOLD_PLACED, (fact) => {
+        placedFacts.push(fact);
+    });
 });
 
 afterEach(() => {
@@ -94,9 +103,11 @@ const flaggedAt = (id: string) =>
 /** What the `order.cancelled` row says for a buyer cancel, as the relay would deliver it. */
 const buyerCancelled = (orderId: string) => ({ orderId, refund: true, cause: 'customer' }) as const;
 
-/** The staff notices queued so far. */
-const staffNotices = () =>
-    mockEnqueueEmail.mock.calls.filter(([, template]) => template === 'orders.purchase-hold-staff');
+/** The `order.purchase_hold_placed` facts emitted so far: what `notifications` turns into a work notice. */
+const placedFacts: DomainEventMap['order.purchase_hold_placed'][] = [];
+
+/** The holds staff were told about so far. */
+const staffNotices = () => placedFacts;
 
 /** The stored purchase hold the checkout would read. */
 const holdOf = (id: string) => userService.purchaseHoldOf(id);
@@ -112,7 +123,7 @@ describe('considerPurchaseHold', () => {
         expect(staffNotices()).toHaveLength(0);
     });
 
-    it('holds the checkout after the third, and tells staff once', async () => {
+    it('holds the checkout after the third, and announces it once', async () => {
         const buyer = await createUser();
 
         for (let n = 0; n < 3; n += 1)
@@ -124,7 +135,7 @@ describe('considerPurchaseHold', () => {
         expect(staffNotices()).toHaveLength(1);
     });
 
-    it('does not take a second hold, or mail twice, when the same cancel is delivered again', async () => {
+    it('does not take a second hold, or announce it twice, when the same cancel is delivered again', async () => {
         const buyer = await createUser();
         const ids = [await cancelOneAsBuyer(buyer), await cancelOneAsBuyer(buyer)];
         const third = await cancelOneAsBuyer(buyer);
@@ -173,7 +184,7 @@ describe('considerPurchaseHold', () => {
         for (let n = 0; n < 3; n += 1)
             await orderService.considerPurchaseHold(buyerCancelled(await cancelOneAsBuyer(buyer)));
         await userService.liftPurchaseHold(buyer.id, callerContextAs('admin'));
-        mockEnqueueEmail.mockClear();
+        placedFacts.length = 0;
 
         // One more cancel after the review is one, not four.
         await orderService.considerPurchaseHold(buyerCancelled(await cancelOneAsBuyer(buyer)));
@@ -197,28 +208,20 @@ describe('considerPurchaseHold', () => {
         });
     });
 
-    it('mails the shop address when no staff mailbox is configured, in the default language', async () => {
+    it('announces the hold with the buyer, the shop and when the pause ends', async () => {
         const buyer = await createUser();
 
         for (let n = 0; n < 3; n += 1)
             await orderService.considerPurchaseHold(buyerCancelled(await cancelOneAsBuyer(buyer)));
 
-        const [envelope] = staffNotices()[0] ?? [];
-        expect(envelope?.to).toBe(shopIdentity().email);
-        expect(envelope?.subject).toContain(buyer.email);
-    });
-
-    it('prefers NODE_STAFF_NOTIFY_EMAIL when it is set', async () => {
-        await withEnvironmentOverrides({ NODE_STAFF_NOTIFY_EMAIL: 'staff@shop.test' }, async () => {
-            const buyer = await createUser();
-
-            for (let n = 0; n < 3; n += 1)
-                await orderService.considerPurchaseHold(
-                    buyerCancelled(await cancelOneAsBuyer(buyer))
-                );
-
-            expect(staffNotices()[0]?.[0].to).toBe('staff@shop.test');
-        });
+        const hold = await holdOf(buyer.id);
+        expect(staffNotices()).toEqual([
+            {
+                tenantId: DEPLOYMENT_TENANT_ID,
+                userId: buyer.id,
+                until: hold?.until.toISOString()
+            }
+        ]);
     });
 
     it('is wired to order.cancelled by the module', async () => {
@@ -303,16 +306,13 @@ describe('the pause counts what bots do', () => {
         await expect(holdOf(buyer.id)).resolves.toMatchObject({ reason: 'repeated_cancellations' });
     });
 
-    it('flags the account in the same write as the pause, and the staff mail says paused', async () => {
+    it('flags the account in the same write as the pause', async () => {
         const buyer = await createUser();
 
         for (let n = 0; n < 3; n += 1)
             await orderService.considerPurchaseHold(buyerCancelled(await cancelOneAsBuyer(buyer)));
 
         await expect(flaggedAt(buyer.id)).resolves.toBeInstanceOf(Date);
-        const [envelope, , data] = staffNotices()[0] ?? [];
-        expect(envelope?.subject).toContain('checkout paused');
-        expect(JSON.stringify(data)).toContain('ends by itself');
     });
 });
 
@@ -335,7 +335,7 @@ describe('the pause never lasts longer than 7 days', () => {
 });
 
 describe('paid cancellations only flag the account', () => {
-    it('flags at the third paid cancel, leaves checkout open and says so to staff', async () => {
+    it('flags at the third paid cancel and leaves checkout open, announcing nothing', async () => {
         const buyer = await createUser();
 
         for (let n = 0; n < 3; n += 1)
@@ -345,10 +345,8 @@ describe('paid cancellations only flag the account', () => {
 
         await expect(holdOf(buyer.id)).resolves.toBeUndefined();
         await expect(flaggedAt(buyer.id)).resolves.toBeInstanceOf(Date);
-        expect(staffNotices()).toHaveLength(1);
-        const [envelope, , data] = staffNotices()[0] ?? [];
-        expect(envelope?.subject).toContain('Review needed');
-        expect(JSON.stringify(data)).toContain('statutory withdrawal');
+        // A flag alone is a statutory withdrawal pattern, not a pause: the users list filter finds it.
+        expect(staffNotices()).toHaveLength(0);
     });
 
     it('flags nothing below the limit', async () => {
@@ -384,17 +382,6 @@ describe('paid cancellations only flag the account', () => {
         await expect(flaggedAt(buyer.id)).resolves.toBeInstanceOf(Date);
     });
 
-    it('mails staff once, however many more paid cancels follow while it stays flagged', async () => {
-        const buyer = await createUser();
-
-        for (let n = 0; n < 5; n += 1)
-            await orderService.considerPurchaseHold(
-                buyerCancelled(await cancelOnePaidAsBuyer(buyer))
-            );
-
-        expect(staffNotices()).toHaveLength(1);
-    });
-
     it('does not mix with the unpaid count: two unpaid and two paid pause and flag nothing', async () => {
         const buyer = await createUser();
         await orderService.considerPurchaseHold(buyerCancelled(await cancelOneAsBuyer(buyer)));
@@ -413,7 +400,6 @@ describe('paid cancellations only flag the account', () => {
                 buyerCancelled(await cancelOnePaidAsBuyer(buyer))
             );
         await userService.liftPurchaseHold(buyer.id, callerContextAs('admin'));
-        mockEnqueueEmail.mockClear();
 
         await orderService.considerPurchaseHold(buyerCancelled(await cancelOnePaidAsBuyer(buyer)));
 

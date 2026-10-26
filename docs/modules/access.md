@@ -23,6 +23,7 @@ flowchart LR
     account["account"]
     api_keys["api-keys"]
     audit_logs["audit-logs"]
+    notifications["notifications"]
     orders["orders"]
     payments["payments"]
     returns["returns"]
@@ -31,6 +32,7 @@ flowchart LR
     account --> access
     api_keys --> access
     audit_logs --> access
+    notifications --> access
     orders --> access
     payments --> access
     returns --> access
@@ -41,7 +43,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class orders core;
-    class payments,returns supporting;
+    class notifications,payments,returns supporting;
     class account,api_keys,audit_logs,users generic;
     class access centre;
 ```

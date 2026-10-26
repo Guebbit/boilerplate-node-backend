@@ -9,8 +9,13 @@ import { NotificationSeverity } from '@types';
 import { defaultOf, enumOf, indexSpecs, optionsOf, refOf, requiredPaths } from '@tests/schema';
 
 describe('notificationSchema', () => {
-    it('requires the owner, the code and the severity', () => {
-        expect(requiredPaths(notificationSchema)).toEqual(['code', 'severity', 'userId']);
+    it('requires the owner, the audience, the code and the severity', () => {
+        expect(requiredPaths(notificationSchema)).toEqual([
+            'audience',
+            'code',
+            'severity',
+            'userId'
+        ]);
     });
 
     it('leaves readAt absent until the inbox is opened on it', () => {
@@ -32,11 +37,19 @@ describe('notificationSchema', () => {
         expect(refOf(notificationSchema, 'userId')).toBe('User');
     });
 
-    it('declares the inbox index newest first, and nothing else', () => {
-        // The same order serves the inbox read and, from the far end, the cap's trim.
+    it('declares the inbox index newest first, the work notice dedupe key and the TTL', () => {
+        // The first serves the inbox read and, from the far end, the cap's trim; the second keeps
+        // a redelivered event to one row per recipient; the third lets work notices age out.
         expect(indexSpecs(notificationSchema)).toEqual([
-            'userId_1_createdAt_-1: userId+1, createdAt-1'
+            'expiresAt_1: expiresAt+1',
+            'userId_1_createdAt_-1: userId+1, createdAt-1',
+            'userId_1_dedupeKey_1: userId+1, dedupeKey+1'
         ]);
+    });
+
+    it('treats a message as the owner’s own unless a work notice says otherwise', () => {
+        expect(defaultOf(notificationSchema, 'audience')).toBe('own');
+        expect(enumOf(notificationSchema, 'audience')).toEqual(['own', 'staff']);
     });
 
     it('stamps creation only: a row is written once', () => {
