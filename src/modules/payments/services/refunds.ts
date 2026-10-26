@@ -67,6 +67,7 @@ import {
 import {
     isFullyRefunded,
     recordRefundFailure,
+    refundedPayload,
     refundRow,
     remainingOf,
     settleRefund
@@ -1215,3 +1216,24 @@ export const sendOpenedRefund = (
             // Stryker restore all
             return 'open';
         });
+
+/**
+ * One `payment.refunded` payload per refund that settled on an order's payment, oldest settlement
+ * first: what `invoicing` replays to issue the credit notes a dead invoice event made it miss. A
+ * refund the provider later took back keeps its `settledAt`-era note, so it is included only while
+ * it still carries one; a settled-by-hand record has `settledAt` too.
+ *
+ * @param orderId - the order
+ * @returns the payloads; empty when the order has no payment or nothing settled
+ */
+export const settledRefundPayloads = (
+    orderId: string
+): Promise<DomainEventMap['payment.refunded'][]> =>
+    paymentRepository.findByOrderId(orderId).then((payment) =>
+        payment
+            ? payment.refunds
+                  .filter((refund) => refund.status === RefundStatus.succeeded && refund.settledAt)
+                  .toSorted((a, b) => (a.settledAt?.getTime() ?? 0) - (b.settledAt?.getTime() ?? 0))
+                  .map((refund) => refundedPayload(payment, refund))
+            : []
+    );

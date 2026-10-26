@@ -87,6 +87,14 @@ flowchart LR
     class I,C,ID,CD own;
 ```
 
+**No invoice, no note, on purpose.** Money that never paid for a sale (a late payment on a cancelled
+order, an amount mismatch) has no invoice and gets no credit note: there was no supply to reverse
+(VAT Directive Art. 2(1)(a) and 65, CJEU C-419/02 BUPA). The other way to miss an invoice is a dead
+invoice event (the outbox parks it after its last attempt, and a refund meanwhile skips its note).
+Reviving that event is complete: after the invoice, `creditSettledRefunds` asks `payments` for the
+order's settled refunds (`paymentService.settledRefundPayloads`, oldest settlement first) and issues
+one note each. `refundId` is unique, so a repeat issues nothing twice.
+
 `issueInvoice` (`services/issue-invoice.ts`) freezes: the order's own lines (title, quantity,
 frozen unit price, frozen VAT rate, frozen rate type), the VAT breakdown `orderTaxBreakdown`
 computes from them, the order's own `billingAddress` as the Art. 226 buyer address (every checkout

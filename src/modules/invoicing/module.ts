@@ -24,7 +24,7 @@ import { PAYMENT_REFUNDED } from '@modules/payments';
 import { OrderStatus } from '@types';
 import { router } from './routes';
 import { invoicingService } from './services';
-import { issueCreditNote } from './services/issue-credit-note';
+import { creditSettledRefunds, issueCreditNote } from './services/issue-credit-note';
 import { collectPersonalData } from './services/personal-data';
 import { invoicingRateLimits } from './rate-limits';
 import { invoicingConfig } from './config';
@@ -59,9 +59,14 @@ export default {
             // A fresh read, not the event's own payload: `ORDER_STATUS_CHANGED` carries only
             // `{ orderId, from, to }`, and this needs the order's full frozen lines, address and
             // currency to freeze onto the invoice.
-            return orderService
-                .getById(orderId)
-                .then((order) => (order ? invoicingService.issueInvoice(order) : undefined));
+            return (
+                orderService
+                    .getById(orderId)
+                    .then((order) => (order ? invoicingService.issueInvoice(order) : undefined))
+                    // A refund that settled while the invoice event was dead found no invoice to
+                    // credit and skipped its note; reviving the invoice brings the notes back.
+                    .then((invoice) => (invoice ? creditSettledRefunds(orderId) : undefined))
+            );
         });
         onDomainEvent(PAYMENT_REFUNDED, ({ orderId, refundId, amount, full, goods }) =>
             issueCreditNote({

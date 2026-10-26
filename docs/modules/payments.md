@@ -426,6 +426,8 @@ sequenceDiagram
   transaction when goods are received) opens a refund with `reason: return` and the return's `returnId`, clamped to what the
   payment has left. The record commits with the return; `sendOpenedRefund` asks the provider after. `payment.refunded` carries the `returnId`, so `returns` closes the return when
   the refund lands — including later, when the sweep completes one the provider first refused.
+- **No sale, no document.** A late payment or an amount mismatch has no invoice, so its refund gets no
+  credit note ([`invoicing`](./invoicing.md#issuing-a-document)).
 - **A late payment is named.** Money that lands after the order could no longer be paid (its hold
   expired or it was cancelled) is refunded with `reason: late_payment`, not `cancellation`, so staff
   can tell a lost sale from a cancellation. The buyer is mailed it like any refund outside a return.
