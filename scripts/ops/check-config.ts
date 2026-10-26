@@ -13,6 +13,7 @@ import '@infrastructure/config/dotenv';
 import { runScript } from '../run-script';
 
 // `undefined`: not a scheduled job, so no outcome to record. Nothing opened, nothing to close.
+// eslint-disable-next-line @typescript-eslint/no-floating-promises -- runScript never rejects (failure is reported via process.exitCode)
 void runScript(
     undefined,
     () => Promise.resolve(),

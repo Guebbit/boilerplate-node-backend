@@ -21,6 +21,7 @@ import { runScript } from '../run-script';
 
 // `undefined`: hand-run, and it never opens Mongo — recording an outcome would need a
 // connection this script has no other reason to hold. See `run-script.ts`.
+// eslint-disable-next-line @typescript-eslint/no-floating-promises -- runScript never rejects (failure is reported via process.exitCode)
 void runScript(
     undefined,
     async () => {

@@ -353,6 +353,7 @@ const armCacheWrite = (
                 staleAt: Date.now() + ttl * 1000
             });
             if (payload !== undefined)
+                // eslint-disable-next-line @typescript-eslint/no-floating-promises -- setCacheValue never rejects (it logs a failed write)
                 void setCacheValue(cacheKey, payload, ttl + graceSeconds, tags);
         }
 
@@ -589,6 +590,7 @@ export const invalidateCache =
             // Only clear cache after a successful write; failed writes should not wipe valid cache.
             if (response.statusCode < 200 || response.statusCode >= 300) return;
 
+            // eslint-disable-next-line @typescript-eslint/no-floating-promises -- invalidateCacheTagsLogged never rejects (an unreachable Redis is logged and counted)
             void invalidateCacheTagsLogged(tags);
         });
 

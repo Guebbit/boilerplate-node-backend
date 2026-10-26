@@ -124,7 +124,8 @@ export const getCacheValue = (key: string): Promise<string | undefined> =>
         });
 
 /**
- * Save one value in Redis and attach it to one or more "tags".
+ * Save one value in Redis and attach it to one or more "tags". Never rejects: a failed write is
+ * logged.
  * Tags let us delete groups of cached entries later (example: all "products" cache).
  *
  * @param key - the cache key, namespaced by the caller's own scheme
@@ -324,7 +325,7 @@ export const invalidateCacheTags = (tags: string[]): Promise<ClearCacheResult> =
  * cache the same way).
  *
  * @param tags - the cache tags to clear, e.g. `['products']`
- * @returns a promise resolving once the attempt, successful or not, is logged
+ * @returns a promise resolving once the attempt, successful or not, is logged. Never rejects.
  */
 export const invalidateCacheTagsLogged = (tags: string[]): Promise<void> =>
     invalidateCacheTags(tags).then(({ reachable }) => {

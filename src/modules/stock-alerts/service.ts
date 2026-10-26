@@ -161,6 +161,7 @@ const mailBuyer = (
                 title: titleFor(titles, locale),
                 productUrl: frontendLink('products/{id}', locale, { id: productId })
             });
+            // eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects (it logs its own failure)
             void enqueueEmail({ to: user.email, subject: mail.subject }, mail.template, mail.data);
         })
         .catch((error: unknown) => {
