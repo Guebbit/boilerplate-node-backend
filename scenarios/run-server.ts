@@ -167,6 +167,7 @@ startEphemeralMongo({ startInProcess: startInProcessMongod })
         // `stop()` is the only thing that removes it. A no-op on the external-Mongo path.
         for (const signal of ['SIGTERM', 'SIGINT'] as const)
             process.once(signal, () => {
+                // eslint-disable-next-line @typescript-eslint/no-floating-promises -- the catch below resolves, and the then only exits the process
                 void mongo
                     .stop()
                     .catch((error: unknown) => {

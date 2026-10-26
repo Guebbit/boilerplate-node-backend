@@ -230,6 +230,7 @@ async function seed() {
  */
 if (isRelaxedEnvironment()) {
     // `undefined`: the demo seeder, not a `docker/crontab` job — see `run-script.ts`.
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises -- runScript never rejects, and the then only exits the process
     void runScript(undefined, seed, () => app?.stop() ?? Promise.resolve()).then(() =>
         process.exit(process.exitCode ?? 0)
     );
