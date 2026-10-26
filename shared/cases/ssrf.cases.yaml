@@ -1,0 +1,242 @@
+# What an outbound call may reach (https only, port 443 unless the operator allows more).
+# The address rule is an allowlist: only ordinary public unicast space is allowed, so every
+# special-purpose range is refused without being listed. Literal IPs only, so no case needs DNS.
+#
+#   address  one resolved or literal address. expect: allowed | refused.
+#            An IPv4-mapped IPv6 address is judged as the IPv4 address it wraps.
+#   url      a whole URL. expect: allowed, or the refusal reason:
+#            invalid-url | insecure-scheme | credentials-in-url | unsafe-port | unsafe-address.
+#            Alternate IPv4 spellings (decimal, hex, octal) are normalised first, per the WHATWG
+#            URL standard, so they are judged as the dotted address they really are.
+cases:
+    - {
+          name: a public IPv4 address is allowed,
+          kind: address,
+          address: 93.184.216.34,
+          expect: allowed
+      }
+    - {
+          name: a second public IPv4 address is allowed,
+          kind: address,
+          address: 8.8.8.8,
+          expect: allowed
+      }
+    - {
+          name: a public IPv6 address is allowed,
+          kind: address,
+          address: '2606:4700:4700::1111',
+          expect: allowed
+      }
+    - {
+          name: a second public IPv6 address is allowed,
+          kind: address,
+          address: '2001:4860:4860::8888',
+          expect: allowed
+      }
+    - {
+          name: an IPv4-mapped public address is allowed as the IPv4 it wraps,
+          kind: address,
+          address: '::ffff:8.8.8.8',
+          expect: allowed
+      }
+    - { name: IPv4 loopback is refused, kind: address, address: 127.0.0.1, expect: refused }
+    - {
+          name: the wider IPv4 loopback block is refused,
+          kind: address,
+          address: 127.255.255.254,
+          expect: refused
+      }
+    - {
+          name: the unspecified IPv4 address is refused,
+          kind: address,
+          address: 0.0.0.0,
+          expect: refused
+      }
+    - { name: private 10/8 is refused, kind: address, address: 10.0.0.1, expect: refused }
+    - { name: private 172.16/12 is refused, kind: address, address: 172.16.0.1, expect: refused }
+    - {
+          name: the last address of 172.16/12 is refused,
+          kind: address,
+          address: 172.31.255.255,
+          expect: refused
+      }
+    - {
+          name: the address just past 172.16/12 is allowed,
+          kind: address,
+          address: 172.32.0.1,
+          expect: allowed
+      }
+    - { name: private 192.168/16 is refused, kind: address, address: 192.168.1.1, expect: refused }
+    - {
+          name: link-local,
+          including the cloud metadata address,
+          is refused,
+          kind: address,
+          address: 169.254.169.254,
+          expect: refused
+      }
+    - { name: carrier-grade NAT is refused, kind: address, address: 100.64.0.1, expect: refused }
+    - { name: multicast is refused, kind: address, address: 224.0.0.1, expect: refused }
+    - {
+          name: the broadcast address is refused,
+          kind: address,
+          address: 255.255.255.255,
+          expect: refused
+      }
+    - { name: a documentation range is refused, kind: address, address: 192.0.2.1, expect: refused }
+    - {
+          name: the benchmarking range is refused,
+          kind: address,
+          address: 198.18.0.1,
+          expect: refused
+      }
+    - {
+          name: reserved class E space is refused,
+          kind: address,
+          address: 240.0.0.1,
+          expect: refused
+      }
+    - { name: IPv6 loopback is refused, kind: address, address: '::1', expect: refused }
+    - {
+          name: the unspecified IPv6 address is refused,
+          kind: address,
+          address: '::',
+          expect: refused
+      }
+    - { name: IPv6 link-local is refused, kind: address, address: 'fe80::1', expect: refused }
+    - {
+          name: IPv6 unique-local fc00 is refused,
+          kind: address,
+          address: 'fc00::1',
+          expect: refused
+      }
+    - {
+          name: IPv6 unique-local fd00 is refused,
+          kind: address,
+          address: 'fd00::1',
+          expect: refused
+      }
+    - { name: IPv6 multicast is refused, kind: address, address: 'ff02::1', expect: refused }
+    - {
+          name: the deprecated site-local block is refused,
+          kind: address,
+          address: 'fec0::1',
+          expect: refused
+      }
+    - {
+          name: the IPv6 documentation range is refused,
+          kind: address,
+          address: '2001:db8::1',
+          expect: refused
+      }
+    - {
+          name: an IPv4-mapped loopback is refused as the IPv4 it wraps,
+          kind: address,
+          address: '::ffff:127.0.0.1',
+          expect: refused
+      }
+    - {
+          name: an IPv4-mapped private address is refused,
+          kind: address,
+          address: '::ffff:10.0.0.1',
+          expect: refused
+      }
+    - {
+          name: an IPv4-compatible address is refused,
+          kind: address,
+          address: '::1.2.3.4',
+          expect: refused
+      }
+    - { name: NAT64 is refused, kind: address, address: '64:ff9b::808:808', expect: refused }
+    - { name: 6to4 is refused, kind: address, address: '2002:808:808::1', expect: refused }
+    - {
+          name: Teredo is refused,
+          kind: address,
+          address: '2001:0:4136:e378:8000:63bf:3fff:fdd2',
+          expect: refused
+      }
+    - {
+          name: a public https URL is allowed,
+          kind: url,
+          url: 'https://93.184.216.34/hook',
+          expect: allowed
+      }
+    - {
+          name: an explicit 443 is allowed,
+          kind: url,
+          url: 'https://93.184.216.34:443/hook',
+          expect: allowed
+      }
+    - {
+          name: a public IPv6 literal URL is allowed,
+          kind: url,
+          url: 'https://[2606:4700:4700::1111]/hook',
+          expect: allowed
+      }
+    - {
+          name: plain http is refused,
+          kind: url,
+          url: 'http://93.184.216.34/hook',
+          expect: insecure-scheme
+      }
+    - {
+          name: another scheme is refused,
+          kind: url,
+          url: 'ftp://93.184.216.34/hook',
+          expect: insecure-scheme
+      }
+    - {
+          name: embedded credentials are refused,
+          kind: url,
+          url: 'https://user:pass@93.184.216.34/hook',
+          expect: credentials-in-url
+      }
+    - {
+          name: a username alone is refused,
+          kind: url,
+          url: 'https://user@93.184.216.34/hook',
+          expect: credentials-in-url
+      }
+    - { name: text that is not a URL is refused, kind: url, url: 'not a url', expect: invalid-url }
+    - {
+          name: a port other than 443 is refused,
+          kind: url,
+          url: 'https://93.184.216.34:22/hook',
+          expect: unsafe-port
+      }
+    - {
+          name: a private literal URL is refused,
+          kind: url,
+          url: 'https://10.0.0.1/hook',
+          expect: unsafe-address
+      }
+    - {
+          name: a loopback IPv6 literal URL is refused,
+          kind: url,
+          url: 'https://[::1]/hook',
+          expect: unsafe-address
+      }
+    - {
+          name: a decimal-encoded loopback is judged as 127.0.0.1,
+          kind: url,
+          url: 'https://2130706433/hook',
+          expect: unsafe-address
+      }
+    - {
+          name: a hex-encoded loopback is judged as 127.0.0.1,
+          kind: url,
+          url: 'https://0x7f000001/hook',
+          expect: unsafe-address
+      }
+    - {
+          name: an octal-encoded loopback is judged as 127.0.0.1,
+          kind: url,
+          url: 'https://0177.0.0.1/hook',
+          expect: unsafe-address
+      }
+    - {
+          name: a short-form loopback is judged as 127.0.0.1,
+          kind: url,
+          url: 'https://127.1/hook',
+          expect: unsafe-address
+      }

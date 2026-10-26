@@ -16,7 +16,8 @@ import {
     maxAdminOrderLines,
     maxAdminOrderLineQuantity,
     orderFrontendLink,
-    orderPiiRetentionDays,
+    orderPiiDaysAfterGuarantee,
+    orderPiiDaysUndelivered,
     withdrawalPeriodDays
 } from '../../config';
 import ordersModule from '../../module';
@@ -148,8 +149,18 @@ describe('the withdrawal period', () => {
     });
 });
 
-describe('the order PII retention', () => {
-    it('reads ten calendar years with their leap days when unset', () => {
-        expect(orderPiiRetentionDays()).toBe(3653);
+describe('the order PII claim window', () => {
+    it('keeps a delivered order only to the end of its guarantee, and an undelivered one 540 days', () => {
+        expect(orderPiiDaysAfterGuarantee()).toBe(0);
+        expect(orderPiiDaysUndelivered()).toBe(540);
+    });
+
+    it('reads both knobs from the environment', () => {
+        setEnvironment({
+            NODE_ORDER_PII_DAYS_AFTER_GUARANTEE: '30',
+            NODE_ORDER_PII_DAYS_UNDELIVERED: '60'
+        });
+        expect(orderPiiDaysAfterGuarantee()).toBe(30);
+        expect(orderPiiDaysUndelivered()).toBe(60);
     });
 });

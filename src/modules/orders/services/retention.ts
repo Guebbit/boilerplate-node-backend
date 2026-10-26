@@ -9,41 +9,35 @@ import type { ClientSession } from 'mongoose';
 import type { AfterErase } from '@kernel/registry';
 import { logger } from '@infrastructure/adapters/logger';
 import { orderRepository } from '../repository';
-import { orderPiiRetentionDays } from '../config';
+import { orderPiiDaysAfterGuarantee, orderPiiDaysUndelivered } from '../config';
 import { cancelForErasureById } from './cancel';
 import { clearTimelineActor } from './timeline';
 
 /**
- * The `personalData.erase` hook. Unsets `userId` on every order this account placed and
- * marks each for `reap:orders` to scrub after `NODE_ORDER_PII_RETENTION_DAYS`
- * (default 3653, ten calendar years with their leap days — the outer edge of common commercial record-keeping periods) FROM ITS
- * OWN `createdAt`, not from today — see `orderRepository.detachUserId`'s own per-order clock, which
- * scrubs a never-paid order AT ONCE instead: it never became the invoice this retention exists
- * for. The orders themselves are never touched here: they are invoices, kept under
- * Art. 17(3)(b)/(e) regardless of what happens to the account that placed them.
+ * The `personalData.erase` hook. Unsets `userId` on every order this account placed and starts
+ * its PII clock; `reap:orders` scrubs each once its claim window is over (a never-paid order at
+ * once). The orders themselves are kept under Art. 17(3)(b)/(e).
+ * See docs/theory/data-retention.md#orders-after-the-account
  *
  * @param userId - the erased account's id
  * @param session - joins the detach to the hard-delete transaction calling this hook
  */
-export const detachUserId = (userId: string, session: ClientSession): Promise<void> => {
-    const retentionDays = orderPiiRetentionDays();
-
-    return orderRepository.detachUserId(userId, retentionDays, session).then((detached) => {
+export const detachUserId = (userId: string, session: ClientSession): Promise<void> =>
+    orderRepository.detachUserId(userId, session).then((detached) => {
         if (detached > 0)
             // Stryker disable next-line all
             logger.info({ message: 'Detached orders from an erased account.', userId, detached });
     });
-};
 
 /**
  * The `personalData.minimise` hook. Starts the same per-order PII clock erasure does, but keeps
  * `userId`: an inactive customer still sees their order history, minus the addresses and notes
- * once each order's own window ends. Idempotent — an order that already has a clock is skipped.
+ * once each order's claim window ends. Idempotent — an order that already has a clock is skipped.
  *
  * @param userId - the inactive account's id
  */
 export const startOrderPiiClock = (userId: string): Promise<void> =>
-    orderRepository.startPiiClock(userId, orderPiiRetentionDays()).then((stamped) => {
+    orderRepository.startPiiClock(userId).then((stamped) => {
         if (stamped > 0)
             // Stryker disable next-line all
             logger.info({
@@ -55,18 +49,23 @@ export const startOrderPiiClock = (userId: string): Promise<void> =>
 
 /**
  * `reap:orders`'s sweep. Scrubs the remaining PII on every order
- * whose retention window (stamped by {@link detachUserId}) has elapsed.
+ * whose clock has started ({@link detachUserId}) and whose claim window has closed.
  *
  * @returns how many orders were scrubbed
  */
 export const anonymizeDueOrders = (): Promise<number> =>
-    orderRepository.scrubDueForAnonymization(new Date()).then((scrubbed) => {
-        if (scrubbed > 0) {
-            // Stryker disable next-line all
-            logger.info({ message: 'Anonymized orders past retention.', scrubbed });
-        }
-        return scrubbed;
-    });
+    orderRepository
+        .scrubDueForAnonymization(new Date(), {
+            daysAfterGuarantee: orderPiiDaysAfterGuarantee(),
+            daysUndelivered: orderPiiDaysUndelivered()
+        })
+        .then((scrubbed) => {
+            if (scrubbed > 0) {
+                // Stryker disable next-line all
+                logger.info({ message: 'Anonymized orders past retention.', scrubbed });
+            }
+            return scrubbed;
+        });
 
 /**
  * Cancels each order through the reservation sweep's own path — `cancelForErasureById`, which

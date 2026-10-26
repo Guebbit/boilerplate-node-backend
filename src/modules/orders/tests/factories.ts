@@ -146,19 +146,17 @@ export const forceOrderStatus = (orderId: string, status: string): Promise<Order
     orderRepository.updateStatusIfIn(orderId, Object.values(OrderStatus), status);
 
 /**
- * Detach an account with an EXPLICIT retention deadline, bypassing the per-order clock —
- * `orderService.detachUserId` always derives `anonymizeAfter` from each order's own `createdAt`
- * (see `orderRepository.detachUserId`), which a sweep test needs to sidestep to put a fixture
- * exactly at, before or after its due date without waiting years or backdating `createdAt` itself.
+ * Detach an account and start its orders' PII clock at an EXPLICIT instant, so a sweep test can
+ * place a fixture before or after its due date without waiting years.
  *
  * @param userId - the erased account's id
- * @param anonymizeAfter - when the reaper may scrub this order's remaining PII
+ * @param piiClockStartedAt - when the clock started
  */
-export const detachOrderUserId = (userId: string, anonymizeAfter: Date): Promise<number> =>
+export const detachOrderUserId = (userId: string, piiClockStartedAt: Date): Promise<number> =>
     orderModel
         .updateMany(
             { userId: toObjectId(userId) },
-            { $unset: { userId: 1 }, $set: { anonymizeAfter } },
+            { $unset: { userId: 1 }, $set: { piiClockStartedAt } },
             { timestamps: false }
         )
         .exec()

@@ -157,9 +157,7 @@ Each account reads back only its own orders; writing and soft-deleting is admin-
 
 One scheduled job via `docker/crontab`: `npm run job reap:orders`, nightly, replaces an order's
 remaining PII (email, shipping name/phone/street, notes) with placeholders once
-`NODE_ORDER_PII_RETENTION_DAYS` has passed from the order's OWN `createdAt` — due at `createdAt`
-plus that many days, or at once when account erasure or inactivity minimisation comes later; a
-never-paid order is due at once — amounts, line items and dates survive, only the person is gone. An account inactive past `NODE_INACTIVE_MINIMISE_DAYS` starts the same clock through this
+the order's claim window has closed (a never-paid order at once, a delivered one after `conformityUntil`, an undelivered paid one 540 days after `paidAt`; [the rule](../theory/data-retention.md#orders-after-the-account)) — amounts, line items and dates survive, only the person is gone. An account inactive past `NODE_INACTIVE_MINIMISE_DAYS` starts the same clock through this
 module's `personalData.minimise` hook, keeping its `userId`; a live, active account's orders keep
 their personal fields, since order history is part of the contract
 ([why](../theory/data-retention.md#orders-kept-while-the-account-lives)). Each scrub is announced:
@@ -784,7 +782,8 @@ when the shop offers a longer withdrawal period.
 | Variable                               | Default | Meaning                                                                                                                                                                                        |
 | -------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `NODE_WITHDRAWAL_PERIOD_DAYS`          | `30`    | Days a consumer has to withdraw. The legal 14 plus the margin in [the withdrawal window](#the-withdrawal-window) gives a floor of 21, so a smaller value is refused at read; the default is 30 |
-| `NODE_ORDER_PII_RETENTION_DAYS`        | `3653`  | Days after an order's `createdAt` (or account erasure or inactivity minimisation, if later) before `reap:orders` replaces its remaining personal data with placeholders                        |
+| `NODE_ORDER_PII_DAYS_AFTER_GUARANTEE`  | `0`     | Days after a delivered order's `conformityUntil` before `reap:orders` replaces its remaining personal data with placeholders (once the account is erased or minimised)                         |
+| `NODE_ORDER_PII_DAYS_UNDELIVERED`      | `540`   | The same for a paid order that ended without delivery, counted from `paidAt`                                                                                                                   |
 | `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS` | `1095`  | Days after a timeline row's own instant before `reap:orders` unsets the free text staff wrote on it (an override's reason). The row stays                                                      |
 | `NODE_ORDER_EXPORT_MAX_ROWS`           | `20000` | Most orders one `GET /orders/export` may carry. Over it: `422` `ORDER_EXPORT_TOO_LARGE`, before any byte of the file                                                                           |
 | `NODE_ORDER_EXPORT_RATE_LIMIT_MAX`     | `10`    | Exports allowed per window, per ACCOUNT                                                                                                                                                        |
