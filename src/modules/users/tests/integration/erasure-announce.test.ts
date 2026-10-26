@@ -62,7 +62,11 @@ describe('user.erased', () => {
 
         const result = await userService.eraseScheduledDeletion(user, systemCallerContext('User'));
 
-        expect(result).toMatchObject({ success: false, status: 409 });
+        expect(result).toMatchObject({
+            success: false,
+            status: 409,
+            errors: [{ code: 'USER_ERASURE_NOT_DUE' }]
+        });
         expect(await erasedRows()).toHaveLength(0);
         expect(await userModel.countDocuments({ _id: user.id })).toBe(1);
     });

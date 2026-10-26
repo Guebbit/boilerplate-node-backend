@@ -88,6 +88,7 @@ describe('accountService.signup', () => {
 
         expect(result.success).toBe(false);
         expect((result as ResponseReject).status).toBe(409);
+        expect((result as ResponseReject).errors[0]?.code).toBe('EMAIL_ALREADY_USED');
     });
 
     it('rejects with 422 when the email format is invalid', async () => {

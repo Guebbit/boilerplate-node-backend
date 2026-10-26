@@ -96,7 +96,10 @@ export const erase = (
             won ? runErasureCascade(user, session) : undefined
         )
     ).then((deferred) => {
-        if (!deferred) return generateReject(409, [t('users.erasure-not-due')]);
+        if (!deferred)
+            return generateReject(409, [
+                { code: ERROR_CODES.USER_ERASURE_NOT_DUE, message: t('users.erasure-not-due') }
+            ]);
         nudgeOutbox();
         return runAfterErase(user.id, deferred)
             .then(() => imageStore.remove(user.imageUrl))

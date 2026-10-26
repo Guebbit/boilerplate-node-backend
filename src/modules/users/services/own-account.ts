@@ -9,6 +9,7 @@
  * staff protection the admin doors enforce, so they stay `@internal` and only these reach them.
  */
 
+import { ERROR_CODES } from '@api/error-codes';
 import { t } from '@infrastructure/i18n';
 import {
     generateReject,
@@ -63,15 +64,22 @@ export const softDeleteInactive = (
     context: CallerContext
 ): ReturnType<typeof remove> => {
     if (!user.inactivityWarnedAt)
-        return Promise.resolve(generateReject(409, [t('users.not-warned')]));
-
-    return accessService
-        .holdsStaffRole(String(user._id))
-        .then((staff) =>
-            staff
-                ? generateReject(409, [t('users.inactive-staff-account')])
-                : remove(user, false, context)
+        return Promise.resolve(
+            generateReject(409, [
+                { code: ERROR_CODES.USER_NOT_WARNED, message: t('users.not-warned') }
+            ])
         );
+
+    return accessService.holdsStaffRole(String(user._id)).then((staff) =>
+        staff
+            ? generateReject(409, [
+                  {
+                      code: ERROR_CODES.USER_STAFF_NOT_REAPABLE,
+                      message: t('users.inactive-staff-account')
+                  }
+              ])
+            : remove(user, false, context)
+    );
 };
 
 /**
@@ -88,7 +96,14 @@ export const eraseInactive = (
 ): ReturnType<typeof remove> =>
     user.deletedBy === 'reaper'
         ? remove(user, true, context)
-        : Promise.resolve(generateReject(409, [t('users.not-reaper-deleted')]));
+        : Promise.resolve(
+              generateReject(409, [
+                  {
+                      code: ERROR_CODES.USER_NOT_REAPER_DELETED,
+                      message: t('users.not-reaper-deleted')
+                  }
+              ])
+          );
 
 /**
  * Lock the caller's own account and promise its erasure at `purgeAt`: one save that stamps

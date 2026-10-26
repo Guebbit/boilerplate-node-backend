@@ -16,6 +16,7 @@ import {
     validationErrors
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
+import { ERROR_CODES } from '@api/error-codes';
 import { SignupBody } from '@api/schemas.zod';
 import { userService, type UserDocument } from '@modules/users';
 import { parseFormBoolean } from '@infrastructure/http/request';
@@ -101,7 +102,13 @@ const createAccountIfEmailFree = (
     userService
         .emailTaken(input.email)
         .then<ResponseSuccess<UserDocument> | ResponseReject>((taken) => {
-            if (taken) return generateReject(409, [t('account.signup.email-already-used')]);
+            if (taken)
+                return generateReject(409, [
+                    {
+                        code: ERROR_CODES.EMAIL_ALREADY_USED,
+                        message: t('account.signup.email-already-used')
+                    }
+                ]);
             return userService
                 .registerSelfService({
                     username: input.username,

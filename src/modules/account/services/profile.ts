@@ -134,7 +134,14 @@ const writeProfile = (
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     if (emailOutcome.conflict)
-        return Promise.resolve(generateReject(409, [t('account.update.email-already-used')]));
+        return Promise.resolve(
+            generateReject(409, [
+                {
+                    code: ERROR_CODES.EMAIL_ALREADY_USED,
+                    message: t('account.update.email-already-used')
+                }
+            ])
+        );
 
     // A genuine change mails two addresses, so it is paced like the resend button: one a minute per
     // account. Answered before the mailbox budget is touched, so a paced request spends nothing.
