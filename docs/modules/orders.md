@@ -461,6 +461,7 @@ keeping a copy of this table.
 | Order     | `address_corrected` (staff-only)                                                             | no         |
 | Payment   | `payment_declined`, `refund_issued`, `refund_settled`                                        | yes        |
 | Payment   | `refund_failed` (a failure code, never the provider's wording)                               | no         |
+| Payment   | `refund_canceled` (a refund staff voided; ids and amount only)                               | no         |
 | Shipments | `shipment_shipped`, `shipment_delivered`, `remainder_cancelled`                              | yes        |
 | Shipments | `fulfillment_held`, `fulfillment_released` (a hold's reason code)                            | no         |
 | Returns   | `return_requested`, `return_approved`, `return_declined`, `return_received`, `return_closed` | yes        |

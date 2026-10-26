@@ -8,6 +8,7 @@
 import { createReturn } from './create';
 import { approveReturn, declineReturn } from './decide';
 import { receiveReturn } from './receive';
+import { closeReturnByHand } from './close';
 import { collectPersonalData } from './personal-data';
 import { listReturns, getReturn, withActions } from './read';
 import { getReturnOptions } from './options';
@@ -26,6 +27,7 @@ export const returnService = {
     approveReturn,
     declineReturn,
     receiveReturn,
+    closeReturnByHand,
     listReturns,
     getReturn,
     getReturnOptions,

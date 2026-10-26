@@ -24,7 +24,8 @@ import {
     REFUNDABLE_PAYMENT_STATUS,
     isHandRecorded,
     isOpenTransfer,
-    mayBeSettledByHand
+    mayBeSettledByHand,
+    mayBeCanceled
 } from '../domain';
 import { resolvePaymentProvider } from '../providers';
 import { presentPayment } from '../presenter';
@@ -206,6 +207,20 @@ const settleableByHand = (payment: PaymentDocument, authContext?: AuthContext): 
         : [];
 
 /**
+ * The refunds an operator may void: the same money-provably-did-not-move set as
+ * {@link settleableByHand}, because both rest on that one fact.
+ *
+ * @param payment - the payment being served
+ * @param authContext - the caller
+ */
+const cancelableRefunds = (payment: PaymentDocument, authContext?: AuthContext): string[] =>
+    mayRefund(authContext) && payment.status === REFUNDABLE_PAYMENT_STATUS
+        ? payment.refunds
+              .filter((refund) => mayBeCanceled(payment, refund))
+              .map((refund) => String(refund._id))
+        : [];
+
+/**
  * What this caller may do to a payment, as the contract's `PaymentActions`.
  *
  * @param payment - the payment
@@ -228,7 +243,8 @@ export const withActions = (
             mayRefund(authContext) &&
             payment.status === REFUNDABLE_PAYMENT_STATUS &&
             remainingOf(payment) > 0,
-        settleByHand: settleableByHand(payment, authContext)
+        settleByHand: settleableByHand(payment, authContext),
+        cancelRefund: cancelableRefunds(payment, authContext)
     }
 });
 

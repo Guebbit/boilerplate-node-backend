@@ -21,7 +21,11 @@ import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
 import { presentReturn } from '../presenter';
 import { ownOrder } from './ownership';
-import { DECIDABLE_RETURN_STATUSES, RECEIVABLE_RETURN_STATUSES } from '../domain';
+import {
+    CLOSABLE_RETURN_STATUSES,
+    DECIDABLE_RETURN_STATUSES,
+    RECEIVABLE_RETURN_STATUSES
+} from '../domain';
 
 /** The filters `GET /returns` accepts. */
 export interface ReturnFilters {
@@ -54,7 +58,9 @@ const actionsFor = (returned: ReturnDocument, authContext: AuthContext): ReturnA
         decline: decidable,
         receive:
             holds(caller, 'receive', 'Return') &&
-            RECEIVABLE_RETURN_STATUSES.includes(returned.status)
+            RECEIVABLE_RETURN_STATUSES.includes(returned.status),
+        close:
+            holds(caller, 'receive', 'Return') && CLOSABLE_RETURN_STATUSES.includes(returned.status)
     };
 };
 

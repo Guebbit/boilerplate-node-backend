@@ -53,7 +53,8 @@ describe('POST /returns', () => {
         expect(response.body.actions).toEqual({
             approve: false,
             decline: false,
-            receive: false
+            receive: false,
+            close: false
         });
     });
 
@@ -76,7 +77,8 @@ describe('POST /returns', () => {
         expect(response.body.actions).toEqual({
             approve: false,
             decline: false,
-            receive: false
+            receive: false,
+            close: false
         });
 
         const order = await api().get(`/orders/${orderId}`).set('Authorization', bearer);
@@ -360,6 +362,92 @@ describe('POST /returns/{id}/receive', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
+    });
+});
+
+/** A withdrawal that was received but whose refund will not follow: stored as `received`. */
+const receivedAndStuck = async () => {
+    const { warehouse, id } = await withdrawn();
+    await returnRepository.claimStatus(id, ['approved'], 'received', { receivedAt: new Date() });
+    return { warehouse, id };
+};
+
+describe('POST /returns/{id}/close', () => {
+    it('closes a received return by hand: 200, closed, and no further close offered', async () => {
+        const { warehouse, id } = await receivedAndStuck();
+
+        const response = await api()
+            .post(`/returns/${id}/close`)
+            .set('Authorization', warehouse)
+            .send({ note: 'the buyer was paid back in cash' });
+
+        expect(response.status).toBe(200);
+        expect(response.body).toMatchObject({ id, status: 'closed' });
+        expect(response.body.closedAt).toEqual(expect.any(String));
+        expect(response.body.actions.close).toBe(false);
+    });
+
+    it('takes no body at all', async () => {
+        const { warehouse, id } = await receivedAndStuck();
+
+        const response = await api().post(`/returns/${id}/close`).set('Authorization', warehouse);
+
+        expect(response.status).toBe(200);
+    });
+
+    it('answers 409 RETURN_NOT_CLOSABLE for a return that is not received', async () => {
+        const { warehouse, id } = await withdrawn();
+
+        const response = await api().post(`/returns/${id}/close`).set('Authorization', warehouse);
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('RETURN_NOT_CLOSABLE');
+    });
+
+    it('refuses a note over 1000 characters with 422', async () => {
+        const { warehouse, id } = await receivedAndStuck();
+
+        const response = await api()
+            .post(`/returns/${id}/close`)
+            .set('Authorization', warehouse)
+            .send({ note: 'x'.repeat(1001) });
+
+        expect(response.status).toBe(422);
+    });
+
+    it('refuses the buyer: closing is staff’s act', async () => {
+        const { customer, id } = await withdrawn();
+
+        const response = await api().post(`/returns/${id}/close`).set('Authorization', customer);
+
+        expect(response.status).toBe(403);
+    });
+
+    it('answers 404 for a return that does not exist', async () => {
+        const { bearer } = await authenticateAsRole('warehouse');
+
+        const response = await api()
+            .post(`/returns/${'a'.repeat(24)}/close`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+    });
+
+    // `receive:Return` carries `stepUp: critical` on the key, and the close rides the same key.
+    describe('with a session past the critical window', () => {
+        afterEach(() => jest.useRealTimers());
+
+        it('answers 401 REAUTH_REQUIRED and leaves the return received', async () => {
+            const { id } = await receivedAndStuck();
+            const stale = await staleBearerFor(await staffUser('warehouse'), 'critical');
+
+            const response = await api().post(`/returns/${id}/close`).set('Authorization', stale);
+
+            expect(response.status).toBe(401);
+            expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
+            const stored = await returnRepository.findById(id);
+            expect(stored?.status).toBe('received');
+        });
     });
 });
 

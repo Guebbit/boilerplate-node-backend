@@ -32,6 +32,7 @@ import { getReturnById } from './controllers/get-return-by-id';
 import { getReturnOptions } from './controllers/get-return-options';
 import { postReturnApprove, postReturnDecline } from './controllers/post-return-decision';
 import { postReturnReceive } from './controllers/post-return-receive';
+import { postReturnClose } from './controllers/post-return-close';
 
 /**
  * Whether this request is a staff remainder cancel — `kind: cancellation`, any reason but the one
@@ -97,3 +98,8 @@ router.post(
     idempotencyKey,
     postReturnReceive
 );
+
+// POST /returns/:id/close — staff finishing a received return whose money will not follow the usual
+// way. The same `receive:Return` key (and so the same `stepUp`) as receiving: closing is the end
+// of the same act. No `Idempotency-Key`: a second close finds the return closed and answers 409.
+router.post('/:id/close', requirePermission('receive', 'Return'), postReturnClose);

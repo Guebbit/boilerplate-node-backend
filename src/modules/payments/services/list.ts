@@ -22,8 +22,8 @@ import {
 } from '@infrastructure/persistence/search';
 import { orderService } from '@modules/orders';
 import { paymentAttentionMinutes } from '../config';
-import { displayStatusFilter, parseReference } from '../domain';
-import type { PaymentDocument } from '../model';
+import { displayStatusFilter, parseReference, refundDueBy } from '../domain';
+import type { PaymentDocument, RefundRecord } from '../model';
 import { paymentRepository, type RefundFilters, type RefundRow } from '../repository';
 import { callerScope } from './scope';
 import { withActions } from './view';
@@ -123,6 +123,18 @@ export const listRefunds = (
         .then(({ items, meta }) => ({ items: items.map((row) => refundRow(row)), meta }));
 
 /**
+ * The legal deadline of a refused refund, as the attention row's `refundDueBy` field: nothing for
+ * any other kind of row, or for a refund that pays no withdrawal or return.
+ *
+ * @param kind - which source found the row
+ * @param refund - the open refund
+ */
+const dueByOf = (kind: PaymentAttentionKind, refund: RefundRecord): { refundDueBy?: string } => {
+    const due = kind === PaymentAttentionKind.refused_refund ? refundDueBy(refund) : undefined;
+    return due ? { refundDueBy: due.toISOString() } : {};
+};
+
+/**
  * A needs-attention row from an open refund.
  * @param row - the unwound refund
  * @param kind - which source found it
@@ -135,7 +147,8 @@ const refundAttention = (row: RefundRow, kind: PaymentAttentionKind): PaymentAtt
     amount: row.refund.amount,
     currency: row.refund.currency,
     ...(row.refund.failureReason ? { failureReason: row.refund.failureReason } : {}),
-    since: row.refund.createdAt.toISOString()
+    since: row.refund.createdAt.toISOString(),
+    ...dueByOf(kind, row.refund)
 });
 
 /**

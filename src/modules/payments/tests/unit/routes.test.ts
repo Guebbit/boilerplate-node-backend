@@ -44,6 +44,7 @@ describe('payment routes', () => {
             'GET /:id',
             'GET /:id/refunds/:refundId',
             'POST /:id/refunds/:refundId/settle',
+            'POST /:id/refunds/:refundId/cancel',
             'POST /:id/confirm',
             'POST /:id/sync'
         ]);
@@ -80,7 +81,7 @@ describe('payment routes', () => {
         expect(routeSignatures(router).indexOf(WEBHOOK)).toBe(0);
     });
 
-    it('admin-guards the staff reads, the refund and its hand settlement, and nothing else', () => {
+    it('admin-guards the staff reads, the refund, its hand settlement and its void, and nothing else', () => {
         // The three routes an operator drives instead of a customer's own checkout — money moving
         // back out, a claim that money moved in some way the provider never saw, or finding the
         // order that claim is about. The shopper's keys are excluded: `update:Cart` and
@@ -99,7 +100,8 @@ describe('payment routes', () => {
             'GET /refunds',
             'GET /attention',
             'POST /:id/refunds',
-            'POST /:id/refunds/:refundId/settle'
+            'POST /:id/refunds/:refundId/settle',
+            'POST /:id/refunds/:refundId/cancel'
         ]);
     });
 

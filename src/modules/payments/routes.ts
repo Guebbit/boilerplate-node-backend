@@ -50,6 +50,7 @@ import { getPayment } from './controllers/get-payment';
 import { getRefund } from './controllers/get-refund';
 import { postPaymentRefund } from './controllers/post-payment-refund';
 import { postPaymentRefundSettle } from './controllers/post-payment-refund-settle';
+import { postPaymentRefundCancel } from './controllers/post-payment-refund-cancel';
 import { getPaymentMethods } from './controllers/get-payment-methods';
 import { getPayments } from './controllers/get-payments';
 import { getRefunds } from './controllers/get-refunds';
@@ -125,6 +126,16 @@ router.post(
     requirePermission('create', 'Refund'),
     idempotencyKey,
     postPaymentRefundSettle
+);
+
+// POST /payments/:id/refunds/:refundId/cancel — staff voiding a refund that must never be paid.
+// Same `create:Refund` key (and so the same `stepUp`) as the refund it voids; the key is optional
+// because cancelling twice is refused by the record itself (409), never repeated.
+router.post(
+    '/:id/refunds/:refundId/cancel',
+    requirePermission('create', 'Refund'),
+    idempotencyKey,
+    postPaymentRefundCancel
 );
 
 // POST /payments/:id/confirm — the payment form's submit. The three velocity limiters and the
