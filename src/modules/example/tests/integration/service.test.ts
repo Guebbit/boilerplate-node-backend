@@ -585,7 +585,7 @@ describe('actions on rows', () => {
         expect(read?.actions).toEqual({ transitions: [], update: false, delete: false });
     });
 
-    it("gives the author the moves from the current status, and a stranger's read none", async () => {
+    it("gives the author the moves from the current status, and a stranger's read all false", async () => {
         const { user, context } = await aCustomer();
         const mine = await createExample({
             userId: user.id,
@@ -602,7 +602,7 @@ describe('actions on rows', () => {
             update: true,
             delete: true
         });
-        expect(strangerRead?.actions).toBeUndefined();
+        expect(strangerRead?.actions).toEqual({ transitions: [], update: false, delete: false });
     });
 
     it('puts the actions on every row of a search', async () => {

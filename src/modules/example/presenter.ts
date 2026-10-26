@@ -3,12 +3,12 @@
  * In any module: the one place a stored row becomes the wire shape `openapi.yaml` declares, so
  * every read and write answers with the same thing.
  * Here: the one field a document cannot supply is `ownerName`, which belongs to `users`; `actions`
- * rides along when someone is acting.
+ * is decided by the caller's service and handed in, never asked for here.
  *
  * See: docs/theory/layers.md
  */
 
-import type { Example, ExampleActions } from '@types';
+import type { Example, ExampleActions, ExportExample } from '@types';
 import { carryVersion } from '@infrastructure/persistence/versioning';
 import type { ExampleDocument, ExampleRow } from './model';
 
@@ -21,17 +21,17 @@ import type { ExampleDocument, ExampleRow } from './model';
  *
  * @param document - the stored example
  * @param ownerName - the owner's display name, read from `users` by the caller
- * @param actions - what the caller may do to it; left out where nobody is acting (the public read)
+ * @param actions - what the caller may do to it
  */
 export const presentExample = (
     document: ExampleDocument,
     ownerName: string,
-    actions?: ExampleActions
+    actions: ExampleActions
 ): Example =>
     carryVersion(document, {
         ...(document.toJSON() as ExampleRow),
         ownerName,
-        ...(actions && { actions })
+        actions
     });
 
 /**
@@ -44,10 +44,21 @@ export const presentExample = (
 export const presentExampleRow = (
     row: ExampleRow,
     ownerName: string,
-    actions?: ExampleActions
+    actions: ExampleActions
 ): Example =>
     carryVersion(row, {
         ...row,
         ownerName,
-        ...(actions && { actions })
+        actions
     });
+
+/**
+ * A row as the account data export carries it: no `actions`, which is per caller.
+ *
+ * @param row - one row of a repository read
+ * @param ownerName - the owner's display name
+ */
+export const presentExampleExport = (row: ExampleRow, ownerName: string): ExportExample => ({
+    ...row,
+    ownerName
+});

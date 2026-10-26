@@ -386,7 +386,7 @@ components:
         Return:
             type: object
             additionalProperties: false
-            required: [id, orderId, orderNumber, currency, status, reason, kind, lines, returnPostage, createdAt]
+            required: [id, orderId, orderNumber, currency, status, reason, kind, lines, returnPostage, createdAt, actions]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -448,7 +448,7 @@ components:
                     type: string
                     format: date-time
                     description: When the money went back and the return finished.
-                # Computed per CALLER, not stored — present on every response carrying ONE return.
+                # Computed per CALLER, not stored — present on every response carrying a return, list rows included.
                 actions:
                     $ref: '#/components/schemas/ReturnActions'
                 createdAt:

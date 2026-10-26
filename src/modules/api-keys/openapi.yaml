@@ -18,7 +18,7 @@ x-personal-data:
         schema:
             type: array
             items:
-                $ref: '#/components/schemas/ApiKey'
+                $ref: '#/components/schemas/ExportApiKey'
 
 paths:
     /api-keys:
@@ -160,7 +160,7 @@ components:
         ApiKey:
             type: object
             additionalProperties: false
-            required: [id, name, publicPrefix, permissions, status, expiresAt, createdAt, updatedAt]
+            required: [id, name, publicPrefix, permissions, status, expiresAt, createdAt, updatedAt, actions]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -176,6 +176,54 @@ components:
                     items: { type: string }
                     minItems: 1
                     description: The permission rules this credential was minted with, each spelled `<action>:<Subject>` (`display:Order`). Re-floored against the minter's CURRENT permissions on every request; this is the snapshot taken at mint time.
+                lastUsedAt:
+                    type: string
+                    format: date-time
+                expiresAt:
+                    type: string
+                    format: date-time
+                revokedAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+                actions:
+                    $ref: '#/components/schemas/ApiKeyActions'
+
+        ApiKeyActions:
+            type: object
+            additionalProperties: false
+            required: [revoke]
+            description: >-
+                What the requesting caller may do to this credential, decided by the server.
+            properties:
+                revoke:
+                    type: boolean
+                    description: Whether `DELETE /api-keys/{id}` would revoke this credential for this caller. False for a caller without `delete:ApiKey`, and for a credential that is revoked already (the call would change nothing).
+
+        # A credential as the account's data export carries it: `actions` is per caller, so it
+        # never leaves in an export.
+        ExportApiKey:
+            type: object
+            additionalProperties: false
+            required: [id, name, publicPrefix, permissions, status, expiresAt, createdAt, updatedAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                name:
+                    type: string
+                publicPrefix:
+                    type: string
+                status:
+                    $ref: '#/components/schemas/ApiKeyStatus'
+                permissions:
+                    type: array
+                    items: { type: string }
+                    minItems: 1
                 lastUsedAt:
                     type: string
                     format: date-time

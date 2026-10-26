@@ -843,6 +843,22 @@ describe('who sees which return', () => {
         expect(asReject(asStranger).status).toBe(404);
     });
 
+    it('puts the caller’s actions on every row of a page, each from its own status', async () => {
+        const open = await requestedReturn();
+        const decided = await requestedReturn();
+        await returnService.approveReturn(decided.returnId, callerContextAs('admin'));
+
+        const staff = await returnService.listReturns({}, asManager());
+        const buyerPage = await returnService.listReturns({}, buyer(open.user));
+
+        expect(
+            Object.fromEntries(staff.items.map(({ id, actions }) => [id, actions.approve]))
+        ).toEqual({ [open.returnId]: true, [decided.returnId]: false });
+        expect(buyerPage.items.map(({ actions }) => actions)).toEqual([
+            { approve: false, decline: false, receive: false }
+        ]);
+    });
+
     it('offers staff approve and decline on a request, and a customer nothing', async () => {
         const { user, returnId } = await requestedReturn();
         const stored = await returnRepository.findById(returnId);

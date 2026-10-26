@@ -25,12 +25,19 @@ import { readAll, MAX_CONFIGURED_PAGE_SIZE } from '@infrastructure/persistence/s
 import { heldRules } from '@kernel/ability';
 import { findRule, systemCallerContext } from '@kernel/permissions';
 import type { Caller } from '@types';
-import type { MintApiKeyRequest, ApiKeyCreated, ApiKey, ApiKeysResponse } from '@types';
+import type {
+    MintApiKeyRequest,
+    ApiKeyCreated,
+    ApiKey,
+    ApiKeysResponse,
+    ExportApiKey
+} from '@types';
 import { apiKeyRepository, type StoredApiKey } from '../repository';
 import { mintApiKey, displayIdOf } from '../credentials';
 import { apiKeysAuditActions } from '../audit';
 import { ERROR_CODES } from '@api/error-codes';
 import { apiKeyStatus, presentApiKey } from '../presenter';
+import { actionsForRows } from './actions';
 import { apiKeyMintedEmail, apiKeysRevokedEmail, type KeysRevokedReason } from '../emails';
 import type { ApiKeyDocument } from '../model';
 
@@ -121,7 +128,7 @@ const notifyMinted = (minterId: string, apiKey: ApiKeyDocument): void => {
  *
  * @param userId - the caller's own id
  */
-export const findOwnApiKeys = (userId: string): Promise<ApiKey[]> =>
+export const findOwnApiKeys = (userId: string): Promise<ExportApiKey[]> =>
     // The subject is exporting their own data, so their keys' minter can sign in (`true`).
     readAll(
         (page) =>
@@ -147,8 +154,9 @@ export const apiKeysDeleteByUserId = (userId: string, session: ClientSession): P
  * that is a fact about the users collection: one lookup per DISTINCT minter, not per row.
  *
  * @param rows - the stored credentials of one page
+ * @param context - the caller, whose keys decide each row's `actions`
  */
-const withStatus = (rows: StoredApiKey[]): Promise<ApiKey[]> =>
+const withStatus = (rows: StoredApiKey[], context: TenantCallerContext): Promise<ApiKey[]> =>
     apiKeyRepository.mintersOf(rows.map((row) => row.id)).then((minterOf) =>
         Promise.all(
             [...new Set(minterOf.values())].map((minterId) =>
@@ -158,9 +166,11 @@ const withStatus = (rows: StoredApiKey[]): Promise<ApiKey[]> =>
             )
         ).then((entries) => {
             const canSignIn = new Map(entries);
+            const actionsFor = actionsForRows(context);
             return rows.map((row) => ({
                 ...row,
-                status: apiKeyStatus(row, canSignIn.get(minterOf.get(row.id) ?? '') ?? false)
+                status: apiKeyStatus(row, canSignIn.get(minterOf.get(row.id) ?? '') ?? false),
+                actions: actionsFor(row)
             }));
         })
     );
@@ -174,7 +184,7 @@ export const list = (
     filters: { page?: unknown; pageSize?: unknown; sort?: string[] }
 ): Promise<ApiKeysResponse> =>
     apiKeyRepository.search(filters, { tenant: context.caller.tenantId }).then(({ items, meta }) =>
-        withStatus(items).then((rows) => ({
+        withStatus(items, context).then((rows) => ({
             items: rows,
             meta,
             maxExpiresAt: latestExpiry().toISOString()
@@ -195,7 +205,7 @@ export const get = (
     apiKeyRepository.findById(id).then((apiKey) => {
         if (apiKey?.tenant !== context.caller.tenantId)
             return generateReject(404, [t('generic.error-not-found')]);
-        return withStatus([presentApiKey(apiKey)]).then(([row]) => generateSuccess(row));
+        return withStatus([presentApiKey(apiKey)], context).then(([row]) => generateSuccess(row));
     });
 
 /**

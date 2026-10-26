@@ -126,6 +126,9 @@ a person with none live gets neither audit row nor mail), so a redelivery does n
   checked in that order. `suspended` is a minter who cannot sign in (banned, soft-deleted, erased):
   the key gets a 401 until they can again, which a client cannot tell from `revokedAt`/`expiresAt`.
   The server looks each distinct minter up once per page.
+- **Every key says whether the caller may revoke it.** `actions.revoke` is true when the caller holds
+  `delete:ApiKey` and the key is not revoked yet (`services/actions.ts`). The personal-data export
+  carries `ExportApiKey` instead: `actions` is per caller and never leaves in an export.
 - **The minter is mailed** when a key is created, and again — with the list — when logout-everywhere,
   a password reset or an email-change undo ("this wasn't me") revoked them. These are the causes whose row in `REVOCATION` (`account/domain/revocation.ts`) announces; the list is derived there, not restated. `account` only announces the event; this module owns what it
   means for keys. An ordinary password change, where the owner typed the current password, leaves

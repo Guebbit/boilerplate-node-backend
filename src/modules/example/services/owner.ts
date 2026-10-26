@@ -13,7 +13,11 @@ import { t } from '@infrastructure/i18n';
 import { userService } from '@modules/users';
 import type { ExampleDocument } from '../model';
 import { presentExample } from '../presenter';
+import { exampleActionsFor } from '../domain';
 import { actionsForRows } from './actions';
+
+/** The keys a stranger holds on an example: none. */
+const NO_KEYS = { update: false, delete: false };
 
 /**
  * The owner's display name.
@@ -55,9 +59,11 @@ export const presentForCaller = (
     );
 
 /**
- * A document as the contract's `Example` for anyone: the owner's name, and no `actions` — nobody
- * is acting on the public read.
+ * A document as the contract's `Example` for anyone: the owner's name, and `actions` all false —
+ * nobody is acting on the public read.
  * @param document - the stored example
  */
 export const presentPublic = (document: ExampleDocument): Promise<Example> =>
-    ownerNameOf(String(document.userId)).then((name) => presentExample(document, name));
+    ownerNameOf(String(document.userId)).then((name) =>
+        presentExample(document, name, exampleActionsFor(document.status, NO_KEYS))
+    );

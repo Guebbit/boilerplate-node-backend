@@ -10,12 +10,12 @@
  */
 
 import type { ClientSession } from 'mongoose';
-import type { Example } from '@types';
+import type { ExportExample } from '@types';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { toObjectId } from '@infrastructure/persistence/create-repository';
 import { MAX_CONFIGURED_PAGE_SIZE, readAll } from '@infrastructure/persistence/search';
 import type { AfterErase, PersonalDataSubject } from '@kernel/registry';
-import { presentExampleRow } from '../presenter';
+import { presentExampleExport } from '../presenter';
 import { ownerNameOf } from './owner';
 import { exampleRepository } from '../repository';
 
@@ -24,7 +24,7 @@ import { exampleRepository } from '../repository';
  *
  * @param subject - who the export is about
  */
-export const collectPersonalData = (subject: PersonalDataSubject): Promise<Example[]> =>
+export const collectPersonalData = (subject: PersonalDataSubject): Promise<ExportExample[]> =>
     Promise.all([
         readAll(
             (page) =>
@@ -40,7 +40,7 @@ export const collectPersonalData = (subject: PersonalDataSubject): Promise<Examp
         ),
         ownerNameOf(subject.userId)
     ]).then(([rows, ownerName]) =>
-        exampleRepository.normalize(rows).map((row) => presentExampleRow(row, ownerName))
+        exampleRepository.normalize(rows).map((row) => presentExampleExport(row, ownerName))
     );
 
 /**

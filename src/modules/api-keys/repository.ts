@@ -14,7 +14,7 @@ import type { ApiKey } from '@types';
  * A stored credential as the wire carries it, minus `status`: whether the minter can still sign
  * in is a fact about ANOTHER collection, so `services/api-keys.ts` adds it to a row after the read.
  */
-export type StoredApiKey = Omit<ApiKey, 'status'>;
+export type StoredApiKey = Omit<ApiKey, 'status' | 'actions'>;
 
 /** The shared factory's CRUD, scoped to `apikeys`. The admin list has no free-text filter, only an order. */
 const base = createRepository<ApiKeyDocument, StoredApiKey>(apiKeyModel, {

@@ -67,6 +67,7 @@ describe('GET /api-keys', () => {
         const response = await api().get('/api-keys').set('Authorization', bearer);
 
         expect(response.body.items[0].status).toBe('active');
+        expect(response.body.items[0].actions).toEqual({ revoke: true });
         expect(new Date(response.body.maxExpiresAt).getTime()).toBeGreaterThan(
             Date.now() + 364 * 24 * 3_600_000
         );
@@ -112,6 +113,20 @@ describe('GET /api-keys/:id', () => {
             status: 'active'
         });
         expect(response.body.secret).toBeUndefined();
+    });
+
+    it('says whether the caller may revoke it, and stops saying so once it is revoked', async () => {
+        const { bearer } = await authenticateAsRole('admin');
+        const id = await mintOne(bearer);
+
+        const live = await api().get(`/api-keys/${id}`).set('Authorization', bearer);
+        await api().delete(`/api-keys/${id}`).set('Authorization', bearer);
+        const revoked = await api().get(`/api-keys/${id}`).set('Authorization', bearer);
+
+        expect([live.body.actions, revoked.body.actions]).toEqual([
+            { revoke: true },
+            { revoke: false }
+        ]);
     });
 
     it('answers 404 for an unknown id and a malformed one alike', async () => {
