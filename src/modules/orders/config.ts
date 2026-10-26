@@ -26,7 +26,8 @@ export const ordersConfig = defineConfig({
         NODE_ADMIN_ORDER_MAX_LINES: int({ default: 100, min: 1 }),
         NODE_ADMIN_ORDER_MAX_LINE_QUANTITY: int({ default: 99_999, min: 1 }),
         NODE_WITHDRAWAL_PERIOD_DAYS: int({ default: 30, min: 21 }),
-        NODE_ORDER_PII_RETENTION_DAYS: int({ default: 3653, min: 1 }),
+        NODE_ORDER_PII_DAYS_AFTER_GUARANTEE: int({ default: 0, min: 0 }),
+        NODE_ORDER_PII_DAYS_UNDELIVERED: int({ default: 540, min: 1 }),
         NODE_ORDER_EVENT_TEXT_RETENTION_DAYS: int({ default: 1095, min: 1 }),
         NODE_ORDER_EXPORT_MAX_ROWS: int({ default: 20_000, min: 1 }),
         NODE_PURCHASE_HOLD_CANCEL_COUNT: int({ default: 3, min: 2 }),
@@ -65,10 +66,19 @@ export const maxAdminOrderLineQuantity = (): number =>
 export const withdrawalPeriodDays = (): number => ordersConfig().NODE_WITHDRAWAL_PERIOD_DAYS;
 
 /**
- * Days a terminal order's personal data is kept before the sweep erases it.
- * @returns the retention, in days
+ * Days a delivered order keeps the buyer after its legal-guarantee window (`conformityUntil`).
+ * See docs/theory/data-retention.md#orders-after-the-account
+ * @returns the days
  */
-export const orderPiiRetentionDays = (): number => ordersConfig().NODE_ORDER_PII_RETENTION_DAYS;
+export const orderPiiDaysAfterGuarantee = (): number =>
+    ordersConfig().NODE_ORDER_PII_DAYS_AFTER_GUARANTEE;
+
+/**
+ * Days a paid order that ended without delivery keeps the buyer, counted from `paidAt`.
+ * See docs/theory/data-retention.md#orders-after-the-account
+ * @returns the days
+ */
+export const orderPiiDaysUndelivered = (): number => ordersConfig().NODE_ORDER_PII_DAYS_UNDELIVERED;
 
 /**
  * Days a timeline row keeps the free text staff wrote on it, counted from the row's own instant.

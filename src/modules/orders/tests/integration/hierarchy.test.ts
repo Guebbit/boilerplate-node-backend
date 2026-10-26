@@ -310,7 +310,7 @@ describe('no rank on an order', () => {
 
     it('leaves an order whose buyer is gone to any operator', async () => {
         const order = await orderOf('customer');
-        await orderRepository.detachUserId(String(order.userId), 30);
+        await orderRepository.detachUserId(String(order.userId));
 
         const result = await orderService.updateById(
             String(order._id),

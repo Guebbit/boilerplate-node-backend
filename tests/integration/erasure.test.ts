@@ -172,7 +172,7 @@ const KEPT_BY_LAW = {
     // The `user.erased` delivery is the notice Art. 19 owes recipients. It carries the id only, no
     // email, and the delivery log expires on its own clock (30 days).
     webhookdeliveries: 'delivery log retention',
-    // Art. 17(3)(b): the paid order is the sale; it is anonymised after NODE_ORDER_PII_RETENTION_DAYS.
+    // Art. 17(3)(b): the paid order is the sale; its buyer is scrubbed once the claim window closes.
     orders: 'paid order, tax law',
     // The invoice freezes the billing address (name and address) for the tax duty.
     invoices: 'tax law',

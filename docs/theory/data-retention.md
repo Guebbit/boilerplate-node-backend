@@ -49,9 +49,6 @@ flowchart LR
 | Account is erased | `userId` detached at once; personal fields scrubbed when the per-order clock ends | the order is evidence for a tax audit or a legal claim, never a reason to keep the street forever |
 | Never paid        | scrubbed at once after erasure                                                    | no tax record exists, so no exemption applies                                                     |
 
-The clock is `NODE_ORDER_PII_RETENTION_DAYS`, counted from the order's own `createdAt`; the
-default and the mechanics are in the [register](./data-protection.md#processing-register-art-30).
-
 **What others do with a live customer's orders:** Shopify, WooCommerce and Amazon all keep order
 history for as long as the account exists. None of them scrubs a live customer's orders on a timer.
 
@@ -59,10 +56,47 @@ history for as long as the account exists. None of them scrubs a live customer's
 billing address. Cross-border EU sales (OSS) also need the place of delivery — a country, not a
 street, a phone or a note.
 
+## Orders after the account
+
+Once erasure or inactivity minimisation has started an order's clock, `reap:orders` scrubs the buyer
+(email, both addresses with their country, notes) when the order is past its claim window. The due date
+is derived on every run from the order's current fields, so an order delivered after the erasure follows
+its delivery.
+
+| Order                                              | Due                                                           |
+| -------------------------------------------------- | ------------------------------------------------------------- |
+| never paid                                         | at once                                                       |
+| delivered                                          | `conformityUntil` + `NODE_ORDER_PII_DAYS_AFTER_GUARANTEE` (0) |
+| paid, ended without delivery (cancelled, refunded) | `paidAt` + `NODE_ORDER_PII_DAYS_UNDELIVERED` (540)            |
+| paid, still open                                   | not due: it still has to be shipped, delivered or returned    |
+
+```mermaid
+flowchart TD
+    A[Clock started: erasure or minimisation] --> B{paid?}
+    B -- no --> N[scrub at once]
+    B -- yes --> C{delivered?}
+    C -- yes --> D[scrub at conformityUntil + days after guarantee]
+    C -- no --> E{cancelled?}
+    E -- yes --> F[scrub at paidAt + days undelivered]
+    E -- no --> G[wait: still open]
+    G -. delivered later .-> D
+```
+
+**Why these dates.** The invoice already keeps the tax copy of the buyer (and the place of supply for
+OSS), so the order's copy has no tax purpose (Art. 5(1)(c)(e)). What still needs the buyer on the order is
+a claim: the EU legal guarantee (Directive 2019/771; Italy art. 132 bars claims 26 months after delivery,
+which `conformityUntil` stores), the 14-day withdrawal inside it, and card disputes (Visa's ceiling is about
+540 days, which is why an undelivered paid order gets that long). Solidus keeps order PII forever; Shopify's
+roughly six months is shorter than the guarantee, so the law decides here.
+
+**Knobs.** `NODE_ORDER_PII_DAYS_AFTER_GUARANTEE` extends the delivered row where national law keeps
+claims open longer (a 10-year limitation period, say). `NODE_ORDER_PII_DAYS_UNDELIVERED` is the card-dispute
+ceiling for the undelivered row.
+
 ### How long a deployment must keep the records
 
-The default window is the longest common EU period, so the boilerplate is safe anywhere in the EU.
-A single-country shop may lower it.
+The invoice buyer clock (`NODE_INVOICE_BUYER_RETENTION_YEARS`) defaults to the longest common EU
+period, so the boilerplate is safe anywhere in the EU. A single-country shop may lower it.
 
 | Where        | Bookkeeping period                 | Source                                                                                                                                                                                                 |
 | ------------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -137,14 +171,14 @@ purpose any more, and keep the login. That step is on by default.
 passive) or the latest API-key use. An account driven only through its API keys is a live
 integration, not an idle account.
 
-| Data on an inactive account | Its purpose                  | On inactivity                                    |
-| --------------------------- | ---------------------------- | ------------------------------------------------ |
-| login (email, password)     | letting the person come back | kept                                             |
-| profile, wishlist           | the account's own content    | kept                                             |
-| saved address book          | a faster next checkout       | deleted — re-entered on the next order           |
-| orders' addresses and notes | showing order history        | the per-order clock starts, as on erasure        |
-| invoices                    | the tax record               | untouched ([own clock](#invoices-the-tax-clock)) |
-| return free text            | the legal-claims window      | its own clock, below                             |
+| Data on an inactive account | Its purpose                  | On inactivity                                                             |
+| --------------------------- | ---------------------------- | ------------------------------------------------------------------------- |
+| login (email, password)     | letting the person come back | kept                                                                      |
+| profile, wishlist           | the account's own content    | kept                                                                      |
+| saved address book          | a faster next checkout       | deleted — re-entered on the next order                                    |
+| orders' addresses and notes | showing order history        | the [claim-window clock](#orders-after-the-account) starts, as on erasure |
+| invoices                    | the tax record               | untouched ([own clock](#invoices-the-tax-clock))                          |
+| return free text            | the legal-claims window      | its own clock, below                                                      |
 
 A banned account is minimised like any other: minimising drops data and deletes nothing, so a ban is no
 reason to keep the address book.
@@ -183,15 +217,15 @@ stateDiagram-v2
 The grace is `NODE_ACCOUNT_DELETION_GRACE_DAYS` (30 by default, 1 to 31). `purgeAt` is **stored**, not
 derived, so changing the knob never moves a date already promised (the AIP-164 `purge_time`).
 
-| While the account is locked | What happens                                                                                                             |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| sessions, refresh           | dead at once (the session epoch moves in the same save)                                                                  |
-| API keys                    | suspended, back on restore, erased at the purge                                                                          |
-| cart, wishlist              | kept intact, restored or erased with the account                                                                         |
-| orders in flight            | untouched; transactional mails continue (Art. 6(1)(b)); the purge cancels the never-paid ones and detaches the paid ones |
-| optional mails              | none (stock alerts, the example notice)                                                                                  |
-| password reset              | still works; it does not restore by itself                                                                               |
-| signup with the same email  | refused until the purge                                                                                                  |
+| While the account is locked | What happens                                                                                                                                                                   |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| sessions, refresh           | dead at once (the session epoch moves in the same save)                                                                                                                        |
+| API keys                    | suspended, back on restore, erased at the purge                                                                                                                                |
+| cart, wishlist              | kept intact, restored or erased with the account                                                                                                                               |
+| orders in flight            | untouched; transactional mails continue (Art. 6(1)(b)); the purge cancels the never-paid ones and detaches the paid ones ([when they are scrubbed](#orders-after-the-account)) |
+| optional mails              | none (stock alerts, the example notice)                                                                                                                                        |
+| password reset              | still works; it does not restore by itself                                                                                                                                     |
+| signup with the same email  | refused until the purge                                                                                                                                                        |
 
 Three ways back, all conditional on `purgeAt > now`: the mailed link, signing in (the answer is a
 `DeletionPending` claim check, redeemed at `POST /account/login/restore`), and staff
