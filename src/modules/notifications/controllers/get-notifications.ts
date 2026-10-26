@@ -11,11 +11,11 @@ import { notificationsService } from '../services';
 
 /**
  * GET /notifications
- * The authenticated user's own inbox, newest first.
+ * The authenticated user's own inbox plus the work notices they hold the sets for, newest first.
  */
 export const getNotifications = (request: Request, response: Response) => {
     return notificationsService
-        .list(request.authContext!.id)
+        .listVisible(request.caller!)
         .then((view) => {
             successResponse<NotificationsResponse>(response, view);
         })

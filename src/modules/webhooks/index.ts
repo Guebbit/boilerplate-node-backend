@@ -13,6 +13,6 @@ export * from './services';
 
 export * from './domain';
 
-export * from './emails';
+export * from './events';
 
 export type * from './model';

@@ -13,38 +13,32 @@
  * dropped, never retried — whatever re-claimed the row in the meantime owns its outcome now.
  */
 
-import { enqueueEmail } from '@infrastructure/adapters/mailer';
-import { getDefaultLocale } from '@infrastructure/i18n';
-import { logger } from '@infrastructure/adapters/logger';
 import { recordAudit } from '@infrastructure/observability/audit';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { emitDomainEvent } from '@kernel/events';
 import { systemCallerContext } from '@kernel/permissions';
-import { userService } from '@modules/users';
 import { deliverWebhook } from '../transport/webhook-delivery';
 import type { WebhookDeliverJobPayload } from '@types';
 import { webhookSubscriptionRepository, webhookDeliveryRepository } from '../repository';
 import { activeRingSecrets } from '../secrets';
 import { nextAttemptAt, shouldAutoDisable } from '../domain';
-import { subscriptionDisabledEmail } from '../emails';
+import { WEBHOOK_SUBSCRIPTION_AUTO_DISABLED } from '../events';
 import { webhooksAuditActions } from '../audit';
 import { webhookDeliveryAttemptsTotal, webhookSubscriptionsAutoDisabledTotal } from '../metrics';
 import type { WebhookDeliveryDocument, WebhookSubscriptionDocument } from '../model';
 
 /**
- * Tell whoever created a subscription that it was just auto-disabled — best-effort, fire-and-
- * forget the same way every other queued notification in this codebase is (see
- * `orders/services/crud.ts`'s own confirmation-mail call for the precedent). A no-op when
- * `disable` found nothing to disable (a second exhausted chain finalizing moments later — see
- * `repository.ts#disable`'s own conditional write).
+ * Record that a subscription was just auto-disabled and tell the staff who manage webhooks —
+ * `notifications` turns the event into a work notice. A no-op when `disable` found nothing to
+ * disable (a second exhausted chain finalizing moments later — see `repository.ts#disable`'s own
+ * conditional write).
  *
  * Deliberately NOT the operator-facing alert (`QueueJobsParked`) — that is Alertmanager's job, for
- * a different audience; this is the one person who configured THIS endpoint hearing about it. The
- * email address is resolved fresh from `ownerUserId` here, never stored on the subscription — see
- * `../model.ts`'s own field docblock for why. The audit entry lands regardless of whether an email
- * could be sent (no `ownerUserId` at all, or its user no longer resolves); the email is the
- * courtesy, the audit trail is the record.
+ * a different audience. The audit entry lands first and regardless of the notice: the notice is
+ * the courtesy, the audit trail is the record.
  */
-const notifyOwnerOfAutoDisable = (subscription: WebhookSubscriptionDocument | null): void => {
-    if (!subscription) return;
+const announceAutoDisable = (subscription: WebhookSubscriptionDocument | null): Promise<void> => {
+    if (!subscription) return Promise.resolve();
 
     // No request behind this: a background job, audited as the system actor — see `../audit.ts`'s
     // own note on why not as whichever worker process ran it.
@@ -55,28 +49,11 @@ const notifyOwnerOfAutoDisable = (subscription: WebhookSubscriptionDocument | nu
         targetId: String(subscription._id)
     });
 
-    void userService
-        .getById(subscription.ownerUserId)
-        .then((owner) => {
-            if (!owner) return;
-            const mail = subscriptionDisabledEmail(
-                owner.locale ?? getDefaultLocale(),
-                subscription.url
-            );
-            // eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects (it logs its own failure)
-            void enqueueEmail({ to: owner.email, subject: mail.subject }, mail.template, mail.data);
-        })
-        .catch((error: unknown) => {
-            // The audit entry above already recorded the disable — a failed lookup here only
-            // costs the courtesy email, not the fact of it. Logged so the miss is visible instead
-            // of surfacing as an unhandled rejection with nothing left to tie it back to this
-            // subscription.
-            logger.error({
-                message: 'Could not notify the subscription owner of an auto-disable.',
-                subscriptionId: String(subscription._id),
-                error
-            });
-        });
+    return emitDomainEvent(WEBHOOK_SUBSCRIPTION_AUTO_DISABLED, {
+        tenantId: DEPLOYMENT_TENANT_ID,
+        subscriptionId: String(subscription._id),
+        disabledAt: (subscription.disabledAt ?? new Date()).toISOString()
+    }).then(() => undefined);
 };
 
 /**
@@ -173,8 +150,7 @@ const recordExhaustion = (
                             .disable(subscriptionId)
                             .then((disabled) => {
                                 if (disabled) webhookSubscriptionsAutoDisabledTotal.inc();
-                                notifyOwnerOfAutoDisable(disabled);
-                                return saved;
+                                return announceAutoDisable(disabled).then(() => saved);
                             });
                     return saved;
                 });

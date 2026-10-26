@@ -235,10 +235,9 @@ export const create = (
         if (refusal) return refusal;
 
         const { entry, plaintext } = mintRingSecret();
-        // A pointer, not a copy: whoever's email the auto-disable notice reaches is resolved fresh
-        // at send time (`services/attempt.ts#notifyOwnerOfAutoDisable`), off this id — never stored
-        // here. `context.caller.id` absent (a stranger, never reachable through this tenant-scoped
-        // route in practice) leaves nobody to notify later.
+        // A pointer, not a copy: who configured the integration, never their email.
+        // `context.caller.id` absent (a stranger, never reachable through this tenant-scoped
+        // route in practice) leaves it unset.
         return webhookSubscriptionRepository
             .create({
                 tenant,

@@ -21,6 +21,8 @@ export interface NotificationOverrides {
     severity?: NotificationDocument['severity'];
     /** Stamped read; leave out for unread. */
     readAt?: Date;
+    /** Makes it a work notice of this shop, earned by these permission sets. Omit for an own message. */
+    staff?: { tenantId: string; sets: string[]; dedupeKey?: string };
     /** Pins the age, so a test can order rows without waiting between inserts. */
     createdAt?: Date;
 }
@@ -38,6 +40,15 @@ export const makeNotification = (
         params: { productId: '64b7f1a2c3d4e5f607182930', titles: { en: 'Blue mug' } }
     }),
     severity: overrides.severity ?? 'warning',
+    ...(overrides.staff
+        ? {
+              audience: 'staff' as const,
+              tenantId: overrides.staff.tenantId,
+              sets: overrides.staff.sets,
+              dedupeKey: overrides.staff.dedupeKey ?? `test:${new Types.ObjectId().toHexString()}`,
+              expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+          }
+        : {}),
     ...(overrides.readAt === undefined ? {} : { readAt: overrides.readAt }),
     ...(overrides.createdAt === undefined ? {} : { createdAt: overrides.createdAt })
 });

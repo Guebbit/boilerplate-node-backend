@@ -84,6 +84,9 @@ membershipSchema.index({ userId: 1, tenantId: 1, scope: 1 }, { unique: true });
 /** Lookups the resolver makes on every authenticated request. */
 membershipSchema.index({ userId: 1 });
 
+/** "Who holds one of these roles in this shop" — what a staff notice asks to find its audience. */
+membershipSchema.index({ tenantId: 1, role: 1 });
+
 /** The shop collection, typed for the store. */
 export type TenantModel = Model<TenantDocument>;
 

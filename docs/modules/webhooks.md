@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — subscriptions, the delivery log, signing, retries and auto-disable for outbound webhook delivery.
-**Depends on** — [`users`](./users.md) only, for the disable-notice recipient's email. The modules that publish events (`delivery`, `orders`, `payments`, `returns`, `example`) declare them; this module never imports them, and no reach back the other way.
+**Depends on** — nothing. The modules that publish events (`delivery`, `orders`, `payments`, `returns`, `example`) declare them; this module never imports them, and no reach back the other way.
 **Breaks if you change** — an event name in any module's `asyncapi.webhooks.yaml`, or the queue payload shape in `asyncapi.internal.yaml`.
 :::
 
@@ -59,15 +59,16 @@ graph cannot see._
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
 flowchart LR
     webhooks["webhooks<br/><i>this module</i>"]
-    users["users"]
+    notifications["notifications"]
 
-    webhooks --> users
+    notifications --> webhooks
+    webhooks -. "webhook.subscription_auto_disabled" .-> notifications
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
-    class users generic;
+    class notifications supporting;
     class webhooks centre;
 ```
 
@@ -81,8 +82,8 @@ their event name constants to listen for it. Each of them declares its own `publ
 mapped to a projection of that event's payload — and `webhooks/module.ts`'s `onRegistered` hook
 collects every registered module's declarations (`kernel/registry.ts`'s `resolvePublicEvents`) and
 subscribes to each one generically on the kernel's domain-event bus, the same shape
-[`delivery`](./delivery.md) uses for `order.status_changed`. The only import left is `users`, for
-the email a disable notice is sent to — never a call back into any publishing module's business logic.
+[`delivery`](./delivery.md) uses for `order.status_changed`. This module imports no sibling, and
+nothing calls back into any publishing module's business logic.
 
 **The public event catalogue is a contract, not an accident.** Each module that fires a webhook
 declares its own events in `src/modules/<module>/asyncapi.webhooks.yaml` (`delivery`, `orders`,
@@ -123,7 +124,7 @@ flowchart LR
     HTTP -->|2xx| OK["status: succeeded"]
     HTTP -->|fail, attempts left| BACK["status: pending<br/>nextAttemptAt scheduled"]
     HTTP -->|fail, exhausted| DIS{"5+ chains in a row,<br/>AND failing 3+ days?"}
-    DIS -->|yes| OFF["subscription disabled<br/>+ owner emailed"]
+    DIS -->|yes| OFF["subscription disabled<br/>+ staff told"]
     DIS -->|no| DONE["status: exhausted"]
     BACK -.->|sweep, per minute<br/>publishes, does not claim| Q
     BACK -.->|sweep, no broker<br/>claims and sends itself| CLAIM
@@ -140,13 +141,13 @@ delivery. The row is the payload's only source of truth once the consumer claims
 keeps a replay's own `attempt` count (or any other field that changes after the message was
 published) from ever going stale inside the queue.
 
-**The owner hears about their own endpoint; operators hear a fleet-wide signal, never a per-endpoint one.**
-Once a subscription auto-disables, `services/attempt.ts#notifyOwnerOfAutoDisable` emails whoever
-created it — resolved fresh, at send time, from the id the subscription points at
-(`WebhookSubscriptionDocument.ownerUserId`, never a stored copy of the address; see the field's own
-docblock for the GDPR reasoning). Best-effort and fire-and-forget, the same as every other queued
-notification in this codebase; silently skipped for a subscription with no owner, or
-whose owner no longer resolves to a user. When the owner's account is erased the pointer is unset (a `personalData.erase` hook that exports nothing), so the integration keeps working and the notice has no one to mail.
+**Staff who manage webhooks hear about an endpoint; operators hear a fleet-wide signal, never a per-endpoint one.**
+Once a subscription auto-disables, `services/attempt.ts#announceAutoDisable` audits it and emits
+`webhook.subscription_auto_disabled` (internal: no channel, no webhook). `notifications` turns that
+into a work notice in the bell of every member whose role lists `WebhookManagement`, and every
+administrator ([how](./notifications.md#work-notices-for-staff)). No mail: a dead endpoint is worth
+a look, not an interruption. The notice replaces the old mail to whoever created the subscription;
+`ownerUserId` stays as the record of who configured the integration (a pointer, forgotten on erasure).
 
 This is deliberately a DIFFERENT channel from what operators hear. A failed delivery never parks —
 it reschedules on its own row, and the sweep republishes — so `QueueJobsParked` never fires for a

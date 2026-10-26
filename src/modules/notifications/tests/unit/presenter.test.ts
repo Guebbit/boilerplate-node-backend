@@ -17,6 +17,7 @@ const documentOf = (overrides: Partial<NotificationDocument> = {}): Notification
         _id: new Types.ObjectId('64b7f1a2c3d4e5f607182930'),
         userId: new Types.ObjectId('64b7f1a2c3d4e5f607182931'),
         code: 'notifications.cart-line-removed',
+        audience: 'own',
         params: { productId: 'p1', titles: { en: 'Blue mug' } },
         severity: 'warning',
         createdAt: new Date('2026-10-04T09:00:00.000Z'),
@@ -27,6 +28,7 @@ describe('presentNotification', () => {
     it('answers exactly the contract fields, ids and dates as strings', () => {
         expect(presentNotification(documentOf())).toEqual({
             id: '64b7f1a2c3d4e5f607182930',
+            audience: 'own',
             code: 'notifications.cart-line-removed',
             params: { productId: 'p1', titles: { en: 'Blue mug' } },
             severity: 'warning',
@@ -88,7 +90,12 @@ describe('presentNotification, per code', () => {
                 notice: 'check_address',
                 message: 'Is the flat number right?'
             }
-        }
+        },
+        {
+            code: 'notifications.staff.purchase-hold-placed',
+            params: { userId: 'u1', until: '2026-10-30T09:00:00.000Z' }
+        },
+        { code: 'notifications.staff.webhook-disabled', params: { subscriptionId: 's1' } }
     ];
 
     it.each(bodies)('answers $code with its own params, untouched', (body) => {

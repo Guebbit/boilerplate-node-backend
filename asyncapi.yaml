@@ -1304,11 +1304,34 @@ components:
                     type: string
                     maxLength: 500
             additionalProperties: false
-        NotificationFulfillmentHeldPayload:
-            title: NotificationFulfillmentHeldPayload
+        PurchaseHoldPlacedParamsPayload:
+            title: PurchaseHoldPlacedParamsPayload
+            type: object
+            required:
+                - userId
+                - until
+            properties:
+                userId:
+                    type: string
+                until:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        WebhookDisabledParamsPayload:
+            title: WebhookDisabledParamsPayload
+            type: object
+            required:
+                - subscriptionId
+            properties:
+                subscriptionId:
+                    type: string
+            additionalProperties: false
+        NotificationStaffPurchaseHoldPlacedPayload:
+            title: NotificationStaffPurchaseHoldPlacedPayload
             type: object
             required:
                 - id
+                - audience
                 - code
                 - params
                 - severity
@@ -1316,6 +1339,92 @@ components:
             properties:
                 id:
                     type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
+                code:
+                    type: string
+                    enum:
+                        - notifications.staff.purchase-hold-placed
+                params:
+                    $ref: '#/components/schemas/PurchaseHoldPlacedParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationStaffWebhookDisabledPayload:
+            title: NotificationStaffWebhookDisabledPayload
+            type: object
+            required:
+                - id
+                - audience
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
+                code:
+                    type: string
+                    enum:
+                        - notifications.staff.webhook-disabled
+                params:
+                    $ref: '#/components/schemas/WebhookDisabledParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationFulfillmentHeldPayload:
+            title: NotificationFulfillmentHeldPayload
+            type: object
+            required:
+                - id
+                - audience
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
                 code:
                     type: string
                     enum:
@@ -1342,6 +1451,7 @@ components:
             type: object
             required:
                 - id
+                - audience
                 - code
                 - params
                 - severity
@@ -1349,6 +1459,12 @@ components:
             properties:
                 id:
                     type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
                 code:
                     type: string
                     enum:
@@ -1375,6 +1491,7 @@ components:
             type: object
             required:
                 - id
+                - audience
                 - code
                 - params
                 - severity
@@ -1382,6 +1499,12 @@ components:
             properties:
                 id:
                     type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
                 code:
                     type: string
                     enum:
@@ -1408,6 +1531,7 @@ components:
             type: object
             required:
                 - id
+                - audience
                 - code
                 - params
                 - severity
@@ -1415,6 +1539,12 @@ components:
             properties:
                 id:
                     type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
                 code:
                     type: string
                     enum:
@@ -1441,6 +1571,7 @@ components:
             type: object
             required:
                 - id
+                - audience
                 - code
                 - params
                 - severity
@@ -1448,6 +1579,12 @@ components:
             properties:
                 id:
                     type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
                 code:
                     type: string
                     enum:
@@ -1474,6 +1611,7 @@ components:
             type: object
             required:
                 - id
+                - audience
                 - code
                 - params
                 - severity
@@ -1481,6 +1619,12 @@ components:
             properties:
                 id:
                     type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
                 code:
                     type: string
                     enum:
@@ -1511,6 +1655,8 @@ components:
                 - $ref: '#/components/schemas/NotificationFulfillmentDelayedPayload'
                 - $ref: '#/components/schemas/NotificationFulfillmentHeldPayload'
                 - $ref: '#/components/schemas/NotificationStockAlertPayload'
+                - $ref: '#/components/schemas/NotificationStaffPurchaseHoldPlacedPayload'
+                - $ref: '#/components/schemas/NotificationStaffWebhookDisabledPayload'
             # A plain property name here, unlike OpenAPI's `{ propertyName }` object.
             discriminator: code
         NotificationCreatedPayload:
