@@ -19,7 +19,7 @@ x-personal-data:
         schema:
             type: array
             items:
-                $ref: '#/components/schemas/Example'
+                $ref: '#/components/schemas/ExportExample'
 
 paths:
     /examples:
@@ -315,7 +315,7 @@ components:
         Example:
             type: object
             additionalProperties: false
-            required: [id, title, body, status, userId, ownerName, createdAt]
+            required: [id, title, body, status, userId, ownerName, createdAt, actions]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -346,9 +346,42 @@ components:
                 updatedAt:
                     type: string
                     format: date-time
-                # Absent on the public read and in the data export: nobody is acting there.
+                # Always present. A stranger on the public read gets every flag false and no moves.
                 actions:
                     $ref: '#/components/schemas/ExampleActions'
+
+        # An example as the account's data export carries it: `actions` is per caller, so it
+        # never leaves in an export.
+        ExportExample:
+            type: object
+            additionalProperties: false
+            required: [id, title, body, status, userId, ownerName, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                title:
+                    type: string
+                body:
+                    type: string
+                status:
+                    $ref: '#/components/schemas/ExampleStatus'
+                userId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                ownerName:
+                    type: string
+                imageUrl:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                thumbnailUrl:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ThumbnailUrl'
+                publishedAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
 
         ExampleActions:
             type: object

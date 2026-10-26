@@ -245,7 +245,11 @@ describe('GET /examples/{id}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body).not.toHaveProperty('actions');
+        expect(response.body.actions).toEqual({
+            transitions: [],
+            update: false,
+            delete: false
+        });
     });
 
     it.each([ExampleStatus.draft, ExampleStatus.archived])(
@@ -620,13 +624,17 @@ describe('Example.actions', () => {
         });
     });
 
-    it('is absent from the public read', async () => {
+    it('is all false on the public read: a stranger may do nothing', async () => {
         const { user } = await authenticateAsRole('editor');
         const published = await createExample({ userId: user.id, status: ExampleStatus.published });
 
         const response = await api().get(`/examples/${String(published._id)}`);
 
-        expect(response.body).not.toHaveProperty('actions');
+        expect(response.body.actions).toEqual({
+            transitions: [],
+            update: false,
+            delete: false
+        });
     });
 });
 

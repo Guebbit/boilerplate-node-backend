@@ -14,7 +14,7 @@ import {
     toObjectId,
     type Repository
 } from '@infrastructure/persistence/create-repository';
-import type { Return } from '@types';
+import type { StoredReturn } from './presenter';
 import type { ReportWindow } from '@infrastructure/persistence/report';
 
 /** The fields a lifecycle move may stamp in the same write as its status. */
@@ -32,7 +32,7 @@ export type ReturnStamp = Partial<
 >;
 
 /** Return CRUD, plus the conditional status move and the per-order reads. */
-export const returnRepository: Repository<ReturnDocument, Return> & {
+export const returnRepository: Repository<ReturnDocument, StoredReturn> & {
     claimStatus: (
         id: string,
         from: readonly ReturnStatus[],
@@ -50,7 +50,7 @@ export const returnRepository: Repository<ReturnDocument, Return> & {
         productId?: Types.ObjectId
     ) => Promise<TRow[]>;
 } = {
-    ...createRepository<ReturnDocument, Return>(returnModel, {
+    ...createRepository<ReturnDocument, StoredReturn>(returnModel, {
         transform: applyReturnTransform,
         searchable: {
             objectIds: { orderId: 'orderId' },

@@ -8,6 +8,10 @@ x-error-codes:
     USER_ERASURE_DUE: { status: 409, description: 'The account owner asked for its deletion and the grace has run out, so it is erased by the next purge run and can no longer be restored.' }
     USER_ALREADY_ACTIVE: { status: 409, description: 'The account is active already: `POST /users/{id}/activate` has nothing to do.' }
     USER_ALREADY_INACTIVE: { status: 409, description: 'The account is deactivated already: `POST /users/{id}/deactivate` has nothing to do.' }
+    USER_NOT_WARNED: { status: 409, description: 'The inactivity reaper tried to delete an account that was never warned first. Raised by the reaper, never by a route.' }
+    USER_STAFF_NOT_REAPABLE: { status: 409, description: 'The inactivity reaper met an account holding a staff role and left it alone. Raised by the reaper, never by a route.' }
+    USER_NOT_REAPER_DELETED: { status: 409, description: 'The reaper may only erase an account it soft-deleted itself. Raised by the reaper, never by a route.' }
+    USER_ERASURE_NOT_DUE: { status: 409, description: 'The account''s erasure was claimed by another run, or is not due yet, so this run did nothing.' }
     USER_PURCHASE_HOLD_NOT_SET: { status: 409, description: 'The account has no purchase hold and no review flag, so there is nothing to lift.' }
 
 # The tags this module's operations file themselves under, with what each is for.

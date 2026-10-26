@@ -7,9 +7,13 @@
 import type { Return } from '@types';
 import type { ReturnDocument } from './model';
 
+/** A return as stored and read back: the contract's `Return` before the caller's `actions`. */
+export type StoredReturn = Omit<Return, 'actions'>;
+
 /**
  * `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform: the document itself
  * is typed as stored, not as the wire shape `Return` promises — one cast narrowing what the
  * compiler cannot see through on its own.
  */
-export const presentReturn = (document: ReturnDocument): Return => document.toJSON() as Return;
+export const presentReturn = (document: ReturnDocument): StoredReturn =>
+    document.toJSON() as StoredReturn;

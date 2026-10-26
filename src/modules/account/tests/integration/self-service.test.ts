@@ -219,6 +219,7 @@ describe('updateProfile', () => {
         );
 
         expect(response.status).toBe(409);
+        expect(response.errors[0]?.code).toBe('EMAIL_ALREADY_USED');
     });
 
     it("answers 409 when the address is ALREADY someone else's pendingEmail", async () => {
@@ -656,6 +657,7 @@ describe('requestEmailVerificationFor', () => {
         );
 
         expect(response.status).toBe(409);
+        expect(response.errors[0]?.code).toBe('EMAIL_ALREADY_VERIFIED');
     });
 });
 

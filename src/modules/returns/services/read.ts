@@ -24,7 +24,8 @@ import { ownOrder } from './ownership';
 import {
     CLOSABLE_RETURN_STATUSES,
     DECIDABLE_RETURN_STATUSES,
-    RECEIVABLE_RETURN_STATUSES
+    RECEIVABLE_RETURN_STATUSES,
+    type ReturnStatus
 } from '../domain';
 
 /** The filters `GET /returns` accepts. */
@@ -37,30 +38,37 @@ export interface ReturnFilters {
     sort?: string[];
 }
 
+/** The one field of a return the actions read: where it is in its lifecycle. */
+interface StatusOnly {
+    status: ReturnStatus;
+}
+
 /** Whether this caller works the returns queue — the wide read. */
 const isStaff = (authContext: AuthContext): boolean =>
     holds(callerForSubject(authContext, 'Return'), 'read', 'Return');
 
 /**
- * What this caller may do to this return, decided here so no client re-implements the lifecycle.
- * Each flag needs the key that names the act and a status the act can run from; a customer holds
- * none of the keys, so a buyer is offered nothing here (their own door is `GET /returns/options`).
- * @param returned - the return
+ * What this caller may do to a return, decided here so no client re-implements the lifecycle. Each
+ * flag needs the key that names the act and a status the act can run from; a customer holds none
+ * of the keys, so a buyer is offered nothing here (their own door is `GET /returns/options`).
+ * The caller's standing is resolved once, so a page of rows costs one ability, not one per row.
  * @param authContext - the caller
+ * @returns a pure function from a return's status to its actions
  */
-const actionsFor = (returned: ReturnDocument, authContext: AuthContext): ReturnActions => {
+const actionsForCaller = (authContext: AuthContext): ((returned: StatusOnly) => ReturnActions) => {
     const caller = callerForSubject(authContext, 'Return');
-    const decidable =
-        DECIDABLE_RETURN_STATUSES.includes(returned.status) && holds(caller, 'update', 'Return');
+    const mayDecide = holds(caller, 'update', 'Return');
+    const mayReceive = holds(caller, 'receive', 'Return');
 
-    return {
-        approve: decidable,
-        decline: decidable,
-        receive:
-            holds(caller, 'receive', 'Return') &&
-            RECEIVABLE_RETURN_STATUSES.includes(returned.status),
-        close:
-            holds(caller, 'receive', 'Return') && CLOSABLE_RETURN_STATUSES.includes(returned.status)
+    return (returned) => {
+        const decidable = DECIDABLE_RETURN_STATUSES.includes(returned.status) && mayDecide;
+
+        return {
+            approve: decidable,
+            decline: decidable,
+            receive: mayReceive && RECEIVABLE_RETURN_STATUSES.includes(returned.status),
+            close: mayReceive && CLOSABLE_RETURN_STATUSES.includes(returned.status)
+        };
     };
 };
 
@@ -71,7 +79,7 @@ const actionsFor = (returned: ReturnDocument, authContext: AuthContext): ReturnA
  */
 export const withActions = (returned: ReturnDocument, authContext: AuthContext): Return => ({
     ...presentReturn(returned),
-    actions: actionsFor(returned, authContext)
+    actions: actionsForCaller(authContext)(returned)
 });
 
 /**
@@ -90,11 +98,17 @@ export const listReturns = (
     const search = (scope: Record<string, unknown>) =>
         returnRepository.search(rest, { ...exact, ...scope });
 
-    if (isStaff(authContext)) return search({});
+    const withCallerActions = ({ items, meta }: Awaited<ReturnType<typeof search>>) => {
+        const actionsFor = actionsForCaller(authContext);
+        return { items: items.map((row) => ({ ...row, actions: actionsFor(row) })), meta };
+    };
+
+    if (isStaff(authContext)) return search({}).then(withCallerActions);
 
     return orderService
         .ownOrderIds(authContext.id)
-        .then((ids) => search({ orderId: { $in: ids } }));
+        .then((ids) => search({ orderId: { $in: ids } }))
+        .then(withCallerActions);
 };
 
 /**

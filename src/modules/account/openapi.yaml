@@ -11,6 +11,8 @@ tags:
       description: The signed-in user's own account - profile, credentials, two-factor, data export and deletion.
 
 x-error-codes:
+    EMAIL_ALREADY_USED: { status: 409, description: 'Another account already holds this email address — on signup, or on a profile email change.' }
+    EMAIL_ALREADY_VERIFIED: { status: 409, description: 'The account''s email address is verified already, so there is nothing to resend.' }
     EMAIL_CHANGE_TOO_SOON: { status: 429, description: 'An email change was already requested for this account in the last minute — carries `details.retryAfter`.' }
     EMAIL_VERIFY_RESEND_TOO_SOON: { status: 429, description: 'A verification email was already sent recently — carries `details.retryAfter`.' }
     SESSION_IDLE: { status: 401, description: 'A staff or admin session saw no real request for longer than `NODE_SESSION_IDLE_TIME_STAFF`, and ended. Sign in again. A shopper never gets this.' }

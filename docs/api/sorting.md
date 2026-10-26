@@ -54,6 +54,10 @@ only when the order is why the screen exists, never for records staff manage (th
 | queue | by urgency, index-backed | inventory levels (scarcest first) · preorder allowances (most outstanding first) · preorder fulfillment orders (earliest expected first) and their product summary (earliest promise first) |
 | dictionary | natural key, ascending | locale entries (both the language's and one app's) |
 
+The kind is also written at the end of the list's 200 description, as `(a log, so no `sort`)`,
+`(a queue, …)` or `(a dictionary, …)`. `tests/cross-cutting/api-standards.test.ts` reads that: a
+paged list with neither a `sort` nor that sentence fails.
+
 ## How it flows
 
 ```mermaid

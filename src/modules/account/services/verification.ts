@@ -183,7 +183,13 @@ export const requestEmailVerificationFor = (
 ): Promise<ResponseSuccess<EmailVerificationRequested> | ResponseReject> =>
     userService.findByIdWithCredentials(userId).then((user) => {
         if (!user) return generateReject(404, [t('users.not-found')]);
-        if (user.verifiedAt) return generateReject(409, [t('account.verify.already-verified')]);
+        if (user.verifiedAt)
+            return generateReject(409, [
+                {
+                    code: ERROR_CODES.EMAIL_ALREADY_VERIFIED,
+                    message: t('account.verify.already-verified')
+                }
+            ]);
 
         // The recipient is the account's own stored address, so no body names it.
         return pacedSend(user, EMAIL_VERIFY_TOKEN_TYPE, user.email, context, () =>
