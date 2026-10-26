@@ -11,6 +11,7 @@ note field, and leaves the decision to a person. Each entry below has the same t
 | A refund is owed and the money must be paid back by hand               | [A refund owed by hand](#refund-owed-by-hand)                  |
 | The card refused to take a refund back                                 | [A card refund the card refused](#card-refund-refused)         |
 | The bank sent a refund back after the shop had marked it paid          | [A refund the bank sent back](#refund-bounced)                 |
+| The buyer was asked how they want their money and has not answered     | [The buyer does not answer](#buyer-silent)                     |
 | A refund was also made in the provider's own dashboard                 | [Refunded in the dashboard as well](#refund-covered-elsewhere) |
 | Two refunds were opened by mistake                                     | [Two refunds by mistake](#two-refunds)                         |
 | A return was received but its refund will never come the usual way     | [A return that cannot finish](#return-cannot-finish)           |
@@ -131,6 +132,27 @@ refund returned after you paid them, never before.
 
 **Whose job.** Whoever holds the refund permission: the [moderator](./moderator.md) or the admin.
 → [`payments`](../modules/payments.md#when-the-bank-sends-a-refund-back)
+
+## The buyer does not answer {#buyer-silent}
+
+**What you see.** A refund the card could not take back (refused for good, or sent back by the
+bank) is open, and the buyer was emailed asking how they would like the money. Days pass with no
+reply. The order stays on the "needs attention" list.
+
+**What to do.**
+
+1. Write to the buyer again around day 7, from your own mailbox.
+2. Note each try on the order or in the ticket, so the next person sees it.
+3. Keep the refund open. If the refund pays a return or a withdrawal, the list shows how many days
+   are left of the 14 the law gives you.
+
+::: warning Never mark it returned, or pick a method, for the buyer
+EU law lets you change the way the money goes back only when the buyer expressly agrees. Press
+**Mark returned** after you have actually paid them, never to make the row disappear.
+:::
+
+**Whose job.** The [moderator](./moderator.md) or the admin.
+→ [`payments`](../modules/payments.md#telling-the-buyer)
 
 ## Refunded in the dashboard as well {#refund-covered-elsewhere}
 

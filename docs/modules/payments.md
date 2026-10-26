@@ -550,6 +550,35 @@ stateDiagram-v2
 - **Needs a person.** `reversed_refund` is on `GET /payments/attention` at once, with `since` = when
   it bounced. A reversed refund cannot be cancelled (it settled once): only paid by hand.
 
+### Telling the buyer their refund cannot reach the card {#telling-the-buyer}
+
+EU law (Consumer Rights Directive Art. 13(1), Codice del Consumo Art. 56) returns the money by the
+means the buyer paid with, unless they expressly agree otherwise, and at no cost to them. So when a
+refund cannot reach the card the shop asks; it never picks a method for them.
+
+```mermaid
+flowchart LR
+    F[payment.refund_failed, final] --> L{record owed another way?}
+    R[payment.refund_reversed] --> L
+    L -->|yes| M[mail payments.refund-undeliverable: we owe you, tell us how]
+    L -->|no: unclear, shop balance, dispute, settled by hand| N[no mail]
+    M --> B[buyer replies to the shop]
+    B --> H[staff pay, press Mark returned: success mail, credit note, webhook]
+```
+
+- **One template, two triggers.** `payments.refund-undeliverable` is sent on a refusal that ended the
+  retrying and on a reversal. The listener reads the record, so a refund already paid by hand mails
+  nobody, and a transient refusal that later turns final mails once (the event fires only on a NEW
+  refusal).
+- **Never mailed:** `provider_unavailable` and `unknown` (the refund may have gone through),
+  `insufficient_funds` (the shop's own balance), `disputed` (the bank already returned it).
+- **No reason in the mail, nor on the buyer's page.** `Refund.owedAnotherWay` is the buyer-visible
+  half: true on an open refund that is owed another way. The order page says so instead of "retried
+  automatically". `failureReason` stays staff-only.
+- **No bank details are stored.** The buyer replies by email and the IBAN stays in the shop's mailbox
+  and bank, under the shop's own retention (GDPR Art. 5(1)(c): the app keeps nothing for a rare
+  event). The mail shows `NODE_SHOP_EMAIL` as text.
+
 ### Cancelling a refund {#cancelling-a-refund}
 
 Staff void a refund the shop must never pay (a duplicate opened by mistake, or one the provider's

@@ -137,6 +137,10 @@ export default {
         // This module's own two mails, from its own facts — see `./services/notify.ts`.
         onDomainEvent(PAYMENT_SUCCEEDED, paymentService.mailPaymentReceived);
         onDomainEvent(PAYMENT_REFUNDED, paymentService.mailRefundIssued);
+        // One mail, two triggers: a refusal that ended the retrying, and a settled refund the bank
+        // sent back. The listener reads the record, so a refusal that is not the card's mails nobody.
+        onDomainEvent(PAYMENT_REFUND_FAILED, paymentService.mailRefundUndeliverable);
+        onDomainEvent(PAYMENT_REFUND_REVERSED, paymentService.mailRefundUndeliverable);
     },
     locales: path.join(__dirname, 'locales'),
     templates: path.join(__dirname, 'templates'),

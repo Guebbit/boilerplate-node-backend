@@ -58,6 +58,15 @@
             "body": "Abbiamo rimborsato {{amount}} per il tuo ordine {{order}}.",
             "detail-full": "È tutto ciò che hai pagato per questo ordine.",
             "detail-partial": "È una parte di ciò che hai pagato; il resto del pagamento resta sull'ordine. Quanto tempo serve perché compaia dipende dalla tua banca o dal tuo emittente."
+        },
+        "email-undeliverable": {
+            "subject": "Ti dobbiamo ancora un rimborso",
+            "meta-title": "Il tuo rimborso richiede un altro percorso",
+            "greeting": "Ciao, {{name}}!",
+            "body": "Non siamo riusciti a restituire {{amount}} per il tuo ordine {{order}} alla carta con cui hai pagato.",
+            "ask": "Ti dobbiamo ancora questa somma. Rispondi a questa email, o scrivi a {{email}}, e dicci come preferisci riceverla, ad esempio con un bonifico su un conto intestato a te (IBAN e intestatario). Non ti costa nulla.",
+            "consent": "Non useremo un altro metodo finché non sei d'accordo.",
+            "link-label": "Vedi il tuo ordine"
         }
     }
 }

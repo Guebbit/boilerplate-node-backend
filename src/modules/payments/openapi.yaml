@@ -993,6 +993,14 @@ components:
                     description: The provider's id for the refund (Stripe's `re_…`). Staff only.
                 failureReason:
                     $ref: '#/components/schemas/RefundFailureReason'
+                owedAnotherWay:
+                    type: boolean
+                    description: >-
+                        `true` while this refund is open and the money cannot go back to the card: the
+                        provider refused it for good, or took it back after settling it. The buyer is
+                        emailed to agree how they would like to receive it, at no cost to them (Consumer
+                        Rights Directive Art. 13(1)), and the order page says so instead of "retried
+                        automatically". Carries no reason: that stays staff-only. Absent otherwise.
                 reversedAt:
                     type: string
                     format: date-time

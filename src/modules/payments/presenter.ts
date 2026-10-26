@@ -11,7 +11,7 @@
 
 import type { Payment, PaymentNextAction, Refund } from '@types';
 import { bankTransferBeneficiary, bankTransferBic, bankTransferIbanFriendly } from './config';
-import { displayStatusOf } from './domain';
+import { displayStatusOf, owesBuyerAnotherWay } from './domain';
 import type { PaymentDocument, RefundRecord } from './model';
 
 /** The stored fields only a caller holding `display:Payment` is sent. */
@@ -91,8 +91,16 @@ const nextActionOf = (document: PaymentDocument): PaymentNextAction | undefined 
  */
 export const presentPayment = (document: PaymentDocument, staff = false): Payment => {
     const nextAction = nextActionOf(document);
+    const serialized = document.toJSON() as Omit<Payment, 'displayStatus' | 'nextAction'>;
     const wire = {
-        ...(document.toJSON() as Omit<Payment, 'displayStatus' | 'nextAction'>),
+        ...serialized,
+        // The buyer's half of a refund owed another way: no reason, only that they will be asked.
+        refunds: serialized.refunds.map(
+            (refund, index): Refund =>
+                owesBuyerAnotherWay(document.refunds[index])
+                    ? { ...refund, owedAnotherWay: true }
+                    : refund
+        ),
         displayStatus: displayStatusOf(document),
         ...(nextAction ? { nextAction } : {})
     };

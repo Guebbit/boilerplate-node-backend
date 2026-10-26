@@ -166,6 +166,25 @@ export const MONEY_DID_NOT_MOVE_FAILURES: readonly RefundFailureReason[] = [
     RefundFailureReason.insufficient_funds
 ];
 
+/**
+ * Whether the buyer is owed this money another way and has to be asked how: the record is still
+ * open and either the provider took it back, or it was refused for good. A refusal that says
+ * nothing about the buyer's card (the shop's own balance, no answer yet) and a chargeback (the bank
+ * already returned the money) do not count.
+ *
+ * @param refund - the refund record
+ */
+export const owesBuyerAnotherWay = (refund: {
+    status: RefundStatus;
+    failureReason?: RefundFailureReason | undefined;
+    reversedAt?: Date | undefined;
+}): boolean =>
+    isOpenRefund(refund) &&
+    refund.failureReason !== RefundFailureReason.disputed &&
+    (isReversed(refund) ||
+        (refund.failureReason !== undefined &&
+            FINAL_REFUND_FAILURES.includes(refund.failureReason)));
+
 /** The slice of a refund record the rules below read. */
 export interface RefundFacts {
     /** The record's id, to tell it from its siblings. */

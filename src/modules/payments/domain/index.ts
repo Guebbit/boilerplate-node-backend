@@ -26,6 +26,7 @@ export {
     UNCLEAR_REFUND_FAILURES,
     isFinalFailure,
     isReversed,
+    owesBuyerAnotherWay,
     exceedsRemaining,
     exceedsBy,
     MONEY_DID_NOT_MOVE_FAILURES,
