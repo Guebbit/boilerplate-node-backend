@@ -221,7 +221,19 @@ describe('a withdrawal before dispatch', () => {
         expect(stored?.status).toBe(OrderStatus.paid);
     });
 
-    it('is not offered to an operator either — the right is the consumer’s', async () => {
+    it('is not offered to staff who cannot act for the buyer (no update:Return)', async () => {
+        const { orderId } = await orderIn(OrderStatus.paid);
+
+        const outcome = await returnService.createReturn(
+            { orderId, reason: 'withdrawal' },
+            asRole('warehouse'),
+            testCallerContext
+        );
+
+        expect(!outcome.success && outcome.status).toBe(404);
+    });
+
+    it('asks staff for the date and channel the buyer stated: without them, 422 on the field', async () => {
         const { orderId } = await orderIn(OrderStatus.paid);
 
         const outcome = await returnService.createReturn(
@@ -230,7 +242,13 @@ describe('a withdrawal before dispatch', () => {
             testCallerContext
         );
 
-        expect(!outcome.success && outcome.status).toBe(404);
+        expect(!outcome.success && outcome.status).toBe(422);
+        expect(!outcome.success && outcome.errors[0]).toMatchObject({
+            code: 'RETURN_STATEMENT_INVALID',
+            details: { field: 'requestedAt' }
+        });
+        const stored = await readOrder(orderId);
+        expect(stored?.status).toBe(OrderStatus.paid);
     });
 
     it('refuses any other reason before dispatch — nothing has left the shop to send back', async () => {
@@ -390,7 +408,13 @@ describe('a return on goods that have shipped', () => {
                 { productId: String(mug._id), quantity: 1, title: 'Mug', unitPrice: 10 }
             ]);
             expect(events).toEqual([
-                { returnId: String(outcome.data._id), orderId, reason: 'withdrawal' }
+                {
+                    returnId: String(outcome.data._id),
+                    orderId,
+                    reason: 'withdrawal',
+                    requestedAt: outcome.data.requestedAt.toISOString(),
+                    statedVia: 'online'
+                }
             ]);
             expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         }
@@ -1270,12 +1294,50 @@ describe('the options read, by caller and deadline', () => {
         expect(options.success && options.data.returnable.length > 0).toBe(true);
     });
 
-    it('offers staff nothing to return: the right is the buyer’s own', async () => {
+    it('offers staff holding update:Return every reason, and the lines to return', async () => {
         const { orderId } = await deliveredOrder();
 
         const options = await returnService.getReturnOptions(orderId, asAdmin());
 
-        expect(options.success && options.data).toMatchObject({ reasons: [], returnable: [] });
+        expect(options.success && options.data.reasons).toEqual([
+            'withdrawal',
+            'defective',
+            'wrong_item',
+            'other'
+        ]);
+        expect(options.success && options.data.exceptions).toEqual([]);
+        expect(options.success && options.data.returnable.length > 0).toBe(true);
+    });
+
+    it('offers nothing to return to staff who cannot act for the buyer (read:Return only)', async () => {
+        const { orderId } = await deliveredOrder();
+
+        const options = await returnService.getReturnOptions(orderId, asRole('warehouse'));
+
+        expect(options.success && options.data).toMatchObject({
+            reasons: [],
+            exceptions: [],
+            returnable: []
+        });
+    });
+
+    it('lists for staff the reasons already past their deadline, so a client can label the waiver', async () => {
+        const { orderId } = await deliveredOrder();
+        await setWithdrawUntil(orderId, new Date(Date.now() - 86_400_000 - 2000));
+
+        const options = await returnService.getReturnOptions(orderId, asAdmin());
+
+        // The withdrawal is not a waiver: it keeps its legal window and is judged on the stated day.
+        expect(options.success && options.data.exceptions).toEqual(['other']);
+    });
+
+    it('keeps the buyer’s exceptions empty', async () => {
+        const { user, orderId } = await deliveredOrder();
+        await setWithdrawUntil(orderId, new Date(Date.now() - 86_400_000 - 2000));
+
+        const options = await returnService.getReturnOptions(orderId, buyer(user));
+
+        expect(options.success && options.data.exceptions).toEqual([]);
     });
 
     it('narrows to the guarantee after the withdrawal period, made-to-order goods marked', async () => {

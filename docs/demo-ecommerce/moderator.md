@@ -7,17 +7,17 @@ Log in as `moderator@example.com` — a real, narrower account, not the owner's.
 on [Test it yourself](./test-me.md).
 
 ::: tip When something goes wrong
-Odd cases that land on you: [a refund owed by hand](./when-something-goes-wrong.md#refund-owed-by-hand), [a transfer for a cancelled order](./when-something-goes-wrong.md#late-transfer).
+Odd cases that land on you: [a return the buyer never sent](./when-something-goes-wrong.md#buyer-never-sent-it), [a decline made by mistake](./support.md#declined-by-mistake), [a refund owed by hand](./when-something-goes-wrong.md#refund-owed-by-hand), [a transfer for a cancelled order](./when-something-goes-wrong.md#late-transfer).
 :::
 
 ## Key families, three jobs
 
-| Key                                                         | Buys                                                      |
-| ----------------------------------------------------------- | --------------------------------------------------------- |
-| `read:User` / `.create` / `.update` / `.delete`, `ban:User` | Add, edit, erase an account — and ban one.                |
-| `display:Order` / `.update`                                 | Read and update any order in the shop, not only your own. |
-| `display:Payment` / `create:Payment` / `create:Refund`      | Read any payment, record one, and refund it.              |
-| `read:Return` / `.update`                                   | Read any return request, and approve or decline it.       |
+| Key                                                         | Buys                                                                                                 |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `read:User` / `.create` / `.update` / `.delete`, `ban:User` | Add, edit, erase an account — and ban one.                                                           |
+| `display:Order` / `.update`                                 | Read and update any order in the shop, not only your own.                                            |
+| `display:Payment` / `create:Payment` / `create:Refund`      | Read any payment, record one, and refund it.                                                         |
+| `read:Return` / `.update`                                   | Read any return request; approve, decline or cancel it; open one or record a withdrawal for a buyer. |
 
 ## Banning is its own key
 

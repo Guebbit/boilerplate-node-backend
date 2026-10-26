@@ -31,9 +31,19 @@ export {
     WITHDRAWAL_WINDOW_REASONS,
     isGuaranteeReason,
     isReasonOpen,
+    policyExceptionsOf,
     reasonsOpenAt
 } from './reasons';
-export type { FrozenDeadlines } from './reasons';
+export type { FrozenDeadlines, PolicyException } from './reasons';
+
+export { checkStatement } from './statement';
+export type {
+    Statement,
+    StatementChannel,
+    StatementInput,
+    StatementVerdict,
+    StaffStatementChannel
+} from './statement';
 
 export { resolveRestock } from './restock';
 export type { RestockRequest, RestockVerdict } from './restock';

@@ -104,7 +104,12 @@ describe('return.requested', () => {
         });
         expect(heard).toEqual([
             [
-                { returnId: String(outcome.data._id), orderId, reason: 'defective' },
+                {
+                    returnId: String(outcome.data._id),
+                    orderId,
+                    reason: 'defective',
+                    requestedAt: outcome.data.requestedAt.toISOString()
+                },
                 String(rows[0]?._id)
             ]
         ]);

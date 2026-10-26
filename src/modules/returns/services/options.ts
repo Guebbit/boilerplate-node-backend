@@ -20,11 +20,13 @@ import { holds } from '@kernel/ability';
 import { deliveryService } from '@modules/delivery';
 import { orderService, isBuyer, isExcludedFromWithdrawal } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
+import { ReturnReason } from '@types';
 import type { AuthContext, ReturnOptions } from '@types';
 import { returnRepository } from '../repository';
 import {
     holdsReturnedGoods,
     isGuaranteeReason,
+    isReasonOpen,
     reasonsOpenAt,
     returnableQuantities,
     wireLines
@@ -72,6 +74,46 @@ const optionLines = (
         }));
 };
 
+/** What a caller may name when opening a return, and which of it staff would waive. */
+interface OfferedReasons {
+    reasons: ReturnReason[];
+    /** Staff only: the non-withdrawal reasons already past their deadline. */
+    exceptions: ReturnReason[];
+    /** Whether the caller is staff acting for the buyer (`update:Return`), not the buyer. */
+    staff: boolean;
+}
+
+/**
+ * The reasons this caller may name. The buyer: the ones whose deadline is open. Staff holding
+ * `update:Return` acting for the buyer: every reason, since they may open a return or record a
+ * withdrawal — with the non-withdrawal ones that are past their deadline listed as exceptions,
+ * a preview of what opening them would waive. Anyone else: none.
+ *
+ * @param order - the order
+ * @param authContext - the caller
+ * @param now - the moment being asked about
+ */
+const offeredReasons = (
+    order: OrderDocument,
+    authContext: AuthContext,
+    now: Date
+): OfferedReasons => {
+    const deadlines = frozenDeadlinesOf(order);
+    if (isBuyer(order, authContext))
+        return { reasons: reasonsOpenAt(deadlines, now), exceptions: [], staff: false };
+    if (!holds(callerForSubject(authContext, 'Return'), 'update', 'Return'))
+        return { reasons: [], exceptions: [], staff: false };
+
+    const reasons = Object.values(ReturnReason);
+    return {
+        reasons,
+        exceptions: reasons.filter(
+            (reason) => reason !== ReturnReason.withdrawal && !isReasonOpen(deadlines, reason, now)
+        ),
+        staff: true
+    };
+};
+
 /**
  * What one order can still return and cancel.
  *
@@ -91,21 +133,19 @@ export const getReturnOptions = (
             deliveryService.shippedQuantities(orderId),
             deliveryService.remainderOptions(orderId, order.fulfillment?.shipped === true)
         ]).then(([returns, shipped, remainders]) => {
-            // Only the buyer exercises a right (staff open nothing here), and only for a reason
-            // whose deadline is still open: none left means no form.
-            const reasons = isBuyer(order, authContext)
-                ? reasonsOpenAt(frozenDeadlinesOf(order), new Date())
-                : [];
+            // The buyer only for a reason whose deadline is still open (none left means no form);
+            // staff acting for the buyer for every one, naming what they would waive.
+            const { reasons, exceptions, staff } = offeredReasons(order, authContext, new Date());
             // Excluded goods (Art. 16) are offered only for a reason that is not the withdrawal:
-            // a defect or a wrong item reaches made-to-order goods too.
+            // a defect or a wrong item reaches made-to-order goods too, and staff may waive the rule.
             const excluded = new Set(
                 order.items
                     .filter((item) => isExcludedFromWithdrawal(item))
                     .map((item) => String(item.product._id))
             );
-            const guaranteeOpen = reasons.some((reason) => isGuaranteeReason(reason));
+            const excludedOffered = staff || reasons.some((reason) => isGuaranteeReason(reason));
             const returnable = shipped.filter(
-                ({ productId }) => guaranteeOpen || !excluded.has(productId)
+                ({ productId }) => excludedOffered || !excluded.has(productId)
             );
             const back: ProductQuantity[] = returns
                 .filter(holdsReturnedGoods)
@@ -115,6 +155,7 @@ export const getReturnOptions = (
                 orderId,
                 currency: order.currency,
                 reasons,
+                exceptions,
                 returnable:
                     reasons.length === 0
                         ? []

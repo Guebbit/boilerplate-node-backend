@@ -11,6 +11,8 @@ import {
     RECEIVABLE_RETURN_STATUSES,
     accountsOf,
     checkRequestedLines,
+    checkStatement,
+    policyExceptionsOf,
     holdsReturnedGoods,
     initialStatusFor,
     quantitiesByProduct,
@@ -406,5 +408,113 @@ describe('resolveRestock', () => {
             index: 0,
             reason: 'too-many'
         });
+    });
+});
+
+describe('checkStatement', () => {
+    const now = new Date('2026-06-10T12:00:00Z');
+    const orderCreatedAt = new Date('2026-05-01T12:00:00Z');
+    const base = { kind: 'return' as const, orderCreatedAt, now };
+
+    it('stamps the buyer’s own request with now, and a withdrawal online', () => {
+        expect(checkStatement({ ...base, byBuyer: true, reason: 'defective' })).toEqual({
+            ok: true,
+            requestedAt: now
+        });
+        expect(checkStatement({ ...base, byBuyer: true, reason: 'withdrawal' })).toEqual({
+            ok: true,
+            requestedAt: now,
+            statedVia: 'online'
+        });
+    });
+
+    it('refuses the buyer sending either field', () => {
+        expect(
+            checkStatement({ ...base, byBuyer: true, reason: 'withdrawal', requestedAt: now })
+        ).toEqual({ ok: false, field: 'requestedAt', reason: 'forbidden' });
+        expect(
+            checkStatement({ ...base, byBuyer: true, reason: 'withdrawal', statedVia: 'phone' })
+        ).toEqual({ ok: false, field: 'statedVia', reason: 'forbidden' });
+    });
+
+    it('requires both fields of staff recording a withdrawal', () => {
+        const staff = { ...base, byBuyer: false, reason: 'withdrawal' as const };
+        expect(checkStatement(staff)).toEqual({
+            ok: false,
+            field: 'requestedAt',
+            reason: 'required'
+        });
+        expect(checkStatement({ ...staff, requestedAt: now })).toEqual({
+            ok: false,
+            field: 'statedVia',
+            reason: 'required'
+        });
+        expect(checkStatement({ ...staff, requestedAt: now, statedVia: 'letter' })).toEqual({
+            ok: true,
+            requestedAt: now,
+            statedVia: 'letter'
+        });
+    });
+
+    it('defaults staff’s date to now for another reason, and takes no channel', () => {
+        const staff = { ...base, byBuyer: false, reason: 'other' as const };
+        expect(checkStatement(staff)).toEqual({ ok: true, requestedAt: now });
+        expect(checkStatement({ ...staff, statedVia: 'phone' })).toEqual({
+            ok: false,
+            field: 'statedVia',
+            reason: 'forbidden'
+        });
+    });
+
+    it('takes no date on a staff remainder cancel for their own reason', () => {
+        expect(
+            checkStatement({
+                ...base,
+                kind: 'cancellation',
+                byBuyer: false,
+                reason: 'other',
+                requestedAt: now
+            })
+        ).toEqual({ ok: false, field: 'requestedAt', reason: 'forbidden' });
+    });
+
+    it('bounds the date by the order and now, both ends inclusive', () => {
+        const staff = { ...base, byBuyer: false, reason: 'other' as const };
+        expect(checkStatement({ ...staff, requestedAt: orderCreatedAt }).ok).toBe(true);
+        expect(checkStatement({ ...staff, requestedAt: now }).ok).toBe(true);
+        expect(checkStatement({ ...staff, requestedAt: new Date(now.getTime() + 1) })).toEqual({
+            ok: false,
+            field: 'requestedAt',
+            reason: 'future'
+        });
+        expect(
+            checkStatement({ ...staff, requestedAt: new Date(orderCreatedAt.getTime() - 1) })
+        ).toEqual({ ok: false, field: 'requestedAt', reason: 'before-order' });
+    });
+});
+
+describe('policyExceptionsOf', () => {
+    const asked = new Date('2026-06-10T12:00:00Z');
+    const open = { withdrawUntil: new Date('2026-06-20T00:00:00Z') };
+    const closed = { withdrawUntil: new Date('2026-06-01T00:00:00Z') };
+
+    it('records nothing when the deadline was open that day and no excluded goods are taken', () => {
+        expect(policyExceptionsOf(open, 'other', asked, false)).toEqual([]);
+    });
+
+    it('records window_closed when the deadline had passed on the day the buyer asked', () => {
+        expect(policyExceptionsOf(closed, 'other', asked, false)).toEqual(['window_closed']);
+    });
+
+    it('records excluded_goods for a goodwill return, never for the guarantee', () => {
+        expect(policyExceptionsOf(open, 'other', asked, true)).toEqual(['excluded_goods']);
+        expect(policyExceptionsOf(open, 'defective', asked, true)).toEqual([]);
+    });
+
+    it('records both, in that order', () => {
+        expect(policyExceptionsOf(closed, 'other', asked, true)).toEqual([
+            'window_closed',
+            'excluded_goods'
+        ]);
     });
 });

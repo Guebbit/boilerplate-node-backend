@@ -749,7 +749,7 @@ describe('POST /returns — a staff cancellation asks a fresh session, the buyer
         expect(retried.headers['idempotent-replay']).toBeUndefined();
     });
 
-    it('refuses staff naming withdrawal on a stranger’s order with 422, never 201', async () => {
+    it('refuses staff naming withdrawal without the stated date and channel with 422, never 201', async () => {
         const { orderId, fulfillmentOrderId } = await customerWithPartlyShippedOrder();
         const { bearer } = await staleModerator();
 
@@ -758,9 +758,27 @@ describe('POST /returns — a staff cancellation asks a fresh session, the buyer
             .set('Authorization', bearer)
             .send({ orderId, reason: 'withdrawal', kind: 'cancellation', fulfillmentOrderId });
 
-        // The exemption from the step-up buys nothing: the reason is the buyer's own right.
+        // No step-up without `statedVia`, and nothing is written: the request is simply refused.
         expect(response.status).toBe(422);
-        expect(response.body.errors[0].code).toBe('RETURN_CANCELLATION_INVALID');
+        expect(response.body.errors[0].code).toBe('RETURN_STATEMENT_INVALID');
+        expect(await stillWaiting(orderId)).toBe(true);
+    });
+
+    it('asks a fresh session whenever the body carries statedVia, and writes nothing without it', async () => {
+        const { orderId, fulfillmentOrderId } = await customerWithPartlyShippedOrder();
+        const { bearer } = await staleModerator();
+
+        const response = await api().post('/returns').set('Authorization', bearer).send({
+            orderId,
+            reason: 'withdrawal',
+            kind: 'cancellation',
+            fulfillmentOrderId,
+            requestedAt: new Date().toISOString(),
+            statedVia: 'phone'
+        });
+
+        expect(response.status).toBe(401);
+        expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
         expect(await stillWaiting(orderId)).toBe(true);
     });
 

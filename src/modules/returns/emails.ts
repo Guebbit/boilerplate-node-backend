@@ -18,7 +18,9 @@ import type { ReturnPostagePayer, ShopAddress } from '@types';
 /** Which notice is being sent. */
 export type ReturnNoticeKind =
     | 'withdrawal-acknowledged'
+    | 'withdrawal-recorded'
     | 'return-requested'
+    | 'return-opened'
     | 'return-approved'
     | 'return-declined'
     | 'return-closed';
@@ -34,6 +36,8 @@ export interface ReturnNoticeInput {
     returnPostage?: ReturnPostagePayer;
     /** When the customer acted — printed with date AND time, as Art. 11a's acknowledgement requires. */
     at: Date;
+    /** How a withdrawal the shop recorded for them was stated, and when the shop wrote it down. */
+    recorded?: { via: string; at: Date };
     /** Staff's reason, on a decline. */
     declineReason?: string;
     /** What went back, on a closed return. */
@@ -59,6 +63,9 @@ const stamp = (locale: string, at: Date): string =>
  *
  * `withdrawal-acknowledged` is the Art. 11a acknowledgement on a durable medium: it names the
  * order, the exact date and time the withdrawal was received, and who pays the postage.
+ * `withdrawal-recorded` is the same for one staff wrote down: the day the buyer stated it, the
+ * channel, and the day the shop recorded it — the buyer's dated proof (Art. 11(4)).
+ * `return-opened` tells a buyer staff opened a return for them after their request.
  *
  * @param kind - which notice
  * @param locale - the recipient's language
@@ -75,6 +82,8 @@ export const returnNoticeEmail = (
     const parameters = {
         order: input.orderRef,
         date: stamp(locale, input.at),
+        recorded: input.recorded ? stamp(locale, input.recorded.at) : '',
+        via: input.recorded ? t(`returns.email.via-${input.recorded.via}`) : '',
         reason: input.declineReason ?? '',
         amount: input.refund ? formatMoney(locale, input.refund.amount, input.refund.currency) : ''
     };

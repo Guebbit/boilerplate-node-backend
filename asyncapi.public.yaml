@@ -879,6 +879,7 @@ components:
                 - returnId
                 - orderId
                 - reason
+                - requestedAt
             properties:
                 returnId:
                     type: string
@@ -887,6 +888,19 @@ components:
                 reason:
                     type: string
                     description: Why the goods come back — `withdrawal`, `defective`, `wrong_item` or `other`.
+                requestedAt:
+                    type: string
+                    format: date-time
+                    description: When the buyer asked, or for a withdrawal when they stated it. Staff recording a phone call or a letter set the day it was made.
+                statedVia:
+                    type: string
+                    enum:
+                        - online
+                        - phone
+                        - email
+                        - letter
+                        - other
+                    description: How a withdrawal was stated. Present on a withdrawal only.
             additionalProperties: false
         ReturnReceivedPayload:
             type: object

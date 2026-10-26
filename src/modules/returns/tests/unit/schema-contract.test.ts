@@ -12,9 +12,11 @@ describe('returnSchema', () => {
             'currency',
             'kind',
             'lines',
+            'openedBy',
             'orderId',
             'orderNumber',
             'reason',
+            'requestedAt',
             'returnPostage'
         ]);
     });

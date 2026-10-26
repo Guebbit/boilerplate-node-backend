@@ -34,11 +34,12 @@ export const CANCELABLE_RETURN_STATUSES: readonly ReturnStatus[] = [ReturnStatus
 /**
  * The status a return is opened in. A withdrawal is a right the consumer exercises, not a favour
  * staff grant, so there is nothing to decide and it starts `approved`; every other reason waits
- * for an answer.
+ * for an answer — unless staff opened it, when opening it IS the answer.
  * @param reason - why the goods come back
+ * @param byStaff - whether staff opened it on the buyer's behalf
  */
-export const initialStatusFor = (reason: ReturnReason): ReturnStatus =>
-    reason === ReturnReason.withdrawal ? ReturnStatus.approved : ReturnStatus.requested;
+export const initialStatusFor = (reason: ReturnReason, byStaff = false): ReturnStatus =>
+    reason === ReturnReason.withdrawal || byStaff ? ReturnStatus.approved : ReturnStatus.requested;
 
 /**
  * Statuses in which a return still holds goods that have not come back — the ones that count

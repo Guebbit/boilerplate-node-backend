@@ -204,7 +204,8 @@ back and the refund is owed. See [The return parcel was lost](#return-parcel-los
 ::: warning A withdrawal has 14 days to send the goods
 Do not cancel a withdrawal before the buyer's 14 days to send the goods have passed (CRD Art.
 14(1)). If the goods turn up after a cancel, record the withdrawal again as a new return with the
-original date as `requestedAt`.
+original date as `requestedAt` (the same fix as
+[Declined by mistake](./support.md#declined-by-mistake)).
 :::
 
 **Whose job.** The [manager](./manager.md), the moderator or support: whoever holds `update:Return`.

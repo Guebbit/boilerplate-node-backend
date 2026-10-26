@@ -15,7 +15,15 @@ import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { moneyPath, moneyPlugin } from '@infrastructure/persistence/money-field';
-import { ReturnKind, ReturnPostagePayer, ReturnReason, ReturnStatus } from '@types';
+import {
+    ReturnKind,
+    ReturnOpenedBy,
+    ReturnPolicyException,
+    ReturnPostagePayer,
+    ReturnReason,
+    ReturnStatementChannel,
+    ReturnStatus
+} from '@types';
 
 /** One line of a return — a snapshot of what is coming back, so it reads the same later. */
 export interface ReturnLine {
@@ -49,6 +57,17 @@ export interface ReturnDocument extends Document {
     lines: ReturnLine[];
     /** Who pays to send the goods back. Frozen from `NODE_RETURN_POSTAGE_PAYER` at creation: what the customer was told beforehand. */
     returnPostage: ReturnPostagePayer;
+    /**
+     * When the buyer asked — or, for a withdrawal, stated it. The server stamps now for the buyer;
+     * staff recording a phone call or a letter give the day it was made. Deadlines are judged on it.
+     */
+    requestedAt: Date;
+    /** How a withdrawal was stated; `online` is the shop's own button. Absent on any other reason. */
+    statedVia?: ReturnStatementChannel;
+    /** The order's buyer, or staff acting on the buyer's behalf. */
+    openedBy: ReturnOpenedBy;
+    /** The rules staff waived when they opened it: frozen at creation, empty for a buyer's. */
+    policyExceptions: ReturnPolicyException[];
     /** Why staff declined. Present only on a `declined` return. */
     declineReason?: string;
     /** When staff approved or declined it — or, for a withdrawal, when it was opened approved. */
@@ -117,6 +136,18 @@ export const returnSchema = new Schema<ReturnDocument>(
         note: { type: String, maxlength: 1000 },
         lines: { type: [returnLineSchema], required: true },
         returnPostage: { type: String, enum: Object.values(ReturnPostagePayer), required: true },
+        requestedAt: { type: Date, required: true, default: Date.now },
+        statedVia: { type: String, enum: Object.values(ReturnStatementChannel) },
+        openedBy: {
+            type: String,
+            enum: Object.values(ReturnOpenedBy),
+            required: true,
+            default: ReturnOpenedBy.buyer
+        },
+        policyExceptions: {
+            type: [{ type: String, enum: Object.values(ReturnPolicyException) }],
+            default: []
+        },
         declineReason: { type: String, maxlength: 500 },
         decidedAt: { type: Date },
         receivedAt: { type: Date },

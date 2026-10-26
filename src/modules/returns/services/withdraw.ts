@@ -3,13 +3,16 @@
  * A withdrawal before dispatch: `orders`' own cancel (which already refunds in full and releases
  * the stock hold) plus a `Return` written closed at birth — no lines, since no goods are expected
  * back, the refund owed, the Art. 11a acknowledgement mailed. One refund path; the record is the
- * dated proof of the withdrawal.
+ * dated proof of the withdrawal. Staff record the one a buyer stated by phone, email or letter the
+ * same way, with the day it was stated and the channel on the record.
  *
  * See: docs/modules/returns.md#the-withdrawal-button
  */
 
 import { withTransaction } from '@infrastructure/runtime/database';
 import { nudgeOutbox } from '@kernel/outbox';
+import { callerForSubject } from '@kernel/permissions';
+import { holds } from '@kernel/ability';
 import { deliveryService } from '@modules/delivery';
 import {
     hasShopStarted,
@@ -24,15 +27,17 @@ import type { AuthContext, CallerContext } from '@types';
 import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
 import { createCancellation } from './cancel-remainder';
-import { ownOrder } from './ownership';
+import { openableOrder } from './ownership';
 import {
     enqueueClosed,
     enqueueRequested,
+    forbidden,
     nothingToCancel,
     opened,
     recordOpened,
     type CreateReturnInput,
-    type CreateReturnOutcome
+    type CreateReturnOutcome,
+    type Opener
 } from './outcome';
 
 /**
@@ -49,10 +54,12 @@ const refundOwedOn = (order: OrderDocument): number => (order.paidAt ? orderTota
  * `return.requested` and `return.closed` are written with it, in that order.
  *
  * @param order - the order that was withdrawn from
+ * @param opener - when the buyer stated it, how, and the staff member recording it, if any
  * @param context - for audit
  */
 const writeWithdrawalRecord = (
     order: OrderDocument,
+    opener: Opener,
     context: CallerContext
 ): Promise<ReturnDocument> => {
     const now = new Date();
@@ -67,6 +74,11 @@ const writeWithdrawalRecord = (
                     reason: 'withdrawal',
                     lines: [],
                     returnPostage: returnPostagePayer(),
+                    requestedAt: opener.statement.requestedAt,
+                    ...(opener.statement.statedVia
+                        ? { statedVia: opener.statement.statedVia }
+                        : {}),
+                    openedBy: opener.staffId === undefined ? 'buyer' : 'staff',
                     decidedAt: now,
                     closedAt: now,
                     refundAmount: refundOwedOn(order)
@@ -92,13 +104,15 @@ const writeWithdrawalRecord = (
  * (S4 of the Q-W2 decision). The order itself stays `processing`.
  *
  * @param order - the order being withdrawn from
- * @param authContext - the buyer
+ * @param input - the request, whose stated date and channel ride along on every cancellation
+ * @param authContext - the buyer, or the staff member recording the withdrawal
  * @param context - for audit
  * @returns the last cancellation written, the first refusal, or nothing-to-cancel when no
  *   eligible group is left live
  */
 const withdrawEligibleGroups = async (
     order: OrderDocument,
+    input: CreateReturnInput,
     authContext: AuthContext,
     context: CallerContext
 ): Promise<CreateReturnOutcome> => {
@@ -121,7 +135,9 @@ const withdrawEligibleGroups = async (
                 orderId,
                 reason: 'withdrawal',
                 kind: 'cancellation',
-                fulfillmentOrderId: group.fulfillmentOrderId
+                fulfillmentOrderId: group.fulfillmentOrderId,
+                ...(input.requestedAt ? { requestedAt: input.requestedAt } : {}),
+                ...(input.statedVia ? { statedVia: input.statedVia } : {})
             },
             authContext,
             context
@@ -129,6 +145,18 @@ const withdrawEligibleGroups = async (
         if (!outcome.success) return outcome;
     }
     return outcome;
+};
+
+/**
+ * The key a staff member lacks to cancel and refund a whole order on the buyer's behalf, if any:
+ * `create:Refund` sends the money back, `update:Order` is the cancel behind it.
+ * @param authContext - the staff member
+ */
+const missingKeyOf = (authContext: AuthContext): string | undefined => {
+    if (!holds(callerForSubject(authContext, 'Refund'), 'create', 'Refund')) return 'create:Refund';
+    return holds(callerForSubject(authContext, 'Order'), 'update', 'Order')
+        ? undefined
+        : 'update:Order';
 };
 
 /**
@@ -145,29 +173,45 @@ const withdrawEligibleGroups = async (
  * refuses, and the withdrawal is opened again on what the order now is — a return, never a full
  * refund of goods the buyer already holds.
  *
+ * Staff recording the buyer's withdrawal need `create:Refund` (the money goes back) and
+ * `update:Order` (the cancel); the cancel runs on the operator's scope, the record names the day
+ * the buyer stated it, and the timeline names the staff member.
+ *
  * @param order - the order being withdrawn from
- * @param input - the customer's request, to open again if the cancel lost a race to a shipment
- * @param authContext - the buyer
+ * @param input - the request, to open again if the cancel lost a race to a shipment
+ * @param opener - when the buyer stated it, how, and the staff member recording it, if any
+ * @param authContext - the buyer, or the staff member
  * @param context - for audit
  * @param openAsReturn - opens the same request as a return of goods, for the race above
  */
 export const withdrawBeforeDispatch = (
     order: OrderDocument,
     input: CreateReturnInput,
+    opener: Opener,
     authContext: AuthContext,
     context: CallerContext,
     openAsReturn: () => Promise<CreateReturnOutcome>
 ): Promise<CreateReturnOutcome> => {
     const bespokeAndStarted =
         hasShopStarted(order.status) && order.items.some((item) => isExcludedFromWithdrawal(item));
-    if (bespokeAndStarted) return withdrawEligibleGroups(order, authContext, context);
+    if (bespokeAndStarted) return withdrawEligibleGroups(order, input, authContext, context);
 
-    return orderService.withdrawById(String(order._id), authContext, context).then((cancelled) => {
+    const byStaff = opener.staffId !== undefined;
+    const missing = byStaff ? missingKeyOf(authContext) : undefined;
+    if (missing) return Promise.resolve(forbidden(order, missing, context));
+
+    const orderId = String(order._id);
+    const cancelling = byStaff
+        ? orderService.withdrawOnBuyersBehalfById(orderId, authContext, context)
+        : orderService.withdrawById(orderId, authContext, context);
+    return cancelling.then((cancelled) => {
         if (!cancelled.success)
-            return ownOrder(input.orderId, authContext).then((fresh) =>
-                fresh && !isBeforeDispatch(fresh) ? openAsReturn() : cancelled
+            // Not `ownOrder`: a staff member reads the order's new state through the same door
+            // that let them in, so the race falls back to a return for them too.
+            return openableOrder(input.orderId, authContext).then((fresh) =>
+                fresh && !isBeforeDispatch(fresh.order) ? openAsReturn() : cancelled
             );
 
-        return writeWithdrawalRecord(order, context).then(opened);
+        return writeWithdrawalRecord(order, opener, context).then(opened);
     });
 };

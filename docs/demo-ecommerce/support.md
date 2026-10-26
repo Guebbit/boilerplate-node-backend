@@ -79,6 +79,46 @@ wishlist and read their own orders, but cannot check out until the address is pr
 says "I never got the email and I cannot order" — that is correct, not a bug: resend the email.
 :::
 
+## A buyer phones in a return {#phones-in-a-return}
+
+The buyer cannot log in, or would rather ask. Open the order, then **Open return**: pick the lines,
+the reason, and — if they asked a few days ago — the day they asked. The return is born
+**approved** (you are the answer), and the buyer gets one email with the address to send the goods
+to. No fresh login: nothing is paid until the goods arrive.
+→ [`returns`](../modules/returns.md#staff-open-a-return-for-the-buyer)
+
+## A buyer withdraws by phone, email or letter {#withdraws-by-phone}
+
+The law accepts any clear statement, and counts it from the day it was **sent**, not the day you read
+it. On the order press **Record withdrawal**, give the day the buyer sent it and how (phone, email,
+letter, other). The shop then does everything their own button does, and emails them the day they
+stated it and the day you recorded it: their proof.
+
+The shop asks you to confirm your password first: it is a legal record, and before dispatch it
+cancels the order and sends the money back (that needs the refund and order keys, which the
+[moderator](./moderator.md) holds). A withdrawal sent after the window really closed is refused:
+that one is not yours to waive.
+→ [`returns`](../modules/returns.md#staff-open-a-return-for-the-buyer)
+
+## A goodwill return after the deadline {#goodwill-after-deadline}
+
+Day 40, the buyer is a regular, you say yes: open the return with reason **Other**. The deadline
+does not stop you, and the return shows, for the next person, that it was an exception. Made-to-order
+goods can be taken back this way too. Write nothing you do not want: the note is optional.
+
+A defect that appeared within the two years but was reported later is **not** goodwill, it is the
+legal guarantee: open it as **Defective goods** with the day the buyer reported it. Some countries
+give more than two years; the same door covers it.
+
+## Declined by mistake? {#declined-by-mistake}
+
+A decline is final, on purpose: a decision stays a record. To fix a wrong one, open a **new return
+for the same lines** from the order ([a buyer phones in a return](#phones-in-a-return)). The old
+decline holds no units, so nothing is blocked. Set the day they asked to the day of the first
+request, and put the declined return's number in the note (the buyer reads the note). The buyer
+will have two emails: the decline, then the approval.
+→ [`returns`](../modules/returns.md#staff-open-a-return-for-the-buyer)
+
 ## "Where is my order?"
 
 Everything a customer might ask has an answer they can already see themselves: their order list, its

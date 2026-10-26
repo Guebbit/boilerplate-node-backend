@@ -92,6 +92,10 @@ Every move is one conditional write from the statuses that may precede it
 the database and exactly one wins — the loser is told it was already decided (409). The one move
 that is not conditional is the first: a withdrawal before dispatch is written `closed` at birth.
 
+`declined` and `canceled` are final. A wrong decline is not undone: staff open a new return for the
+same lines ([Declined by mistake](../demo-ecommerce/support.md#declined-by-mistake)), which is how
+Shopify and Solidus fix it, so a decision stays a record and is never rewritten.
+
 ## Closing a return by hand {#closing-a-return-by-hand}
 
 `POST /returns/{id}/close`, body `{ note }` (optional), moves a `received` return to `closed` when its
@@ -208,10 +212,48 @@ refund.
   notice about the money is the refund's, which belongs to `payments`, not to this module.
 - An order's `returnStatus` stays `none`: a Return with no lines holds no goods, and
   `projectReturnStatus` ignores it.
-- **Only the buyer may do it**, an operator included: the right is the consumer's.
+- **The buyer does it, or staff record it for them** with the day and channel the buyer stated it: see [Staff open a return for the buyer](#staff-open-a-return-for-the-buyer).
 - **The acknowledgement** carries the order, the exact date and time (UTC, spelled out), and who
   pays the postage — Art. 14(1) permits the consumer to bear it only if told beforehand, so the
   same `NODE_RETURN_POSTAGE_PAYER` value drives the copy and is frozen on the return.
+
+## Staff open a return for the buyer {#staff-open-a-return-for-the-buyer}
+
+A buyer who phones, writes or walks in cannot always click the button. Staff holding `update:Return`
+use the same door, `POST /returns` (Solidus has one endpoint for both; Shopify's `returnCreate`
+takes `requestedAt` for the same reason). The order is the buyer's or, for such a caller, anyone's;
+anyone else still gets a 404.
+
+| Staff open                       | Born                                   | Deadline                                       | Art. 16 goods            | Recorded                                      |
+| -------------------------------- | -------------------------------------- | ---------------------------------------------- | ------------------------ | --------------------------------------------- |
+| `defective` `wrong_item` `other` | `approved`, `decidedAt` now            | waived; judged on `requestedAt` for the record | taken (`other` only)     | `openedBy: staff`, `policyExceptions`         |
+| `withdrawal`                     | `approved` (or closed before dispatch) | the legal window, judged on `requestedAt`      | refused as for the buyer | `openedBy: staff`, `statedVia`, `requestedAt` |
+
+- **Opening it is the decision.** One transaction writes `return.requested` and `return.decided`
+  (approved), so the buyer gets one mail, with the return address and the day they asked.
+  A wrong decline is fixed the same way: open a new return for the same lines. `declined` and
+  `canceled` are final, so a decision stays a record and is never rewritten.
+- **`requestedAt`** is when the buyer asked, never in the future and never before the order. Staff may
+  backdate it; the audit names the staff member. Every return carries it (the server stamps now for
+  the buyer), and the deadline is judged on it, so a request made inside the window and entered late
+  records no exception.
+- **`policyExceptions`** is frozen at creation, like Solidus' `acceptance_status_errors`:
+  `window_closed` when the reason's deadline had passed on `requestedAt`, `excluded_goods` when a
+  goodwill return takes made-to-order goods. A defect or a wrong item never records the second: the
+  guarantee reaches those goods. The `Return` shows it, so the next staff member sees it was an exception.
+- **A withdrawal is not theirs to waive.** It keeps its legal window and its Art. 16 exclusion, judged
+  on `requestedAt` (CRD Art. 11(2): timing counts from when it was SENT). `requestedAt` and
+  `statedVia` (`phone`, `email`, `letter`, `other`) are required; the buyer's own withdrawal is
+  stamped now and `online`, and the buyer sending either is a 422 `RETURN_STATEMENT_INVALID`.
+- **Keys.** Shipped goods: `update:Return`. Before dispatch the order is cancelled and refunded, which
+  needs `create:Refund` (the money) and `update:Order` (the cancel, run on the operator's scope with
+  the staff member on the timeline). A remainder cancel needs `create:Refund`.
+- **Fresh session.** Any request carrying `statedVia` asks for one, whoever sends it: the record is a
+  legal act and, before dispatch, a refund. Written as "the body carries it", not "the caller is
+  staff", so it fails closed.
+- **The mail** tells the buyer the day they stated it, the channel and the day the shop wrote it
+  down: their dated proof (Art. 11(4)). `return.requested` carries `requestedAt` and `statedVia`.
+- **Not built:** a dedicated key for the waiver. `update:Return` already decides every request.
 
 ## Lines
 
@@ -436,22 +478,24 @@ before the provider is asked, so a provider refusal that the sweep later finishe
 decision on file; an approval or a receipt of one's own return carries the flag too. No new key and
 no new verb: it is one more thing the refund permission already means.
 
-`reason: withdrawal` is the buyer's own right, so it is never written on someone else's behalf: staff
-who are not the order's buyer name another reason, and are refused `withdrawal`. A staff member who
-IS the buyer is answered as the buyer, and is never prompted for a fresh session.
+`reason: withdrawal` by staff is **recording** the buyer's withdrawal, so it carries the day and the
+channel the buyer stated it (`requestedAt`, `statedVia`) and is judged on that day, with the buyer's
+own window and Art. 16 limits. A staff member who IS the buyer is answered as the buyer, and is
+never prompted for a fresh session.
 
-| Caller                                   | `withdrawal`                        | Any other reason                    |
-| ---------------------------------------- | ----------------------------------- | ----------------------------------- |
-| the order's buyer (staff or not)         | allowed, no step-up                 | `RETURN_CANCELLATION_INVALID` (422) |
-| staff with the refund key, not the buyer | `RETURN_CANCELLATION_INVALID` (422) | allowed, after a fresh session      |
-| anyone else                              | 403 (the key is asked first)        | 403                                 |
+| Caller                                   | `withdrawal`                                                        | Any other reason                    |
+| ---------------------------------------- | ------------------------------------------------------------------- | ----------------------------------- |
+| the order's buyer (staff or not)         | allowed, no step-up                                                 | `RETURN_CANCELLATION_INVALID` (422) |
+| staff with the refund key, not the buyer | with `requestedAt` and `statedVia`, after a fresh session; else 422 | allowed, after a fresh session      |
+| anyone else                              | 403 (the key is asked first)                                        | 403                                 |
 
 The route asks for the fresh session BEFORE the idempotency ledger: the ledger stores any JSON
 answer, so a 401 challenge placed behind it would be replayed to the same key after the staff member
 re-authenticated. The order is read as the caller may read it: a stranger's order is a 404.
 
 Refused: `RETURN_CANCELLATION_INVALID` (422) — no `fulfillmentOrderId`, `lines` sent, a return that
-names one, or a reason that does not fit the caller (above); `RETURN_NOTHING_TO_CANCEL` (409) —
+names one, or a reason that does not fit the caller (above); `RETURN_STATEMENT_INVALID` (422) — the
+stated date or channel is missing, misplaced, in the future or before the order; `RETURN_NOTHING_TO_CANCEL` (409) —
 nothing is left on that fulfillment order, or nothing has shipped and no other fulfillment order has
 units (that one is the whole order: cancel the order instead).
 
@@ -489,10 +533,12 @@ delivery's `remainder_cancelled` already say it.
 
 `GET /returns/options?orderId=` is the server's answer to "what can I still return, and what can I
 still cancel?", so the frontend shows and never counts: `reasons` is what THIS caller can still name
-([the two deadlines](#the-two-deadlines)), empty for staff, who open nothing, and for a buyer past
-every deadline; `returnable` is the quantity per product that
+([the two deadlines](#the-two-deadlines)): the buyer's open ones (none past every deadline), and
+for staff holding `update:Return` every reason, with `exceptions` naming the non-withdrawal ones
+already past their deadline (a preview of what opening them waives); `returnable` is the quantity per product that
 has **shipped** and is not already coming back, empty while `reasons` is, with each line's
-`withdrawable` flag (false for Art. 16 goods, which only a defect or a wrong item may name); `cancellable` lists each fulfillment order with a
+`withdrawable` flag (false for Art. 16 goods, which only a defect or a wrong item may name, and
+which staff may take for a goodwill return); `cancellable` lists each fulfillment order with a
 remainder and the exact refund cancelling it would owe (the delivery included when it takes the last
 unit), each with `cancel`: whether THIS caller may cancel it. The buyer may inside the window and
 unless the remainder holds excluded goods and the shop has started on the order; anyone else when
@@ -548,11 +594,11 @@ Every rule this module declares and who holds it, role by role. The rule is what
 
 <!-- permissions:start -->
 
-| Rule             | Set                | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                                      |
-| ---------------- | ------------------ | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `read:Return`    | `ReturnDisplay`    | —       | —            | —          | ✅        | ✅          | ✅        | —        | ✅          | ✅      | —          | ✅         | Read every return in the shop — the queue staff work through.                                                             |
-| `update:Return`  | `ReturnManagement` | —       | —            | —          | ✅        | —           | ✅        | —        | ✅          | ✅      | —          | ✅         | Decide a return request — approve it, or decline it with a reason — and cancel an approved return whose goods never came. |
-| `receive:Return` | `ReturnReceiving`  | —       | —            | —          | ✅ ⚡c    | ✅ ⚡c      | —         | —        | —           | ✅ ⚡c  | —          | —          | Record that the returned goods arrived — puts the units back on sale and returns the customer's money.                    |
+| Rule             | Set                | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                                                                                                |
+| ---------------- | ------------------ | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read:Return`    | `ReturnDisplay`    | —       | —            | —          | ✅        | ✅          | ✅        | —        | ✅          | ✅      | —          | ✅         | Read every return in the shop — the queue staff work through.                                                                                                                       |
+| `update:Return`  | `ReturnManagement` | —       | —            | —          | ✅        | —           | ✅        | —        | ✅          | ✅      | —          | ✅         | Decide a return request — approve it, or decline it with a reason — cancel an approved return whose goods never came, and open a return or record a withdrawal on a buyer's behalf. |
+| `receive:Return` | `ReturnReceiving`  | —       | —            | —          | ✅ ⚡c    | ✅ ⚡c      | —         | —        | —           | ✅ ⚡c  | —          | —          | Record that the returned goods arrived — puts the units back on sale and returns the customer's money.                                                                              |
 
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in

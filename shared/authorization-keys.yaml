@@ -351,7 +351,7 @@ rules:
       subject: Return
       module: returns
       scope: tenant
-      description: Decide a return request — approve it, or decline it with a reason — and cancel an approved return whose goods never came.
+      description: Decide a return request — approve it, or decline it with a reason — cancel an approved return whose goods never came, and open a return or record a withdrawal on a buyer's behalf.
     # Narrower than `update:Return` on purpose, the way `start:Shipment` is narrower than
     # `update:Order`: the warehouse holds the parcel and may say it arrived, without being
     # handed the decision of whether the return was owed.
@@ -747,7 +747,7 @@ sets:
           - read:Return
     - name: ReturnManagement
       module: returns
-      description: Approve or decline a return request, and cancel an approved return whose goods never came.
+      description: Approve or decline a return request, cancel an approved one whose goods never came, and open a return or record a withdrawal for a buyer.
       rules:
           - update:Return
     - name: ReturnReceiving

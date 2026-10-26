@@ -36,6 +36,18 @@
                 "subject": "Your return was declined",
                 "body": "We could not accept your return for order {{order}}. Reason: {{reason}}"
             },
+            "via-phone": "phone",
+            "via-email": "email",
+            "via-letter": "letter",
+            "via-other": "another channel",
+            "withdrawal-recorded": {
+                "subject": "We recorded your withdrawal",
+                "body": "We recorded your withdrawal from order {{order}}. You told us on {{date}} (UTC), by {{via}}. Our team wrote it down on {{recorded}} (UTC)."
+            },
+            "return-opened": {
+                "subject": "We opened your return",
+                "body": "Following your request of {{date}} (UTC), we opened a return for order {{order}}. You can send the goods back now."
+            },
             "return-address": "Send the goods to: {{address}}",
             "return-closed": {
                 "subject": "Your return was refunded",
@@ -45,6 +57,10 @@
         "deduction-too-high": "The handling deduction is more than the refund is worth.",
         "restock-unknown-product": "A restock count names a product that is not on this return.",
         "restock-duplicate": "A restock count names the same product twice.",
-        "restock-too-many": "A restock count is more than the line holds."
+        "restock-too-many": "A restock count is more than the line holds.",
+        "statement-forbidden": "This date or channel cannot be given here: the server sets the buyer's own, and a channel belongs to a withdrawal recorded by staff.",
+        "statement-required": "A withdrawal recorded for the buyer needs the date they stated it and the channel they used.",
+        "statement-future": "The date the buyer stated it cannot be in the future.",
+        "statement-before-order": "The date the buyer stated it cannot be before the order was made."
     }
 }

@@ -32,6 +32,7 @@ import { reencryptOrders } from './reencrypt';
 import {
     cancelOnRequestById,
     withdrawById,
+    withdrawOnBuyersBehalfById,
     expireReservationById,
     cancelForPaymentMismatchById
 } from './cancel';
@@ -158,6 +159,7 @@ export const orderService = {
     anonymizeDueOrders,
     cancelOnRequestById,
     withdrawById,
+    withdrawOnBuyersBehalfById,
     expireReservationById,
     cancelForPaymentMismatchById,
     withActions,
