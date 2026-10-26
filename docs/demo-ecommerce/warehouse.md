@@ -163,8 +163,9 @@ recording the handover all happen on their own: you do not separately create the
 the status field, or send the email.
 
 ::: tip Starting work on a paid order
-Packing starts with its own action — `POST /orders/{id}/process` — which moves the order
-from paid to `processing`. Nobody sets `processing` directly: the same rule, one step earlier.
+Marking an order in progress — `POST /orders/{id}/process` — is optional: recording the handover of
+a paid order moves it from paid to `processing` by itself (you need the start permission too). The
+one thing "in progress" changes is that the customer can no longer cancel the order themselves.
 :::
 
 **There is no courier simulation.** Recording the arrival is a real action on a real

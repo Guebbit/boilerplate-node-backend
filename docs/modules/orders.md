@@ -304,7 +304,7 @@ override all ASK for a move, never assign the field themselves. See
 | Move                                        | Who asks                                                                         | Through                                                                                                                                                              |
 | ------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pending` → `paid`                          | `system`                                                                         | `payments`' settlement, on confirm                                                                                                                                   |
-| `paid` → `processing`                       | `system`                                                                         | `POST /orders/{id}/process`, `start:Shipment` — or `POST /orders/{id}/status-override`, `override:Order`                                                             |
+| `paid` → `processing`                       | `system`                                                                         | `POST /orders/{id}/process`, `start:Shipment` — a first shipment or fulfil from `paid` makes it too — or `POST /orders/{id}/status-override`, `override:Order`       |
 | `processing` → `shipped`                    | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/shipments` — only the shipment that leaves **nothing** remaining                                                             |
 | `shipped` → `delivered`                     | `system`                                                                         | `POST /delivery/shipments/{id}/deliver` — only the last arrival, with nothing left to ship                                                                           |
 | `processing` → `delivered`                  | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/fulfill` (digital), or a remainder cancel after every shipment arrived — `markFulfilmentComplete`, the one named double move |
@@ -387,10 +387,10 @@ against the wrong order — needs `override:Order`, a step-up permission granted
 name. Two modes, both requiring a `reason`, both writing a `status_overridden` row on the
 [timeline](#the-timeline) (who, when, from → to, mode, reason):
 
-- **Forced** — `delivery`'s ship and deliver doors accept `forced: true`. The regular operation still
-  runs; the order skips a step (ship from `paid` without `process`, deliver without a carrier
-  confirmation) and leaves a history row through `recordForcedFulfilment` — a row **without** a move of
-  its own. It never lands on `paid` (that stays `system`-only, absolute), and never ships from `on_hold`.
+- **Forced** — `delivery`'s deliver door accepts `forced: true`. The regular operation still runs; the
+  order skips the carrier confirmation and leaves a history row through `recordForcedFulfilment` — a
+  row **without** a move of its own. It never lands on `paid` (that stays `system`-only, absolute).
+  Shipping from `paid` is no override: the ship act makes `paid → processing` itself.
 - **Status-only** — `POST /orders/{id}/status-override` with `{ to, reason }` moves the status
   alone, forward to `processing`/`shipped`/`delivered` only. No shipped email — but webhooks still fire,
   since a subscriber's own view of the order genuinely changed.

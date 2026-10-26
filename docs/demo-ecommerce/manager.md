@@ -21,7 +21,7 @@ shop manager (purple).
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
     P["waiting for payment"] -->|"💳 the customer pays"| PA["paid"]
-    PA -->|"🧑‍💼 you start packing"| PR["being prepared"]
+    PA -->|"🧑‍💼 you mark it in progress<br/>(optional: shipping does it)"| PR["being prepared"]
     PR -->|"📦 warehouse records<br/>the last parcel's handover"| SH["shipped"]
     SH -->|"📦 warehouse records<br/>the parcel's arrival"| DE["delivered"]
     P -.->|"customer cancels,<br/>or 15 min passed"| CA["cancelled"]

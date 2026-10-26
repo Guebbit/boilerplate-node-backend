@@ -4,7 +4,7 @@
  * prices against the items total alone; an order that is paid gets one fulfillment order, and
  * shipping it writes the shipment and moves the order together; shipping in parts keeps the order
  * `processing` until nothing remains, and the withdrawal clock starts from the LAST arrival; holds,
- * digital fulfilment, forced shipments and an order cancel all leave the records and the order in
+ * digital fulfilment, shipping from `paid` and an order cancel all leave the records and the order in
  * step. Real Mongo (`setupTestDb`); the shipped email is asserted through the mocked queue, the
  * cart's confirmation-email seam.
  */
@@ -280,15 +280,6 @@ describe('shipping a whole fulfillment order', () => {
         // Everything left: the order is `shipped`, which no further shipment can leave from.
         expect(asReject(second).status).toBe(409);
         expect(asReject(second).errors[0].code).toBe('ORDER_NOT_PROCESSING');
-    });
-
-    it('refuses a `paid` order, which has not been started, and asks to start it', async () => {
-        const { order } = await processingOrderOf([1], { status: OrderStatus.paid });
-
-        const result = await shipFrom(String(order._id));
-
-        expect(asReject(result).errors[0].code).toBe('ORDER_NOT_PROCESSING');
-        expect(await shipmentsOf(String(order._id))).toEqual([]);
     });
 
     it('refuses a missing tracking code for a tracked method, and never writes the shipment', async () => {
@@ -627,68 +618,67 @@ const shippedWith = async (code: string) => {
     return { order, shipment };
 };
 
-describe('forced shipments', () => {
-    it('lets an override holder ship from `paid` without `start`, and leaves a history row', async () => {
+describe('shipping from `paid`', () => {
+    it('is an ordinary act: the order starts itself, with no override row and no `forced` mark', async () => {
         const { order } = await processingOrderOf([1], { status: OrderStatus.paid });
 
-        const result = await shipFrom(String(order._id), {
-            forced: true,
-            reason: 'no time to start'
-        });
+        const result = await shipFrom(String(order._id));
 
         expect(result.success).toBe(true);
         const stored = await orderService.getById(String(order._id));
         expect(stored!.status).toBe(OrderStatus.shipped);
-        expect(await lastOverrideOf(String(order._id))).toMatchObject({
-            text: 'no time to start',
-            data: { mode: 'forced', from: OrderStatus.paid, to: OrderStatus.shipped }
-        });
-        expect(await shipmentsOf(String(order._id)).then(([first]) => first.forced)).toBe(true);
+        expect(await lastOverrideOf(String(order._id))).toBeUndefined();
+        expect(await shipmentsOf(String(order._id)).then(([first]) => first.forced)).toBe(false);
     });
 
-    // The twin of the forced-deliver refusal: a forced ship skips the lifecycle and moves stock, so
-    // the ship door asks for the override key itself, and for a reason, whatever the route let in.
-    it('refuses a forced ship from a warehouse login, and one with no reason, and writes no shipment', async () => {
+    it('refuses 403 a caller without `start:Shipment`, audits it, and writes nothing', async () => {
         const { order } = await processingOrderOf([1], { status: OrderStatus.paid });
         const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
-        const forceShip = (
-            input: Parameters<typeof deliveryService.shipFulfillmentOrder>[1],
-            role: string
-        ) =>
-            deliveryService.shipFulfillmentOrder(
-                String(fulfillmentOrder._id),
-                input,
-                asRole(role),
-                callerContextAs(role)
-            );
+        const audited = collectAudit();
 
-        const noKey = await forceShip({ forced: true, reason: 'because' }, 'warehouse');
-        const noReason = await forceShip({ forced: true }, 'admin');
+        const result = await deliveryService.shipFulfillmentOrder(
+            String(fulfillmentOrder._id),
+            {},
+            asRole('support'),
+            callerContextAs('support')
+        );
 
-        expect(asReject(noKey).status).toBe(403);
-        expect(asReject(noReason).errors[0]).toMatchObject({
-            code: 'DELIVERY_OVERRIDE_REASON_REQUIRED',
-            details: { field: 'reason' }
-        });
+        expect(asReject(result).status).toBe(403);
+        expect(audited.filter((entry) => entry.action === 'security.forbidden')).toEqual([
+            expect.objectContaining({
+                targetType: 'fulfillment_order',
+                targetId: String(fulfillmentOrder._id),
+                metadata: { reason: 'missing_permission', permission: 'start:Shipment' }
+            })
+        ]);
         expect(await shipmentsOf(String(order._id))).toEqual([]);
         expect((await orderService.getById(String(order._id)))!.status).toBe(OrderStatus.paid);
     });
 
-    it('records a forced partial shipment from `paid` as `processing`, still not shipped', async () => {
+    it('does not need `start:Shipment` once the order is already `processing`', async () => {
+        const { order } = await processingOrderOf();
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
+
+        const result = await deliveryService.shipFulfillmentOrder(
+            String(fulfillmentOrder._id),
+            {},
+            asRole('support'),
+            callerContextAs('support')
+        );
+
+        expect(result.success).toBe(true);
+    });
+
+    it('leaves a partial shipment from `paid` as `processing`, still not shipped', async () => {
         const { order, products } = await processingOrderOf([2], { status: OrderStatus.paid });
 
         const result = await shipFrom(String(order._id), {
-            forced: true,
-            reason: 'partial',
             lines: [{ productId: String(products[0]._id), quantity: 1 }]
         });
 
         expect(result.success).toBe(true);
         const stored = await orderService.getById(String(order._id));
         expect(stored!.status).toBe(OrderStatus.processing);
-        expect(await lastOverrideOf(String(order._id))).toMatchObject({
-            data: { from: OrderStatus.paid, to: OrderStatus.processing }
-        });
     });
 });
 
@@ -704,17 +694,17 @@ const metadataOf = (audited: AuditEntry[], action: string) =>
     audited.filter((entry) => entry.action === action).map((entry) => entry.metadata);
 
 describe('what the audit rows carry', () => {
-    it('a forced ship names its reason, an ordinary one only says it was not forced', async () => {
-        const forcedOrder = await processingOrderOf([1], { status: OrderStatus.paid });
+    it('a ship names only its shipment, whether it started from `paid` or not', async () => {
+        const fromPaid = await processingOrderOf([1], { status: OrderStatus.paid });
         const plainOrder = await processingOrderOf([1], {}, 'plain@example.com');
         const audited = collectAudit();
 
-        await shipFrom(String(forcedOrder.order._id), { forced: true, reason: 'no time to start' });
+        await shipFrom(String(fromPaid.order._id));
         await shipFrom(String(plainOrder.order._id));
 
         expect(metadataOf(audited, 'admin.order.shipped')).toEqual([
-            { shipmentId: expect.any(String), forced: true, reason: 'no time to start' },
-            { shipmentId: expect.any(String), forced: false }
+            { shipmentId: expect.any(String) },
+            { shipmentId: expect.any(String) }
         ]);
     });
 
@@ -789,6 +779,38 @@ describe('digital fulfilment', () => {
         const stored = await orderService.getById(String(order._id));
         expect(stored!.status).toBe(OrderStatus.delivered);
         expect(stored!.withdrawUntil).toEqual(withdrawUntilFrom(paidAt, 30));
+    });
+
+    it('fulfils from `paid` too: the order starts itself, for a caller who may start it', async () => {
+        const order = await seedDigitalOrder(OrderStatus.paid, new Date());
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
+
+        const result = await deliveryService.fulfillFulfillmentOrder(
+            String(fulfillmentOrder._id),
+            asAdmin(),
+            admin
+        );
+
+        expect(result.success).toBe(true);
+        expect((await orderService.getById(String(order._id)))!.status).toBe(OrderStatus.delivered);
+        expect(await lastOverrideOf(String(order._id))).toBeUndefined();
+    });
+
+    it('refuses 403 a `paid` digital order to a caller without `start:Shipment`, and audits it', async () => {
+        const order = await seedDigitalOrder(OrderStatus.paid, new Date());
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
+        const audited = collectAudit();
+
+        const result = await deliveryService.fulfillFulfillmentOrder(
+            String(fulfillmentOrder._id),
+            asRole('support'),
+            callerContextAs('support')
+        );
+
+        expect(asReject(result).status).toBe(403);
+        expect(audited.filter((entry) => entry.action === 'security.forbidden')).toHaveLength(1);
+        expect(await shipmentsOf(String(order._id))).toEqual([]);
+        expect((await orderService.getById(String(order._id)))!.status).toBe(OrderStatus.paid);
     });
 
     it('mails only the arrival of a digital fulfilment, never "on its way"', async () => {
@@ -983,7 +1005,7 @@ describe('holds', () => {
         expect(asReject(holdAgain).errors[0].code).toBe('DELIVERY_NOT_HOLDABLE');
     });
 
-    it('never ships a held fulfillment order, forced or not', async () => {
+    it('never ships a held fulfillment order, not even from `paid`', async () => {
         const { order } = await processingOrderOf([1], { status: OrderStatus.paid });
         const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
         await deliveryService.holdFulfillmentOrder(
@@ -993,9 +1015,9 @@ describe('holds', () => {
             admin
         );
 
-        const forced = await shipFrom(String(order._id), { forced: true, reason: 'now' });
+        const shipped = await shipFrom(String(order._id));
 
-        expect(asReject(forced).errors[0].code).toBe('DELIVERY_NOT_SHIPPABLE');
+        expect(asReject(shipped).errors[0].code).toBe('DELIVERY_NOT_SHIPPABLE');
     });
 });
 
