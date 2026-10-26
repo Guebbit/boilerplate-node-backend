@@ -26,6 +26,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { t } from '@infrastructure/i18n';
+import { applyTranslations } from '@kernel/translation';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { auditChanges } from '@infrastructure/observability/audit-changes';
 import { imageStore } from '@infrastructure/adapters/image-store';
@@ -115,6 +116,18 @@ const publishedById = (id: string): Promise<Example | null> =>
         .then((example) => (example ? presentPublic(example) : null));
 
 /**
+ * An example with its text in the request's language, field by field over the live chain (and
+ * the draft language for a staff preview, see `previewDraftLanguage`).
+ *
+ * @param example - the presented example, or `null` when there is none
+ * @returns the same example with its translated fields laid over, or `null`
+ */
+const translatedOne = (example: Example | null): Promise<Example | null> =>
+    example
+        ? applyTranslations('example', [example]).then(([translated]) => translated)
+        : Promise.resolve(null);
+
+/**
  * One example, scoped by the caller: their own (any status), or any when they hold
  * `display:Example`; failing that, a published one, which is open to anyone, a stranger included.
  * A draft that is not the caller's is the same answer as a missing id.
@@ -126,7 +139,8 @@ const publishedById = (id: string): Promise<Example | null> =>
 export const getById = (id: string, context: CallerContext): Promise<Example | null> =>
     exampleRepository
         .findScoped(id, scopeOf(context, 'read'))
-        .then((example) => (example ? presentForCaller(example, context) : publishedById(id)));
+        .then((example) => (example ? presentForCaller(example, context) : publishedById(id)))
+        .then(translatedOne);
 
 /**
  * Search the examples the caller may read, paginated.
@@ -149,12 +163,14 @@ export const search = (
         })
         .then(({ items, meta }) => {
             const actionsFor = actionsForRows(context);
-            return ownerNamesOf(items.map((row) => row.userId)).then((names) => ({
-                items: items.map((row) =>
-                    presentExampleRow(row, names.get(row.userId) ?? '', actionsFor(row))
-                ),
-                meta
-            }));
+            return ownerNamesOf(items.map((row) => row.userId))
+                .then((names) =>
+                    items.map((row) =>
+                        presentExampleRow(row, names.get(row.userId) ?? '', actionsFor(row))
+                    )
+                )
+                .then((presented) => applyTranslations('example', presented))
+                .then((translated) => ({ items: translated, meta }));
         });
 
 /**

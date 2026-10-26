@@ -10,6 +10,7 @@
 
 import { Router } from 'express';
 import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
+import { previewDraftLanguage } from '@kernel/middlewares/locale-preview';
 import { noStore, privateNoCache } from '@infrastructure/http/middlewares/cache';
 import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
@@ -32,8 +33,9 @@ export const router = Router();
  * guard below rather than carrying an exemption.
  * `privateNoCache`: the answer varies by caller and by `Accept-Language`, and revalidation stops
  * an archived example being served.
+ * `previewDraftLanguage` lets staff read the title in a draft language, uncached (all three reads).
  */
-router.get('/:id', getAuth, privateNoCache, getExample);
+router.get('/:id', getAuth, previewDraftLanguage, privateNoCache, getExample);
 
 /*
  * Everything below is signed-in, and POSITIONAL: the guard covers routes under it, not above.
@@ -46,10 +48,22 @@ router.use(getAuth, isAuth);
  * `search` is declared before `/:id` so the word cannot be read as an id. A POST answer is never
  * cached (`noStore`); the GET may be kept by the browser alone, since the answer depends on who asks.
  */
-router.post('/search', requirePermission('read', 'Example'), noStore, getExamples);
+router.post(
+    '/search',
+    requirePermission('read', 'Example'),
+    previewDraftLanguage,
+    noStore,
+    getExamples
+);
 
 // GET /examples — the caller's own examples, filtered by the query string.
-router.get('/', requirePermission('read', 'Example'), privateNoCache, getExamples);
+router.get(
+    '/',
+    requirePermission('read', 'Example'),
+    previewDraftLanguage,
+    privateNoCache,
+    getExamples
+);
 
 // `createExampleLimiter` first: a spent budget should not cost a database write, and the ledger
 // records any JSON answer, so a 429 placed behind `idempotencyKey` would be replayed as the result.

@@ -641,7 +641,8 @@ export const markDraftPreview = (request: Request, response: Response): void => 
  * Marks `response.locals.noStore` for `setCache` above to check and refuse — see that guard.
  */
 export const noStore = (request: Request, response: Response, next: NextFunction) => {
-    response.set('Cache-Control', 'no-store');
+    // A draft preview keeps its `private`: `no-store` either way, but the answer is one person's.
+    response.set('Cache-Control', isDraftPreview(response) ? 'private, no-store' : 'no-store');
     response.locals.noStore = true;
 
     // `no-store` only stops a COMPLIANT client from revalidating. A non-compliant one sending

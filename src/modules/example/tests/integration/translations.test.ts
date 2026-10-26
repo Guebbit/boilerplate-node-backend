@@ -7,9 +7,28 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
+import { ExampleStatus } from '@types';
+import { localeService } from '@modules/locales';
+import {
+    refreshLocaleOverrides,
+    registerLocaleOverrideProvider,
+    resetLocaleOverrides
+} from '@infrastructure/i18n';
 import { createExample, fieldOf } from '../factories';
 
 setupTestDb();
+
+beforeAll(() => {
+    registerLocaleOverrideProvider(() => localeService.readLocaleOverlay());
+});
+
+afterEach(() => {
+    resetLocaleOverrides();
+});
+
+afterAll(() => {
+    registerLocaleOverrideProvider(undefined);
+});
 
 /** Registers a language through the real route; a translation slot needs a real `locales` row. */
 const registerLanguage = (
@@ -77,5 +96,60 @@ describe('translating an example’s title through /locales', () => {
             .send({ it: { fields: { title: 'Ciao' }, origin: 'human' } });
 
         expect(response.status).toBe(404);
+    });
+});
+
+/** A published example titled in English, with an Italian row, and the served list refreshed. */
+const publishedWithItalian = async (italianActive: boolean) => {
+    const { user, bearer } = await adminWithLanguages();
+    if (!italianActive) await api().post('/locales/it/deactivate').set('Authorization', bearer);
+    const example = await createExample({
+        userId: user.id,
+        title: 'Hello',
+        status: ExampleStatus.published
+    });
+    const id = String(example._id);
+    await api()
+        .patch(`/locales/translations/example/${id}`)
+        .set('Authorization', bearer)
+        .send({ it: { fields: { title: 'Ciao' }, origin: 'human' } });
+    await refreshLocaleOverrides();
+    return { id, bearer };
+};
+
+describe('reading an example in the request’s language', () => {
+    it('resolves the title in a language that is switched on, for anyone', async () => {
+        const { id } = await publishedWithItalian(true);
+
+        const response = await api().get(`/examples/${id}`).set('Accept-Language', 'it');
+
+        expect(response.body.title).toBe('Ciao');
+    });
+
+    it('previews a draft language for staff, uncached, and not for a visitor', async () => {
+        const { id, bearer } = await publishedWithItalian(false);
+
+        const staff = await api()
+            .get(`/examples/${id}`)
+            .set('Authorization', bearer)
+            .set('Accept-Language', 'it');
+        const visitor = await api().get(`/examples/${id}`).set('Accept-Language', 'it');
+
+        expect(staff.body.title).toBe('Ciao');
+        expect(staff.headers['content-language']).toBe('it');
+        expect(staff.headers['cache-control']).toBe('private, no-store');
+        expect(visitor.body.title).toBe('Hello');
+        expect(visitor.headers['content-language']).toBe('en');
+    });
+
+    it('resolves the title on the list too', async () => {
+        const { bearer } = await publishedWithItalian(true);
+
+        const response = await api()
+            .get('/examples')
+            .set('Authorization', bearer)
+            .set('Accept-Language', 'it');
+
+        expect(response.body.items[0].title).toBe('Ciao');
     });
 });
