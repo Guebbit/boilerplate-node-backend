@@ -106,6 +106,21 @@ export interface ProviderRefundState {
 }
 
 /**
+ * One refund of an intent as the provider lists it: its own status plus what it needs to be
+ * recorded when the application did not make it (a refund made in the provider's dashboard).
+ */
+export interface ProviderRefund extends ProviderRefundState {
+    /** The provider's refund id (`re_…`). */
+    refundRef: string;
+    /** A decimal in {@link ProviderRefund.currency}; the adapter converts its minor units. */
+    amount: number;
+    /** ISO-4217, upper case, as the payment stores it. */
+    currency: string;
+    /** When the provider created it. */
+    createdAt: Date;
+}
+
+/**
  * A webhook delivery, normalised — the provider owns the translation from its own event shape.
  *
  * THIN on purpose: it names an intent and nothing about what happened to it. The body of a
@@ -222,6 +237,16 @@ export interface PaymentProvider {
      * @param refundRef - what {@link refund} returned
      */
     retrieveRefund(refundRef: string): Promise<ProviderRefundState>;
+
+    /**
+     * Every refund of one intent, ours and any made in the provider's own dashboard, with several
+     * partial ones and ones whose webhook never arrived. A refund this application made carries our
+     * record id as `refundId` (`metadata.refund_record`); one without it is imported as an outside
+     * refund once it has succeeded.
+     *
+     * @param providerRef - what {@link prepare} returned
+     */
+    listRefunds(providerRef: string): Promise<ProviderRefund[]>;
 
     /**
      * Close an intent that has not succeeded yet — the customer abandoned it, or this application

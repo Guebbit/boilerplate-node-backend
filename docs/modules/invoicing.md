@@ -111,6 +111,9 @@ smaller than its goods: the weights then split what was actually refunded. An or
 refunded in parts therefore has several credit notes; `refundId` is unique, which is what makes a
 redelivered event issue nothing twice.
 
+A refund made in the provider's own dashboard is imported by `payments` as a settled refund of reason
+`external`, so it gets a credit note like any other (no lines: the note splits pro rata).
+
 Both are idempotent the same way: a unique index (`model.ts`: invoices on `orderId`, credit notes on
 `refundId`) is what actually guarantees "at most one", not the listener's own read-then-insert — a redelivered event, or two
 writers racing the same order, both attempt the insert. The number is allocated and the document

@@ -54,7 +54,8 @@ export const refundRow = (
  * @param payment - the payment, after a refund just settled
  */
 export const isFullyRefunded = (payment: PaymentDocument): boolean =>
-    remainingOf(payment) === 0 && payment.refunds.every((refund) => !isOpenRefund(refund));
+    // `<=`: an outside refund can take the total past what was paid, and that is still everything back.
+    remainingOf(payment) <= 0 && payment.refunds.every((refund) => !isOpenRefund(refund));
 
 /**
  * Tell the rest of the system a refund landed: the log line and the audit row.

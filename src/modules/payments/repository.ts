@@ -324,6 +324,14 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         >,
         session?: ClientSession
     ) => Promise<PaymentDocument | null>;
+    importRefund: (
+        paymentId: string,
+        expectedRefunded: number,
+        newRefunded: number,
+        refund: RefundRecord,
+        session?: ClientSession
+    ) => Promise<PaymentDocument | null>;
+    findOverRefunded: (limit: number) => Promise<PaymentDocument[]>;
     settleRefund: (
         paymentId: string,
         refundId: string,
@@ -603,6 +611,53 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                 { $set: { amountRefunded: newRefunded }, $push: { refunds: refund } },
                 { returnDocument: 'after', ...(session ? { session } : {}) }
             )
+            .exec(),
+
+    /**
+     * Record a refund made in the provider's own dashboard: append the settled record and raise
+     * `amountRefunded`, in ONE write conditional on the running total being what the caller read AND
+     * on no record already holding this provider refund id. The second condition is the idempotence:
+     * a redelivered event imports nothing. There is deliberately NO ceiling on the new total: the
+     * money really moved, so the record exists even when it pushes the payment past what was paid.
+     *
+     * @param paymentId - the payment
+     * @param expectedRefunded - `amountRefunded` as the caller read it
+     * @param newRefunded - `amountRefunded` once this refund is counted
+     * @param refund - the settled record to append
+     * @param session - the caller's transaction, when the timeline rows and the event commit with it
+     * @returns the payment as it now stands, or `null` if either condition no longer held
+     */
+    importRefund: (paymentId, expectedRefunded, newRefunded, refund, session) =>
+        paymentModel
+            .findOneAndUpdate(
+                {
+                    _id: toObjectId(paymentId),
+                    status: REFUNDABLE_PAYMENT_STATUS,
+                    amountRefunded: expectedRefunded,
+                    'refunds.providerRefundRef': { $ne: refund.providerRefundRef }
+                },
+                { $set: { amountRefunded: newRefunded }, $push: { refunds: refund } },
+                { returnDocument: 'after', ...(session ? { session } : {}) }
+            )
+            .exec(),
+
+    /**
+     * Card payments with a refund still open whose running total is past what was paid: an outside
+     * refund took the room an open record of ours counted on. The attention list works out which
+     * records no longer fit.
+     *
+     * @param limit - how many to return at most
+     */
+    findOverRefunded: (limit: number) =>
+        paymentModel
+            .find({
+                provider: { $ne: MANUAL_PROVIDER },
+                // First, so the compound index on `refunds.status` serves the scan.
+                'refunds.status': { $in: [...OPEN_REFUND_STATUSES] },
+                $expr: { $gt: ['$amountRefunded', '$amount'] }
+            })
+            .sort({ updatedAt: 1 })
+            .limit(limit)
             .exec(),
 
     /**

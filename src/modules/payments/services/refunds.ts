@@ -56,6 +56,7 @@ import { paymentRepository } from '../repository';
 import { PAYMENT_REFUND_CANCELED } from '../events';
 import type { PaymentDocument, RefundLine, RefundRecord } from '../model';
 import {
+    exceedsRemaining,
     isHandRecorded,
     isOpenRefund,
     mayBeCanceled,
@@ -422,6 +423,23 @@ const sendToProvider = (
 };
 
 /**
+ * Log that an open refund is held back because it no longer fits what the provider holds.
+ *
+ * @param refund - the held record
+ * @returns always `null`: nothing settled
+ */
+const held = (refund: RefundRecord): null => {
+    // Stryker disable all
+    logger.warn({
+        message:
+            'An open refund no longer fits what the provider already gave back; it is held unsent for staff.',
+        refundId: String(refund._id)
+    });
+    // Stryker restore all
+    return null;
+};
+
+/**
  * Carry one open refund to its end: log the impossible row, or ask the provider. A hand-paid
  * refund is never carried here: only `settleRefundByHand` may say the cash went back.
  *
@@ -437,6 +455,10 @@ const attemptRefund = (
 ): Promise<PaymentDocument | null> => {
     // Money recorded by hand has no provider to ask, and nothing here may declare it returned.
     if (isHandRecorded(payment)) return Promise.resolve(null);
+
+    // An outside refund took the room this one counted on: the provider would refuse it, so it
+    // stays open and unsent for staff to cancel or mark returned.
+    if (exceedsRemaining(payment, refund)) return Promise.resolve(held(refund));
 
     if (!payment.providerRef) {
         // Only a `succeeded` payment reaches here, and nothing can succeed before the provider
@@ -473,6 +495,9 @@ const attemptKeepingGoing = (
 ): Promise<PaymentDocument | null> => {
     // Money recorded by hand has no provider to ask, and nothing here may declare it returned.
     if (isHandRecorded(payment)) return Promise.resolve(null);
+
+    // Held before the claim, so the sweep does not claim it again every few minutes.
+    if (exceedsRemaining(payment, refund)) return Promise.resolve(held(refund));
 
     const now = new Date();
     return paymentRepository

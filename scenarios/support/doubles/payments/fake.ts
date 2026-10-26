@@ -172,6 +172,9 @@ interface KeyedAnswer {
 /** One refund the fake holds, the way a provider keeps it as an object of its own. */
 interface FakeRefund extends ProviderRefundState {
     providerRef: string;
+    amount: number;
+    currency: string;
+    createdAt: Date;
 }
 
 /** Every refund the fake made, by the provider's refund id: its own status can change later. */
@@ -179,6 +182,44 @@ const refundObjects = new Map<string, FakeRefund>();
 
 /** Intents whose next refunds are accepted but not settled (Stripe `pending`). */
 const pendingRefundIntents = new Set<string>();
+
+/**
+ * The status slice of a refund the fake holds: what `retrieveRefund` answers.
+ * @param known - the fake's refund
+ */
+const stateOf = (known: FakeRefund): ProviderRefundState => ({
+    status: known.status,
+    ...(known.failureReason ? { failureReason: known.failureReason } : {}),
+    ...(known.refundId ? { refundId: known.refundId } : {})
+});
+
+/**
+ * Test lever: a refund made in the provider's own dashboard, which this application did not make
+ * and carries no record id. It shows up in `listRefunds` and nowhere else.
+ *
+ * @param providerRef - the intent
+ * @param refund - its amount and currency (decimals), its status, and when it was made
+ * @returns the provider's refund id, for the webhook naming it
+ */
+export const addFakeExternalRefund = (
+    providerRef: string,
+    refund: {
+        amount: number;
+        currency: string;
+        status: ProviderRefundState['status'];
+        createdAt?: Date;
+    }
+): string => {
+    const refundRef = `re_dashboard_${String(refundObjects.size)}`;
+    refundObjects.set(refundRef, {
+        providerRef,
+        status: refund.status,
+        amount: refund.amount,
+        currency: refund.currency,
+        createdAt: refund.createdAt ?? new Date()
+    });
+    return refundRef;
+};
 
 /**
  * Test lever: refunds on this intent are accepted but stay `pending` at the provider, until
@@ -372,7 +413,14 @@ export const fakePaymentProvider: PaymentProvider = {
             : `re_fake_${idempotencyKey}`;
         const status = pendingRefundIntents.has(providerRef) ? 'pending' : 'succeeded';
         refundsByRecord.set(refundId, refundRef);
-        refundObjects.set(refundRef, { providerRef, status, refundId });
+        refundObjects.set(refundRef, {
+            providerRef,
+            status,
+            refundId,
+            amount: charge.amount,
+            currency: charge.currency,
+            createdAt: new Date()
+        });
         keyedAnswers.set(idempotencyKey, { at: Date.now(), refundRef, status });
 
         if (refundTimeouts.delete(providerRef))
@@ -393,9 +441,21 @@ export const fakePaymentProvider: PaymentProvider = {
             return Promise.reject(
                 new PaymentProviderError('unknown', `[fake-psp] no refund ${refundRef}`)
             );
-        const { providerRef: _providerRef, ...state } = known;
-        return Promise.resolve(state);
+        return Promise.resolve(stateOf(known));
     },
+
+    listRefunds: (providerRef) =>
+        Promise.resolve(
+            [...refundObjects]
+                .filter(([, known]) => known.providerRef === providerRef)
+                .map(([refundRef, known]) => ({
+                    ...stateOf(known),
+                    refundRef,
+                    amount: known.amount,
+                    currency: known.currency,
+                    createdAt: known.createdAt
+                }))
+        ),
 
     cancel: (providerRef, { reason }) => {
         if (cancelledIntents.has(providerRef)) {

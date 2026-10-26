@@ -41,6 +41,8 @@ const lazyFakePaymentProvider: PaymentProvider = {
         ),
     retrieveRefund: (refundRef) =>
         loadFakePaymentProvider().then((provider) => provider.retrieveRefund(refundRef)),
+    listRefunds: (providerRef) =>
+        loadFakePaymentProvider().then((provider) => provider.listRefunds(providerRef)),
     cancel: (providerRef, options) =>
         loadFakePaymentProvider().then((provider) => provider.cancel(providerRef, options)),
     parseWebhook: (rawBody, headers) =>

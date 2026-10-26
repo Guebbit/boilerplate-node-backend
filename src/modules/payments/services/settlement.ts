@@ -51,7 +51,7 @@ import {
     performRefund,
     recordOwedByHand
 } from './refunds';
-import { applyRefundWebhook } from './refund-sync';
+import { syncProviderRefunds } from './external-refunds';
 import { recordDecline } from './announce';
 import { PAYMENT_SUCCEEDED } from '../events';
 import { notPayable, paymentNotFound } from './errors';
@@ -774,7 +774,7 @@ const applyRefundDelivery = (
             // Stryker restore all
             return undefined;
         }
-        return applyRefundWebhook(payment, refundRef);
+        return syncProviderRefunds(payment);
     });
 
 /**

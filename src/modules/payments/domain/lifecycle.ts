@@ -16,7 +16,7 @@
  * See: docs/theory/tactical-ddd.md
  */
 
-import { toMinorUnits } from '@domain-primitives/money';
+import { addMoney, subtractMoney, toMinorUnits, type Money } from '@domain-primitives/money';
 import { RefundFailureReason, RefundStatus, type PaymentStatus } from '@types';
 
 /**
@@ -224,48 +224,42 @@ const sameRecord = (a: RefundFacts, b: RefundFacts): boolean =>
     a === b || (a._id !== undefined && b._id !== undefined && String(a._id) === String(b._id));
 
 /**
- * Whether the provider's own money may be out for this record: it settled, it holds a provider
- * refund id, or its last refusal was unclear (it may have gone through). A reversed record is the
- * opposite: the money came back.
+ * Whether the provider holds this record's money: it settled, or it holds a provider refund id. A
+ * record whose last refusal was unclear is NOT counted: if it had gone through, the provider's list
+ * would carry it under our record id and it would have settled. A reversed record is the opposite:
+ * the money came back.
  * @param refund - the refund record
  */
 const mayHaveMoved = (refund: RefundFacts): boolean =>
     !isReversed(refund) &&
-    (refund.status === RefundStatus.succeeded ||
-        refund.providerRefundRef !== undefined ||
-        (refund.failureReason !== undefined &&
-            UNCLEAR_REFUND_FAILURES.includes(refund.failureReason)));
-
-/**
- * Whether an open refund the application never sent no longer fits: what the provider holds
- * (settled or in flight, an outside refund imported included) plus this record is more than was
- * paid. Such a record is held unsent: the provider would refuse it, and staff decide.
- *
- * @param payment - the payment the refund sits on
- * @param refund - the refund record, by identity within `payment.refunds`
- */
-export const exceedsRemaining = (payment: RefundablePayment, refund: RefundFacts): boolean => {
-    if (!isOpenRefund(refund) || mayHaveMoved(refund)) return false;
-    const heldMinor = payment.refunds
-        .filter((other) => !sameRecord(other, refund) && mayHaveMoved(other))
-        .reduce((sum, other) => sum + toMinorUnits(other.amount, other.currency), 0);
-    return (
-        heldMinor + toMinorUnits(refund.amount, refund.currency) >
-        toMinorUnits(payment.amount, payment.currency)
-    );
-};
+    (refund.status === RefundStatus.succeeded || refund.providerRefundRef !== undefined);
 
 /**
  * By how much (minor units) an unsent open refund overshoots what the provider can still give back.
  * @param payment - the payment the refund sits on
  * @param refund - the refund record
  */
-export const exceedsBy = (payment: RefundablePayment, refund: RefundFacts): number =>
-    payment.refunds
-        .filter((other) => !sameRecord(other, refund) && mayHaveMoved(other))
-        .reduce((sum, other) => sum + toMinorUnits(other.amount, other.currency), 0) +
-    toMinorUnits(refund.amount, refund.currency) -
-    toMinorUnits(payment.amount, payment.currency);
+export const exceedsBy = (payment: RefundablePayment, refund: RefundFacts): Money =>
+    subtractMoney(
+        addMoney(
+            ...payment.refunds
+                .filter((other) => !sameRecord(other, refund) && mayHaveMoved(other))
+                .map((other) => toMinorUnits(other.amount, other.currency)),
+            toMinorUnits(refund.amount, refund.currency)
+        ),
+        toMinorUnits(payment.amount, payment.currency)
+    );
+
+/**
+ * Whether an open refund the application never sent no longer fits: what the provider already holds
+ * (settled or in flight, an outside refund imported included) plus this record is more than was
+ * paid. Such a record is held unsent: the provider would refuse it, and staff decide.
+ *
+ * @param payment - the payment the refund sits on
+ * @param refund - the refund record, by identity within `payment.refunds`
+ */
+export const exceedsRemaining = (payment: RefundablePayment, refund: RefundFacts): boolean =>
+    isOpenRefund(refund) && !mayHaveMoved(refund) && exceedsBy(payment, refund) > 0;
 
 /**
  * Whether an operator may report this refund's money returned outside the application. A hand-paid

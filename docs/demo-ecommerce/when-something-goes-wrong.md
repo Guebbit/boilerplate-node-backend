@@ -156,20 +156,26 @@ EU law lets you change the way the money goes back only when the buyer expressly
 
 ## Refunded in the dashboard as well {#refund-covered-elsewhere}
 
-**What you see.** Somebody refunded the buyer straight from the card provider's dashboard, and the
-shop also holds its own refund for the same money. On the payment, that refund reads **open**
-(waiting for you, or **Failed** with a clear reason such as "declined"), and the payment's
+**What you see.** Somebody refunded the buyer straight from the card provider's dashboard. The shop
+notices by itself: the refund appears on the payment as **Refunded in the provider's dashboard**,
+with the credit note and the buyer's email like any other refund. Nothing to do for that one.
+
+If the shop also held its own refund for the same money, the payment may now be refunded for more
+than was paid. The shop records the dashboard refund anyway (the money really left), keeps its own
+refund **unsent**, and puts the order on the "needs attention" list as **A refund made elsewhere left
+no room**, with by how much. On the payment, the shop's refund reads **open**, and the payment's
 **Cancel refund** button is offered.
 
 **What to do.**
 
 1. Open the provider's dashboard and confirm the money really went back to the buyer.
-2. Press **Cancel refund** on the shop's refund and write who refunded it, and where, in the note.
+2. Press **Cancel refund** on the shop's own refund and write who refunded it, and where, in the
+   note. (If you paid the buyer a third way instead, press **Mark returned**.)
 
 Cancelling is a void inside the shop only. Nothing is sent to the provider, no credit note is issued
 and the buyer is not emailed: the money never moved from here. The amount becomes refundable again.
-If the refund still reads **provider unavailable** or **no usable reason**, there is no Cancel
-button on purpose: the shop may still be sending it, so wait for its answer first.
+If the refund still reads **provider unavailable** or **no usable reason** and it fits, there is no
+Cancel button on purpose: the shop may still be sending it, so wait for its answer first.
 
 ::: warning Never cancel a refund the shop already paid
 A refund that reads **succeeded** cannot be cancelled: the money left, and voiding it would make

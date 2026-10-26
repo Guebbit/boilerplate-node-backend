@@ -1188,7 +1188,7 @@ components:
 
         PaymentAttentionKind:
             type: string
-            enum: [stale_refund, refused_refund, reversed_refund, manual_refund_owed]
+            enum: [stale_refund, refused_refund, reversed_refund, refund_exceeds_remaining, manual_refund_owed]
             description: >-
                 `stale_refund` — a provider refund open past the threshold, still waiting for the
                 provider's answer or its next retry;
@@ -1197,6 +1197,9 @@ components:
                 `reversed_refund` — a refund the provider took back after settling it (a bank sent
                 it back), shown at once with `since` = when it was reversed: the money is owed
                 another way, agreed with the buyer;
+                `refund_exceeds_remaining` — a refund made in the provider's dashboard took the room an
+                open refund here counted on: the open one is held unsent (the provider would refuse it)
+                and `exceedsBy` says by how much. Staff cancel it or mark it returned;
                 `manual_refund_owed` — money to hand back outside the system on a `manual` payment.
                 Both are an open refund record on a payment: a cancel or a refund opens it before
                 anything is asked of a provider, so no refund is owed without one.
@@ -1222,6 +1225,13 @@ components:
                     type: string
                     format: date-time
                     description: When the problem was recorded, so the page can sort by age.
+                exceedsBy:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: >-
+                        On a `refund_exceeds_remaining` row, by how much this open refund overshoots
+                        what the provider can still give back, in the payment's currency.
                 refundDueBy:
                     type: string
                     format: date-time
@@ -1243,14 +1253,17 @@ components:
 
         RefundReason:
             type: string
-            enum: [cancellation, goodwill, return, late_payment]
+            enum: [cancellation, goodwill, return, late_payment, external]
             description: >-
                 Why the money went back. `cancellation` — the order was cancelled after payment, or the
                 unshipped remainder of one fulfillment order was (then `returnId` names that cancellation);
                 `return` — goods came back and were received; `goodwill` — an operator chose to;
                 `late_payment` — the money arrived after the order could no longer be paid (its stock
                 reservation had expired or it was cancelled), so the sale was lost and the money went back.
-                The buyer is mailed it like a cancellation's refund.
+                The buyer is mailed it like a cancellation's refund. `external` — the refund was made in
+                the payment provider's own dashboard, not here: the application found it and recorded
+                it so the credit note, the buyer's mail and the order's state follow; it is `succeeded`
+                from the start and carries the provider's own amount and date.
 
         RefundPaymentRequest:
             type: object
@@ -1339,8 +1352,10 @@ components:
             additionalProperties: false
             required: [id]
             description: >-
-                One delivery, in this module's normalised shape: which event it is and which intent
-                it names, and nothing about what happened. A real provider sends its OWN event
+                One delivery, in this module's normalised shape: which event it is, which intent
+                it names and, for a refund event (`refund.created`, `refund.updated`, `refund.failed`,
+                `charge.refunded`), which refund, and nothing about what happened. A refund made in the
+                provider's own dashboard arrives the same way and is imported. A real provider sends its OWN event
                 shape and its implementation of the provider port translates it into this. The
                 outcome is never read from the body: once the delivery is authenticated, the
                 server asks the provider for the payment's state, because providers do not

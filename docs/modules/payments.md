@@ -579,6 +579,36 @@ flowchart LR
   and bank, under the shop's own retention (GDPR Art. 5(1)(c): the app keeps nothing for a rare
   event). The mail shows `NODE_SHOP_EMAIL` as text.
 
+### Refunds made outside the app {#refunds-made-outside-the-app}
+
+Staff can refund from the provider's own dashboard. The application finds those refunds and records
+them, so the credit note (a VAT duty), the buyer's mail and the order's state follow, and
+`remainingOf` stops offering money that already left.
+
+```mermaid
+flowchart TD
+    E[refund event: refund.created, refund.updated, refund.failed, charge.refunded] --> L[listRefunds for the intent]
+    L --> W{each provider refund}
+    W -->|ours: our record id echoed, or its stored id| A[apply its status to the record]
+    W -->|unknown, succeeded, same currency| I[import: settled record, reason external]
+    W -->|unknown, pending or failed| S[skip until a later event says succeeded]
+    W -->|unknown, other currency| X[log an error, skip]
+    I --> F[timeline rows, order stamp, payment.refunded: credit note, buyer mail, webhook]
+```
+
+- **Matched by our id, not a flag.** The adapter echoes `metadata.refund_record` as `refundId`, so a
+  refund of ours whose answer was lost (a timeout that ran) is settled from the provider, never
+  imported a second time.
+- **One write, once.** The import appends the record, raises the running total and carries the
+  provider's refund id in one conditional write: a redelivery imports nothing. It sets
+  `createdAt` and `settledAt` to the provider's own date.
+- **Always recorded.** The money moved, so the import never refuses, even when the total then passes
+  what was paid. An open refund of ours that no longer fits (`exceedsRemaining`: what the provider
+  holds, plus this one, is more than was paid) is held **unsent**: the provider would refuse it. It
+  shows as `refund_exceeds_remaining` with `exceedsBy`, and staff cancel it or mark it returned.
+  Nothing closes by itself.
+- **The order is not cancelled.** An outside refund moves `paymentStatus`; the order keeps its status.
+
 ### Cancelling a refund {#cancelling-a-refund}
 
 Staff void a refund the shop must never pay (a duplicate opened by mistake, or one the provider's

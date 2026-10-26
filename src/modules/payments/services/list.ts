@@ -22,7 +22,14 @@ import {
 } from '@infrastructure/persistence/search';
 import { orderService } from '@modules/orders';
 import { paymentAttentionMinutes } from '../config';
-import { displayStatusFilter, parseReference, refundDueBy } from '../domain';
+import {
+    displayStatusFilter,
+    exceedsBy,
+    exceedsRemaining,
+    parseReference,
+    refundDueBy
+} from '../domain';
+import { toDecimalAmount } from '@domain-primitives/money';
 import type { PaymentDocument, RefundRecord } from '../model';
 import { paymentRepository, type RefundFilters, type RefundRow } from '../repository';
 import { callerScope } from './scope';
@@ -161,6 +168,30 @@ const refundAttention = (row: RefundRow, kind: PaymentAttentionKind): PaymentAtt
 });
 
 /**
+ * The open refunds an outside refund left no room for, as attention rows (see
+ * `exceedsRemaining`): one per record, with by how much it overshoots.
+ *
+ * @param payments - payments whose running total is past what was paid
+ */
+const exceedingRows = (payments: PaymentDocument[]): PaymentAttentionItem[] =>
+    payments.flatMap((payment) =>
+        payment.refunds
+            .filter((refund) => exceedsRemaining(payment, refund))
+            .map(
+                (refund): PaymentAttentionItem => ({
+                    kind: PaymentAttentionKind.refund_exceeds_remaining,
+                    orderId: String(payment.orderId),
+                    paymentId: String(payment._id),
+                    refundId: String(refund._id),
+                    amount: refund.amount,
+                    currency: refund.currency,
+                    exceedsBy: toDecimalAmount(exceedsBy(payment, refund), payment.currency),
+                    since: refund.createdAt.toISOString()
+                })
+            )
+    );
+
+/**
  * Every problem still recorded on a payment, oldest first: refunds open past the threshold, refunds the
  * provider refused for good (at once), and refunds owed by hand. A refund owed is always an open record, so a fixed problem has closed it
  * and is not here.
@@ -186,13 +217,28 @@ export const listAttention = (): Promise<{ items: PaymentAttentionItem[] }> => {
             manual: false,
             refusal: 'reversed',
             limit: ATTENTION_LIMIT
-        })
-    ]).then(([stale, refused, manual, reversed]) => ({
-        items: [
-            ...stale.map((row) => refundAttention(row, PaymentAttentionKind.stale_refund)),
-            ...refused.map((row) => refundAttention(row, PaymentAttentionKind.refused_refund)),
-            ...reversed.map((row) => refundAttention(row, PaymentAttentionKind.reversed_refund)),
-            ...manual.map((row) => refundAttention(row, PaymentAttentionKind.manual_refund_owed))
-        ].toSorted((a, b) => a.since.localeCompare(b.since))
-    }));
+        }),
+        // An open refund an outside refund left no room for: shown once, as its own kind.
+        paymentRepository.findOverRefunded(ATTENTION_LIMIT).then(exceedingRows)
+    ]).then(([stale, refused, manual, reversed, exceeding]) => {
+        const held = new Set(exceeding.map((item) => item.refundId));
+        const others = (row: RefundRow): boolean => !held.has(String(row.refund._id));
+        return {
+            items: [
+                ...stale
+                    .filter((row) => others(row))
+                    .map((row) => refundAttention(row, PaymentAttentionKind.stale_refund)),
+                ...refused
+                    .filter((row) => others(row))
+                    .map((row) => refundAttention(row, PaymentAttentionKind.refused_refund)),
+                ...reversed.map((row) =>
+                    refundAttention(row, PaymentAttentionKind.reversed_refund)
+                ),
+                ...exceeding,
+                ...manual.map((row) =>
+                    refundAttention(row, PaymentAttentionKind.manual_refund_owed)
+                )
+            ].toSorted((a, b) => a.since.localeCompare(b.since))
+        };
+    });
 };
