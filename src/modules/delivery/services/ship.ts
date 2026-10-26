@@ -21,7 +21,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { canStartFulfilment, orderService } from '@modules/orders';
+import { canProcessOrder, orderService } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { OrderStatus } from '@types';
 import type { AuthContext, CallerContext, Shipment } from '@types';
@@ -148,7 +148,7 @@ const shipAct = async (
     // A forced first shipment from `paid` makes the `start` move itself, as it always has.
     const actor = context.caller.id;
     if (
-        canStartFulfilment(order.status) &&
+        canProcessOrder(order.status) &&
         !(await orderService.markProcessing(orderId, session, actor))
     )
         refuse(409, ERROR_CODES.ORDER_NOT_PAID, 'delivery.not-paid');

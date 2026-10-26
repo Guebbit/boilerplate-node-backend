@@ -134,10 +134,8 @@ const requestFor = async (overrides: Parameters<typeof createUser>[0] = {}) => {
 const fileOf = (name: string): Promise<string> => readFile(path.join(root, name), 'utf8');
 
 /** What a download of this export streams, or `undefined` when there is nothing to send. */
-const downloadOf = (userId: string, exportId: string): Promise<string | undefined> =>
-    openOwnExport(userId, exportId, testCallerContext).then((stream) =>
-        stream ? text(stream) : undefined
-    );
+const downloadOf = (userId: string): Promise<string | undefined> =>
+    openOwnExport(userId, testCallerContext).then((stream) => (stream ? text(stream) : undefined));
 
 /** A section that holds the build until the case lets it go. */
 const gate = () => {
@@ -336,14 +334,14 @@ describe('requestExport', () => {
     it('mails a link to the account and never the data', async () => {
         setPersonalDataSections(basicSections());
 
-        const { user, result } = await requestFor();
+        const { user } = await requestFor();
         await settleInlineExports();
 
         expect(mockOutbox).toHaveLength(1);
         const [mail] = mockOutbox;
         expect(mail.to).toBe(user.email);
         expect(mail.template).toBe('account.export-ready');
-        expect(String(mail.data.linkUrl)).toContain(`/account-export/${result.data.id}`);
+        expect(String(mail.data.linkUrl)).toContain('/account-export');
         // The mail names the link and the retention, and carries nothing of the export.
         expect(JSON.stringify(mail.data)).not.toContain('productId');
     });
@@ -482,14 +480,14 @@ describe('the mailbox budget', () => {
     it('answers 429 once the mailbox is spent, and the ready export stays downloadable', () =>
         withBudget(1, async () => {
             setPersonalDataSections(basicSections());
-            const { user, result: first } = await requestFor({ email: 'budget@example.com' });
+            const { user } = await requestFor({ email: 'budget@example.com' });
             await settleInlineExports();
 
             const refused = await requestExport(user.id, testCallerContext);
 
             expect(asReject(refused).status).toBe(429);
             expect(asReject(refused).errors[0].code).toBe('RATE_LIMITED');
-            expect(await downloadOf(user.id, first.data.id)).toContain('exportedAt');
+            expect(await downloadOf(user.id)).toContain('exportedAt');
         }));
 
     it('does not charge a request that finds an export still building', () =>
@@ -699,7 +697,7 @@ describe('openOwnExport', () => {
         const { user, result } = await requestFor();
         await settleInlineExports();
 
-        const body = await downloadOf(user.id, result.data.id);
+        const body = await downloadOf(user.id);
 
         expect(JSON.parse(body ?? '')).toHaveProperty('profile');
         expect(mockAudit).toContainEqual(
@@ -710,22 +708,22 @@ describe('openOwnExport', () => {
         );
     });
 
-    it('answers nothing for another account’s export', async () => {
+    it('answers nothing to an account that never asked, whoever else did', async () => {
         setPersonalDataSections(basicSections());
-        const { result } = await requestFor();
+        await requestFor();
         await settleInlineExports();
         const stranger = await createUser({ email: 'stranger@example.com' });
 
-        await expect(downloadOf(stranger.id, result.data.id)).resolves.toBeUndefined();
+        await expect(downloadOf(stranger.id)).resolves.toBeUndefined();
     });
 
     it('answers nothing for an export still building', async () => {
         const { held, release } = gate();
         setPersonalDataSections([held]);
         const user = await createUser({ email: 'ada@example.com' });
-        const requested = await requestExport(user.id, testCallerContext);
+        await requestExport(user.id, testCallerContext);
 
-        await expect(downloadOf(user.id, String(requested.data?.id))).resolves.toBeUndefined();
+        await expect(downloadOf(user.id)).resolves.toBeUndefined();
 
         release();
         await settleInlineExports();
@@ -737,20 +735,20 @@ describe('openOwnExport', () => {
         await settleInlineExports();
 
         await accountExportModel.updateOne({ userId: user.id }, { $set: { status: 'failed' } });
-        await expect(downloadOf(user.id, result.data.id)).resolves.toBeUndefined();
+        await expect(downloadOf(user.id)).resolves.toBeUndefined();
 
         await accountExportModel.updateOne(
             { userId: user.id },
             { $set: { status: 'ready', expiresAt: new Date(Date.now() - 1000) } }
         );
-        await expect(downloadOf(user.id, result.data.id)).resolves.toBeUndefined();
+        await expect(downloadOf(user.id)).resolves.toBeUndefined();
 
         await accountExportModel.updateOne(
             { userId: user.id },
             { $set: { expiresAt: new Date(Date.now() + 60_000) } }
         );
         await rm(path.join(root, `${result.data.id}.json`));
-        await expect(downloadOf(user.id, result.data.id)).resolves.toBeUndefined();
+        await expect(downloadOf(user.id)).resolves.toBeUndefined();
     });
 });
 

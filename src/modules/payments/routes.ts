@@ -6,7 +6,7 @@
  * would only stop deliveries arriving, not make it safer), and `GET /methods`, which is
  * pre-purchase information exactly like `GET /delivery/methods`.
  *
- * Admin-only:    the refund and the offline record — a self-service withdrawal, or a
+ * Admin-only:    the refund and the order payment record (`./order-routes.ts`) — a self-service withdrawal, or a
  *                self-reported "I paid", if left open to any caller,
  *                versus an intent or confirm locked to admins being a checkout nobody can
  *                complete.
@@ -48,10 +48,8 @@ import { postPaymentSync } from './controllers/post-payment-sync';
 import { postPaymentWebhook } from './controllers/post-payment-webhook';
 import { getPayment } from './controllers/get-payment';
 import { getRefund } from './controllers/get-refund';
-import { getPaymentByOrder } from './controllers/get-payment-by-order';
 import { postPaymentRefund } from './controllers/post-payment-refund';
 import { postPaymentRefundSettle } from './controllers/post-payment-refund-settle';
-import { postPaymentOffline } from './controllers/post-payment-offline';
 import { getPaymentMethods } from './controllers/get-payment-methods';
 import { getPayments } from './controllers/get-payments';
 import { getRefunds } from './controllers/get-refunds';
@@ -96,9 +94,6 @@ router.post(
     postPayment
 );
 
-// GET /payments/orders/:orderId — the payment behind an order
-router.get('/orders/:orderId', getPaymentByOrder);
-
 // POST /payments/:id/refunds — the operator returns the money, order untouched. The key
 // is REQUIRED: a retried refund would otherwise return the money twice.
 /*
@@ -130,15 +125,6 @@ router.post(
     requirePermission('create', 'Refund'),
     idempotencyKey,
     postPaymentRefundSettle
-);
-
-// POST /payments/orders/:orderId/offline — the admin recording money by hand. Same `stepUp`
-// arrangement as the refund: `create:Payment` carries it in `shared/authorization-keys.yaml`.
-router.post(
-    '/orders/:orderId/offline',
-    requirePermission('create', 'Payment'),
-    idempotencyKey,
-    postPaymentOffline
 );
 
 // POST /payments/:id/confirm — the payment form's submit. The three velocity limiters and the

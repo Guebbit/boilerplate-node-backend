@@ -21,7 +21,7 @@ import { requireAllowedOrigin } from '@infrastructure/http/middlewares/origin';
 import { getNotifications } from './controllers/get-notifications';
 import { getNotificationsStream } from './controllers/get-notifications-stream';
 import { postReadAll } from './controllers/post-read-all';
-import { postDismissAll } from './controllers/post-dismiss-all';
+import { deleteNotifications } from './controllers/delete-notifications';
 import { getNotification } from './controllers/get-notification';
 import { deleteNotification } from './controllers/delete-notification';
 
@@ -46,8 +46,9 @@ router.get('/', requirePermission('read', 'Notification'), getNotifications);
 // POST /notifications/read-all — the bell opened: the badge goes to zero, the messages stay.
 router.post('/read-all', requirePermission('read', 'Notification'), postReadAll);
 
-// POST /notifications/dismiss-all — empty the inbox.
-router.post('/dismiss-all', requirePermission('delete', 'Notification'), postDismissAll);
+// DELETE /notifications — empty the inbox. Membership changes, so it is a delete; `read-all` above
+// only moves `readAt`, so it stays an action.
+router.delete('/', requirePermission('delete', 'Notification'), deleteNotifications);
 
 // GET /notifications/:id — one of the caller's own. Below the literal paths, so none is read as an id.
 router.get('/:id', requirePermission('read', 'Notification'), getNotification);

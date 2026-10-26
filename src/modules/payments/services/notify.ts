@@ -27,11 +27,10 @@ import type { PaymentDocument, RefundRecord } from '../model';
 /**
  * Whether a settled refund moved real money: the provider named it, or an operator reported
  * returning a hand-paid one. The corrupted-row case settles a record with neither.
- * @param payment - the payment the refund belongs to
  * @param refund - the settled record
  */
-const moneyWentBack = (payment: PaymentDocument, refund: RefundRecord): boolean =>
-    Boolean(refund.providerRefundRef) || payment.refundedByHand === true;
+const moneyWentBack = (refund: RefundRecord): boolean =>
+    Boolean(refund.providerRefundRef) || refund.settledByHand === true;
 
 /**
  * Whether this refund completed the payment: everything settled up to and including it adds up
@@ -83,7 +82,7 @@ export const mailRefundIssued = ({
             const refund = payment?.refunds.find((record) => String(record._id) === refundId);
             if (!payment || !order || !refund) return undefined;
             if (refund.returnId && refund.reason !== 'cancellation') return undefined;
-            if (!moneyWentBack(payment, refund)) return undefined;
+            if (!moneyWentBack(refund)) return undefined;
             return orderService.mailBuyer(order, (locale, name) => {
                 const mail = refundIssuedEmail(
                     locale,

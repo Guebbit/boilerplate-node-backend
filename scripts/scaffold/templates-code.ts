@@ -46,8 +46,7 @@ import { router } from './routes';
 /** This module's manifest entry: one admin router, guarded by ${names.entity} permissions. */
 export default {
     name: '${names.kebab}',
-    basePath: '${names.basePath}',
-    routes: router,
+    mounts: [{ basePath: '${names.basePath}', routes: router }],
     // 'none' is the reviewed answer for a collection with no user-linked field. Change it to a
     // section the moment a record names a person.
     personalData: 'none'

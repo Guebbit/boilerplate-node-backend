@@ -188,7 +188,7 @@ const attemptRefund = (providerRef: string) =>
     fakePaymentProvider.refund(
         providerRef,
         { amount: 100, currency: 'eur' },
-        { idempotencyKey: 'lever-test' }
+        { idempotencyKey: 'lever-test', refundId: 'lever-record', createdAt: new Date() }
     );
 
 describe('POST /__test/payments/refund-failure', () => {

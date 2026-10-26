@@ -10,16 +10,15 @@
  *
  * - `delivery` marks the lines cancelled (and recomputes the order's summary);
  * - `inventory` gives the units back;
- * - the Return row is written, closed, with its refund.
+ * - the Return row is written, closed, with its refund record.
  *
- * The refund follows the commit, as on receipt: its intent is the Return row, and a refund the
- * provider refuses stays open for the payment sweep.
+ * Only the provider call follows the commit, as on receipt: the record is already durable, and a
+ * refund the provider refuses stays open for the payment sweep.
  *
  * See: docs/modules/returns.md#cancelling-what-has-not-shipped
  */
 
 import { t } from '@infrastructure/i18n';
-import { logger } from '@infrastructure/adapters/logger';
 import { generateReject } from '@infrastructure/http/response';
 import { auditForbidden } from '@infrastructure/observability/forbidden';
 import { withTransaction } from '@infrastructure/runtime/database';
@@ -28,7 +27,8 @@ import { deliveryService, ActRefusal } from '@modules/delivery';
 import { inventoryService } from '@modules/inventory';
 import { isBuyer, orderService } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
-import { paymentService, RefundLeftOpenError } from '@modules/payments';
+import { paymentService } from '@modules/payments';
+import type { OpenedReturnRefund } from '@modules/payments';
 import { FulfillmentCancelReason } from '@types';
 import type { AuthContext, CallerContext } from '@types';
 import { toObjectId } from '@infrastructure/persistence/create-repository';
@@ -57,6 +57,8 @@ import { returnPostagePayer } from '@modules/shop';
 interface Cancelled {
     created: ReturnDocument;
     lines: ProductQuantity[];
+    /** The refund record opened with the cancel, or `null` when nothing is owed. */
+    opened: OpenedReturnRefund | null;
 }
 
 /**
@@ -122,12 +124,13 @@ const rowFor = (
 };
 
 /**
- * The transaction: lock the order, mark the lines, give the units back, write the Return.
+ * The transaction: lock the order, mark the lines, give the units back, write the Return and open
+ * its refund record.
  * @param order - the order
  * @param input - the request
  * @param fulfillmentOrderId - the fulfillment order whose remainder is cancelled
  * @param reason - who cancelled it, stored on the fulfillment order
- * @param actor - the account that cancelled (the buyer or a staff member), for the order's timeline
+ * @param context - the account that cancelled (the buyer or a staff member), for the order's timeline and the refund
  * @returns what was cancelled, or why nothing was
  */
 const cancelUnderLock = (
@@ -135,7 +138,7 @@ const cancelUnderLock = (
     input: CreateReturnInput,
     fulfillmentOrderId: string,
     reason: FulfillmentCancelReason,
-    actor: string | null | undefined
+    context: CallerContext
 ): Promise<Cancelled | 'nothing-to-cancel' | 'not-found'> =>
     withTransaction(async (session) => {
         const orderId = String(order._id);
@@ -147,7 +150,7 @@ const cancelUnderLock = (
             orderId,
             session,
             reason,
-            actor
+            context.caller.id
         );
         if (!cancelled.ok)
             return cancelled.reason === 'not-found' ? 'not-found' : 'nothing-to-cancel';
@@ -167,46 +170,39 @@ const cancelUnderLock = (
         );
         await enqueueRequested(created, session);
         await enqueueClosed(created, session);
-        return { created, lines: cancelled.lines };
+        const owed = created.refundAmount ?? 0;
+        const opened =
+            owed > 0
+                ? await paymentService.openReturnRefund(
+                      orderId,
+                      {
+                          returnId: String(created._id),
+                          amount: owed,
+                          lines: cancelled.lines,
+                          shipping: created.shippingRefund ?? 0,
+                          reason: 'cancellation'
+                      },
+                      context,
+                      session
+                  )
+                : null;
+        return { created, lines: cancelled.lines, opened };
     });
 
 /**
- * Pay the cancel back. A provider refusal is logged and left: the refund is recorded as `failed`,
- * the sweep retries it, and nothing waits on it — the Return is closed already.
+ * Send the cancel's refund. Its record committed with the cancellation, so a refusal or any other
+ * error is left to the payment sweep; nothing waits on it, the Return is closed already.
  *
  * @param order - the order
  * @param done - the cancellation just committed
  * @param context - the caller, audited on the refund
  */
-const refund = (order: OrderDocument, done: Cancelled, context: CallerContext): Promise<void> => {
-    const amount = done.created.refundAmount ?? 0;
-    if (amount <= 0) return Promise.resolve();
-
-    return paymentService
-        .refundForReturn(
-            String(order._id),
-            {
-                returnId: String(done.created._id),
-                amount,
-                lines: done.lines,
-                shipping: done.created.shippingRefund ?? 0,
-                reason: 'cancellation'
-            },
-            context
-        )
-        .then(() => undefined)
-        .catch((error: unknown) => {
-            // Stryker disable all
-            logger.error({
-                message:
-                    error instanceof RefundLeftOpenError
-                        ? `Returns: the refund for cancellation ${String(done.created._id)} is not settled yet — the payment sweep retries it`
-                        : `Returns: the refund for cancellation ${String(done.created._id)} could not be recorded — no sweep will retry it, a person must refund it`,
-                error
-            });
-            // Stryker restore all
-        });
-};
+const refund = (order: OrderDocument, done: Cancelled, context: CallerContext): Promise<void> =>
+    done.opened
+        ? paymentService
+              .sendOpenedRefund(String(order._id), done.opened.refundId, context)
+              .then(() => undefined)
+        : Promise.resolve();
 
 /**
  * Everything a committed cancellation unlocks: the stock cache, the refund, the audit row, the
@@ -298,7 +294,7 @@ export const createCancellation = (
                     input,
                     fulfillmentOrderId,
                     byBuyer ? FulfillmentCancelReason.buyer : FulfillmentCancelReason.staff,
-                    context.caller.id
+                    context
                 )
                     .then((done): CreateReturnOutcome | Promise<CreateReturnOutcome> =>
                         typeof done === 'string'

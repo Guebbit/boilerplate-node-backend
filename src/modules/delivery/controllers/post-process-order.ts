@@ -1,6 +1,6 @@
 /**
  * @module
- * POST /delivery/orders/:orderId/start
+ * POST /orders/:id/process
  * Staff reporting that fulfilment has started on a paid order — the one door that moves an order
  * `paid → processing`, before any parcel exists to record.
  */
@@ -13,19 +13,18 @@ import { requireId } from '@infrastructure/http/ids';
 import { deliveryService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
 
-/** Handles `POST /delivery/orders/:orderId/start`. */
-export const postStartOrder = (request: Request<{ orderId?: string }>, response: Response) => {
+/** Handles `POST /orders/:id/process`. */
+export const postProcessOrder = (request: Request<{ id?: string }>, response: Response) => {
     const orderId = requireId(request, response, {
-        notFound: 'delivery.order-not-found',
-        name: 'orderId'
+        notFound: 'delivery.order-not-found'
     });
     if (!orderId) return Promise.resolve();
 
     return deliveryService
-        .startFulfilment(orderId, request.authContext, callerContextOf(request))
+        .processOrder(orderId, request.authContext, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
             successResponse<Order>(response, result.data);
         })
-        .catch(catchAs(response, 'postStartOrder'));
+        .catch(catchAs(response, 'postProcessOrder'));
 };

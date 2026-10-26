@@ -4,14 +4,16 @@
  * what it sees, the same shape `orders`' `OrderActions` publishes.
  */
 
+import { t } from '@infrastructure/i18n';
 import { callerForSubject } from '@kernel/permissions';
 import { holds } from '@kernel/ability';
 import {
+    generateReject,
     generateSuccess,
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { RefundStatus, type Payment, type Refund, type AuthContext } from '@types';
+import { type OrderPaymentsResponse, type Payment, type Refund, type AuthContext } from '@types';
 import { orderService, isPayable } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { paymentRepository } from '../repository';
@@ -21,7 +23,8 @@ import {
     IN_FLIGHT_PAYMENT_STATUSES,
     REFUNDABLE_PAYMENT_STATUS,
     isHandRecorded,
-    isOpenTransfer
+    isOpenTransfer,
+    mayBeSettledByHand
 } from '../domain';
 import { resolvePaymentProvider } from '../providers';
 import { presentPayment } from '../presenter';
@@ -46,6 +49,28 @@ export const getForOrder = (
                 ? presentWithActions(payment, authContext).then((wire) => generateSuccess(wire))
                 : paymentNotFound()
         );
+
+/**
+ * The payments of an order, as `GET /orders/{id}/payments` lists them: unpaged, none or one (an
+ * order has one payment row). The order is read first, so a caller who cannot see it gets the 404
+ * and one who can gets `[]` for an order nobody has started paying.
+ *
+ * @param orderId - the order
+ * @param authContext - the caller; sees only their own, `display:Payment` sees anyone's
+ * @returns the list, or the 404 for an order the caller cannot see
+ */
+export const listForOrder = (
+    orderId: string,
+    authContext?: AuthContext
+): Promise<ResponseSuccess<OrderPaymentsResponse> | ResponseReject> =>
+    orderService.getForCaller(orderId, authContext).then((order) => {
+        if (!order) return generateReject(404, [t('orders.not-found')]);
+
+        return paymentRepository
+            .findByOrderId(orderId, callerScope(authContext))
+            .then((payment) => (payment ? [withActions(payment, order, authContext)] : []))
+            .then((items) => generateSuccess({ items }));
+    });
 
 /**
  * One payment by its own id — the address `Location` names after `POST /payments`.
@@ -89,13 +114,17 @@ export const getRefund = (
     });
 
 /**
- * The record a refund just opened: the newest one on the payment, as the caller may see it.
+ * One refund of a payment as the caller may see it, found by its id: the record a request just
+ * wrote, never whichever happens to be newest when a racing request added another.
  *
- * @param payment - the payment a successful refund answered with
+ * @param payment - the payment the record sits on
+ * @param refundId - the record's id
  * @param authContext - the caller, for the staff-only fields
  */
-export const newestRefund = (payment: PaymentDocument, authContext?: AuthContext) =>
-    presentPayment(payment, readsAllPayments(authContext)).refunds.at(-1);
+export const refundOf = (payment: PaymentDocument, refundId: string, authContext?: AuthContext) =>
+    presentPayment(payment, readsAllPayments(authContext)).refunds.find(
+        (record) => record.id === refundId
+    );
 
 /**
  * Whether the caller is the account that made this payment and may spend a basket at all.
@@ -163,17 +192,16 @@ const maySync = (payment: PaymentDocument, authContext?: AuthContext): boolean =
     isPayerWithCheckout(payment, authContext);
 
 /**
- * The refunds an operator may mark as returned: pending records on a hand-paid payment.
+ * The refunds an operator may mark as returned: a hand-paid payment's pending ones, and a card
+ * refund the provider refused in a way that proves the money did not move.
  *
  * @param payment - the payment being served
  * @param authContext - the caller
  */
 const settleableByHand = (payment: PaymentDocument, authContext?: AuthContext): string[] =>
-    mayRefund(authContext) &&
-    payment.status === REFUNDABLE_PAYMENT_STATUS &&
-    isHandRecorded(payment)
+    mayRefund(authContext) && payment.status === REFUNDABLE_PAYMENT_STATUS
         ? payment.refunds
-              .filter((refund) => refund.status === RefundStatus.pending)
+              .filter((refund) => mayBeSettledByHand(payment, refund))
               .map((refund) => String(refund._id))
         : [];
 

@@ -380,11 +380,11 @@ every order see every row; anyone else sees only their own orders' fulfillment o
 
 ### When they are made
 
-| Path       | What                                                                                                                                                                                                          |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Normal     | this module listens to `order.status_changed {to: paid}` through the outbox, as `invoicing` does. Idempotent on `{ orderId, number }`                                                                         |
-| Safety net | `ensureFulfillmentOrders` runs the same idempotent create on every read and every `start` of a paid order: the outbox gives up after its last retry, and a missing fulfillment order would leave no ship door |
-| Not paid   | `GET /delivery/orders/{orderId}` answers `200` with both lists empty                                                                                                                                          |
+| Path       | What                                                                                                                                                                                                            |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Normal     | this module listens to `order.status_changed {to: paid}` through the outbox, as `invoicing` does. Idempotent on `{ orderId, number }`                                                                           |
+| Safety net | `ensureFulfillmentOrders` runs the same idempotent create on every read and every `process` of a paid order: the outbox gives up after its last retry, and a missing fulfillment order would leave no ship door |
+| Not paid   | `GET /delivery/orders/{orderId}` answers `200` with both lists empty                                                                                                                                            |
 
 ## One transaction per act
 
@@ -446,7 +446,7 @@ shipment leaves **nothing** remaining anywhere; until then it stays `processing`
 
 ### `forced`
 
-`forced` lets staff skip a step, never a rule: ship from `paid` without `start` (the order then moves
+`forced` lets staff skip a step, never a rule: ship from `paid` without `process` (the order then moves
 `paid → processing → …` by itself), or record a delivery without a carrier confirmation. It needs
 `override:Order` (itself step-up gated, and the route asks for the fresh session before the
 controller runs) and a `reason`. It leaves a `status_overridden` row on the order's [timeline](./orders.md#the-timeline) —
@@ -540,7 +540,7 @@ date this order was expecting, not the product's previous date.
 | `GET /delivery/fulfillment-orders` · `/summary`            | `display:Order`                    | [the preorder board](#the-preorder-board)'s two reads               |
 | `GET /delivery/fulfillment-orders/restock-date-impact`     | `update:Product` + `display:Order` | orders a restock-date move would email, before it is saved          |
 | `GET /delivery/orders/{orderId}`                           | the owner, or staff                | `{ fulfillmentOrders[], shipments[] }`, each with its own `actions` |
-| `POST /delivery/orders/{orderId}/start`                    | `start:Shipment`                   | the order, `processing`                                             |
+| `POST /orders/{id}/process`                                | `start:Shipment`                   | the order, `processing`                                             |
 | `POST /delivery/fulfillment-orders/{id}/shipments`         | `update:Shipment`                  | `201` + the shipment                                                |
 | `POST /delivery/fulfillment-orders/{id}/fulfill`           | `update:Shipment`                  | the shipment, delivered                                             |
 | `POST /delivery/fulfillment-orders/{id}/hold` · `/release` | `update:Shipment`                  | the fulfillment order                                               |

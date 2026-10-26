@@ -502,6 +502,11 @@ orderSchema.plugin(revisionPlugin);
  * name fails at startup instead of silently doing nothing; these are the names the databases
  * already carry.
  */
+/*
+ * A receipt number names one order: the invariant, and what makes the staff `orderNumber` filter an
+ * index hit. Production builds it through `npm run db:sync` (autoIndex is off there).
+ */
+orderSchema.index({ orderNumber: 1 }, { name: 'orders_orderNumber', unique: true });
 /* "My orders" lookups, newest first. */
 orderSchema.index({ userId: 1, createdAt: -1 }, { name: 'orders_userId_createdAt' });
 /* An order remembers the address it was placed from, which is how guests' orders are found. */

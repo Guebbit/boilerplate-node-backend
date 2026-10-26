@@ -25,8 +25,7 @@ import './events';
 /** This module's manifest entry: routes, its VAT config gate, locales, the image target and the translatable fields. */
 export default {
     name: 'products',
-    basePath: '/products',
-    routes: router,
+    mounts: [{ basePath: '/products', routes: router }],
     // The catalogue resolves a product's tax class into a rate, so the rates are this module's
     // config — `orders` only freezes the number `resolveTaxRate` hands it.
     config: [productsConfig.slice],

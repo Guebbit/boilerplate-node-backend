@@ -15,15 +15,16 @@ import path from 'node:path';
 import {
     resolvePersonalDataErasers,
     resolvePersonalDataMinimisers,
-    type AppModule
+    type AppModule,
+    type PublicEventTarget
 } from '@kernel/registry';
-import { onDomainEvent } from '@kernel/events';
+import { onDomainEvent, type DomainEventMap } from '@kernel/events';
 import { resolveAnalyticsProvider } from '@infrastructure/observability/analytics';
 import { router } from './routes';
 import { userRepository } from './repository';
 import { userService } from './services';
 import { setPersonalDataErasers, setPersonalDataMinimisers } from './erasure-registry';
-import { USER_ERASED } from './events';
+import { USER_ERASED, USER_PROFILE_CHANGED } from './events';
 import { usersConfig } from './config';
 import { usersJobs } from './jobs';
 
@@ -39,15 +40,35 @@ const onRegistered = (modules: readonly AppModule[]): void => {
     setPersonalDataMinimisers(resolvePersonalDataMinimisers(modules));
 };
 
+/**
+ * This module's public (webhook-visible) events, ids only: `webhooks` subscribes to them through
+ * `kernel/registry.ts`'s `resolvePublicEvents`. No value of the person's travels in a payload.
+ */
+const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
+    [USER_ERASED]: {
+        toPublicEvent: (payload: DomainEventMap[typeof USER_ERASED]) => ({
+            eventType: 'user.erased',
+            data: { userId: payload.userId }
+        })
+    },
+    [USER_PROFILE_CHANGED]: {
+        toPublicEvent: (payload: DomainEventMap[typeof USER_PROFILE_CHANGED]) => ({
+            eventType: 'user.updated',
+            // Names only: the new values would put a fresh copy of the person's data in the log.
+            data: { userId: payload.userId, changed: payload.changed }
+        })
+    }
+};
+
 /** This module's manifest entry: routes, locales, and the image writeback target. */
 export default {
     name: 'users',
-    basePath: '/users',
-    routes: router,
+    mounts: [{ basePath: '/users', routes: router }],
     onRegistered,
     locales: path.join(__dirname, 'locales'),
     templates: path.join(__dirname, 'templates'),
     jobs: usersJobs,
+    publicEvents,
     subscribe: () => {
         /*
          * The account is gone; the analytics provider may still hold its id. A rejection fails the

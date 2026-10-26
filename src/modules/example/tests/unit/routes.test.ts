@@ -22,11 +22,10 @@ import { router } from '@modules/example/routes';
 describe('example routes: what is mounted', () => {
     it('mounts exactly the documented endpoints, in the documented order', () => {
         expect(routeSignatures(router)).toEqual([
-            'GET /published/:id',
+            'GET /:id',
             'POST /search',
             'GET /',
             'POST /',
-            'GET /:id',
             'PUT /:id',
             'PATCH /:id',
             'POST /:id/transitions',
@@ -37,9 +36,10 @@ describe('example routes: what is mounted', () => {
 });
 
 describe('example routes: the positional guard', () => {
-    it('leaves the published read public, above the gate', () => {
-        const guards = guardsOn(router, 'GET /published/:id');
+    it('leaves the item read open, above the gate: the caller is resolved, never required', () => {
+        const guards = guardsOn(router, 'GET /:id');
 
+        expect(guards).toContain('getAuth');
         expect(identityGuardIndex(guards)).toBe(-1);
         expect(guards).not.toContain('requirePermissionGuard');
     });
@@ -48,7 +48,6 @@ describe('example routes: the positional guard', () => {
         'POST /search',
         'GET /',
         'POST /',
-        'GET /:id',
         'PUT /:id',
         'PATCH /:id',
         'POST /:id/transitions',
@@ -62,14 +61,14 @@ describe('example routes: the positional guard', () => {
         expect(guards).toContain('requirePermissionGuard');
     });
 
-    it('keeps the public route first, so the gate cannot be moved above it', () => {
-        expect(routeSignatures(router)[0]).toBe('GET /published/:id');
+    it('keeps the open read first, so the gate cannot be moved above it', () => {
+        expect(routeSignatures(router)[0]).toBe('GET /:id');
     });
 
-    it('declares /search before /:id, so the word is never read as an id', () => {
+    it('declares /search before the keyed /:id writes, so the word is never read as an id', () => {
         const signatures = routeSignatures(router);
 
-        expect(signatures.indexOf('POST /search')).toBeLessThan(signatures.indexOf('GET /:id'));
+        expect(signatures.indexOf('POST /search')).toBeLessThan(signatures.indexOf('PUT /:id'));
     });
 });
 

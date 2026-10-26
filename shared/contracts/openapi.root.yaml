@@ -1259,8 +1259,8 @@ paths:
         $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1summary'
     /cart/checkout:
         $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1checkout'
-    /cart/reorder/{orderId}:
-        $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1reorder~1{orderId}'
+    /cart/reorder:
+        $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1reorder'
 
     # ---------- wishlist ----------
     /wishlist:
@@ -1296,18 +1296,21 @@ paths:
         $ref: '../../src/modules/invoicing/openapi.yaml#/paths/~1orders~1{id}~1credit-notes'
     /orders/{id}/credit-notes/{creditNoteId}:
         $ref: '../../src/modules/invoicing/openapi.yaml#/paths/~1orders~1{id}~1credit-notes~1{creditNoteId}'
+    /orders/{id}/payments:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1orders~1{id}~1payments'
+
+    # ---------- delivery's door under an order ---------- (`POST /orders/{id}/process`: the order's URL,
+    # delivery's module and key; mounted through a second entry in delivery's `mounts`)
+    /orders/{id}/process:
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1orders~1{id}~1process'
 
     # ---------- payments ----------
     /payments/methods:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1methods'
-    /payments/orders/{orderId}:
-        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1orders~1{orderId}'
     /payments/{id}/refunds:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1{id}~1refunds'
     /payments/{id}/refunds/{refundId}:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1{id}~1refunds~1{refundId}'
-    /payments/orders/{orderId}/offline:
-        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1orders~1{orderId}~1offline'
     /payments/{id}:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1{id}'
     /payments/{id}/confirm:
@@ -1322,8 +1325,6 @@ paths:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1methods'
     /delivery/orders/{orderId}:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1orders~1{orderId}'
-    /delivery/orders/{orderId}/start:
-        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1orders~1{orderId}~1start'
     /delivery/fulfillment-orders:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1fulfillment-orders'
     /delivery/fulfillment-orders/summary:

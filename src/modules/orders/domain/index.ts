@@ -28,12 +28,12 @@ export {
 export type { ShippableLineCandidate } from './rules';
 
 // `ORDER_EVENTS` is published for reading; a sibling module asks a named predicate
-// (`isPayable`, `canStartFulfilment`, ...) and never lists statuses or reads the table itself.
+// (`isPayable`, `canProcessOrder`, ...) and never lists statuses or reads the table itself.
 export {
     ORDER_EVENTS,
     canTransition,
     isPayable,
-    canStartFulfilment,
+    canProcessOrder,
     isAwaitingGoods,
     canShip,
     canRecordArrival,

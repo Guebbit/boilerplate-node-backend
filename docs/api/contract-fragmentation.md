@@ -193,7 +193,7 @@ hit them first:
   `Invoicing` rather than `Orders`, since download-a-frozen-document is a different concern from
   the order resource itself — fragmenting by `basePath` still splits the two files correctly.
 - **`access` has no HTTP surface of its own** — headless by design, the one module whose manifest
-  declares neither `basePath` nor `routes`. Its `openapi.yaml` is components only (`paths: {}`):
+  declares no `mounts`. Its `openapi.yaml` is components only (`paths: {}`):
   the abilities schemas `GET /account/abilities` returns, and the `roles` section of the data
   export. A components-only fragment owns no folder in the client collections.
 
@@ -219,7 +219,7 @@ and nothing but a careful reading catches it.
 
 ```
 src/modules/products/
-├── module.ts        name, basePath '/products', routes, locales
+├── module.ts        name, mounts [{ basePath '/products', routes }], locales
 ├── routes.ts        the express router
 ├── controllers/     request handling
 ├── services/        business rules
@@ -412,7 +412,7 @@ internally. That file's header is the full argument. See also
 
 The `webhooks` section is the one section that is not complete on its own. Its file keeps the server
 and the headers schema every event shares; each event is declared by the module that fires it, in
-`src/modules/<module>/asyncapi.webhooks.yaml` (`delivery`, `orders`, `payments`, `returns`, `example`).
+`src/modules/<module>/asyncapi.webhooks.yaml` (`delivery`, `orders`, `payments`, `returns`, `users`, `example`).
 `scripts/contracts/asyncapi-webhook-events.ts` finds those files on disk and
 `withWebhookEvents` folds them into the section before it joins the bundle: one call, in
 `asyncapi-bundles.ts`. The same collision refusal applies, so two modules claiming one event name
@@ -425,6 +425,7 @@ flowchart LR
     O["orders/asyncapi.webhooks.yaml"] --> S
     P["payments/asyncapi.webhooks.yaml"] --> S
     R["returns/asyncapi.webhooks.yaml"] --> S
+    U["users/asyncapi.webhooks.yaml"] --> S
     E["example/asyncapi.webhooks.yaml"] --> S
     S --> B["asyncapi.yaml +<br/>asyncapi.public.yaml"]
 ```

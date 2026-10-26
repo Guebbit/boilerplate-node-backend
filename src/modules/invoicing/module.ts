@@ -34,8 +34,7 @@ import { invoicingJobs } from './jobs';
 /** This module's manifest entry: routes, the two issuing subscriptions, and locales. */
 export default {
     name: 'invoicing',
-    basePath: '/orders',
-    routes: router,
+    mounts: [{ basePath: '/orders', routes: router }],
     jobs: invoicingJobs,
     config: [invoicingConfig.slice, invoicingProviderProbe.slice],
     rateLimits: invoicingRateLimits,

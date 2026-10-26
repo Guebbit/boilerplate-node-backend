@@ -72,8 +72,7 @@ const onRegistered = (modules: readonly AppModule[]): void => {
 /** This module's manifest entry: routes, event subscriptions, and locales. */
 export default {
     name: 'account',
-    basePath: '/account',
-    routes: router,
+    mounts: [{ basePath: '/account', routes: router }],
     jobs: accountJobs,
     /** The credential/signup/reset/MFA/password-check budgets — see `./rate-limits.ts`. */
     rateLimits: accountRateLimits,

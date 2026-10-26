@@ -8,6 +8,7 @@
 #          src/modules/payments/asyncapi.webhooks.yaml
 #          src/modules/returns/asyncapi.webhooks.yaml
 #          src/modules/example/asyncapi.webhooks.yaml
+#          src/modules/users/asyncapi.webhooks.yaml
 asyncapi: 3.0.0
 id: 'urn:boilerplate-node-backend:asyncapi:contracts'
 info:
@@ -107,6 +108,14 @@ channels:
         messages:
             OrderCancelledEvent:
                 $ref: '#/components/messages/OrderCancelledEvent'
+    order.redacted:
+        address: order.redacted
+        description: An order's personal data was scrubbed.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            OrderRedactedEvent:
+                $ref: '#/components/messages/OrderRedactedEvent'
     shipment.shipped:
         address: shipment.shipped
         description: A shipment left — some or all of an order's goods.
@@ -179,6 +188,22 @@ channels:
         messages:
             ExamplePublishedEvent:
                 $ref: '#/components/messages/ExamplePublishedEvent'
+    user.erased:
+        address: user.erased
+        description: An account was erased.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            UserErasedEvent:
+                $ref: '#/components/messages/UserErasedEvent'
+    user.updated:
+        address: user.updated
+        description: A personal-data field of an account was rectified.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            UserUpdatedEvent:
+                $ref: '#/components/messages/UserUpdatedEvent'
     notifications.created:
         address: notifications.created
         servers:
@@ -259,6 +284,15 @@ operations:
             The `order.cancelled` domain event, without its refund policy: whether the cancel owes the buyer money back is for `payments`, and a subscriber learns that money actually moved from `payment.refunded`. See `orders/events.ts`.
         messages:
             - $ref: '#/channels/order.cancelled/messages/OrderCancelledEvent'
+    webhookOrderRedacted:
+        action: send
+        channel:
+            $ref: '#/channels/order.redacted'
+        summary: An order's email, addresses and notes were scrubbed.
+        description: >-
+            Fired once per order by the nightly retention sweep (`reap:orders`), in the scrub's own transaction, when the order's personal-data window ends: after the buyer's erasure, or for an inactive account's orders. Not fired at the erasure itself, which only detaches the account. A recipient drops the buyer's email, addresses and notes it holds for `orderId` (GDPR Art. 19). The order row itself is kept as the invoice.
+        messages:
+            - $ref: '#/channels/order.redacted/messages/OrderRedactedEvent'
     webhookShipmentShipped:
         action: send
         channel:
@@ -339,6 +373,24 @@ operations:
             One-to-one with the `example.published` domain event — see `example/services/crud.ts`. Fired each time an example moves to `published`, including after being archived and brought back.
         messages:
             - $ref: '#/channels/example.published/messages/ExamplePublishedEvent'
+    webhookUserErased:
+        action: send
+        channel:
+            $ref: '#/channels/user.erased'
+        summary: An account's row was hard-deleted.
+        description: >-
+            Fired once per erasure, in the erasure's own transaction: an admin hard delete, the purge after the self-deletion grace, or the inactivity erase. Never at the lock or the start of the grace, never for a soft delete. The payload is the id alone, so the delivery log never holds a fresh copy of an erased person's address. A recipient drops what it holds under that `userId`.
+        messages:
+            - $ref: '#/channels/user.erased/messages/UserErasedEvent'
+    webhookUserUpdated:
+        action: send
+        channel:
+            $ref: '#/channels/user.updated'
+        summary: A person's username, email, phone, website or picture changed.
+        description: >-
+            Fired once per committed change, from an admin edit, the owner's own profile edit, an email-change confirmation and its undo. `changed` names the fields that moved and never carries a value, so a recipient refetches the account through the API. A request that resends what is stored, an email-change request not yet confirmed, a change of preferences (locale, consent) and the address book fire nothing.
+        messages:
+            - $ref: '#/channels/user.updated/messages/UserUpdatedEvent'
     sseNotificationCreated:
         action: send
         channel:
@@ -352,7 +404,7 @@ operations:
         channel:
             $ref: '#/channels/notifications.deleted'
         description: >-
-            Pushed when the user deletes one (`DELETE /notifications/{id}`), empties the inbox (`dismiss-all`), or the cap trims the oldest, so a second tab stays in step with the first. `all` is true when the whole inbox went.
+            Pushed when the user deletes one (`DELETE /notifications/{id}`), empties the inbox (`DELETE /notifications`), or the cap trims the oldest, so a second tab stays in step with the first. `all` is true when the whole inbox went.
         messages:
             - $ref: '#/channels/notifications.deleted/messages/NotificationsDeletedEvent'
     sseNotificationsRead:
@@ -401,6 +453,13 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/OrderCancelledEnvelope'
+        OrderRedactedEvent:
+            name: OrderRedactedEvent
+            title: Order redacted
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/OrderRedactedEnvelope'
         ShipmentShippedEvent:
             name: ShipmentShippedEvent
             title: Shipment shipped
@@ -464,6 +523,20 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/ExamplePublishedEnvelope'
+        UserErasedEvent:
+            name: UserErasedEvent
+            title: User erased
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/UserErasedEnvelope'
+        UserUpdatedEvent:
+            name: UserUpdatedEvent
+            title: User updated
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/UserUpdatedEnvelope'
         NotificationCreatedEvent:
             name: NotificationCreatedEvent
             title: A notification was written
@@ -621,6 +694,24 @@ components:
                     type: string
                     enum:
                         - order.cancelled
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/OrderIdPayload'
+            additionalProperties: false
+        OrderRedactedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: OrderRedactedEventType
+                    type: string
+                    enum:
+                        - order.redacted
                 timestamp:
                     type: string
                     format: date-time
@@ -910,6 +1001,71 @@ components:
                     format: date-time
                 data:
                     $ref: '#/components/schemas/ExamplePublishedPayload'
+            additionalProperties: false
+        UserIdPayload:
+            type: object
+            required:
+                - userId
+            properties:
+                userId:
+                    type: string
+            additionalProperties: false
+        UserErasedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: UserErasedEventType
+                    type: string
+                    enum:
+                        - user.erased
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/UserIdPayload'
+            additionalProperties: false
+        UserUpdatedPayload:
+            type: object
+            required:
+                - userId
+                - changed
+            properties:
+                userId:
+                    type: string
+                changed:
+                    type: array
+                    minItems: 1
+                    items:
+                        title: UserChangedField
+                        type: string
+                        enum:
+                            - username
+                            - email
+                            - phone
+                            - website
+                            - imageUrl
+            additionalProperties: false
+        UserUpdatedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: UserUpdatedEventType
+                    type: string
+                    enum:
+                        - user.updated
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/UserUpdatedPayload'
             additionalProperties: false
         CartLineRemovedParamsPayload:
             title: CartLineRemovedParamsPayload
@@ -1226,7 +1382,7 @@ components:
                 - ids
             properties:
                 all:
-                    description: True when the whole inbox went (`dismiss-all`); `ids` is then empty.
+                    description: True when the whole inbox went (`DELETE /notifications`); `ids` is then empty.
                     type: boolean
                 ids:
                     description: The deleted notifications' ids.

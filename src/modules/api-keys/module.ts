@@ -33,8 +33,7 @@ const onRegistered = (): void => {
 /** This module's manifest entry. */
 export default {
     name: 'api-keys',
-    basePath: '/api-keys',
-    routes: router,
+    mounts: [{ basePath: '/api-keys', routes: router }],
     onRegistered,
     subscribe: () => {
         // A key outlives every session, so the events that end sessions wholesale (logout

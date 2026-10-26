@@ -25,7 +25,7 @@ paths:
             summary: List notifications
             description: >-
                 The caller's own inbox, newest first. A notification stays until its owner deletes it
-                (`DELETE /notifications/{id}`, `POST /notifications/dismiss-all`), the per-user cap
+                (`DELETE /notifications/{id}`, `DELETE /notifications`), the per-user cap
                 trims it, or the account goes. Never paginated: the inbox is bounded by that cap, so
                 one read is the whole of it. Empty and absent are the same state — this never
                 answers 404. A client keeps the list live with `GET /notifications/stream`; the
@@ -41,6 +41,23 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/NotificationsResponse'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        delete:
+            tags: [Notifications]
+            summary: Delete every notification
+            description: >-
+                Permanently deletes every notification of the caller — a hard delete, like
+                `DELETE /notifications/{id}`, on the collection itself (as `DELETE /account/sessions`
+                and `DELETE /cart/items` are). Emptying an empty inbox is the state the caller asked
+                for, so it answers 204 too. `POST /notifications/read-all` stays an action: it moves
+                `readAt`, not membership.
+            operationId: dismissAllNotifications
+            security:
+                - bearerAuth: []
+            responses:
+                '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -81,23 +98,6 @@ paths:
                 opens, so the badge (unread count) goes to zero while the messages stay. Repeating
                 it is a no-op.
             operationId: readAllNotifications
-            security:
-                - bearerAuth: []
-            responses:
-                '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
-
-    /notifications/dismiss-all:
-        post:
-            tags: [Notifications]
-            summary: Delete every notification
-            description: >-
-                Permanently deletes every notification of the caller — a hard delete, like
-                `DELETE /notifications/{id}`. Emptying an empty inbox is the state the caller asked
-                for, so it answers 200.
-            operationId: dismissAllNotifications
             security:
                 - bearerAuth: []
             responses:

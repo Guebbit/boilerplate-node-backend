@@ -143,6 +143,7 @@ surely as no barrel would, since there is nothing in it to reach for.
 | Know which sources an endpoint reads                               | [Request Input](./request-input.md)                                         |
 | Understand process model & shutdown                                | [Clustering & Shutdown](./clustering.md)                                    |
 | Know how one shop becomes many, and what is deliberately not built | [Tenancy](./tenancy.md)                                                     |
+| Know which rules are shared data and how a backend loads them      | [Shared rules](./shared-rules.md)                                           |
 | Look up what a domain term means in one module                     | [Glossary](./glossary.md)                                                   |
 | Know who may do what, and which rows they see                      | [Authorization](./authorization.md)                                         |
 | Know how people stay signed in, and which of two ways to pick      | [Two ways to stay signed in](./sessions.md)                                 |

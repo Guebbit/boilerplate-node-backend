@@ -954,14 +954,12 @@ describe('POST /account/export for an account that is gone', () => {
 
 describe('POST /account/export without a session', () => {});
 
-describe('GET /account/export/{id}', () => {
+describe('GET /account/export', () => {
     it('streams the export as a JSON attachment, never cached', async () => {
         const { bearer } = await loginWithCookie();
-        const { request } = await requestAndDownloadExport(bearer);
+        await requestAndDownloadExport(bearer);
 
-        const response = await api()
-            .get(`/account/export/${request.id}`)
-            .set('Authorization', bearer);
+        const response = await api().get('/account/export').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
         expect(response.headers['content-type']).toContain('application/json');
@@ -971,32 +969,20 @@ describe('GET /account/export/{id}', () => {
         expect(response.headers['cache-control']).toBe('private, no-store');
     });
 
-    it('answers 404 for an export that does not exist', async () => {
+    it('answers 404 for an account that has not asked for an export', async () => {
         const { bearer } = await loginWithCookie();
 
-        const response = await api()
-            .get(`/account/export/${MISSING_ID}`)
-            .set('Authorization', bearer);
+        const response = await api().get('/account/export').set('Authorization', bearer);
 
         expect(response.status).toBe(404);
     });
 
-    it('answers 404 for a malformed id, the same as an unknown one', async () => {
-        const { bearer } = await loginWithCookie();
-
-        const response = await api().get('/account/export/not-an-id').set('Authorization', bearer);
-
-        expect(response.status).toBe(404);
-    });
-
-    it('answers 404 for another account’s export, not 403', async () => {
+    it('answers 404 to an account that did not ask, whoever else did, not 403', async () => {
         const owner = await loginWithCookie({ email: 'owner-export@example.com' });
-        const { request } = await requestAndDownloadExport(owner.bearer);
+        await requestAndDownloadExport(owner.bearer);
         const stranger = await loginWithCookie({ email: 'stranger-export@example.com' });
 
-        const response = await api()
-            .get(`/account/export/${request.id}`)
-            .set('Authorization', stranger.bearer);
+        const response = await api().get('/account/export').set('Authorization', stranger.bearer);
 
         expect(response.status).toBe(404);
     });

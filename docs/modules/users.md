@@ -68,7 +68,7 @@ runtime value stay inside even so: every read or write, `account`'s included, go
 `userService`, never the collection directly.
 
 ::: tip Why two modules and not one
-`/users` and `/account` are different mounts, and a manifest carries one `basePath`. Merging them
+`/users` and `/account` are different mounts. Merging them
 would collapse two URL surfaces into one module for no gain — and the cost of keeping them apart is
 visible on the map as an `account → users` arrow, which this page labels `shared-kernel`, rather than hidden inside a barrel.
 :::
@@ -298,9 +298,20 @@ it the answer is 409 `USER_ERASURE_DUE` and `actions.restore` is false. The rest
 outbox event `user.deletion-cancelled`; `account` drops the restore link and tells the owner staff did
 it. There is no reason field: the audit row records who.
 
-The erase cascade also forgets a staff member's name where it only pointed: `purchaseHold.setBy` on
-another buyer is unset before the row goes, and `webhooks` and `locales` do the same for the
-subscription owner and the translator. The rows stay, the person goes.
+## Webhook events
+
+Erasing or rectifying a person tells connected tools (GDPR Art. 19). Ids and field names only, never
+a value, so the delivery log never holds a fresh copy of the person's data.
+
+| Webhook        | `data`                  | Fires on                                                                                                                               | Does not fire on                                                                                                                                                             |
+| -------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user.erased`  | `{ userId }`            | admin hard delete, the purge after the grace, the inactivity erase (same commit)                                                       | the lock, the grace starting, a soft delete, a restore that wins the claim                                                                                                   |
+| `user.updated` | `{ userId, changed[] }` | a username, phone, website or picture that really moved (admin or owner edit); an email-change confirmation and its undo (`['email']`) | a resent value, an email-change request not yet confirmed, locale or consent, the address book, a role-only edit. A phone is compared as plaintext, not as stored ciphertext |
+
+`user.updated` is projected from the outbox event `user.profile_changed`, written in the save's own
+transaction (`services/update.ts`, `services/credentials.ts`). A recipient that syncs customers
+stores our `userId`, drops what it holds on `user.erased`, and refetches on `user.updated`. The
+catalogue and the delivery pipeline are [`webhooks`](./webhooks.md).
 
 ## What this module adds to the data export
 

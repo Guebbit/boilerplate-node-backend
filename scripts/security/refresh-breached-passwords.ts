@@ -40,10 +40,7 @@ const SOURCE_URL = `https://raw.githubusercontent.com/danielmiessler/SecLists/${
 const SOURCE_SHA256 = '18dc49ca32b62455a61e3398f4ab9f93eb700ff142fa0d4b9fd11a727f3b80e4';
 
 /** Where the filtered, committable list lives — loaded once at boot into a `Set`. */
-const OUTPUT_PATH = path.resolve(
-    __dirname,
-    '../../src/infrastructure/security/breached-passwords/list.txt'
-);
+const OUTPUT_PATH = path.resolve(__dirname, '../../shared/rules/breached-passwords.txt');
 
 /** The committed root bundle, read for its resolved `PasswordNew` schema rather than a fragment. */
 const ROOT_CONTRACT_PATH = path.resolve(__dirname, '../../openapi.yaml');

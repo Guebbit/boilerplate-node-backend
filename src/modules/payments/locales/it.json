@@ -9,7 +9,7 @@
         "declined": "Il pagamento è stato rifiutato dall'emittente della carta.",
         "not-refundable": "Questo pagamento non può essere rimborsato — nessun importo è arrivato, oppure è già stato restituito.",
         "refund-not-open": "Questo rimborso è già stato concluso.",
-        "refund-not-by-hand": "Questo rimborso passa dal gestore della carta; non si può segnare come restituito a mano.",
+        "refund-in-flight": "Il gestore della carta non ha ancora dato una risposta definitiva su questo rimborso, quindi non si può ancora segnare come restituito a mano. Viene ritentato automaticamente.",
         "in-flight": "Per questo ordine è già in corso un pagamento con carta — attendi che si concluda prima di registrare un pagamento a mano.",
         "received-at-future": "La data di arrivo del pagamento non può essere nel futuro.",
         "webhook-not-configured": "Questo negozio non accetta pagamenti con carta.",
@@ -22,6 +22,7 @@
             "insufficient_funds": "Fondi insufficienti.",
             "expired_or_canceled_card": "La carta è scaduta o annullata.",
             "lost_or_stolen_card": "La carta risulta smarrita o rubata.",
+            "provider_removed": "Il gestore dei pagamenti non è più installato.",
             "provider_unavailable": "Il provider non è raggiungibile.",
             "unknown": "Il provider non ha indicato un motivo utilizzabile."
         },

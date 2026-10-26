@@ -254,9 +254,10 @@ automatically regardless. Runs every 5 minutes, well inside both windows. See
 
 `npm run job sweep:payment-effects` is the provider-facing counterpart. A settlement is one database
 transaction (payment, order, hold, outbox rows), so a crash leaves nothing half-done; what can still
-be owed is the provider's side. The sweep retries every refund still open, with the same idempotency
-key, once it is past `NODE_PAYMENT_REFUND_RETRY_MINUTES` (default 1: longer than a refund request in
-flight). Runs every 5 minutes. See [payments](../modules/payments.md#one-settlement-transaction).
+be owed is the provider's side. The sweep retries every refund it may send, with the same idempotency
+key: a record is claimed first (one conditional write), a retryable refusal waits a delay that
+starts at `NODE_PAYMENT_REFUND_RETRY_MINUTES` (default 1: longer than a refund request in flight)
+and doubles to at most a day, and a final refusal is never sent again. Runs every 5 minutes. See [payments](../modules/payments.md#one-settlement-transaction).
 
 The same job reconciles lost webhooks: an unsettled payment untouched for
 `NODE_PAYMENT_RECONCILE_MINUTES` (default 15) is asked about at the provider and settled through the

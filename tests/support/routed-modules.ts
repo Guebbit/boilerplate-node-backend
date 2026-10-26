@@ -2,7 +2,7 @@
  * Every module that mounts a router, by name.
  *
  * Read off the registry (`src/modules.ts`) rather than listed: a module that mounts a router has
- * `routes` on its manifest, so a new one is covered the moment it is enabled. A module folder that
+ * `mounts` on its manifest, so a new one is covered the moment it is enabled. A module folder that
  * is on disk but not in the registry is caught by `write-routes-are-guarded.test.ts` instead of
  * going silently unguarded.
  *
@@ -24,3 +24,13 @@ import { routedModulesOf } from '@tests/routes';
 
 /** Every routed module, keyed by directory name under `src/modules/`. */
 export const ROUTED_MODULES: Record<string, Router> = routedModulesOf(enabledModules);
+
+/**
+ * Every router one module serves: its own and any it mounts under another resource's URL.
+ * @param name - directory name under `src/modules/`
+ * @returns the module's routers, empty for a module with none
+ */
+export const routersOfModule = (name: string): Router[] =>
+    Object.entries(ROUTED_MODULES)
+        .filter(([key]) => key.split('@', 1)[0] === name)
+        .map(([, router]) => router);

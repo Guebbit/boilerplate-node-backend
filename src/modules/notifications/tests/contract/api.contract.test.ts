@@ -83,14 +83,12 @@ describe('POST /notifications/read-all', () => {
     });
 });
 
-describe('POST /notifications/dismiss-all', () => {
+describe('DELETE /notifications', () => {
     it('matches the contract and empties the caller’s inbox', async () => {
         const { bearer, user } = await authenticateAs('user');
         await createNotification({ userId: user.id });
 
-        const response = await api()
-            .post('/notifications/dismiss-all')
-            .set('Authorization', bearer);
+        const response = await api().delete('/notifications').set('Authorization', bearer);
         const inbox = await api().get('/notifications').set('Authorization', bearer);
 
         expect(response.status).toBe(204);

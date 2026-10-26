@@ -17,8 +17,7 @@ import { feedbackConfig } from './config';
 /** This module's manifest entry: public contact form, keyed triage (`feedback.*`). */
 export default {
     name: 'feedback',
-    basePath: '/feedback',
-    routes: router,
+    mounts: [{ basePath: '/feedback', routes: router }],
     config: [feedbackConfig.slice],
     /** The contact-form budgets — see `./rate-limits.ts`. */
     rateLimits: feedbackRateLimits,

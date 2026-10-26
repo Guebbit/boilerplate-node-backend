@@ -1,7 +1,7 @@
 /**
  * @module
- * Contract tests for /examples: every route over HTTP, judged against `openapi.yaml`. One public
- * route (a published example), the rest signed-in and narrowed by who is asking — someone else's
+ * Contract tests for /examples: every route over HTTP, judged against `openapi.yaml`. One open
+ * read (a published example is anyone's), the rest signed-in and narrowed by who is asking — someone else's
  * example is a 404, never a 403, so an id says nothing about who owns it. Behavioural rules live
  * in the integration suite; these make sure each declared response is actually reached.
  *
@@ -64,42 +64,6 @@ const statusOf = (request: PromiseLike<{ status: number }>): Promise<number> =>
  */
 const etagOf = (request: PromiseLike<{ headers: Record<string, string> }>): Promise<string> =>
     Promise.resolve(request).then((response) => response.headers.etag);
-
-describe('GET /examples/published/{id}', () => {
-    it('answers anyone, with no credentials, for a published example', async () => {
-        const { user } = await authenticateAsRole('editor');
-        const published = await createExample({ userId: user.id, status: ExampleStatus.published });
-
-        const response = await api().get(`/examples/published/${String(published._id)}`);
-
-        expect(response.status).toBe(200);
-        expect(response.body).toMatchObject({
-            id: String(published._id),
-            status: 'published',
-            ownerName: user.username
-        });
-    });
-
-    it.each([ExampleStatus.draft, ExampleStatus.archived])(
-        'answers 404 for a %s example, exactly as for one that does not exist',
-        async (status) => {
-            const { user } = await authenticateAsRole('editor');
-            const hidden = await createExample({ userId: user.id, status });
-
-            const response = await api().get(`/examples/published/${String(hidden._id)}`);
-
-            expect(response.status).toBe(404);
-        }
-    );
-
-    it('answers 404 for an id nothing holds', async () => {
-        expect(await statusOf(api().get(`/examples/published/${MISSING_ID}`))).toBe(404);
-    });
-
-    it('answers 404, as for an id nothing holds, for an id no ObjectId can be built from', async () => {
-        expect(await statusOf(api().get(`/examples/published/${MALFORMED_ID}`))).toBe(404);
-    });
-});
 
 describe('POST /examples', () => {
     it('creates a draft owned by the caller, and points at it', async () => {
@@ -252,6 +216,79 @@ describe('GET /examples/{id}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
+    });
+
+    it('answers anyone, with no credentials, for a published example', async () => {
+        const { user } = await authenticateAsRole('editor');
+        const published = await createExample({ userId: user.id, status: ExampleStatus.published });
+
+        const response = await api().get(`/examples/${String(published._id)}`);
+
+        expect(response.status).toBe(200);
+        expect(response.body).toMatchObject({
+            id: String(published._id),
+            status: 'published',
+            ownerName: user.username
+        });
+    });
+
+    it('shows a signed-in stranger a published example, without actions', async () => {
+        const owner = await createUser({ email: 'owner@example.com' });
+        const published = await createExample({
+            userId: owner.id,
+            status: ExampleStatus.published
+        });
+        const { bearer } = await authenticateAsRole('editor');
+
+        const response = await api()
+            .get(`/examples/${String(published._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body).not.toHaveProperty('actions');
+    });
+
+    it.each([ExampleStatus.draft, ExampleStatus.archived])(
+        'answers an anonymous caller 404 for a %s example, exactly as for one that does not exist',
+        async (status) => {
+            const { user } = await authenticateAsRole('editor');
+            const hidden = await createExample({ userId: user.id, status });
+
+            const response = await api().get(`/examples/${String(hidden._id)}`);
+
+            expect(response.status).toBe(404);
+        }
+    );
+
+    it('lets the owner read their own archived example', async () => {
+        const { user, bearer } = await authenticateAsRole('editor');
+        const archived = await createExample({ userId: user.id, status: ExampleStatus.archived });
+
+        const response = await api()
+            .get(`/examples/${String(archived._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+    });
+
+    it('lets a caller holding display:Example read anyone’s draft', async () => {
+        const owner = await createUser({ email: 'owner@example.com' });
+        const draft = await createExample({ userId: owner.id });
+        const { bearer } = await authenticateAsRole('admin');
+
+        const response = await api()
+            .get(`/examples/${String(draft._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+    });
+
+    it('answers 404 for an id nothing holds', async () => {
+        expect(await statusOf(api().get(`/examples/${MISSING_ID}`))).toBe(404);
+    });
+
+    it('answers 404, as for an id nothing holds, for an id no ObjectId can be built from', async () => {
+        expect(await statusOf(api().get(`/examples/${MALFORMED_ID}`))).toBe(404);
     });
 });
 
@@ -587,7 +624,7 @@ describe('Example.actions', () => {
         const { user } = await authenticateAsRole('editor');
         const published = await createExample({ userId: user.id, status: ExampleStatus.published });
 
-        const response = await api().get(`/examples/published/${String(published._id)}`);
+        const response = await api().get(`/examples/${String(published._id)}`);
 
         expect(response.body).not.toHaveProperty('actions');
     });

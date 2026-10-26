@@ -32,7 +32,7 @@ export const accountConfig = defineConfig({
         NODE_FRONTEND_LINK_RESTORE: text({ default: 'account-restore#token={token}' }),
         NODE_FRONTEND_LINK_EMAIL_CHANGE: text({ default: 'email-change/confirm#token={token}' }),
         NODE_FRONTEND_LINK_EMAIL_UNDO: text({ default: 'email-change/undo#token={token}' }),
-        NODE_FRONTEND_LINK_EXPORT: text({ default: 'account-export/{id}' }),
+        NODE_FRONTEND_LINK_EXPORT: text({ default: 'account-export' }),
         NODE_PASSWORD_RESET_TTL_MS: int({ default: 3_600_000, min: 1 }),
         NODE_INACTIVE_ACCOUNT_DAYS: int({ default: 0, min: 0 }),
         NODE_INACTIVE_MINIMISE_DAYS: int({ default: 1095, min: 0 }),
@@ -72,14 +72,13 @@ export const accountFrontendLink = (
 
 /**
  * The link in the "your data export is ready" mail: the frontend page that downloads it. Not one
- * of {@link AccountLinkKind}: it carries an export's id, not a token, and the page needs a signed-in
+ * of {@link AccountLinkKind}: it carries no token, and the page needs a signed-in
  * session anyway (the download route asks for a fresh one).
  *
  * @param locale - the mail's own locale
- * @param exportId - the export the page downloads
  */
-export const accountExportLink = (locale: string, exportId: string): string =>
-    frontendLink(accountConfig().NODE_FRONTEND_LINK_EXPORT, locale, { id: exportId });
+export const accountExportLink = (locale: string): string =>
+    frontendLink(accountConfig().NODE_FRONTEND_LINK_EXPORT, locale);
 
 /**
  * When an account whose owner asked to delete it at `requestedAt` is erased: the configured grace,

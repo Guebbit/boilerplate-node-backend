@@ -22,27 +22,6 @@ x-personal-data:
                 $ref: '#/components/schemas/Example'
 
 paths:
-    # The one PUBLIC route: it sits above the auth gate in `routes.ts`, so `security: []` here
-    # is what keeps the contract and the router telling the same story.
-    /examples/published/{id}:
-        get:
-            tags: [Examples]
-            summary: Read a published example
-            description: Returns one example, to anyone, but only while its status is `published`. A draft or an archived example answers `404`, the same as an id that does not exist.
-            operationId: getPublishedExample
-            security: []
-            parameters:
-                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
-            responses:
-                '200':
-                    description: The published example
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/Example'
-                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
-
     /examples:
         get:
             tags: [Examples]
@@ -147,10 +126,17 @@ paths:
         get:
             tags: [Examples]
             summary: Read an example
-            description: Returns one example the caller may read — their own, or any when they hold `display:Example`. Another person's example answers `404`, never `403`, so an id reveals nothing about who owns it.
+            description: >-
+                Returns one example, scoped by the caller as `GET /products/{id}` is. A `published`
+                example is open to anyone, signed in or not. The owner also reads their own drafts
+                and archived ones, and a caller holding `display:Example` reads any. Everything else
+                answers `404`, never `403`, so an id reveals nothing about who owns it or whether a
+                draft exists. The answer varies by caller and language, so it is never shared-cached.
             operationId: getExampleById
             security:
+                - {}
                 - bearerAuth: []
+                - cookieAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -160,8 +146,6 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Example'
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         put:

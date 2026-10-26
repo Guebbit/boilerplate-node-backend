@@ -162,7 +162,11 @@ plus that many days, or at once when account erasure or inactivity minimisation 
 never-paid order is due at once — amounts, line items and dates survive, only the person is gone. An account inactive past `NODE_INACTIVE_MINIMISE_DAYS` starts the same clock through this
 module's `personalData.minimise` hook, keeping its `userId`; a live, active account's orders keep
 their personal fields, since order history is part of the contract
-([why](../theory/data-retention.md#orders-kept-while-the-account-lives)). An admin can still hard-delete an order, but only one that is `cancelled` and was never paid
+([why](../theory/data-retention.md#orders-kept-while-the-account-lives)). Each scrub is announced:
+the sweep works in batches of 500, and a batch scrubs its orders and writes one `order.redacted`
+outbox row each (`data: { orderId }`) in the same transaction, so the
+[webhook](./webhooks.md) exists exactly when the scrub does (GDPR Art. 19). It fires when the data
+goes, not at the erasure, which only detaches `userId`. An admin can still hard-delete an order, but only one that is `cancelled` and was never paid
 (`services/remove.ts`'s `remove`): the cancel owns every end-of-order effect (stock, payment intent,
 `order.cancelled`), so an open order answers 409 `ORDER_NOT_CANCELLED` until it is cancelled. This
 reap is what protects the far more common case, the order nobody ever deletes. An order that was
@@ -274,7 +278,7 @@ module announcing and a sibling reacting.
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
     P["pending<br/><i>created · units held</i>"] -->|"payments confirms<br/>(system)"| PA["paid<br/><i>units committed</i>"]
-    PA -->|"system, via<br/>delivery's start door"| PR["processing"]
+    PA -->|"system, via<br/>delivery's process door"| PR["processing"]
     PR -->|"system: the shipment that leaves<br/>nothing remaining"| SH["shipped"]
     SH -->|"system: the last shipment arrives"| DE["delivered"]
     PR -->|"system: a digital fulfilment, or a<br/>remainder cancelled after every<br/>shipment arrived — both moves at once"| DE
@@ -302,7 +306,7 @@ override all ASK for a move, never assign the field themselves. See
 | Move                                        | Who asks                                                                         | Through                                                                                                                                                              |
 | ------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pending` → `paid`                          | `system`                                                                         | `payments`' settlement, on confirm                                                                                                                                   |
-| `paid` → `processing`                       | `system`                                                                         | `POST /delivery/orders/{id}/start`, `start:Shipment` — or `POST /orders/{id}/status-override`, `override:Order`                                                      |
+| `paid` → `processing`                       | `system`                                                                         | `POST /orders/{id}/process`, `start:Shipment` — or `POST /orders/{id}/status-override`, `override:Order`                                                             |
 | `processing` → `shipped`                    | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/shipments` — only the shipment that leaves **nothing** remaining                                                             |
 | `shipped` → `delivered`                     | `system`                                                                         | `POST /delivery/shipments/{id}/deliver` — only the last arrival, with nothing left to ship                                                                           |
 | `processing` → `delivered`                  | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/fulfill` (digital), or a remainder cancel after every shipment arrived — `markFulfilmentComplete`, the one named double move |
@@ -339,6 +343,14 @@ summary, the status move and the events commit together or not at all.
 | 4   | otherwise (`paid`, `processing`)                                                | its trait's value                   |
 
 The per-status half (rows 1 and 4) is the `fulfillment` trait in [the status traits](#status-traits).
+
+**Finding an order by the number the customer quotes.** `GET /orders`, `POST /orders/search` and the
+CSV export take an exact, indexed `orderNumber` filter (`orders_orderNumber`, unique: a receipt number
+names one order). The value is read the way customers type it (`parseOrderNumber`): spaces and a leading
+`#` are dropped and the sequence is padded, so `#2026-41` finds `2026-000041`. Anything that is not
+`{year}-{digits}` finds nothing, an empty page rather than an error, the same choice as payments'
+`transferReference`. It narrows the caller's own scope like any other filter, so a buyer holding only
+`read:Order` cannot reach another buyer's order by its number.
 
 `GET /orders?fulfillmentStatus=` lists by that value. The filter is built from the same table
 (`fulfillmentStatusFilter`) and ANDed into the caller's own scope, rather than storing a copy of the
@@ -378,7 +390,7 @@ name. Two modes, both requiring a `reason`, both writing a `status_overridden` r
 [timeline](#the-timeline) (who, when, from → to, mode, reason):
 
 - **Forced** — `delivery`'s ship and deliver doors accept `forced: true`. The regular operation still
-  runs; the order skips a step (ship from `paid` without `start`, deliver without a carrier
+  runs; the order skips a step (ship from `paid` without `process`, deliver without a carrier
   confirmation) and leaves a history row through `recordForcedFulfilment` — a row **without** a move of
   its own. It never lands on `paid` (that stays `system`-only, absolute), and never ships from `on_hold`.
 - **Status-only** — `POST /orders/{id}/status-override` with `{ to, reason }` moves the status

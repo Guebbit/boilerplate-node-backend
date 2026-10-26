@@ -128,7 +128,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
     'api-keys.minted': apiKeyMintedEmail(locale, 'ci', 'sk_abcd1234', 'October 13, 2026'),
     'api-keys.revoked': apiKeysRevokedEmail(locale, 'logout-all', ['ci (sk_abcd1234)']),
     'account.export-failed': exportFailedEmail(locale, 'Ada'),
-    'account.export-ready': exportReadyEmail(locale, 'Ada', '64b0c0ffee64b0c0ffee64b0', 7),
+    'account.export-ready': exportReadyEmail(locale, 'Ada', 7),
     'orders.order-confirm': orderConfirmEmail(
         locale,
         'Ada',

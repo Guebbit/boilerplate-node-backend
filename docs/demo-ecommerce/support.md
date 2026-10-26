@@ -84,6 +84,9 @@ says "I never got the email and I cannot order" — that is correct, not a bug: 
 Everything a customer might ask has an answer they can already see themselves: their order list, its
 current step, the tracking code once it ships, and a PDF invoice to download.
 
+A customer who writes in quotes the order number from their mail (`2026-000041`, often typed `#2026-41`).
+Paste it into the Orders list's order number box: the list finds that one order.
+
 If they want to cancel, they can — and a paid order refunds itself when they do. Nobody has to
 process it.
 → [The customer](./shopper.md) · [`orders`](../modules/orders.md)

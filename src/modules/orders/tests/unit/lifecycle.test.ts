@@ -13,7 +13,7 @@ import {
     canTransition,
     canOverrideTo,
     isPayable,
-    canStartFulfilment,
+    canProcessOrder,
     isAwaitingGoods,
     canShip,
     canRecordArrival,
@@ -279,17 +279,17 @@ describe('isPayable', () => {
     });
 });
 
-describe('canStartFulfilment', () => {
+describe('canProcessOrder', () => {
     it('is true for paid alone, over every status', () => {
         for (const status of EVERY_STATUS)
-            expect(canStartFulfilment(status)).toBe(status === OrderStatus.paid);
+            expect(canProcessOrder(status)).toBe(status === OrderStatus.paid);
     });
 
     it('agrees with the statuses that lead to processing as the system', () => {
         const leadingTo = statusesLeadingTo(OrderStatus.processing, 'system');
 
         for (const status of EVERY_STATUS)
-            expect(canStartFulfilment(status)).toBe(leadingTo.includes(status));
+            expect(canProcessOrder(status)).toBe(leadingTo.includes(status));
     });
 });
 

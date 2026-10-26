@@ -266,7 +266,10 @@ describe('every write route is guarded by default', () => {
             existsSync(path.join(MODULES_ROOT, name, 'routes.ts'))
         );
 
-        expect(Object.keys(ROUTED_MODULES).toSorted()).toEqual(withRouter.toSorted());
+        // `name@/basePath` keys are a module's extra mounts, not extra modules.
+        const modules = Object.keys(ROUTED_MODULES).filter((key) => !key.includes('@'));
+
+        expect(modules.toSorted()).toEqual(withRouter.toSorted());
     });
 
     it('has no stale exception — every listed route is still mounted and still a write', () => {

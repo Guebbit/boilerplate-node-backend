@@ -163,7 +163,7 @@ recording the handover all happen on their own: you do not separately create the
 the status field, or send the email.
 
 ::: tip Starting work on a paid order
-Packing starts with its own action — `POST /delivery/orders/{orderId}/start` — which moves the order
+Packing starts with its own action — `POST /orders/{id}/process` — which moves the order
 from paid to `processing`. Nobody sets `processing` directly: the same rule, one step earlier.
 :::
 

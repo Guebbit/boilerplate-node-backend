@@ -163,11 +163,23 @@ export interface PaymentProvider {
      *
      * An adapter must time its request out well inside the refund sweep's lease (10 minutes for
      * up to 200 payments): a call that hangs holds the whole sweep.
+     *
+     * Beyond the provider's key window the key no longer protects anything (Stripe forgets a key
+     * after 24 hours, and a reused key then makes a NEW refund). So the adapter must stay
+     * idempotent on its own: stamp `refundId` on the provider's refund (Stripe:
+     * `metadata.refund_record`) and, when `createdAt` is more than a day old, list the payment's
+     * refunds and adopt the one carrying `refundId` instead of creating another.
+     *
+     * Error classes: throw a {@link PaymentProviderError} with a definite code only when the
+     * provider answered about THIS refund (a 4xx on the create, or a refund object that is
+     * `failed`/`canceled`). A network error, a timeout, a 5xx or a 429 is `provider_unavailable`;
+     * anything unclassified is `unknown`. The two unclear classes are never offered for hand
+     * settlement, because the refund may have gone through.
      */
     refund(
         providerRef: string,
         charge: { amount: number; currency: string },
-        idempotency: { idempotencyKey: string }
+        idempotency: { idempotencyKey: string; refundId: string; createdAt: Date }
     ): Promise<RefundedByProvider>;
 
     /**

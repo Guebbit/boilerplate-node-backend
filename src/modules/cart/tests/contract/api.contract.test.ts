@@ -1020,10 +1020,10 @@ describe('POST /cart/checkout', () => {
                     expect(response.body.payBy).toEqual(expect.any(String));
                     expect(response.body).not.toHaveProperty('transferInstructions');
                     const payment = await api()
-                        .get(`/payments/orders/${String(response.body.id)}`)
+                        .get(`/orders/${String(response.body.id)}/payments`)
                         .set('Authorization', bearer);
                     expect(payment.status).toBe(200);
-                    expect(payment.body.nextAction).toEqual({
+                    expect(payment.body.items[0].nextAction).toEqual({
                         type: 'bank_transfer',
                         beneficiary: 'Guebbit Shop',
                         // Grouped into 4s for display — see `bankTransferIbanFriendly`.
@@ -1038,7 +1038,7 @@ describe('POST /cart/checkout', () => {
         ));
 });
 
-describe('POST /cart/reorder/{orderId}', () => {
+describe('POST /cart/reorder', () => {
     it("refills the cart from the caller's own order, quantities included", async () => {
         const { bearer, user } = await authenticateAs('user');
         const keyboard = await createProduct({ title: 'Keyboard' });
@@ -1046,8 +1046,9 @@ describe('POST /cart/reorder/{orderId}', () => {
         const order = await createOrder(user, [toOrderItem(keyboard, 2), toOrderItem(mouse, 1)]);
 
         const response = await api()
-            .post(`/cart/reorder/${String(order._id)}`)
-            .set('Authorization', bearer);
+            .post('/cart/reorder')
+            .set('Authorization', bearer)
+            .send({ orderId: String(order._id) });
 
         expect(response.status).toBe(200);
         // Ids, not counts: the cart must hold exactly the order's products.
@@ -1080,8 +1081,9 @@ describe('POST /cart/reorder/{orderId}', () => {
         const order = await createOrder(user, [toOrderItem(product, 3)]);
 
         const response = await api()
-            .post(`/cart/reorder/${String(order._id)}`)
-            .set('Authorization', bearer);
+            .post('/cart/reorder')
+            .set('Authorization', bearer)
+            .send({ orderId: String(order._id) });
 
         expect(response.status).toBe(200);
         expect(response.body.cart.summary.totalQuantity).toBe(5);
@@ -1102,8 +1104,9 @@ describe('POST /cart/reorder/{orderId}', () => {
         const order = await createOrder(user, [toOrderItem(product, 5)]);
 
         const response = await api()
-            .post(`/cart/reorder/${String(order._id)}`)
-            .set('Authorization', bearer);
+            .post('/cart/reorder')
+            .set('Authorization', bearer)
+            .send({ orderId: String(order._id) });
 
         expect(response.status).toBe(200);
         expect(response.body.lines).toMatchObject([
@@ -1123,8 +1126,9 @@ describe('POST /cart/reorder/{orderId}', () => {
         const order = await createOrder(user, [toOrderItem(product, 1), toOrderItem(kept, 1)]);
 
         const response = await api()
-            .post(`/cart/reorder/${String(order._id)}`)
-            .set('Authorization', bearer);
+            .post('/cart/reorder')
+            .set('Authorization', bearer)
+            .send({ orderId: String(order._id) });
 
         expect(response.status).toBe(200);
         expect(response.body.lines).toMatchObject([
@@ -1140,8 +1144,9 @@ describe('POST /cart/reorder/{orderId}', () => {
         const order = await createOrder(user, [toOrderItem(alive, 1), toOrderItem(retired, 4)]);
 
         const response = await api()
-            .post(`/cart/reorder/${String(order._id)}`)
-            .set('Authorization', bearer);
+            .post('/cart/reorder')
+            .set('Authorization', bearer)
+            .send({ orderId: String(order._id) });
 
         expect(response.status).toBe(200);
         const items: { productId: string }[] = response.body.cart.items;
@@ -1158,8 +1163,9 @@ describe('POST /cart/reorder/{orderId}', () => {
         const order = await createOrder(user, [toOrderItem(retired, 1)]);
 
         const response = await api()
-            .post(`/cart/reorder/${String(order._id)}`)
-            .set('Authorization', bearer);
+            .post('/cart/reorder')
+            .set('Authorization', bearer)
+            .send({ orderId: String(order._id) });
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('REORDER_UNAVAILABLE');
@@ -1172,18 +1178,31 @@ describe('POST /cart/reorder/{orderId}', () => {
         const { bearer } = await authenticateAs('user');
 
         const response = await api()
-            .post(`/cart/reorder/${String(order._id)}`)
-            .set('Authorization', bearer);
+            .post('/cart/reorder')
+            .set('Authorization', bearer)
+            .send({ orderId: String(order._id) });
 
         expect(response.status).toBe(404);
     });
 
-    it('matches the error contract for a malformed order id', async () => {
+    it('answers 422 naming orderId for a malformed order id: it is a body field, not a URL', async () => {
         const { bearer } = await authenticateAs('user');
 
-        const response = await api().post('/cart/reorder/not-an-id').set('Authorization', bearer);
+        const response = await api()
+            .post('/cart/reorder')
+            .set('Authorization', bearer)
+            .send({ orderId: 'not-an-id' });
 
-        expect(response.status).toBe(404);
+        expect(response.status).toBe(422);
+        expect(response.body.errors[0].details.field).toBe('orderId');
+    });
+
+    it('answers 422 for a request with no orderId', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api().post('/cart/reorder').set('Authorization', bearer).send({});
+
+        expect(response.status).toBe(422);
     });
 });
 

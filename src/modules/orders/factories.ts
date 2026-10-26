@@ -100,11 +100,12 @@ let orderNumberSequence = 0;
 
 /**
  * A distinct `{year}-{sequence}` number in the shape `allocateOrderNumber` mints, for a fixture
- * that does not care which number it carries.
+ * that does not care which number it carries. In 1999, a year no real order can carry, so a test
+ * that makes fixtures and then checks out cannot collide on the unique `orderNumber` index.
  */
 const nextOrderNumber = (): string => {
     orderNumberSequence += 1;
-    return `2026-${String(orderNumberSequence).padStart(6, '0')}`;
+    return `1999-${String(orderNumberSequence).padStart(6, '0')}`;
 };
 
 /**

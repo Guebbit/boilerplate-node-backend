@@ -7,6 +7,7 @@
  */
 
 import { Types } from 'mongoose';
+import { withTransaction } from '@infrastructure/runtime/database';
 import { asCustomer, testCallerContext } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
 import type { UserDocument } from '@modules/users';
@@ -24,6 +25,29 @@ import type { PaymentDocument } from '../model';
  * `paymentService`: only this module's own `order.cancelled` listener runs it in production.
  */
 export { refundForOrder } from '../services/refunds';
+
+/** What a return hands to {@link refundForReturn}. */
+type ReturnRefundInput = Parameters<typeof paymentService.openReturnRefund>[1];
+
+/**
+ * What `returns` does for a return's money, in two steps: open the record in a transaction, then
+ * send it after the commit. A test that needs "a return's refund" without a whole return.
+ *
+ * @param orderId - the returned order
+ * @param input - the return and the amount
+ * @param context - the caller
+ * @returns `null` when nothing was owed, else whether the money went back (`settled`) or not (`open`)
+ */
+export const refundForReturn = (
+    orderId: string,
+    input: ReturnRefundInput,
+    context: CallerContext
+): Promise<'settled' | 'open' | null> =>
+    withTransaction((session) =>
+        paymentService.openReturnRefund(orderId, input, context, session)
+    ).then((opened) =>
+        opened ? paymentService.sendOpenedRefund(orderId, opened.refundId, context) : null
+    );
 
 /** What a test may pin on {@link transferOrder}. */
 export interface TransferOrderOptions {

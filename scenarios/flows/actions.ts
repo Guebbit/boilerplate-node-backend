@@ -191,17 +191,17 @@ export const recordOfflinePayment = (
     orderId: string,
     method: string
 ): Promise<void> =>
-    owner.call('POST', `/payments/orders/${orderId}/offline`, { method }).then(() => undefined);
+    owner.call('POST', `/orders/${orderId}/payments`, { method }).then(() => undefined);
 
 /**
  * Move a paid order into `processing`, as an operator would: the warehouse's own door,
- * `POST /delivery/orders/{id}/start`. Going through it means a seeded order carries the ordinary
+ * `POST /orders/{id}/process`. Going through it means a seeded order carries the ordinary
  * history, not an override's status-correction audit rows.
  *
  * @param owner - a caller holding `delivery.any.start`
  */
 export const startProcessing = (owner: Caller, orderId: string): Promise<void> =>
-    owner.call('POST', `/delivery/orders/${orderId}/start`).then(() => undefined);
+    owner.call('POST', `/orders/${orderId}/process`).then(() => undefined);
 
 /** The part of `GET /delivery/orders/{id}` the flows read: what can ship and what is out. */
 interface FulfillmentData {

@@ -68,6 +68,7 @@ paths:
                   in: query
                   schema:
                       $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                - $ref: '#/components/parameters/OrderNumberParam'
                 - name: status
                   in: query
                   schema:
@@ -252,6 +253,7 @@ paths:
                   in: query
                   schema:
                       $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                - $ref: '#/components/parameters/OrderNumberParam'
                 - name: status
                   in: query
                   schema:
@@ -521,6 +523,11 @@ paths:
                 themselves recently: a stale session answers `401 REAUTH_REQUIRED`, while the buyer's own
                 cancel is never prompted. The check and the write are one atomic statement, so a cancel racing a status change resolves
                 to exactly one winner.
+
+                The refund of a paid order runs AFTER this answer, so a 200 does not say the money
+                is back: follow it on the payment (`displayStatus` `refund_pending`, then
+                `refunded`) and on `GET /payments/attention`. A provider that refuses it leaves the
+                refund open and retried; the cancel stays done.
             operationId: cancelOrderById
             security:
                 - bearerAuth: []
@@ -871,6 +878,12 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 email:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                orderNumber:
+                    type: string
+                    maxLength: 32
+                    description: >-
+                        The order's number as the customer quotes it; a leading `#`, spaces and an
+                        unpadded sequence are tolerated; anything else finds nothing.
                 # Narrows a listing already scoped to the caller: a customer filtering by
                 # status is filtering their own orders, and staff see the same shape.
                 status:
@@ -1223,7 +1236,7 @@ components:
                     cancel,
                     pay,
                     recordPayment,
-                    start,
+                    process,
                     override,
                     correctAddress,
                     invoice,
@@ -1257,14 +1270,14 @@ components:
                 recordPayment:
                     type: boolean
                     description: >-
-                        Whether `POST /payments/orders/{orderId}/offline` would be accepted for this
+                        Whether `POST /orders/{id}/payments` would be accepted for this
                         caller: an operator recording money that arrived another way. True while
                         the order is still awaiting payment and the caller holds the key that records
                         one. A buyer's own step is `pay`; a buyer who is staff may also record.
-                start:
+                process:
                     type: boolean
                     description: >-
-                        Whether `POST /delivery/orders/{id}/start` would be accepted for this
+                        Whether `POST /orders/{id}/process` would be accepted for this
                         caller. `paid → processing` is `system`-only in the lifecycle, reached
                         only by reporting the fact through `delivery`'s own door.
                 override:
@@ -1780,6 +1793,19 @@ components:
             schema:
                 $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
             description: Order identifier
+
+        OrderNumberParam:
+            name: orderNumber
+            in: query
+            required: false
+            description: >-
+                The order's number as the customer quotes it (`2026-000041`); a leading `#`, spaces and
+                an unpadded sequence (`#2026-41`) are tolerated. Exact and indexed. Anything that is
+                not an order number finds nothing: an empty page, not an error. A caller holding
+                `read:Order` alone still sees only their own orders.
+            schema:
+                type: string
+                maxLength: 32
 
         UserIdParam:
             name: userId

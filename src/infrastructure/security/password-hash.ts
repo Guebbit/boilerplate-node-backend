@@ -5,7 +5,7 @@
  * file is the small part that is still ours: a salt, the PHC string a hash is stored as, and a
  * constant-time comparison.
  *
- * Cost: m = 19 MiB, t = 2, p = 1 — OWASP Password Storage Cheat Sheet's second argon2id profile,
+ * Cost: `shared/rules/password-hash.yaml` (m = 19 MiB, t = 2, p = 1) — OWASP Password Storage Cheat Sheet's second argon2id profile,
  * the one that keeps a login under ~50 ms on ordinary hardware. A stored hash carries its own
  * parameters, so verifying never depends on what these constants are now.
  * https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#argon2id
@@ -13,15 +13,18 @@
 
 import { argon2, argon2Sync, randomBytes, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
+import { loadSharedRules } from '../config/shared-rules/load';
+import { passwordHashSchema } from '../config/shared-rules/password-hash';
 
-/** Memory cost in KiB: 19 MiB. */
-const MEMORY_KIB = 19_456;
-
-/** Passes over that memory. */
-const PASSES = 2;
-
-/** Lanes. Parallelism buys a defender nothing on a busy server, so one. */
-const PARALLELISM = 1;
+/**
+ * The argon2id cost (m, t, p) from `shared/rules/password-hash.yaml`, which the PHP twin reads
+ * too. Parallelism stays at one lane: it buys a defender nothing on a busy server.
+ */
+const {
+    memoryKib: MEMORY_KIB,
+    passes: PASSES,
+    parallelism: PARALLELISM
+} = loadSharedRules('password-hash', passwordHashSchema);
 
 /** Bytes of salt: 128 bits, per RFC 9106 §3.1's recommendation. */
 const SALT_BYTES = 16;

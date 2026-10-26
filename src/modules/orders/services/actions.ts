@@ -15,7 +15,7 @@ import { orderRepository } from '../repository';
 import { OrderStatus } from '@types';
 import {
     orderActionsFor,
-    canStartFulfilment,
+    canProcessOrder,
     overridableTargetsFrom,
     isDigitalOnlyOrder,
     isPayable,
@@ -53,15 +53,15 @@ type OrderForActions = Lean<OrderDocument>;
 const startAndOverrideActions = (
     order: OrderForActions,
     authContext: AuthContext | undefined
-): Pick<OrderActions, 'start' | 'override' | 'correctAddress'> => {
-    if (!authContext) return { start: false, override: [], correctAddress: false };
+): Pick<OrderActions, 'process' | 'override' | 'correctAddress'> => {
+    if (!authContext) return { process: false, override: [], correctAddress: false };
 
     const { status } = order;
     const caller = callerForSubject(authContext, 'Order');
-    // The start event's own question, the same one `markProcessing`'s conditional write asks.
-    const reachesProcessing = canStartFulfilment(status);
+    // The process event's own question, the same one `markProcessing`'s conditional write asks.
+    const reachesProcessing = canProcessOrder(status);
     return {
-        start: holds(caller, 'start', 'Shipment') && reachesProcessing,
+        process: holds(caller, 'start', 'Shipment') && reachesProcessing,
         correctAddress: holds(caller, 'update', 'Order') && canCorrectAddress(order),
         // The door's own stock guard, so no target is offered that answers 409.
         override: holds(caller, 'override', 'Order')

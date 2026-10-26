@@ -50,9 +50,9 @@ const operationsOf = (prefix: string, router: Parameters<typeof routeTable>[0]):
 
 /** Every operation the app mounts: each enabled module's router, then the system router. */
 const mountedOperations = (): OperationKey[] => [
-    ...enabledModules.flatMap(({ basePath, routes }) =>
-        basePath && routes ? operationsOf(basePath, routes) : []
-    ),
+    ...enabledModules
+        .flatMap(({ mounts = [] }) => mounts)
+        .flatMap(({ basePath, routes }) => operationsOf(basePath, routes)),
     ...operationsOf('', systemRouter)
 ];
 

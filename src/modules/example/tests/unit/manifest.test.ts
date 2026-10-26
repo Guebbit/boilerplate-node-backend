@@ -11,7 +11,7 @@ import { exampleRateLimits } from '../../rate-limits';
 describe('the example manifest', () => {
     it('is named for its folder and mounted at the plural collection path', () => {
         expect(module.name).toBe('example');
-        expect(module.basePath).toBe('/examples');
+        expect(module.mounts?.map(({ basePath }) => basePath)).toEqual(['/examples']);
     });
 
     it('projects example.published into the public event, carrying the id and title only', () => {

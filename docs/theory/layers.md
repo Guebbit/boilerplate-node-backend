@@ -232,8 +232,8 @@ A module carries one of these only when it has something to declare, so they are
 tax: most modules carry some subset of them, and some carry only one or two (`observability` has just `audit.ts` and `metrics.ts`). Collapsing them
 into central registries would trade that for a file every domain must edit.
 
-A module does not have to serve HTTP. `basePath` and `routes` are both optional on the manifest and
-mounted only as a pair, so a domain that owns a collection and no URL is
+A module does not have to serve HTTP. `mounts` is optional on the manifest and each entry
+carries its `basePath` and router as a pair, so a domain that owns a collection and no URL is
 a first-class entry rather than a special case. `access` is the example: it owns the tenant and
 membership collections, but nothing in the boilerplate creates a shop or grants a role over the
 wire, so there is no URL of its own to mount — `account`, `api-keys` and `users` reach it only

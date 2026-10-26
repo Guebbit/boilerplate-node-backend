@@ -127,7 +127,7 @@ describe('orderSchema — the embedded snapshots', () => {
 });
 
 describe('orderSchema — indexes', () => {
-    it('declares exactly the eight documented indexes, named and directed', () => {
+    it('declares exactly the nine documented indexes, named and directed', () => {
         // Names are given rather than derived, since Mongo identifies an index by name — a rename
         // leaves the old index in production. The `createdAt` DIRECTION serves "newest first"
         // from the index rather than an in-memory sort; getting it wrong is a latency incident.
@@ -135,6 +135,7 @@ describe('orderSchema — indexes', () => {
             'orders_anonymizeAfter: anonymizeAfter+1',
             'orders_createdAt: createdAt+1',
             'orders_email: email+1',
+            'orders_orderNumber: orderNumber+1',
             'orders_paidAt: paidAt+1',
             'orders_status_createdAt: status+1, createdAt-1',
             'orders_status_payBy: status+1, payBy+1',
@@ -143,15 +144,16 @@ describe('orderSchema — indexes', () => {
         ]);
     });
 
-    it('declares no unique index, and the two sparse ones sparse', () => {
-        // A unique index here would reject a customer's second order. Stated explicitly because
-        // "no options" is the kind of fact that is never written down and quietly acquires one.
+    it('declares one unique index, the receipt number, and the two sparse ones sparse', () => {
+        // Unique on `orderNumber` only: a receipt number names one order. A unique index on any
+        // other key would reject a customer's second order, so every other one stays plain.
         // Both sparse indexes are sparse on purpose: most orders never carry either field, and a
         // dense index would hold every row's absence forever.
         expect(indexOptionSpecs(orderSchema)).toEqual([
             'orders_anonymizeAfter: sparse=true',
             'orders_createdAt: (none)',
             'orders_email: (none)',
+            'orders_orderNumber: unique=true',
             'orders_paidAt: sparse=true',
             'orders_status_createdAt: (none)',
             'orders_status_payBy: (none)',

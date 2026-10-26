@@ -5,7 +5,7 @@
  * so neither imports the other.
  */
 
-import { canShip, canStartFulfilment } from '@modules/orders';
+import { canShip, canProcessOrder } from '@modules/orders';
 import type { OrderStatus } from '@types';
 
 /**
@@ -15,4 +15,4 @@ import type { OrderStatus } from '@types';
  * @param forced - whether the caller forces the first shipment
  */
 export const isOpenForShipment = (status: OrderStatus, forced: boolean): boolean =>
-    canShip(status) || (forced && canStartFulfilment(status));
+    canShip(status) || (forced && canProcessOrder(status));

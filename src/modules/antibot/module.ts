@@ -17,8 +17,7 @@ import { router } from './routes';
 /** This module's manifest entry: two public routes, no persistence, no locales. */
 export default {
     name: 'antibot',
-    basePath: '/antibot',
-    routes: router,
+    mounts: [{ basePath: '/antibot', routes: router }],
     // No persistence, no collection — a stateless challenge issued to a caller who, by
     // construction, has no account yet.
     personalData: 'none'

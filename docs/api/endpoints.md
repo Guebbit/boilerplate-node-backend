@@ -151,7 +151,7 @@ A customer asks to send goods back (`POST /returns`, idempotent by key); staff h
 
 > The domain behind these routes: [`notifications`](../modules/notifications.md) · routes and middleware: `src/modules/notifications/routes.ts`
 
-The caller's inbox: list, `read-all`, `dismiss-all`, delete one, and a per-user SSE stream at `GET /notifications/stream`. A frame reaches only the connections of the user it is about.
+The caller's inbox: list, `read-all`, `DELETE /notifications` (empty it), delete one, and a per-user SSE stream at `GET /notifications/stream`. A frame reaches only the connections of the user it is about.
 
 ## Webhooks
 

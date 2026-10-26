@@ -47,7 +47,7 @@ export const ORDER_EVENTS = {
      * Fulfilment started, recorded through `delivery`'s own door (`start:Shipment`). `admin`
      * reaches `processing` only through the override door (`canOverrideTo`).
      */
-    start: { from: [OrderStatus.paid], to: OrderStatus.processing, actors: ['system'] },
+    process: { from: [OrderStatus.paid], to: OrderStatus.processing, actors: ['system'] },
     /** The last unit left, as `delivery` records it. */
     ship: { from: [OrderStatus.processing], to: OrderStatus.shipped, actors: ['system'] },
     /** The last shipment arrived, as `delivery` records it. */
@@ -110,17 +110,17 @@ export const canTransition = (from: OrderStatus, to: OrderStatus, actor: OrderAc
 export const isPayable = (status: OrderStatus): boolean =>
     canTransition(status, OrderStatus.paid, 'system');
 
-/** The `start` event's `from` set, widened once so `includes` accepts any status. */
-const STARTABLE_FROM: readonly OrderStatus[] = ORDER_EVENTS.start.from;
+/** The `process` event's `from` set, widened once so `includes` accepts any status. */
+const PROCESSABLE_FROM: readonly OrderStatus[] = ORDER_EVENTS.process.from;
 
 /**
- * Whether fulfilment may start on an order in `status` — `paid` only. Keyed on the `start` event's
+ * Whether fulfilment may start on an order in `status` — `paid` only. Keyed on the `process` event's
  * own `from`, not on `canTransition`: that is exactly the set `markProcessing`'s conditional write
  * uses, so a pre-check and the write can never disagree.
  * @param status - current status
  * @returns whether `delivery`'s start door (or a forced first shipment) may move the order on
  */
-export const canStartFulfilment = (status: OrderStatus): boolean => STARTABLE_FROM.includes(status);
+export const canProcessOrder = (status: OrderStatus): boolean => PROCESSABLE_FROM.includes(status);
 
 /**
  * Whether the order's goods are still to be handed over — `paid` or `processing`: money in, nothing
@@ -161,7 +161,7 @@ export const canRecordArrival = (status: OrderStatus): boolean =>
  * @returns whether the order is past the point where nothing had been done to it
  */
 export const hasShopStarted = (status: OrderStatus): boolean =>
-    !isPayable(status) && !canStartFulfilment(status);
+    !isPayable(status) && !canProcessOrder(status);
 
 /**
  * Whether an order in `status` has already been paid — `paid`, or further along. `pending` has
@@ -245,7 +245,7 @@ export const statusesLeadingTo = (to: OrderStatus, actor: OrderActor): readonly 
     Object.values(OrderStatus).filter((from) => from !== to && canTransition(from, to, actor));
 
 /**
- * The part of `OrderActions` this status/actor pairing alone can answer — `start`/`ship`/
+ * The part of `OrderActions` this status/actor pairing alone can answer — `process`/`ship`/
  * `deliver`/`override` need the caller's actual permission keys (a warehouse operator holds
  * `start:Shipment` without `update:Order`, and `actor` alone cannot tell them apart from
  * a customer), so `services/scope.ts`'s `withActions` computes those and merges them in.

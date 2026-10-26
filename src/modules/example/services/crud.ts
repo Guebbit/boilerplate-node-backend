@@ -103,28 +103,30 @@ export const create = (
 };
 
 /**
- * One example the caller may read: their own, or any when they hold `display:Example`.
- *
- * @param id - the example's id
- * @param context - the caller
- * @returns the example, or `null` when there is none the caller may see
- */
-export const getById = (id: string, context: CallerContext): Promise<Example | null> =>
-    exampleRepository
-        .findScoped(id, scopeOf(context, 'read'))
-        .then((example) => (example ? presentForCaller(example, context) : null));
-
-/**
  * One PUBLISHED example, for anyone. The status is part of the query, so a draft and a missing
  * id are the same answer.
  *
  * @param id - the example's id
  * @returns the example, or `null` when it does not exist or is not published
  */
-export const getPublishedById = (id: string): Promise<Example | null> =>
+const publishedById = (id: string): Promise<Example | null> =>
     exampleRepository
         .findScoped(id, { status: ExampleStatus.published })
         .then((example) => (example ? presentPublic(example) : null));
+
+/**
+ * One example, scoped by the caller: their own (any status), or any when they hold
+ * `display:Example`; failing that, a published one, which is open to anyone, a stranger included.
+ * A draft that is not the caller's is the same answer as a missing id.
+ *
+ * @param id - the example's id
+ * @param context - the caller, possibly anonymous
+ * @returns the example, or `null` when there is none the caller may see
+ */
+export const getById = (id: string, context: CallerContext): Promise<Example | null> =>
+    exampleRepository
+        .findScoped(id, scopeOf(context, 'read'))
+        .then((example) => (example ? presentForCaller(example, context) : publishedById(id)));
 
 /**
  * Search the examples the caller may read, paginated.

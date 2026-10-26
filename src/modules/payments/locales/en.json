@@ -9,7 +9,7 @@
         "declined": "The payment was declined by the card issuer.",
         "not-refundable": "This payment cannot be refunded — no money arrived, or it has already been returned.",
         "refund-not-open": "This refund has already been settled.",
-        "refund-not-by-hand": "This refund goes back through the card provider; it cannot be marked returned by hand.",
+        "refund-in-flight": "The card provider has not given a final answer on this refund, so it cannot be marked returned by hand yet. It is retried automatically.",
         "in-flight": "A card payment is already in progress for this order — wait for it to resolve before recording money by hand.",
         "received-at-future": "The date the money arrived cannot be in the future.",
         "webhook-not-configured": "This shop takes no card payments.",
@@ -22,6 +22,7 @@
             "insufficient_funds": "Insufficient funds.",
             "expired_or_canceled_card": "The card is expired or cancelled.",
             "lost_or_stolen_card": "The card was reported lost or stolen.",
+            "provider_removed": "The payment provider is no longer installed.",
             "provider_unavailable": "The provider could not be reached.",
             "unknown": "The provider gave no usable reason."
         },

@@ -333,7 +333,7 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /cart/reorder/{orderId}:
+    /cart/reorder:
         post:
             tags: [Cart]
             summary: Reorder (refill cart from a past order)
@@ -341,9 +341,12 @@ paths:
             operationId: reorder
             security:
                 - bearerAuth: []
-            parameters:
-                - $ref: '../orders/openapi.yaml#/components/parameters/OrderIdPathParam'
-                  description: One of the caller's own orders
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReorderRequest'
             responses:
                 '200':
                     description: The updated cart, and what happened to each order line
@@ -353,11 +356,13 @@ paths:
                                 $ref: '#/components/schemas/ReorderResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                # Well-formed order id that matches none of the caller's own orders.
+                # Well-formed order id that matches none of the caller's own orders. A malformed one is
+                # a 422 on `orderId`: the id is a body field, so it is an argument, not a URL.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # Every product on the order has left the public catalogue — nothing to add.
                 # `errors[].code` is `REORDER_UNAVAILABLE`.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
 components:
@@ -387,6 +392,16 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 quantity:
                     $ref: '#/components/schemas/CartQuantity'
+
+        # An action on the cart with its input in the body, like `POST /cart/merge {lines}` (AIP-136).
+        ReorderRequest:
+            type: object
+            additionalProperties: false
+            required: [orderId]
+            properties:
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                    description: One of the caller's own orders
 
         MergeCartRequest:
             type: object

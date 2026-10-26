@@ -169,6 +169,9 @@ const KEPT_BY_LAW = {
     auditlogs: 'audit window',
     // Published rows are kept seven days; the events carry ids only.
     outboxevents: 'outbox retention',
+    // The `user.erased` delivery is the notice Art. 19 owes recipients. It carries the id only, no
+    // email, and the delivery log expires on its own clock (30 days).
+    webhookdeliveries: 'delivery log retention',
     // Art. 17(3)(b): the paid order is the sale; it is anonymised after NODE_ORDER_PII_RETENTION_DAYS.
     orders: 'paid order, tax law',
     // The invoice freezes the billing address (name and address) for the tax duty.

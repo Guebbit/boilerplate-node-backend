@@ -12,6 +12,25 @@ import { orderRepository } from '../repository';
 import { shopTimezone } from '@modules/shop';
 
 /**
+ * `{4-digit year}-{1 to 9 digits}`: the shape a quoted number must have once trimmed. Nine digits
+ * is far past what the six-wide sequence reaches and well inside what `Number` holds exactly.
+ */
+const QUOTED_ORDER_NUMBER = /^(\d{4})-(\d{1,9})$/;
+
+/**
+ * The stored form of an order number as a customer typed it: surrounding spaces, a leading `#`
+ * (the receipt prints one) and an unpadded sequence are tolerated. The tolerant inverse of
+ * {@link allocateOrderNumber}'s format.
+ *
+ * @param raw - what a filter carried, e.g. `#2026-41` or ` 2026-000041 `
+ * @returns the canonical number (`2026-000041`), or `undefined` when it is not a number at all
+ */
+export const parseOrderNumber = (raw: string): string | undefined => {
+    const match = QUOTED_ORDER_NUMBER.exec(raw.trim().replace(/^#\s*/, ''));
+    return match ? formatYearlySequence(Number(match[1]), Number(match[2])) : undefined;
+};
+
+/**
  * Allocates and formats the next order number for the current year of the shop's calendar (`NODE_SHOP_TIMEZONE`) —
  * `{year}-{sequence}`, zero-padded (e.g. `2026-000041`).
  *

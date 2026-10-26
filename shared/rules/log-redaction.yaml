@@ -1,0 +1,72 @@
+# What a log line or a trace span may never carry in clear.
+# Keys are compared after normalisation (lowercase, `_` and `-` dropped), so one entry catches
+# every spelling: `new_password` / `newPassword` / `new-password`.
+
+# Credentials. Replaced with a marker, never hashed-and-kept.
+sensitiveFields:
+    - password
+    - passwordhash
+    - confirm_password
+    - password_confirm
+    - new_password
+    - old_password
+    - current_password
+    - token
+    - access_token
+    - refresh_token
+    - authorization
+    - cookie
+    - set-cookie
+    - x-api-key
+    - antibot-challenge-token
+    - otp
+    - jwt
+    - __Host-session
+    - __Host-device
+    - __Host-oauth_state
+    - __Host-oauth_verifier
+    - __Host-oauth_link
+    - __Host-oauth_mfa_challenge
+    - secret
+    - new_secret
+    - api_key
+    - apikey
+    - private_key
+    - client_secret
+    - credit_card
+    - card_number
+    - cvv
+    - ssn
+    # Exact names only. As substrings they would eat `idempotencyKey`, `statusCode`, `linkCount`.
+    - key
+    - linkurl
+    - challenge
+    - verifier
+    - iban
+
+# Substrings: secrets are named by what they ARE and the spellings multiply (`resetToken`,
+# `webhookSecret`, `x-hub-signature`, `otpauthUrl`, `backupCodes`). Deliberately not here: `code`
+# (the first thing a debugger reads) and any broad `code|key|link` pattern.
+sensitiveKeyFragments:
+    - password
+    - secret
+    - token
+    - signature
+    - otpauth
+    - backupcode
+
+# Personal data: not credentials, so the log mode (`NODE_LOG_PERSONAL_FIELDS`) decides hash,
+# redact or plain. Kept apart from the credentials on purpose.
+personalFields:
+    - email
+    - to
+    - ip
+    - phone
+    - street
+    - zip
+    - fullname
+
+# Query parameters no trace span may carry: the OAuth callback's one-time `code` and CSRF `state`.
+traceUrlSecrets:
+    - code
+    - state

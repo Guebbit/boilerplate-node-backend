@@ -511,15 +511,9 @@ export const exportFailedEmail = (locale: string, name: string): EmailContent =>
  *
  * @param locale - the recipient's language
  * @param name - the display name, or `''` (see {@link greetableName})
- * @param exportId - the export the link downloads
  * @param days - how long the file is kept, for the "works until" sentence
  */
-export const exportReadyEmail = (
-    locale: string,
-    name: string,
-    exportId: string,
-    days: number
-): EmailContent => {
+export const exportReadyEmail = (locale: string, name: string, days: number): EmailContent => {
     return accountMail({
         template: 'account.export-ready',
         locale,
@@ -527,7 +521,7 @@ export const exportReadyEmail = (
         body: (t) => ({
             intro: t('account.email.export-ready.intro'),
             linkLabel: t('account.email.export-ready.link-label'),
-            linkUrl: accountExportLink(locale, exportId),
+            linkUrl: accountExportLink(locale),
             expiry: t('account.email.export-ready.expiry', { days }),
             ignore: t('account.email.export-ready.ignore')
         })

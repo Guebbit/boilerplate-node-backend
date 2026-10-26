@@ -74,9 +74,22 @@ const readMountPrefixes = (): Map<string, string> => {
         /import\s+(\w+)\s+from\s+'\.\/modules\/([^'/]+)\/module'/g
     )) {
         if (!listed.has(binding)) continue;
-        const basePath = /basePath:\s*'([^']*)'/.exec(read(`src/modules/${name}/module.ts`))?.[1];
-        if (basePath !== undefined)
-            prefixes.set(`src/modules/${name}/routes.ts`, basePath === '/' ? '' : basePath);
+        const manifest = read(`src/modules/${name}/module.ts`);
+        // `import { router } from './routes'` or `{ router as ordersRouter } from './order-routes'`:
+        // binding to file, so each mount's prefix lands on the file that declares its router.
+        const files = new Map<string, string>();
+        for (const [, imported, alias, file] of manifest.matchAll(
+            /import\s*{\s*(\w+)(?:\s+as\s+(\w+))?\s*}\s*from\s*'\.\/([^']*)'/g
+        ))
+            files.set(alias ?? imported, file);
+
+        for (const [, basePath, binding] of manifest.matchAll(
+            /basePath:\s*'([^']*)',\s*routes:\s*(\w+)/g
+        )) {
+            const file = files.get(binding);
+            if (file)
+                prefixes.set(`src/modules/${name}/${file}.ts`, basePath === '/' ? '' : basePath);
+        }
     }
 
     // The one router `src/app/routes.ts` still names, resolved through its import so a rename of

@@ -10,7 +10,7 @@
  * `override-sync.ts` keeps them in step with an admin override.
  */
 
-import { listMethods, startFulfilment } from './start';
+import { listMethods, processOrder } from './process';
 import {
     getForOrder,
     getShipment,
@@ -53,7 +53,7 @@ export const deliveryService = {
     getForOrder,
     getShipment,
     getFulfillmentOrder,
-    startFulfilment,
+    processOrder,
     shipFulfillmentOrder,
     deliverShipment,
     fulfillFulfillmentOrder,

@@ -20,8 +20,7 @@ import { wishlistService } from './service';
 /** This module's manifest entry: routes, event subscriptions, and locales. */
 export default {
     name: 'wishlist',
-    basePath: '/wishlist',
-    routes: router,
+    mounts: [{ basePath: '/wishlist', routes: router }],
     personalData: [
         {
             section: 'wishlist',

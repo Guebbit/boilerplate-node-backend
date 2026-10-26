@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { Router } from 'express';
 import { effectiveRouteTable, type PermissionAsk } from '@tests/routes';
 import { findRule, ruleId } from '@kernel/permissions';
-import { ROUTED_MODULES } from '@tests/routed-modules';
+import { routersOfModule } from '@tests/routed-modules';
 import { MODULES_ROOT } from '@tests/paths';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
@@ -97,10 +97,10 @@ describe('every controller reading the caller is mounted behind isAuth', () => {
     it('finds no handler asserting an auth context its route does not guarantee', () => {
         const offenders = moduleNames().flatMap((name) => {
             const reading = handlersReadingAuthContext(path.join(MODULES_ROOT, name));
-            const router = ROUTED_MODULES[name];
-            if (reading.size === 0 || router === undefined) return [];
+            if (reading.size === 0) return [];
 
-            return [...handlersMountedUnauthenticated(router)]
+            return routersOfModule(name)
+                .flatMap((router) => [...handlersMountedUnauthenticated(router)])
                 .filter((handler) => reading.has(handler))
                 .map((handler) => `${name}: ${handler}`);
         });
@@ -128,10 +128,8 @@ describe('every controller reading the caller is mounted behind isAuth', () => {
 describe('every requirePermission behind isAuthOrCredential asks for a tenant rule with no owner condition', () => {
     it('finds no rule pinned to an owner or to the platform', () => {
         const offenders = moduleNames().flatMap((name) => {
-            const router = ROUTED_MODULES[name];
-            if (router === undefined) return [];
-
-            return permissionsBehindCredentialGuard(router)
+            return routersOfModule(name)
+                .flatMap((router) => permissionsBehindCredentialGuard(router))
                 .filter((ask) => {
                     const declared = findRule(ruleId(ask.action, ask.subject));
                     return declared?.scope !== 'tenant' || declared.conditions !== undefined;
@@ -144,10 +142,8 @@ describe('every requirePermission behind isAuthOrCredential asks for a tenant ru
 
     it('finds no rule marked credential: false, which would be a flag that lies', () => {
         const lying = moduleNames().flatMap((name) => {
-            const router = ROUTED_MODULES[name];
-            if (router === undefined) return [];
-
-            return permissionsBehindCredentialGuard(router)
+            return routersOfModule(name)
+                .flatMap((router) => permissionsBehindCredentialGuard(router))
                 .filter((ask) => findRule(ruleId(ask.action, ask.subject))?.credential === false)
                 .map((ask) => `${name}: ${ruleId(ask.action, ask.subject)}`);
         });
@@ -161,9 +157,8 @@ describe('every requirePermission behind isAuthOrCredential asks for a tenant ru
         const total = moduleNames().reduce(
             (count, name) =>
                 count +
-                (ROUTED_MODULES[name]
-                    ? permissionsBehindCredentialGuard(ROUTED_MODULES[name]).length
-                    : 0),
+                routersOfModule(name).flatMap((router) => permissionsBehindCredentialGuard(router))
+                    .length,
             0
         );
         expect(total).toBeGreaterThan(10);

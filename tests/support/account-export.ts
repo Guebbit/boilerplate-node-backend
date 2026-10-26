@@ -27,7 +27,7 @@ export const requestAndDownloadExport = async (bearer: string): Promise<Download
     const { id } = requested.body as { id: string };
 
     await settleInlineExports();
-    const downloaded = await api().get(`/account/export/${id}`).set('Authorization', bearer);
+    const downloaded = await api().get('/account/export').set('Authorization', bearer);
 
     return {
         request: { status: requested.status, id },

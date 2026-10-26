@@ -16,8 +16,7 @@ import { router } from './routes';
 /** This module's manifest entry. */
 export default {
     name: 'stats',
-    basePath: '/stats',
-    routes: router,
+    mounts: [{ basePath: '/stats', routes: router }],
     // Nothing here is personal data: every figure is an aggregate, and a customer count is by account id.
     personalData: [],
     locales: path.join(__dirname, 'locales')

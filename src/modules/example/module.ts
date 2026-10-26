@@ -54,8 +54,7 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
 /** This module's manifest entry. */
 export default {
     name: 'example',
-    basePath: '/examples',
-    routes: router,
+    mounts: [{ basePath: '/examples', routes: router }],
     config: [exampleConfig.slice],
     rateLimits: exampleRateLimits,
     publicEvents,

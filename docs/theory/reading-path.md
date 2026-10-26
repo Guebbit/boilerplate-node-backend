@@ -68,7 +68,7 @@ The thesis of the repository. A module is a **typed object**, not a folder conve
 its name, routes, locales, scenario guarantees and event subscriptions, and the registry calls what
 it declares.
 
-**Take away:** every field on `AppModule` is read by something — `basePath` and `routes` by
+**Take away:** every field on `AppModule` is read by something — `mounts` by
 `app/routes.ts`, `locales` by i18next, `subscribe` by `registerModules`, `scenario` by
 `scenarios/check.ts`'s guarantee comparison. A field nothing reads is a comment with extra syntax.
 
@@ -86,8 +86,8 @@ connected one.
 
 ### 5 · `src/modules/example/routes.ts` — the URL surface
 
-**Take away:** two things that are easy to miss. The gate is **positional**: the one public route
-(`GET /published/:id`) sits above `router.use(getAuth, …)` and everything below it is signed-in,
+**Take away:** two things that are easy to miss. The gate is **positional**: the one open read
+(`GET /examples/:id`, a published example is anyone's) sits above `router.use(getAuth, …)` and everything below it is signed-in,
 purely by where it was typed. And static segments (`/search`) are declared **before** `/:id` or
 Express matches them as ids. Several routes also point at the same controller on purpose — `GET
 /examples` and `POST /examples/search` are one handler.

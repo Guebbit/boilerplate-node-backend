@@ -36,7 +36,7 @@ const EMPTY_STRING_CASES: readonly WriteCase[] = [
         '/account/addresses',
         { fullName: 'A', street: 's', city: 'c', zip: 'z', country: 'IT', phone: '' }
     ],
-    ['post', `/payments/orders/${MISSING_ID}/offline`, { method: 'cash', reference: '' }],
+    ['post', `/orders/${MISSING_ID}/payments`, { method: 'cash', reference: '' }],
     ['post', `/delivery/fulfillment-orders/${MISSING_ID}/shipments`, { trackingCode: '' }],
     ['post', `/inventory/levels/${MISSING_ID}/receive`, { quantity: 1, note: '' }],
     ['post', `/inventory/levels/${MISSING_ID}/adjust`, { delta: 1, note: '' }],

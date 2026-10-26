@@ -11,7 +11,7 @@ import type { Request, Response } from 'express';
 import { createdResponse } from '@infrastructure/http/response';
 import { paymentService } from '../services';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
-import { RefundPaymentByOrderBody } from '@api/schemas.zod';
+import { CreateRefundBody } from '@api/schemas.zod';
 import { callerContextOf } from '@infrastructure/http/request';
 import { requireId } from '@infrastructure/http/ids';
 
@@ -20,14 +20,15 @@ export const postPaymentRefund = (request: Request<{ id?: string }>, response: R
     const paymentId = requireId(request, response, { notFound: 'payments.not-found' });
     if (!paymentId) return;
 
-    const body = parseBody(RefundPaymentByOrderBody, request.body ?? {}, response);
+    const body = parseBody(CreateRefundBody, request.body ?? {}, response);
     if (!body) return;
 
     return paymentService
         .refundPayment(paymentId, request.authContext, callerContextOf(request), body)
         .then((result) => {
             if (refused(response, result)) return;
-            const refund = paymentService.newestRefund(result.data, request.authContext);
+            const { payment, refundId } = result.data;
+            const refund = paymentService.refundOf(payment, refundId, request.authContext);
             // Unreachable on a success: the refund that just ran left its record on the payment.
             if (!refund) throw new Error('a successful refund left no record on the payment');
             createdResponse(response, refund, `/payments/${paymentId}/refunds/${refund.id}`);

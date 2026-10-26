@@ -6,13 +6,14 @@ The shop does not guess in a case like these. It shows you what it knows, gives 
 note field, and leaves the decision to a person. Each entry below has the same three parts:
 **what you see**, **what to do**, **whose job it is**.
 
-| Something odd happened                                                 | Go to                                                |
-| ---------------------------------------------------------------------- | ---------------------------------------------------- |
-| A refund is owed and the money must be paid back by hand               | [A refund owed by hand](#refund-owed-by-hand)        |
-| Money arrived by bank transfer for an order that was already cancelled | [A transfer for a cancelled order](#late-transfer)   |
-| The shelf holds fewer units than the orders promised                   | [Fewer on the shelf than promised](#fewer-on-shelf)  |
-| An order stays in "being prepared" and nothing moves                   | [An order stuck in processing](#stuck-in-processing) |
-| A parcel left a long time ago and nobody recorded its arrival          | [Shipped but not arrived](#shipped-not-arrived)      |
+| Something odd happened                                                 | Go to                                                  |
+| ---------------------------------------------------------------------- | ------------------------------------------------------ |
+| A refund is owed and the money must be paid back by hand               | [A refund owed by hand](#refund-owed-by-hand)          |
+| The card refused to take a refund back                                 | [A card refund the card refused](#card-refund-refused) |
+| Money arrived by bank transfer for an order that was already cancelled | [A transfer for a cancelled order](#late-transfer)     |
+| The shelf holds fewer units than the orders promised                   | [Fewer on the shelf than promised](#fewer-on-shelf)    |
+| An order stays in "being prepared" and nothing moves                   | [An order stuck in processing](#stuck-in-processing)   |
+| A parcel left a long time ago and nobody recorded its arrival          | [Shipped but not arrived](#shipped-not-arrived)        |
 
 ::: tip More entries come with their features
 Each entry here describes something the shop does today. When a new tool lands (voiding a refund,
@@ -58,6 +59,43 @@ believe they were paid back and nobody is left to notice.
 **Whose job.** Whoever holds the refund permission: the [moderator](./moderator.md) or the admin.
 A card payment is different: the shop refunds the card itself, and has no hand step.
 → [`payments`](../modules/payments.md)
+
+## A card refund the card refused {#card-refund-refused}
+
+**What you see.** You refunded a card payment (or cancelled an order, or received a return), and
+the refund sits **open**. On the payment, the refund reads **Failed** with a reason. If the reason
+is one of the clear ones (the bank declined it, the card expired or was reported lost or stolen, or
+the shop's own provider balance was too low), the payment's **Mark returned** button is offered and
+the order is on the "needs attention" list at once. The shop does not keep sending a refund the bank
+has refused for good.
+
+**What to do.**
+
+1. Agree with the buyer how to pay them back, for example a bank transfer to an account in their
+   name. The shop does not store bank details: keep them in your mailbox and your bank, under your
+   usual retention.
+2. Pay the money back from your bank, for the amount shown.
+3. Only then press **Mark returned** on that refund.
+
+Pressing it closes the refund: the credit note is issued, a waiting return closes, and the buyer is
+told their money is back.
+
+If the reason reads **provider unavailable** or **no usable reason**, there is no Mark returned
+button on purpose. The refund may have gone through, and the shop keeps asking the provider under
+the same key until it has an answer. If it stays open for an hour, it shows up on the "needs
+attention" list: check the provider's own dashboard (or its support) to see whether the money left.
+If the provider is gone for good, that is a technician's job in the database, not a button.
+
+If the payment's provider was removed from the shop, the reason reads **The payment provider is no
+longer installed**: nothing was asked, so pay the buyer back yourself and press **Mark returned**.
+
+::: warning Never press Mark returned before the money has left
+The button only records that you paid. If the bank transfer then fails, the shop and the buyer both
+believe they were paid back and nobody is left to notice.
+:::
+
+**Whose job.** Whoever holds the refund permission: the [moderator](./moderator.md) or the admin.
+→ [`payments`](../modules/payments.md#when-a-card-refund-cannot-go-back)
 
 ## A transfer for a cancelled order {#late-transfer}
 

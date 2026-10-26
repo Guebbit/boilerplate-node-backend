@@ -18,13 +18,17 @@ import { orderRepository } from '../repository';
 import { resolveCurrentImages } from './current';
 import { callerScope, ownerScope } from './scope';
 import { buyerIdOf, fulfillmentStatusFilter } from '../domain';
+import { parseOrderNumber } from './order-numbering';
 import { toObjectId } from '@infrastructure/persistence/create-repository';
 
 /**
- * Turn `fulfillmentStatus` — a value derived on read, not a stored column — into the conditions
- * that make `fulfillmentStatusOf` answer it, and AND them into the scope. The rest of the search
- * goes through unchanged. Not a stored copy of the answer: a filter built from the same table
- * cannot disagree with the value a row serializes with.
+ * Rewrite the two filters that are not plain columns into conditions the repository understands,
+ * and AND them into the scope; the rest of the search goes through unchanged.
+ *
+ * - `fulfillmentStatus` is derived on read, not stored: the filter is built from the same table
+ *   that serializes the value, so it cannot disagree with it.
+ * - `orderNumber` is canonicalised (`#2026-41` is `2026-000041`). One that is not a number at all
+ *   finds nothing, an empty page rather than an error, as payments' `transferReference` does.
  *
  * @param request - the search as it arrived
  * @param scope - the caller's own scope
@@ -34,10 +38,22 @@ export const withFulfillmentFilter = (
     request: SearchOrdersRequest,
     scope: Record<string, unknown> | undefined
 ): [SearchOrdersRequest, Record<string, unknown> | undefined] => {
-    const { fulfillmentStatus, ...rest } = request;
-    return fulfillmentStatus
-        ? [rest, { $and: [scope ?? {}, fulfillmentStatusFilter(fulfillmentStatus)] }]
-        : [rest, scope];
+    const { fulfillmentStatus, orderNumber, ...rest } = request;
+    const canonical = orderNumber === undefined ? undefined : parseOrderNumber(orderNumber);
+    const conditions = [
+        ...(scope ? [scope] : []),
+        ...(fulfillmentStatus ? [fulfillmentStatusFilter(fulfillmentStatus)] : []),
+        // `$in: []` matches no row: the page for a quoted number that cannot be one.
+        ...(orderNumber !== undefined && canonical === undefined ? [{ _id: { $in: [] } }] : [])
+    ];
+    return [
+        canonical === undefined ? rest : { ...rest, orderNumber: canonical },
+        conditions.length === 0
+            ? undefined
+            : conditions.length === 1
+              ? conditions[0]
+              : { $and: conditions }
+    ];
 };
 
 /**

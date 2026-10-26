@@ -457,14 +457,20 @@ export const chainOf = (router: Router, signature: string): string[] =>
     routeTable(router).find(({ method, path }) => `${method} ${path}` === signature)!.chain;
 /**
  * The routed modules of a registry, keyed by module name.
+ *
+ * A module's first mount is keyed by its name; each further mount is keyed `name@/basePath`, so a
+ * test that walks routers sees every router a module serves.
  * @param modules - the registry to read: the real one, or a virtual one in a test
- * @returns name to router, for every module that declares `routes`
+ * @returns key to router, for every mount a module declares
  */
 export const routedModulesOf = (
-    modules: readonly { name: string; routes?: Router }[]
+    modules: readonly { name: string; mounts?: readonly { basePath: string; routes: Router }[] }[]
 ): Record<string, Router> =>
     Object.fromEntries(
-        modules.flatMap((appModule) =>
-            appModule.routes ? [[appModule.name, appModule.routes] as const] : []
+        modules.flatMap(({ name, mounts = [] }) =>
+            mounts.map(
+                ({ basePath, routes }, index) =>
+                    [index === 0 ? name : `${name}@${basePath}`, routes] as const
+            )
         )
     );

@@ -2,7 +2,7 @@
  * @module
  * In any module: the route table. Public routes sit ABOVE one `router.use(getAuth, isAuth)` and
  * everything below it is signed-in, so which half a route is in is decided by where it is typed.
- * Each mount states the one key its own action needs. Here: one public read, then the caller's
+ * Each mount states the one key its own action needs. Here: one open read, then the caller's
  * own examples (or everyone's, for a key that says so).
  *
  * See: docs/theory/request-flow.md
@@ -14,7 +14,7 @@ import { noStore, privateNoCache } from '@infrastructure/http/middlewares/cache'
 import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 import { upload } from '@infrastructure/http/middlewares/upload';
-import { getPublishedExample, getExample } from './controllers/get-example';
+import { getExample } from './controllers/get-example';
 import { getExamples } from './controllers/get-examples';
 import { postExample } from './controllers/post-example';
 import { postExampleTransition } from './controllers/post-example-transition';
@@ -27,12 +27,13 @@ import { createExampleLimiter } from './rate-limits';
 export const router = Router();
 
 /*
- * PUBLIC: the answer is the same for everyone, so no credential is read. Mounted above the guard
- * below rather than carrying an exemption.
- * `privateNoCache`: the title varies by `Accept-Language`, and revalidation stops an archived
- * example being served.
+ * OPEN READ: a published example is anyone's, a draft its owner's. `getAuth` alone, no `isAuth`:
+ * the caller is resolved if there is one and the service scopes the answer. Mounted above the
+ * guard below rather than carrying an exemption.
+ * `privateNoCache`: the answer varies by caller and by `Accept-Language`, and revalidation stops
+ * an archived example being served.
  */
-router.get('/published/:id', privateNoCache, getPublishedExample);
+router.get('/:id', getAuth, privateNoCache, getExample);
 
 /*
  * Everything below is signed-in, and POSITIONAL: the guard covers routes under it, not above.
@@ -59,9 +60,6 @@ router.post(
     idempotencyKey,
     postExample
 );
-
-// GET /examples/:id — one example. `privateNoCache`: the browser may keep it, revalidated.
-router.get('/:id', requirePermission('read', 'Example'), privateNoCache, getExample);
 
 // PUT /examples/:id — replace the whole example.
 router.put('/:id', requirePermission('update', 'Example'), replaceExample);

@@ -38,7 +38,9 @@ const jsonBodyLimit = (): string => appConfig().NODE_JSON_BODY_LIMIT;
  * would cost a map and a flat on every JSON body the API receives.
  */
 const RAW_BODY_PATHS = enabledModules.flatMap((appModule) =>
-    (appModule.rawBodyPaths ?? []).map((path) => `${appModule.basePath ?? ''}${path}`.toLowerCase())
+    (appModule.rawBodyPaths ?? []).map((path) =>
+        `${appModule.mounts?.[0]?.basePath ?? ''}${path}`.toLowerCase()
+    )
 );
 
 /**

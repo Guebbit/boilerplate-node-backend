@@ -64,7 +64,7 @@ operations:
             $ref: '#/channels/notifications.deleted'
         description: >-
             Pushed when the user deletes one (`DELETE /notifications/{id}`), empties the inbox
-            (`dismiss-all`), or the cap trims the oldest, so a second tab stays in step with the
+            (`DELETE /notifications`), or the cap trims the oldest, so a second tab stays in step with the
             first. `all` is true when the whole inbox went.
         messages:
             - $ref: '#/channels/notifications.deleted/messages/NotificationsDeletedEvent'
@@ -413,7 +413,7 @@ components:
                 - ids
             properties:
                 all:
-                    description: True when the whole inbox went (`dismiss-all`); `ids` is then empty.
+                    description: True when the whole inbox went (`DELETE /notifications`); `ids` is then empty.
                     type: boolean
                 ids:
                     description: The deleted notifications' ids.

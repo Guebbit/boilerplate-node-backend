@@ -13,6 +13,7 @@ import type { AppModule, PublicEventTarget } from '@kernel/registry';
 import { onDomainEvent, type DomainEventMap } from '@kernel/events';
 import { ORDER_CANCELLED, ORDER_CREATED } from '@modules/orders';
 import { router } from './routes';
+import { orderRouter } from './order-routes';
 import { paymentService } from './services';
 import { cancelOpenIntentForOrder } from './services/intent';
 import { refundForOrder } from './services/refunds';
@@ -63,13 +64,16 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
 /** This module's manifest entry: routes, the cancel-refund subscription, and locales. */
 export default {
     name: 'payments',
-    basePath: '/payments',
-    routes: router,
+    mounts: [
+        { basePath: '/payments', routes: router },
+        // `POST /orders/{id}/payments`: the order's URL, payments' own key.
+        { basePath: '/orders', routes: orderRouter }
+    ],
     jobs: paymentsJobs,
     publicEvents,
     /** The webhook and card-testing budgets — see `./rate-limits.ts`. */
     rateLimits: paymentsRateLimits,
-    // The provider signs over the exact bytes it sent — relative to `basePath`, composed by the
+    // The provider signs over the exact bytes it sent — relative to the first mount's `basePath`, composed by the
     // app tier, so the mount point is stated once and the two cannot drift.
     rawBodyPaths: ['/webhook'],
     // The webhook secret and the bank-transfer values: see `./config`. The
@@ -108,8 +112,8 @@ export default {
      * cancelled by an operator, with this module's own `order.cancelled` listener returning the
      * money. Named so the admin's refunded-payment screen has a row to open.
      *
-     * The id behind it is the ORDER's: `GET /payments/orders/{orderId}` is the only read path a
-     * payment has, so a payment id would name a row no caller could fetch.
+     * The id behind it is the ORDER's: `GET /orders/{id}/payments` reads a payment by its order, so the
+     * subject is the order the row belongs to.
      */
     scenario: { shop: ['payment.refunded'] }
 } satisfies AppModule;

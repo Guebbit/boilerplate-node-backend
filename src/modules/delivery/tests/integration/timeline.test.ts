@@ -156,7 +156,7 @@ describe('starting fulfilment', () => {
         });
         const orderId = String(order._id);
 
-        await deliveryService.startFulfilment(orderId, asAdmin(), admin);
+        await deliveryService.processOrder(orderId, asAdmin(), admin);
 
         // Not a whole-trail match: `ensureFulfillmentOrders` writes rows of its own.
         expect(await trail(orderId)).toContainEqual(['processing', 'admin-1']);

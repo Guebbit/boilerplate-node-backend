@@ -432,7 +432,7 @@ anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` 
 | `PUT /account` | `email` is stored as `pendingEmail` | an address is proven before it replaces the old one |
 | `POST /account/signup` | a refused address still gets a 201 and the same `Location: /account`, and nothing is created | antibot: the refusal must look like a success |
 | `PUT /cart/shipping-method`, `PUT /locales/{locale}/apps/{app}/entries/{entryId}`, `PUT /account/addresses/{id}/default` | no PATCH | one field, or none; a PATCH would say exactly what the PUT says |
-| `POST /payments`, `POST /payments/orders/{id}/offline` | 200 when they refresh or convert the order's one payment row | one payment per order is a database fact |
+| `POST /payments`, `POST /orders/{id}/payments` | 200 when they refresh or convert the order's one payment row | one payment per order is a database fact |
 | `PUT`/`PATCH /locales/{locale}/apps/{app}/entries` | the app is a path segment; the body is `{ entries: { <key>: text } }`, and under PATCH a `null` deletes its key | a PUT replaces exactly what the GET on the same URI lists; the map is a real merge patch (RFC 7396) |
 
 ## How it is kept true
