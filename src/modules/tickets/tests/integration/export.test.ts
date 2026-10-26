@@ -10,11 +10,18 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { ticketService } from '@modules/tickets/service';
 import ticketsModule from '@modules/tickets/module';
+import { ticketRepository } from '@modules/tickets/repository';
+import { callerContextAs } from '@tests/callers';
+import { Types } from 'mongoose';
+import { TicketKind, TicketLinkType, TicketSource } from '@types';
 
 setupTestDb();
 
 /** The tickets section's own `collect`, off the manifest — the way `account` reaches it. */
 const [{ collect }] = ticketsModule.personalData;
+
+/** A member of staff, who resolves and annotates. */
+const admin = callerContextAs('admin');
 
 /** The account under test. */
 const ACCOUNT_ID = '65dc8a99604c307b702b5ccc';
@@ -93,17 +100,65 @@ describe('the tickets section of an export', () => {
         expect(section[0]).toMatchObject({ category: 'order', orderNumber: 'ORD-7' });
     });
 
-    it('exports status and respondedAt but never the staff-only adminNotes', async () => {
+    it('exports status, respondedAt and the note’s words and time, but never who wrote it', async () => {
         const ticket = await fileTicket();
-        await ticketService.updateStatusById(String(ticket._id), {
-            status: 'resolved',
-            adminNotes: 'internal assessment'
-        });
+        await ticketService.resolve(String(ticket._id), admin);
+        await ticketService.addNote(String(ticket._id), 'internal assessment', admin);
 
         const section = (await collect(subject(true))) as object[];
 
         expect(section[0]).toMatchObject({ status: 'resolved' });
         expect(section[0]).toHaveProperty('respondedAt');
-        expect(section[0]).not.toHaveProperty('adminNotes');
+        const [note] = (section[0] as { notes: object[] }).notes;
+        expect(note).toMatchObject({ body: 'internal assessment' });
+        expect(note).toHaveProperty('at');
+        expect(note).not.toHaveProperty('authorId');
+    });
+});
+
+/** A system ticket about the account, worked by a member of staff. */
+const aboutAccount = () =>
+    ticketRepository.create({
+        source: TicketSource.system,
+        kind: TicketKind.manual_refund_owed,
+        routeSet: 'PaymentRefunding',
+        subject: 'A refund is owed by hand',
+        message: 'Refund r1',
+        link: { type: TicketLinkType.refund, id: 'r1' },
+        openKey: 'manual_refund_owed:refund:r1',
+        subjectId: new Types.ObjectId(ACCOUNT_ID),
+        assigneeId: new Types.ObjectId(),
+        notes: [{ authorId: new Types.ObjectId(), body: 'asked the bank', at: new Date() }]
+    });
+
+describe('the systemTickets section of an export', () => {
+    const [, { collect: collectSystem }] = ticketsModule.personalData;
+
+    it('carries the ticket and its notes, but never the staff ids or the dedup key', async () => {
+        await aboutAccount();
+
+        const [exported] = (await collectSystem(subject(true))) as object[];
+
+        expect(exported).toMatchObject({
+            kind: 'manual_refund_owed',
+            link: { type: 'refund', id: 'r1' },
+            notes: [{ body: 'asked the bank' }]
+        });
+        expect(exported).not.toHaveProperty('assigneeId');
+        expect(exported).not.toHaveProperty('openKey');
+        expect(JSON.stringify(exported)).not.toContain('authorId');
+    });
+
+    it('is empty, never absent, and leaves another account’s tickets out', async () => {
+        await ticketRepository.create({
+            source: TicketSource.system,
+            kind: TicketKind.account_review,
+            routeSet: 'UserBanning',
+            subject: 'x',
+            message: 'y',
+            subjectId: new Types.ObjectId(OTHER_ACCOUNT_ID)
+        });
+
+        expect(await collectSystem(subject(true))).toEqual([]);
     });
 });

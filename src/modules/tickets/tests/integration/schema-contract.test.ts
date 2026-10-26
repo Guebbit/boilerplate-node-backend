@@ -15,6 +15,7 @@ setupTestDb();
 describe('ticket schema', () => {
     const payload = {
         email: 'ada@example.com',
+        routeSet: 'TicketDisplay',
         subject: 'Subject',
         message: 'Message'
     };

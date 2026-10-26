@@ -1225,8 +1225,20 @@ paths:
         $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets'
     /tickets/search:
         $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1search'
+    /tickets/summary:
+        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1summary'
     /tickets/{id}:
         $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1{id}'
+    /tickets/{id}/resolve:
+        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1{id}~1resolve'
+    /tickets/{id}/mark-spam:
+        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1{id}~1mark-spam'
+    /tickets/{id}/reopen:
+        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1{id}~1reopen'
+    /tickets/{id}/assignee:
+        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1{id}~1assignee'
+    /tickets/{id}/notes:
+        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1{id}~1notes'
 
     # ---------- products ----------
     /products:

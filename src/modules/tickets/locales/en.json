@@ -10,6 +10,12 @@
             "label-message": "Message",
             "label-created-at": "Created at",
             "not-available": "N/A"
-        }
+        },
+        "already-resolved": "This ticket is already resolved.",
+        "already-spam": "This ticket is already marked as spam.",
+        "already-open": "This ticket is already open.",
+        "superseded": "A newer open ticket already covers this situation, so this one cannot be reopened.",
+        "not-open": "This ticket is closed. Reopen it first.",
+        "assignee-invalid": "That person cannot work this ticket."
     }
 }

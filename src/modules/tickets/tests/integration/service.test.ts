@@ -1,12 +1,12 @@
 /**
  * @module
- * Integration tests for the ticket service. Pins two behaviours: create normalises
- * (lowercased email, trimmed fields, blank `name` → `undefined`); and `respondedAt` stamps once, so re-resolving an
- * already-resolved item never moves it. Also covers the honeypot disposition and `removeById`.
+ * Integration tests for the ticket service. Pins create (lowercased email, trimmed
+ * fields, blank `name` → `undefined`, the contact kind's route set and due date, the honeypot
+ * disposition), the staff search and `removeById`. The doors live in the doors' own test file.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { testCallerContext } from '@tests/callers';
+import { callerContextAs } from '@tests/callers';
 import { observePort } from '@tests/ports';
 import { ticketService } from '@modules/tickets/service';
 import { ticketRepository } from '@modules/tickets/repository';
@@ -14,7 +14,7 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import * as auditPort from '@infrastructure/observability/audit';
 import { ticketsAuditActions } from '@modules/tickets/audit';
 import { TicketStatus } from '@types';
-import { asReject, asSuccess } from '@tests/response';
+import { asReject } from '@tests/response';
 import { MISSING_ID } from '@tests/ids';
 import { setEnvironment } from '@tests/environment';
 
@@ -212,6 +212,9 @@ describe('create — disposable-email policy', () => {
     });
 });
 
+/** The staff member every read and move in this file is made as. */
+const staff = callerContextAs('admin');
+
 /** Seeds a small, deliberately varied corpus. */
 const seed = async () => {
     await ticketService.create(makePayload({ email: 'ada@example.com', subject: 'Checkout bug' }));
@@ -221,15 +224,14 @@ const seed = async () => {
     const third = await ticketService.create(
         makePayload({ email: 'alan@example.com', subject: 'Feature idea' })
     );
-    third.status = TicketStatus.resolved;
-    await ticketRepository.save(third);
+    await ticketService.resolve(String(third._id), staff);
 };
 
 describe('search', () => {
     it('returns every request when no filter is given', async () => {
         await seed();
 
-        const { items, meta } = await ticketService.search();
+        const { items, meta } = await ticketService.search({}, staff);
 
         expect(items).toHaveLength(3);
         expect(meta.totalItems).toBe(3);
@@ -238,7 +240,7 @@ describe('search', () => {
     it('filters by status', async () => {
         await seed();
 
-        const { items } = await ticketService.search({ status: 'resolved' });
+        const { items } = await ticketService.search({ status: 'resolved' }, staff);
 
         expect(items).toHaveLength(1);
         expect(items[0].email).toBe('alan@example.com');
@@ -249,7 +251,7 @@ describe('search', () => {
         await ticketService.create({ ...makePayload(), category: 'order' });
         await ticketService.create(makePayload());
 
-        const { items } = await ticketService.search({ category: 'privacy' });
+        const { items } = await ticketService.search({ category: 'privacy' }, staff);
 
         expect(items).toHaveLength(1);
         expect(items[0].category).toBe('privacy');
@@ -258,7 +260,7 @@ describe('search', () => {
     it('filters by email fragment', async () => {
         await seed();
 
-        const { items } = await ticketService.search({ email: 'grace' });
+        const { items } = await ticketService.search({ email: 'grace' }, staff);
 
         expect(items).toHaveLength(1);
         expect(items[0].email).toBe('grace@example.com');
@@ -267,7 +269,7 @@ describe('search', () => {
     it('searches free text across name, subject and message', async () => {
         await seed();
 
-        const { items } = await ticketService.search({ text: 'Login' });
+        const { items } = await ticketService.search({ text: 'Login' }, staff);
 
         expect(items).toHaveLength(1);
         expect(items[0].subject).toBe('Login trouble');
@@ -276,7 +278,7 @@ describe('search', () => {
     it('paginates and reports coherent meta', async () => {
         await seed();
 
-        const { items, meta } = await ticketService.search({ page: 1, pageSize: 2 });
+        const { items, meta } = await ticketService.search({ page: 1, pageSize: 2 }, staff);
 
         expect(items).toHaveLength(2);
         // The three meta fields must agree with each other and with the page actually returned;
@@ -285,159 +287,28 @@ describe('search', () => {
     });
 });
 
-/** The ticket as storage holds it now — the service answers a copy, not the instance a test built. */
-const reload = (ticket: { _id: unknown }) =>
-    ticketRepository.findById(String(ticket._id)).then((found) => found!);
-
-describe('updateStatusById — the patch', () => {
-    it('applies a new status', async () => {
-        const ticket = await ticketService.create(makePayload());
-
-        const result = await ticketService.updateStatusById(String(ticket._id), {
-            status: TicketStatus.in_progress
-        });
-
-        expect(asSuccess(result).data.status).toBe(TicketStatus.in_progress);
-    });
-
-    it('persists the change rather than only mutating in memory', async () => {
-        const ticket = await ticketService.create(makePayload());
-
-        await ticketService.updateStatusById(String(ticket._id), {
-            status: TicketStatus.spam
-        });
-
-        const stored = await reload(ticket);
-
-        expect(stored.status).toBe(TicketStatus.spam);
-    });
-
-    it('records admin notes', async () => {
-        const ticket = await ticketService.create(makePayload());
-
-        const result = await ticketService.updateStatusById(String(ticket._id), {
-            adminNotes: 'Duplicate of #12'
-        });
-
-        expect(asSuccess(result).data.adminNotes).toBe('Duplicate of #12');
-    });
-
-    it('leaves the status untouched when the payload carries none', async () => {
-        const ticket = await ticketService.create(makePayload());
-        ticket.status = TicketStatus.in_progress;
-        await ticketRepository.save(ticket);
-
-        await ticketService.updateStatusById(String(ticket._id), {
-            adminNotes: 'Just a note'
-        });
-
-        const stored = await reload(ticket);
-
-        expect(stored.status).toBe(TicketStatus.in_progress);
-    });
-
-    it("clears admin notes on `null`, the contract's only way to clear them", async () => {
-        // `!== undefined`, not a truthiness check: `null` is a deliberate clear, and a truthy guard
-        // would make notes impossible to remove once written. `''` is refused at the HTTP door.
-        const ticket = await ticketService.create(makePayload());
-        await ticketService.updateStatusById(String(ticket._id), {
-            adminNotes: 'temporary'
-        });
-
-        await ticketService.updateStatusById(String(ticket._id), { adminNotes: null });
-
-        const stored = await reload(ticket);
-
-        expect(stored.adminNotes).toBeUndefined();
-    });
-
-    it('stamps respondedAt when the request becomes resolved', async () => {
-        const ticket = await ticketService.create(makePayload());
-
-        await ticketService.updateStatusById(String(ticket._id), {
-            status: TicketStatus.resolved
-        });
-
-        const stored = await reload(ticket);
-
-        expect(stored.respondedAt).toBeInstanceOf(Date);
-    });
-
-    it('does not stamp respondedAt for a non-resolved status', async () => {
-        const ticket = await ticketService.create(makePayload());
-
-        await ticketService.updateStatusById(String(ticket._id), {
-            status: TicketStatus.in_progress
-        });
-
-        const stored = await reload(ticket);
-
-        expect(stored.respondedAt).toBeUndefined();
-    });
-
-    it('keeps the original respondedAt when resolved a second time', async () => {
-        // "When did we answer this" must not drift every time an admin re-saves the record.
-        const ticket = await ticketService.create(makePayload());
-        await ticketService.updateStatusById(String(ticket._id), {
-            status: TicketStatus.resolved
-        });
-        const first = await reload(ticket);
-        const firstStamp = first.respondedAt!.getTime();
-
-        await ticketService.updateStatusById(String(ticket._id), {
-            status: TicketStatus.resolved
-        });
-
-        const stored = await reload(ticket);
-
-        expect(stored.respondedAt!.getTime()).toBe(firstStamp);
-    });
-});
-
-describe('updateStatusById — the lookup', () => {
-    it('updates an existing request', async () => {
-        const ticket = await ticketService.create(makePayload());
-
-        const result = await ticketService.updateStatusById(String(ticket._id), {
-            status: TicketStatus.resolved
-        });
-
-        expect(result.success).toBe(true);
-        expect(asSuccess(result).data.status).toBe(TicketStatus.resolved);
-    });
-
-    it('rejects with 404 for an id that does not exist', async () => {
-        const result = await ticketService.updateStatusById(MISSING_ID, {
-            status: TicketStatus.resolved
-        });
-
-        expect(result.success).toBe(false);
-        expect(asReject(result).status).toBe(404);
-    });
-});
-
 describe('removeById', () => {
     it('permanently deletes an existing request', async () => {
         const ticket = await ticketService.create(makePayload());
 
-        const result = await ticketService.removeById(String(ticket._id));
+        const result = await ticketService.removeById(String(ticket._id), staff);
 
         expect(result.success).toBe(true);
         expect(await ticketRepository.findById(String(ticket._id))).toBeNull();
     });
 
     it('rejects with 404 for an id that does not exist', async () => {
-        const result = await ticketService.removeById(MISSING_ID);
+        const result = await ticketService.removeById(MISSING_ID, staff);
 
         expect(result.success).toBe(false);
         expect(asReject(result).status).toBe(404);
     });
 
-    it('emits admin.ticket.deleted with the target id when a context is given', async () => {
+    it('emits admin.ticket.deleted with the target id', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const ticket = await ticketService.create(makePayload());
 
-        await ticketService.removeById(String(ticket._id), testCallerContext);
+        await ticketService.removeById(String(ticket._id), staff);
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -447,14 +318,5 @@ describe('removeById', () => {
                 targetId: String(ticket._id)
             })
         );
-    });
-
-    it('emits no audit event when no context is given', async () => {
-        const auditSpy = observePort(auditPort.emitAuditEvent);
-        const ticket = await ticketService.create(makePayload());
-
-        await ticketService.removeById(String(ticket._id));
-
-        expect(auditSpy).not.toHaveBeenCalled();
     });
 });

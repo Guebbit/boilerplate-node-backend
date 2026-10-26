@@ -25,8 +25,14 @@ describe('tickets routes — what is mounted', () => {
             'POST /',
             'POST /search',
             'GET /',
+            'GET /summary',
             'GET /:id',
-            'PATCH /:id',
+            'POST /:id/resolve',
+            'POST /:id/mark-spam',
+            'POST /:id/reopen',
+            'PUT /:id/assignee',
+            'DELETE /:id/assignee',
+            'POST /:id/notes',
             'DELETE /:id'
         ]);
     });
@@ -51,16 +57,25 @@ describe('tickets routes — the positional guard', () => {
         expect(chain.indexOf('getAuth')).toBeLessThan(chain.indexOf('postTicket'));
     });
 
-    it.each(['POST /search', 'GET /', 'GET /:id', 'PATCH /:id', 'DELETE /:id'])(
-        '%s sits below the gate and is keyed',
-        (signature) => {
-            const guards = guardsOn(router, signature);
+    it.each([
+        'POST /search',
+        'GET /',
+        'GET /summary',
+        'GET /:id',
+        'POST /:id/resolve',
+        'POST /:id/mark-spam',
+        'POST /:id/reopen',
+        'PUT /:id/assignee',
+        'DELETE /:id/assignee',
+        'POST /:id/notes',
+        'DELETE /:id'
+    ])('%s sits below the gate and is keyed', (signature) => {
+        const guards = guardsOn(router, signature);
 
-            expect(guards).toContain('getAuth');
-            expect(identityGuardIndex(guards)).toBeGreaterThanOrEqual(0);
-            expect(guards).toContain('requirePermissionGuard');
-        }
-    );
+        expect(guards).toContain('getAuth');
+        expect(identityGuardIndex(guards)).toBeGreaterThanOrEqual(0);
+        expect(guards).toContain('requirePermissionGuard');
+    });
 
     it('keeps the contact route first, so the gate cannot be moved above it', () => {
         // If `router.use` were mounted at the top instead, this ordering assertion would still

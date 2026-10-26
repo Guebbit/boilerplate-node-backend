@@ -187,7 +187,8 @@ rebuilds it), which is why `db:bootstrap` syncs before the server starts there. 
 `docker-compose.production.yml`'s one-shot `setup` service is what runs `db:sync` on deploy instead,
 see [Data — TTL windows](./data.md#ttl-windows). `tickets`'s window
 is the longest on purpose: a contact request can be evidence in a commercial dispute, and 24 months
-sits inside the common limitation periods. `carts` ties to `updatedAt`, so any edit (a cart line changed) restarts the clock; only a genuinely
+sits inside the common limitation periods. It runs on `closedAt`, so an open ticket never expires and a
+reopen stops the clock; changing it needs `npm run db:sync`. `carts` ties to `updatedAt`, so any edit (a cart line changed) restarts the clock; only a genuinely
 abandoned row is ever removed. `leases` has no TTL on purpose: a job that stopped running entirely must
 keep alerting (`ScheduledJobStale`), and an expired row would make that alert resolve on its own. Pushgateway
 and Healthchecks.io behave the same way: a silent job stays down until someone deletes it.

@@ -22,8 +22,10 @@ const RETENTION_SECONDS =
     Number(currentEnvironment().NODE_TICKETS_RETENTION_DAYS ?? 730) * 24 * 60 * 60;
 
 describe('ticketSchema', () => {
-    it('requires an address to reply to, a subject and a message', () => {
-        expect(requiredPaths(ticketSchema)).toEqual(['email', 'message', 'subject']);
+    it('requires a subject, a message and a route set; the address is the form’s rule, not the schema’s', () => {
+        // A system ticket has no sender, so `email` is required by the service for a visitor ticket
+        // only. The route set always exists: a ticket without a jurisdiction would be nobody's.
+        expect(requiredPaths(ticketSchema)).toEqual(['message', 'routeSet', 'subject']);
     });
 
     it('leaves the name optional', () => {
@@ -36,7 +38,7 @@ describe('ticketSchema', () => {
         // `adminNotes` and `respondedAt` are written by the answer, not by the submission. A
         // `default` on `respondedAt` would mark every incoming message as already answered.
         expect(defaultOf(ticketSchema, 'respondedAt')).toBeUndefined();
-        expect(defaultOf(ticketSchema, 'adminNotes')).toBeUndefined();
+        expect(defaultOf(ticketSchema, 'closedAt')).toBeUndefined();
     });
 
     it('restricts status to the contract enum and starts every request new', () => {
@@ -47,9 +49,11 @@ describe('ticketSchema', () => {
     it('indexes the operator queue and the retention sweep', () => {
         // The queue — "what is still open, most recent first" — plus the TTL index below.
         expect(indexSpecs(ticketSchema)).toEqual([
-            'createdAt_1: createdAt+1',
+            'assigneeId_1_status_1: assigneeId+1, status+1',
+            'closedAt_1: closedAt+1',
             'email_1: email+1',
-            'status_1_createdAt_-1: status+1, createdAt-1',
+            'openKey_1: openKey+1',
+            'routeSet_1_status_1_dueAt_1: routeSet+1, status+1, dueAt+1',
             'subjectId_1: subjectId+1'
         ]);
     });
@@ -63,17 +67,19 @@ describe('ticketSchema', () => {
         // `NODE_TICKETS_RETENTION_DAYS` moves the policy and the test together — and so a TTL
         // appearing on a different index fails here.
         expect(indexOptionSpecs(ticketSchema)).toEqual([
-            `createdAt_1: expireAfterSeconds=${RETENTION_SECONDS}`,
-            'email_1: (none)',
-            'status_1_createdAt_-1: (none)',
+            'assigneeId_1_status_1: partialFilterExpression={"assigneeId":{"$exists":true}}',
+            `closedAt_1: expireAfterSeconds=${RETENTION_SECONDS}`,
+            'email_1: partialFilterExpression={"email":{"$exists":true}}',
+            'openKey_1: partialFilterExpression={"openKey":{"$exists":true}}, unique=true',
+            'routeSet_1_status_1_dueAt_1: (none)',
             'subjectId_1: partialFilterExpression={"subjectId":{"$exists":true}}'
         ]);
     });
 
-    it('expires ascending by createdAt, which is the direction a TTL index needs', () => {
+    it('expires ascending by closedAt, so an open ticket never expires', () => {
         // Mongo only honours `expireAfterSeconds` on a single-field ascending index. The same
         // field appears descending in the compound queue index above; getting these confused
         // produces an index that silently never deletes anything.
-        expect(indexSpecs(ticketSchema)).toContain('createdAt_1: createdAt+1');
+        expect(indexSpecs(ticketSchema)).toContain('closedAt_1: closedAt+1');
     });
 });

@@ -10,6 +10,12 @@
             "label-message": "Messaggio",
             "label-created-at": "Creata il",
             "not-available": "N/D"
-        }
+        },
+        "already-resolved": "Questo ticket è già risolto.",
+        "already-spam": "Questo ticket è già segnato come spam.",
+        "already-open": "Questo ticket è già aperto.",
+        "superseded": "Un ticket aperto più recente copre già questa situazione, quindi questo non può essere riaperto.",
+        "not-open": "Questo ticket è chiuso. Riaprilo prima.",
+        "assignee-invalid": "Questa persona non può gestire questo ticket."
     }
 }

@@ -1,19 +1,24 @@
 /**
  * @module
- * Ticket service — creation (with the operator notification), search, and status
- * triage. The status rules themselves — narrowing, the starting status, when `respondedAt`
- * stamps — live in `./domain`; this file is the write path around them.
+ * Ticket service — the contact form's creation (with the operator notification), the staff reads
+ * and delete, and the module's two `personalData` halves (export, erasure). The doors that move a
+ * ticket (resolve, assign, note…) are in `./workflow`; the rules they apply are in `./domain`.
  *
  * See: docs/modules/tickets.md
  */
 
+import type { ClientSession } from 'mongoose';
+import { Types } from 'mongoose';
+import { TicketKind, TicketResolution, TicketSource } from '@types';
 import type {
-    Ticket,
-    SearchTicketsRequest,
-    UpdateTicketStatusRequest,
+    CallerContext,
     CreateContactTicketRequest,
-    ExportTicket
+    ExportSystemTicket,
+    ExportTicket,
+    SearchTicketsRequest,
+    Ticket
 } from '@types';
+import type { PersonalDataSubject } from '@kernel/registry';
 import type { TicketDocument } from './model';
 import { ticketRepository } from './repository';
 import {
@@ -33,17 +38,16 @@ import {
     type PaginatedMeta
 } from '@infrastructure/persistence/search';
 import { toObjectId, type Lean } from '@infrastructure/persistence/create-repository';
-import type { CallerContext } from '@types';
-import type { ClientSession } from 'mongoose';
-import type { PersonalDataSubject } from '@kernel/registry';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { auditChanges } from '@infrastructure/observability/audit-changes';
-import { ticketsAuditActions } from './audit';
-import { clearedOrValue } from '@infrastructure/persistence/changes';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
-import { initialTicketStatus, ownTicketsFilter, shouldStampRespondedAt } from './domain';
+import { OPEN_STATUSES, initialTicketStatus, ownTicketsFilter, routeSetOf } from './domain';
 import { ticketsConfig } from './config';
 import { mailConfig } from '@infrastructure/adapters/config';
+import { ticketsAuditActions } from './audit';
+import { inJurisdiction, jurisdictionScope, mayDelete } from './access';
+import { presentTicket, withView } from './presenter';
+import { assigneeNamesOf, viewerOf } from './views';
+import { workflow } from './services/workflow';
 
 /**
  * Where the operator's notification goes: the dedicated contact mailbox, then the generic SMTP
@@ -54,6 +58,9 @@ import { mailConfig } from '@infrastructure/adapters/config';
  */
 const notifyMailbox = (): string =>
     ticketsConfig().NODE_CONTACT_NOTIFY_EMAIL ?? mailConfig().NODE_SMTP_SENDER ?? '';
+
+/** How long a contact message may wait before it is overdue, in milliseconds. */
+const contactSlaMs = (): number => ticketsConfig().NODE_TICKETS_CONTACT_SLA_HOURS * 3_600_000;
 
 /**
  * Record a contact request and tell the support mailbox about it — unless the honeypot caught it.
@@ -80,6 +87,7 @@ const create = (
     subjectId?: string
 ): Promise<TicketDocument> => {
     const email = normalizeEmail(payload.email);
+    const now = new Date();
     const honeypotFilled = Boolean(payload.website?.trim());
 
     return checkEmailPolicy(email).then((verdict) => {
@@ -94,7 +102,14 @@ const create = (
                 message: payload.message.trim(),
                 ...(payload.category ? { category: payload.category } : {}),
                 ...(payload.orderNumber?.trim() ? { orderNumber: payload.orderNumber.trim() } : {}),
-                status: initialTicketStatus(suspectedSpam)
+                source: TicketSource.visitor,
+                kind: TicketKind.contact,
+                routeSet: routeSetOf(TicketKind.contact),
+                status: initialTicketStatus(suspectedSpam),
+                // Spam is closed at birth: it ages from now and never owes work.
+                ...(suspectedSpam
+                    ? { closedAt: now, resolution: TicketResolution.spam }
+                    : { dueAt: new Date(now.getTime() + contactSlaMs()) })
             })
             .then((created) => {
                 if (suspectedSpam) return created;
@@ -114,7 +129,7 @@ const create = (
                  */
                 const operatorMail = contactRequestEmail(getDefaultLocale(), {
                     name: created.name,
-                    email: created.email,
+                    email: created.email ?? email,
                     subject: created.subject,
                     message: created.message,
                     createdAt: created.createdAt?.toISOString()
@@ -139,127 +154,160 @@ const create = (
     });
 };
 
-/**
- * Search tickets by status, email fragment or free text, paginated.
- *
- * Emits `ticketsAuditActions.ADMIN_TICKET_VIEWED` when a `context` is given — an omitted
- * context means "not an HTTP request" (a test, or future internal reuse as a plain query helper),
- * so no event is emitted for those.
- */
-const search = (
-    // `page`/`pageSize` are widened to accept strings: they arrive from a query string, and
-    // `normalizePagination` is what coerces and bounds them. `status` is already the closed enum
-    // by the time it reaches here — the generated Zod schema validates it at the controller.
-    filters: Omit<SearchTicketsRequest, 'page' | 'pageSize'> & {
-        page?: string | number;
-        pageSize?: string | number;
-    } = {},
-    // Omitted by callers that are not a request answering `GET /tickets` (tests, and any future
-    // internal reuse of this as a plain query helper) — no context means no emit.
-    context?: CallerContext
-): Promise<{
-    items: Ticket[];
-    meta: PaginatedMeta;
-}> =>
-    // `status` and `category` are declared as a scope rather than on the repository's own search
-    // spec: each is a closed enum with its own collection-wide meaning, not a per-field text/exact
-    // match.
-    ticketRepository
-        .search(filters, {
-            ...(filters.status ? { status: filters.status } : {}),
-            ...(filters.category ? { category: filters.category } : {})
-        })
-        .then((result) => {
-            recordAudit(context, {
-                action: ticketsAuditActions.ADMIN_TICKET_VIEWED,
-                outcome: 'success'
-            });
-            return result;
-        });
-
-/**
- * Applies a status/notes patch to an already-loaded ticket and persists it.
- *
- * `respondedAt` is stamped once, the first time a ticket reaches `resolved` — re-resolving an
- * already-resolved ticket must not move the timestamp.
- *
- * Always succeeds once called — there is no validation branch here, only a write. A failed
- * `save` rejects the promise rather than resolving a `ResponseReject`, which is why the return
- * type carries no reject case; `updateStatusById` is what can still answer 404, before this runs.
- */
-const updateStatus = (
-    ticket: TicketDocument,
-    payload: UpdateTicketStatusRequest
-): Promise<ResponseSuccess<TicketDocument>> => {
-    const nextStatus = payload.status;
-    if (nextStatus !== undefined) ticket.status = nextStatus;
-    // `null` clears the notes — $unset on save, via `clearedOrValue`.
-    if (payload.adminNotes !== undefined) ticket.adminNotes = clearedOrValue(payload.adminNotes);
-    if (shouldStampRespondedAt(nextStatus, Boolean(ticket.respondedAt)))
-        ticket.respondedAt = new Date();
-    return ticketRepository.save(ticket).then((saved) => generateSuccess(saved));
+/** What a search may filter on, past the repository's own text and address matching. */
+type TicketFilters = Omit<SearchTicketsRequest, 'page' | 'pageSize'> & {
+    page?: string | number;
+    pageSize?: string | number;
 };
 
 /**
- * Loads a ticket by id, applies {@link updateStatus}, and — on success — emits
- * `ticketsAuditActions.ADMIN_TICKET_STATUS_UPDATED`.
+ * The part of a search that is a closed enum or a relation, declared as scope rather than on the
+ * repository's spec: each has its own collection-wide meaning, not a per-field text match.
  *
- * @returns A 404 `ResponseReject` when the id names no ticket, otherwise the save result.
+ * @param filters - the validated filters
+ * @param context - the caller, whose jurisdiction bounds the search and whose id `assignee=me` reads
+ * @param now - the clock, for `overdue`
  */
-const updateStatusById = (
-    id: string,
-    payload: UpdateTicketStatusRequest,
-    context?: CallerContext
-): Promise<ResponseSuccess<TicketDocument> | ResponseReject> =>
-    ticketRepository.findById(id).then((ticket) => {
-        if (!ticket) return generateReject(404, [t('generic.error-not-found')]);
-        // Read before `updateStatus` assigns onto the document. The notes are free text: by name only.
-        const metadata = auditChanges(ticket, payload, {
-            valued: ['status'],
-            named: ['adminNotes']
-        });
+const scopeOf = (
+    filters: TicketFilters,
+    context: CallerContext,
+    now: Date
+): Record<string, unknown> => {
+    const { caller } = context;
+    const clauses: Record<string, unknown>[] = [jurisdictionScope(caller)];
 
-        return updateStatus(ticket, payload).then((result) => {
-            recordAudit(context, {
-                action: ticketsAuditActions.ADMIN_TICKET_STATUS_UPDATED,
-                outcome: 'success',
-                targetType: 'ticket',
-                targetId: id,
-                metadata
-            });
-            return result;
-        });
+    if (filters.overdue === true)
+        clauses.push({ status: { $in: OPEN_STATUSES }, dueAt: { $lt: now } });
+
+    if (filters.assignee === 'none') clauses.push({ assigneeId: { $exists: false } });
+    else if (filters.assignee !== undefined) {
+        const who = filters.assignee === 'me' ? caller.id : filters.assignee;
+        // `me` for a caller with no account (an API key), or an id that is not one, matches nothing.
+        clauses.push(
+            who !== null && who !== undefined && Types.ObjectId.isValid(who)
+                ? { assigneeId: toObjectId(who) }
+                : { _id: { $in: [] } }
+        );
+    }
+
+    return {
+        ...(filters.status ? { status: filters.status } : {}),
+        ...(filters.category ? { category: filters.category } : {}),
+        ...(filters.source ? { source: filters.source } : {}),
+        ...(filters.kind ? { kind: filters.kind } : {}),
+        $and: clauses
+    };
+};
+
+/**
+ * Search tickets by status, kind, source, assignee, overdue, email fragment or free text,
+ * paginated — inside the caller's jurisdiction.
+ *
+ * Emits `ticketsAuditActions.ADMIN_TICKET_VIEWED` when a `context` is given.
+ *
+ * @param filters - the validated filters; `page`/`pageSize` may be strings, which
+ *   `normalizePagination` coerces and bounds
+ * @param context - the caller. Required: the jurisdiction is theirs.
+ */
+const search = (
+    filters: TicketFilters,
+    context: CallerContext
+): Promise<{ items: Ticket[]; meta: PaginatedMeta }> => {
+    const now = new Date();
+
+    return ticketRepository
+        .search(filters, scopeOf(filters, context, now))
+        .then(({ items, meta }) =>
+            assigneeNamesOf(items.map((row) => row.assigneeId)).then((names) => {
+                const viewer = viewerOf(context.caller, names);
+                recordAudit(context, {
+                    action: ticketsAuditActions.ADMIN_TICKET_VIEWED,
+                    outcome: 'success'
+                });
+                return { items: items.map((row) => withView(row, viewer.of(row), now)), meta };
+            })
+        );
+};
+
+/**
+ * One ticket by id, inside the caller's jurisdiction, with its notes, its assignee's name and the
+ * earlier tickets about the same record. A ticket outside the jurisdiction is a 404, not a 403: it
+ * does not admit to existing.
+ *
+ * @param id - the ticket
+ * @param context - the caller
+ * @returns the ticket, or the 404 a missing or out-of-jurisdiction one earns
+ */
+const getById = (
+    id: string,
+    context: CallerContext
+): Promise<ResponseSuccess<Ticket> | ResponseReject> =>
+    ticketRepository.findById(id).then((ticket) => {
+        if (!ticket || !inJurisdiction(context.caller, ticket))
+            return generateReject(404, [t('generic.error-not-found')]);
+
+        return Promise.all([
+            assigneeNamesOf([ticket.assigneeId?.toString()]),
+            ticket.link ? earlierThan(ticket, context) : Promise.resolve([])
+        ]).then(([names, earlierTickets]) =>
+            generateSuccess(
+                presentTicket(ticket, {
+                    ...viewerOf(context.caller, names).of(ticket),
+                    earlierTickets
+                })
+            )
+        );
     });
 
 /**
- * One ticket by id — the item read of the list the admin queue shows. The same rows the list
- * returns, so there is no further scope: whoever holds `read:Ticket` reads any of them.
+ * The tickets about the same record that came before this one, newest first, inside the caller's
+ * jurisdiction.
  *
- * @param id - the ticket
- * @returns the ticket, or the 404 a missing one earns
+ * @param ticket - the ticket being read
+ * @param context - the caller
  */
-const getById = (id: string): Promise<ResponseSuccess<TicketDocument> | ResponseReject> =>
+const earlierThan = (ticket: TicketDocument, context: CallerContext) =>
     ticketRepository
-        .findById(id)
-        .then((ticket) =>
-            ticket ? generateSuccess(ticket) : generateReject(404, [t('generic.error-not-found')])
+        .findAll(
+            {
+                'link.type': ticket.link?.type,
+                'link.id': ticket.link?.id,
+                _id: { $ne: ticket._id },
+                createdAt: { $lte: ticket.createdAt },
+                ...jurisdictionScope(context.caller)
+            },
+            { sort: { createdAt: -1 }, limit: 20 }
+        )
+        .then((rows) =>
+            rows.map((row) => ({
+                id: String(row._id),
+                kind: row.kind,
+                status: row.status,
+                createdAt: (row.createdAt ?? new Date(0)).toISOString()
+            }))
         );
 
 /**
  * Loads a ticket by id and permanently removes it, then — on success — emits
- * `ticketsAuditActions.ADMIN_TICKET_DELETED`.
+ * `ticketsAuditActions.ADMIN_TICKET_DELETED`. Needs `delete:Ticket` and, for a system ticket,
+ * its route set.
  *
  * No soft-delete tier: this module has none, so unlike `orders`' `removeById` there is no
  * `hardDelete` flag to thread through.
  *
- * @returns A 404 `ResponseReject` when the id names no ticket, otherwise the removal result.
+ * @returns A 404 when the id names no ticket in the caller's jurisdiction, a 403 when the caller
+ *   may see but not delete it, otherwise the removal result.
  */
 const removeById = (
     id: string,
-    context?: CallerContext
+    context: CallerContext
 ): Promise<ResponseSuccess<undefined> | ResponseReject> =>
     ticketRepository.findById(id).then((ticket) => {
-        if (!ticket) return generateReject(404, [t('generic.error-not-found')]);
+        if (!ticket || !inJurisdiction(context.caller, ticket))
+            return generateReject(404, [t('generic.error-not-found')]);
+        if (!mayDelete(context.caller, ticket))
+            return generateReject(403, [t('generic.error-forbidden')]);
+
         return ticketRepository.deleteOne(ticket).then(() => {
             recordAudit(context, {
                 action: ticketsAuditActions.ADMIN_TICKET_DELETED,
@@ -272,10 +320,10 @@ const removeById = (
     });
 
 /**
- * A person's own tickets — what they sent signed in, plus what was sent under their verified
- * address (`ownTicketsFilter`). Deliberately `findAll` with a raw filter, not `search`'s `email`
- * spec: that spec is a REGEX for staff free-text search, and a substring match here would hand
- * one person another's ticket whose address happens to contain theirs.
+ * A person's own visitor tickets — what they sent signed in, plus what was sent under their
+ * verified address (`ownTicketsFilter`). Deliberately `findAll` with a raw filter, not `search`'s
+ * `email` spec: that spec is a REGEX for staff free-text search, and a substring match here would
+ * hand one person another's ticket whose address happens to contain theirs.
  *
  * @param subject - who the export is about
  */
@@ -290,22 +338,29 @@ const findOwnTickets = (subject: PersonalDataSubject): Promise<Lean<TicketDocume
     );
 
 /**
- * {@link ExportTicket}, built from the real document — the one place `adminNotes` is
- * dropped: that field is staff's internal assessment of the ticket, not the submitter's data, and
- * Art. 15(4) protects the rights of others (whoever wrote the note) the same way it protects the
- * submitter's own. A REAL plain object, not a type-level `Omit` on the Mongoose document: the
- * document's own `toJSON()` carries no such omission, so returning the document itself would
- * still serialize `adminNotes` regardless of what a narrower TypeScript type here claimed.
+ * The staff notes as the data subject sees them: the words and the time, never the author (the
+ * author is a colleague's data, and who wrote it is not the subject's to know).
+ *
+ * @param ticket - the stored ticket
+ */
+const exportNotesOf = (ticket: Lean<TicketDocument>) =>
+    ticket.notes.map((note) => ({ body: note.body, at: note.at.toISOString() }));
+
+/**
+ * {@link ExportTicket}, built from the real document. A REAL plain object, not a type-level `Omit`
+ * on the Mongoose document: the document's own `toJSON()` carries no such omission, so returning
+ * the document itself would still serialize every staff field.
  */
 const toExportTicket = (ticket: Lean<TicketDocument>): ExportTicket => ({
     id: String(ticket._id),
     ...(ticket.name === undefined ? {} : { name: ticket.name }),
-    email: ticket.email,
+    email: ticket.email ?? '',
     subject: ticket.subject,
     message: ticket.message,
     ...(ticket.category ? { category: ticket.category } : {}),
     ...(ticket.orderNumber ? { orderNumber: ticket.orderNumber } : {}),
     status: ticket.status,
+    notes: exportNotesOf(ticket),
     ...(ticket.respondedAt ? { respondedAt: ticket.respondedAt.toISOString() } : {}),
     ...(ticket.createdAt ? { createdAt: ticket.createdAt.toISOString() } : {})
 });
@@ -320,24 +375,78 @@ const findOwnTicketsForExport = (subject: PersonalDataSubject): Promise<ExportTi
     findOwnTickets(subject).then((tickets) => tickets.map((ticket) => toExportTicket(ticket)));
 
 /**
- * Delete every ticket a person owns, open or spam included — the `personalData.erase` hook, run
- * only inside a hard delete's transaction (never at the reversible lock, so a restore finds every
- * message).
+ * {@link ExportSystemTicket}: every field the system holds about the situation except the staff
+ * behind it (`assigneeId`, the notes' authors) and the dedup key. A ticket is itself an assessment
+ * of the person, so it is the person's to read (CJEU C-434/16, EDPB 01/2022).
+ */
+const toExportSystemTicket = (ticket: Lean<TicketDocument>): ExportSystemTicket => ({
+    id: String(ticket._id),
+    kind: ticket.kind,
+    subject: ticket.subject,
+    message: ticket.message,
+    ...(ticket.link ? { link: { type: ticket.link.type, id: ticket.link.id } } : {}),
+    routeSet: ticket.routeSet,
+    status: ticket.status,
+    ...(ticket.resolution ? { resolution: ticket.resolution } : {}),
+    notes: exportNotesOf(ticket),
+    ...(ticket.dueAt ? { dueAt: ticket.dueAt.toISOString() } : {}),
+    ...(ticket.lastSeenAt ? { lastSeenAt: ticket.lastSeenAt.toISOString() } : {}),
+    ...(ticket.seenCount ? { seenCount: ticket.seenCount } : {}),
+    ...(ticket.respondedAt ? { respondedAt: ticket.respondedAt.toISOString() } : {}),
+    ...(ticket.closedAt ? { closedAt: ticket.closedAt.toISOString() } : {}),
+    ...(ticket.createdAt ? { createdAt: ticket.createdAt.toISOString() } : {})
+});
+
+/**
+ * The tickets the system opened about this person, shaped for the export. Matched by `subjectId`
+ * alone: a system ticket is about an account, never about an address.
+ *
+ * @param subject - who the export is about
+ */
+const findSystemTicketsForExport = (subject: PersonalDataSubject): Promise<ExportSystemTicket[]> =>
+    readAll(
+        (page) =>
+            ticketRepository.findAll(
+                { source: TicketSource.system, subjectId: toObjectId(subject.userId) },
+                {
+                    skip: (page - 1) * MAX_CONFIGURED_PAGE_SIZE,
+                    limit: MAX_CONFIGURED_PAGE_SIZE
+                }
+            ),
+        MAX_CONFIGURED_PAGE_SIZE
+    ).then((tickets) => tickets.map((ticket) => toExportSystemTicket(ticket)));
+
+/**
+ * Erase what the person owns — the `personalData.erase` hook, run only inside a hard delete's
+ * transaction (never at the reversible lock, so a restore finds every message):
+ *   - their visitor tickets, open and spam included;
+ *   - system tickets that ARE the person's (the record is the account or its export), deleted;
+ *   - system tickets about an order, payment… that outlive them, detached from the account;
+ *   - their name as assignee and as the author of notes, wherever they worked.
  *
  * @param subject - the erased account
  * @param session - the erasure's transaction
  */
-const eraseOwnTickets = (subject: PersonalDataSubject, session: ClientSession): Promise<void> =>
-    ticketRepository.deleteOwned(ownTicketsFilter(subject), session).then(() => undefined);
+const eraseOwnTickets = async (
+    subject: PersonalDataSubject,
+    session: ClientSession
+): Promise<void> => {
+    // Sequential: a `ClientSession` runs ONE operation at a time.
+    await ticketRepository.deleteOwned(ownTicketsFilter(subject), session);
+    await ticketRepository.deleteSystemAbout(subject.userId, session);
+    await ticketRepository.detachSubject(subject.userId, session);
+    await ticketRepository.forgetStaff(subject.userId, session);
+};
 
 /** The module's barrel export — used by the controllers in `./controllers`. */
 export const ticketService = {
     create,
     search,
     getById,
-    updateStatusById,
     removeById,
+    ...workflow,
     findOwnTickets,
     findOwnTicketsForExport,
+    findSystemTicketsForExport,
     eraseOwnTickets
 };

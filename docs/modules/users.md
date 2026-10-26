@@ -25,6 +25,7 @@ flowchart LR
     notifications["notifications"]
     orders["orders"]
     stock_alerts["stock-alerts"]
+    tickets["tickets"]
 
     account --> users
     api_keys --> users
@@ -33,6 +34,7 @@ flowchart LR
     notifications --> users
     orders --> users
     stock_alerts --> users
+    tickets --> users
     users --> access
     users -. "user.deactivated" .-> account
     users -. "user.deletion-cancelled" .-> account
@@ -44,7 +46,7 @@ flowchart LR
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
     class notifications,stock_alerts supporting;
-    class access,account,api_keys,example generic;
+    class access,account,api_keys,example,tickets generic;
     class users centre;
 ```
 

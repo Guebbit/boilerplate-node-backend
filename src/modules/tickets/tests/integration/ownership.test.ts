@@ -6,15 +6,28 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
+import { Types } from 'mongoose';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { ticketService } from '@modules/tickets/service';
 import { ticketRepository } from '@modules/tickets/repository';
 import ticketsModule from '@modules/tickets/module';
+import type { PersonalDataEraser } from '@kernel/registry';
+import { TicketKind, TicketLinkType, TicketSource } from '@types';
 
 setupTestDb();
 
 /** The tickets section, off the manifest — the way `account` and `users` reach it. */
-const [{ collect, erase }] = ticketsModule.personalData;
+const [{ collect }] = ticketsModule.personalData;
+
+/** The erase hook, off the manifest — the way `users` reaches it. */
+const erase = (
+    subject: Parameters<PersonalDataEraser>[0],
+    session: Parameters<PersonalDataEraser>[1]
+): Promise<void> => {
+    const hook = ticketsModule.personalData[0].erase;
+    if (!hook) throw new Error('the tickets section declares no erase hook');
+    return Promise.resolve(hook(subject, session)).then(() => undefined);
+};
 
 /** The account under test. */
 const ACCOUNT_ID = '65dc8a99604c307b702b5ccc';
@@ -70,6 +83,53 @@ describe('POST /tickets records who sent it', () => {
 
         expect(response.status).toBe(201);
         expect(response.body).not.toHaveProperty('subjectId');
+    });
+});
+
+/** A system ticket about a record, optionally about the account under test. */
+const systemTicket = (link: { type: TicketLinkType; id: string }, extra: object = {}) =>
+    ticketRepository.create({
+        source: TicketSource.system,
+        kind: TicketKind.account_review,
+        routeSet: 'UserBanning',
+        subject: 'Review',
+        message: 'A person must look.',
+        link,
+        subjectId: new Types.ObjectId(ACCOUNT_ID),
+        ...extra
+    });
+
+describe('erasing the system tickets about a person', () => {
+    it('deletes a ticket that IS the person’s (its record is the account) and detaches one that outlives them', async () => {
+        const about = await systemTicket({ type: TicketLinkType.user, id: ACCOUNT_ID });
+        const order = await systemTicket({ type: TicketLinkType.order, id: 'order-1' });
+
+        await withTransaction((session) => erase(subject(true), session));
+
+        expect(await ticketRepository.findById(String(about._id))).toBeNull();
+        const kept = await ticketRepository.findById(String(order._id));
+        expect(kept?.subjectId).toBeUndefined();
+    });
+
+    it('forgets an erased member of staff as assignee and as the author of notes', async () => {
+        const staffId = new Types.ObjectId();
+        const worked = await systemTicket(
+            { type: TicketLinkType.order, id: 'order-2' },
+            {
+                subjectId: new Types.ObjectId(OTHER_ACCOUNT_ID),
+                assigneeId: staffId,
+                notes: [{ authorId: staffId, body: 'looked into it', at: new Date() }]
+            }
+        );
+
+        await withTransaction((session) =>
+            erase({ ...subject(true), userId: String(staffId) }, session)
+        );
+
+        const after = await ticketRepository.findById(String(worked._id));
+        expect(after?.assigneeId).toBeUndefined();
+        expect(after?.notes[0].authorId).toBeUndefined();
+        expect(after?.notes[0].body).toBe('looked into it');
     });
 });
 

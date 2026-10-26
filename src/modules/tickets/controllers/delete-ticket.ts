@@ -15,8 +15,8 @@ import { requireId } from '@infrastructure/http/ids';
 import { ticketService } from '../service';
 
 /**
- * DELETE /tickets/:id (admin)
- * Permanently removes a ticket. A malformed or unknown id both answer 404.
+ * DELETE /tickets/:id (staff)
+ * Permanently removes a ticket. A malformed, unknown or out-of-jurisdiction id answers 404.
  */
 export const deleteTicket = (request: Request<{ id: string }>, response: Response) => {
     const id = requireId(request, response, { notFound: 'generic.error-not-found' });

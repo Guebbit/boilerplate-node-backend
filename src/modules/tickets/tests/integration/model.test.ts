@@ -5,6 +5,7 @@
  * list result (mapped manually via `applyTicketTransform`).
  */
 import { asStub } from '@tests/stub';
+import { callerContextAs } from '@tests/callers';
 import { setupTestDb } from '@tests/setup-test-db';
 import { ticketRepository } from '@modules/tickets/repository';
 import { ticketService } from '@modules/tickets/service';
@@ -30,7 +31,7 @@ describe('ticket serialization', () => {
 
     it('normalizes a lean list via ticketService.search', async () => {
         await createTicket();
-        const { items } = await ticketService.search({});
+        const { items } = await ticketService.search({}, callerContextAs('admin'));
 
         expect(items).toHaveLength(1);
         const item = asStub<Record<string, unknown>>(items[0]);

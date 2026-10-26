@@ -272,98 +272,165 @@ describe('GET /tickets/{id}', () => {
     });
 });
 
-describe('PATCH /tickets/{id}', () => {
-    // A triage state is two fields of a bigger record, so no PUT is offered (RFC 9110 §15.5.6).
-    it('answers a PUT 405 with the methods it does allow', async () => {
+describe('the status doors', () => {
+    it('answers PATCH and PUT 405: status is read-only, there is no field to write', async () => {
         const { bearer } = await authenticateAs('admin');
         const id = await createContactTicket();
-        const response = await api()
+
+        const patch = await api()
+            .patch(`/tickets/${id}`)
+            .set('Authorization', bearer)
+            .send({ status: 'resolved' });
+        const put = await api()
             .put(`/tickets/${id}`)
             .set('Authorization', bearer)
             .send({ status: 'resolved' });
 
-        expect(response.status).toBe(405);
-        expect(response.headers.allow).toBe('DELETE, GET, HEAD, PATCH');
+        expect([patch.status, put.status]).toEqual([405, 405]);
+        expect(patch.headers.allow).toBe('DELETE, GET, HEAD');
     });
 
-    it('matches the contract when changing status and notes together', async () => {
+    it('resolves, marks as spam and reopens, each answering the ticket with its actions', async () => {
         const { bearer } = await authenticateAs('admin');
         const id = await createContactTicket();
-        const response = await api()
-            .patch(`/tickets/${id}`)
-            .set('Authorization', bearer)
-            .send({ status: 'resolved', adminNotes: 'Fixed in 2.1.1' });
 
-        expect(response.status).toBe(200);
-        expect(response.body.status).toBe('resolved');
-        expect(response.body.adminNotes).toBe('Fixed in 2.1.1');
+        const resolved = await api().post(`/tickets/${id}/resolve`).set('Authorization', bearer);
+        const spam = await api().post(`/tickets/${id}/mark-spam`).set('Authorization', bearer);
+        const reopened = await api().post(`/tickets/${id}/reopen`).set('Authorization', bearer);
+
+        expect([resolved.status, spam.status, reopened.status]).toEqual([200, 200, 200]);
+        expect(resolved.body).toMatchObject({ status: 'resolved', resolution: 'staff' });
+        expect(resolved.body.actions).toMatchObject({ resolve: false, reopen: true });
+        expect(spam.body).toMatchObject({ status: 'spam', resolution: 'spam' });
+        expect(reopened.body.status).toBe('new');
+        expect(reopened.body).not.toHaveProperty('closedAt');
     });
 
-    it('matches the error contract for a status outside the enum', async () => {
+    it('answers 409 with the code of the state already reached', async () => {
         const { bearer } = await authenticateAs('admin');
         const id = await createContactTicket();
-        const response = await api()
-            .patch(`/tickets/${id}`)
-            .set('Authorization', bearer)
-            .send({ status: 'archived' });
+        await api().post(`/tickets/${id}/resolve`).set('Authorization', bearer);
 
-        expect(response.status).toBe(422);
+        const again = await api().post(`/tickets/${id}/resolve`).set('Authorization', bearer);
+        const open = await api().post(`/tickets/${id}/reopen`).set('Authorization', bearer);
+        const openAgain = await api().post(`/tickets/${id}/reopen`).set('Authorization', bearer);
+
+        expect(again.status).toBe(409);
+        expect(again.body.errors[0].code).toBe('TICKET_ALREADY_RESOLVED');
+        expect(open.status).toBe(200);
+        expect(openAgain.status).toBe(409);
+        expect(openAgain.body.errors[0].code).toBe('TICKET_ALREADY_OPEN');
     });
 
-    it('leaves adminNotes unchanged when the PATCH body omits it', async () => {
-        const { bearer } = await authenticateAs('admin');
+    it('refuses a shopper (403) and a guest (401)', async () => {
+        const { bearer } = await authenticateAs('user');
         const id = await createContactTicket();
-        await api()
-            .patch(`/tickets/${id}`)
-            .set('Authorization', bearer)
-            .send({ adminNotes: 'first pass' });
 
-        const response = await api()
-            .patch(`/tickets/${id}`)
-            .set('Authorization', bearer)
-            .send({ status: 'resolved' });
+        const shopper = await api().post(`/tickets/${id}/resolve`).set('Authorization', bearer);
+        const guest = await api().post(`/tickets/${id}/resolve`);
 
-        expect(response.status).toBe(200);
-        expect(response.body.status).toBe('resolved');
-        expect(response.body.adminNotes).toBe('first pass');
+        expect([shopper.status, guest.status]).toEqual([403, 401]);
     });
 
-    it('clears adminNotes on an explicit null', async () => {
+    it('answers 404 for a ticket that does not exist', async () => {
         const { bearer } = await authenticateAs('admin');
-        const id = await createContactTicket();
-        await api()
-            .patch(`/tickets/${id}`)
-            .set('Authorization', bearer)
-            .send({ adminNotes: 'to be cleared' });
 
         const response = await api()
-            .patch(`/tickets/${id}`)
-            .set('Authorization', bearer)
-            .send({ adminNotes: null });
-
-        expect(response.status).toBe(200);
-        expect(response.body.adminNotes).toBeUndefined();
-    });
-
-    it('refuses "" for adminNotes, never a synonym for null', async () => {
-        const { bearer } = await authenticateAs('admin');
-        const id = await createContactTicket();
-        const response = await api()
-            .patch(`/tickets/${id}`)
-            .set('Authorization', bearer)
-            .send({ adminNotes: '' });
-
-        expect(response.status).toBe(422);
-    });
-
-    it('matches the error contract for a request that does not exist', async () => {
-        const { bearer } = await authenticateAs('admin');
-        const response = await api()
-            .patch(`/tickets/${MISSING_ID}`)
-            .set('Authorization', bearer)
-            .send({ status: 'spam' });
+            .post(`/tickets/${MISSING_ID}/resolve`)
+            .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
+    });
+});
+
+describe('assignment and notes', () => {
+    it('takes a ticket for yourself, names you, and gives it back', async () => {
+        const { bearer, user } = await authenticateAs('admin');
+        const id = await createContactTicket();
+
+        const taken = await api()
+            .put(`/tickets/${id}/assignee`)
+            .set('Authorization', bearer)
+            .send({ userId: user.id });
+        const given = await api().delete(`/tickets/${id}/assignee`).set('Authorization', bearer);
+
+        expect(taken.status).toBe(200);
+        expect(taken.body).toMatchObject({ status: 'in_progress', assigneeId: user.id });
+        expect(typeof taken.body.assigneeName).toBe('string');
+        expect(given.body.status).toBe('new');
+        expect(given.body).not.toHaveProperty('assigneeId');
+    });
+
+    it('422s an assignee id that is not an id', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const id = await createContactTicket();
+
+        const response = await api()
+            .put(`/tickets/${id}/assignee`)
+            .set('Authorization', bearer)
+            .send({ userId: 'nobody' });
+
+        expect(response.status).toBe(422);
+    });
+
+    it('appends a note with 201 and shows it on the ticket read', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const id = await createContactTicket();
+
+        const noted = await api()
+            .post(`/tickets/${id}/notes`)
+            .set('Authorization', bearer)
+            .send({ body: 'Called back.' });
+        const read = await api().get(`/tickets/${id}`).set('Authorization', bearer);
+
+        expect(noted.status).toBe(201);
+        expect(read.body.notes).toHaveLength(1);
+        expect(read.body.notes[0]).toMatchObject({ body: 'Called back.' });
+    });
+
+    it('422s an empty note', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const id = await createContactTicket();
+
+        const response = await api()
+            .post(`/tickets/${id}/notes`)
+            .set('Authorization', bearer)
+            .send({ body: '' });
+
+        expect(response.status).toBe(422);
+    });
+});
+
+describe('GET /tickets/summary and the queue filters', () => {
+    it('counts open, mine, overdue and unassigned', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createContactTicket();
+
+        const response = await api().get('/tickets/summary').set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({ open: 1, mine: 0, overdue: 0, unassigned: 1 });
+    });
+
+    it('refuses a shopper the summary with 403', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api().get('/tickets/summary').set('Authorization', bearer);
+
+        expect(response.status).toBe(403);
+    });
+
+    it('filters by source, kind and assignee', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createContactTicket();
+
+        const visitor = await api()
+            .get('/tickets?source=visitor&kind=contact&assignee=none')
+            .set('Authorization', bearer);
+        const system = await api().get('/tickets?source=system').set('Authorization', bearer);
+
+        expect(visitor.body.items).toHaveLength(1);
+        expect(system.body.items).toHaveLength(0);
     });
 });
 

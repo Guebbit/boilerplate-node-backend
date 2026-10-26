@@ -14,7 +14,14 @@ import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewa
 import { postTicket } from './controllers/post-ticket';
 import { getTickets } from './controllers/get-tickets';
 import { getTicketById } from './controllers/get-ticket-by-id';
-import { updateTicketStatus } from './controllers/update-ticket-status';
+import { getTicketSummary } from './controllers/get-ticket-summary';
+import {
+    postTicketMarkSpam,
+    postTicketReopen,
+    postTicketResolve
+} from './controllers/ticket-doors';
+import { deleteTicketAssignee, putTicketAssignee } from './controllers/ticket-assignee';
+import { postTicketNote } from './controllers/post-ticket-note';
 import { deleteTicket } from './controllers/delete-ticket';
 import { noStore, privateNoCache } from '@infrastructure/http/middlewares/cache';
 import { contactLimiters } from './rate-limits';
@@ -50,9 +57,9 @@ router.use(getAuth, isAuthOrCredential);
 
 /**
  * The DTO form of `GET /` — a GET body has no defined semantics, so this exists to carry filters.
- * Mounted ABOVE any future `/:id` route so "search" can't later match as an id.
+ * Mounted ABOVE any `/:id` route so "search" can't later match as an id.
  *
- * Never Redis-cached: an admin-only queue, which a shared cache must never hold — RFC 9111 §3.5.
+ * Never Redis-cached: a staff queue, which a shared cache must never hold — RFC 9111 §3.5.
  * `noStore`, like every POST answer.
  */
 router.post('/search', requirePermission('read', 'Ticket'), noStore, getTickets);
@@ -60,11 +67,29 @@ router.post('/search', requirePermission('read', 'Ticket'), noStore, getTickets)
 // `privateNoCache`: the browser may keep its own copy, revalidated every time.
 router.get('/', requirePermission('read', 'Ticket'), privateNoCache, getTickets);
 
-// GET /tickets/:id — one ticket. After `/` and `/search`, so neither matches as an id.
+// GET /tickets/summary — the badge's counts. Above `/:id`, so "summary" is not read as an id.
+router.get('/summary', requirePermission('read', 'Ticket'), noStore, getTicketSummary);
+
+// GET /tickets/:id — one ticket. After `/`, `/search` and `/summary`, so none matches as an id.
 router.get('/:id', requirePermission('read', 'Ticket'), privateNoCache, getTicketById);
 
-// PATCH /tickets/:id — merge the fields sent
-router.patch('/:id', requirePermission('update', 'Ticket'), updateTicketStatus);
+// The status doors: one action per effect, no body (`docs/api/write-methods.md`). The status field
+// is read-only, so there is no PATCH.
+router.post('/:id/resolve', requirePermission('update', 'Ticket'), noStore, postTicketResolve);
+router.post('/:id/mark-spam', requirePermission('update', 'Ticket'), noStore, postTicketMarkSpam);
+router.post('/:id/reopen', requirePermission('update', 'Ticket'), noStore, postTicketReopen);
+
+// Assignment: taking a ticket is assigning yourself; giving it back clears it.
+router.put('/:id/assignee', requirePermission('update', 'Ticket'), noStore, putTicketAssignee);
+router.delete(
+    '/:id/assignee',
+    requirePermission('update', 'Ticket'),
+    noStore,
+    deleteTicketAssignee
+);
+
+// POST /tickets/:id/notes — the staff thread, append-only.
+router.post('/:id/notes', requirePermission('update', 'Ticket'), noStore, postTicketNote);
 
 // DELETE /tickets/:id — remove the entry
 router.delete('/:id', requirePermission('delete', 'Ticket'), deleteTicket);

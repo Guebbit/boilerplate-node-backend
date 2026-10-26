@@ -34,11 +34,23 @@ flowchart LR
 Four states, and that is the entire workflow. Private notes can be attached to a message; the person
 who sent it never sees them.
 
-::: tip It records an email address, not a customer
+::: tip The form works without an account, and remembers one if there is one
 The form asks for an email rather than requiring a login, because the people most likely to need
-help are the ones who cannot get in. A consequence worth knowing: **deleting someone's account does
-not delete their messages** — they were never attached to the account in the first place.
+help are the ones who cannot get in. A message sent while signed in is attached to that account, so
+**when the account is finally erased its messages go with it**, and so do the messages sent under its
+confirmed email address. Messages typed under an old or different address are not matched: find
+those in the inbox by hand.
 :::
+
+### Working a ticket
+
+Open a ticket to see its notes, who has it and what else was asked about the same order. **Take** it
+to put your name on it (it becomes _in progress_); **Resolve** it when it is done; **Mark as spam**
+when it is not a real message. Both can be undone with **Reopen**, which puts it back where it was
+(with you, if you had it). If **Reopen** says a newer ticket already covers the situation, that
+ticket is the one to work: the message names it. Every note is kept with the time it was written;
+write each as if the customer will read it, because their data export includes them (without your
+name). A ticket stays in the inbox for 24 months after it was closed, then goes.
 
 → [`tickets`](../modules/tickets.md)
 

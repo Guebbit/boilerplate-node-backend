@@ -104,6 +104,9 @@ allowed", with 409 where Google says 400).
 
 - `POST /users/{id}/activate` on an active account: `USER_ALREADY_ACTIVE`; `deactivate` on a
   deactivated one: `USER_ALREADY_INACTIVE`.
+- `POST /tickets/{id}/resolve` on a resolved ticket: `TICKET_ALREADY_RESOLVED`; `mark-spam` on spam:
+  `TICKET_ALREADY_SPAM`; `reopen` on an open one: `TICKET_ALREADY_OPEN`. A reopen that finds a newer
+  open ticket on the same situation: `TICKET_SUPERSEDED`, with the newer ticket's id in `details`.
 - `DELETE /users/{id}/purchase-hold` on an account with no hold and no review flag:
   `USER_PURCHASE_HOLD_NOT_SET`.
 - A retried `DELETE` leaves the same state (RFC 9110 §9.2.2). What is already gone answers 404, as
@@ -137,7 +140,7 @@ The item reads, and what each is scoped by:
 | `GET /webhooks/subscriptions/{id}`                     | the shop's own subscriptions                       |
 | `GET /payments/{id}`                                   | the payer's own, or `display:Payment`              |
 | `GET /payments/{id}/refunds/{refundId}`                | the payment's scope; a record it does not hold     |
-| `GET /tickets/{id}`                                   | `read:Ticket`, the list's key                    |
+| `GET /tickets/{id}`                                   | `read:Ticket`, and for a system ticket its route set |
 | `GET /api-keys/{id}`                                   | this shop's credentials, `read:ApiKey`             |
 | `GET /account/addresses/{addressId}`                   | the caller's own book                              |
 | `GET /account/sessions/{sessionId}`                    | the caller's own live sessions                     |
@@ -199,7 +202,7 @@ changes — Shopify's `PUT …/addresses/{id}/default.json` is the same shape. A
 answer 201, RFC 9110 §9.3.4, and nothing here has a URL the client may name).
 
 **Offer a PUT only when the body can be the whole resource.** A route that sets two fields of a
-bigger record is a PATCH alone (`PATCH /tickets/{id}`), never a PUT that clears the rest.
+bigger record is a PATCH alone (`PATCH /users/{id}`), never a PUT that clears the rest.
 
 **A server may transform.** RFC 9110 lets the stored state differ from the body. Here that is one
 case: `PUT /account`'s `email` becomes `pendingEmail` until the new address is proven.
@@ -250,7 +253,7 @@ in the query or the `/hard` path and a body is refused instead of ignored.
 
 A path the contract declares, asked with a method it does not give it, answers **405** with an
 `Allow` header (RFC 9110 §15.5.6) — never the catch-all's 404. `DELETE /tickets/{id}` is fine,
-`PUT /tickets/{id}` is a 405 naming `DELETE, PATCH`.
+`PATCH /tickets/{id}` is a 405 naming `DELETE, GET, HEAD`: a ticket's `status` is read-only and moves only through its doors.
 
 - **`Allow` is sorted**, with HEAD beside GET. `OPTIONS` is never judged: the CORS layer answers
   a preflight before any route runs.

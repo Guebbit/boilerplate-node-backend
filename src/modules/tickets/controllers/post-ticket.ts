@@ -12,7 +12,7 @@ import { trimmedInto } from '@infrastructure/http/schemas';
 import { createdResponse } from '@infrastructure/http/response';
 import type { CreateContactTicketRequest, Ticket } from '@types';
 import { ticketService } from '../service';
-import { presentTicket } from '../presenter';
+import { NO_ACTIONS, presentTicket } from '../presenter';
 import { catchAs, parseBody } from '@infrastructure/http/controller';
 
 /**
@@ -49,7 +49,7 @@ export const postTicket = (
     return ticketService
         .create(body, request.authContext?.id)
         .then((createdTicket) => {
-            const ticketRecord = presentTicket(createdTicket);
+            const ticketRecord = presentTicket(createdTicket, NO_ACTIONS);
             createdResponse<Ticket>(response, ticketRecord, `/tickets/${ticketRecord.id}`);
         })
         .catch(catchAs(response, 'postTicket'));

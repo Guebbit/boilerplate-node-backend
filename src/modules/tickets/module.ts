@@ -29,6 +29,12 @@ export default {
             collect: (subject) => ticketService.findOwnTicketsForExport(subject),
             // Inside the hard-delete transaction only, never at the reversible lock.
             erase: (subject, session) => ticketService.eraseOwnTickets(subject, session)
+        },
+        {
+            // The tickets the system opened about the person, staff ids withheld. Erased by the
+            // first section's hook, which owns the whole collection.
+            section: 'systemTickets',
+            collect: (subject) => ticketService.findSystemTicketsForExport(subject)
         }
     ],
     locales: path.join(__dirname, 'locales'),

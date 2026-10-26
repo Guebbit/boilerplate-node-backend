@@ -184,8 +184,8 @@ two dispositions, because the safe direction differs:
 | a WRITE's field | 422, from the generated Zod enum, before any handler code runs |
 
 A read can fail closed and still answer; a write has no safe narrowing of a value it cannot
-understand, only a rejection. `status` on tickets is the live pair — `toTicketStatus` in
-`src/modules/tickets/service.ts` for the read, `update-ticket-status.ts` for the write.
+understand, only a rejection. `status` on orders is the live pair — the read filter in
+`src/modules/orders` and the write-side enum in the generated Zod schema.
 
 ## Declaring it
 

@@ -9,7 +9,12 @@
 /** The audit action vocabulary this module owns. */
 export const ticketsAuditActions = {
     ADMIN_TICKET_VIEWED: 'admin.ticket.viewed',
-    ADMIN_TICKET_STATUS_UPDATED: 'admin.ticket.status_updated',
+    ADMIN_TICKET_RESOLVED: 'admin.ticket.resolved',
+    ADMIN_TICKET_MARKED_SPAM: 'admin.ticket.marked_spam',
+    ADMIN_TICKET_REOPENED: 'admin.ticket.reopened',
+    ADMIN_TICKET_ASSIGNED: 'admin.ticket.assigned',
+    ADMIN_TICKET_UNASSIGNED: 'admin.ticket.unassigned',
+    ADMIN_TICKET_NOTED: 'admin.ticket.noted',
     ADMIN_TICKET_DELETED: 'admin.ticket.deleted'
 } as const;
 
