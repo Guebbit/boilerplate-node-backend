@@ -11,6 +11,7 @@ import { holds } from '@kernel/ability';
 import { canRecordArrival, isAwaitingGoods } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { isOpenForShipment } from './ship-gate';
+import { FulfillmentOrderKind } from '@types';
 import type {
     AuthContext,
     FulfillmentOrder,
@@ -18,7 +19,13 @@ import type {
     Shipment,
     ShipmentActions
 } from '@types';
-import { isFulfillable, isHoldable, isReleasable, isShippable } from '../domain';
+import {
+    isAwaitingTracking,
+    isFulfillable,
+    isHoldable,
+    isReleasable,
+    isShippable
+} from '../domain';
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
 import { presentFulfillmentOrder, presentShipment } from '../presenter';
 
@@ -79,7 +86,12 @@ export const shipmentActions = (
 ): ShipmentActions => {
     const open = standing.staff && shipment.status === 'shipped' && canRecordArrival(order.status);
     // The forced arrival has the same state gate as the ordinary one; it adds the override key.
-    return { deliver: open, forceDeliver: open && standing.override, update: open };
+    return {
+        deliver: open,
+        forceDeliver: open && standing.override,
+        // The tracking code is a record staff may fix at any time, once and after arrival, on a parcel.
+        update: standing.staff && shipment.kind === FulfillmentOrderKind.physical
+    };
 };
 
 /**
@@ -112,4 +124,22 @@ export const viewShipment = (
     shipment: ShipmentDocument,
     order: OrderDocument,
     authContext: AuthContext | undefined
-): Shipment => presentShipment(shipment, shipmentActions(shipment, order, standingOn(authContext)));
+): Shipment => presentShipmentFor(shipment, order, standingOn(authContext));
+
+/**
+ * A shipment as the wire carries it, for a caller whose standing is already known — the list read
+ * works that out once for every row.
+ * @param shipment - the shipment
+ * @param order - the order it belongs to
+ * @param standing - how the caller stands to it
+ */
+export const presentShipmentFor = (
+    shipment: ShipmentDocument,
+    order: OrderDocument,
+    standing: Standing
+): Shipment =>
+    presentShipment(
+        shipment,
+        shipmentActions(shipment, order, standing),
+        isAwaitingTracking(shipment, order.shippingMethod)
+    );

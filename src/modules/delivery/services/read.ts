@@ -22,12 +22,12 @@ import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
 import {
     standingOn,
     fulfillmentOrderActions,
-    shipmentActions,
+    presentShipmentFor,
     viewFulfillmentOrder,
     viewShipment
 } from './actions';
 import { ensureFulfillmentOrders } from './ensure';
-import { presentFulfillmentOrder, presentShipment } from '../presenter';
+import { presentFulfillmentOrder } from '../presenter';
 
 /**
  * The fulfillment orders of one of the caller's orders, each with its own `actions`. Makes them
@@ -88,9 +88,7 @@ export const listShipmentsForOrder = (
             .findByOrderId(orderId)
             .then((shipments) =>
                 generateSuccess(
-                    shipments.map((shipment) =>
-                        presentShipment(shipment, shipmentActions(shipment, order, standing))
-                    )
+                    shipments.map((shipment) => presentShipmentFor(shipment, order, standing))
                 )
             );
     });

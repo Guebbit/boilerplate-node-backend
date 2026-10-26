@@ -349,8 +349,8 @@ const markDelivered = (
 
 /**
  * Replace where an order ships, encrypted under the order's own id like the address it replaces.
- * Conditional on the status the caller read and on nothing having shipped, so a correction that
- * lost a race against a dispatch writes nothing.
+ * Conditional on the status the caller read and on units still remaining to send, so a
+ * correction that lost a race against a dispatch writes nothing.
  * @param id - the order
  * @param observedStatus - the status the caller read; the write lands only while it still holds
  * @param address - the corrected address, in the clear
@@ -368,7 +368,12 @@ const replaceShippingAddress = (
             {
                 _id: toObjectId(id),
                 status: observedStatus,
-                'fulfillment.shipped': { $ne: true }
+                // Nothing has shipped, or units still remain to send: the same question as
+                // `canCorrectAddress`, so a dispatch that emptied the order in between wins.
+                $or: [
+                    { 'fulfillment.shipped': { $ne: true } },
+                    { 'fulfillment.remaining': { $gt: 0 } }
+                ]
             } as QueryFilter<OrderDocument>,
             {
                 $set: {

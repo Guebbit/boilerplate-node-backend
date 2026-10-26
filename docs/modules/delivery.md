@@ -34,6 +34,7 @@ flowchart LR
     delivery --> shop
     inventory -. "inventory.backorder_allocated" .-> delivery
     orders -. "order.cancelled" .-> delivery
+    orders -. "order.redacted" .-> delivery
     orders -. "order.status_changed" .-> delivery
     orders -. "order.status_overridden" .-> delivery
     products -. "product.release_date_changed" .-> delivery
@@ -72,9 +73,11 @@ There is no courier simulation: goods move only when staff record it, through th
 doors.
 
 Each shipping method (`domain/rates.ts`) says whether it is `tracked` — standard is untracked,
-express is tracked, pickup is untracked. `tracked` is what `POST /delivery/fulfillment-orders/{id}/shipments`
-enforces: a tracking code is required for a tracked method, on every shipment, refused with a named
-422 otherwise.
+express is tracked, pickup is untracked. `tracked` means the carrier gives a code the buyer can follow. The ship door never
+requires it: a parcel may leave first and get its code later, with `PATCH /delivery/shipments/{id}`.
+`Shipment.awaitingTracking` is the server's answer to "tracked, still waiting for its code" (a
+physical, `shipped` parcel on a tracked method with none), so a client draws one chip and staff's
+digest counts the same rows.
 
 A method may also declare `minWeight`/`maxWeight`, grams — express caps at 5000g, standard at
 30000g, pickup at neither. Unlike `tracked`, this one IS enforced against the basket: `PUT /cart/shipping-method`
@@ -402,7 +405,7 @@ sequenceDiagram
     participant I as inventory
     S->>D: POST /fulfillment-orders/{id}/shipments {lines?, trackingCode?}
     Note over D: ONE transaction opens
-    D->>D: refuse early: order status, kind, hold, lines, tracking
+    D->>D: refuse early: order status, kind, hold, lines
     D->>D: claim the fulfillment order by its revision
     D->>D: write the shipment
     D->>O: shipStock(lines)
@@ -438,12 +441,21 @@ shipment leaves **nothing** remaining anywhere; until then it stays `processing`
 | Case                                                                                          | Answer                                          |
 | --------------------------------------------------------------------------------------------- | ----------------------------------------------- |
 | more than remains, a product that is not there, the same twice                                | `422 DELIVERY_LINES_INVALID`                    |
-| a tracked method with no code                                                                 | `422 DELIVERY_TRACKING_CODE_REQUIRED`           |
 | a fulfillment order on hold, closed or cancelled; a cancelled or never-paid (`pending`) order | `409 DELIVERY_NOT_SHIPPABLE`                    |
 | a first shipment from `paid` that finds the order no longer `paid` (it moved meanwhile)       | `409 ORDER_NOT_PAID`                            |
 | a `paid` order, for a caller without `start:Shipment` (the act makes the start move itself)   | `403` and a `security.forbidden` audit row      |
 | a digital one                                                                                 | `409 DELIVERY_NOT_PHYSICAL` — fulfil it instead |
 | an order that is neither `processing` nor `paid`                                              | `409 ORDER_NOT_PROCESSING`                      |
+
+### Where a parcel went
+
+The order holds one address: where the units still to send go. Each shipment stores its own copy as
+`destination`, taken when it is cut (`services/cut.ts`, so ship, fulfil and the override's shipments
+all get it), encrypted under the shipment's `_id` (`pii.ts`, same key ring as the order's). Staff can
+therefore redirect the rest of a partly shipped order without rewriting where the first parcel
+went. The copy is personal data of its own: it shows in the account export, follows the key rotation
+(`reencrypt`), and is unset when the order's address is scrubbed (`order.redacted` →
+`scrubDestinations`). A pickup or a digital fulfilment has none.
 
 ### Shipping from `paid`
 
@@ -553,7 +565,7 @@ date this order was expecting, not the product's previous date.
 | `POST /delivery/fulfillment-orders/{id}/shipments`         | `update:Shipment`                                  | `201` + the shipment                                           |
 | `POST /delivery/fulfillment-orders/{id}/fulfill`           | `update:Shipment` (+ `start:Shipment` from `paid`) | the shipment, delivered                                        |
 | `POST /delivery/fulfillment-orders/{id}/hold` · `/release` | `update:Shipment`                                  | the fulfillment order                                          |
-| `PATCH /delivery/shipments/{id}`                           | `update:Shipment`                                  | the shipment, tracking corrected while it is out               |
+| `PATCH /delivery/shipments/{id}`                           | `update:Shipment`                                  | the shipment, tracking added or corrected, at any time         |
 | `POST /delivery/shipments/{id}/deliver`                    | `update:Shipment`                                  | the shipment                                                   |
 
 Every button a client draws comes from the record's own `actions` (or `GET /returns/options`): the
@@ -578,8 +590,14 @@ All are written through the outbox **in the act's transaction**. An order shippe
 **Emails**, one per shipment: _shipped_ (its lines, the tracking line when the method carries one, and
 "N more items to follow" while anything remains) when it leaves, and _delivered_ (its lines, and on
 the delivery that completes the order, the date until which the buyer may withdraw) when it arrives.
-Correcting a tracking code (`PATCH /delivery/shipments/{id}`) mails the buyer the same shipped mail with its own
-subject and an apology for the earlier code, only when the code actually changed; best effort, after the fix is saved.
+Setting a tracking code (`PATCH /delivery/shipments/{id}`) mails the buyer the same shipped mail with its
+own subject, only when the code actually changed; best effort, after the save. The first code of a parcel
+that left without one says "your tracking code is ready"; a replacement says it changed, with an apology
+for the earlier code. The audit row records the code before and after.
+
+The code can be set at any time, delivered shipments included: it is most useful later, as dispute
+evidence. A digital shipment never had a carrier and refuses it with `DELIVERY_NOT_PHYSICAL`; the
+shipment stores the fulfillment order's `kind` for that reason.
 
 ## Your data
 

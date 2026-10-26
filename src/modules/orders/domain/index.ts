@@ -17,14 +17,7 @@ export { AUTOMATIC_PURCHASE_HOLD_MAX_DAYS, purchaseHoldUntil } from './purchase-
 export { owedLineOf } from './backorder';
 export type { OwedLine } from './backorder';
 
-export {
-    buyerIdOf,
-    checkOrderLines,
-    isBuyer,
-    isSellable,
-    isShippedItem,
-    isDigitalOnlyOrder
-} from './rules';
+export { buyerIdOf, checkOrderLines, isBuyer, isShippedItem, isDigitalOnlyOrder } from './rules';
 export type { ShippableLineCandidate } from './rules';
 
 // `ORDER_EVENTS` is published for reading; a sibling module asks a named predicate

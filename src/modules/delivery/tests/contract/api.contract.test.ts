@@ -279,7 +279,7 @@ describe('POST /delivery/fulfillment-orders/{id}/shipments', () => {
         expect(read.body.fulfillmentStatus).toBe('partially_fulfilled');
     });
 
-    it('matches the error contract when a tracked method has no code', async () => {
+    it('ships a tracked method with no code yet, and says it is waiting for one', async () => {
         const { bearer, fulfillmentOrderId } = await adminWithOrder(1, {
             shippingMethod: 'express'
         });
@@ -289,11 +289,9 @@ describe('POST /delivery/fulfillment-orders/{id}/shipments', () => {
             .set('Authorization', bearer)
             .send({});
 
-        expect(response.status).toBe(422);
-        expect(response.body.errors[0]).toMatchObject({
-            code: 'DELIVERY_TRACKING_CODE_REQUIRED',
-            details: { field: 'trackingCode' }
-        });
+        expect(response.status).toBe(201);
+        expect(response.body.trackingCode).toBeUndefined();
+        expect(response.body.awaitingTracking).toBe(true);
     });
 
     it('matches the error contract for more units than remain', async () => {
@@ -574,7 +572,7 @@ describe('PATCH /delivery/shipments/{id}', () => {
         expect(own.body.items[0].trackingCode).toBe('TRK-FIXED002');
     });
 
-    it('answers 409 once the shipment arrived, and 422 for an empty code', async () => {
+    it('still corrects the code once the shipment arrived, and answers 422 for an empty code', async () => {
         const { order } = await authenticateWithShipment();
         const { bearer } = await authenticateAs('admin');
         const [shipment] = await shipmentsOf(String(order._id));
@@ -591,7 +589,9 @@ describe('PATCH /delivery/shipments/{id}', () => {
             .set('Authorization', bearer)
             .send({ trackingCode: '' });
 
-        expect(late.status).toBe(409);
+        expect(late.status).toBe(200);
+        expect(late.body.trackingCode).toBe('TRK-LATE0001');
+        expect(late.body.actions.update).toBe(true);
         expect(empty.status).toBe(422);
     });
 });

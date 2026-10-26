@@ -282,16 +282,28 @@ describe('shipping a whole fulfillment order', () => {
         expect(asReject(second).errors[0].code).toBe('ORDER_NOT_PROCESSING');
     });
 
-    it('refuses a missing tracking code for a tracked method, and never writes the shipment', async () => {
+    it('ships a tracked method with no code, and marks the shipment as awaiting one', async () => {
         const { order } = await processingOrderOf([1], { shippingMethod: 'express' });
 
         const result = await shipFrom(String(order._id));
 
-        expect(asReject(result).status).toBe(422);
-        expect(asReject(result).errors[0].code).toBe('DELIVERY_TRACKING_CODE_REQUIRED');
-        expect(await shipmentsOf(String(order._id))).toEqual([]);
-        const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
-        expect(fulfillmentOrder.status).toBe('open');
+        expect(result.success && result.data.awaitingTracking).toBe(true);
+        expect(await shipmentsOf(String(order._id))).toHaveLength(1);
+    });
+
+    it('does not mark an untracked method, or a shipment that has its code', async () => {
+        const standard = await processingOrderOf([1], { shippingMethod: 'standard' });
+        const express = await processingOrderOf(
+            [1],
+            { shippingMethod: 'express' },
+            'express@example.com'
+        );
+
+        const plain = await shipFrom(String(standard.order._id));
+        const coded = await shipFrom(String(express.order._id), { trackingCode: 'TRK-HAVE0001' });
+
+        expect(plain.success && plain.data.awaitingTracking).toBe(false);
+        expect(coded.success && coded.data.awaitingTracking).toBe(false);
     });
 
     it('allows an untracked method to ship with no code at all', async () => {
@@ -536,30 +548,96 @@ describe('delivering', () => {
         });
     });
 
-    it('corrects a tracking code while the shipment is out, and not after it arrived', async () => {
+    it('sets the code at any time, delivered shipments included, and audits the code before and after', async () => {
         const { order } = await processingOrderOf();
         await shipFrom(String(order._id), { trackingCode: 'TRK-TYPO0001' });
         const [shipment] = await shipmentsOf(String(order._id));
-
-        const fixed = await deliveryService.editShipmentTracking(
-            String(shipment._id),
-            'TRK-FIXED001',
-            asAdmin(),
-            admin
-        );
         await deliveryService.deliverShipment(String(shipment._id), {}, asAdmin(), admin);
+        const audited = collectAudit();
+
         const late = await deliveryService.editShipmentTracking(
             String(shipment._id),
             'TRK-LATE0001',
             asAdmin(),
             admin
         );
+        const same = await deliveryService.editShipmentTracking(
+            String(shipment._id),
+            'TRK-LATE0001',
+            asAdmin(),
+            admin
+        );
 
-        expect(fixed.success && fixed.data.trackingCode).toBe('TRK-FIXED001');
-        expect(asReject(late).status).toBe(409);
+        expect(late.success && late.data.trackingCode).toBe('TRK-LATE0001');
+        expect(late.success && late.data.actions.update).toBe(true);
+        expect(metadataOf(audited, 'admin.shipment.tracking_edited')).toEqual([
+            {
+                shipmentId: String(shipment._id),
+                changes: { trackingCode: { from: 'TRK-TYPO0001', to: 'TRK-LATE0001' } }
+            },
+            { shipmentId: String(shipment._id) }
+        ]);
+        expect(same.success).toBe(true);
     });
 
-    describe('mailing a corrected code', () => {
+    it('refuses a digital shipment, which never had a carrier, and offers no edit on it', async () => {
+        const order = await seedDigitalOrder(OrderStatus.processing, new Date());
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
+        const fulfilled = await deliveryService.fulfillFulfillmentOrder(
+            String(fulfillmentOrder._id),
+            asAdmin(),
+            admin
+        );
+        const [shipment] = await shipmentsOf(String(order._id));
+
+        const edited = await deliveryService.editShipmentTracking(
+            String(shipment._id),
+            'TRK-NOPE0001',
+            asAdmin(),
+            admin
+        );
+
+        expect(fulfilled.success && fulfilled.data.actions.update).toBe(false);
+        expect(asReject(edited).errors[0].code).toBe('DELIVERY_NOT_PHYSICAL');
+    });
+
+    it('answers 404 for a shipment that is not there', async () => {
+        const edited = await deliveryService.editShipmentTracking(
+            '64b64b64b64b64b64b64b64b',
+            'TRK-NONE0001',
+            asAdmin(),
+            admin
+        );
+
+        expect(asReject(edited).status).toBe(404);
+    });
+
+    describe('mailing a new code', () => {
+        it('tells the buyer the first code in an "added" mail, and a replacement in a "corrected" one', async () => {
+            const { order } = await processingOrderOf([1], { shippingMethod: 'express' });
+            await shipFrom(String(order._id));
+            const [shipment] = await shipmentsOf(String(order._id));
+            mockEnqueueEmail.mockClear();
+
+            await deliveryService.editShipmentTracking(
+                String(shipment._id),
+                'TRK-FIRST0001',
+                asAdmin(),
+                admin
+            );
+            await deliveryService.editShipmentTracking(
+                String(shipment._id),
+                'TRK-SECOND002',
+                asAdmin(),
+                admin
+            );
+
+            expect(mockEnqueueEmail.mock.calls.map(([envelope]) => envelope.subject)).toEqual([
+                'The tracking code of your shipment is ready',
+                'The tracking code of your shipment changed'
+            ]);
+        });
+
         it('tells the buyer the new code, in the corrected mail', async () => {
             const { order, shipment } = await shippedWith('TRK-TYPO0001');
 

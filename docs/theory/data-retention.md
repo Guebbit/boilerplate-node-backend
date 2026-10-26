@@ -312,6 +312,14 @@ against contact details; the box stays optional for every reason.
 **What never leaves the database.** The `return.requested` webhook carries the `reason` code, never
 the `note` (`returns/module.ts`).
 
+## A shipment's address copy
+
+Each shipment keeps a copy of the address it went to (`destination`, encrypted under the shipment's
+own id), so redirecting the rest of an order never rewrites where an earlier parcel went. The copy
+is the same personal data as the order's address, on the same clock: when retention scrubs the
+order's address (`order.redacted`), `delivery` unsets every shipment's copy in answer. Lines, number,
+tracking code and dates stay. The copy is in `POST /account/export`.
+
 ## Free text on holds
 
 Staff can put a fulfillment order on hold, with a reason from a closed set and an optional **note**

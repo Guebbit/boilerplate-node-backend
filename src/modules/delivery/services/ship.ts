@@ -12,11 +12,8 @@
  */
 
 import type { ClientSession } from 'mongoose';
-import { t } from '@infrastructure/i18n';
 import {
-    fieldError,
     generateSuccess,
-    generateReject,
     type ResponseReject,
     type ResponseSuccess
 } from '@infrastructure/http/response';
@@ -26,7 +23,7 @@ import type { OrderDocument } from '@modules/orders';
 import { OrderStatus } from '@types';
 import type { AuthContext, CallerContext, Shipment } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
-import { checkShipLines, findShippingMethod, isShippable } from '../domain';
+import { checkShipLines, isShippable } from '../domain';
 import {
     auditUnearnedStart,
     isOpenForShipment,
@@ -36,7 +33,7 @@ import {
 import type { ProductQuantity } from '../domain';
 import { deliveryAuditActions } from '../audit';
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
-import { ActRefusal, readWithOrder, refuse, runAct } from './act';
+import { readWithOrder, refuse, runAct } from './act';
 import { viewShipment } from './actions';
 import { announceShipped } from './announce';
 import { cutShipment } from './cut';
@@ -46,7 +43,7 @@ import { reportProgress, settleOrder, startFulfilment } from './progress';
 export interface ShipInput {
     /** What ships, per product; absent means everything that remains. */
     lines?: ProductQuantity[] | undefined;
-    /** The carrier's handle; required when the order's shipping method is tracked. */
+    /** The carrier's handle. Optional: a tracked method may get its code later, from the shipment. */
     trackingCode?: string | undefined;
 }
 
@@ -94,27 +91,6 @@ const gateFulfillmentOrder = (
 };
 
 /**
- * A tracked method needs a tracking code on every shipment. The method is looked up live, not
- * frozen at checkout, so a rate change also changes what the door requires.
- * @param order - the order
- * @param trackingCode - what staff sent
- * @throws {ActRefusal} a 422 naming `trackingCode` when a tracked method has none
- */
-const gateTracking = (order: OrderDocument, trackingCode: string | undefined): void => {
-    const method = order.shippingMethod ? findShippingMethod(order.shippingMethod) : undefined;
-    if (method?.tracked && !trackingCode)
-        throw new ActRefusal(
-            generateReject(422, [
-                fieldError(
-                    'trackingCode',
-                    t('delivery.tracking-code-required'),
-                    ERROR_CODES.DELIVERY_TRACKING_CODE_REQUIRED
-                )
-            ])
-        );
-};
-
-/**
  * The act itself, in its transaction. Refusals are decided first, from the snapshot the writes land
  * in; then the shipment is cut, `orders` is told, and the event is written.
  * @param fulfillmentOrderId - the fulfillment order to ship from
@@ -133,7 +109,6 @@ const shipAct = async (
     const orderId = String(fulfillmentOrder.orderId);
     gateOrder(order.status, mayStart);
     const lines = gateFulfillmentOrder(fulfillmentOrder, input.lines);
-    gateTracking(order, input.trackingCode);
 
     const { shipment } = await cutShipment(
         {
