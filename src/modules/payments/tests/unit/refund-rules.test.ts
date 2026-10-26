@@ -4,7 +4,7 @@
  * voided, and the legal deadline of a refund that pays for a withdrawal or a return.
  */
 import { RefundFailureReason, RefundStatus } from '@types';
-import { isOpenRefund, mayBeCanceled } from '@modules/payments/domain';
+import { isOpenRefund, mayBeCanceled, refundDueBy } from '@modules/payments/domain';
 
 describe('isOpenRefund', () => {
     it.each([
@@ -43,5 +43,19 @@ describe('mayBeCanceled', () => {
         expect(mayBeCanceled(card, failed(RefundFailureReason.provider_unavailable))).toBe(false);
         expect(mayBeCanceled(card, { status: RefundStatus.pending })).toBe(false);
         expect(mayBeCanceled(card, failed(RefundFailureReason.canceled))).toBe(false);
+    });
+});
+
+describe('refundDueBy', () => {
+    const createdAt = new Date('2026-03-01T10:00:00.000Z');
+
+    it('is 14 days after creation for a refund that pays a return or a remainder cancel', () => {
+        expect(refundDueBy({ createdAt, returnId: 'r1' })?.toISOString()).toBe(
+            '2026-03-15T10:00:00.000Z'
+        );
+    });
+
+    it('is absent for a refund that pays no return', () => {
+        expect(refundDueBy({ createdAt })).toBeUndefined();
     });
 });

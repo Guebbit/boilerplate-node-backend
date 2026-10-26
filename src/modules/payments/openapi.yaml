@@ -1181,6 +1181,14 @@ components:
                     type: string
                     format: date-time
                     description: When the problem was recorded, so the page can sort by age.
+                refundDueBy:
+                    type: string
+                    format: date-time
+                    description: >-
+                        The legal deadline to give the money back, on a `refused_refund` that pays for a
+                        withdrawal or a return: the refund's creation plus 14 days (Consumer Rights
+                        Directive Art. 13). Absent for any other refund, which shows its age only. The
+                        client shows the days left; a past date means the deadline has gone.
 
         PaymentAttentionResponse:
             type: object

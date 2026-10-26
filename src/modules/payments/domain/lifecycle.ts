@@ -179,6 +179,22 @@ export const mayBeCanceled = (
     refund: { status: RefundStatus; failureReason?: RefundFailureReason }
 ): boolean => mayBeSettledByHand(payment, refund);
 
+/** Days the trader has to give the money back after a withdrawal (Directive 2011/83/EU, Art. 13). */
+const WITHDRAWAL_REFUND_DAYS = 14;
+
+/**
+ * The legal deadline to pay a refund back, when it pays for a withdrawal or a return: its creation
+ * plus 14 days. A goodwill or late-payment refund, or the shop's own cancellation of an order, has
+ * no such deadline.
+ *
+ * @param refund - the refund's `createdAt` and the return it pays for, if any
+ * @returns the deadline, or `undefined` when the law sets none
+ */
+export const refundDueBy = (refund: { createdAt: Date; returnId?: string }): Date | undefined =>
+    refund.returnId === undefined
+        ? undefined
+        : new Date(refund.createdAt.getTime() + WITHDRAWAL_REFUND_DAYS * 24 * 60 * 60_000);
+
 /** The longest wait the growing retry delay reaches: a day. */
 const MAX_RETRY_DELAY_MS = 24 * 60 * 60_000;
 

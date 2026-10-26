@@ -82,6 +82,10 @@ has refused for good.
 Pressing it closes the refund: the credit note is issued, a waiting return closes, and the buyer is
 told their money is back.
 
+If the refund pays a return or a withdrawal, the "needs attention" list also shows **how many days are
+left** to pay it back. The law (EU Consumer Rights Directive, Art. 13) gives you 14 days from the
+day it was opened; after that the row says how late it is. Any other refund shows only its age.
+
 If the reason reads **provider unavailable** or **no usable reason**, there is no Mark returned
 button on purpose. The refund may have gone through, and the shop keeps asking the provider under
 the same key until it has an answer. If it stays open for an hour, it shows up on the "needs
