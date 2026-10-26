@@ -12,6 +12,8 @@
 import i18next from 'i18next';
 import {
     createLocaleContext,
+    createPreviewContext,
+    draftLocaleFor,
     getFallbackLocale,
     hasServedDictionary,
     isServedLocale,
@@ -19,6 +21,7 @@ import {
     listSupportedLocales,
     loadLocaleResources,
     refreshLocaleOverrides,
+    resetServedLanguages,
     registerLocaleOverrideProvider,
     resetLocaleOverrides,
     runWithLocale,
@@ -228,6 +231,67 @@ describe('the served languages', () => {
 
             expect(log).not.toHaveBeenCalled();
             log.mockRestore();
+        });
+    });
+});
+
+describe('draft languages', () => {
+    beforeEach(async () => {
+        await i18next.init({
+            lng: 'en',
+            fallbackLng: 'en',
+            supportedLngs: listSupportedLocales(),
+            resources: loadLocaleResources()
+        });
+    });
+
+    afterEach(() => {
+        resetServedLanguages();
+    });
+
+    describe('draftLocaleFor', () => {
+        it.each([
+            ['a registered switched-off language', 'de'],
+            ['the same tag in another case', 'DE']
+        ])('names %s', (_label, asked) => {
+            setServedLanguages([], ['de']);
+
+            expect(draftLocaleFor(asked)).toBe('de');
+        });
+
+        it.each([
+            ['a language that is switched on', 'fr'],
+            ['an unknown tag', 'xx'],
+            ['a regional tag of a draft', 'de-AT'],
+            ['no tag', '']
+        ])('does not name %s', (_label, asked) => {
+            setServedLanguages(['fr'], ['de']);
+
+            expect(draftLocaleFor(asked)).toBeUndefined();
+        });
+
+        it('never names the fallback language, even if it were listed as off', () => {
+            const fallback = getFallbackLocale();
+            setServedLanguages([], [fallback]);
+
+            expect(draftLocaleFor(fallback)).toBeUndefined();
+        });
+    });
+
+    describe('createPreviewContext', () => {
+        it('keeps the draft tag, where createLocaleContext folds it to the fallback', () => {
+            setServedLanguages([], ['de']);
+
+            expect(createLocaleContext('de').locale).toBe(getFallbackLocale());
+            expect(createPreviewContext('de')).toMatchObject({ locale: 'de', preview: true });
+        });
+
+        it('falls back for the API wording, which a switched-off language has none of', () => {
+            setServedLanguages([], ['de']);
+            const preview = createPreviewContext('de');
+            const fallbackT = translator(getFallbackLocale());
+
+            expect(preview.t('generic.error-unknown')).toBe(fallbackT('generic.error-unknown'));
         });
     });
 });

@@ -34,6 +34,7 @@ const fakeTranslationPort = (overrides: Partial<TranslationPort> = {}): Translat
     write: jest.fn().mockResolvedValue(undefined),
     readAll: jest.fn().mockResolvedValue(new Map()),
     readServed: jest.fn().mockResolvedValue(new Map()),
+    canPreviewDrafts: () => false,
     ...overrides
 });
 

@@ -4,7 +4,7 @@
  */
 
 import { getCurrentLocale, localeCandidatesFor } from '@infrastructure/i18n';
-import { applyTranslations, searchTranslatedEntityIds } from '@kernel/translation';
+import { applyTranslations, previewDraftTag, searchTranslatedEntityIds } from '@kernel/translation';
 import type { SearchProductsRequest, Product, FacetCount, CallerContext } from '@types';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import { toSearchPattern } from '@infrastructure/persistence/search';
@@ -76,7 +76,8 @@ const searchWithTranslatedText = (
         'product',
         TRANSLATABLE_SEARCH_FIELDS,
         pattern,
-        candidates
+        candidates,
+        previewDraftTag()
     ).then((translatedIds) => {
         const union =
             translatedIds.length === 0

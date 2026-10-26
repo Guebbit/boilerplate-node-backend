@@ -23,7 +23,13 @@ import {
     writeTranslations,
     type TranslationPort
 } from '@kernel/translation';
-import { runWithLocale } from '@infrastructure/i18n';
+import {
+    createPreviewContext,
+    resetServedLanguages,
+    runWithLocale,
+    runWithLocaleContext,
+    setServedLanguages
+} from '@infrastructure/i18n';
 import { setEnvironment } from '@tests/environment';
 
 /** A port double whose methods are jest mocks by default, overridable per test. */
@@ -35,6 +41,7 @@ const fakePort = (overrides: Partial<TranslationPort> = {}): TranslationPort => 
     write: jest.fn().mockResolvedValue(undefined),
     readAll: jest.fn().mockResolvedValue(new Map()),
     readServed: jest.fn().mockResolvedValue(new Map()),
+    canPreviewDrafts: () => false,
     ...overrides
 });
 
@@ -62,7 +69,12 @@ describe('resolveTranslations', () => {
 
         const result = await resolveTranslations('product', ['p1', 'p2'], ['it-CH', 'it', 'en']);
 
-        expect(port.resolve).toHaveBeenCalledWith('product', ['p1', 'p2'], ['it-CH', 'it', 'en']);
+        expect(port.resolve).toHaveBeenCalledWith(
+            'product',
+            ['p1', 'p2'],
+            ['it-CH', 'it', 'en'],
+            undefined
+        );
         expect(result).toBe(resolved);
     });
 
@@ -122,10 +134,13 @@ describe('searchTranslatedEntityIds', () => {
             ['it', 'en']
         );
 
-        expect(port.search).toHaveBeenCalledWith('product', ['title', 'description'], 'cuccia', [
-            'it',
-            'en'
-        ]);
+        expect(port.search).toHaveBeenCalledWith(
+            'product',
+            ['title', 'description'],
+            'cuccia',
+            ['it', 'en'],
+            undefined
+        );
         expect(result).toEqual(['p1', 'p2']);
     });
 });
@@ -298,6 +313,36 @@ describe('applyTranslations', () => {
 
         await runWithLocale('it-CH', () => applyTranslations('product', [{ id: 'p1' }]));
 
-        expect(resolve).toHaveBeenCalledWith('product', ['p1'], ['it-CH', 'it', 'en']);
+        expect(resolve).toHaveBeenCalledWith('product', ['p1'], ['it-CH', 'it', 'en'], undefined);
+    });
+
+    // The draft tag rides only on a staff preview's context; `runWithLocale` (workers, order
+    // snapshots) builds a fresh one that can never carry it.
+    describe('a draft preview', () => {
+        afterEach(() => {
+            resetServedLanguages();
+        });
+
+        it('passes the draft tag to the port inside a preview context', async () => {
+            setServedLanguages([], ['de']);
+            const resolve = jest.fn().mockResolvedValue(new Map());
+            registerTranslationPort(fakePort({ resolve }));
+
+            await runWithLocaleContext(createPreviewContext('de'), () =>
+                applyTranslations('product', [{ id: 'p1' }])
+            );
+
+            expect(resolve).toHaveBeenCalledWith('product', ['p1'], ['de', 'en'], 'de');
+        });
+
+        it('passes no draft tag for a plain locale run, the shape a snapshot uses', async () => {
+            setServedLanguages([], ['de']);
+            const resolve = jest.fn().mockResolvedValue(new Map());
+            registerTranslationPort(fakePort({ resolve }));
+
+            await runWithLocale('de', () => applyTranslations('product', [{ id: 'p1' }]));
+
+            expect(resolve.mock.calls[0][3]).toBeUndefined();
+        });
     });
 });

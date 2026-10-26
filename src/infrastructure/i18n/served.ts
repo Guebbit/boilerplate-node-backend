@@ -56,6 +56,21 @@ export const listServedLocales = (): string[] => {
     return [...new Set([fallback, ...fromFiles, ...served.active])];
 };
 
+/**
+ * The registered draft a client's tag names: a language that is switched off (a deployed file the
+ * shop switched off included), never the fallback. Case-insensitive, but the exact tag otherwise:
+ * a regional tag is not its base language's draft.
+ *
+ * @param tag - a BCP-47 tag as a client sent it
+ * @returns the registered spelling of the draft, or `undefined` when the tag is not a draft
+ */
+export const draftLocaleFor = (tag: string): string | undefined => {
+    const wanted = tag.toLowerCase();
+    return [...served.inactive].find(
+        (draft) => draft.toLowerCase() === wanted && draft !== getFallbackLocale()
+    );
+};
+
 /** Whether the tag is a language a request may be answered in — see {@link listServedLocales}. */
 export const isServedLocale = (tag: string): boolean => listServedLocales().includes(tag);
 

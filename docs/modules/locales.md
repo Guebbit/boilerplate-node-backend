@@ -79,22 +79,23 @@ response still resolves its copy from the files.
 (`200`) and stored, never served: Shopify, WPML and Polylang let an editor translate before
 publishing, and none refuses the write. A tag this deployment has no language for is a `422`.
 
-| Path                                                                                                                          | A switched-off language                                                                                                                                                                                                                                                                                                                                            |
-| ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| A product's translated title and description on a read                                                                        | Not served: the fallback text answers. Only the languages that are on, plus the fallback, are read                                                                                                                                                                                                                                                                 |
-| Free-text search                                                                                                              | Not searched: a draft word finds nothing                                                                                                                                                                                                                                                                                                                           |
-| The names copied into a message that outlives its product (an inbox row, the stream, the data export, the back-in-stock mail) | Not copied: a customer can never read a draft title back from a message                                                                                                                                                                                                                                                                                            |
-| A row whose language no longer exists (a write racing a delete)                                                               | Served by nothing, for the same reason: the read is an allow-list of live languages                                                                                                                                                                                                                                                                                |
-| The editor's admin read, `GET /products/{id}/admin`                                                                           | Lists every row, drafts included                                                                                                                                                                                                                                                                                                                                   |
-| `GET /locales/{locale}/messages` and the dictionary                                                                           | `404` to everyone but staff holding `display:Locale`                                                                                                                                                                                                                                                                                                               |
-| The manifest, `GET /locales`                                                                                                  | Listed `active: false`, a language with a deployed file (`src/locales/it.json`) included: the frontend bundles that file, and the flag is how it learns to stop offering it. A registered language is absent for a visitor. Staff holding `display:Locale` see every row                                                                                           |
-| The sitemap                                                                                                                   | Lists the active languages only: the switched-off one has no page and no `hreflang`                                                                                                                                                                                                                                                                                |
-| The API itself: negotiation, the dictionary, mail, order snapshots                                                            | Never picks it. `Accept-Language` for it gets the default language, `GET /locales/{locale}` answers `404`, mail to a buyer who saved it goes out in the default language, and a snapshot freezes the default language's text. The list the pick is made from is refreshed in the worker that took the write at once, and in the others within one refresh interval |
-| Cached product responses                                                                                                      | Cleared when the flag changes and when the language is deleted, since both change what is served and no entity was written                                                                                                                                                                                                                                         |
+| Path                                                                                                                          | A switched-off language                                                                                                                                                                                                                                                                                                                                                                            |
+| ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A product's translated title and description on a read                                                                        | Not served: the fallback text answers. Only the languages that are on, plus the fallback, are read (except to staff [previewing it](#previewing-a-draft))                                                                                                                                                                                                                                          |
+| Free-text search                                                                                                              | Not searched: a draft word finds nothing (except to staff previewing it)                                                                                                                                                                                                                                                                                                                           |
+| The names copied into a message that outlives its product (an inbox row, the stream, the data export, the back-in-stock mail) | Not copied: a customer can never read a draft title back from a message                                                                                                                                                                                                                                                                                                                            |
+| A row whose language no longer exists (a write racing a delete)                                                               | Served by nothing, for the same reason: the read is an allow-list of live languages                                                                                                                                                                                                                                                                                                                |
+| The editor's admin read, `GET /products/{id}/admin`                                                                           | Lists every row, drafts included                                                                                                                                                                                                                                                                                                                                                                   |
+| `GET /locales/{locale}/messages` and the dictionary                                                                           | `404` to everyone but staff holding `display:Locale`                                                                                                                                                                                                                                                                                                                                               |
+| The manifest, `GET /locales`                                                                                                  | Listed `active: false`, a language with a deployed file (`src/locales/it.json`) included: the frontend bundles that file, and the flag is how it learns to stop offering it. A registered language is absent for a visitor. Staff holding `display:Locale` see every row                                                                                                                           |
+| The sitemap                                                                                                                   | Lists the active languages only: the switched-off one has no page and no `hreflang`                                                                                                                                                                                                                                                                                                                |
+| The API itself: negotiation, the dictionary, mail, order snapshots                                                            | Never picks it. `Accept-Language` for it gets the default language, `GET /locales/{locale}` answers `404`, mail to a buyer who saved it goes out in the default language, and a snapshot freezes the default language's text. The list the pick is made from is refreshed in the worker that took the write at once, and in the others within one refresh interval (except a staff preview, below) |
+| Cached product responses                                                                                                      | Cleared when the flag changes and when the language is deleted, since both change what is served and no entity was written                                                                                                                                                                                                                                                                         |
 
-Staff holding `display:Locale` still see the manifest row and the dictionary, so a translation can
-be read in the shop's own screens before it is switched on, and entity text can be written into it
-from the editor's language tabs. Going live is the one flag. Switching a language off keeps its
+Staff holding `display:Locale` see a draft whole: the manifest row and the dictionary (the
+interface), and, by choosing it in the switcher, its product text on the catalogue reads
+([below](#previewing-a-draft)). Entity text can be written into it from the editor's language
+tabs. Going live is the one flag. Switching a language off keeps its
 text; deleting it (refused while it is on) removes its UI strings and its entity text.
 
 The flag moves through two action endpoints, never through `PUT`/`PATCH`: `POST
@@ -110,6 +111,44 @@ Every `Language` and every manifest row carries `actions` (`update`, `activate`,
 only a caller answered outside that cache (`display:Locale`) gets a flag set to `true`; a visitor's
 answer carries them all `false`. A language that is only a deployed file has no row to switch, so
 its flags are `false` for everyone.
+
+### Previewing a draft
+
+A caller holding `display:Locale` whose FIRST `Accept-Language` choice is a draft is answered in it
+by `GET /products`, `POST /products/search`, `GET /products/{id}` and the example reads. The
+sign-in is the preview token: no new parameter, no new header.
+
+|               |                                                                                                                                  |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Trigger       | The top-ranked range names a switched-off language (exact tag, case-insensitive) and `canPreviewDrafts(caller)` is true          |
+| Permission    | The draft dictionary's own predicate, asked through the translation port: the kernel names no subject                            |
+| Answer        | Draft text field by field over the normal live chain. `Content-Language: <draft>`, `Cache-Control: private, no-store`            |
+| Cache         | The preview flag skips Redis in both directions and wins over `scopeKey` ([redis-cache](../tools/redis-cache.md#draft-previews)) |
+| Everyone else | The live pick, `200`, never an error: a `404` would reveal that the draft exists                                                 |
+| Never         | Mail, orders, snapshots, messages, exports, cart, wishlist, facets: they run outside the request's preview context               |
+| CDN           | In cookie-session mode a CDN must bypass on the session cookie; jwt mode varies on `Authorization`                               |
+
+The oracle: the preview equals what a visitor gets the moment the language is switched on.
+
+```mermaid
+flowchart TD
+    R["request<br/><i>Accept-Language: de</i>"] --> AL["attachLocale<br/>negotiate among live languages"]
+    AL --> GA["getAuth<br/><i>request.caller</i>"]
+    GA --> PV{"first choice is a draft<br/>and the caller may read drafts?"}
+    PV -->|no| SC["setCache<br/>shared entry, public headers"]
+    PV -->|yes| RB["re-bind: locale = de, preview<br/>private, no-store"]
+    RB --> SC2["setCache sees the flag<br/>no Redis read, no write, no 304"]
+    SC --> C["service applyTranslations"]
+    SC2 --> C
+    C --> RP["port resolve / search<br/>allow-list = live plus the draft tag"]
+```
+
+| Product      | Draft language for staff                                                  |
+| ------------ | ------------------------------------------------------------------------- |
+| Shopify      | Unpublished languages hidden from customers; staff preview from the admin |
+| WPML         | Hidden languages shown to users who opt in                                |
+| Polylang Pro | Deactivated languages visible to logged-in editors                        |
+| Contentful   | A separate Preview API, with the delivery fallback rules                  |
 
 ## The pipeline
 

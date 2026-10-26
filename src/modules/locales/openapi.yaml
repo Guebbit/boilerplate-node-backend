@@ -389,8 +389,8 @@ paths:
                 that exists but is inactive — an inactive language is invisible to every public
                 route, which is the whole point of the flag. A caller holding `display:Locale`
                 (staff, or an API key minted with it) is the exception: they get an inactive
-                language's dictionary too, so a translation can be seen in the shop before it is
-                switched on for everyone.
+                language's dictionary too, so a draft's interface strings can be read before it is
+                switched on; the same caller previews its product text on the product reads.
 
                 Public and cacheable, like every other locale read; a staff answer skips the
                 shared cache.
@@ -1036,8 +1036,9 @@ components:
                 # the dictionary, and its translated entity text is not served. A registered
                 # language is absent from the visitor manifest; one with a deployed file stays in
                 # it, as `active: false`, so a client that bundles it knows to stop offering it. Staff holding
-                # `display:Locale` still see the manifest row and the dictionary, and entity text
-                # can be drafted into it. It is the state a half-finished translation lives in,
+                # `display:Locale` still see the manifest row and the dictionary, entity text
+                # can be drafted into it, and its product text is served to them, uncached, when
+                # they ask for it first. It is the state a half-finished translation lives in,
                 # and the state a language must be put into before it can be deleted.
                 active:
                     type: boolean

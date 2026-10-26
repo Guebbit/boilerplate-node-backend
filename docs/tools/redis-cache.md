@@ -65,7 +65,7 @@ filters unequal on its own, with nobody needing to remember to touch the cache k
 ## Draft previews
 
 A third case beside `scopeKey`'s `true` and `false`: the draft-preview flag. A staff caller whose
-first `Accept-Language` choice is a switched-off language is answered in it, and that answer must never meet a
+first `Accept-Language` choice is a switched-off language is answered in it ([previewing a draft](../modules/locales.md#previewing-a-draft)), and that answer must never meet a
 visitor.
 
 |          | Behaviour                                                                                   |

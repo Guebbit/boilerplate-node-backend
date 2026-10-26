@@ -15,6 +15,7 @@ import {
     translationRepository
 } from '@modules/locales/repository';
 import { givenLocale } from '@modules/locales/tests/factories';
+import { localeModel } from '@modules/locales/model';
 import { localeService } from '@modules/locales/services';
 import { resolveTranslatables } from '@kernel/registry';
 import { enabledModules } from '../../../../modules';
@@ -185,6 +186,61 @@ describe('updateEntityTranslations', () => {
 
         expect(resolved.size).toBe(0);
         expect(found).toEqual([]);
+    });
+
+    // A staff preview names the one draft tag it may read; without the tag the draft is dropped.
+    it('serves a draft’s text, and finds a product through it, only for the tag a preview names', async () => {
+        const product = await createProduct();
+        const id = String(product._id);
+        await givenLocale('it', { active: false });
+        await localeService.updateEntityTranslations('product', id, {
+            it: { fields: { title: 'Cuccia' } }
+        });
+
+        const previewed = await translationRepository.resolveEntityFields(
+            'product',
+            [id],
+            ['it'],
+            'it'
+        );
+        const found = await translationRepository.findEntityIdsByFieldMatch(
+            'product',
+            ['title'],
+            'Cuccia',
+            ['it'],
+            'it'
+        );
+        const otherDraft = await translationRepository.resolveEntityFields(
+            'product',
+            [id],
+            ['it'],
+            'de'
+        );
+
+        expect(previewed.get(id)).toEqual({ title: 'Cuccia' });
+        expect(found).toEqual([id]);
+        expect(otherDraft.size).toBe(0);
+    });
+
+    it('serves nothing for a draft tag that has no language row', async () => {
+        const product = await createProduct();
+        const id = String(product._id);
+        await givenLocale('it', { active: false });
+        await localeService.updateEntityTranslations('product', id, {
+            it: { fields: { title: 'Cuccia' } }
+        });
+        // Straight at the model: the cascade would take the translation rows with it, and a delete
+        // racing a write is exactly the case where the row outlives its language.
+        await localeModel.deleteOne({ tag: 'it' }).exec();
+
+        const resolved = await translationRepository.resolveEntityFields(
+            'product',
+            [id],
+            ['it'],
+            'it'
+        );
+
+        expect(resolved.size).toBe(0);
     });
 
     it('serves that text again once the language goes live', async () => {
