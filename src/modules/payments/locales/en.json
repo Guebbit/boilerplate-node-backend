@@ -12,7 +12,7 @@
         "refund-in-flight": "The card provider has not given a final answer on this refund, so it cannot be marked returned or canceled yet. It is retried automatically.",
         "in-flight": "A card payment is already in progress for this order — wait for it to resolve before recording money by hand.",
         "received-at-future": "The date the money arrived cannot be in the future.",
-        "webhook-not-configured": "This shop takes no card payments.",
+        "webhook-not-configured": "No payment provider is installed under that name.",
         "webhook-unverified": "That delivery could not be verified.",
         "refund-exceeds-remaining": "That is more than is left to refund on this payment.",
         "refund-currency-mismatch": "The refund's currency is not the payment's currency.",

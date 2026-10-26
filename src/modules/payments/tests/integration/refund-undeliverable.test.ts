@@ -176,8 +176,8 @@ describe('a settled refund the bank sent back', () => {
         mockEnqueueEmail.mockClear();
 
         setFakeLateRefundFailure(refundRef, 'expired_or_canceled_card');
-        await paymentService.applyWebhookDelivery({ id: 'evt', providerRef, refundRef });
-        await paymentService.applyWebhookDelivery({ id: 'evt', providerRef, refundRef });
+        await paymentService.applyWebhookDelivery({ id: 'evt', providerRef, refundRef }, 'fake');
+        await paymentService.applyWebhookDelivery({ id: 'evt', providerRef, refundRef }, 'fake');
         await settle();
 
         expect(mailsOf('payments.refund-undeliverable')).toHaveLength(1);

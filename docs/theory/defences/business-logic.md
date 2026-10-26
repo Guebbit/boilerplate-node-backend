@@ -73,7 +73,7 @@ to make the WRITE carry the precondition.
 
 ## The payment provider
 
-`POST /payments/webhook` is the one route in this module with no session behind it: its caller is a
+`POST /payments/webhook/{provider}` is the one route in this module with no session behind it: its caller is a
 machine with no account. That makes it the module's most exposed surface and its most carefully
 built one — the three controls below are the whole reason it can be trusted.
 

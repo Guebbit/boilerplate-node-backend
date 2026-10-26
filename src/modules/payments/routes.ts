@@ -60,9 +60,10 @@ import { noStore, privateNoCache } from '@infrastructure/http/middlewares/cache'
 /** Express router for payment operations (intent, confirm, sync, webhook, read back). */
 export const router = Router();
 
-// POST /payments/webhook — the provider's own callback. MUST stay above the auth wall below.
-// `webhookLimiter`, not `credentialLimiters`: there is no session here to skip a success on.
-router.post('/webhook', webhookLimiter, postPaymentWebhook);
+// POST /payments/webhook/:provider — one callback per provider, resolved from the registry by name.
+// MUST stay above the auth wall below. `webhookLimiter`, not `credentialLimiters`: there is no
+// session here to skip a success on.
+router.post('/webhook/:provider', webhookLimiter, postPaymentWebhook);
 
 // GET /payments/methods — public: which methods are offered is pre-purchase information, same
 // reasoning as GET /delivery/methods. MUST stay above the auth wall below.

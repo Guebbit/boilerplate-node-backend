@@ -101,8 +101,8 @@ describe('a refund the provider accepts but has not settled', () => {
         const { orderId, providerRef, refundRef } = await pendingRefund();
         setFakeRefundOutcome(refundRef, { status: 'succeeded' });
 
-        await paymentService.applyWebhookDelivery({ id: 'evt_1', providerRef, refundRef });
-        await paymentService.applyWebhookDelivery({ id: 'evt_1', providerRef, refundRef });
+        await paymentService.applyWebhookDelivery({ id: 'evt_1', providerRef, refundRef }, 'fake');
+        await paymentService.applyWebhookDelivery({ id: 'evt_1', providerRef, refundRef }, 'fake');
 
         const payment = await paymentRepository.findByOrderId(orderId);
         expect(payment?.refunds[0]).toMatchObject({ status: 'succeeded' });

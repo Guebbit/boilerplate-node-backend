@@ -63,7 +63,7 @@ const settledRefund = async (amount = 30) => {
 
 /** Deliver the provider's webhook for one refund. */
 const deliver = (providerRef: string, refundRef: string) =>
-    paymentService.applyWebhookDelivery({ id: 'evt', providerRef, refundRef });
+    paymentService.applyWebhookDelivery({ id: 'evt', providerRef, refundRef }, 'fake');
 
 /** The order's stamped payment status. */
 const stampOf = (orderId: string) =>

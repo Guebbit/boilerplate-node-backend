@@ -17,7 +17,12 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { signWebhookPayload, WEBHOOK_SIGNATURE_HEADER } from '@modules/payments/providers';
 import { paymentRepository } from '@modules/payments/repository';
 import { inventoryService } from '@modules/inventory';
-import { setFakeOutcome, setFakeRefundFailure } from '@scenarios/support/doubles/payments/fake';
+import {
+    fakePaymentProvider,
+    setFakeOutcome,
+    setFakeRefundFailure
+} from '@scenarios/support/doubles/payments/fake';
+import { registerPaymentProvider } from '@modules/payments/providers/registry';
 import { onDomainEvent } from '@kernel/events';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { ORDER_STATUS_CHANGED } from '@modules/orders';
@@ -125,16 +130,16 @@ describe('with no card payment provider configured', () => {
         expect(await paymentRepository.findByOrderId(String(order._id))).toBeNull();
     });
 
-    it('POST /payments/webhook answers 404, signed or not', async () => {
-        const body = JSON.stringify({ id: 'evt_no_provider', providerRef: 'x' });
+    it('POST /payments/webhook/{provider} still reaches an installed adapter: the path decides, not the env', async () => {
+        const body = JSON.stringify({ id: 'evt_no_env', providerRef: 'x' });
 
         const response = await api()
-            .post('/payments/webhook')
+            .post('/payments/webhook/fake')
             .set('Content-Type', 'application/json')
             .set(WEBHOOK_SIGNATURE_HEADER, signWebhookPayload(body))
             .send(body);
 
-        expect(response.status).toBe(404);
+        expect(response.status).toBe(204);
     });
 });
 
@@ -357,7 +362,7 @@ describe('POST /payments/{id}/sync', () => {
 });
 
 /** Posts a body with the signature a provider would have sent over those exact bytes. */
-const deliver = (event: unknown, signature?: string, path = '/payments/webhook') => {
+const deliver = (event: unknown, signature?: string, path = '/payments/webhook/fake') => {
     const body = JSON.stringify(event);
     return api()
         .post(path)
@@ -413,7 +418,44 @@ describe('the card steps — who may pay', () => {
     });
 });
 
-describe('POST /payments/webhook', () => {
+describe('POST /payments/webhook/{provider}', () => {
+    it('answers 404 for a name no adapter is installed under, signed or not', async () => {
+        const response = await deliver(
+            { id: 'evt_unknown', providerRef: 'x' },
+            undefined,
+            '/payments/webhook/nobody'
+        );
+
+        expect(response.status).toBe(404);
+    });
+
+    it('settles a provider own payment even when the deployment now uses another provider', async () => {
+        const { paymentId, providerRef } = await preparedPayment();
+        setFakeOutcome(providerRef, { status: 'succeeded', cardLast4: '4242' });
+        setEnvironment({ NODE_PAYMENT_PROVIDER: undefined });
+
+        const response = await deliver({ id: `evt_${paymentId}`, providerRef });
+
+        expect(response.status).toBe(204);
+        expect((await paymentRepository.findById(paymentId))!.status).toBe('succeeded');
+    });
+
+    it('acknowledges an authentic delivery naming another provider payment, and settles nothing', async () => {
+        const { paymentId, providerRef } = await preparedPayment();
+        setFakeOutcome(providerRef, { status: 'succeeded', cardLast4: '4242' });
+        // A second adapter under another name, verifying with the same reference scheme.
+        registerPaymentProvider({ ...fakePaymentProvider, name: 'fake-b' });
+
+        const response = await deliver(
+            { id: `evt_${paymentId}`, providerRef },
+            undefined,
+            '/payments/webhook/fake-b'
+        );
+
+        expect(response.status).toBe(204);
+        expect((await paymentRepository.findById(paymentId))!.status).not.toBe('succeeded');
+    });
+
     it('settles what the provider answers for the named intent, with no session of any kind', async () => {
         const { paymentId, providerRef } = await preparedPayment();
         // The delivery says nothing about the outcome: the provider's own answer is what lands.
@@ -435,7 +477,7 @@ describe('POST /payments/webhook', () => {
         const response = await deliver(
             { id: `evt_case_${paymentId}`, providerRef },
             undefined,
-            '/Payments/Webhook'
+            '/Payments/Webhook/fake'
         );
 
         expect(response.status).toBe(204);

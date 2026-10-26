@@ -46,7 +46,7 @@ implementation answers is a deployment decision rather than a code path.
 %%{init: {'flowchart': {'nodeSpacing': 34, 'rankSpacing': 52}}}%%
 flowchart TD
     S["payments/services/"] --> P["PaymentProvider<br/><i>the port</i>"]
-    W["POST /payments/webhook"] --> P
+    W["POST /payments/webhook/{provider}"] --> P
     P --> F["fake.ts<br/><i>a double, not shipped</i>"]
     P -.-> X["stripe.ts<br/><i>yours, one file</i>"]
     E["NODE_PAYMENT_PROVIDER"] -.->|"selects"| P
@@ -80,7 +80,7 @@ cards. Only an UNSET variable means no provider.
 
 ::: tip No provider is a valid deployment
 Unset, `GET /payments/methods` lists no `card`, `POST /payments` answers 409
-`PAYMENT_CARD_NOT_AVAILABLE`, `POST /payments/webhook` answers 404, and checkout refuses `card` (and
+`PAYMENT_CARD_NOT_AVAILABLE`, and checkout refuses `card` (and
 a request that names no method, which defaults to it) with `CART_PAYMENT_METHOD_NOT_AVAILABLE`.
 With a bank transfer configured, checkout still works.
 :::
@@ -138,7 +138,7 @@ Nothing here ships a PSP adapter; Stripe is the worked example.
 3. Set `NODE_PAYMENT_PROVIDER`, and `NODE_PAYMENT_WEBHOOK_SECRET` to the vendor's webhook signing secret.
    Your adapter reads its own secret key, and refuses its vendor's test key outside development
    (Stripe's is `sk_test_`).
-4. Point the vendor's dashboard at `POST /payments/webhook`, which needs a public HTTPS endpoint.
+4. Point the vendor's dashboard at `POST /payments/webhook/<name>` (the name the adapter is registered under), which needs a public HTTPS endpoint.
 
 The frontend swaps its method widget for the vendor's, which is the point of the exercise — the app
 stops touching card data. The service and the contract's shape stay as they are; settlement stays too, with one added input: the adapter reports `amountReceived`, `currency` and `paymentId` with every `succeeded`, converted from its minor units, and echoes the `metadata.paymentId` it was given at `prepare`. A success that disagrees with the frozen payment is refused, see [the final write](./payments.md#the-pre-check-and-the-final-write).
@@ -182,6 +182,12 @@ after, and adopts by `refundId` for an old record. Its levers (`scenarios/suppor
 2. Keep the adapter registered and keyed until its payments are settled and the refund and chargeback
    window has passed.
 3. Delete the webhook endpoint in the vendor's dashboard.
+
+The webhook route is one per provider, resolved from the registry by the name in the path, never from
+`NODE_PAYMENT_PROVIDER`. So an old provider still delivers its in-flight payments' events after
+the switch, each adapter verifies with its own secret, a name nobody registered answers 404 (no
+security event), and an authentic delivery naming another provider's payment is acknowledged and
+left alone. An unverifiable delivery is never acknowledged.
 
 Removing the adapter earlier is allowed, not guarded. Each open refund on it then fails once as
 `provider_removed`, which is final and can be marked returned by hand once the money went back

@@ -19,7 +19,7 @@ import { router } from '@modules/payments/routes';
 import { orderRouter } from '@modules/payments/order-routes';
 
 /** The one route in front of the auth wall that authenticates by signing its own body. */
-const WEBHOOK = 'POST /webhook';
+const WEBHOOK = 'POST /webhook/:provider';
 
 /** The other route in front of the auth wall — public, like `GET /delivery/methods`. */
 const METHODS = 'GET /methods';

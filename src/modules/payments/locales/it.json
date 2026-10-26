@@ -12,7 +12,7 @@
         "refund-in-flight": "Il gestore della carta non ha ancora dato una risposta definitiva su questo rimborso, quindi non si può ancora segnare come restituito a mano né annullare. Viene ritentato automaticamente.",
         "in-flight": "Per questo ordine è già in corso un pagamento con carta — attendi che si concluda prima di registrare un pagamento a mano.",
         "received-at-future": "La data di arrivo del pagamento non può essere nel futuro.",
-        "webhook-not-configured": "Questo negozio non accetta pagamenti con carta.",
+        "webhook-not-configured": "Nessun gestore di pagamento è installato con questo nome.",
         "webhook-unverified": "Non è stato possibile verificare questa notifica.",
         "refund-exceeds-remaining": "L'importo supera quanto resta da rimborsare su questo pagamento.",
         "refund-currency-mismatch": "La valuta del rimborso non è quella del pagamento.",

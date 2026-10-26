@@ -712,7 +712,7 @@ paths:
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /payments/webhook:
+    /payments/webhook/{provider}:
         post:
             tags: [Payments]
             summary: Provider webhook
@@ -726,20 +726,36 @@ paths:
                 days settles once: the delivery is a pointer, the provider is re-read, and every
                 write of the settlement is conditional.
 
-                Answers 200 to anything it has authenticated, including events it does not act on:
-                a provider reads a non-2xx as a failure and retries harder. Answers 404 when no
-                card payment provider is configured: nobody can sign a delivery, so the route
-                does not exist for that deployment.
+                One endpoint per provider, named in the path and resolved from the registry of
+                installed adapters, not from `NODE_PAYMENT_PROVIDER`: a provider that is no longer
+                the one new checkouts use still delivers its in-flight payments' events, and each
+                adapter verifies its own signature with its own secret.
+
+                Answers 204 to anything it has authenticated, including events it does not act on
+                and a delivery naming a payment another provider took (logged, left alone): a
+                provider reads a non-2xx as a failure and retries harder. Answers 404 when no
+                adapter is installed under that name, and 400 for a signature that does not verify
+                or a body that is not an event. An unverifiable delivery is never acknowledged.
             operationId: receivePaymentWebhook
             security: []
             parameters:
+                - name: provider
+                  in: path
+                  required: true
+                  schema:
+                      type: string
+                      maxLength: 100
+                  description: The name the payment provider adapter is registered under (for example `stripe`).
                 - name: Payment-Signature
                   in: header
-                  required: true
+                  required: false
                   schema:
                       type: string
                       maxLength: 200
                   description: >-
+                      The reference HMAC scheme (the fake provider's); a real adapter reads its own
+                      provider's header instead (Stripe: `Stripe-Signature`), so this one is
+                      documented as the reference and not required by the contract.
                       `t=<unix seconds>,v1=<hex hmac-sha256 of "<t>.<raw body>">`. `t` must be
                       within 300 seconds of the server's clock or the delivery is rejected as
                       stale, replay protection against a captured signature being resent later.
@@ -754,7 +770,7 @@ paths:
                     description: Accepted — acted on, or knowingly ignored. No body.
                 # The signature did not verify, is stale, or the body is not an event.
                 '400': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/BadRequest' }
-                # No card payment provider is configured (`NODE_PAYMENT_PROVIDER` unset).
+                # No adapter is installed under that provider name.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # Keyed on the caller's address, not a signed identity — see
                 # docs/tools/security.md#the-rate-limit-budgets.
