@@ -5,7 +5,8 @@
  * link (`orders`' own `detachUserId` breaks the order's), which is the Art. 17(3)(b)/(e) retention
  * exemption `invoicing` already documents — a return is the same kind of legal/accounting record.
  *
- * Lifecycle: `requested → approved → received → closed`, or `requested → declined`. A withdrawal
+ * Lifecycle: `requested → approved → received → closed`, or `requested → declined`, or
+ * `approved → canceled` (the goods never came). A withdrawal
  * (`reason: withdrawal`) is a right, not a request, so it is born `approved`. See
  * `docs/modules/returns.md`.
  */
@@ -67,6 +68,8 @@ export interface ReturnDocument extends Document {
     shippingRefund?: number;
     /** When the money went back and the return was finished. */
     closedAt?: Date;
+    /** When staff canceled an approved return whose goods never came. */
+    canceledAt?: Date;
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -117,7 +120,8 @@ export const returnSchema = new Schema<ReturnDocument>(
         handlingDeduction: moneyPath({ nonNegative: true }),
         refundAmount: moneyPath({ nonNegative: true }),
         shippingRefund: moneyPath({ nonNegative: true }),
-        closedAt: { type: Date }
+        closedAt: { type: Date },
+        canceledAt: { type: Date }
     },
     { timestamps: true }
 );

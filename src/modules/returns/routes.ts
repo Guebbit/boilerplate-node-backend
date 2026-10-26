@@ -33,6 +33,7 @@ import { getReturnOptions } from './controllers/get-return-options';
 import { postReturnApprove, postReturnDecline } from './controllers/post-return-decision';
 import { postReturnReceive } from './controllers/post-return-receive';
 import { postReturnClose } from './controllers/post-return-close';
+import { postReturnCancel } from './controllers/post-return-cancel';
 
 /**
  * Whether this request is a staff remainder cancel — `kind: cancellation`, any reason but the one
@@ -103,3 +104,8 @@ router.post(
 // way. The same `receive:Return` key (and so the same `stepUp`) as receiving: closing is the end
 // of the same act. No `Idempotency-Key`: a second close finds the return closed and answers 409.
 router.post('/:id/close', requirePermission('receive', 'Return'), postReturnClose);
+
+// POST /returns/:id/cancel — staff ending an approved return whose goods never came. `update:Return`,
+// the decision key: nothing moves (no money, no stock), so no step-up. No `Idempotency-Key`: a
+// second cancel finds the return canceled and answers 409.
+router.post('/:id/cancel', requirePermission('update', 'Return'), postReturnCancel);

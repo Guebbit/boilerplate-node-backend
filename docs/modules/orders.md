@@ -454,19 +454,19 @@ added there without an audience row fails to compile. Each row carries its own `
 (`buyer` or `staff`) on the wire, so a staff screen marks which rows the buyer cannot see without
 keeping a copy of this table.
 
-| Group     | Type                                                                                         | Buyer sees |
-| --------- | -------------------------------------------------------------------------------------------- | ---------- |
-| Order     | `created`, `paid`, `processing`, `shipped`, `delivered`, `cancelled`                         | yes        |
-| Order     | `status_overridden` (mode, from, to, and the staff's reason as `text`)                       | no         |
-| Order     | `address_corrected` (staff-only)                                                             | no         |
-| Payment   | `payment_declined`, `refund_issued`, `refund_settled`                                        | yes        |
-| Payment   | `refund_failed` (a failure code, never the provider's wording)                               | no         |
-| Payment   | `refund_canceled` (a refund staff voided; ids and amount only)                               | no         |
-| Shipments | `shipment_shipped`, `shipment_delivered`, `remainder_cancelled`                              | yes        |
-| Shipments | `fulfillment_held`, `fulfillment_released` (a hold's reason code)                            | no         |
-| Returns   | `return_requested`, `return_approved`, `return_declined`, `return_received`, `return_closed` | yes        |
-| Documents | `invoice_issued`, `credit_note_issued`                                                       | yes        |
-| Preorders | `release_date_moved`, `delay_notice_sent`                                                    | yes        |
+| Group     | Type                                                                                                            | Buyer sees |
+| --------- | --------------------------------------------------------------------------------------------------------------- | ---------- |
+| Order     | `created`, `paid`, `processing`, `shipped`, `delivered`, `cancelled`                                            | yes        |
+| Order     | `status_overridden` (mode, from, to, and the staff's reason as `text`)                                          | no         |
+| Order     | `address_corrected` (staff-only)                                                                                | no         |
+| Payment   | `payment_declined`, `refund_issued`, `refund_settled`                                                           | yes        |
+| Payment   | `refund_failed` (a failure code, never the provider's wording)                                                  | no         |
+| Payment   | `refund_canceled` (a refund staff voided; ids and amount only)                                                  | no         |
+| Shipments | `shipment_shipped`, `shipment_delivered`, `remainder_cancelled`                                                 | yes        |
+| Shipments | `fulfillment_held`, `fulfillment_released` (a hold's reason code)                                               | no         |
+| Returns   | `return_requested`, `return_approved`, `return_declined`, `return_received`, `return_closed`, `return_canceled` | yes        |
+| Documents | `invoice_issued`, `credit_note_issued`                                                                          | yes        |
+| Preorders | `release_date_moved`, `delay_notice_sent`                                                                       | yes        |
 
 A row holds ids, codes and numbers in `data`. Never a sibling's free text: `returns`' `note` and
 `declineReason`, `delivery`'s hold note are reaped on their own clocks, and a copy here would

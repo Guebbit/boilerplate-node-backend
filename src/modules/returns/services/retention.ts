@@ -14,7 +14,8 @@ import { DAY_MS } from '@domain-primitives/time';
 /**
  * `reap:returns`'s sweep. Unsets `note` and `declineReason` on every return whose
  * `updatedAt` is older than `NODE_RETURN_TEXT_RETENTION_DAYS`. `updatedAt`, not the closing date:
- * an approved return whose goods never arrive never closes.
+ * an approved return whose goods never arrive stays quiet for as long as staff leave it, and is
+ * wiped like any other.
  *
  * @returns how many returns lost their text
  */

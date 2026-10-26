@@ -82,6 +82,7 @@ stateDiagram-v2
     requested --> approved: staff approve
     requested --> declined: staff decline, with a reason
     approved --> received: goods arrive
+    approved --> canceled: staff cancel it, the goods never came
     received --> closed: the money has gone back
     received --> closed: staff close it by hand
 ```
@@ -105,10 +106,38 @@ Shopify's `returnClose`.
 | refresh the order's `returnStatus`                                                  | issue a credit note                                          |
 
 `receive:Return` guards it, the key that receives the goods, with the same fresh-session tier. Any
-other status answers 409 `RETURN_NOT_CLOSABLE`: a `requested` return is declined, not closed.
-`Return.actions.close` says whether it would be accepted. Closing an `approved` return (goods that
-never come) is not offered: a closed return counts as goods back in the order's accounting, which
-would then be wrong.
+other status answers 409 `RETURN_NOT_CLOSABLE`: a `requested` return is declined, not closed, and
+an `approved` one whose goods never come is [canceled](#canceling-a-return).
+`Return.actions.close` says whether it would be accepted.
+
+## Canceling a return {#canceling-a-return}
+
+`POST /returns/{id}/cancel`, body `{ note }` (optional), moves an `approved` return whose goods will
+never arrive to `canceled`. It is Shopify's `returnCancel` and Solidus' return-authorization cancel.
+A withdrawal, born `approved`, can be canceled too.
+
+`canceled` is not `completed`: the return did not happen. So it holds no units (the same lines can be
+returned again, by a new return) and counts as no goods back (the order's `returnStatus` leaves
+`in_progress`, and the return takes no part in the delivery-refund rule).
+
+| What it does                                                           | What it does not                          |
+| ---------------------------------------------------------------------- | ----------------------------------------- |
+| `approved → canceled` in one conditional write                         | move money or stock                       |
+| order timeline `return_canceled`, audit `admin.return.canceled` (note) | publish an event or webhook, or send mail |
+| refresh the order's `returnStatus`                                     | issue a credit note                       |
+
+No event and no mail is a choice: a decline is not published either, and nothing the customer must
+act on changed. `update:Return` guards it, with no fresh session since nothing moves; a repeat
+answers 409 `RETURN_NOT_CANCELABLE`. There is no cancel from `requested` (decline covers it, with its
+reason code) and no buyer-side cancel.
+
+Two things it is **not** for:
+
+- A parcel lost on its way back. The shop bears that risk, so the refund may be owed: receive it with
+  a restock count of 0 ([receive](#what-the-customer-gets-back)).
+- A withdrawal still inside the buyer's 14 days to send the goods (CRD Art. 14(1)). The guide says
+  to wait; the server does not block it. Goods that turn up after a cancel are a new, staff-opened
+  return with the original `requestedAt`.
 
 ## The events
 
@@ -507,11 +536,11 @@ Every rule this module declares and who holds it, role by role. The rule is what
 
 <!-- permissions:start -->
 
-| Rule             | Set                | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                   |
-| ---------------- | ------------------ | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | ------------------------------------------------------------------------------------------------------ |
-| `read:Return`    | `ReturnDisplay`    | —       | —            | —          | ✅        | ✅          | ✅        | —        | ✅          | ✅      | —          | ✅         | Read every return in the shop — the queue staff work through.                                          |
-| `update:Return`  | `ReturnManagement` | —       | —            | —          | ✅        | —           | ✅        | —        | ✅          | ✅      | —          | ✅         | Decide a return request — approve it, or decline it with a reason.                                     |
-| `receive:Return` | `ReturnReceiving`  | —       | —            | —          | ✅ ⚡c    | ✅ ⚡c      | —         | —        | —           | ✅ ⚡c  | —          | —          | Record that the returned goods arrived — puts the units back on sale and returns the customer's money. |
+| Rule             | Set                | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                                      |
+| ---------------- | ------------------ | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `read:Return`    | `ReturnDisplay`    | —       | —            | —          | ✅        | ✅          | ✅        | —        | ✅          | ✅      | —          | ✅         | Read every return in the shop — the queue staff work through.                                                             |
+| `update:Return`  | `ReturnManagement` | —       | —            | —          | ✅        | —           | ✅        | —        | ✅          | ✅      | —          | ✅         | Decide a return request — approve it, or decline it with a reason — and cancel an approved return whose goods never came. |
+| `receive:Return` | `ReturnReceiving`  | —       | —            | —          | ✅ ⚡c    | ✅ ⚡c      | —         | —        | —           | ✅ ⚡c  | —          | —          | Record that the returned goods arrived — puts the units back on sale and returns the customer's money.                    |
 
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in

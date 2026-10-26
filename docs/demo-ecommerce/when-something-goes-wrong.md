@@ -13,6 +13,7 @@ note field, and leaves the decision to a person. Each entry below has the same t
 | A refund was also made in the provider's own dashboard                 | [Refunded in the dashboard as well](#refund-covered-elsewhere) |
 | Two refunds were opened by mistake                                     | [Two refunds by mistake](#two-refunds)                         |
 | A return was received but its refund will never come the usual way     | [A return that cannot finish](#return-cannot-finish)           |
+| A return was approved but the buyer never sent the goods               | [The buyer never sent it back](#buyer-never-sent-it)           |
 | Money arrived by bank transfer for an order that was already cancelled | [A transfer for a cancelled order](#late-transfer)             |
 | The shelf holds fewer units than the orders promised                   | [Fewer on the shelf than promised](#fewer-on-shelf)            |
 | An order stays in "being prepared" and nothing moves                   | [An order stuck in processing](#stuck-in-processing)           |
@@ -182,6 +183,31 @@ A request is approved or declined. Close is for a return whose goods have arrive
 
 **Whose job.** Whoever receives returns: the [warehouse](./warehouse.md) or the manager.
 → [`returns`](../modules/returns.md#closing-a-return-by-hand)
+
+## The buyer never sent it back {#buyer-never-sent-it}
+
+**What you see.** A return is **approved**, the order reads "return in progress", and weeks later no
+parcel has come.
+
+**What to do.** Press **Cancel return** on the return and, if you like, write why. The return becomes
+canceled: its units can be returned again and the order stops reading "return in progress".
+
+Canceling is bookkeeping only: no money, no stock, no email. It is not a close, because the goods did
+not come back.
+
+::: warning If the buyer has proof of posting, do not cancel
+A buyer who shows a posting receipt sent the goods; the shop bears the risk of the parcel on its way
+back and the refund is owed. Receive the return with a restock count of 0 instead.
+:::
+
+::: warning A withdrawal has 14 days to send the goods
+Do not cancel a withdrawal before the buyer's 14 days to send the goods have passed (CRD Art.
+14(1)). If the goods turn up after a cancel, record the withdrawal again as a new return with the
+original date as `requestedAt`.
+:::
+
+**Whose job.** The [manager](./manager.md), the moderator or support: whoever holds `update:Return`.
+→ [`returns`](../modules/returns.md#canceling-a-return)
 
 ## A transfer for a cancelled order {#late-transfer}
 

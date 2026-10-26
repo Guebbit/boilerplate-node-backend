@@ -54,7 +54,8 @@ describe('POST /returns', () => {
             approve: false,
             decline: false,
             receive: false,
-            close: false
+            close: false,
+            cancel: false
         });
     });
 
@@ -78,7 +79,8 @@ describe('POST /returns', () => {
             approve: false,
             decline: false,
             receive: false,
-            close: false
+            close: false,
+            cancel: false
         });
 
         const order = await api().get(`/orders/${orderId}`).set('Authorization', bearer);
@@ -448,6 +450,86 @@ describe('POST /returns/{id}/close', () => {
             const stored = await returnRepository.findById(id);
             expect(stored?.status).toBe('received');
         });
+    });
+});
+
+describe('POST /returns/{id}/cancel', () => {
+    it('cancels an approved return: 200, canceled, and no further cancel offered', async () => {
+        const { id } = await withdrawn();
+        const { bearer } = await authenticateAsRole('support');
+
+        const response = await api()
+            .post(`/returns/${id}/cancel`)
+            .set('Authorization', bearer)
+            .send({ note: 'the buyer never sent it' });
+
+        expect(response.status).toBe(200);
+        expect(response.body).toMatchObject({ id, status: 'canceled' });
+        expect(response.body.canceledAt).toEqual(expect.any(String));
+        expect(response.body.actions.cancel).toBe(false);
+    });
+
+    it('takes no body at all', async () => {
+        const { id } = await withdrawn();
+        const { bearer } = await authenticateAsRole('support');
+
+        const response = await api().post(`/returns/${id}/cancel`).set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+    });
+
+    it('answers 409 RETURN_NOT_CANCELABLE to a second cancel', async () => {
+        const { id } = await withdrawn();
+        const { bearer } = await authenticateAsRole('support');
+        await api().post(`/returns/${id}/cancel`).set('Authorization', bearer);
+
+        const response = await api().post(`/returns/${id}/cancel`).set('Authorization', bearer);
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('RETURN_NOT_CANCELABLE');
+    });
+
+    it('refuses a note over 500 characters with 422', async () => {
+        const { id } = await withdrawn();
+        const { bearer } = await authenticateAsRole('support');
+
+        const response = await api()
+            .post(`/returns/${id}/cancel`)
+            .set('Authorization', bearer)
+            .send({ note: 'x'.repeat(501) });
+
+        expect(response.status).toBe(422);
+    });
+
+    it('refuses the buyer, and a warehouse member without update:Return, with 403', async () => {
+        const { customer, warehouse, id } = await withdrawn();
+
+        const asBuyer = await api().post(`/returns/${id}/cancel`).set('Authorization', customer);
+        const asWarehouse = await api()
+            .post(`/returns/${id}/cancel`)
+            .set('Authorization', warehouse);
+
+        expect(asBuyer.status).toBe(403);
+        expect(asWarehouse.status).toBe(403);
+    });
+
+    it('answers 404 for a return that does not exist', async () => {
+        const { bearer } = await authenticateAsRole('support');
+
+        const response = await api()
+            .post(`/returns/${'a'.repeat(24)}/cancel`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+    });
+
+    it('needs no fresh session: nothing moves', async () => {
+        const { id } = await withdrawn();
+        const stale = await staleBearerFor(await staffUser('support'), 'critical');
+
+        const response = await api().post(`/returns/${id}/cancel`).set('Authorization', stale);
+
+        expect(response.status).toBe(200);
     });
 });
 

@@ -35,7 +35,8 @@ describe('returnSchema', () => {
             'approved',
             'declined',
             'received',
-            'closed'
+            'closed',
+            'canceled'
         ]);
         expect(enumOf(returnSchema, 'reason')).toEqual([
             'withdrawal',

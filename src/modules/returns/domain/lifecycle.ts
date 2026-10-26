@@ -26,6 +26,12 @@ export const RECEIVABLE_RETURN_STATUSES: readonly ReturnStatus[] = [ReturnStatus
 export const CLOSABLE_RETURN_STATUSES: readonly ReturnStatus[] = [ReturnStatus.received];
 
 /**
+ * What may be canceled: an approved return whose goods never came. Not a `requested` one (that is
+ * declined, with a reason code) and not a `received` one (the goods are in; it is closed).
+ */
+export const CANCELABLE_RETURN_STATUSES: readonly ReturnStatus[] = [ReturnStatus.approved];
+
+/**
  * The status a return is opened in. A withdrawal is a right the consumer exercises, not a favour
  * staff grant, so there is nothing to decide and it starts `approved`; every other reason waits
  * for an answer.
@@ -36,7 +42,8 @@ export const initialStatusFor = (reason: ReturnReason): ReturnStatus =>
 
 /**
  * Statuses in which a return still holds goods that have not come back — the ones that count
- * against an order line's returnable quantity. A declined return holds nothing.
+ * against an order line's returnable quantity. A declined or canceled return holds nothing: no
+ * unit is spoken for, so the same lines can be returned again.
  */
 export const QUANTITY_HOLDING_RETURN_STATUSES: readonly ReturnStatus[] = [
     ReturnStatus.requested,
@@ -48,7 +55,8 @@ export const QUANTITY_HOLDING_RETURN_STATUSES: readonly ReturnStatus[] = [
 /**
  * The statuses a return must have reached for its goods to count as BACK — received, or closed
  * once the money followed. A return still `requested` or `approved` holds goods that have not come
- * back, so it neither makes the order whole nor takes the delivery refund.
+ * back, so it neither makes the order whole nor takes the delivery refund. `canceled` is out on
+ * purpose: it is not a completed return, it is one that never happened.
  */
 export const BACK_RETURN_STATUSES: readonly ReturnStatus[] = [
     ReturnStatus.received,

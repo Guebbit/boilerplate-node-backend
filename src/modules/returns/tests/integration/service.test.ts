@@ -855,7 +855,7 @@ describe('who sees which return', () => {
             Object.fromEntries(staff.items.map(({ id, actions }) => [id, actions.approve]))
         ).toEqual({ [open.returnId]: true, [decided.returnId]: false });
         expect(buyerPage.items.map(({ actions }) => actions)).toEqual([
-            { approve: false, decline: false, receive: false, close: false }
+            { approve: false, decline: false, receive: false, close: false, cancel: false }
         ]);
     });
 
@@ -867,13 +867,15 @@ describe('who sees which return', () => {
             approve: true,
             decline: true,
             receive: false,
-            close: false
+            close: false,
+            cancel: false
         });
         expect(actionsOf(stored!, buyer(user))).toEqual({
             approve: false,
             decline: false,
             receive: false,
-            close: false
+            close: false,
+            cancel: false
         });
     });
 
@@ -888,7 +890,8 @@ describe('who sees which return', () => {
             approve: true,
             decline: true,
             receive: false,
-            close: false
+            close: false,
+            cancel: false
         });
     });
 
@@ -901,7 +904,8 @@ describe('who sees which return', () => {
             approve: false,
             decline: false,
             receive: true,
-            close: false
+            close: false,
+            cancel: false
         });
     });
 });

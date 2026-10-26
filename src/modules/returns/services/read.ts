@@ -22,6 +22,7 @@ import type { ReturnDocument } from '../model';
 import { presentReturn } from '../presenter';
 import { ownOrder } from './ownership';
 import {
+    CANCELABLE_RETURN_STATUSES,
     CLOSABLE_RETURN_STATUSES,
     DECIDABLE_RETURN_STATUSES,
     RECEIVABLE_RETURN_STATUSES,
@@ -67,7 +68,8 @@ const actionsForCaller = (authContext: AuthContext): ((returned: StatusOnly) => 
             approve: decidable,
             decline: decidable,
             receive: mayReceive && RECEIVABLE_RETURN_STATUSES.includes(returned.status),
-            close: mayReceive && CLOSABLE_RETURN_STATUSES.includes(returned.status)
+            close: mayReceive && CLOSABLE_RETURN_STATUSES.includes(returned.status),
+            cancel: mayDecide && CANCELABLE_RETURN_STATUSES.includes(returned.status)
         };
     };
 };

@@ -11,6 +11,7 @@
         "nothing-returnable": "Nulla di questo ordine resta da rendere.",
         "not-decidable": "Questo reso è già stato deciso.",
         "not-closable": "Questo reso non è stato ricevuto oppure è già chiuso.",
+        "not-cancelable": "Questo reso non è approvato e in attesa della merce, quindi non può essere annullato.",
         "not-receivable": "Questo reso non sta aspettando la merce.",
         "cancellation-invalid": "Un annullamento deve indicare l'ordine di evasione da annullare e non inviare righe: si annulla tutto il resto.",
         "cancellation-withdrawal-buyer-only": "Solo l'acquirente dell'ordine può annullare come recesso: il personale annulla con un altro motivo.",

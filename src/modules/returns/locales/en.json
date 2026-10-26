@@ -11,6 +11,7 @@
         "nothing-returnable": "Nothing on this order is left to return.",
         "not-decidable": "This return has already been decided.",
         "not-closable": "This return has not been received, or it is already closed.",
+        "not-cancelable": "This return is not an approved one awaiting its goods, so it cannot be canceled.",
         "not-receivable": "This return is not awaiting its goods.",
         "cancellation-invalid": "A cancellation must name the fulfillment order to cancel, and send no lines — the whole remainder is cancelled.",
         "cancellation-withdrawal-buyer-only": "Only the order's own buyer can cancel as a withdrawal; staff cancel with another reason.",

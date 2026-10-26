@@ -5,6 +5,7 @@
  */
 import {
     BACK_RETURN_STATUSES,
+    CANCELABLE_RETURN_STATUSES,
     DECIDABLE_RETURN_STATUSES,
     QUANTITY_HOLDING_RETURN_STATUSES,
     RECEIVABLE_RETURN_STATUSES,
@@ -40,6 +41,16 @@ describe('the lifecycle sets', () => {
 
     it('lets goods be received only against an approved return', () => {
         expect(RECEIVABLE_RETURN_STATUSES).toEqual(['approved']);
+    });
+
+    it('lets only an approved return be canceled — the goods are awaited, not yet in', () => {
+        expect(CANCELABLE_RETURN_STATUSES).toEqual(['approved']);
+    });
+
+    it('does not count a canceled return against what can still come back, nor as goods back', () => {
+        expect(QUANTITY_HOLDING_RETURN_STATUSES).not.toContain('canceled');
+        expect(BACK_RETURN_STATUSES).not.toContain('canceled');
+        expect(holdsReturnedGoods({ kind: 'return', status: 'canceled' })).toBe(false);
     });
 
     it('does not count a declined return against what can still come back', () => {
@@ -265,7 +276,12 @@ describe('accountsOf', () => {
                     status: 'approved',
                     lines: [{ productId: id('a'), quantity: 9 }]
                 },
-                { kind: 'return', status: 'declined', lines: [{ productId: id('a'), quantity: 9 }] }
+                {
+                    kind: 'return',
+                    status: 'declined',
+                    lines: [{ productId: id('a'), quantity: 9 }]
+                },
+                { kind: 'return', status: 'canceled', lines: [{ productId: id('a'), quantity: 9 }] }
             ],
             'EUR'
         );
