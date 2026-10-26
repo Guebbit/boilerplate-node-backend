@@ -304,6 +304,11 @@ re-implementing the rules — a status dropdown listing every enum value, a canc
 `pending` or `paid`, a pay form testing for `pending`. Three copies of server rules, in a separately
 deployed codebase, with nothing able to notice when they drift.
 
+A record with a lifecycle `status` therefore lists `actions` in `required`, on every read and write,
+list rows included; a read-only projection or a line of its parent is the exception, and
+`tests/cross-cutting/api-standards.test.ts` names each one with its reason. The same file keeps a
+presenter honest: it maps what a service decided and imports no ability, caller or service.
+
 So the server sends the answer. `Order.actions` and `PaymentActions` are computed per REQUEST, not
 stored. `example` is the minimal worked case: `Example.actions` is `{ transitions, update, delete }` (a target-taking endpoint, so an array is right),
 the moves from the domain's table and the two keys asked of the kernel per row (`permitsOnRows`), so

@@ -109,6 +109,9 @@ allowed", with 409 where Google says 400).
 - A retried `DELETE` leaves the same state (RFC 9110 §9.2.2). What is already gone answers 404, as
   Google's [AIP-135](https://google.aip.dev/135) does.
 - The caller's `actions` flag for the move is `false` in that state, so a screen never offers it.
+- Every 409 names a code, and the code is listed in a contract fragment's `x-error-codes`: a bare
+  message cannot be told from its neighbour by a client. `tests/cross-cutting/api-standards.test.ts`
+  reads the source for it.
 
 #### An action whose target state is already reached
 
