@@ -310,8 +310,8 @@ list rows included; a read-only projection or a line of its parent is the except
 presenter honest: it maps what a service decided and imports no ability, caller or service.
 
 So the server sends the answer. `Order.actions` and `PaymentActions` are computed per REQUEST, not
-stored. `example` is the minimal worked case: `Example.actions` is `{ transitions, update, delete }` (a target-taking endpoint, so an array is right),
-the moves from the domain's table and the two keys asked of the kernel per row (`permitsOnRows`), so
+stored. `example` is the minimal worked case: `Example.actions` is flags `{ publish, archive, unarchive, update, delete }` (one door per lifecycle event, like `User.actions`),
+the events from the domain's table and the two keys asked of the kernel per row (`permitsOnRows`), so
 the own-rows condition in `authorization.yaml` stays its only encoding. `User.actions` is the
 account-side case: one flag per endpoint (`activate`, `restore`, `setPurchaseHold`…), assembled in
 `users/services/actions.ts` from the caller's keys, `access`'s pure `mayChangeAccount` and the row's

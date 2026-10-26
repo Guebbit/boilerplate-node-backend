@@ -17,7 +17,11 @@ import { upload } from '@infrastructure/http/middlewares/upload';
 import { getExample } from './controllers/get-example';
 import { getExamples } from './controllers/get-examples';
 import { postExample } from './controllers/post-example';
-import { postExampleTransition } from './controllers/post-example-transition';
+import {
+    postExampleArchive,
+    postExamplePublish,
+    postExampleUnarchive
+} from './controllers/post-example-event';
 import { replaceExample, updateExample } from './controllers/update-example';
 import { deleteExample } from './controllers/delete-example';
 import { putExampleCover } from './controllers/put-example-cover';
@@ -67,10 +71,12 @@ router.put('/:id', requirePermission('update', 'Example'), replaceExample);
 // PATCH /examples/:id — change the fields sent.
 router.patch('/:id', requirePermission('update', 'Example'), updateExample);
 
-// POST /examples/:id/transitions — move the example to another status. Declared before the
-// `/:id/cover` mount for readability only; the paths cannot collide. No `If-Match`: the write is
-// conditional on the status read, so of two racing moves exactly one lands.
-router.post('/:id/transitions', requirePermission('update', 'Example'), postExampleTransition);
+// POST /examples/:id/publish|archive|unarchive — one door per lifecycle event. No `If-Match`: the
+// write is conditional on the status read, so of two racing moves exactly one lands. All three
+// need `update`; the paths cannot collide with `/:id/cover`.
+router.post('/:id/publish', requirePermission('update', 'Example'), postExamplePublish);
+router.post('/:id/archive', requirePermission('update', 'Example'), postExampleArchive);
+router.post('/:id/unarchive', requirePermission('update', 'Example'), postExampleUnarchive);
 
 // DELETE /examples/:id — remove the example.
 router.delete('/:id', requirePermission('delete', 'Example'), deleteExample);
