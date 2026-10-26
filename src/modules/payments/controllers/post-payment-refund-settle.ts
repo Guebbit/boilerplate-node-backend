@@ -1,13 +1,12 @@
 /**
  * @module
  * POST /payments/:id/refunds/:refundId/settle
- * An operator confirming that a hand-paid refund's money went back outside the application.
- * `create:Refund` at the route, which also carries the fresh-session requirement; the service
- * refuses a card refund and a refund someone already settled.
+ * An operator confirming that a refund's money went back outside the application. Answers the
+ * refund it settled. `create:Refund` at the route, which also carries the fresh-session
+ * requirement; the service refuses a refund with no final answer and one someone already settled.
  */
 
 import type { Request, Response } from 'express';
-import type { Payment } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { paymentService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
@@ -31,11 +30,10 @@ export const postPaymentRefundSettle = (
         .settleRefundByHand(paymentId, refundId, request.authContext, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse<Payment>(
-                response,
-                paymentService.withActions(result.data, undefined, request.authContext),
-                200
-            );
+            const refund = paymentService.refundOf(result.data, refundId, request.authContext);
+            // Unreachable on a success: the refund that just settled is on the payment.
+            if (!refund) throw new Error('a settled refund is missing from its payment');
+            successResponse(response, refund, 200);
         })
         .catch(catchAs(response, 'postPaymentRefundSettle'));
 };

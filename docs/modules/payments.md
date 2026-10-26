@@ -347,21 +347,20 @@ the reason; the actor is the caller, or the system when none is behind it. Nobod
 spot, whoever asked: goods arriving or a buyer withdrawing is not cash going back.
 
 `settleRefundByHand` (`POST /payments/{id}/refunds/{refundId}/settle`, `create:Refund`, the same
-fresh-session tier as recording a payment) is the only door that sets `refundedByHand: true`. It
+fresh-session tier as recording a payment) is the only door that sets `settledByHand: true` (on the refund, never on the payment: one hand-settled refund says nothing about the next). It
 names one record, so a payment carrying several open refunds (a cancelled remainder and two
 returns) settles each separately, and a return stays `received` until its own money is confirmed
-back. It audits `admin.payment.refund_settled_by_hand`; the `payment.refunded` event is the same as
+back. It answers the refund it settled (`GET /payments/{id}` has the totals and the actions). It audits `admin.payment.refund_settled_by_hand`; the `payment.refunded` event is the same as
 for a provider refund. `PaymentActions.settleByHand` lists the ids a caller may settle. A refund two
-operators settle at once settles once; the loser answers 409 `PAYMENT_REFUND_NOT_OPEN`, and a card
-refund answers `PAYMENT_REFUND_NOT_BY_HAND`. A cancelled hand-paid order therefore shows
+operators settle at once settles once; the loser answers 409 `PAYMENT_REFUND_NOT_OPEN`. A cancelled hand-paid order therefore shows
 `succeeded` until an operator confirms it, not "refunded" for money nobody actually moved.
 
 **The `actions` on every payment.** Each response that carries a payment, the answer to every
 write included, carries `PaymentActions`: `pay` (confirm, or take a waiting transfer over with a
 card when a provider is configured), `sync` (finish an in-flight payment at the provider; narrower
 than its route on purpose, and never true together with `pay`), `refund` (`create:Refund`, a
-`succeeded` payment, and something left: a refund still open counts as taken, so a card refund
-awaiting the sweep is not offered again) and `settleByHand`. `confirm`, `sync` and `intent` read the
+`succeeded` payment, and something left: a refund still open counts against what is left but does
+not hide the control while money remains) and `settleByHand`. `confirm`, `sync` and `intent` read the
 order for `pay`; `offline` and `refund` only ever return a `succeeded` payment, where `pay` is false
 whatever the order says, so they read nothing.
 
@@ -388,9 +387,19 @@ sequenceDiagram
         P-->>C: payment.refunded (once per refund)
     else provider refuses
         P->>D: record failed + failureReason, still counted
-        P-->>C: error — the sweep retries the same record
+        P-->>C: 201 with the failed record — the sweep retries it, or staff settle it
     end
 ```
+
+- **A refusal is an answer, not an error.** The record exists and counts against what is left, so
+  `POST /payments/{id}/refunds` answers **201** with the `failed` record (never a 5xx: a 500 would
+  invite a second click that opens a second partial refund). The three entry points differ:
+
+    | Entry point                   | Answers                                       | Where staff follow the refund                                        |
+    | ----------------------------- | --------------------------------------------- | -------------------------------------------------------------------- |
+    | `POST /payments/{id}/refunds` | 201 and the record (`failed` if refused)      | the record itself, `actions.settleByHand`, the attention list        |
+    | `POST /orders/{id}/cancel`    | 200; the refund runs after the answer         | the payment's `displayStatus` (`refund_pending`), the attention list |
+    | `POST /returns/{id}/receive`  | 200; `received` = still owed, `closed` = back | the order's payment, the attention list                              |
 
 - **Opened before asked.** The write that appends the record also raises `amountRefunded`, and it is
   conditional on `amountRefunded` still being what the caller read — so two racing partial refunds
@@ -405,17 +414,17 @@ sequenceDiagram
   or `refunded`) is stamped in the settlement's own transaction. No later refund exists to repair a
   missed stamp after the last one, so a failing stamp settles nothing and the sweep retries.
 - **A refusal stays open.** The record is `failed`, with a closed `failureReason` (staff only; see
-  [the staff Payments page](#the-staff-payments-page)), and keeps its share of `amountRefunded`, so nothing is opened beside it. Only `retryOpenRefunds` (run by
-  `npm run job sweep:payment-effects`) re-sends it. A later cancel, return or operator call sends
-  only records it opened itself (or found `pending`), so one stuck refund never blocks the next:
-  the request opens its own record and the sweep keeps retrying the old one.
+  [the staff Payments page](#the-staff-payments-page)), and keeps its share of `amountRefunded`, so nothing is opened beside it. What happens next
+  is [the claim](#sending-a-refund-the-claim-the-fence-the-delay) below. A later cancel, return or
+  operator call sends only records it opened itself (or found never attempted), so one stuck refund
+  never blocks the next: the request opens its own record and the sweep keeps retrying the old one.
 - **The default is everything left.** `POST /payments/{id}/refunds` with no body returns
   all that is still refundable; with an `amount` it returns that part. An `amount` over what is
   left, nothing left included, is a 422 (`PAYMENT_REFUND_EXCEEDS_REMAINING`); with no `amount`,
   nothing left is a 409 (`PAYMENT_NOT_REFUNDABLE`).
-- **A refund can pay for a return.** `refundForReturn` (called by [`returns`](./returns.md) when goods
-  are received) opens a refund with `reason: return` and the return's `returnId`, clamped to what the
-  payment has left. `payment.refunded` carries the `returnId`, so `returns` closes the return when
+- **A refund can pay for a return.** `openReturnRefund` (called by [`returns`](./returns.md) inside its own
+  transaction when goods are received) opens a refund with `reason: return` and the return's `returnId`, clamped to what the
+  payment has left. The record commits with the return; `sendOpenedRefund` asks the provider after. `payment.refunded` carries the `returnId`, so `returns` closes the return when
   the refund lands — including later, when the sweep completes one the provider first refused.
 - **A late payment is named.** Money that lands after the order could no longer be paid (its hold
   expired or it was cancelled) is refunded with `reason: late_payment`, not `cancellation`, so staff
@@ -429,6 +438,78 @@ sequenceDiagram
   records the goods it pays back (`lines`: product and quantity, plus the `shipping` inside the
   amount, Shopify's `refund_line_items`) and announces them as `goods`, so the credit note
   credits each line at its own VAT rate. Neither field is published on the wire.
+
+### Sending a refund: the claim, the fence, the delay {#sending-a-refund-the-claim-the-fence-the-delay}
+
+Two callers can reach the same open record (the request that opened it, the sweep every few
+minutes). Three rules keep them from sending it twice or overwriting each other:
+
+| Rule      | What it does                                                                                                                                                                                                                                                                                  |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The claim | One conditional write moves a sendable record to `pending` and stamps `attemptedAt`. Sendable is: `failed` and not final and past its delay, or `pending` with an attempt old enough to be taken for dead. A record opened in a caller's transaction carries no stamp and is claimed at once. |
+| The fence | The provider's answer settles, and its refusal fails, only a `pending` record that still carries the SAME `attemptedAt`. A slow old attempt that comes back after a newer claim finds nothing to write.                                                                                       |
+| The delay | After a refusal the record waits `NODE_PAYMENT_REFUND_RETRY_MINUTES`, doubling with each refusal and capped at a day (`nextAttemptAt`). A definite refusal has no next attempt at all.                                                                                                        |
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: opened (attemptedAt stamped when the request sends it)
+    pending --> succeeded: the provider answers, same attemptedAt
+    pending --> failed: the provider refuses, same attemptedAt
+    failed --> pending: claimed (retryable, delay passed)
+    pending --> pending: claimed again (attempt looks dead)
+    failed --> [*]: final refusal, never claimed
+    succeeded --> [*]
+```
+
+A refusal is **final** when the provider (or the lack of one) gave a definite answer about this
+refund: `declined`, `expired_or_canceled_card`, `lost_or_stolen_card`, `provider_removed`. Asking
+again will not change it, so the sweep never does; the shop pays back another way. `insufficient_funds`
+(the shop's own provider balance is short), `provider_unavailable` and `unknown` are retried.
+The domain sets are `FINAL_REFUND_FAILURES` and `MONEY_DID_NOT_MOVE_FAILURES`
+(`payments/domain/lifecycle.ts`).
+
+**A provider the deployment no longer carries.** A payment keeps the name of the provider that took
+it. If that adapter is gone from this process, nothing can be asked: the refund fails once as
+`provider_removed` (final), and the reconcile sweep skips such payments instead of stopping on
+them. See [Retiring a provider](./payments-provider-port.md#retiring-a-provider).
+
+**The provider's key expires.** A provider remembers an idempotency key for a day from its first
+use (Stripe). Past that a reused key makes a NEW refund, so the adapter must adopt the refund the
+record already made ([the port](./payments-provider-port.md#a-key-the-provider-forgot)). The age
+is measured from the record's `createdAt`, never from the last attempt.
+
+### When a card refund cannot go back {#when-a-card-refund-cannot-go-back}
+
+A refused card refund is the shop's to settle: the money has to reach the buyer another way, and an
+operator then presses **Mark returned** (`POST /payments/{id}/refunds/{refundId}/settle`). That is
+only offered when the refusal PROVES the money did not move.
+
+| The refusal                                                   | Money moved? | Retried?           | Hand settle                        | Attention kind                      |
+| ------------------------------------------------------------- | ------------ | ------------------ | ---------------------------------- | ----------------------------------- |
+| `declined`, `expired_or_canceled_card`, `lost_or_stolen_card` | no           | never (final)      | yes                                | `refused_refund`, at once           |
+| `provider_removed` (the adapter is no longer installed)       | no           | never (final)      | yes                                | `refused_refund`, at once           |
+| `insufficient_funds` (the shop's provider balance is short)   | no           | yes, growing delay | yes                                | `stale_refund`, after the threshold |
+| `provider_unavailable`, `unknown`                             | maybe        | yes, growing delay | no: 409 `PAYMENT_REFUND_IN_FLIGHT` | `stale_refund`, after the threshold |
+| a `pending` record (an attempt is running)                    | maybe        | claimed when stale | no: 409 `PAYMENT_REFUND_IN_FLIGHT` | `stale_refund`                      |
+
+```mermaid
+flowchart TD
+    A[provider refuses] --> B{the answer was about THIS refund?}
+    B -->|yes, definite| C[final: declined, expired, lost, removed]
+    B -->|yes, shop balance| D[insufficient_funds: retried, settleable]
+    B -->|no answer or unclear| E[provider_unavailable or unknown: retried]
+    C --> F[on the attention list at once]
+    D --> G[settleByHand lists it]
+    C --> G
+    E --> H[sweep resends under the same key; a timeout then gets the real answer]
+    G --> I[operator returns the money, presses Mark returned]
+    I --> J[credit note, return closes, buyer mail, webhook]
+```
+
+An unclear failure that never resolves (the provider gone dark) stays open with the growing delay
+and shows on the attention list after `NODE_PAYMENT_ATTENTION_MINUTES`. There is no override: a
+provider gone for good is a technician's edit of the record. Staff check the provider's dashboard or
+support first. Rule of thumb for adapter authors: [reading a refusal](./payments-provider-port.md#reading-a-refusal).
 
 Every other refund dispatches to the provider named on the payment's own `provider` field — never
 the deployment's currently configured one — so a refund of an older payment still reaches the

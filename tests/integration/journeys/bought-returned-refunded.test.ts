@@ -25,7 +25,7 @@ import {
     GetSalesStats200Response,
     ListAuditEntries200Response,
     ListOrderCreditNotes200Response,
-    RefundPaymentByOrder201Response,
+    CreateRefund201Response,
     GetPayment200Response,
     ReceiveReturn200Response,
     ShipFulfillmentOrder201Response,
@@ -297,7 +297,7 @@ it('records a staff buyer’s refund of their own order as theirs', async () => 
             .set('Authorization', moderator)
             .set('Idempotency-Key', 'journey-own-order-refund')
             .send({}),
-        RefundPaymentByOrder201Response
+        CreateRefund201Response
     );
     expect(refund).toMatchObject({ amount: 25 });
     const refunded = bodyOf(

@@ -1458,7 +1458,7 @@ describe('refundPayment', () => {
 
         await expect(
             refundOrderPayment(String(order._id), asAdmin(), callerContextAs('admin'))
-        ).rejects.toThrow('payment provider unreachable');
+        ).resolves.toMatchObject({ success: true, status: 201 });
         const stored = await paymentRepository.findByOrderId(String(order._id));
         expect(stored!.status).toBe('succeeded');
         expect(stored!.refunds[0].status).toBe('failed');
@@ -1718,7 +1718,7 @@ describe('recordOfflinePayment — refunding it back', () => {
     });
 
     /*
-     * Only an operator confirming the cash came back may record `refundedByHand: true` — the
+     * Only an operator confirming the cash came back may record `settledByHand: true` — the
      * automatic cancel listener leaves a hand-paid order's payment `succeeded` instead, rather
      * than the system saying money moved that nobody actually moved.
      */
@@ -1735,12 +1735,12 @@ describe('recordOfflinePayment — refunding it back', () => {
 
         expect(cancelled.success).toBe(true);
         const payment = await paymentRepository.findByOrderId(String(order._id));
-        expect(payment).toMatchObject({ status: 'succeeded', refundedByHand: undefined });
+        expect(payment).toMatchObject({ status: 'succeeded' });
         expect(refundSpy).not.toHaveBeenCalled();
         refundSpy.mockRestore();
     });
 
-    it('only settleRefundByHand sets refundedByHand — the operator refund only opens a record', async () => {
+    it('only settleRefundByHand sets settledByHand — the operator refund only opens a record', async () => {
         const { user, order } = await orderFor();
         await paymentService.recordOfflinePayment(
             String(order._id),
@@ -1761,8 +1761,7 @@ describe('recordOfflinePayment — refunding it back', () => {
         );
         expect(asReject(again).errors[0].code).toBe('PAYMENT_NOT_REFUNDABLE');
         expect(await paymentRepository.findByOrderId(String(order._id))).toMatchObject({
-            status: 'succeeded',
-            refundedByHand: undefined
+            status: 'succeeded'
         });
 
         const settled = await paymentService.settleRefundByHand(
@@ -1774,7 +1773,8 @@ describe('recordOfflinePayment — refunding it back', () => {
 
         expect(settled.success).toBe(true);
         const payment = await paymentRepository.findByOrderId(String(order._id));
-        expect(payment).toMatchObject({ status: 'succeeded', refundedByHand: true });
+        expect(payment).toMatchObject({ status: 'succeeded' });
+        expect(payment?.refunds[0].settledByHand).toBe(true);
     });
 });
 

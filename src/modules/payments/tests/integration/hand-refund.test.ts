@@ -77,7 +77,7 @@ describe('the operator refunding a cash payment', () => {
 
         expect(refunded.success).toBe(true);
         const payment = await paymentOf(orderId);
-        expect(payment.refundedByHand).toBeUndefined();
+        expect(payment.refunds[0].settledByHand).toBeUndefined();
         expect(payment.refunds).toHaveLength(1);
         expect(payment.refunds[0]).toMatchObject({ amount: 30, status: 'pending' });
         await settleOutboxNudges();
@@ -141,7 +141,7 @@ describe('settleRefundByHand', () => {
         expect(settled.success).toBe(true);
         const payment = await paymentOf(orderId);
         expect(payment.refunds.map((refund) => refund.status)).toEqual(['pending', 'succeeded']);
-        expect(payment.refundedByHand).toBe(true);
+        expect(payment.refunds.map((refund) => refund.settledByHand)).toEqual([undefined, true]);
         // The other record is untouched and still the operator's to confirm.
         const read = await paymentService.getForOrder(orderId, asAdmin());
         expect(read.data?.actions?.settleByHand).toEqual([first]);
@@ -172,7 +172,7 @@ describe('settleRefundByHand', () => {
         expect(await outboxEventModel.countDocuments({ name: PAYMENT_REFUNDED })).toBe(1);
     });
 
-    it('answers PAYMENT_REFUND_NOT_BY_HAND to a card refund: the sweep owns it', async () => {
+    it('answers PAYMENT_REFUND_IN_FLIGHT to a card refund the provider left unclear: the sweep owns it', async () => {
         const user = await createUser();
         const product = await createProduct({ price: 50 });
         const order = await createOrder(user, [toOrderItem(product, 2)]);
@@ -180,13 +180,13 @@ describe('settleRefundByHand', () => {
         jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
         await expect(
             refundOrderPayment(String(order._id), asAdmin(), callerContextAs('admin'))
-        ).rejects.toThrow('down');
+        ).resolves.toMatchObject({ success: true, status: 201 });
         const payment = await paymentOf(String(order._id));
 
         const result = await settle(String(payment._id), String(payment.refunds[0]._id));
 
         expect(asReject(result).status).toBe(409);
-        expect(asReject(result).errors[0].code).toBe('PAYMENT_REFUND_NOT_BY_HAND');
+        expect(asReject(result).errors[0].code).toBe('PAYMENT_REFUND_IN_FLIGHT');
         const after = await paymentOf(String(order._id));
         expect(after.refunds[0].status).toBe('failed');
     });
