@@ -342,10 +342,12 @@ const armCacheWrite = (
         // Save only successful, FINISHED responses — errors must not become sticky in cache, and
         // 202 is a status about the request, not the resource: caching it would keep answering
         // "still working" long after the work finished, to every caller polling for the result.
+        // A draft preview is never stored, even if a later change moved the bypass decision.
         if (
             response.statusCode >= 200 &&
             response.statusCode < 300 &&
-            response.statusCode !== 202
+            response.statusCode !== 202 &&
+            !isDraftPreview(response)
         ) {
             const payload = serializeCachedResponse(cacheKey, {
                 status: response.statusCode,
@@ -399,13 +401,15 @@ const applyCacheHeaders = (
 
     response.set(
         'Cache-Control',
-        cacheableRead
-            ? cacheable
-                ? options.browserRevalidate
-                    ? 'public, no-cache'
-                    : `public, max-age=${ttl}, stale-while-revalidate=${STALE_WHILE_REVALIDATE_SECONDS}, stale-if-error=${STALE_IF_ERROR_SECONDS}`
-                : 'private, no-cache'
-            : 'no-store'
+        isDraftPreview(response)
+            ? 'private, no-store'
+            : cacheableRead
+              ? cacheable
+                  ? options.browserRevalidate
+                      ? 'public, no-cache'
+                      : `public, max-age=${ttl}, stale-while-revalidate=${STALE_WHILE_REVALIDATE_SECONDS}, stale-if-error=${STALE_IF_ERROR_SECONDS}`
+                  : 'private, no-cache'
+              : 'no-store'
     );
     response.vary('Authorization');
     response.vary('Accept-Language');
@@ -533,7 +537,10 @@ export const setCache = (seconds = 0, options: CacheOptions) => {
         const ttl = resolveCacheTtl(seconds);
         // Resolved once, up front: both the headers and the Redis decision below must agree on
         // whether THIS caller may share the cached answer — see CacheOptions.scopeKey.
-        const cacheable = options.scopeKey(request);
+        // A draft preview wins over `scopeKey`: a caller can hold the staff read of a draft
+        // language and still read the guest scope of the catalogue, so the scope alone would
+        // share the visitors' entry with a draft answer.
+        const cacheable = !isDraftPreview(response) && options.scopeKey(request);
         const cacheableRead = applyCacheHeaders(request, response, options, ttl, cacheable);
         return serveOrArm(
             request,
@@ -598,6 +605,31 @@ export const invalidateCache =
     };
 
 /**
+ * Whether this response is a staff preview of a draft language — see {@link markDraftPreview}.
+ * `setCache` and `privateNoCache` read it, so the preview never reaches Redis or a 304.
+ */
+export const isDraftPreview = (response: Response): boolean =>
+    response.locals.draftPreview === true;
+
+/**
+ * Mark the response as a draft preview: `private, no-store`, no conditional answer, and a flag
+ * the cache middlewares above honour (no key built, no Redis read, no Redis write).
+ *
+ * Mounted BEFORE `setCache`, whose key is built from `request.locale`: run after it, a draft
+ * answer would be stored under a live language's key.
+ * See docs/tools/redis-cache.md#draft-previews
+ */
+export const markDraftPreview = (request: Request, response: Response): void => {
+    response.locals.draftPreview = true;
+    response.set('Cache-Control', 'private, no-store');
+    response.vary('Authorization');
+    response.vary('Accept-Language');
+    // Same reason as `noStore`: a non-compliant client would otherwise get a bodyless 304.
+    delete request.headers['if-none-match'];
+    delete request.headers['if-modified-since'];
+};
+
+/**
  * Forbid every cache — browser, proxy, CDN — from storing the response at all. Mounted on the
  * account router, where every endpoint exchanges credentials or changes auth state.
  *
@@ -632,6 +664,11 @@ export const noStore = (request: Request, response: Response, next: NextFunction
  *          still learn the answer depends on who asked.
  */
 export const privateNoCache = (request: Request, response: Response, next: NextFunction) => {
+    if (isDraftPreview(response)) {
+        next();
+        return;
+    }
+
     response.set('Cache-Control', 'private, no-cache');
     response.vary('Authorization');
     response.vary('Accept-Language');
