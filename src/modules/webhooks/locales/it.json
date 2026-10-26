@@ -8,12 +8,6 @@
         "delivery-in-progress": "Questa consegna è già in corso di tentativo. Riprova a breve.",
         "already-enabled": "Questa sottoscrizione è già abilitata.",
         "already-disabled": "Questa sottoscrizione è già disabilitata.",
-        "subscription-disabled": "Questa sottoscrizione è disabilitata, quindi la consegna non può essere rinviata. Abilitala prima.",
-        "email-disabled": {
-            "subject": "Una sottoscrizione webhook è stata disabilitata",
-            "meta-title": "Sottoscrizione webhook disabilitata",
-            "greeting": "Salve,",
-            "body": "Una delle tue sottoscrizioni webhook è stata disabilitata automaticamente dopo ripetuti errori di consegna. Correggi l'endpoint, poi riabilita la sottoscrizione — non riproverà da sola finché non lo farai."
-        }
+        "subscription-disabled": "Questa sottoscrizione è disabilitata, quindi la consegna non può essere rinviata. Abilitala prima."
     }
 }

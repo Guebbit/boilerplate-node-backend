@@ -6,7 +6,7 @@ info:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Notifications
-      description: The signed-in user's in-app notifications and their delivery preferences.
+      description: The signed-in user's in-app notifications, their own and the shop's work notices for staff.
 
 # This module's section of the account data export (`POST /account/export`): the bundler
 # adds it to `AccountExportResponse`. Removing the module removes the section.
@@ -17,6 +17,13 @@ x-personal-data:
             type: array
             items:
                 $ref: '#/components/schemas/Notification'
+    # The work notices this account was sent as staff: when and which kind, never their `params`,
+    # which name other people's orders and accounts.
+    staffNotifications:
+        schema:
+            type: array
+            items:
+                $ref: '#/components/schemas/StaffNoticeExport'
 
 paths:
     /notifications:
@@ -24,7 +31,10 @@ paths:
             tags: [Notifications]
             summary: List notifications
             description: >-
-                The caller's own inbox, newest first. A notification stays until its owner deletes it
+                The caller's own inbox, newest first, plus the work notices (`audience: staff`) of
+                their shop whose permission sets they hold right now: a staff member who loses a role
+                stops seeing the notices that role earned, and a member promoted later sees only
+                those written after. A notification stays until its owner deletes it
                 (`DELETE /notifications/{id}`, `DELETE /notifications`), the per-user cap
                 trims it, or the account goes. Never paginated: the inbox is bounded by that cap, so
                 one read is the whole of it. Empty and absent are the same state — this never
@@ -111,7 +121,8 @@ paths:
             tags: [Notifications]
             summary: Get a notification
             description: >-
-                One of the caller's own notifications, the same shape the list carries. Someone
+                One of the caller's own notifications, the same shape the list carries (a work
+                notice only while the caller still holds its permission sets). Someone
                 else's, an unknown id and a malformed one are the same 404, so a probe cannot tell
                 them apart.
             operationId: getNotificationById
@@ -250,10 +261,12 @@ components:
             type: object
             additionalProperties: false
             description: Part of an order the caller bought is held back, and they can act (check the address) or have a message from the shop.
-            required: [id, code, params, severity, createdAt]
+            required: [id, audience, code, params, severity, createdAt]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '#/components/schemas/NotificationAudience'
                 code:
                     type: string
                     enum: [notifications.fulfillment-held]
@@ -273,10 +286,12 @@ components:
             type: object
             additionalProperties: false
             description: A product the caller asked to be told about can be ordered again. Sent once, then the request is gone.
-            required: [id, code, params, severity, createdAt]
+            required: [id, audience, code, params, severity, createdAt]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '#/components/schemas/NotificationAudience'
                 code:
                     type: string
                     enum: [notifications.stock-alert]
@@ -296,10 +311,12 @@ components:
             type: object
             additionalProperties: false
             description: A preorder the caller paid for will arrive later than promised; cancelling is open and silence keeps waiting.
-            required: [id, code, params, severity, createdAt]
+            required: [id, audience, code, params, severity, createdAt]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '#/components/schemas/NotificationAudience'
                 code:
                     type: string
                     enum: [notifications.fulfillment-delayed]
@@ -319,10 +336,12 @@ components:
             type: object
             additionalProperties: false
             description: A product left the catalogue and left the caller's cart with it.
-            required: [id, code, params, severity, createdAt]
+            required: [id, audience, code, params, severity, createdAt]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '#/components/schemas/NotificationAudience'
                 code:
                     type: string
                     enum: [notifications.cart-line-removed]
@@ -342,10 +361,12 @@ components:
             type: object
             additionalProperties: false
             description: A product left the catalogue and left the caller's wishlist with it.
-            required: [id, code, params, severity, createdAt]
+            required: [id, audience, code, params, severity, createdAt]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '#/components/schemas/NotificationAudience'
                 code:
                     type: string
                     enum: [notifications.wishlist-item-removed]
@@ -365,10 +386,12 @@ components:
             type: object
             additionalProperties: false
             description: Guest-cart lines `POST /cart/merge` could not add at all, because the product is no longer available.
-            required: [id, code, params, severity, createdAt]
+            required: [id, audience, code, params, severity, createdAt]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '#/components/schemas/NotificationAudience'
                 code:
                     type: string
                     enum: [notifications.cart-merge-refused]
@@ -384,6 +407,102 @@ components:
                     type: string
                     format: date-time
 
+        NotificationAudience:
+            type: string
+            enum: [own, staff]
+            description: >-
+                Whose message this is. `own`: about the caller as a person or buyer. `staff`: a work
+                notice sent because the caller's role does that work, not because it concerns them.
+
+        PurchaseHoldPlacedParams:
+            type: object
+            additionalProperties: false
+            required: [userId, until]
+            description: >-
+                The shop's rule paused a buyer's checkout. Ids and instants only: the account's own
+                page has the rest.
+            properties:
+                userId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                until:
+                    type: string
+                    format: date-time
+                    description: When the pause ends by itself.
+
+        WebhookDisabledParams:
+            type: object
+            additionalProperties: false
+            required: [subscriptionId]
+            description: A webhook subscription was switched off after repeated delivery failures.
+            properties:
+                subscriptionId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+
+        NotificationStaffPurchaseHoldPlaced:
+            type: object
+            additionalProperties: false
+            description: A buyer's checkout was paused by the shop's cancellation rule; staff who can ban decide whether to step in.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [notifications.staff.purchase-hold-placed]
+                params:
+                    $ref: '#/components/schemas/PurchaseHoldPlacedParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationStaffWebhookDisabled:
+            type: object
+            additionalProperties: false
+            description: A webhook subscription was switched off after repeated failures; staff who manage webhooks fix the endpoint and re-enable it.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [notifications.staff.webhook-disabled]
+                params:
+                    $ref: '#/components/schemas/WebhookDisabledParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        StaffNoticeExport:
+            type: object
+            additionalProperties: false
+            required: [code, createdAt]
+            description: One work notice this account received as staff, without the facts it named.
+            properties:
+                code:
+                    type: string
+                createdAt:
+                    type: string
+                    format: date-time
+                readAt:
+                    type: string
+                    format: date-time
+
         Notification:
             oneOf:
                 - $ref: '#/components/schemas/NotificationCartLineRemoved'
@@ -392,6 +511,8 @@ components:
                 - $ref: '#/components/schemas/NotificationFulfillmentDelayed'
                 - $ref: '#/components/schemas/NotificationFulfillmentHeld'
                 - $ref: '#/components/schemas/NotificationStockAlert'
+                - $ref: '#/components/schemas/NotificationStaffPurchaseHoldPlaced'
+                - $ref: '#/components/schemas/NotificationStaffWebhookDisabled'
             discriminator:
                 propertyName: code
                 mapping:
@@ -401,6 +522,8 @@ components:
                     notifications.fulfillment-delayed: '#/components/schemas/NotificationFulfillmentDelayed'
                     notifications.fulfillment-held: '#/components/schemas/NotificationFulfillmentHeld'
                     notifications.stock-alert: '#/components/schemas/NotificationStockAlert'
+                    notifications.staff.purchase-hold-placed: '#/components/schemas/NotificationStaffPurchaseHoldPlaced'
+                    notifications.staff.webhook-disabled: '#/components/schemas/NotificationStaffWebhookDisabled'
 
         NotificationsResponse:
             type: object

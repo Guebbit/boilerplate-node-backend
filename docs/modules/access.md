@@ -23,6 +23,7 @@ flowchart LR
     account["account"]
     api_keys["api-keys"]
     audit_logs["audit-logs"]
+    notifications["notifications"]
     orders["orders"]
     payments["payments"]
     returns["returns"]
@@ -31,6 +32,7 @@ flowchart LR
     account --> access
     api_keys --> access
     audit_logs --> access
+    notifications --> access
     orders --> access
     payments --> access
     returns --> access
@@ -41,7 +43,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class orders core;
-    class payments,returns supporting;
+    class notifications,payments,returns supporting;
     class account,api_keys,audit_logs,users generic;
     class access centre;
 ```
@@ -135,6 +137,14 @@ account holds a role in either scope. A role has no level and nothing ranks. The
 exemptions and where each service asks it are on
 [Authorization](../theory/authorization.md#protecting-people); this module owns only the question,
 never the places it is asked.
+
+## Who does the work a set names
+
+`membersHolding(tenantId, sets)` answers "who is this notice for": every member of the shop whose
+role lists one of the permission sets, plus every unrestricted role (admin, by property, never by
+name). An empty list of sets means administrators only. Roles are matched in memory from the shared
+file; the database is asked once, for the members of those roles, through the
+`{ tenantId, role }` index on `membership`. `notifications` is the caller.
 
 ## Who can do what
 

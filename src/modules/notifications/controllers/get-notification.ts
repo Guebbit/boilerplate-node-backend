@@ -20,7 +20,7 @@ export const getNotification = (request: Request<{ id: string }>, response: Resp
     if (!id) return;
 
     return notificationsService
-        .get(request.authContext!.id, id)
+        .get(request.caller!, id)
         .then((result) => {
             if (refused(response, result)) return;
 

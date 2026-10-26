@@ -8,12 +8,6 @@
         "delivery-in-progress": "This delivery is already being attempted right now. Try again shortly.",
         "already-enabled": "This subscription is already enabled.",
         "already-disabled": "This subscription is already disabled.",
-        "subscription-disabled": "This subscription is disabled, so the delivery cannot be replayed. Enable it first.",
-        "email-disabled": {
-            "subject": "A webhook subscription was disabled",
-            "meta-title": "Webhook subscription disabled",
-            "greeting": "Hello,",
-            "body": "One of your webhook subscriptions was automatically disabled after repeated delivery failures. Fix the endpoint, then re-enable the subscription — it will not retry on its own until you do."
-        }
+        "subscription-disabled": "This subscription is disabled, so the delivery cannot be replayed. Enable it first."
     }
 }

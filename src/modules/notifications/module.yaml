@@ -2,8 +2,12 @@ summary: 'A per-user inbox: messages that stay until the owner deletes them, fed
 subdomain: supporting
 group: shop
 dependsOn:
+    - access # who holds the permission sets a work notice is for
     - cart # subscribes to its two events
     - delivery # subscribes to its event, a late preorder's notice
+    - orders # subscribes to its event, a purchase hold placed
     - stock-alerts # subscribes to its event, a back-in-stock request answered
+    - users # which of those members can act today, and where to mail them
+    - webhooks # subscribes to its event, a subscription auto-disabled
     - wishlist # subscribes to its event
-noAudit: "Writes and clears a person's own courtesy messages: nothing money, stock or identity related, and every row is the owner's to delete."
+noAudit: "Writes and clears courtesy messages and pointers to work: nothing money, stock or identity related, every row is the owner's to delete, and the screen a work notice points at audits its own acts."

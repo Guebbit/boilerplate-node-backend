@@ -22,6 +22,7 @@ flowchart LR
     delivery["delivery"]
     inventory["inventory"]
     invoicing["invoicing"]
+    notifications["notifications"]
     payments["payments"]
     products["products"]
     returns["returns"]
@@ -32,6 +33,7 @@ flowchart LR
     cart --> orders
     delivery --> orders
     invoicing --> orders
+    notifications --> orders
     payments --> orders
     returns --> orders
     stats --> orders
@@ -46,6 +48,7 @@ flowchart LR
     orders -. "order.status_changed" .-> delivery
     orders -. "order.status_overridden" .-> delivery
     orders -. "order.status_changed" .-> invoicing
+    orders -. "order.purchase_hold_placed" .-> notifications
     orders -. "order.cancelled" .-> payments
     orders -. "order.created" .-> payments
 
@@ -54,7 +57,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,products core;
-    class delivery,inventory,invoicing,payments,returns,shop,stats supporting;
+    class delivery,inventory,invoicing,notifications,payments,returns,shop,stats supporting;
     class access,users generic;
     class orders centre;
 ```
@@ -736,8 +739,9 @@ account also carries a review flag (`purchaseHoldFlaggedAt`), set with an automa
 the paid count. The flag outlives the hold's end, so an unreviewed pause does not drop off the staff
 list; it stays until a staff member acts: placing a hold or `DELETE /users/{id}/purchase-hold` clears
 it and restarts the count from that moment, so the same cancellations never trigger a second hold. The hold is stored on the user (`users` owns it, see
-[users](./users.md#purchase-hold)); `orders` only owns the count. Staff are told by a mail to
-`NODE_STAFF_NOTIFY_EMAIL` (default `NODE_SHOP_EMAIL`), an audit row `system.user.purchase_hold_set`
+[users](./users.md#purchase-hold)); `orders` only owns the count. Staff are told by a work notice
+(`order.purchase_hold_placed` → [notifications](./notifications.md#work-notices-for-staff): the bell,
+and one mail to each member who can ban), an audit row `system.user.purchase_hold_set`
 (or `system.user.purchase_hold_flagged` for a flag alone), and the users-list filters
 `purchaseHold=true` (held right now) and `purchaseHoldReview=true` (flagged, not yet reviewed). The buyer is told too, by a mail to the account's own
 address sent from `users` ([what it says](./users.md#purchase-hold)).
@@ -800,7 +804,6 @@ when the shop offers a longer withdrawal period.
 | `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`   | `99999` | Largest quantity on one line of an admin-created order. Same refusal. The contract's ceiling is 999999                                                                                         |
 | `NODE_PURCHASE_HOLD_CANCEL_COUNT`      | `3`     | How many of a buyer's unpaid cancels inside the window pause their checkout, and paid ones flag the account ([the purchase hold](#the-purchase-hold)). Minimum 2                               |
 | `NODE_PURCHASE_HOLD_WINDOW_DAYS`       | `7`     | How long a cancel counts toward it                                                                                                                                                             |
-| `NODE_STAFF_NOTIFY_EMAIL`              | unset   | Where staff are told a hold was placed. Unset: `NODE_SHOP_EMAIL`                                                                                                                               |
 
 The VAT RATES charged against an order line are a different thing with a different owner — see
 [products](./products.md#configuration); this module only freezes onto the order the rate `products`
