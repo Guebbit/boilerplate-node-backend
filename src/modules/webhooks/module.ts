@@ -49,7 +49,6 @@ export default {
     mounts: [{ basePath: '/webhooks', routes: router }],
     jobs: webhooksJobs,
     locales: path.join(__dirname, 'locales'),
-    templates: path.join(__dirname, 'templates'),
     onRegistered,
     /*
      * `handler: processDeliveryJob` directly, no separate guard in front of it: `schema` below

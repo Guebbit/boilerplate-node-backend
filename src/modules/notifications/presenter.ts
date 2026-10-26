@@ -33,12 +33,19 @@ const bodyOf = (notification: NotificationDocument): NotificationBody => {
         case 'notifications.fulfillment-held': {
             return { code: notification.code, params: notification.params };
         }
+        case 'notifications.staff.purchase-hold-placed': {
+            return { code: notification.code, params: notification.params };
+        }
+        case 'notifications.staff.webhook-disabled': {
+            return { code: notification.code, params: notification.params };
+        }
     }
 };
 
 /** Turn one notification document into the contract's `Notification`, the variant for its code. */
 export const presentNotification = (notification: NotificationDocument): Notification => ({
     id: String(notification._id),
+    audience: notification.audience,
     ...bodyOf(notification),
     severity: notification.severity,
     // Absent while unread, rather than `null`: the stream's payload cannot express null.

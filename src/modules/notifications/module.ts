@@ -5,8 +5,11 @@
  * `wishlist` announce whose lists lost a deleted product, and a refused guest-cart merge
  * announces its lines, and a late preorder announces what its buyer was told — never by an import
  * in the other direction: nothing imports this module to send a message, which keeps the graph
- * acyclic and the producers ignorant of the inbox. Depends on `cart`, `delivery` and `wishlist` only
- * for the event names it subscribes to.
+ * acyclic and the producers ignorant of the inbox. Depends on the producers only for the event
+ * names it subscribes to.
+ *
+ * It also carries work notices for staff (`audience: staff`): `./staff-routing` says who hears
+ * what, `access` and `users` say who that is today.
  *
  * See: docs/modules/notifications.md
  */
@@ -16,6 +19,8 @@ import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
 import { CART_LINES_REMOVED, CART_MERGE_REFUSED } from '@modules/cart';
 import { FULFILLMENT_ORDER_DELAYED, FULFILLMENT_ORDER_HOLD_NOTICED } from '@modules/delivery';
+import { ORDER_PURCHASE_HOLD_PLACED } from '@modules/orders';
+import { WEBHOOK_SUBSCRIPTION_AUTO_DISABLED } from '@modules/webhooks';
 import { WISHLIST_ITEMS_REMOVED } from '@modules/wishlist';
 import { STOCK_ALERT_SENT } from '@modules/stock-alerts';
 import { notificationsConfig } from './config';
@@ -34,6 +39,11 @@ export default {
                 notificationsService.list(subject.userId).then((view) => view.items),
             // Joins the caller's own hard-delete transaction — see `notificationsService.removeByUserId`.
             erase: notificationsService.removeByUserId
+        },
+        {
+            section: 'staffNotifications',
+            // Erased with the first section: both are the same rows.
+            collect: (subject) => notificationsService.listStaffNotices(subject.userId)
         }
     ],
     subscribe: () => {
@@ -46,6 +56,12 @@ export default {
             FULFILLMENT_ORDER_HOLD_NOTICED,
             notificationsService.onFulfillmentOrderHoldNoticed
         );
+        onDomainEvent(ORDER_PURCHASE_HOLD_PLACED, notificationsService.onPurchaseHoldPlaced);
+        onDomainEvent(
+            WEBHOOK_SUBSCRIPTION_AUTO_DISABLED,
+            notificationsService.onWebhookSubscriptionAutoDisabled
+        );
     },
-    locales: path.join(__dirname, 'locales')
+    locales: path.join(__dirname, 'locales'),
+    templates: path.join(__dirname, 'templates')
 } satisfies AppModule;

@@ -53,10 +53,8 @@ export interface WebhookSubscriptionDocument extends Document {
     failingSince?: Date;
     /**
      * The id of whoever created this subscription — a pointer, not a copy of their email: GDPR
-     * data minimisation (Art. 5(1)(c)/(d)), and the same shape Stripe uses for a failing webhook
-     * endpoint's account notice. `services/attempt.ts`'s auto-disable notice resolves the current
-     * email from this id at send time. Absent on a subscription created by a stranger; then no
-     * notice is sent, silently — the audit entry auto-disable already writes is not lost.
+     * data minimisation (Art. 5(1)(c)/(d)). It records who configured the integration and is
+     * forgotten when that account is erased. Absent on a subscription created by a stranger.
      */
     ownerUserId?: string;
     secrets: WebhookSecretRingEntry[];

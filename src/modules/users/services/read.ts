@@ -6,6 +6,7 @@
 import type { Caller, SearchUsersRequest, User } from '@types';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { getDefaultLocale } from '@infrastructure/i18n';
 import { accessService } from '@modules/access';
 import type { UserDocument, UserWire } from '../model';
 import { presentUser } from '../presenter';
@@ -48,6 +49,31 @@ export const getById = (id?: string): Promise<UserDocument | undefined> => {
     if (!id) return Promise.resolve(undefined);
     return userRepository.findById(id).then((user) => user ?? undefined);
 };
+
+/** One staff member a notice can reach: where to mail them and in which language. */
+export interface StaffContact {
+    id: string;
+    email: string;
+    locale: string;
+}
+
+/**
+ * Narrow candidate staff to the ones who can act on a notice: live, enabled and with an
+ * authenticator app armed (without one their staff role is withheld, so they could not do what the
+ * notice asks). Anyone else is silently left out.
+ *
+ * @param ids - account ids, typically the members who hold the permission set a notice is for
+ */
+export const staffContacts = (ids: readonly string[]): Promise<StaffContact[]> =>
+    ids.length === 0
+        ? Promise.resolve([])
+        : userRepository.findStaffContacts(ids).then((users) =>
+              users.map((user) => ({
+                  id: String(user._id),
+                  email: user.email,
+                  locale: user.locale ?? getDefaultLocale()
+              }))
+          );
 
 /**
  * The contract `User` for an already-loaded document: resolves its CURRENT role fresh from the

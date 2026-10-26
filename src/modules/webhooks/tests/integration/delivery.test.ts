@@ -27,13 +27,13 @@ import {
     WEBHOOK_MIN_FAILING_MS
 } from '@modules/webhooks/domain';
 import type { WebhookSubscriptionDocument } from '@modules/webhooks/model';
-import { createUser } from '@modules/users/tests/factories';
-import { userService } from '@modules/users';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { onDomainEvent, resetDomainEvents, type DomainEventMap } from '@kernel/events';
+import { WEBHOOK_SUBSCRIPTION_AUTO_DISABLED } from '../../events';
 import { callerAs, TEST_TENANT_ID } from '@tests/callers';
 import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
 import { webhooksAuditActions } from '@modules/webhooks/audit';
-import { logger } from '@infrastructure/adapters/logger';
 import { webhookDeliveryAttemptsTotal } from '@modules/webhooks/metrics';
 
 // The real `node:https`, with this suite's own throwaway CA injected into every request — see
@@ -80,12 +80,6 @@ jest.mock('@infrastructure/adapters/ssrf-guard', () => {
     };
 });
 
-/** The auto-disable notice's one call — asserted directly rather than through the 'log' transport. */
-const enqueueEmailMock = jest.fn().mockResolvedValue(undefined);
-jest.mock('@infrastructure/adapters/mailer', () => ({
-    enqueueEmail: (...args: unknown[]) => enqueueEmailMock(...args)
-}));
-
 // Replaced, not spied on — `jest.spyOn` cannot redefine the non-configurable getter a CommonJS
 // namespace import exposes. Same pattern `account`'s own integration suites use.
 jest.mock('@infrastructure/observability/audit', () =>
@@ -94,15 +88,24 @@ jest.mock('@infrastructure/observability/audit', () =>
 
 setupTestDb();
 
-beforeEach(() => enqueueEmailMock.mockClear());
+/** The `webhook.subscription_auto_disabled` facts emitted so far. */
+const disabledFacts: DomainEventMap['webhook.subscription_auto_disabled'][] = [];
+
+beforeEach(() => {
+    disabledFacts.length = 0;
+    onDomainEvent(WEBHOOK_SUBSCRIPTION_AUTO_DISABLED, (fact) => {
+        disabledFacts.push(fact);
+    });
+});
+
+afterEach(() => resetDomainEvents());
 
 const context = { caller: callerAs('manager'), analyticsConsent: false };
 
 /** A subscription document with one ring secret, saved for real. */
 const createSubscription = (
     url: string,
-    eventTypes: string[] = ['*'],
-    ownerUserId?: string
+    eventTypes: string[] = ['*']
 ): Promise<WebhookSubscriptionDocument> => {
     const { entry } = mintRingSecret();
 
@@ -111,7 +114,6 @@ const createSubscription = (
         url,
         eventTypes,
         consecutiveFailures: 0,
-        ownerUserId,
         secrets: [entry]
     });
 };
@@ -414,14 +416,9 @@ describe('sustained failure', () => {
         expect(reloadedSubscription?.autoDisabledAt).toEqual(reloadedSubscription?.disabledAt);
     });
 
-    it('notifies the subscription owner once auto-disabled', async () => {
+    it('announces the disable once and audits it', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
-        const owner = await createUser({ email: 'owner@example.com', locale: 'it' });
-        const subscription = await createSubscription(
-            `${server.url}/hook`,
-            ['*'],
-            String(owner._id)
-        );
+        const subscription = await createSubscription(`${server.url}/hook`);
 
         for (let chain = 0; chain < WEBHOOK_MAX_CONSECUTIVE_FAILURES - 1; chain++) {
             const job = await createPendingDelivery(subscription, `order.paid.notice.${chain}`);
@@ -431,85 +428,19 @@ describe('sustained failure', () => {
         const finalJob = await createPendingDelivery(subscription, 'order.paid.notice.final');
         await runChainToCompletion(finalJob.deliveryId);
 
-        expect(enqueueEmailMock).toHaveBeenCalledTimes(1);
-        expect(enqueueEmailMock).toHaveBeenCalledWith(
-            expect.objectContaining({ to: 'owner@example.com' }),
-            'webhooks.subscription-disabled',
-            expect.objectContaining({ url: `${server.url}/hook`, locale: 'it' })
-        );
-
+        const reloaded = await webhookSubscriptionRepository.findById(String(subscription._id));
+        expect(disabledFacts).toEqual([
+            {
+                tenantId: DEPLOYMENT_TENANT_ID,
+                subscriptionId: String(subscription._id),
+                disabledAt: reloaded?.disabledAt?.toISOString()
+            }
+        ]);
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 actorUserId: 'system',
                 action: webhooksAuditActions.SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED,
                 targetType: 'webhook_subscription',
-                targetId: String(subscription._id)
-            })
-        );
-    });
-
-    it('sends no notice for a subscription with no ownerUserId, but still audits it', async () => {
-        const auditSpy = observePort(auditPort.emitAuditEvent);
-        // No `ownerUserId` — `createSubscription`'s third argument defaults to `undefined`: the
-        // stranger case, where nobody is recorded as the owner.
-        const subscription = await createSubscription(`${server.url}/hook`);
-
-        for (let chain = 0; chain < WEBHOOK_MAX_CONSECUTIVE_FAILURES - 1; chain++) {
-            const job = await createPendingDelivery(subscription, `order.paid.nonotice.${chain}`);
-            await runChainToCompletion(job.deliveryId);
-        }
-        await backdateFailingStreak(String(subscription._id));
-        const finalJob = await createPendingDelivery(subscription, 'order.paid.nonotice.final');
-        await runChainToCompletion(finalJob.deliveryId);
-
-        expect(enqueueEmailMock).not.toHaveBeenCalled();
-        // The email is the courtesy; the audit trail is the record — one missing must not cost
-        // the other.
-        expect(auditSpy).toHaveBeenCalledWith(
-            expect.objectContaining({
-                action: webhooksAuditActions.SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED,
-                targetId: String(subscription._id)
-            })
-        );
-    });
-
-    /*
-     * The owner lookup behind the courtesy email (`attempt.ts`'s `notifyOwnerOfAutoDisable`)
-     * had no `.catch` — a rejection there had nobody left to see it, since the caller does not
-     * await this branch either. Logged instead, so a lookup failure is visible without costing
-     * the disable itself, which already committed via the audit entry above.
-     */
-    it('logs a failed owner lookup instead of losing it, and still auto-disables', async () => {
-        const auditSpy = observePort(auditPort.emitAuditEvent);
-        const owner = await createUser({ email: 'owner@example.com' });
-        const subscription = await createSubscription(
-            `${server.url}/hook`,
-            ['*'],
-            String(owner._id)
-        );
-        const loggedError = jest.spyOn(logger, 'error').mockImplementation(() => logger);
-        // Real DB, deliberately made to fail: `getById` is the one call this fixture cannot
-        // otherwise force to reject.
-        jest.spyOn(userService, 'getById').mockRejectedValueOnce(new Error('lookup unavailable'));
-
-        for (let chain = 0; chain < WEBHOOK_MAX_CONSECUTIVE_FAILURES - 1; chain++) {
-            const job = await createPendingDelivery(subscription, `order.paid.lookupfail.${chain}`);
-            await runChainToCompletion(job.deliveryId);
-        }
-        await backdateFailingStreak(String(subscription._id));
-        const finalJob = await createPendingDelivery(subscription, 'order.paid.lookupfail.final');
-        await runChainToCompletion(finalJob.deliveryId);
-        // The lookup runs off the auto-disable write, not off the HTTP response — give its
-        // microtask chain a turn before asserting.
-        await Promise.resolve();
-
-        expect(enqueueEmailMock).not.toHaveBeenCalled();
-        expect(loggedError).toHaveBeenCalledWith(
-            expect.objectContaining({ subscriptionId: String(subscription._id) })
-        );
-        expect(auditSpy).toHaveBeenCalledWith(
-            expect.objectContaining({
-                action: webhooksAuditActions.SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED,
                 targetId: String(subscription._id)
             })
         );

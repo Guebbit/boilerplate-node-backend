@@ -149,8 +149,8 @@ it('publishes the set the pair agreed on', () => {
      * boilerplate-php-laravel-backend: the admin "create a user, let them set their own password"
      * flow, the inactive-account reaper and the email second factor only exist on this backend so
      * far — and neither does the pending-email-change notice, nor bank transfer, which the PHP
-     * twin has no equivalent feature for at all. `example.published` is Node-only until the twin builds its `example` module. `webhooks.subscription-disabled` is the same
-     * story: the PHP twin has no webhook module yet. `returns.notice` is the same story: the PHP twin has no returns module yet. So are
+     * twin has no equivalent feature for at all. `example.published` is Node-only until the twin builds its `example` module. `notifications.staff-notice` is the same
+     * story: the PHP twin has no work notices for staff yet. `returns.notice` is the same story: the PHP twin has no returns module yet. So are
      * `payments.payment-received` (a payment settling to `succeeded` mails the buyer) and
      * `orders.order-card-expired` (a `card` hold's own expiry notice, the twin of
      * `payments.transfer-expired` for the other payment method) — both new here. So is
@@ -165,8 +165,7 @@ it('publishes the set the pair agreed on', () => {
      * for the twin's session. So are `account.export-ready` (the link to a finished data export) and
      * `account.export-failed` (its failure notice): the twin's export is still one synchronous
      * answer. So is `delivery.shipment-delivered`, the notice that a shipment arrived: an order ships in
-     * parts on this backend first. So is `orders.purchase-hold-staff`, the operator's notice that a purchase hold was
-     * placed: the twin has no hold. So is `users.purchase-hold-placed`, the buyer's notice of the same
+     * parts on this backend first. So is `users.purchase-hold-placed`, the buyer's notice of the same
      * hold. So are `account.deletion-scheduled` and `account.restored`: this backend locks an account and
      * erases it after a grace, the twin still deletes on a confirmed link. The other eight are the
      * agreed, mirrored set.
@@ -197,18 +196,17 @@ it('publishes the set the pair agreed on', () => {
         'delivery.shipment-shipped',
         'example.published',
         'feedback.contact',
+        'notifications.staff-notice',
         'orders.order-cancelled',
         'orders.order-card-expired',
         'orders.order-confirm',
-        'orders.purchase-hold-staff',
         'payments.payment-received',
         'payments.refund-issued',
         'payments.transfer-expired',
         'payments.transfer-instructions',
         'returns.notice',
         'stock-alerts.back-in-stock',
-        'users.purchase-hold-placed',
-        'webhooks.subscription-disabled'
+        'users.purchase-hold-placed'
     ];
     // A name's first segment is the module that publishes it, so deleting a module (`demo:remove`)
     // takes its names out of the expected set too.

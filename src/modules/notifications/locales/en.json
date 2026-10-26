@@ -1,6 +1,15 @@
 {
     "notifications": {
         "deleted": "Notification deleted.",
-        "not-found": "This notification was not found."
+        "not-found": "This notification was not found.",
+        "staff-mail": {
+            "open": "Open it in the admin",
+            "purchase-hold-placed": {
+                "subject": "Checkout paused for a buyer",
+                "meta-title": "Purchase hold placed",
+                "title": "A purchase hold was placed",
+                "summary": "A buyer cancelled or let expire several unpaid orders, so their checkout is paused until {{until}}. Every cancellation was processed normally; nothing is blocked except placing a new order. The pause ends by itself; place a manual hold on the account to keep it longer."
+            }
+        }
     }
 }

@@ -1,6 +1,15 @@
 {
     "notifications": {
         "deleted": "Notifica eliminata.",
-        "not-found": "Questa notifica non è stata trovata."
+        "not-found": "Questa notifica non è stata trovata.",
+        "staff-mail": {
+            "open": "Aprilo nell'area admin",
+            "purchase-hold-placed": {
+                "subject": "Checkout sospeso per un acquirente",
+                "meta-title": "Blocco acquisti applicato",
+                "title": "È stato applicato un blocco acquisti",
+                "summary": "Un acquirente ha annullato o lasciato scadere diversi ordini non pagati, quindi il suo checkout è sospeso fino a {{until}}. Ogni annullamento è stato elaborato normalmente; è bloccato solo l'inserimento di un nuovo ordine. La sospensione termina da sola; applica un blocco manuale all'account per prolungarla."
+            }
+        }
     }
 }

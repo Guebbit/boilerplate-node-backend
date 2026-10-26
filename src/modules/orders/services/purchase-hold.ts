@@ -3,7 +3,8 @@
  * The shop's own answer to repeated cancellations, taken from the `order.cancelled` fact. `orders`
  * owns the count (the timeline rows); `users` owns the hold and the review flag it lands on. Every
  * cancel is still processed normally: the rule only closes the NEXT checkout or flags the account,
- * and staff are told either way so a person steps in before a bot or a loop does damage.
+ * and staff are told when a pause is taken (`order.purchase_hold_placed`) so a person steps in
+ * before a bot or a loop does damage. A mere flag for review is found through the users list filter.
  *
  * Two counts, one limit and one window:
  *
@@ -16,14 +17,13 @@
  */
 
 import { logger } from '@infrastructure/adapters/logger';
-import { enqueueEmail } from '@infrastructure/adapters/mailer';
-import { getDefaultLocale } from '@infrastructure/i18n';
-import type { DomainEventMap } from '@kernel/events';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { emitDomainEvent, type DomainEventMap } from '@kernel/events';
 import { systemCallerContext } from '@kernel/permissions';
 import { userService } from '@modules/users';
-import { purchaseHoldCancelCount, purchaseHoldWindowDays, staffNotifyEmail } from '../config';
+import { purchaseHoldCancelCount, purchaseHoldWindowDays } from '../config';
 import { purchaseHoldUntil } from '../domain';
-import { purchaseHoldStaffEmail, type PurchaseHoldStaffNotice } from '../emails';
+import { ORDER_PURCHASE_HOLD_PLACED } from '../events';
 import { orderEventRepository, orderRepository } from '../repository';
 
 /** The causes that can move either count; every other cause is staff's or the system's own doing. */
@@ -32,36 +32,6 @@ const COUNTED_CAUSES: ReadonlySet<string> = new Set([
     'withdrawal',
     'reservation_expired'
 ]);
-
-/**
- * Tell staff the rule fired, in the operator's language (not the buyer's): a person reviews it from
- * the admin users list. A mail that cannot be queued is logged, never raised: the hold or the flag
- * is already in force and the list filter finds it.
- *
- * @param what - which wording, who, and for a pause until when
- */
-const notifyStaff = (
-    what: Pick<PurchaseHoldStaffNotice, 'buyerEmail' | 'userId'> &
-        ({ kind: 'paused'; until: Date } | { kind: 'review' })
-): void => {
-    const mail = purchaseHoldStaffEmail(getDefaultLocale(), {
-        buyerEmail: what.buyerEmail,
-        userId: what.userId,
-        cancelCount: purchaseHoldCancelCount(),
-        windowDays: purchaseHoldWindowDays(),
-        ...(what.kind === 'paused'
-            ? { kind: 'paused', until: what.until.toISOString() }
-            : { kind: 'review' })
-    });
-
-    void enqueueEmail(
-        { to: staffNotifyEmail(), subject: mail.subject },
-        mail.template,
-        mail.data
-    ).catch((error: unknown) =>
-        logger.error({ message: 'purchase hold staff notification email failed', error })
-    );
-};
 
 /** What the rule found for one buyer: when a pause would end, and whether paid cancels need a look. */
 interface Findings {
@@ -108,13 +78,12 @@ const findingsFor = (userId: string, now: Date): Promise<Findings> =>
  * Act on what the count found: take the pause (which flags the account in the same write) or, with
  * only paid cancellations over the limit, flag the account without pausing it. At-least-once
  * delivery is safe both ways: a taken hold restarts the count at its own `setAt`, and a flag already
- * set is left alone, so a redelivered event mails staff nothing.
+ * set is left alone, so a redelivered event tells staff nothing twice.
  *
  * @param userId - the buyer
- * @param email - the order's address, for the staff mail
  * @param findings - what the count found
  */
-const actOn = (userId: string, email: string, findings: Findings): Promise<void> => {
+const actOn = (userId: string, findings: Findings): Promise<void> => {
     if (findings.pauseUntil) {
         const until = findings.pauseUntil;
         return userService
@@ -122,17 +91,21 @@ const actOn = (userId: string, email: string, findings: Findings): Promise<void>
                 cancelCount: purchaseHoldCancelCount(),
                 windowDays: purchaseHoldWindowDays()
             })
-            .then((taken) => {
-                if (taken) notifyStaff({ kind: 'paused', buyerEmail: email, userId, until });
-            });
+            .then((taken) =>
+                taken
+                    ? emitDomainEvent(ORDER_PURCHASE_HOLD_PLACED, {
+                          tenantId: DEPLOYMENT_TENANT_ID,
+                          userId,
+                          until: until.toISOString()
+                      }).then(() => undefined)
+                    : undefined
+            );
     }
     if (!findings.review) return Promise.resolve();
 
-    return userService
-        .flagPurchaseHoldReview(userId, systemCallerContext('User'))
-        .then((flagged) => {
-            if (flagged) notifyStaff({ kind: 'review', buyerEmail: email, userId });
-        });
+    return userService.flagPurchaseHoldReview(userId, systemCallerContext('User')).then(() => {
+        // explicit void return
+    });
 };
 
 /**
@@ -157,9 +130,7 @@ export const considerPurchaseHold = ({
             const userId = order?.userId ? String(order.userId) : undefined;
             if (!order || !userId) return;
 
-            return findingsFor(userId, new Date()).then((findings) =>
-                actOn(userId, order.email, findings)
-            );
+            return findingsFor(userId, new Date()).then((findings) => actOn(userId, findings));
         })
         .catch((error: unknown) => {
             logger.error({ message: 'purchase hold check failed', orderId, error });

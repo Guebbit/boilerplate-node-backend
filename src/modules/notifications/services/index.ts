@@ -12,13 +12,17 @@ import {
     onCartMergeRefused,
     onFulfillmentOrderDelayed,
     onStockAlertSent,
-    onFulfillmentOrderHoldNoticed
+    onFulfillmentOrderHoldNoticed,
+    onPurchaseHoldPlaced,
+    onWebhookSubscriptionAutoDisabled
 } from './subscribers';
 import { streamNotifications, publishToUser, openStreamCount } from './stream';
 
 /** The service's public surface — controllers and siblings call through this, never the bare functions. */
 export const notificationsService = {
     list: inbox.notificationsList,
+    listStaffNotices: inbox.notificationsListStaffNotices,
+    listVisible: inbox.notificationsListVisible,
     get: inbox.notificationGet,
     create: inbox.notificationsCreate,
     remove: inbox.notificationDelete,
@@ -33,5 +37,7 @@ export const notificationsService = {
     onCartMergeRefused,
     onFulfillmentOrderDelayed,
     onStockAlertSent,
-    onFulfillmentOrderHoldNoticed
+    onFulfillmentOrderHoldNoticed,
+    onPurchaseHoldPlaced,
+    onWebhookSubscriptionAutoDisabled
 };
