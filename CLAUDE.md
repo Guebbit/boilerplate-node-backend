@@ -316,6 +316,55 @@ likelier one and build it.
   end to end, and put the assumptions, the trade-offs and what *would* have been a question into
   the summary at the end instead.
 
+## Researching an open question (`card it`)
+
+When the user says **"card it"** / **"card these"** about one question or a list of them, or a plan
+raises a design choice the rules above don't settle, run this procedure. Don't answer from memory.
+
+1. **One agent per question**, in parallel, read-only. Each one:
+   - re-checks the code on current `main` in both repos (cite `file:line` and the sha);
+   - looks the standard up on the web, in the house order: Solidus → Shopify → Stripe → RFCs / Google
+     AIP / Zalando → EU law. Every row is marked `verified: <url>` or `from memory`;
+   - writes one **card** (format below).
+2. **A skeptic agent per card** tries to break it: wrong facts, a better option, a clash with
+   another decision. The card is corrected, never just defended.
+3. **Decide or ask, by confidence after the skeptic:**
+
+   | Layer | Decided alone | Otherwise |
+   | --- | --- | --- |
+   | BE (or BE + FE) | ≥ 90 % | the card goes to the user |
+   | FE only | ≥ 70 % | the card goes to the user |
+
+4. **Where cards live** (root, gitignored):
+   - open cards in QUESTIONS_<MMDD>.md, with a quick table on top (id, what, suggestion, %, lane);
+   - decided and answered cards in DECIDED_<MMDD>.md: each card is its lane's build spec, so it
+     is moved there, never deleted;
+   - an answered card leaves QUESTIONS, and its lane row in the root HANDOFF file says so.
+5. **"Prune" or "refute"**: one refuter agent per decided card. A refuted card goes back to
+   QUESTIONS; a surviving one is permanent and gets its amendments appended to its card.
+
+**The card**, in this order. Short lines, plain words, no paragraphs:
+
+```md
+### <ID> · <the question, in plain words>
+
+**Summary:** 3-5 lines a non-specialist can answer from: what is being decided, what changes
+for whom, and what the suggestion is.
+
+**Background (from scratch):** the terms, one bullet each.
+**Today (main <sha>):** at most ~8 bullets: what the code does, with file:line.
+**Why it matters:** who is hurt, and how.
+**What others do:** | Who | What they do | Source (verified / from memory) |
+**Options:** | Option | What changes | For | Against | Cost (S/M/L · BE/FE · contract yes/no) |
+**Suggestion:** <letter>, <N> %. The one reason. What would lower it.
+**Answer with:** "<ID> <letter>" (or the alternatives).
+```
+
+- The suggested option carries a build list (files, contract, tests, docs), so a lane can build
+  it without coming back.
+- When the user answers "dumb it down", add a **Plain version** block under the Summary. Don't
+  rewrite the card.
+
 ## Commits
 
 Conventional Commits, enforced by commitlint on the `commit-msg` hook
