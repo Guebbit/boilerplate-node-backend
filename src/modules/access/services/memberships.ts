@@ -10,6 +10,7 @@
 import type { ClientSession } from 'mongoose';
 import type { AuthorizationScope, CallerContext } from '@types';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { isUnrestrictedRole, PRESET_ROLES } from '@kernel/permissions';
 import { membershipRepository, tenantRepository } from '../repository';
 import type { MembershipDocument, TenantDocument } from '../model';
 import { accessAuditActions } from '../audit';
@@ -232,3 +233,28 @@ export const DEPLOYMENT_TENANT_SLUG = 'shop';
  */
 export const bootstrapAccess = (name: string): Promise<TenantDocument> =>
     ensureTenant(DEPLOYMENT_TENANT_SLUG, name, DEPLOYMENT_TENANT_ID);
+
+/**
+ * Who does the work a permission set names: every member of the shop whose role lists one of
+ * `sets`, plus every unrestricted role (admin, by property, never by name). `sets: []` therefore
+ * means administrators only.
+ *
+ * Roles come from the shared file and are matched in memory; the database is asked once, for the
+ * members of those roles. A role that cannot be assigned (`system`) never matches.
+ *
+ * @param tenantId - the shop
+ * @param sets - permission set names (`UserBanning`, ...), as `shared/authorization-roles.yaml` lists them
+ * @returns the member ids, without duplicates
+ */
+export const membersHolding = (tenantId: string, sets: readonly string[]): Promise<string[]> => {
+    const roles = PRESET_ROLES.filter(
+        (role) =>
+            role.scope === 'tenant' &&
+            role.assignable !== false &&
+            (isUnrestrictedRole(role.name) || role.sets.some((name) => sets.includes(name)))
+    ).map((role) => role.name);
+
+    return roles.length === 0
+        ? Promise.resolve([])
+        : membershipRepository.findUserIdsByRoles(tenantId, roles);
+};

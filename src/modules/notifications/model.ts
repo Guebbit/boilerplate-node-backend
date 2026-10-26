@@ -14,7 +14,10 @@ import type {
     CartLineRemovedParams,
     CartMergeRefusedParams,
     FulfillmentHeldParams,
-    FulfillmentDelayedParams
+    FulfillmentDelayedParams,
+    NotificationAudience,
+    PurchaseHoldPlacedParams,
+    WebhookDisabledParams
 } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 
@@ -25,8 +28,19 @@ export const NOTIFICATION_CODES = [
     'notifications.cart-merge-refused',
     'notifications.fulfillment-delayed',
     'notifications.fulfillment-held',
-    'notifications.stock-alert'
+    'notifications.stock-alert',
+    'notifications.staff.purchase-hold-placed',
+    'notifications.staff.webhook-disabled'
 ] as const;
+
+/** The codes of work notices: the ones `./staff-routing` finds an audience for. */
+export const STAFF_NOTIFICATION_CODES = [
+    'notifications.staff.purchase-hold-placed',
+    'notifications.staff.webhook-disabled'
+] as const satisfies readonly (typeof NOTIFICATION_CODES)[number][];
+
+/** One of {@link STAFF_NOTIFICATION_CODES}. */
+export type StaffNotificationCode = (typeof STAFF_NOTIFICATION_CODES)[number];
 
 /** One of {@link NOTIFICATION_CODES}. */
 export type NotificationCode = (typeof NOTIFICATION_CODES)[number];
@@ -42,6 +56,8 @@ export interface NotificationParametersByCode {
     'notifications.fulfillment-delayed': FulfillmentDelayedParams;
     'notifications.fulfillment-held': FulfillmentHeldParams;
     'notifications.stock-alert': CartLineRemovedParams;
+    'notifications.staff.purchase-hold-placed': PurchaseHoldPlacedParams;
+    'notifications.staff.webhook-disabled': WebhookDisabledParams;
 }
 
 /**
@@ -56,8 +72,18 @@ export type NotificationBody = {
 interface NotificationCommon extends Document {
     userId: Types.ObjectId;
     severity: NotificationSeverity;
+    /** `own` for a person's own message, `staff` for a work notice. */
+    audience: NotificationAudience;
     readAt?: Date;
     createdAt: Date;
+    /** Staff rows only: the shop the notice is about; the read filters by the caller's shop. */
+    tenantId?: string;
+    /** Staff rows only: permission sets that earned it. Checked at read time; never on the wire. */
+    sets?: string[];
+    /** Staff rows only: one row per situation per recipient (`<kind>:<entity>`). */
+    dedupeKey?: string;
+    /** Staff rows only: when the TTL index removes it. */
+    expiresAt?: Date;
 }
 
 /**
@@ -82,7 +108,12 @@ export const notificationSchema = new Schema<NotificationDocument>(
         code: { type: String, enum: NOTIFICATION_CODES, required: true },
         params: { type: Schema.Types.Mixed, default: {} },
         severity: { type: String, enum: Object.values(NotificationSeverity), required: true },
-        readAt: { type: Date }
+        audience: { type: String, enum: ['own', 'staff'], default: 'own', required: true },
+        readAt: { type: Date },
+        tenantId: { type: String },
+        sets: { type: [String], default: undefined },
+        dedupeKey: { type: String },
+        expiresAt: { type: Date }
     },
     { timestamps: { createdAt: true, updatedAt: false } }
 );
@@ -92,6 +123,18 @@ export const notificationSchema = new Schema<NotificationDocument>(
  * from the far end. One compound index serves both.
  */
 notificationSchema.index({ userId: 1, createdAt: -1 });
+
+/*
+ * One work notice per situation per recipient: a redelivered event upserts into the same row.
+ * Partial, because a person's own messages carry no key and must never collide on its absence.
+ */
+notificationSchema.index(
+    { userId: 1, dedupeKey: 1 },
+    { unique: true, partialFilterExpression: { dedupeKey: { $type: 'string' } } }
+);
+
+/* Staff rows age out by themselves; `expiresAt` is set only on them. */
+notificationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 /**
  * Normalizes a serialized notification: `_id` → `id`, drops `__v`. Owed to the repository factory

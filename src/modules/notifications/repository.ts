@@ -9,6 +9,7 @@
  */
 
 import type { ClientSession } from 'mongoose';
+import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { notificationModel, applyNotificationTransform } from './model';
 import type { NotificationDocument } from './model';
 import {
@@ -22,6 +23,13 @@ import {
 export type NewNotification = Pick<NotificationDocument, 'userId' | 'code' | 'params' | 'severity'>;
 
 /**
+ * A work notice for one recipient: the same body plus what the staff-only fields need. Always
+ * `audience: 'staff'`, so a caller cannot write a staff row that reads as someone's own.
+ */
+export type NewStaffNotification = NewNotification &
+    Required<Pick<NotificationDocument, 'tenantId' | 'sets' | 'dedupeKey' | 'expiresAt'>>;
+
+/**
  * The type is written out because Mongoose's generics are too large for TypeScript to serialize
  * an inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
  *
@@ -32,22 +40,42 @@ export const notificationRepository: Repository<
     NotificationDocument,
     Wire<NotificationDocument>
 > & {
-    listByUserId: (userId: string) => Promise<NotificationDocument[]>;
+    listOwn: (userId: string) => Promise<NotificationDocument[]>;
+    listStaff: (userId: string, tenantId?: string) => Promise<NotificationDocument[]>;
     insertMany: (rows: NewNotification[]) => Promise<NotificationDocument[]>;
+    insertStaffOnce: (row: NewStaffNotification) => Promise<NotificationDocument | null>;
     findOwned: (userId: string, id: string) => Promise<NotificationDocument | null>;
     deleteOwned: (userId: string, id: string) => Promise<boolean>;
     deleteByUserId: (userId: string, session?: ClientSession) => Promise<void>;
     markAllRead: (userId: string, readAt: Date) => Promise<void>;
-    trimToNewest: (userId: string, keep: number) => Promise<string[]>;
+    trimToNewest: (
+        userId: string,
+        keep: number,
+        audience: NotificationDocument['audience']
+    ) => Promise<string[]>;
 } = {
     ...createRepository<NotificationDocument, Wire<NotificationDocument>>(notificationModel, {
         transform: applyNotificationTransform
     }),
 
-    /** A user's whole inbox, newest first. Bounded by the cap, so never paged. */
-    listByUserId: async (userId: string) =>
+    /** A user's own messages, newest first. Bounded by the cap, so never paged. */
+    listOwn: async (userId: string) =>
         notificationModel
-            .find({ userId: toObjectId(userId) })
+            .find({ userId: toObjectId(userId), audience: 'own' })
+            .sort({ createdAt: -1 })
+            .exec(),
+
+    /**
+     * A user's work notices, newest first; of one shop when `tenantId` is given, of every shop
+     * (the data export) when not. Bounded by the staff cap, so never paged.
+     */
+    listStaff: async (userId: string, tenantId?: string) =>
+        notificationModel
+            .find({
+                userId: toObjectId(userId),
+                audience: 'staff',
+                ...(tenantId === undefined ? {} : { tenantId })
+            })
             .sort({ createdAt: -1 })
             .exec(),
 
@@ -59,6 +87,21 @@ export const notificationRepository: Repository<
      */
     insertMany: async (rows: NewNotification[]) =>
         notificationModel.insertMany(rows, { ordered: false }),
+
+    /**
+     * Write a work notice unless the recipient already has one for this situation. `null` says it
+     * was a repeat (a redelivered event, or a second door onto the same situation), which is how
+     * the caller knows not to push or mail it again. The unique `{ userId, dedupeKey }` index is
+     * the arbiter, so two racing writers cannot both win.
+     */
+    insertStaffOnce: async (row: NewStaffNotification) =>
+        notificationModel
+            .insertMany([{ ...row, audience: 'staff' }], { ordered: true })
+            .then(([created]) => created)
+            .catch((error: unknown) => {
+                if (isDuplicateKey(error)) return null;
+                throw error;
+            }),
 
     /** One row, but only if it is the caller's: `null` covers "no such row" and "someone else's". */
     findOwned: async (userId: string, id: string) =>
@@ -97,12 +140,17 @@ export const notificationRepository: Repository<
             }),
 
     /**
-     * Delete everything older than a user's newest `keep` rows, answering the ids it removed.
-     * The cap is the one thing besides the owner and account deletion that removes a row; the ids
-     * go back so the stream can tell an open tab.
+     * Delete everything older than a user's newest `keep` rows of one audience, answering the ids
+     * it removed. Each audience has its own cap, so a flood of work notices cannot push a person's
+     * own messages out. The cap and the TTL are the things besides the owner and account deletion
+     * that remove a row; the ids go back so the stream can tell an open tab.
      */
-    trimToNewest: async (userId: string, keep: number) => {
-        const owner = { userId: toObjectId(userId) };
+    trimToNewest: async (
+        userId: string,
+        keep: number,
+        audience: NotificationDocument['audience']
+    ) => {
+        const owner = { userId: toObjectId(userId), audience };
         const excess = await notificationModel
             .find(owner)
             .sort({ createdAt: -1, _id: -1 })

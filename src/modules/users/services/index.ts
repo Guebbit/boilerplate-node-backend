@@ -12,7 +12,14 @@
  */
 
 import { presentAccount } from '../presenter';
-import { search, getById, findByEmail, toUserContract, toUserContracts } from './read';
+import {
+    search,
+    getById,
+    findByEmail,
+    staffContacts,
+    toUserContract,
+    toUserContracts
+} from './read';
 import { activate, deactivate } from './activation';
 import { enqueueIfPending } from './image';
 import { create } from './create';
@@ -89,6 +96,7 @@ export { isAuthenticatable, isRestorable } from '../authenticatable';
 export { personalDataSubjectOf } from './personal-data-subject';
 export type { TwoFactorSecretRing } from './reencrypt';
 export type { ActivePurchaseHold } from './purchase-hold';
+export type { StaffContact } from './read';
 
 /**
  * The service's public surface — the controllers call through this, never the bare functions.
@@ -102,6 +110,7 @@ export const userService = {
     userAuditChanges,
     search,
     getById,
+    staffContacts,
     create,
     registerSelfService,
     registerFromOAuth,

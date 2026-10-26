@@ -165,6 +165,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     findByIdWithPendingEmail: (id: string) => Promise<UserDocument | null>;
     emailOrPendingEmailTaken: (email: string, excludingId: string) => Promise<boolean>;
     emailTaken: (email: string) => Promise<boolean>;
+    findStaffContacts: (ids: readonly string[]) => Promise<UserDocument[]>;
     findAuthenticatableById: (id: string) => Promise<UserDocument | null>;
     findForSignInByEmail: (email: string, now: Date) => Promise<UserDocument | null>;
     findForSignInByOAuthIdentity: (
@@ -290,6 +291,22 @@ export const userRepository: Repository<UserDocument, UserWire> & {
             .exists({ email })
             .setOptions(EXTERNAL_KEY_QUERY)
             .then((match) => match !== null),
+
+    /**
+     * The live, enabled accounts among `ids` that have an authenticator app armed. Only those can
+     * use a staff role (it is withheld without one), so only those can act on a staff notice.
+     *
+     * @param ids - candidate account ids
+     */
+    findStaffContacts: (ids: readonly string[]) =>
+        userModel
+            .find({
+                _id: trusted({ $in: ids.map((id) => toObjectId(id)) }),
+                ...TRUSTED_AUTHENTICATABLE_FILTER,
+                authenticatorEnabledAt: trusted({ $exists: true })
+            })
+            .select('email locale')
+            .exec(),
 
     /**
      * Fetch a user by id, but only if the account may still authenticate — `active` is not

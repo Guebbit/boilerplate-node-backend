@@ -538,3 +538,50 @@ describe('rolesOfMany', () => {
         expect(await accessService.rolesOfMany([], DEPLOYMENT_TENANT_ID)).toEqual(new Map());
     });
 });
+
+/** One member per role in the shop, as ids named for their role; returns the shop's id. */
+const seedTeam = async (): Promise<string> => {
+    const shop = await accessService.ensureTenant('shop', 'The Shop');
+    const shopId = String(shop._id);
+    await seedMembership('moderator-1', shopId, 'tenant', 'moderator');
+    await seedMembership('manager-1', shopId, 'tenant', 'manager');
+    await seedMembership('admin-1', shopId, 'tenant', 'admin');
+    await seedMembership('support-1', shopId, 'tenant', 'support');
+    return shopId;
+};
+
+describe('membersHolding', () => {
+    it('returns the roles that list the set, and the administrators who list everything', async () => {
+        const shop = await seedTeam();
+
+        const members = await accessService.membersHolding(shop, ['UserBanning']);
+
+        expect(members.toSorted()).toEqual(['admin-1', 'moderator-1']);
+    });
+
+    it('finds a role by any of the sets named, listed once', async () => {
+        const shop = await seedTeam();
+
+        const members = await accessService.membersHolding(shop, [
+            'UserBanning',
+            'WebhookManagement'
+        ]);
+
+        expect(members.toSorted()).toEqual(['admin-1', 'manager-1', 'moderator-1']);
+    });
+
+    it('means administrators only for an empty list of sets', async () => {
+        const shop = await seedTeam();
+
+        await expect(accessService.membersHolding(shop, [])).resolves.toEqual(['admin-1']);
+    });
+
+    it('does not reach into another shop', async () => {
+        const shop = await seedTeam();
+        await seedMembership('elsewhere-1', 'another-shop', 'tenant', 'moderator');
+
+        const members = await accessService.membersHolding(shop, ['UserBanning']);
+
+        expect(members).not.toContain('elsewhere-1');
+    });
+});

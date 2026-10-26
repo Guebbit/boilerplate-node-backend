@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — the per-user inbox: one row per message, kept until its owner deletes it.
-**Depends on** — [`cart`](./cart.md), [`delivery`](./delivery.md), [`stock-alerts`](./stock-alerts.md) and [`wishlist`](./wishlist.md), only for the event names it listens to.
+**Depends on** — [`cart`](./cart.md), [`delivery`](./delivery.md), [`orders`](./orders.md), [`stock-alerts`](./stock-alerts.md), [`webhooks`](./webhooks.md) and [`wishlist`](./wishlist.md) for the event names it listens to; [`access`](./access.md) and [`users`](./users.md) to find who a work notice is for.
 **Breaks if you change** — nothing outside this folder. No module imports it: a producer announces an event and never calls in.
 :::
 
@@ -17,28 +17,39 @@ graph cannot see._
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
 flowchart LR
     notifications["notifications<br/><i>this module</i>"]
+    access["access"]
     cart["cart"]
     delivery["delivery"]
+    orders["orders"]
     stock_alerts["stock-alerts"]
+    users["users"]
+    webhooks["webhooks"]
     wishlist["wishlist"]
 
+    notifications --> access
     notifications --> cart
     notifications --> delivery
+    notifications --> orders
     notifications --> stock_alerts
+    notifications --> users
+    notifications --> webhooks
     notifications --> wishlist
     cart -. "cart.lines_removed" .-> notifications
     cart -. "cart.merge_refused" .-> notifications
     delivery -. "fulfillment_order.delayed" .-> notifications
     delivery -. "fulfillment_order.hold_noticed" .-> notifications
+    orders -. "order.purchase_hold_placed" .-> notifications
     stock_alerts -. "stock_alert.sent" .-> notifications
+    webhooks -. "webhook.subscription_auto_disabled" .-> notifications
     wishlist -. "wishlist.items_removed" .-> notifications
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
-    class cart core;
+    class cart,orders core;
     class delivery,stock_alerts,wishlist supporting;
+    class access,users,webhooks generic;
     class notifications centre;
 ```
 
@@ -110,6 +121,44 @@ flowchart LR
     class P,C,M,A,T peer;
 ```
 
+## Work notices for staff
+
+Some rows are not about the reader as a person but about work that needs doing: `audience: staff`.
+They share the table, the stream and the bell with a person's own messages, so there is one feed,
+one cap logic and one erasure path.
+
+```mermaid
+flowchart LR
+    E["a producer's event<br/><i>order.purchase_hold_placed<br/>webhook.subscription_auto_disabled</i>"] -.-> R["staff-routing<br/><i>code → sets, mail class</i>"]
+    R -->|"who holds the sets?"| AC["access<br/>membersHolding"]
+    AC -->|"who can act today?"| U["users<br/>staffContacts"]
+    U --> W[("one row per person<br/>per situation")]
+    W -->|SSE| B["the bell"]
+    W -->|"mail: now"| M["mail queue"]
+    B -->|"GET /notifications"| F{"reader still holds<br/>the sets?"}
+```
+
+- **Routing is one table.** `src/modules/notifications/staff-routing.ts` maps each code to the permission sets whose holders
+  do that work, whether it mails, and its severity. Administrators (any unrestricted role, by
+  property) hear everything; an empty list of sets means administrators only.
+- **Who can act.** Of the members found, only live, enabled accounts with an authenticator app armed
+  are told: without one their staff role is withheld and they could not do what the notice asks.
+- **Mail is the exception.** `now` only where someone must act soon (money, a legal clock,
+  security); every other code is the bell alone. There are no per-person mail preferences: the
+  choice is made once, in the table. A `now` mail is short: what happened and a link, in the
+  recipient's own language, with ids and dates only (no buyer address, no name).
+- **Once per situation.** Each row carries a `dedupeKey` (`<kind>:<entity>`) under a unique
+  `{ userId, dedupeKey }` index, so a redelivered event writes nothing, pushes nothing and mails
+  nothing a second time.
+- **Read at read time.** The row stores the sets that earned it; `GET /notifications` shows it only
+  to a member of the same shop who holds one of them _now_. A role taken away hides the notices
+  without a write; a promotion shows only what was written after it. `read-all` and delete cover
+  both kinds.
+- **Retention.** Work notices have their own cap (`NODE_NOTIFICATIONS_STAFF_MAX_PER_USER`) and a TTL
+  (`NODE_NOTIFICATIONS_STAFF_TTL_DAYS`), so a flood of them cannot push a person's own messages out.
+- **Today's codes.** `notifications.staff.purchase-hold-placed` (mail `now`: abuse defence) and
+  `notifications.staff.webhook-disabled` (bell only).
+
 ## What decides what
 
 - **Who reaches the inbox.** Only domain events. `cart` knows whose carts held a product, so `cart`
@@ -138,13 +187,16 @@ flowchart LR
 
 A notification says what was in someone's cart, so it is personal data: it is in the account
 export (`personalData.collect`) and removed with the account (`personalData.erase`, inside the
-hard-delete transaction).
+hard-delete transaction). A staff member's work notices are exported as a kind and a date only
+(`staffNotifications`): their facts name other people's accounts and orders.
 
 ## Configuration
 
-| Variable                          | Default | What                               |
-| --------------------------------- | ------- | ---------------------------------- |
-| `NODE_NOTIFICATIONS_MAX_PER_USER` | `100`   | Newest notifications kept per user |
+| Variable                                | Default | What                                |
+| --------------------------------------- | ------- | ----------------------------------- |
+| `NODE_NOTIFICATIONS_MAX_PER_USER`       | `100`   | Newest notifications kept per user  |
+| `NODE_NOTIFICATIONS_STAFF_MAX_PER_USER` | `200`   | Newest work notices kept per person |
+| `NODE_NOTIFICATIONS_STAFF_TTL_DAYS`     | `30`    | How many days a work notice lives   |
 
 ## Who can do what
 

@@ -22,17 +22,17 @@ flowchart LR
     api_keys["api-keys"]
     cart["cart"]
     example["example"]
+    notifications["notifications"]
     orders["orders"]
     stock_alerts["stock-alerts"]
-    webhooks["webhooks"]
 
     account --> users
     api_keys --> users
     cart --> users
     example --> users
+    notifications --> users
     orders --> users
     stock_alerts --> users
-    webhooks --> users
     users --> access
     users -. "user.deactivated" .-> account
     users -. "user.deletion-cancelled" .-> account
@@ -43,8 +43,8 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class stock_alerts supporting;
-    class access,account,api_keys,example,webhooks generic;
+    class notifications,stock_alerts supporting;
+    class access,account,api_keys,example generic;
     class users centre;
 ```
 
@@ -223,6 +223,11 @@ and later be erased like anyone else. The purge hands a system context, so the t
 `system.user.erased`, not an admin erase.
 
 `updateById` and `removeById` stay the doors for an admin: they load by id and ask first.
+
+`staffContacts(ids)` is the read a staff notice makes of the members it found: of those ids, the
+accounts that are live, enabled and have an authenticator app armed, with their address and
+language. An account without an app has its staff role withheld, so it could not act on the notice
+and is left out; so is a banned or deleted one.
 
 ## Purchase hold
 
