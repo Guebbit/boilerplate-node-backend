@@ -89,11 +89,10 @@ const STEP_UP_ROUTES: Record<string, string[]> = {
     // Regenerating backup codes discards the old set — the same stolen-but-fresh-session risk
     // as disabling a factor.
     'account POST /2fa/backup-codes': [`requireFreshAuth(critical)`],
-    // Freshness here is a property of the REQUEST, not the route: a plain ship/deliver never
-    // needs it, a `forced: true` one does — the same `override:Order` tier the direct
-    // status-override route inherits automatically through `requirePermission`, restated here
-    // because the service's own permission check has no way to demand a step-up on its own.
-    'delivery POST /fulfillment-orders/:id/shipments': [`requireFreshAuthWhen(critical)`],
+    // Freshness here is a property of the REQUEST, not the route: a plain deliver never needs it,
+    // a `forced: true` one does — the same `override:Order` tier the direct status-override route
+    // inherits automatically through `requirePermission`, restated here because the service's own
+    // permission check has no way to demand a step-up on its own. Shipping has no forced variant.
     'delivery POST /shipments/:id/deliver': [`requireFreshAuthWhen(critical)`],
     // A remainder cancel by a caller holding the refund key is staff's money-out door, at that
     // key's own tier; the buyer's own withdrawal, on the same route, is never prompted.

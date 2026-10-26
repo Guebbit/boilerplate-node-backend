@@ -35,7 +35,8 @@ import { onDateChanged } from './slip';
 import { runPreorderSweep } from './preorder-sweep';
 import { listPreorderFulfillmentOrders, summarizePreorders } from './board';
 import { previewDateImpact } from './release-date-impact';
-import { scrubHoldNotes } from './retention';
+import { scrubHoldNotes, scrubDestinations } from './retention';
+import { reencryptShipments } from './reencrypt';
 import { mailShipped, mailDelivered, mailDelayed, mailHoldNoticed } from './notify';
 
 export type { RemainderOption } from './read';
@@ -78,6 +79,8 @@ export const deliveryService = {
     summarizePreorders,
     previewDateImpact,
     scrubHoldNotes,
+    scrubDestinations,
+    reencryptShipments,
     mailShipped,
     mailDelivered,
     mailDelayed,

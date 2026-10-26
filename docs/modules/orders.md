@@ -44,6 +44,7 @@ flowchart LR
     orders --> users
     inventory -. "inventory.reservation_expired" .-> orders
     orders -. "order.cancelled" .-> delivery
+    orders -. "order.redacted" .-> delivery
     orders -. "order.status_changed" .-> delivery
     orders -. "order.status_overridden" .-> delivery
     orders -. "order.status_changed" .-> invoicing
@@ -261,9 +262,11 @@ exists for manual corrections, not as a second sales channel:
 
 - it takes a buyer, an email and line items, and nothing else — no payment method, no address, no
   shipping method, and no frontend screen behind it;
-- it sells the shelf a shopper buys from: a hidden, off-sale or soft-deleted product is refused with
-  `409 ORDER_PRODUCT_UNAVAILABLE` (`isSellable`, the three facts checkout refuses on), every refused
-  product named in `details.productIds`;
+- staff may sell a hidden or off-sale product by hand (the shopper's shelf rules are checkout's, not
+  this door's); only a removed (soft-deleted) one is refused with `409 ORDER_PRODUCT_UNAVAILABLE`,
+  every one named in `details.productIds`. The product is read through the caller's own scope, so a
+  role without `display:Product` gets `404` for a hidden or removed product and an order never
+  copies a product its caller may not read;
 - it holds stock for the default reservation window like any other order, so an unpaid correction
   order is cancelled by the same reservation sweep as an abandoned checkout;
 - carrying no address or shipping, it cannot be fulfilled through the warehouse's normal
@@ -307,7 +310,7 @@ override all ASK for a move, never assign the field themselves. See
 | Move                                        | Who asks                                                                         | Through                                                                                                                                                              |
 | ------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pending` → `paid`                          | `system`                                                                         | `payments`' settlement, on confirm                                                                                                                                   |
-| `paid` → `processing`                       | `system`                                                                         | `POST /orders/{id}/process`, `start:Shipment` — or `POST /orders/{id}/status-override`, `override:Order`                                                             |
+| `paid` → `processing`                       | `system`                                                                         | `POST /orders/{id}/process`, `start:Shipment` — a first shipment or fulfil from `paid` makes it too — or `POST /orders/{id}/status-override`, `override:Order`       |
 | `processing` → `shipped`                    | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/shipments` — only the shipment that leaves **nothing** remaining                                                             |
 | `shipped` → `delivered`                     | `system`                                                                         | `POST /delivery/shipments/{id}/deliver` — only the last arrival, with nothing left to ship                                                                           |
 | `processing` → `delivered`                  | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/fulfill` (digital), or a remainder cancel after every shipment arrived — `markFulfilmentComplete`, the one named double move |
@@ -390,10 +393,10 @@ against the wrong order — needs `override:Order`, a step-up permission granted
 name. Two modes, both requiring a `reason`, both writing a `status_overridden` row on the
 [timeline](#the-timeline) (who, when, from → to, mode, reason):
 
-- **Forced** — `delivery`'s ship and deliver doors accept `forced: true`. The regular operation still
-  runs; the order skips a step (ship from `paid` without `process`, deliver without a carrier
-  confirmation) and leaves a history row through `recordForcedFulfilment` — a row **without** a move of
-  its own. It never lands on `paid` (that stays `system`-only, absolute), and never ships from `on_hold`.
+- **Forced** — `delivery`'s deliver door accepts `forced: true`. The regular operation still runs; the
+  order skips the carrier confirmation and leaves a history row through `recordForcedFulfilment` — a
+  row **without** a move of its own. It never lands on `paid` (that stays `system`-only, absolute).
+  Shipping from `paid` is no override: the ship act makes `paid → processing` itself.
 - **Status-only** — `POST /orders/{id}/status-override` with `{ to, reason }` moves the status
   alone, forward to `processing`/`shipped`/`delivered` only. No shipped email — but webhooks still fire,
   since a subscriber's own view of the order genuinely changed.
@@ -636,12 +639,17 @@ flowchart LR
 
 `PUT /orders/{id}/shipping-address` (`update:Order`) replaces where an order ships, for the case a held
 `incorrect_address` fulfillment order creates: nothing else could change an address after checkout.
-Shopify lets staff edit an unfulfilled fulfillment order's address the same way; the buyer's own
-edit is a later, optional step.
+Shopify allows it on a partly fulfilled order too, and Solidus keeps the address a carton shipped to;
+the buyer's own edit is a later, optional step.
 
-- Allowed only while the order has a shipping address and **nothing has shipped**
-  (`canCorrectAddress`): a parcel on its way went where it went. Otherwise `409 ORDER_ADDRESS_LOCKED`,
-  and `OrderActions.correctAddress` says in advance, so no button is offered that the door refuses.
+- Allowed while the order has a shipping address and **units remain to send** (`canCorrectAddress`:
+  held and awaiting-stock units count). A parcel already cut keeps the address it went to: each
+  [shipment stores its own `destination`](./delivery.md#where-a-parcel-went). Otherwise
+  `409 ORDER_ADDRESS_LOCKED`, and `OrderActions.correctAddress` says in advance, so no button is
+  offered that the door refuses.
+- The country must be on the shop's ship-to list, the one checkout refuses by: VAT is charged at the
+  shop's own rates, so a redirect abroad would break what the order was charged.
+  `422 ORDER_SHIP_TO_COUNTRY_NOT_SUPPORTED`.
 - The new address is encrypted under the order's id like the one it replaces. The staff-only timeline
   row `address_corrected` and the audit row name **who**, never what it says.
 

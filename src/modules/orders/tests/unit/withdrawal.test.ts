@@ -5,6 +5,7 @@
  */
 import { OrderStatus, WithdrawBlockedReason } from '@types';
 import {
+    canCorrectAddress,
     canWithdraw,
     conformityUntilFrom,
     deliveryClockFor,
@@ -172,6 +173,34 @@ describe('isBeforeDispatch', () => {
         expect(
             isBeforeDispatch({ status: OrderStatus.processing, fulfillment: { shipped: true } })
         ).toBe(false);
+    });
+});
+
+describe('canCorrectAddress', () => {
+    const address = { street: '1 Way' };
+
+    it.each([
+        ['nothing has shipped', OrderStatus.paid, undefined],
+        [
+            'units remain after a first parcel',
+            OrderStatus.processing,
+            { shipped: true, remaining: 1 }
+        ]
+    ])('is open when %s', (_name, status, fulfillment) => {
+        expect(canCorrectAddress({ status, fulfillment, shippingAddress: address })).toBe(true);
+    });
+
+    it.each([
+        ['every unit has left', OrderStatus.processing, { shipped: true, remaining: 0 }],
+        ['the order is shipped', OrderStatus.shipped, { shipped: true, remaining: 0 }],
+        ['the order is delivered', OrderStatus.delivered, undefined],
+        ['the order is cancelled', OrderStatus.cancelled, undefined]
+    ])('is closed when %s', (_name, status, fulfillment) => {
+        expect(canCorrectAddress({ status, fulfillment, shippingAddress: address })).toBe(false);
+    });
+
+    it('is closed for an order that ships nowhere', () => {
+        expect(canCorrectAddress({ status: OrderStatus.paid })).toBe(false);
     });
 });
 

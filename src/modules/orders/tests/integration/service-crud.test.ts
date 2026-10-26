@@ -150,39 +150,97 @@ describe('create', () => {
         expect(await countOrders()).toBe(2);
     });
 
-    // An operator sells the shelf a shopper buys from: what checkout refuses, this refuses too, and
-    // names every product it refused so the form can point at them.
+    // Staff may sell a hidden or off-sale product by hand (Solidus, Shopify draft orders); the
+    // order is a normal one, stock held, and the product is the shelf's.
     it.each([
         ['hidden', { active: false }],
-        ['off sale', { purchasable: false }],
+        ['off sale', { purchasable: false }]
+    ])('sells a %s product by hand, and holds its stock', async (_name, flags) => {
+        const user = await createUser();
+        const product = await createProduct({ title: 'Mouse', price: 10, onHand: 5, ...flags });
+
+        const result = await orderService.create(
+            String(user._id),
+            user.email,
+            [{ productId: String(product._id), quantity: 2 }],
+            callerContextAs('admin')
+        );
+
+        expect(result.success).toBe(true);
+        expect(await countOrders()).toBe(1);
+        expect(await countersOf(product._id)).toMatchObject({ reserved: 2 });
+    });
+
+    // A removed product is the one thing a hand-raised order still refuses, every one named.
+    it('refuses a soft-deleted product with 409 ORDER_PRODUCT_UNAVAILABLE, and writes nothing', async () => {
+        const user = await createUser();
+        const fine = await createProduct({ title: 'Keyboard', price: 25, onHand: 5 });
+        const removed = await createProduct({
+            title: 'Mouse',
+            price: 10,
+            onHand: 5,
+            deletedAt: new Date()
+        });
+
+        const result = await orderService.create(
+            String(user._id),
+            user.email,
+            [
+                { productId: String(fine._id), quantity: 1 },
+                { productId: String(removed._id), quantity: 1 }
+            ],
+            callerContextAs('admin')
+        );
+
+        expect(asReject(result).status).toBe(409);
+        expect(asReject(result).errors[0]).toMatchObject({
+            code: 'ORDER_PRODUCT_UNAVAILABLE',
+            details: { productIds: [String(removed._id)] }
+        });
+        expect(await countOrders()).toBe(0);
+        // No hold was taken for the line that was fine.
+        expect(await countersOf(fine._id)).toMatchObject({ reserved: 0 });
+    });
+
+    // A caller who cannot read a hidden or removed product sees the same 404 as for an unknown id:
+    // the order would otherwise copy the product's title and price, and the 409 would confirm it exists.
+    it.each([
+        ['hidden', { active: false }],
         ['soft-deleted', { deletedAt: new Date() }]
-    ])(
-        'refuses a %s product with 409 ORDER_PRODUCT_UNAVAILABLE, and writes nothing',
-        async (_name, flags) => {
-            const user = await createUser();
-            const fine = await createProduct({ title: 'Keyboard', price: 25, onHand: 5 });
-            const refused = await createProduct({ title: 'Mouse', price: 10, onHand: 5, ...flags });
+    ])('answers 404 for a %s product to a caller without display:Product', async (_name, flags) => {
+        const user = await createUser();
+        const product = await createProduct({ title: 'Mouse', price: 10, onHand: 5, ...flags });
 
-            const result = await orderService.create(
-                String(user._id),
-                user.email,
-                [
-                    { productId: String(fine._id), quantity: 1 },
-                    { productId: String(refused._id), quantity: 1 }
-                ],
-                callerContextAs('admin')
-            );
+        const result = await orderService.create(
+            String(user._id),
+            user.email,
+            [{ productId: String(product._id), quantity: 1 }],
+            // A shopper holds no `display:Product`; no stock role lacks it while holding create:Order.
+            callerContextAs('customer')
+        );
 
-            expect(asReject(result).status).toBe(409);
-            expect(asReject(result).errors[0]).toMatchObject({
-                code: 'ORDER_PRODUCT_UNAVAILABLE',
-                details: { productIds: [String(refused._id)] }
-            });
-            expect(await countOrders()).toBe(0);
-            // No hold was taken for the line that was fine.
-            expect(await countersOf(fine._id)).toMatchObject({ reserved: 0 });
-        }
-    );
+        expect(asReject(result).status).toBe(404);
+        expect(await countOrders()).toBe(0);
+    });
+
+    it('still sells an off-sale product to a caller without display:Product, since it is public', async () => {
+        const user = await createUser();
+        const product = await createProduct({
+            title: 'Mouse',
+            price: 10,
+            onHand: 5,
+            purchasable: false
+        });
+
+        const result = await orderService.create(
+            String(user._id),
+            user.email,
+            [{ productId: String(product._id), quantity: 1 }],
+            callerContextAs('customer')
+        );
+
+        expect(result.success).toBe(true);
+    });
 
     // The open-order cap is a checkout rule (`cart/services/checkout.ts`): an operator raising an
     // order for a customer is not the shopper the cap exists to stop.

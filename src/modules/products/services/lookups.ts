@@ -21,6 +21,16 @@ import { productRepository, type ListedProduct, type StockCounters } from '../re
 export const findByIdRaw = (productId: string) => productRepository.findByIdRaw(productId);
 
 /**
+ * {@link findByIdRaw} narrowed to the rows a caller may read ({@link callerScope}): a hidden or
+ * removed product is `null` to a caller who lacks `display:Product`, exactly as a missing one is,
+ * so a write that snapshots the product cannot widen what that caller may read.
+ * @param productId - the product
+ * @param scope - the caller's scope from `callerScope`
+ */
+export const findByIdRawScoped = (productId: string, scope: Record<string, unknown>) =>
+    productRepository.findByIdRawScoped(productId, scope);
+
+/**
  * Whether a product exists and is not soft-deleted — the question a late `product.deleted` handler
  * asks before it acts: a retried delivery can arrive after the product was restored.
  *
