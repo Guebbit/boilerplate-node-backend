@@ -1,0 +1,120 @@
+# How a request is bucketed by a rate-limit budget.
+#
+#   address   the plain address key: IPv4 as is, IPv6 masked to its /56 (the express-rate-limit
+#             default), an IPv4-mapped IPv6 unwrapped first.
+#   block     the wider block key: IPv4 /24, IPv6 /48, an IPv4-mapped IPv6 unwrapped first;
+#             `unknown` when the request has no address at all.
+#   identity  a budget keyed on a submitted email: the keyed HMAC of the normalised address under
+#             the `rate-limit` purpose, else `anon:<block>`. `email` wins over `username`; a field
+#             that is present but blank still wins, and then names nobody.
+#             `root` is the pseudonym root (test-only, public).
+cases:
+    - { name: an IPv4 address is its own key, kind: address, ip: 203.0.113.5, key: 203.0.113.5 }
+    - {
+          name: an IPv4-mapped caller is keyed as the IPv4 address,
+          kind: address,
+          ip: '::ffff:203.0.113.5',
+          key: 203.0.113.5
+      }
+    - {
+          name: an IPv6 address is masked to its /56,
+          kind: address,
+          ip: '2001:db8:1:2::1',
+          key: '2001:db8:1::/56'
+      }
+    - {
+          name: two addresses in one /56 share a key,
+          kind: address,
+          ip: '2001:db8:1:ff00::1',
+          key: '2001:db8:1:ff00::/56'
+      }
+    - {
+          name: the same /56 from the far end of the range,
+          kind: address,
+          ip: '2001:db8:1:ffff::9',
+          key: '2001:db8:1:ff00::/56'
+      }
+    - {
+          name: an IPv4 caller is bucketed in its /24,
+          kind: block,
+          ip: 203.0.113.5,
+          key: 203.0.113.0/24
+      }
+    - {
+          name: an IPv4-mapped caller shares the plain address's /24,
+          kind: block,
+          ip: '::ffff:203.0.113.77',
+          key: 203.0.113.0/24
+      }
+    - {
+          name: the hex spelling of a mapped address is unwrapped too,
+          kind: block,
+          ip: '::ffff:cb00:7105',
+          key: 203.0.113.0/24
+      }
+    - {
+          name: the next IPv4 block is a different bucket,
+          kind: block,
+          ip: 203.0.114.5,
+          key: 203.0.114.0/24
+      }
+    - {
+          name: an IPv6 caller is bucketed in its /48,
+          kind: block,
+          ip: '2001:db8:1:2:aaaa:bbbb:cccc:dddd',
+          key: '2001:db8:1::/48'
+      }
+    - {
+          name: two /56s of one /48 share a block,
+          kind: block,
+          ip: '2001:db8:1:ffff::9',
+          key: '2001:db8:1::/48'
+      }
+    - {
+          name: another /48 is a different block,
+          kind: block,
+          ip: '2001:db8:2:2::1',
+          key: '2001:db8:2::/48'
+      }
+    - { name: a request with no address gets one stable key, kind: block, key: unknown }
+    - name: an email is lowercased, trimmed and pseudonymised
+      kind: identity
+      root: shared-cases-root-secret-do-not-use-in-production-0001
+      ip: 203.0.113.5
+      body: { email: '  Ada@Example.com ' }
+      key: c889538b60d0431154f7dcbe98b7cb70849db79819cb9dfe2b0f0cd7a1b5e326
+    - name: a username is keyed like an email
+      kind: identity
+      root: shared-cases-root-secret-do-not-use-in-production-0001
+      ip: 203.0.113.5
+      body: { username: ADA@example.com }
+      key: c889538b60d0431154f7dcbe98b7cb70849db79819cb9dfe2b0f0cd7a1b5e326
+    - name: email wins over username
+      kind: identity
+      root: shared-cases-root-secret-do-not-use-in-production-0001
+      ip: 203.0.113.5
+      body: { email: ada@example.com, username: someone-else }
+      key: c889538b60d0431154f7dcbe98b7cb70849db79819cb9dfe2b0f0cd7a1b5e326
+    - name: a body naming nobody falls back to the address block
+      kind: identity
+      root: shared-cases-root-secret-do-not-use-in-production-0001
+      ip: 203.0.113.5
+      body: {}
+      key: anon:203.0.113.0/24
+    - name: a non-string email names nobody
+      kind: identity
+      root: shared-cases-root-secret-do-not-use-in-production-0001
+      ip: 203.0.113.5
+      body: { email: 42 }
+      key: anon:203.0.113.0/24
+    - name: a blank email names nobody and does not fall through to the username
+      kind: identity
+      root: shared-cases-root-secret-do-not-use-in-production-0001
+      ip: 203.0.113.5
+      body: { email: '  ', username: ada@example.com }
+      key: anon:203.0.113.0/24
+    - name: a missing body falls back to the address block
+      kind: identity
+      root: shared-cases-root-secret-do-not-use-in-production-0001
+      ip: '2001:db8:1:2::1'
+      key: 'anon:2001:db8:1::/48'

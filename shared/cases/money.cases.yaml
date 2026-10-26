@@ -1,0 +1,313 @@
+# Money as whole minor units. The ISO 4217 exponent table itself stays in `money.ts`; these cases
+# are how both sides must read it. Exponent 2 is the rule: JPY has 0, KWD/BHD/IQD 3, CLF 4.
+# HUF, IDR, COP, PKR and LBP are 2 here although CLDR (`Intl`) says 0, and IQD is 3 where CLDR says 0.
+#
+#   exponent       a currency code -> its decimal places (an unlisted code gets 2).
+#   minor-text     decimal TEXT -> minor units by moving digits, never by float. Rounds half away
+#                  from zero on the first dropped digit. Only plain `-?digits[.digits]` takes this
+#                  path; anything else (exponent form, `.5`, padding) is read as a number.
+#   minor-number   a number -> minor units: `round(value * 10^exponent)`, half toward +infinity.
+#                  Non-finite input and negative zero both come out as 0.
+#   decimal        minor units -> the decimal the API publishes.
+#   fits           whether a decimal has no more places than the currency's minor unit.
+#   apportion      split `total` over `weights`; floor every share, then the leftover goes to the
+#                  largest weight (the first one on a tie). All-zero weights give all zeros.
+#   scale-by-rate  `round(amount * rate)`, half toward +infinity (so -252.5 is -252).
+cases:
+    - { name: EUR has two places, kind: exponent, currency: EUR, exponent: 2 }
+    - { name: JPY has none, kind: exponent, currency: JPY, exponent: 0 }
+    - { name: KRW has none, kind: exponent, currency: KRW, exponent: 0 }
+    - { name: ISK has none, kind: exponent, currency: ISK, exponent: 0 }
+    - { name: KWD has three, kind: exponent, currency: KWD, exponent: 3 }
+    - { name: BHD has three, kind: exponent, currency: BHD, exponent: 3 }
+    - { name: IQD has three where CLDR says none, kind: exponent, currency: IQD, exponent: 3 }
+    - { name: CLF has four, kind: exponent, currency: CLF, exponent: 4 }
+    - { name: HUF has two where CLDR says none, kind: exponent, currency: HUF, exponent: 2 }
+    - { name: IDR has two where CLDR says none, kind: exponent, currency: IDR, exponent: 2 }
+    - { name: an unlisted code gets two, kind: exponent, currency: XXX, exponent: 2 }
+    - {
+          name: a lowercase code is not listed and gets two,
+          kind: exponent,
+          currency: jpy,
+          exponent: 2
+      }
+    - {
+          name: plain text moves the digits,
+          kind: minor-text,
+          value: '19.99',
+          currency: EUR,
+          minor: 1999
+      }
+    - {
+          name: a missing fraction is padded,
+          kind: minor-text,
+          value: '19.9',
+          currency: EUR,
+          minor: 1990
+      }
+    - { name: a whole amount is scaled, kind: minor-text, value: '20', currency: EUR, minor: 2000 }
+    - {
+          name: a first dropped digit under five rounds down,
+          kind: minor-text,
+          value: '19.994',
+          currency: EUR,
+          minor: 1999
+      }
+    - {
+          name: a first dropped digit of five rounds up,
+          kind: minor-text,
+          value: '19.995',
+          currency: EUR,
+          minor: 2000
+      }
+    - {
+          name: the classic float trap rounds up from text,
+          kind: minor-text,
+          value: '1.005',
+          currency: EUR,
+          minor: 101
+      }
+    - {
+          name: only the first dropped digit decides,
+          kind: minor-text,
+          value: '19.9949',
+          currency: EUR,
+          minor: 1999
+      }
+    - {
+          name: a negative rounds half away from zero,
+          kind: minor-text,
+          value: '-19.995',
+          currency: EUR,
+          minor: -2000
+      }
+    - {
+          name: negative zero text is plain zero,
+          kind: minor-text,
+          value: '-0',
+          currency: EUR,
+          minor: 0
+      }
+    - {
+          name: negative zero with a fraction is plain zero,
+          kind: minor-text,
+          value: '-0.00',
+          currency: EUR,
+          minor: 0
+      }
+    - { name: JPY text is whole yen, kind: minor-text, value: '1234', currency: JPY, minor: 1234 }
+    - {
+          name: JPY rounds a half yen up,
+          kind: minor-text,
+          value: '1234.5',
+          currency: JPY,
+          minor: 1235
+      }
+    - {
+          name: JPY drops a fraction under half,
+          kind: minor-text,
+          value: '1234.4',
+          currency: JPY,
+          minor: 1234
+      }
+    - {
+          name: KWD keeps three places,
+          kind: minor-text,
+          value: '1234.567',
+          currency: KWD,
+          minor: 1234567
+      }
+    - {
+          name: KWD rounds on the fourth,
+          kind: minor-text,
+          value: '1.2345',
+          currency: KWD,
+          minor: 1235
+      }
+    - {
+          name: CLF keeps four places,
+          kind: minor-text,
+          value: '1.0001',
+          currency: CLF,
+          minor: 10001
+      }
+    - {
+          name: CLF rounds on the fifth,
+          kind: minor-text,
+          value: '1.00005',
+          currency: CLF,
+          minor: 10001
+      }
+    - {
+          name: HUF is read at two places,
+          kind: minor-text,
+          value: '100.5',
+          currency: HUF,
+          minor: 10050
+      }
+    - {
+          name: IQD is read at three places,
+          kind: minor-text,
+          value: '1',
+          currency: IQD,
+          minor: 1000
+      }
+    - {
+          name: a leading dot is not plain text and is read as a number,
+          kind: minor-text,
+          value: '.5',
+          currency: EUR,
+          minor: 50
+      }
+    - {
+          name: exponent form is read as a number,
+          kind: minor-text,
+          value: '1e3',
+          currency: EUR,
+          minor: 100000
+      }
+    - {
+          name: text that is no number is zero,
+          kind: minor-text,
+          value: 'abc',
+          currency: EUR,
+          minor: 0
+      }
+    - { name: empty text is zero, kind: minor-text, value: '', currency: EUR, minor: 0 }
+    - {
+          name: a number is multiplied and rounded,
+          kind: minor-number,
+          value: 19.99,
+          currency: EUR,
+          minor: 1999
+      }
+    - {
+          name: a JPY number is already whole,
+          kind: minor-number,
+          value: 100,
+          currency: JPY,
+          minor: 100
+      }
+    - {
+          name: a KWD number scales by a thousand,
+          kind: minor-number,
+          value: 1234.567,
+          currency: KWD,
+          minor: 1234567
+      }
+    - { name: half a yen rounds up, kind: minor-number, value: 0.5, currency: JPY, minor: 1 }
+    - {
+          name: minus half a yen rounds toward plus infinity and is zero,
+          kind: minor-number,
+          value: -0.5,
+          currency: JPY,
+          minor: 0
+      }
+    - { name: NaN is zero, kind: minor-number, value: NaN, currency: EUR, minor: 0 }
+    - { name: infinity is zero, kind: minor-number, value: Infinity, currency: EUR, minor: 0 }
+    - {
+          name: minus infinity is zero,
+          kind: minor-number,
+          value: -Infinity,
+          currency: EUR,
+          minor: 0
+      }
+    - {
+          name: minor units back to a decimal,
+          kind: decimal,
+          minor: 1999,
+          currency: EUR,
+          decimal: 19.99
+      }
+    - { name: JPY stays whole, kind: decimal, minor: 1999, currency: JPY, decimal: 1999 }
+    - {
+          name: KWD divides by a thousand,
+          kind: decimal,
+          minor: 1234567,
+          currency: KWD,
+          decimal: 1234.567
+      }
+    - {
+          name: CLF divides by ten thousand,
+          kind: decimal,
+          minor: 10001,
+          currency: CLF,
+          decimal: 1.0001
+      }
+    - {
+          name: a negative amount keeps its sign,
+          kind: decimal,
+          minor: -1999,
+          currency: EUR,
+          decimal: -19.99
+      }
+    - { name: zero is zero, kind: decimal, minor: 0, currency: EUR, decimal: 0 }
+    - { name: two places fit EUR, kind: fits, amount: 19.99, currency: EUR, fits: true }
+    - { name: three places do not fit EUR, kind: fits, amount: 19.999, currency: EUR, fits: false }
+    - { name: a whole amount fits JPY, kind: fits, amount: 100, currency: JPY, fits: true }
+    - { name: a half yen does not fit JPY, kind: fits, amount: 100.5, currency: JPY, fits: false }
+    - { name: three places fit KWD, kind: fits, amount: 1234.567, currency: KWD, fits: true }
+    - { name: four places fit CLF, kind: fits, amount: 1.0001, currency: CLF, fits: true }
+    - { name: NaN never fits, kind: fits, amount: NaN, currency: EUR, fits: false }
+    - { name: infinity never fits, kind: fits, amount: Infinity, currency: EUR, fits: false }
+    - {
+          name: the leftover unit goes to the first of equal weights,
+          kind: apportion,
+          total: 100,
+          weights: [1, 1, 1],
+          shares: [34, 33, 33]
+      }
+    - {
+          name: an exact split leaves nothing over,
+          kind: apportion,
+          total: 100,
+          weights: [50, 30, 20],
+          shares: [50, 30, 20]
+      }
+    - {
+          name: the leftover goes to the largest weight,
+          kind: apportion,
+          total: 10,
+          weights: [1, 3, 3],
+          shares: [1, 5, 4]
+      }
+    - {
+          name: one unit over two equal weights goes to the first,
+          kind: apportion,
+          total: 1,
+          weights: [1, 1],
+          shares: [1, 0]
+      }
+    - {
+          name: all-zero weights give all zeros,
+          kind: apportion,
+          total: 100,
+          weights: [0, 0],
+          shares: [0, 0]
+      }
+    - {
+          name: a zero total gives zero shares,
+          kind: apportion,
+          total: 0,
+          weights: [1, 2],
+          shares: [0, 0]
+      }
+    - { name: no weights give no shares, kind: apportion, total: 100, weights: [], shares: [] }
+    - { name: a rate takes a share, kind: scale-by-rate, amount: 1000, rate: 0.22, result: 220 }
+    - {
+          name: a share rounds to the nearest unit,
+          kind: scale-by-rate,
+          amount: 995,
+          rate: 0.22,
+          result: 219
+      }
+    - { name: a half rounds up, kind: scale-by-rate, amount: 505, rate: 0.5, result: 253 }
+    - {
+          name: a negative half rounds toward plus infinity,
+          kind: scale-by-rate,
+          amount: -505,
+          rate: 0.5,
+          result: -252
+      }
+    - { name: a zero amount stays zero, kind: scale-by-rate, amount: 0, rate: 0.22, result: 0 }
+    - { name: a non-finite rate is zero, kind: scale-by-rate, amount: 1000, rate: NaN, result: 0 }
