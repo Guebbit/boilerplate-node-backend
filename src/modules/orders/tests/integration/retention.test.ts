@@ -13,7 +13,9 @@ import {
     createOrder,
     toOrderItem,
     detachOrderUserId,
-    markOrderPaidAt
+    forceOrderStatus,
+    markOrderPaidAt,
+    setConformityUntil
 } from '@modules/orders/tests/factories';
 import { orderRepository } from '../../repository';
 import { orderModel } from '../../model';
@@ -29,6 +31,17 @@ import { setEnvironment } from '@tests/environment';
 
 setupTestDb();
 
+/** The order ids of every `order.redacted` row, plain. */
+const redactedIds = () =>
+    outboxEventModel
+        .find({ name: 'order.redacted' })
+        .lean()
+        .exec()
+        .then((rows) => rows.map((row) => row.aggregateId).toSorted());
+
+/** One day, in milliseconds. */
+const DAY = 24 * 60 * 60 * 1000;
+
 describe('orders — detach on account erasure', () => {
     beforeEach(() => {
         registerCheckoutModules();
@@ -38,68 +51,19 @@ describe('orders — detach on account erasure', () => {
         resetDomainEvents();
     });
 
-    // Each of these three pins the order to `paid` (`markOrderPaidAt`) — the per-order-clock
-    // arithmetic they test (`max(now, createdAt + days)`) only applies to an order that actually
-    // became the tax record this retention window exists for. A never-paid order's own immediate
-    // rule has its own describe block below.
-
-    it('unsets userId and schedules anonymization when the account is hard-deleted', async () => {
-        setEnvironment({ NODE_ORDER_PII_RETENTION_DAYS: '7' });
+    it('unsets userId and starts the PII clock when the account is hard-deleted', async () => {
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
-        await markOrderPaidAt(String(order._id), new Date());
 
         await eraseAsScheduled(user);
 
         const reloaded = await orderRepository.findById(String(order._id));
         expect(reloaded!.userId).toBeUndefined();
-        expect(reloaded!.anonymizeAfter).toBeDefined();
-        const daysAhead =
-            (reloaded!.anonymizeAfter!.getTime() - Date.now()) / (24 * 60 * 60 * 1000);
-        expect(daysAhead).toBeGreaterThan(6.9);
-        expect(daysAhead).toBeLessThan(7.1);
+        expect(reloaded!.piiClockStartedAt).toBeInstanceOf(Date);
     });
 
-    it('runs the clock from the ORDER, not from today', async () => {
-        setEnvironment({ NODE_ORDER_PII_RETENTION_DAYS: '7' });
-        const user = await createUser();
-        const product = await createProduct();
-        // Placed 5 days ago: due in ~2 more days, not a fresh 7 counted from the erasure.
-        const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
-        const order = await createOrder(user, [toOrderItem(product, 1)], {
-            createdAt: fiveDaysAgo
-        });
-        await markOrderPaidAt(String(order._id), fiveDaysAgo);
-
-        await eraseAsScheduled(user);
-
-        const reloaded = await orderRepository.findById(String(order._id));
-        const daysAhead =
-            (reloaded!.anonymizeAfter!.getTime() - Date.now()) / (24 * 60 * 60 * 1000);
-        expect(daysAhead).toBeGreaterThan(1.9);
-        expect(daysAhead).toBeLessThan(2.1);
-    });
-
-    it('an order already past its own window is due immediately, not re-extended', async () => {
-        setEnvironment({ NODE_ORDER_PII_RETENTION_DAYS: '7' });
-        const user = await createUser();
-        const product = await createProduct();
-        const twentyDaysAgo = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000);
-        const order = await createOrder(user, [toOrderItem(product, 1)], {
-            createdAt: twentyDaysAgo
-        });
-        await markOrderPaidAt(String(order._id), twentyDaysAgo);
-
-        await eraseAsScheduled(user);
-
-        const reloaded = await orderRepository.findById(String(order._id));
-        // `$max(now, createdAt + days)` — an order already past its window lands at "now", never
-        // a fresh window measured from the erasure.
-        expect(reloaded!.anonymizeAfter!.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
-    });
-
-    it('the order itself survives — it is the invoice, not the account', async () => {
+    it('the order itself survives — it is the sale record, not the account', async () => {
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
@@ -118,7 +82,7 @@ describe('orders — detach on account erasure', () => {
 
         const reloaded = await orderRepository.findById(String(order._id));
         expect(String(reloaded!.userId)).toBe(user._id.toString());
-        expect(reloaded!.anonymizeAfter).toBeUndefined();
+        expect(reloaded!.piiClockStartedAt).toBeUndefined();
     });
 
     it("does not touch a different account's orders", async () => {
@@ -134,65 +98,138 @@ describe('orders — detach on account erasure', () => {
     });
 });
 
-describe('orders — a never-paid order is due for anonymization AT ONCE', () => {
+/** Erases the buyer of a fresh order built by `build`, runs the sweep, returns the order after. */
+const eraseAndSweep = async (
+    build: (orderId: string) => Promise<unknown>,
+    overrides: Parameters<typeof createOrder>[2] = {}
+) => {
+    const user = await createUser();
+    const product = await createProduct();
+    const order = await createOrder(user, [toOrderItem(product, 1)], overrides);
+    await build(String(order._id));
+    await eraseAsScheduled(user);
+    const scrubbed = await orderService.anonymizeDueOrders();
+    const reloaded = await orderRepository.findById(String(order._id));
+    return { scrubbed, order: reloaded! };
+};
+
+describe('orders — the claim window decides when a paid order loses its buyer', () => {
     beforeEach(() => registerCheckoutModules());
 
     afterEach(() => {
         resetDomainEvents();
     });
 
-    it('is due immediately, not after the retention window, while still pending', async () => {
-        setEnvironment({ NODE_ORDER_PII_RETENTION_DAYS: '7' });
-        const user = await createUser();
-        const product = await createProduct();
-        // Old enough that a paid order's own clock would still have days left on its window.
-        const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
-        const order = await createOrder(user, [toOrderItem(product, 1)], {
-            createdAt: fiveDaysAgo
-        });
+    it('scrubs a never-paid order on the first run after the erasure', async () => {
+        const { scrubbed, order } = await eraseAndSweep(() => Promise.resolve());
 
-        await eraseAsScheduled(user);
-
-        const reloaded = await orderRepository.findById(String(order._id));
-        expect(reloaded!.anonymizeAfter!.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
+        expect(scrubbed).toBe(1);
+        expect(order.email).toBe('anonymized@deleted.invalid');
+        expect(order.piiClockStartedAt).toBeUndefined();
     });
 
-    it('is due immediately even once cancelled, as long as it was never paid', async () => {
+    it('scrubs a never-paid order even once cancelled', async () => {
+        const { scrubbed } = await eraseAndSweep(() => Promise.resolve(), {
+            status: OrderStatus.cancelled
+        });
+
+        expect(scrubbed).toBe(1);
+    });
+
+    it('does not scrub a delivered order before conformityUntil, and does after', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.delivered
+        });
+        await markOrderPaidAt(String(order._id), new Date(Date.now() - 400 * DAY));
+        await setConformityUntil(String(order._id), new Date(Date.now() + 10 * DAY));
+        await eraseAsScheduled(user);
+
+        await expect(orderService.anonymizeDueOrders()).resolves.toBe(0);
+        await setConformityUntil(String(order._id), new Date(Date.now() - DAY));
+
+        await expect(orderService.anonymizeDueOrders()).resolves.toBe(1);
+    });
+
+    it('moves the date with NODE_ORDER_PII_DAYS_AFTER_GUARANTEE', async () => {
+        setEnvironment({ NODE_ORDER_PII_DAYS_AFTER_GUARANTEE: '30' });
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.delivered
+        });
+        await markOrderPaidAt(String(order._id), new Date(Date.now() - 800 * DAY));
+        // Guarantee ended 10 days ago: still inside the extra 30.
+        await setConformityUntil(String(order._id), new Date(Date.now() - 10 * DAY));
+        await eraseAsScheduled(user);
+
+        await expect(orderService.anonymizeDueOrders()).resolves.toBe(0);
+        await setConformityUntil(String(order._id), new Date(Date.now() - 31 * DAY));
+
+        await expect(orderService.anonymizeDueOrders()).resolves.toBe(1);
+    });
+
+    it('uses paidAt plus the undelivered days for a paid order cancelled without delivery', async () => {
+        setEnvironment({ NODE_ORDER_PII_DAYS_UNDELIVERED: '100' });
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             status: OrderStatus.cancelled
         });
-
+        await markOrderPaidAt(String(order._id), new Date(Date.now() - 99 * DAY));
         await eraseAsScheduled(user);
 
-        const reloaded = await orderRepository.findById(String(order._id));
-        expect(reloaded!.anonymizeAfter!.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
+        await expect(orderService.anonymizeDueOrders()).resolves.toBe(0);
+        await markOrderPaidAt(String(order._id), new Date(Date.now() - 101 * DAY));
+
+        await expect(orderService.anonymizeDueOrders()).resolves.toBe(1);
     });
 
-    it('keeps the FULL window for an order that was paid and only later cancelled', async () => {
-        // `paidAt` is what decides this, not the CURRENT status — a refunded order was still once
-        // a real tax record.
-        setEnvironment({ NODE_ORDER_PII_RETENTION_DAYS: '7' });
-        const user = await createUser();
-        const product = await createProduct();
-        const order = await createOrder(user, [toOrderItem(product, 1)], {
-            status: OrderStatus.cancelled
+    it.each([OrderStatus.paid, OrderStatus.processing, OrderStatus.shipped])(
+        'does not scrub an order still %s at the erasure; once delivered it follows conformityUntil',
+        async (status) => {
+            const user = await createUser();
+            const product = await createProduct();
+            const order = await createOrder(user, [toOrderItem(product, 1)], { status });
+            await markOrderPaidAt(String(order._id), new Date(Date.now() - 900 * DAY));
+            await eraseAsScheduled(user);
+            await expect(orderService.anonymizeDueOrders()).resolves.toBe(0);
+
+            // Delivered late, after the clock started.
+            await forceOrderStatus(String(order._id), OrderStatus.delivered);
+            await setConformityUntil(String(order._id), new Date(Date.now() + 5 * DAY));
+            await expect(orderService.anonymizeDueOrders()).resolves.toBe(0);
+            await setConformityUntil(String(order._id), new Date(Date.now() - DAY));
+
+            await expect(orderService.anonymizeDueOrders()).resolves.toBe(1);
+        }
+    );
+
+    it('unsets the addresses with their country', async () => {
+        const { order } = await eraseAndSweep(() => Promise.resolve(), {
+            shippingAddress: {
+                fullName: 'Ada Lovelace',
+                street: '12 Analytical Engine Rd',
+                city: 'London',
+                zip: 'SW1A',
+                country: 'GB'
+            }
         });
-        await markOrderPaidAt(String(order._id), new Date());
 
-        await eraseAsScheduled(user);
+        expect(order.shippingAddress).toBeUndefined();
+    });
 
-        const reloaded = await orderRepository.findById(String(order._id));
-        const daysAhead =
-            (reloaded!.anonymizeAfter!.getTime() - Date.now()) / (24 * 60 * 60 * 1000);
-        expect(daysAhead).toBeGreaterThan(6.9);
-        expect(daysAhead).toBeLessThan(7.1);
+    it('announces order.redacted exactly once per scrub', async () => {
+        const { order } = await eraseAndSweep(() => Promise.resolve());
+        await orderService.anonymizeDueOrders();
+
+        expect(await redactedIds()).toEqual([String(order._id)]);
     });
 });
 
 describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
-    it('scrubs the email and unsets both addresses and the notes once anonymizeAfter has elapsed', async () => {
+    it('scrubs the email and unsets both addresses and the notes once its clock has started', async () => {
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)], {
@@ -225,7 +262,7 @@ describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
         expect(reloaded!.shippingAddress).toBeUndefined();
         expect(reloaded!.billingAddress).toBeUndefined();
         expect(reloaded!.notes).toBeUndefined();
-        expect(reloaded!.anonymizeAfter).toBeUndefined();
+        expect(reloaded!.piiClockStartedAt).toBeUndefined();
     });
 
     it('leaves an order with no address at all working, scrubbing only email', async () => {
@@ -278,11 +315,14 @@ describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
         expect(await versionOfOrder()).toBeGreaterThan(before ?? Infinity);
     });
 
-    it('does not touch an order whose anonymizeAfter has not arrived yet', async () => {
+    it('does not touch an order whose claim window is still open', async () => {
         const user = await createUser();
         const product = await createProduct();
-        const order = await createOrder(user, [toOrderItem(product, 1)]);
-        await detachOrderUserId(String(user._id), new Date(Date.now() + 100_000));
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.processing
+        });
+        await markOrderPaidAt(String(order._id), new Date());
+        await detachOrderUserId(String(user._id), new Date());
 
         await expect(orderService.anonymizeDueOrders()).resolves.toBe(0);
 
@@ -297,32 +337,22 @@ describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
         await detachOrderUserId(String(user._id), new Date(Date.now() - 1000));
         await orderService.anonymizeDueOrders();
 
-        // `anonymizeAfter` is unset by the first sweep, so a second run finds nothing due.
+        // `piiClockStartedAt` is unset by the first sweep, so a second run finds nothing due.
         await expect(orderService.anonymizeDueOrders()).resolves.toBe(0);
     });
 });
-
-/** The order ids of every `order.redacted` row, plain. */
-const redactedIds = () =>
-    outboxEventModel
-        .find({ name: 'order.redacted' })
-        .lean()
-        .exec()
-        .then((rows) => rows.map((row) => row.aggregateId).toSorted());
 
 describe('orders — order.redacted outbox event', () => {
     it('is written once per scrubbed order, and for no order that is not yet due', async () => {
         const user = await createUser();
         const product = await createProduct();
         const due = await createOrder(user, [toOrderItem(product, 1)]);
-        const later = await createOrder(user, [toOrderItem(product, 1)]);
+        // The second order is paid and still open: its window has not even started.
+        const later = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.processing
+        });
+        await markOrderPaidAt(String(later._id), new Date());
         await detachOrderUserId(String(user._id), new Date(Date.now() - 1000));
-        // The second order's window is still open.
-        await orderModel.updateOne(
-            { _id: later._id },
-            { $set: { anonymizeAfter: new Date(Date.now() + 86_400_000) } },
-            { timestamps: false }
-        );
 
         await expect(orderService.anonymizeDueOrders()).resolves.toBe(1);
 
@@ -347,7 +377,7 @@ describe('orders — order.redacted outbox event', () => {
         const order = await createOrder(user, [toOrderItem(product, 1)]);
         await orderModel.updateOne(
             { _id: order._id },
-            { $set: { anonymizeAfter: new Date(Date.now() - 1000) } },
+            { $set: { piiClockStartedAt: new Date(Date.now() - 1000) } },
             { timestamps: false }
         );
 
