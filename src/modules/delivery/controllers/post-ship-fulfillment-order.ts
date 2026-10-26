@@ -28,7 +28,7 @@ export const postShipFulfillmentOrder = (request: Request<{ id?: string }>, resp
             createdResponse<Shipment>(
                 response,
                 result.data,
-                `/delivery/orders/${result.data.orderId}`
+                `/delivery/shipments/${result.data.id}`
             );
         })
         .catch(catchAs(response, 'postShipFulfillmentOrder'));

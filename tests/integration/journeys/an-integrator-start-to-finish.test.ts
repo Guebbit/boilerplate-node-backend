@@ -13,7 +13,7 @@ import '@tests/contract';
 import {
     CreateReturn201Response,
     DeliverShipment200Response,
-    GetFulfillmentByOrder200Response,
+    ListOrderFulfillmentOrders200Response,
     MintApiKey201Response,
     ShipFulfillmentOrder201Response,
     CreateWebhookSubscription201Response
@@ -91,9 +91,9 @@ it('delivers every event once, signed, in causal order', async () => {
     // Shipped and delivered by staff.
     await api().post(`/orders/${order.id}/process`).set('Authorization', admin).expect(200);
     const [fulfillmentOrder] = bodyOf(
-        await api().get(`/delivery/orders/${order.id}`).set('Authorization', admin),
-        GetFulfillmentByOrder200Response
-    ).fulfillmentOrders;
+        await api().get(`/orders/${order.id}/fulfillment-orders`).set('Authorization', admin),
+        ListOrderFulfillmentOrders200Response
+    ).items;
     const shipment = bodyOf(
         await api()
             .post(`/delivery/fulfillment-orders/${fulfillmentOrder.id}/shipments`)

@@ -16,7 +16,6 @@ import {
 } from '@kernel/middlewares/authorizations';
 import { noStore } from '@infrastructure/http/middlewares/cache';
 import { getShippingMethods } from './controllers/get-shipping-methods';
-import { getOrderFulfillment } from './controllers/get-order-fulfillment';
 import { postShipFulfillmentOrder } from './controllers/post-ship-fulfillment-order';
 import { postDeliverShipment } from './controllers/post-deliver-shipment';
 import { postFulfillFulfillmentOrder } from './controllers/post-fulfill-fulfillment-order';
@@ -47,9 +46,6 @@ export const router = Router();
 
 // GET /delivery/methods — public: what shipping costs is pre-purchase information
 router.get('/methods', getShippingMethods);
-
-// GET /delivery/orders/:orderId — the fulfillment orders and shipments behind one of the caller's orders
-router.get('/orders/:orderId', getAuth, isAuth, getOrderFulfillment);
 
 // GET /delivery/fulfillment-orders and /summary — the preorder board's reads. `read:Order`, the
 // key of the orders they are about, which every signed-in account holds: the service narrows the

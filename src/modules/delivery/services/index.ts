@@ -12,7 +12,8 @@
 
 import { listMethods, processOrder } from './process';
 import {
-    getForOrder,
+    listFulfillmentOrdersForOrder,
+    listShipmentsForOrder,
     getShipment,
     getFulfillmentOrder,
     shippedQuantities,
@@ -50,7 +51,8 @@ export { ActRefusal } from './act';
 /** The module's one door — every operation on fulfillment orders and shipments. */
 export const deliveryService = {
     listMethods,
-    getForOrder,
+    listFulfillmentOrdersForOrder,
+    listShipmentsForOrder,
     getShipment,
     getFulfillmentOrder,
     processOrder,

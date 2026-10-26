@@ -92,46 +92,51 @@ describe('GET /delivery/methods', () => {
     });
 });
 
-describe('GET /delivery/orders/{orderId}', () => {
-    it('matches the contract for the caller’s own fulfilment: both lists, each with its actions', async () => {
+describe('GET /orders/{id}/fulfillment-orders and /shipments', () => {
+    it('match the contract for the caller’s own fulfilment: two lists, each item with its actions', async () => {
         const { bearer, order } = await authenticateWithShipment();
 
-        const response = await api()
-            .get(`/delivery/orders/${String(order._id)}`)
+        const plan = await api()
+            .get(`/orders/${String(order._id)}/fulfillment-orders`)
+            .set('Authorization', bearer);
+        const left = await api()
+            .get(`/orders/${String(order._id)}/shipments`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
-        expect(response.body.fulfillmentOrders).toHaveLength(1);
-        expect(response.body.fulfillmentOrders[0]).toMatchObject({
-            number: 1,
-            kind: 'physical',
-            status: 'closed'
-        });
-        expect(response.body.shipments).toHaveLength(1);
-        expect(response.body.shipments[0]).toMatchObject({
+        expect(plan.status).toBe(200);
+        expect(plan.body.items).toHaveLength(1);
+        expect(plan.body.items[0]).toMatchObject({ number: 1, kind: 'physical', status: 'closed' });
+        expect(left.status).toBe(200);
+        expect(left.body.items).toHaveLength(1);
+        expect(left.body.items[0]).toMatchObject({
             number: 1,
             status: 'shipped',
             trackingCode: 'TRK-CONTRACT1'
         });
         // The buyer sees their goods, and nothing they could act on as staff.
-        expect(response.body.shipments[0].actions).toEqual({
+        expect(left.body.items[0].actions).toEqual({
             deliver: false,
             forceDeliver: false,
             update: false
         });
     });
 
-    it('answers both lists empty for an order that is not paid yet — absence is the answer', async () => {
+    it('answer an empty list for an order that is not paid yet — absence is the answer', async () => {
         const { user, bearer } = await authenticateAs('user');
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
 
-        const response = await api()
-            .get(`/delivery/orders/${String(order._id)}`)
+        const plan = await api()
+            .get(`/orders/${String(order._id)}/fulfillment-orders`)
+            .set('Authorization', bearer);
+        const left = await api()
+            .get(`/orders/${String(order._id)}/shipments`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
-        expect(response.body).toEqual({ fulfillmentOrders: [], shipments: [] });
+        expect(plan.status).toBe(200);
+        expect(plan.body).toEqual({ items: [] });
+        expect(left.status).toBe(200);
+        expect(left.body).toEqual({ items: [] });
     });
 
     it('serves staff the actions they may take, and the hold note only to them', async () => {
@@ -142,10 +147,10 @@ describe('GET /delivery/orders/{orderId}', () => {
             .send({ reason: 'high_risk', note: 'call first' });
 
         const response = await api()
-            .get(`/delivery/orders/${orderId}`)
+            .get(`/orders/${orderId}/fulfillment-orders`)
             .set('Authorization', bearer);
 
-        expect(response.body.fulfillmentOrders[0]).toMatchObject({
+        expect(response.body.items[0]).toMatchObject({
             status: 'on_hold',
             holdReason: 'high_risk',
             holdNote: 'call first',
@@ -166,23 +171,39 @@ describe('GET /delivery/orders/{orderId}', () => {
             .send({ reason: 'high_risk', note: 'call first' });
 
         const response = await api()
-            .get(`/delivery/orders/${String(order._id)}`)
+            .get(`/orders/${String(order._id)}/fulfillment-orders`)
             .set('Authorization', customer);
 
         expect(response.status).toBe(200);
-        expect(response.body.fulfillmentOrders[0].status).toBe('on_hold');
-        expect(response.body.fulfillmentOrders[0]).not.toHaveProperty('holdNote');
+        expect(response.body.items[0].status).toBe('on_hold');
+        expect(response.body.items[0]).not.toHaveProperty('holdNote');
     });
 
-    it('answers 404 for another customer’s order', async () => {
+    it('answer 404 for another customer’s order, on both lists', async () => {
         const { order } = await authenticateWithShipment();
         const { bearer } = await authenticateAsRole('customer');
 
-        const response = await api()
-            .get(`/delivery/orders/${String(order._id)}`)
+        const plan = await api()
+            .get(`/orders/${String(order._id)}/fulfillment-orders`)
+            .set('Authorization', bearer);
+        const left = await api()
+            .get(`/orders/${String(order._id)}/shipments`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(404);
+        expect(plan.status).toBe(404);
+        expect(left.status).toBe(404);
+    });
+
+    it('answer 401 with no token, and 404 for a malformed id', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const anonymous = await api().get('/orders/000000000000000000000000/shipments');
+        const malformed = await api()
+            .get('/orders/not-an-id/fulfillment-orders')
+            .set('Authorization', bearer);
+
+        expect(anonymous.status).toBe(401);
+        expect(malformed.status).toBe(404);
     });
 });
 
@@ -228,7 +249,7 @@ describe('POST /delivery/fulfillment-orders/{id}/shipments', () => {
             .send({ trackingCode: 'TRK-SHIPDOOR1' });
 
         expect(response.status).toBe(201);
-        expect(response.headers.location).toBe(`/delivery/orders/${orderId}`);
+        expect(response.headers.location).toBe(`/delivery/shipments/${String(response.body.id)}`);
         expect(response.body).toMatchObject({
             number: 1,
             status: 'shipped',
@@ -539,12 +560,12 @@ describe('PATCH /delivery/shipments/{id}', () => {
             .set('Content-Type', 'application/merge-patch+json')
             .send(JSON.stringify({ trackingCode: 'TRK-FIXED002' }));
         const own = await api()
-            .get(`/delivery/orders/${String(order._id)}`)
+            .get(`/orders/${String(order._id)}/shipments`)
             .set('Authorization', customer);
 
         expect(json.status).toBe(200);
         expect(merge.status).toBe(200);
-        expect(own.body.shipments[0].trackingCode).toBe('TRK-FIXED002');
+        expect(own.body.items[0].trackingCode).toBe('TRK-FIXED002');
     });
 
     it('answers 409 once the shipment arrived, and 422 for an empty code', async () => {

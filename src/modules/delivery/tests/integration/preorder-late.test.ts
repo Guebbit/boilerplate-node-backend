@@ -235,9 +235,9 @@ describe('a release date that moves', () => {
 /** The three views of one fulfillment order, as the wire carries them. */
 const viewsOf = async (orderId: string, userId: string) => {
     const stored = await waitingOf(orderId);
-    const buyer = await deliveryService.getForOrder(orderId, asCustomer(userId));
+    const buyer = await deliveryService.listFulfillmentOrdersForOrder(orderId, asCustomer(userId));
     return {
-        buyer: buyer.success ? buyer.data.fulfillmentOrders[0] : undefined,
+        buyer: buyer.success ? buyer.data[0] : undefined,
         exported: presentExportFulfillmentOrder(stored),
         board: presentPreorderFulfillmentOrder(stored, undefined, false, new Date())
     };

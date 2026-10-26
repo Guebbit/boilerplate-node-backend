@@ -56,10 +56,9 @@ describe('forceShip and the forced ship door agree', () => {
                 const [fulfillmentOrder] = await fulfillmentOrdersOf(orderId);
                 if (status !== OrderStatus.paid) await forceOrderStatus(orderId, status);
                 const view = await api()
-                    .get(`/delivery/orders/${orderId}`)
+                    .get(`/orders/${orderId}/fulfillment-orders`)
                     .set('Authorization', staff.bearer);
-                const shown = (view.body as { fulfillmentOrders?: FulfillmentOrder[] })
-                    .fulfillmentOrders?.[0]?.actions;
+                const shown = (view.body as { items?: FulfillmentOrder[] }).items?.[0]?.actions;
                 const ship = shown?.ship ?? false;
                 const forceShip = shown?.forceShip ?? false;
                 const opened = accepted(

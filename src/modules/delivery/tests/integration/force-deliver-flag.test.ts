@@ -29,12 +29,11 @@ const shipmentActionsFor = (
     bearer: string
 ): Promise<ShipmentActions | undefined> =>
     api()
-        .get(`/delivery/orders/${orderId}`)
+        .get(`/orders/${orderId}/shipments`)
         .set('Authorization', bearer)
         .then(
             (response) =>
-                (response.body as { shipments?: { actions: ShipmentActions }[] }).shipments?.[0]
-                    ?.actions
+                (response.body as { items?: { actions: ShipmentActions }[] }).items?.[0]?.actions
         );
 
 describe('ShipmentActions.update and forceDeliver', () => {

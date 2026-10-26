@@ -1299,10 +1299,15 @@ paths:
     /orders/{id}/payments:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1orders~1{id}~1payments'
 
-    # ---------- delivery's door under an order ---------- (`POST /orders/{id}/process`: the order's URL,
-    # delivery's module and key; mounted through a second entry in delivery's `mounts`)
+    # ---------- delivery's doors under an order ---------- (`POST /orders/{id}/process` and the two
+    # fulfilment lists: the order's URL, delivery's module and key; mounted through a second entry in
+    # delivery's `mounts`)
     /orders/{id}/process:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1orders~1{id}~1process'
+    /orders/{id}/fulfillment-orders:
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1orders~1{id}~1fulfillment-orders'
+    /orders/{id}/shipments:
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1orders~1{id}~1shipments'
 
     # ---------- payments ----------
     /payments/methods:
@@ -1323,8 +1328,6 @@ paths:
     # ---------- delivery ----------
     /delivery/methods:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1methods'
-    /delivery/orders/{orderId}:
-        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1orders~1{orderId}'
     /delivery/fulfillment-orders:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1fulfillment-orders'
     /delivery/fulfillment-orders/summary:

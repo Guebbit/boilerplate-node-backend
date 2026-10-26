@@ -24,7 +24,6 @@ describe('delivery routes', () => {
     it('mounts exactly the documented endpoints, in the documented order', () => {
         expect(routeSignatures(router)).toEqual([
             'GET /methods',
-            'GET /orders/:orderId',
             'GET /fulfillment-orders',
             'GET /fulfillment-orders/summary',
             'GET /fulfillment-orders/release-date-impact',
@@ -47,17 +46,24 @@ describe('delivery routes', () => {
         expect(guardsOn(router, 'GET /methods')).not.toContain('isAuth');
     });
 
-    it('requires a session to read the fulfilment behind an order', () => {
-        // The fulfilment is tied to one caller's order. The ownership check itself lives in the
-        // service; this is the gate that guarantees there is a caller to check.
-        const guards = guardsOn(router, 'GET /orders/:orderId');
+    it.each(['GET /:id/fulfillment-orders', 'GET /:id/shipments'])(
+        'requires a session and the order key to read %s',
+        (signature) => {
+            // The fulfilment is tied to one caller's order. The ownership check itself lives in the
+            // service; this is the gate that guarantees there is a caller to check.
+            const guards = guardsOn(orderRouter, signature);
 
-        expect(guards).toContain('isAuth');
-        expect(guards).not.toContain('requirePermissionGuard');
-    });
+            expect(guards).toContain('isAuth');
+            expect(guards).toContain('requirePermissionGuard');
+        }
+    );
 
-    it('mounts the process door under /orders, restricted to an operator holding start:Shipment', () => {
-        expect(routeSignatures(orderRouter)).toEqual(['POST /:id/process']);
+    it('mounts the process door and the two lists under /orders, the door restricted to an operator holding start:Shipment', () => {
+        expect(routeSignatures(orderRouter)).toEqual([
+            'POST /:id/process',
+            'GET /:id/fulfillment-orders',
+            'GET /:id/shipments'
+        ]);
         expect(guardsOn(orderRouter, 'POST /:id/process')).toContain('requirePermissionGuard');
     });
 

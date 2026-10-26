@@ -52,31 +52,61 @@ paths:
                                 $ref: '#/components/schemas/ShippingMethodsResponse'
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /delivery/orders/{orderId}:
+    /orders/{id}/fulfillment-orders:
         get:
             tags: [Delivery]
-            summary: Get the fulfilment of an order
+            summary: List the fulfillment orders of an order
             description: >-
-                Where an order's goods stand: its fulfillment orders (the groups of lines that leave
-                together, made by rule when the order is paid) and the shipments cut from them (what
-                actually left, with its tracking code). Each record carries its own `actions`, decided
+                The plan for an order's goods: its fulfillment orders, the groups of lines that leave
+                together, made by rule when the order is paid. Each carries its own `actions`, decided
                 per caller. Ownership is the order's, read through the same scope every order read
-                uses. An order that is not paid yet answers both lists empty — absence is the answer,
-                never a 404. A hold reads to the buyer as `holdNotice` and staff's `holdMessage`; `holdReason` and `holdNote` are staff's own and are left out for anyone else.
-            operationId: getFulfillmentByOrder
+                uses. An order that is not paid yet answers `items: []` — absence is the answer, never
+                a 404. A hold reads to the buyer as `holdNotice` and staff's `holdMessage`; `holdReason` and `holdNote` are staff's own and are left out for anyone else. Unpaged: one order holds a handful. Each
+                item has its own read at `GET /delivery/fulfillment-orders/{id}`.
+            operationId: listOrderFulfillmentOrders
             security:
                 - bearerAuth: []
             parameters:
-                - $ref: '../orders/openapi.yaml#/components/parameters/OrderIdPathParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                   description: One of the caller's own orders
             responses:
                 '200':
-                    description: The fulfillment orders and the shipments of the order
+                    description: The fulfillment orders of the order
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/OrderFulfillment'
+                                $ref: '#/components/schemas/OrderFulfillmentOrdersResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /orders/{id}/shipments:
+        get:
+            tags: [Delivery]
+            summary: List the shipments of an order
+            description: >-
+                What actually left for an order: the shipments cut from its fulfillment orders, oldest
+                first, with tracking code and delivered date. Each carries its own `actions`, decided per
+                caller. Scoped like the order: a buyer reads their own, staff holding `display:Order`
+                read any; someone else's order is a 404, and an order with nothing shipped is
+                `items: []`. Unpaged. Each item has its own read at `GET /delivery/shipments/{id}`,
+                which is also where the `Location` of a newly cut shipment points.
+            operationId: listOrderShipments
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                  description: One of the caller's own orders
+            responses:
+                '200':
+                    description: The shipments of the order
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OrderShipmentsResponse'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
@@ -833,17 +863,22 @@ components:
                     type: string
                     format: date-time
 
-        OrderFulfillment:
+        OrderFulfillmentOrdersResponse:
             type: object
             additionalProperties: false
-            required: [fulfillmentOrders, shipments]
-            description: An order's fulfilment — both lists empty until the order is paid.
+            required: [items]
             properties:
-                fulfillmentOrders:
+                items:
                     type: array
                     items:
                         $ref: '#/components/schemas/FulfillmentOrder'
-                shipments:
+
+        OrderShipmentsResponse:
+            type: object
+            additionalProperties: false
+            required: [items]
+            properties:
+                items:
                     type: array
                     items:
                         $ref: '#/components/schemas/Shipment'

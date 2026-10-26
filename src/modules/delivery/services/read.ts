@@ -1,7 +1,7 @@
 /**
  * @module
- * Reading an order's fulfilment — what the order page asks (`GET /delivery/orders/:orderId`), the
- * narrow reads `returns` makes (what has shipped, what a remainder cancel would take) and the
+ * Reading an order's fulfilment — what the order page asks (`GET /orders/:id/fulfillment-orders` and
+ * `/shipments`), the narrow reads `returns` makes (what has shipped, what a remainder cancel would take) and the
  * account export's two sections. A fulfillment order and a shipment have no owner of their own:
  * ownership is the order's, read through the same scope every order read uses.
  */
@@ -14,7 +14,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { orderService } from '@modules/orders';
-import type { AuthContext, FulfillmentOrder, OrderFulfillment, Shipment } from '@types';
+import type { AuthContext, FulfillmentOrder, Shipment } from '@types';
 import { remainderLines, remainingOfLine } from '../domain';
 import type { ProductQuantity } from '../domain';
 import { fulfillmentOrderRepository, shipmentRepository } from '../repository';
@@ -30,17 +30,17 @@ import { ensureFulfillmentOrders } from './ensure';
 import { presentFulfillmentOrder, presentShipment } from '../presenter';
 
 /**
- * The fulfilment of one of the caller's orders: both lists, each record with its own `actions`.
- * Makes the order's fulfillment orders first when a paid order has none — the safety net behind the
- * `paid` listener. An order that is not paid yet answers both lists empty: absence is the answer.
+ * The fulfillment orders of one of the caller's orders, each with its own `actions`. Makes them
+ * first when a paid order has none — the safety net behind the `paid` listener. An order that is
+ * not paid yet answers `[]`: absence is the answer, never a 404.
  *
  * @param orderId - the order
  * @param authContext - the caller; sees only their own, staff see anyone's
  */
-export const getForOrder = (
+export const listFulfillmentOrdersForOrder = (
     orderId: string,
     authContext?: AuthContext
-): Promise<ResponseSuccess<OrderFulfillment> | ResponseReject> =>
+): Promise<ResponseSuccess<FulfillmentOrder[]> | ResponseReject> =>
     orderService.getById(orderId, orderService.callerScope(authContext)).then((order) => {
         if (!order) return generateReject(404, [t('delivery.order-not-found')]);
 
@@ -50,30 +50,53 @@ export const getForOrder = (
             .then(() =>
                 Promise.all([
                     fulfillmentOrderRepository.findByOrderId(orderId),
-                    shipmentRepository.findByOrderId(orderId),
                     orderService.getById(orderId)
                 ])
             )
-            .then(([fulfillmentOrders, shipments, fresh]) => {
+            .then(([fulfillmentOrders, fresh]) => {
                 // The order as `ensure` left it: its status may have moved while it ran.
                 const current = fresh ?? order;
-                return generateSuccess({
-                    fulfillmentOrders: fulfillmentOrders.map((fulfillmentOrder) =>
+                return generateSuccess(
+                    fulfillmentOrders.map((fulfillmentOrder) =>
                         presentFulfillmentOrder(
                             fulfillmentOrder,
                             fulfillmentOrderActions(fulfillmentOrder, current, standing),
                             standing.staff
                         )
-                    ),
-                    shipments: shipments.map((shipment) =>
-                        presentShipment(shipment, shipmentActions(shipment, current, standing))
                     )
-                });
+                );
             });
     });
 
 /**
- * One shipment by its own id — the item read of the shipments `getForOrder` lists, at the address
+ * The shipments cut for one of the caller's orders, each with its own `actions`. Reads only: a
+ * shipment cannot exist before its fulfillment order, so there is nothing to make first.
+ *
+ * @param orderId - the order
+ * @param authContext - the caller; sees only their own, staff see anyone's
+ */
+export const listShipmentsForOrder = (
+    orderId: string,
+    authContext?: AuthContext
+): Promise<ResponseSuccess<Shipment[]> | ResponseReject> =>
+    orderService.getById(orderId, orderService.callerScope(authContext)).then((order) => {
+        if (!order) return generateReject(404, [t('delivery.order-not-found')]);
+
+        const standing = standingOn(authContext);
+
+        return shipmentRepository
+            .findByOrderId(orderId)
+            .then((shipments) =>
+                generateSuccess(
+                    shipments.map((shipment) =>
+                        presentShipment(shipment, shipmentActions(shipment, order, standing))
+                    )
+                )
+            );
+    });
+
+/**
+ * One shipment by its own id — the item read of the shipments `listShipmentsForOrder` lists, at the address
  * `PATCH /delivery/shipments/:id` writes. Scoped like the order it belongs to: a buyer reads their
  * own, `display:Order` reads any; someone else's is the same 404 as a missing one.
  *

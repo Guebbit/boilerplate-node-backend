@@ -186,18 +186,27 @@ describe('the fulfillment orders of a paid order', () => {
         expect(stored!.fulfillment?.remaining).toBe(1);
     });
 
-    it('answer both lists empty for an order that is not paid, and carry their own actions once it is', async () => {
+    it('answer empty lists for an order that is not paid, and carry their own actions once it is', async () => {
         const { user, order } = await processingOrderOf([1]);
         const pending = await createOrder(user, [toOrderItem(await createProduct(), 1)]);
 
-        const early = await deliveryService.getForOrder(
+        const buyer = asCustomer(String(user._id));
+        const earlyPlan = await deliveryService.listFulfillmentOrdersForOrder(
             String(pending._id),
-            asCustomer(String(user._id))
+            buyer
         );
-        const own = await deliveryService.getForOrder(String(order._id), asAdmin());
+        const earlyShipments = await deliveryService.listShipmentsForOrder(
+            String(pending._id),
+            buyer
+        );
+        const own = await deliveryService.listFulfillmentOrdersForOrder(
+            String(order._id),
+            asAdmin()
+        );
 
-        expect(early.success && early.data).toEqual({ fulfillmentOrders: [], shipments: [] });
-        expect(own.success && own.data.fulfillmentOrders[0].actions.ship).toBe(true);
+        expect(earlyPlan.success && earlyPlan.data).toEqual([]);
+        expect(earlyShipments.success && earlyShipments.data).toEqual([]);
+        expect(own.success && own.data[0].actions.ship).toBe(true);
     });
 });
 

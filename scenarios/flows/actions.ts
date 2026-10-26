@@ -203,7 +203,7 @@ export const recordOfflinePayment = (
 export const startProcessing = (owner: Caller, orderId: string): Promise<void> =>
     owner.call('POST', `/orders/${orderId}/process`).then(() => undefined);
 
-/** The part of `GET /delivery/orders/{id}` the flows read: what can ship and what is out. */
+/** What the flows read of an order's two fulfilment lists: what can ship and what is out. */
 interface FulfillmentData {
     fulfillmentOrders: {
         id: string;
@@ -214,9 +214,22 @@ interface FulfillmentData {
     shipments: { id: string; status: string }[];
 }
 
-/** The order's fulfillment orders and shipments, as staff read them. */
+/**
+ * The order's fulfillment orders and shipments, as staff read them. The plan is read first: that
+ * read makes the fulfillment orders of a paid order that has none yet.
+ */
 const readFulfillment = (owner: Caller, orderId: string): Promise<FulfillmentData> =>
-    owner.call<FulfillmentData>('GET', `/delivery/orders/${orderId}`);
+    owner
+        .call<{
+            items: FulfillmentData['fulfillmentOrders'];
+        }>('GET', `/orders/${orderId}/fulfillment-orders`)
+        .then(({ items: fulfillmentOrders }) =>
+            owner
+                .call<{
+                    items: FulfillmentData['shipments'];
+                }>('GET', `/orders/${orderId}/shipments`)
+                .then(({ items: shipments }) => ({ fulfillmentOrders, shipments }))
+        );
 
 /**
  * Run `step` over `items` one after another — each is an HTTP call whose order matters, and the
@@ -308,11 +321,11 @@ export const deliverOrder = (owner: Caller, orderId: string): Promise<void> =>
  */
 export const cancelRemainder = (caller: Caller, orderId: string): Promise<string> =>
     caller
-        .call<{ fulfillmentOrders: { id: string; lines: { remaining: number }[] }[] }>(
+        .call<{ items: { id: string; lines: { remaining: number }[] }[] }>(
             'GET',
-            `/delivery/orders/${orderId}`
+            `/orders/${orderId}/fulfillment-orders`
         )
-        .then(({ fulfillmentOrders }) => {
+        .then(({ items: fulfillmentOrders }) => {
             const open = fulfillmentOrders.find(({ lines }) =>
                 lines.some(({ remaining }) => remaining > 0)
             );

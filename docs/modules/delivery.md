@@ -380,11 +380,11 @@ every order see every row; anyone else sees only their own orders' fulfillment o
 
 ### When they are made
 
-| Path       | What                                                                                                                                                                                                            |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Normal     | this module listens to `order.status_changed {to: paid}` through the outbox, as `invoicing` does. Idempotent on `{ orderId, number }`                                                                           |
-| Safety net | `ensureFulfillmentOrders` runs the same idempotent create on every read and every `process` of a paid order: the outbox gives up after its last retry, and a missing fulfillment order would leave no ship door |
-| Not paid   | `GET /delivery/orders/{orderId}` answers `200` with both lists empty                                                                                                                                            |
+| Path       | What                                                                                                                                                                                                                                    |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Normal     | this module listens to `order.status_changed {to: paid}` through the outbox, as `invoicing` does. Idempotent on `{ orderId, number }`                                                                                                   |
+| Safety net | `ensureFulfillmentOrders` runs the same idempotent create on every fulfillment-orders list read and every `process` of a paid order: the outbox gives up after its last retry, and a missing fulfillment order would leave no ship door |
+| Not paid   | `GET /orders/{id}/fulfillment-orders` and `/shipments` answer `200` with `items: []`                                                                                                                                                    |
 
 ## One transaction per act
 
@@ -534,18 +534,18 @@ date this order was expecting, not the product's previous date.
 
 ## Routes and events
 
-| Route                                                      | Key                                | Answers                                                             |
-| ---------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------- |
-| `GET /delivery/methods`                                    | public                             | the shipping methods and what each costs                            |
-| `GET /delivery/fulfillment-orders` · `/summary`            | `display:Order`                    | [the preorder board](#the-preorder-board)'s two reads               |
-| `GET /delivery/fulfillment-orders/restock-date-impact`     | `update:Product` + `display:Order` | orders a restock-date move would email, before it is saved          |
-| `GET /delivery/orders/{orderId}`                           | the owner, or staff                | `{ fulfillmentOrders[], shipments[] }`, each with its own `actions` |
-| `POST /orders/{id}/process`                                | `start:Shipment`                   | the order, `processing`                                             |
-| `POST /delivery/fulfillment-orders/{id}/shipments`         | `update:Shipment`                  | `201` + the shipment                                                |
-| `POST /delivery/fulfillment-orders/{id}/fulfill`           | `update:Shipment`                  | the shipment, delivered                                             |
-| `POST /delivery/fulfillment-orders/{id}/hold` · `/release` | `update:Shipment`                  | the fulfillment order                                               |
-| `PATCH /delivery/shipments/{id}`                           | `update:Shipment`                  | the shipment, tracking corrected while it is out                    |
-| `POST /delivery/shipments/{id}/deliver`                    | `update:Shipment`                  | the shipment                                                        |
+| Route                                                      | Key                                | Answers                                                        |
+| ---------------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------- |
+| `GET /delivery/methods`                                    | public                             | the shipping methods and what each costs                       |
+| `GET /delivery/fulfillment-orders` · `/summary`            | `display:Order`                    | [the preorder board](#the-preorder-board)'s two reads          |
+| `GET /delivery/fulfillment-orders/restock-date-impact`     | `update:Product` + `display:Order` | orders a restock-date move would email, before it is saved     |
+| `GET /orders/{id}/fulfillment-orders` · `/shipments`       | the owner, or staff                | `{ items[] }` each, every item with its own `actions`; unpaged |
+| `POST /orders/{id}/process`                                | `start:Shipment`                   | the order, `processing`                                        |
+| `POST /delivery/fulfillment-orders/{id}/shipments`         | `update:Shipment`                  | `201` + the shipment                                           |
+| `POST /delivery/fulfillment-orders/{id}/fulfill`           | `update:Shipment`                  | the shipment, delivered                                        |
+| `POST /delivery/fulfillment-orders/{id}/hold` · `/release` | `update:Shipment`                  | the fulfillment order                                          |
+| `PATCH /delivery/shipments/{id}`                           | `update:Shipment`                  | the shipment, tracking corrected while it is out               |
+| `POST /delivery/shipments/{id}/deliver`                    | `update:Shipment`                  | the shipment                                                   |
 
 Every button a client draws comes from the record's own `actions` (or `GET /returns/options`): the
 frontend never re-derives a rule. Every staff door asks the key and nothing else: [no rank](../theory/authorization.md#protecting-people).

@@ -21,7 +21,7 @@ import {
     CreatePayment201Response,
     CreateReturn201Response,
     DeliverShipment200Response,
-    GetFulfillmentByOrder200Response,
+    ListOrderFulfillmentOrders200Response,
     GetSalesStats200Response,
     ListAuditEntries200Response,
     ListOrderCreditNotes200Response,
@@ -133,9 +133,9 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
         ProcessOrder200Response
     );
     const [fulfillmentOrder] = bodyOf(
-        await api().get(`/delivery/orders/${order.id}`).set('Authorization', staff),
-        GetFulfillmentByOrder200Response
-    ).fulfillmentOrders;
+        await api().get(`/orders/${order.id}/fulfillment-orders`).set('Authorization', staff),
+        ListOrderFulfillmentOrders200Response
+    ).items;
     const shipment = bodyOf(
         await api()
             .post(`/delivery/fulfillment-orders/${fulfillmentOrder.id}/shipments`)
