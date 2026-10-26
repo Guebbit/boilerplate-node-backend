@@ -16,6 +16,7 @@ describe('the timeline audience table', () => {
             'fulfillment_released',
             'refund_canceled',
             'refund_failed',
+            'refund_reversed',
             'status_overridden'
         ]);
     });

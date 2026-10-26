@@ -488,6 +488,7 @@ only offered when the refusal PROVES the money did not move.
 | ------------------------------------------------------------- | ------------ | ------------------ | ---------------------------------- | ----------------------------------- |
 | `declined`, `expired_or_canceled_card`, `lost_or_stolen_card` | no           | never (final)      | yes                                | `refused_refund`, at once           |
 | `provider_removed` (the adapter is no longer installed)       | no           | never (final)      | yes                                | `refused_refund`, at once           |
+| `disputed` (the buyer's bank took the money back)             | no (already) | never (final)      | no: the dispute decides            | `refused_refund`, at once           |
 | `insufficient_funds` (the shop's provider balance is short)   | no           | yes, growing delay | yes                                | `stale_refund`, after the threshold |
 | `provider_unavailable`, `unknown`                             | maybe        | yes, growing delay | no: 409 `PAYMENT_REFUND_IN_FLIGHT` | `stale_refund`, after the threshold |
 | a `pending` record (an attempt is running)                    | maybe        | claimed when stale | no: 409 `PAYMENT_REFUND_IN_FLIGHT` | `stale_refund`                      |
@@ -510,6 +511,44 @@ An unclear failure that never resolves (the provider gone dark) stays open with 
 and shows on the attention list after `NODE_PAYMENT_ATTENTION_MINUTES`. There is no override: a
 provider gone for good is a technician's edit of the record. Staff check the provider's dashboard or
 support first. Rule of thumb for adapter authors: [reading a refusal](./payments-provider-port.md#reading-a-refusal).
+
+### When the provider reports a refund's own status {#when-the-bank-sends-a-refund-back}
+
+A refund is an object of its own at the provider, with a status that can change after the first
+answer. The port reports it: `refund` answers `{refundRef, status}`, and `retrieveRefund` reads it back.
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: opened here
+    pending --> pending: provider says pending (refund id kept)
+    pending --> succeeded: provider says succeeded
+    pending --> failed: provider says failed (reversedAt set)
+    succeeded --> failed: a bank sends it back (reversedAt set)
+    failed --> succeeded: staff pay another way, Mark returned
+```
+
+| What happens                                        | Record                                             | Announced                                  |
+| --------------------------------------------------- | -------------------------------------------------- | ------------------------------------------ |
+| the provider answers `pending`                      | stays `pending`, holds the provider's refund id    | nothing yet: no credit note, no buyer mail |
+| the sweep (or a webhook) re-reads it: `succeeded`   | settles                                            | `payment.refunded`                         |
+| a re-read says `failed` on an open record           | `failed` + reason + `reversedAt`, never resent     | `payment.refund_failed` with `final: true` |
+| a webhook says `failed` on a settled record         | `failed` + reason + `reversedAt`, `settledAt` gone | `payment.refund_reversed`                  |
+| the same report again, or a success after a failure | unchanged: `reversedAt` is set once                | nothing                                    |
+
+- **Never resent.** A record holding a provider refund id is re-read by the sweep, never sent again:
+  a resend inside the key window replays the old success. A record with `reversedAt` is skipped.
+- **Owed, not undone.** The order is re-stamped (`partially_refunded` while another refund stands,
+  otherwise cleared so it reads `paid`), the timeline gains `refund_reversed`, and the payment reads
+  `refund_pending`. The credit note and a closed return stay: the sale was reduced, and a bounced
+  payout is a payable, not a tax event (an accountant should confirm before a real shop relies on it).
+- **Settled by hand.** Staff agree a method with the buyer, pay, and press Mark returned. That
+  fires `payment.refunded` again for the same `refundId`: the credit note (unique per refund) and the
+  return ignore it, the outbound webhook goes out again.
+- **A report that beats the answer.** A webhook can arrive before `refund()` returns. The provider
+  echoes our record id, so the delivery finds the open record, fails it for good, and the late
+  success answer then settles nothing (the settle refuses a record with `reversedAt`).
+- **Needs a person.** `reversed_refund` is on `GET /payments/attention` at once, with `since` = when
+  it bounced. A reversed refund cannot be cancelled (it settled once): only paid by hand.
 
 ### Cancelling a refund {#cancelling-a-refund}
 
@@ -938,6 +977,20 @@ contract's schema (`ReceivePaymentWebhookBody`) before any lookup, so an operato
 `{ "$ne": null }` where a `providerRef` string belongs is refused with the same 400, even from an
 adapter that validated nothing. Do not rely on that: refuse a body you cannot make sense of
 yourself, and keep the reason in the `WebhookRejected` message.
+
+### Refund status, and the refund webhooks
+
+`refund` answers `{refundRef, status}`: `pending` for a refund the provider accepted but has not
+settled (Stripe `pending`, `requires_action`), `succeeded` otherwise. An immediate refusal still
+throws. `retrieveRefund(refundRef)` returns the refund's own status: Stripe `canceled` maps to
+`failed`, `requires_action` to `pending`, and `metadata.refund_record` comes back as `refundId`.
+
+| Stripe event                                                           | Delivery                                       |
+| ---------------------------------------------------------------------- | ---------------------------------------------- |
+| `refund.created`, `refund.updated`, `refund.failed`, `charge.refunded` | `{id, providerRef: payment_intent, refundRef}` |
+
+`parseWebhook(rawBody, headers)` receives every header: Stripe signs in `Stripe-Signature`, PayPal
+in several. A charge under dispute (`charge_disputed`, `refund_disputed_payment`) is `disputed`.
 
 ### Refund errors
 

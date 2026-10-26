@@ -993,6 +993,15 @@ components:
                     description: The provider's id for the refund (Stripe's `re_…`). Staff only.
                 failureReason:
                     $ref: '#/components/schemas/RefundFailureReason'
+                reversedAt:
+                    type: string
+                    format: date-time
+                    description: >-
+                        When the provider took this refund back (a bank sent the money back, or the
+                        provider reported the refund failed). Set once; a reversed refund is `failed`
+                        again, counts against what is left, and is owed another way: an operator
+                        pays it and presses mark-returned (`actions.settleByHand`). The credit note
+                        issued when it first settled stays. Absent otherwise.
                 createdAt:
                     type: string
                     format: date-time
@@ -1138,6 +1147,7 @@ components:
                 failureReason:
                     $ref: '#/components/schemas/RefundFailureReason'
                 settledAt: { type: string, format: date-time }
+                reversedAt: { type: string, format: date-time }
                 createdAt: { type: string, format: date-time }
 
         RefundsResponse:
@@ -1154,12 +1164,15 @@ components:
 
         PaymentAttentionKind:
             type: string
-            enum: [stale_refund, refused_refund, manual_refund_owed]
+            enum: [stale_refund, refused_refund, reversed_refund, manual_refund_owed]
             description: >-
                 `stale_refund` — a provider refund open past the threshold, still waiting for the
                 provider's answer or its next retry;
                 `refused_refund` — a card refund the provider refused for good (a final
                 `RefundFailureReason`), shown at once: the money has to go back another way;
+                `reversed_refund` — a refund the provider took back after settling it (a bank sent
+                it back), shown at once with `since` = when it was reversed: the money is owed
+                another way, agreed with the buyer;
                 `manual_refund_owed` — money to hand back outside the system on a `manual` payment.
                 Both are an open refund record on a payment: a cancel or a refund opens it before
                 anything is asked of a provider, so no refund is owed without one.

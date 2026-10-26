@@ -21,7 +21,13 @@ import { paymentsRateLimits } from './rate-limits';
 // Also installs this module's event declarations (PAYMENT_SUCCEEDED, PAYMENT_FAILED,
 // PAYMENT_REFUNDED). Reached directly, never through this module's own barrel — see CLAUDE.md's
 // module-barrel rule.
-import { PAYMENT_SUCCEEDED, PAYMENT_FAILED, PAYMENT_REFUNDED } from './events';
+import {
+    PAYMENT_SUCCEEDED,
+    PAYMENT_FAILED,
+    PAYMENT_REFUNDED,
+    PAYMENT_REFUND_FAILED,
+    PAYMENT_REFUND_REVERSED
+} from './events';
 import { paymentsConfig } from './config';
 import { paymentProviderProbe } from './providers';
 import { paymentsJobs } from './jobs';
@@ -56,6 +62,33 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
                 refundId: payload.refundId,
                 amount: payload.amount,
                 currency: payload.currency
+            }
+        })
+    },
+    [PAYMENT_REFUND_FAILED]: {
+        toPublicEvent: (payload: DomainEventMap[typeof PAYMENT_REFUND_FAILED]) => ({
+            eventType: 'payment.refund_failed',
+            data: {
+                paymentId: payload.paymentId,
+                orderId: payload.orderId,
+                refundId: payload.refundId,
+                amount: payload.amount,
+                currency: payload.currency,
+                failureReason: payload.failureReason,
+                final: payload.final
+            }
+        })
+    },
+    [PAYMENT_REFUND_REVERSED]: {
+        toPublicEvent: (payload: DomainEventMap[typeof PAYMENT_REFUND_REVERSED]) => ({
+            eventType: 'payment.refund_reversed',
+            data: {
+                paymentId: payload.paymentId,
+                orderId: payload.orderId,
+                refundId: payload.refundId,
+                amount: payload.amount,
+                currency: payload.currency,
+                failureReason: payload.failureReason
             }
         })
     }

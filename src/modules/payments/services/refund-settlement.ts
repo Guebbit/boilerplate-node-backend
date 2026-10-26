@@ -8,20 +8,19 @@
 
 import type { ClientSession } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
-import { RefundFailureReason, type CallerContext } from '@types';
+import { RefundFailureReason, RefundStatus, type CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { DomainEventMap } from '@kernel/events';
 import { announceInTransaction } from '@kernel/outbox';
-import { withTransaction } from '@infrastructure/runtime/database';
 import { toMinorUnits, subtractMoney, type Money } from '@domain-primitives/money';
 import { orderService } from '@modules/orders';
 import { ownOrderFlag } from '@modules/access';
 import { paymentsAuditActions } from '../audit';
 import { paymentEffectRetryMinutes } from '../config';
 import { paymentRepository } from '../repository';
-import { PAYMENT_REFUNDED } from '../events';
+import { PAYMENT_REFUNDED, PAYMENT_REFUND_FAILED, PAYMENT_REFUND_REVERSED } from '../events';
 import type { PaymentDocument, RefundRecord, RefundSettlement } from '../model';
-import { isOpenRefund, nextRefundAttemptAt } from '../domain';
+import { isFinalFailure, isOpenRefund, nextRefundAttemptAt, OPEN_REFUND_STATUSES } from '../domain';
 
 /**
  * What is still refundable on a payment, in minor units: what was paid minus what has been asked
@@ -221,10 +220,34 @@ export const isNewFailure = (refund: RefundRecord, failureReason: RefundFailureR
     (refund.attempts ?? 0) === 0 || refund.failureReason !== failureReason;
 
 /**
+ * The `payment.refund_failed` payload: the record, the closed reason, and whether it ends the retrying.
+ *
+ * @param payment - the payment
+ * @param refund - the record that failed
+ * @param failureReason - the closed code
+ * @param final - whether the refusal ends the retrying
+ */
+const failedPayload = (
+    payment: PaymentDocument,
+    refund: RefundRecord,
+    failureReason: RefundFailureReason,
+    final: boolean
+): DomainEventMap['payment.refund_failed'] => ({
+    paymentId: String(payment._id),
+    orderId: String(payment.orderId),
+    refundId: String(refund._id),
+    amount: refund.amount,
+    currency: refund.currency,
+    failureReason,
+    final
+});
+
+/**
  * Record that the provider refused a refund: the record goes `failed` (counting the attempt) and,
- * when the refusal is news ({@link isNewFailure}), the order's timeline says so, in one
- * transaction. Only the current attempt can fail it, so a late error never walks back a refund
- * that already succeeded or overwrites a newer attempt, and writes no row.
+ * when the refusal is news ({@link isNewFailure}), the order's timeline says so and
+ * `payment.refund_failed` is announced, in one transaction. Only the current attempt can fail it,
+ * so a late error never walks back a refund that already succeeded or overwrites a newer attempt,
+ * and writes no row.
  *
  * @param payment - the payment
  * @param refund - the record the provider refused, as it was read
@@ -236,35 +259,148 @@ export const recordRefundFailure = (
     failureReason: RefundFailureReason
 ): Promise<void> => {
     const attempts = (refund.attempts ?? 0) + 1;
-    return withTransaction((session) =>
-        paymentRepository
-            .failRefund(
-                String(payment._id),
-                String(refund._id),
-                {
-                    reason: failureReason,
-                    // `attemptedAt` is always there on a record this code opened or claimed.
-                    attempt: refund.attemptedAt!,
-                    nextAttemptAt: nextRefundAttemptAt(
-                        failureReason,
-                        attempts,
-                        paymentEffectRetryMinutes(),
-                        new Date()
+    return announceInTransaction(
+        (session) =>
+            paymentRepository
+                .failRefund(
+                    String(payment._id),
+                    String(refund._id),
+                    {
+                        reason: failureReason,
+                        // `attemptedAt` is always there on a record this code opened or claimed.
+                        attempt: refund.attemptedAt!,
+                        nextAttemptAt: nextRefundAttemptAt(
+                            failureReason,
+                            attempts,
+                            paymentEffectRetryMinutes(),
+                            new Date()
+                        )
+                    },
+                    session
+                )
+                .then((failed) =>
+                    // A repeat of the last refusal writes the record and says nothing.
+                    failed && isNewFailure(refund, failureReason)
+                        ? orderService
+                              .appendTimeline(
+                                  String(payment.orderId),
+                                  {
+                                      type: 'refund_failed',
+                                      data: { ...refundRow(refund), failureReason }
+                                  },
+                                  session
+                              )
+                              .then(() => failed)
+                        : null
+                ),
+        (failed) => ({
+            name: PAYMENT_REFUND_FAILED,
+            payload: failedPayload(failed, refund, failureReason, isFinalFailure(failureReason)),
+            aggregateId: String(failed.orderId)
+        })
+    ).then(() => undefined);
+};
+
+/**
+ * Where the order's payment stamp stands once a settled refund was taken back: partly refunded
+ * while another refund still stands, otherwise cleared so the order reads `paid` again.
+ *
+ * @param payment - the payment after the reversal
+ */
+const stampAfterReversal = (payment: PaymentDocument): 'partially_refunded' | undefined =>
+    payment.refunds.some((refund) => refund.status === RefundStatus.succeeded)
+        ? 'partially_refunded'
+        : undefined;
+
+/**
+ * The reversal's writes, inside the caller's transaction: the record goes `failed` with
+ * `reversedAt`, then (for a refund that had settled) the order is re-stamped and the timeline says
+ * so; for one that was still open, the timeline records the provider's refusal.
+ *
+ * @param payment - the payment as read
+ * @param refund - the record, as read
+ * @param reason - the closed reason the provider gave
+ * @param session - the transaction every write joins
+ * @returns the payment after the write, or `null` when the record was not reversible any more
+ */
+const writeReversal = (
+    payment: PaymentDocument,
+    refund: RefundRecord,
+    reason: RefundFailureReason,
+    session: ClientSession
+): Promise<PaymentDocument | null> => {
+    const wasSettled = refund.status === RefundStatus.succeeded;
+    return paymentRepository
+        .reverseRefund(
+            String(payment._id),
+            String(refund._id),
+            { reason, from: wasSettled ? [RefundStatus.succeeded] : OPEN_REFUND_STATUSES },
+            session
+        )
+        .then((final) => {
+            if (!final) return null;
+            const stamp = wasSettled
+                ? orderService.markPaymentStatus(
+                      String(final.orderId),
+                      stampAfterReversal(final),
+                      session
+                  )
+                : Promise.resolve(true);
+            return stamp
+                .then(() =>
+                    orderService.appendTimeline(
+                        String(final.orderId),
+                        {
+                            type: wasSettled ? 'refund_reversed' : 'refund_failed',
+                            data: { ...refundRow(refund), failureReason: reason }
+                        },
+                        session
                     )
-                },
-                session
-            )
-            .then((failed) =>
-                failed && isNewFailure(refund, failureReason)
-                    ? orderService.appendTimeline(
-                          String(payment.orderId),
-                          {
-                              type: 'refund_failed',
-                              data: { ...refundRow(refund), failureReason }
-                          },
-                          session
-                      )
-                    : undefined
-            )
+                )
+                .then(() => final);
+        });
+};
+
+/**
+ * The provider says this refund failed: a settled one was taken back (a bank sent the money back),
+ * an open one was refused by the provider itself. Either way the record is owed another way and is
+ * never sent again. The write is conditional and sets `reversedAt` once, so a redelivered report
+ * changes nothing and announces nothing.
+ *
+ * Announces `payment.refund_reversed` for a settled record and `payment.refund_failed` (final) for
+ * an open one. The credit note and a closed return stay either way.
+ *
+ * @param payment - the payment as read
+ * @param refund - the record, as read
+ * @param reason - the closed reason the provider gave
+ * @returns the payment after the reversal, or `null` when nothing changed
+ */
+export const reverseRefund = (
+    payment: PaymentDocument,
+    refund: RefundRecord,
+    reason: RefundFailureReason
+): Promise<PaymentDocument | null> => {
+    const wasSettled = refund.status === RefundStatus.succeeded;
+    return announceInTransaction(
+        (session) => writeReversal(payment, refund, reason, session),
+        (final) =>
+            wasSettled
+                ? {
+                      name: PAYMENT_REFUND_REVERSED,
+                      payload: {
+                          paymentId: String(final._id),
+                          orderId: String(final.orderId),
+                          refundId: String(refund._id),
+                          amount: refund.amount,
+                          currency: refund.currency,
+                          failureReason: reason
+                      },
+                      aggregateId: String(final.orderId)
+                  }
+                : {
+                      name: PAYMENT_REFUND_FAILED,
+                      payload: failedPayload(final, refund, reason, true),
+                      aggregateId: String(final.orderId)
+                  }
     );
 };

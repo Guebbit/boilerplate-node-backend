@@ -11,12 +11,12 @@
  */
 
 import { logger } from '@infrastructure/adapters/logger';
-import { RefundStatus } from '@types';
-import { OPEN_REFUND_STATUSES, isOpenRefund } from '../domain';
+import { RefundFailureReason, RefundStatus } from '@types';
+import { OPEN_REFUND_STATUSES, isOpenRefund, isReversed } from '../domain';
 import type { ProviderRefundState } from '../providers';
 import { paymentProviderRegistry } from '../providers/registry';
 import type { PaymentDocument, RefundRecord } from '../model';
-import { settleRefund } from './refund-settlement';
+import { reverseRefund, settleRefund } from './refund-settlement';
 
 /**
  * Carry a provider's report about one refund onto its record.
@@ -41,8 +41,20 @@ export const applyRefundState = (
             { providerRefundRef: refundRef, from: OPEN_REFUND_STATUSES },
             undefined
         );
+    // The provider's own failure, definite: a settled refund was taken back, an open one refused.
+    // Never `canceled`: that is staff's void, closed for good.
+    if (state.status === 'failed' && isOpenOrSettled(refund))
+        return reverseRefund(payment, refund, state.failureReason ?? RefundFailureReason.declined);
     return Promise.resolve(null);
 };
+
+/**
+ * Whether a failure report can still change this record: it settled, or it is open, and the
+ * provider has not reported it failed before.
+ * @param refund - the record
+ */
+const isOpenOrSettled = (refund: RefundRecord): boolean =>
+    !isReversed(refund) && (refund.status === RefundStatus.succeeded || isOpenRefund(refund));
 
 /**
  * Ask the provider how a refund it accepted ended, and apply the answer. A provider that cannot be

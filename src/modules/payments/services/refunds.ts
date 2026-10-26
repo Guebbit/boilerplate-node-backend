@@ -547,22 +547,20 @@ const settledElsewhere = (orderId: string, refund: RefundRecord): Promise<Paymen
         );
 
 /**
- * A refund this caller sent that the provider accepted without settling: the record is the
- * caller's answer, left open (`pending`, holding the provider's refund id) until a re-read settles it.
+ * A refund this caller sent that is still open although nobody refused it: the provider accepted it
+ * without settling (`pending`, holding its refund id), or reported it failed while the request was
+ * still in flight. The record is the caller's answer, owed or waiting, not a refusal to raise.
  *
  * @param orderId - the order whose payment carries the record
  * @param refund - the record this caller opened
- * @returns the outcome with `leftOpen`, or `null` when the record is not held at the provider
+ * @returns the outcome with `leftOpen`, or `null` when the record is not open
  */
-const heldAtProvider = (orderId: string, refund: RefundRecord): Promise<RefundOutcome | null> =>
+const openAtProvider = (orderId: string, refund: RefundRecord): Promise<RefundOutcome | null> =>
     paymentRepository
         .findByOrderId(orderId)
         .then((fresh) =>
             fresh?.refunds.some(
-                (record) =>
-                    String(record._id) === String(refund._id) &&
-                    record.status === RefundStatus.pending &&
-                    record.providerRefundRef !== undefined
+                (record) => String(record._id) === String(refund._id) && isOpenRefund(record)
             )
                 ? { payment: fresh, leftOpen: true, refundId: String(refund._id) }
                 : null
@@ -609,7 +607,7 @@ const performCardRefund = (
                                   leftOpen: false,
                                   refundId: String(opened.refund._id)
                               }
-                            : heldAtProvider(orderId, opened.refund)
+                            : openAtProvider(orderId, opened.refund)
                     );
             });
         }

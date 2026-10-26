@@ -10,6 +10,7 @@ note field, and leaves the decision to a person. Each entry below has the same t
 | ---------------------------------------------------------------------- | -------------------------------------------------------------- |
 | A refund is owed and the money must be paid back by hand               | [A refund owed by hand](#refund-owed-by-hand)                  |
 | The card refused to take a refund back                                 | [A card refund the card refused](#card-refund-refused)         |
+| The bank sent a refund back after the shop had marked it paid          | [A refund the bank sent back](#refund-bounced)                 |
 | A refund was also made in the provider's own dashboard                 | [Refunded in the dashboard as well](#refund-covered-elsewhere) |
 | Two refunds were opened by mistake                                     | [Two refunds by mistake](#two-refunds)                         |
 | A return was received but its refund will never come the usual way     | [A return that cannot finish](#return-cannot-finish)           |
@@ -102,6 +103,34 @@ believe they were paid back and nobody is left to notice.
 
 **Whose job.** Whoever holds the refund permission: the [moderator](./moderator.md) or the admin.
 → [`payments`](../modules/payments.md#when-a-card-refund-cannot-go-back)
+
+## A refund the bank sent back {#refund-bounced}
+
+**What you see.** A refund read **succeeded** (the buyer was told, the credit note was issued), and
+days later the order is on the "needs attention" list as **Refund sent back by the bank**. On the
+payment the refund reads **Failed** again, with a "Reversed on" date. The buyer was emailed
+automatically: their bank returned the money, we still owe it, and they are asked how they would
+like to receive it.
+
+**What to do.**
+
+1. Wait for the buyer's answer by email, and agree a method with them, for example a bank transfer
+   to an account in their name. The shop does not store bank details: keep them in your mailbox and
+   your bank, under your usual retention.
+2. Pay the money back from your bank, for the amount shown.
+3. Only then press **Mark returned** on that refund.
+
+The credit note stays as it was: the sale was reduced, and a returned payout is money you owe, not
+a new sale. The legal clock (EU Consumer Rights Directive, Art. 13) is 14 days; the list shows how
+many are left when the refund paid a return or a withdrawal.
+
+::: warning Never pick a method for the buyer
+EU law lets you change the way the money goes back only when the buyer expressly agrees. Mark the
+refund returned after you paid them, never before.
+:::
+
+**Whose job.** Whoever holds the refund permission: the [moderator](./moderator.md) or the admin.
+→ [`payments`](../modules/payments.md#when-the-bank-sends-a-refund-back)
 
 ## Refunded in the dashboard as well {#refund-covered-elsewhere}
 

@@ -108,6 +108,7 @@ const refundRow = ({ paymentId, orderId, refund }: RefundRow): RefundListItem =>
     ...(refund.providerRefundRef ? { providerRefundRef: refund.providerRefundRef } : {}),
     ...(refund.failureReason ? { failureReason: refund.failureReason } : {}),
     ...(refund.settledAt ? { settledAt: refund.settledAt.toISOString() } : {}),
+    ...(refund.reversedAt ? { reversedAt: refund.reversedAt.toISOString() } : {}),
     createdAt: refund.createdAt.toISOString()
 });
 
@@ -130,7 +131,11 @@ export const listRefunds = (
  * @param refund - the open refund
  */
 const dueByOf = (kind: PaymentAttentionKind, refund: RefundRecord): { refundDueBy?: string } => {
-    const due = kind === PaymentAttentionKind.refused_refund ? refundDueBy(refund) : undefined;
+    const due =
+        kind === PaymentAttentionKind.refused_refund ||
+        kind === PaymentAttentionKind.reversed_refund
+            ? refundDueBy(refund)
+            : undefined;
     return due ? { refundDueBy: due.toISOString() } : {};
 };
 
@@ -147,7 +152,11 @@ const refundAttention = (row: RefundRow, kind: PaymentAttentionKind): PaymentAtt
     amount: row.refund.amount,
     currency: row.refund.currency,
     ...(row.refund.failureReason ? { failureReason: row.refund.failureReason } : {}),
-    since: row.refund.createdAt.toISOString(),
+    // A reversed refund is a problem from the day it bounced, not from the day it was opened.
+    since: (kind === PaymentAttentionKind.reversed_refund && row.refund.reversedAt
+        ? row.refund.reversedAt
+        : row.refund.createdAt
+    ).toISOString(),
     ...dueByOf(kind, row.refund)
 });
 
@@ -171,11 +180,18 @@ export const listAttention = (): Promise<{ items: PaymentAttentionItem[] }> => {
             refusal: 'final',
             limit: ATTENTION_LIMIT
         }),
-        paymentRepository.findOpenRefundRows({ manual: true, limit: ATTENTION_LIMIT })
-    ]).then(([stale, refused, manual]) => ({
+        paymentRepository.findOpenRefundRows({ manual: true, limit: ATTENTION_LIMIT }),
+        // A refund the provider took back needs a person at once, whatever it says it failed for.
+        paymentRepository.findOpenRefundRows({
+            manual: false,
+            refusal: 'reversed',
+            limit: ATTENTION_LIMIT
+        })
+    ]).then(([stale, refused, manual, reversed]) => ({
         items: [
             ...stale.map((row) => refundAttention(row, PaymentAttentionKind.stale_refund)),
             ...refused.map((row) => refundAttention(row, PaymentAttentionKind.refused_refund)),
+            ...reversed.map((row) => refundAttention(row, PaymentAttentionKind.reversed_refund)),
             ...manual.map((row) => refundAttention(row, PaymentAttentionKind.manual_refund_owed))
         ].toSorted((a, b) => a.since.localeCompare(b.since))
     }));
