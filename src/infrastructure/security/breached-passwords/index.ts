@@ -17,6 +17,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { SHARED_RULES_DIRECTORY } from '@infrastructure/config/shared-rules/load';
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { breachedPasswordsConfig } from '@infrastructure/security/config';
@@ -24,16 +25,12 @@ import { fieldError, type ResponseErrorItem } from '@infrastructure/http/respons
 import { readCappedText, DEFAULT_BODY_CAP_BYTES } from '@infrastructure/http/read-capped-body';
 
 /**
- * The bundled list, loaded once at import time. Exact match, case-sensitive — breach corpora are,
- * and `password1!` is a different candidate from `Password1!` to an attacker's tooling too. A few
+ * The bundled list, loaded once at import time. It lives in `shared/rules/breached-passwords.txt`,
+ * byte-identical in the PHP twin. Exact match, case-sensitive — breach corpora are, and `password1!` is a different candidate from `Password1!` to an attacker's tooling too. A few
  * MB of heap for ~20k short strings is not a concern.
- *
- * `__dirname`, not `import.meta.url`: this file is the same whether the entry point is `tsx` or a
- * Jest worker, and `import.meta` is not valid syntax under ts-jest's CommonJS target — same
- * reasoning as `i18n/catalog.ts`'s `LOCALES_DIRECTORY`.
  */
 const bundledList = new Set(
-    readFileSync(path.join(__dirname, 'list.txt'), 'utf8')
+    readFileSync(path.join(SHARED_RULES_DIRECTORY, 'breached-passwords.txt'), 'utf8')
         .split('\n')
         .filter((line) => line.length > 0)
 );

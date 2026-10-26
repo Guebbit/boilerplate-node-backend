@@ -127,7 +127,7 @@ describe('accountService.signup', () => {
     });
 
     it('rejects a breached password even when it satisfies every composition rule', async () => {
-        // `Password1!` is a listed, composition-valid entry in `breached-passwords/list.txt` —
+        // `Password1!` is a listed, composition-valid entry in `shared/rules/breached-passwords.txt` —
         // documented on `PLAIN_PASSWORD` above precisely so it stays available for this case.
         // `assertPasswordNotBreached` is unit-tested on its own; this is the only case proving
         // `accountService.signup` actually calls it.
