@@ -1,6 +1,6 @@
 /**
  * @module
- * Express router for locale discovery and translation administration. The four GET reads are
+ * Express router for locale discovery and translation administration. The GET reads are
  * public — an unauthenticated client is exactly who needs a dictionary — with the manifest and
  * the messages taking `getAuth`, to include inactive languages for staff. Every write is gated per
  * mount (`getAuth, isAuthOrCredential, requirePermission(...)` spelled on each route, not a
@@ -15,7 +15,7 @@ import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewa
 import { invalidateCache, setCache } from '@infrastructure/http/middlewares/cache';
 import { hasAnonymousReadScope } from '@kernel/access/query';
 import { localeService } from './services';
-import { getLocales, getLocaleDictionary } from './controllers/get-locales';
+import { getLocales, getLocale, getLocaleDictionary } from './controllers/get-locales';
 import { getLocaleMessages } from './controllers/get-locale-messages';
 import { getLocaleApps } from './controllers/get-locale-apps';
 import { createLocale } from './controllers/create-locale';
@@ -57,15 +57,15 @@ const messagesCache = setCache(3600, {
 });
 
 /**
- * The four public reads, all `browserRevalidate`: Redis still holds them for the hour, but the
+ * The five public reads, all `browserRevalidate`: Redis still holds them for the hour, but the
  * flag tells the BROWSER to revalidate rather than answer from its own store. Without it, an
  * editor's save clears Redis but not the browser's copy, and reads as "saving is broken" — the
  * one failure this tier cannot afford. Costs one conditional request per read, answered `304`
  * when nothing changed.
  *
- * `scopeKey`: two of the four never see `request.authContext` at all (no `getAuth` mounted
- * ahead of them), so they are trivially guest-equivalent; `GET /locales` and the messages read do
- * take `getAuth`, for the inactive languages staff may see — `hasAnonymousReadScope` is what
+ * `scopeKey`: two of the five never see `request.authContext` at all (no `getAuth` mounted
+ * ahead of them), so they are trivially guest-equivalent; `GET /locales`, `GET /locales/:locale`
+ * and the messages read do take `getAuth`, for the inactive languages staff may see — `hasAnonymousReadScope` is what
  * tells that caller apart from a guest and bypasses Redis for them, safe BY CONSTRUCTION.
  */
 const publicLocaleCache = setCache(3600, {
@@ -87,8 +87,12 @@ router.get('/apps', publicLocaleCache, getLocaleApps);
 // `getAuth` (and only that: no token still answers) so staff can preview an inactive language.
 router.get('/:locale/messages', getAuth, messagesCache, getLocaleMessages);
 
-// GET /locales/:locale — the API's own dictionary, off the filesystem
-router.get('/:locale', publicLocaleCache, getLocaleDictionary);
+// GET /locales/:locale/dictionary — the API's own dictionary, off the filesystem.
+router.get('/:locale/dictionary', publicLocaleCache, getLocaleDictionary);
+
+// GET /locales/:locale — one language, as the list shows it. `getAuth` for the same reason as the
+// list: staff see a switched-off language a visitor gets a 404 for.
+router.get('/:locale', getAuth, publicLocaleCache, getLocale);
 
 /*
  * Everything past here is an admin write on the dynamic tier — or, in one case, the read that

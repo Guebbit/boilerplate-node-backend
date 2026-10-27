@@ -41,8 +41,14 @@ export const deriveBaseLanguage = (tag: string): string =>
     // `split` always yields at least one element, so index 0 needs no fallback arm.
     normalizeTag(tag.split('-', 1)[0]);
 
-/** Mongoose document type for a registered language. Overrides the generated `Language`'s dates. */
-export interface LocaleDocument extends Omit<Language, 'id' | 'createdAt' | 'updatedAt'>, Document {
+/**
+ * Mongoose document type for a registered language. Overrides the generated `Language`'s dates and
+ * drops the three fields the manifest derives from the tiers (`apps`, `source`, `entryCount`).
+ */
+export interface LocaleDocument
+    extends
+        Omit<Language, 'id' | 'createdAt' | 'updatedAt' | 'apps' | 'source' | 'entryCount'>,
+        Document {
     createdAt?: Date;
     updatedAt?: Date;
 }

@@ -33,6 +33,7 @@ import {
 } from '@modules/account/services/personal-data-registry';
 import {
     openOwnExport,
+    readOwnExport,
     requestExport,
     settleInlineExports
 } from '@modules/account/services/export';
@@ -799,5 +800,69 @@ describe('reapExpiredExports', () => {
 
     it('does nothing when nothing is due', async () => {
         await expect(reapExpiredExports()).resolves.toEqual({ rows: 0, files: 0 });
+    });
+});
+
+describe('readOwnExport', () => {
+    it('answers none for an account that never asked', async () => {
+        const user = await createUser({ email: 'ada@example.com' });
+
+        await expect(readOwnExport(user.id)).resolves.toBeUndefined();
+    });
+
+    it('answers building, with no expiry, while the job runs', async () => {
+        const { held, release } = gate();
+        setPersonalDataSections([held]);
+        const user = await createUser({ email: 'ada@example.com' });
+        await requestExport(user.id, testCallerContext);
+
+        const status = await readOwnExport(user.id);
+
+        expect(status).toMatchObject({ status: 'building' });
+        expect(status).not.toHaveProperty('expiresAt');
+        release();
+        await settleInlineExports();
+    });
+
+    it('answers ready with the date the file goes', async () => {
+        const { user } = await exportDueIn('ada@example.com', 60_000);
+
+        const status = await readOwnExport(user.id);
+
+        expect(status?.status).toBe('ready');
+        expect(status?.expiresAt).toEqual(expect.any(String));
+    });
+
+    it('reads a building export older than 30 minutes as failed', async () => {
+        const { held, release } = gate();
+        setPersonalDataSections([held]);
+        const user = await createUser({ email: 'ada@example.com' });
+        await requestExport(user.id, testCallerContext);
+        await accountExportModel.updateOne(
+            { userId: user.id },
+            { $set: { createdAt: new Date(Date.now() - 31 * 60 * 1000) } }
+        );
+
+        await expect(readOwnExport(user.id)).resolves.toMatchObject({ status: 'failed' });
+        release();
+        await settleInlineExports();
+    });
+
+    it('answers failed once the job gave up', async () => {
+        jest.spyOn(logger, 'error').mockReturnValue(undefined);
+        setPersonalDataSections([
+            section('profile', {}),
+            { section: 'orders', collect: () => Promise.reject(new Error('mongo went away')) }
+        ]);
+        const { user } = await requestFor();
+        await settleInlineExports();
+
+        await expect(readOwnExport(user.id)).resolves.toMatchObject({ status: 'failed' });
+    });
+
+    it('counts an export past its retention, not yet swept, as none', async () => {
+        const { user } = await exportDueIn('ada@example.com', -60_000);
+
+        await expect(readOwnExport(user.id)).resolves.toBeUndefined();
     });
 });

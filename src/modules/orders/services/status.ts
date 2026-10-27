@@ -10,7 +10,7 @@
 
 import { announceInTransaction, announceWithin, type OutboxAnnouncements } from '@kernel/outbox';
 import { inventoryService } from '@modules/inventory';
-import { ORDER_STATUS_CHANGED } from '../events';
+import { ORDER_CANCELLED, ORDER_STATUS_CHANGED } from '../events';
 import { OrderStatus } from '@types';
 import type { ClientSession } from 'mongoose';
 import type { OrderDocument } from '../model';
@@ -19,6 +19,7 @@ import { statusChangedEvent } from './announce';
 import { withTimeline } from './timeline';
 import {
     ORDER_EVENTS,
+    UNDELIVERABLE_EVENT,
     isDigitalOnlyOrder,
     isPayable,
     type OrderEventName,
@@ -31,6 +32,7 @@ import {
     type StampedReturnStatus
 } from '../domain';
 import { withdrawalPeriodDays } from '../config';
+import { CANCEL_CAUSES } from './cancel';
 
 /** The timeline row each system move leaves; `reopen` leaves none, the loss that caused it has its own. */
 const MOVE_ROW = { process: 'processing', ship: 'shipped', reopen: undefined } as const;
@@ -306,6 +308,46 @@ export const markFulfilmentComplete = (
                 )
         );
     });
+
+/**
+ * Settle an order whose every parcel was lost and whose remainder was cancelled and refunded:
+ * nothing ever arrived, so it ends `cancelled` with cause `lost` — not `delivered`, which would
+ * start a withdrawal and a guarantee clock for goods the buyer never had.
+ *
+ * Not `cancel()`'s path: that one forces a refund, and the remainder cancel already made it,
+ * so this writes `refund: false` itself. No clocks, no `shipped`/`delivered` rows, and the
+ * `cancelled` row is the system's (no account behind it). The stock is already back.
+ * @param orderId - the order to settle
+ * @param session - the act's transaction; the settlement commits with the cancel or not at all
+ * @returns the order as it now stands, or `null` if it was not `processing`
+ */
+export const markUndeliverable = (
+    orderId: string,
+    session: ClientSession
+): Promise<OrderDocument | null> =>
+    announceWithin(
+        session,
+        withTimeline(
+            (active) =>
+                orderRepository.updateStatusIfIn(
+                    orderId,
+                    [...UNDELIVERABLE_EVENT.from],
+                    UNDELIVERABLE_EVENT.to,
+                    { session: active }
+                ),
+            () => [
+                {
+                    type: 'cancelled',
+                    data: { by: CANCEL_CAUSES.lost.by, cause: 'lost', refund: false }
+                }
+            ]
+        ),
+        () => ({
+            name: ORDER_CANCELLED,
+            payload: { orderId, refund: false, cause: 'lost' },
+            aggregateId: orderId
+        })
+    );
 
 /**
  * Report where an order's money stands once a refund exists. `payments`' own door for this — the

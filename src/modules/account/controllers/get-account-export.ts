@@ -1,22 +1,41 @@
 /**
  * @module
- * `GET /account/export` controller — streams the caller's finished export to its owner. The page the
+ * `GET /account/export` (the status) and `GET /account/export/file` (the download) controllers.
+ * The file streams the caller's finished export to its owner. The page the
  * mailed link opens calls this with the visitor's own session; `requireFreshAuth` (mounted on the
- * route) is the identity proof, and the service's ownership query is the authorization.
+ * file route) is the identity proof, and the service's ownership query is the authorization.
  */
 
 import { pipeline } from 'node:stream/promises';
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
-import { rejectResponse } from '@infrastructure/http/response';
+import { rejectResponse, successResponse } from '@infrastructure/http/response';
 import { catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
-import { openOwnExport } from '../services/export';
+import { openOwnExport, readOwnExport } from '../services/export';
 
 /**
- * GET /account/export — the caller's own export as a JSON attachment, or `404`. An account has
- * one live export, so there is no id to name.
+ * GET /account/export — where the caller's export stands, or `404` when there is none. No fresh
+ * session: it carries dates and a state, no personal data.
+ */
+export const getAccountExportStatus = (request: Request, response: Response) => {
+    /* Auth context is guaranteed by isAuth middleware */
+    const { id: userId } = request.authContext!;
+
+    return readOwnExport(userId)
+        .then((exportStatus) => {
+            if (!exportStatus)
+                return rejectResponse(response, 404, [t('account.export.not-found')]);
+
+            return successResponse(response, exportStatus);
+        })
+        .catch(catchAs(response, 'getAccountExport'));
+};
+
+/**
+ * GET /account/export/file — the caller's own export as a JSON attachment, or `404`. An account
+ * has one live export, so there is no id to name.
  *
  * Streamed, never read into memory: the file is whatever the build wrote, and that is the whole
  * reason the build is a job. Not wrapped in the response envelope: the body IS the document
@@ -54,6 +73,6 @@ export const getAccountExport = (request: Request, response: Response) => {
                 response.destroy();
                 return;
             }
-            catchAs(response, 'getAccountExport')(error);
+            catchAs(response, 'downloadAccountExport')(error);
         });
 };

@@ -289,13 +289,15 @@ flowchart LR
     I --> B
     B --> F["file in the private store"]
     F --> M["mail: a link"]
-    M --> D["GET /account/export<br/><i>owner · fresh session</i>"]
+    M --> D["GET /account/export/file<br/><i>owner · fresh session</i>"]
+    A -. "poll" .-> S["GET /account/export<br/><i>status · session</i>"]
+    R -.-> S
     B -. "throws" .-> X["row: failed<br/><i>logged, counted, a notice mailed</i>"]
 
     classDef entry fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef warn fill:#fee2e2,stroke:#dc2626,color:#111827;
     classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
-    class A,D entry;
+    class A,D,S entry;
     class X warn;
     class R,W,I,B,F,M done;
 ```
@@ -335,9 +337,15 @@ Decisions rather than mechanics:
   skipped when the account is gone, and a mail that cannot be queued is logged: the row stays `failed`.
   Asking again replaces it. Two runs of one job (a broker redelivery) are safe: only a row
   still `building` is built, and only the run that settles it mails the link.
+- **The status is its own read.** `GET /account/export` answers `building`, `ready` or `failed`
+  with `createdAt`, and `expiresAt` once `ready`, for a session that need not be fresh: it holds
+  dates and a state, no personal data. `404` only when there is no export; one past its retention
+  and not yet swept counts as none. A `building` row past 30 minutes reads as `failed`. The `202`
+  of the request carries `Location: /account/export`, so a client can poll what it was told.
 - **The download asks for a fresh session, like the request.** The mailed link opens a frontend page
-  that calls `GET /account/export`; a forwarded mail hands nobody the file. A row that is not
-  yours, not ready, past its retention or already gone are the same `404`.
+  that reads the status, then calls `GET /account/export/file`; a forwarded mail hands nobody the
+  file. A row that is not yours, not `ready`, past its retention, or `ready` with its file missing
+  from the store are the same `404`: the file honestly does not exist.
 - **Kept `NODE_ACCOUNT_EXPORT_TTL_DAYS` days (7), then gone.** The nightly `reap:account-exports`
   deletes file and row, and sweeps files no row points at by age. A hard account delete (and so
   `reap:inactive-accounts`) deletes the export with the rest of the account: the row inside the

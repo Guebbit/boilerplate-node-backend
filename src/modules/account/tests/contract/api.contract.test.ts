@@ -921,6 +921,7 @@ describe('POST /account/export', () => {
         const { request, status, data } = await requestAndDownloadExport(bearer);
 
         expect(request.status).toBe(202);
+        expect(request.location).toBe('/account/export');
         expect(status).toBe(200);
         const { profile, sessions } = data as {
             profile: { email: string };
@@ -955,11 +956,54 @@ describe('POST /account/export for an account that is gone', () => {
 describe('POST /account/export without a session', () => {});
 
 describe('GET /account/export', () => {
-    it('streams the export as a JSON attachment, never cached', async () => {
+    it('answers 404 for an account that has not asked for an export', async () => {
+        const { bearer } = await loginWithCookie();
+
+        const response = await api().get('/account/export').set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+    });
+
+    it('answers building, with no expiry, right after the request', async () => {
+        const { bearer } = await loginWithCookie();
+        const requested = await api().post('/account/export').set('Authorization', bearer).send();
+
+        const response = await api().get('/account/export').set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body).toMatchObject({ id: requested.body.id, status: 'building' });
+        expect(response.body).not.toHaveProperty('expiresAt');
+        await settleInlineExports();
+    });
+
+    it('answers ready with the date the file goes, once the build finished', async () => {
         const { bearer } = await loginWithCookie();
         await requestAndDownloadExport(bearer);
 
         const response = await api().get('/account/export').set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.status).toBe('ready');
+        expect(Date.parse(response.body.expiresAt as string)).toBeGreaterThan(Date.now());
+    });
+
+    it('answers 404 to an account that did not ask, whoever else did, not 403', async () => {
+        const owner = await loginWithCookie({ email: 'owner-export@example.com' });
+        await requestAndDownloadExport(owner.bearer);
+        const stranger = await loginWithCookie({ email: 'stranger-export@example.com' });
+
+        const response = await api().get('/account/export').set('Authorization', stranger.bearer);
+
+        expect(response.status).toBe(404);
+    });
+});
+
+describe('GET /account/export/file', () => {
+    it('streams the export as a JSON attachment, never cached', async () => {
+        const { bearer } = await loginWithCookie();
+        await requestAndDownloadExport(bearer);
+
+        const response = await api().get('/account/export/file').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
         expect(response.headers['content-type']).toContain('application/json');
@@ -972,17 +1016,29 @@ describe('GET /account/export', () => {
     it('answers 404 for an account that has not asked for an export', async () => {
         const { bearer } = await loginWithCookie();
 
-        const response = await api().get('/account/export').set('Authorization', bearer);
+        const response = await api().get('/account/export/file').set('Authorization', bearer);
 
         expect(response.status).toBe(404);
     });
 
-    it('answers 404 to an account that did not ask, whoever else did, not 403', async () => {
-        const owner = await loginWithCookie({ email: 'owner-export@example.com' });
-        await requestAndDownloadExport(owner.bearer);
-        const stranger = await loginWithCookie({ email: 'stranger-export@example.com' });
+    it('answers 404 while the export is still building: there is no file yet', async () => {
+        const { bearer } = await loginWithCookie();
+        await api().post('/account/export').set('Authorization', bearer).send();
 
-        const response = await api().get('/account/export').set('Authorization', stranger.bearer);
+        const response = await api().get('/account/export/file').set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+        await settleInlineExports();
+    });
+
+    it('answers 404 to an account that did not ask, whoever else did, not 403', async () => {
+        const owner = await loginWithCookie({ email: 'owner-file@example.com' });
+        await requestAndDownloadExport(owner.bearer);
+        const stranger = await loginWithCookie({ email: 'stranger-file@example.com' });
+
+        const response = await api()
+            .get('/account/export/file')
+            .set('Authorization', stranger.bearer);
 
         expect(response.status).toBe(404);
     });

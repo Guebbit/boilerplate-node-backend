@@ -153,7 +153,7 @@ paths:
         delete:
             tags: [Account]
             summary: Remove an address
-            description: Removes one entry of the caller's own book. Removing the default promotes the oldest remaining entry, so a non-empty book always has exactly one default.
+            description: Removes one entry of the caller's own book. Removing the default promotes the oldest remaining entry, so a non-empty book always has exactly one default; a client showing the book refetches it.
             operationId: removeAddress
             security:
                 - bearerAuth: []
@@ -165,12 +165,7 @@ paths:
                       $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                   description: Address identifier from `GET /account/addresses`
             responses:
-                '200':
-                    description: The updated address book
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/AddressesResponse'
+                '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
 

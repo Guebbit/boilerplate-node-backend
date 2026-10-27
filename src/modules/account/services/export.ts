@@ -33,12 +33,12 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { userService } from '@modules/users';
 import { withOwnAccount } from './caller';
 import { WORKER_CHANNELS } from '@types';
-import type { AccountExportJobPayload, AccountExportRequest, CallerContext } from '@types';
+import type { AccountExport, AccountExportJobPayload, CallerContext } from '@types';
 import type { AfterErase } from '@kernel/registry';
 import { exportRetentionMs } from '../config';
 import { recipientLocale } from '../emails';
 import { accountAuditActions } from '../audit';
-import { presentExportRequest } from '../presenter';
+import { presentExport } from '../presenter';
 import { accountExportRepository, type AccountExportRow } from '../repository';
 import { mailRecipientRefusal } from '../mail-budget';
 import { runExportJob } from './export-job';
@@ -180,13 +180,13 @@ const isRow = (outcome: ExportRowChoice | ResponseReject): outcome is ExportRowC
  *
  * @param userId - the authenticated caller's own id; this never reads anyone else's data
  * @param context - for the audit event this call itself is, and the request's language
- * @returns `202` with the export's `id` and `status`, `401` when the account is gone, or `429`
+ * @returns `202` with the export and its status, `401` when the account is gone, or `429`
  *   when a new build would exceed the mailbox budget
  */
 export const requestExport = (
     userId: string,
     context: CallerContext
-): Promise<ResponseSuccess<AccountExportRequest> | ResponseReject> =>
+): Promise<ResponseSuccess<AccountExport> | ResponseReject> =>
     withOwnAccount(
         userId,
         (user) =>
@@ -209,7 +209,7 @@ export const requestExport = (
                 };
 
                 return (created ? dispatch(job) : Promise.resolve()).then(() =>
-                    generateSuccess<AccountExportRequest>(presentExportRequest(row), 202)
+                    generateSuccess<AccountExport>(presentExport(row, row.status), 202)
                 );
             }),
         // No credentials needed: the export reads the profile, never a secret.
@@ -217,9 +217,26 @@ export const requestExport = (
     );
 
 /**
+ * Where the caller's export stands. `undefined` only when there is none: never asked for, erased,
+ * or past its retention and not yet swept, which counts as none. A `building` row past
+ * {@link EXPORT_BUILD_LIMIT_MS} reads as `failed`, the same call {@link rowOrRefusal} makes.
+ *
+ * @param userId - the authenticated caller
+ */
+export const readOwnExport = (userId: string): Promise<AccountExport | undefined> =>
+    accountExportRepository.findByUserId(userId).then((row) => {
+        if (!row || row.expiresAt.getTime() <= Date.now()) return undefined;
+
+        return presentExport(
+            row,
+            row.status === 'building' && isStale(row) ? 'failed' : row.status
+        );
+    });
+
+/**
  * Open the caller's finished export for download. An account has one live export, found by its
- * owner, so a `building` or `failed` one, one past its retention and one that is simply
- * gone are all the same `undefined`.
+ * owner, so a `building` or `failed` one, one past its retention, a `ready` one whose file is
+ * missing and one that is simply gone are all the same `undefined`.
  *
  * @param userId - the authenticated caller
  * @param context - for the audit event: the moment the data actually leaves

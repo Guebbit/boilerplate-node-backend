@@ -44,6 +44,7 @@ import {
     markReopened,
     markDelivered,
     markFulfilmentComplete,
+    markUndeliverable,
     markPaymentStatus,
     markReturnStatus,
     markMoneyReceived
@@ -140,6 +141,7 @@ export const orderService = {
     markReopened,
     markDelivered,
     markFulfilmentComplete,
+    markUndeliverable,
     markPaymentStatus,
     markReturnStatus,
     markMoneyReceived,

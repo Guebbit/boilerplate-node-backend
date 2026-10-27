@@ -24,6 +24,7 @@ export type { ShippableLineCandidate } from './rules';
 // (`isPayable`, `canProcessOrder`, ...) and never lists statuses or reads the table itself.
 export {
     ORDER_EVENTS,
+    UNDELIVERABLE_EVENT,
     canTransition,
     isPayable,
     canProcessOrder,
