@@ -6,7 +6,25 @@
  * (`./services/settlement`); `payment.refunded` comes from `./services/refunds.ts`.
  */
 
-import type { RefundFailureReason } from '@types';
+import type { DisputeKind, DisputeReason, DisputeStatus, RefundFailureReason } from '@types';
+
+/**
+ * What both dispute events carry: the dispute as the provider last reported it, never its free
+ * text. Money is a decimal in `currency`; `evidenceDueBy` is an ISO time.
+ */
+export interface DisputeEventPayload {
+    paymentId: string;
+    orderId: string;
+    /** The provider's dispute id. */
+    disputeId: string;
+    kind: DisputeKind;
+    status: DisputeStatus;
+    reason: DisputeReason;
+    amount: number;
+    currency: string;
+    fundsWithdrawn: boolean;
+    evidenceDueBy?: string;
+}
 
 /** Registers this module's event payloads into the kernel's app-wide `DomainEventMap`. */
 declare module '@kernel/events' {
@@ -124,6 +142,26 @@ declare module '@kernel/events' {
             currency: string;
             failureReason: RefundFailureReason;
         };
+
+        /**
+         * The buyer's bank disputed a card payment, first reported (an inquiry or a chargeback).
+         * It is not a refund: nothing is credited and the order does not change. The shop answers
+         * in the provider's dashboard before `evidenceDueBy`; a staff ticket opens on this.
+         *
+         * Delivered through the transactional outbox, written in the transaction that stores the
+         * dispute: at-least-once, so a listener dedupes on `meta.eventId`.
+         */
+        'payment.dispute_opened': DisputeEventPayload;
+
+        /**
+         * A newer report of a dispute already on file: evidence under review, decided, accepted,
+         * or a closed one reopened (a late win, a second chargeback). `status` says where it is; a
+         * repeated or older report announces nothing.
+         *
+         * Delivered through the transactional outbox, written in the transaction that replaces the
+         * stored dispute: at-least-once, so a listener dedupes on `meta.eventId`.
+         */
+        'payment.dispute_updated': DisputeEventPayload;
     }
 }
 
@@ -144,3 +182,9 @@ export const PAYMENT_REFUND_FAILED = 'payment.refund_failed';
 
 /** See `DomainEventMap['payment.refund_reversed']` above. */
 export const PAYMENT_REFUND_REVERSED = 'payment.refund_reversed';
+
+/** See `DomainEventMap['payment.dispute_opened']` above. */
+export const PAYMENT_DISPUTE_OPENED = 'payment.dispute_opened';
+
+/** See `DomainEventMap['payment.dispute_updated']` above. */
+export const PAYMENT_DISPUTE_UPDATED = 'payment.dispute_updated';

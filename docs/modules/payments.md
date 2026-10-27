@@ -486,14 +486,14 @@ A refused card refund is the shop's to settle: the money has to reach the buyer 
 operator then presses **Mark returned** (`POST /payments/{id}/refunds/{refundId}/settle`). That is
 only offered when the refusal PROVES the money did not move.
 
-| The refusal                                                   | Money moved? | Retried?           | Hand settle                        | Attention kind                      |
-| ------------------------------------------------------------- | ------------ | ------------------ | ---------------------------------- | ----------------------------------- |
-| `declined`, `expired_or_canceled_card`, `lost_or_stolen_card` | no           | never (final)      | yes                                | `refused_refund`, at once           |
-| `provider_removed` (the adapter is no longer installed)       | no           | never (final)      | yes                                | `refused_refund`, at once           |
-| `disputed` (the buyer's bank took the money back)             | no (already) | never (final)      | no: the dispute decides            | `refused_refund`, at once           |
-| `insufficient_funds` (the shop's provider balance is short)   | no           | yes, growing delay | yes                                | `stale_refund`, after the threshold |
-| `provider_unavailable`, `unknown`                             | maybe        | yes, growing delay | no: 409 `PAYMENT_REFUND_IN_FLIGHT` | `stale_refund`, after the threshold |
-| a `pending` record (an attempt is running)                    | maybe        | claimed when stale | no: 409 `PAYMENT_REFUND_IN_FLIGHT` | `stale_refund`                      |
+| The refusal                                                   | Money moved? | Retried?           | Hand settle                                                       | Attention kind                      |
+| ------------------------------------------------------------- | ------------ | ------------------ | ----------------------------------------------------------------- | ----------------------------------- |
+| `declined`, `expired_or_canceled_card`, `lost_or_stolen_card` | no           | never (final)      | yes                                                               | `refused_refund`, at once           |
+| `provider_removed` (the adapter is no longer installed)       | no           | never (final)      | yes                                                               | `refused_refund`, at once           |
+| `disputed` (the buyer's bank took the money back)             | no (already) | never (final)      | only after a lost chargeback covers it, see [Disputes](#disputes) | `refused_refund`, at once           |
+| `insufficient_funds` (the shop's provider balance is short)   | no           | yes, growing delay | yes                                                               | `stale_refund`, after the threshold |
+| `provider_unavailable`, `unknown`                             | maybe        | yes, growing delay | no: 409 `PAYMENT_REFUND_IN_FLIGHT`                                | `stale_refund`, after the threshold |
+| a `pending` record (an attempt is running)                    | maybe        | claimed when stale | no: 409 `PAYMENT_REFUND_IN_FLIGHT`                                | `stale_refund`                      |
 
 ```mermaid
 flowchart TD
@@ -659,6 +659,76 @@ admin's own word that money arrived is exactly as consequential as one that it l
 The webhook is not on this diagram because it does not add an edge the diagram doesn't already
 have — it reaches the exact same `settlePayment` a sync does, with `succeeded` or `declined` as the
 only two states it ever reports.
+
+## Disputes {#disputes}
+
+A buyer can ask their bank to take a card payment back. The bank does it at once, and a window of
+about 7 to 21 days opens for the shop to send evidence. The application shows the dispute, alerts
+staff, and refuses to refund twice; the answer itself is given in the provider's own dashboard.
+
+```mermaid
+flowchart TD
+    D["provider webhook: dispute report<br/>(Stripe charge.dispute.*, Adyen CHARGEBACK ...)"] --> N{newer observedAt<br/>than the stored one?}
+    N -->|no: old or repeated| X[dropped, nothing announced]
+    N -->|yes, first report| O["store on Payment.disputes<br/>timeline dispute_opened<br/>payment.dispute_opened"]
+    N -->|yes, known dispute| U["replace the stored one<br/>payment.dispute_updated<br/>timeline dispute_closed if it just closed"]
+    O --> R{open chargeback?}
+    U --> R
+    R -->|yes| B["refund door: 409 PAYMENT_DISPUTED<br/>actions.refund false<br/>sent refunds fail final as disputed"]
+    R -->|lost or accepted| L["remaining = amount - refunded - lost"]
+    R -->|inquiry, won, closed| A[refunds allowed]
+```
+
+- **A chargeback is not a refund.** It raises no `payment.refunded`, so no credit note; it changes no
+  order status and no `amountRefunded` (Saleor lowers `charged`, not `refunded`). In the EU a lost
+  chargeback with no return is a non-payment, not a credit note (VAT Directive Art. 90); in Italy that
+  holds outside insolvency (DPR 633/72 art. 26). Have an accountant confirm it for your deployment.
+- **The report is the state.** Unlike a payment or a refund, a dispute is not re-read from the
+  provider: Adyen has no endpoint to read one, so the signed notification is the only source. The port
+  therefore carries `ProviderWebhookEvent.dispute` (`ProviderDisputeState`), and the application
+  trusts it only after the signature has been verified.
+- **Order is the provider's `observedAt`.** One write per report, conditional on it being newer than
+  the stored one for the same `disputeRef`; a repeated or out-of-order delivery changes and announces
+  nothing. There is no terminal state: a lost dispute can flip to `won` (a late win) and a closed one
+  can reopen (a second chargeback).
+- **Stored on the payment.** `Payment.disputes[]`, one per `disputeRef`, staff only on the wire. The
+  payment's `displayStatus` does not change (Shopify keeps `displayFinancialStatus` separate); the
+  staff list filters with `disputed=true`.
+
+| Rule                        | What happens                                                                                                                                 |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Open chargeback             | the operator refund door answers 409 `PAYMENT_DISPUTED`; `actions.refund` is false                                                           |
+| Open inquiry                | refunds stay allowed (a full refund ends one)                                                                                                |
+| Lost or accepted chargeback | what is left to refund shrinks by its amount; a late win gives it back                                                                       |
+| A refund sent meanwhile     | fails final as `disputed` without asking the provider; never retried; not settled by hand while the chargeback is open                       |
+| Lost chargeback covers it   | a refund open at that time may be marked returned (the bank paid the buyer); that is the normal path, so a return still gets its credit note |
+| Shop won                    | a refund refused as `disputed` can only be voided (`cancelRefund`)                                                                           |
+| Unshipped goods             | nothing is held by itself; staff use the existing `high_risk` hold                                                                           |
+
+**Visibility.** The attention list gets `dispute_needs_response` for a dispute waiting on the shop,
+with `since`, `dueBy` (the provider's evidence deadline) and `disputeId` (it has no `refundId`). When
+the payment already had refunds succeed, the row carries `alreadyRefunded`: send that refund as
+evidence (a refund-then-chargeback; Adyen defends it by itself). The order timeline gets two staff-only
+rows, `dispute_opened` and `dispute_closed`.
+
+**Events.** `payment.dispute_opened` on the first report and `payment.dispute_updated` on each newer
+one (Shopify's two topics), both through the outbox and both public webhook events. The payload is
+ids, closed codes and money: `{paymentId, orderId, disputeId, kind, status, reason, amount, currency,
+fundsWithdrawn, evidenceDueBy?}`.
+
+| Provider      | Its event                                                                                | Maps to                                              |
+| ------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Stripe        | `charge.dispute.created`, `.updated`, `.closed`, `.funds_withdrawn`, `.funds_reinstated` | re-read `disputes.retrieve`, fill the report from it |
+| Stripe status | `warning_needs_response`, `warning_under_review`, `warning_closed`                       | inquiry: `needs_response`, `under_review`, `closed`  |
+| Stripe status | `needs_response`, `under_review`, `won`, `lost`                                          | chargeback with the same status                      |
+| Stripe error  | `charge_disputed`, `refund_disputed_payment` on a refund                                 | `PaymentProviderError('disputed')`                   |
+| Adyen         | `REQUEST_FOR_INFORMATION`, `NOTIFICATION_OF_CHARGEBACK`                                  | inquiry, `needs_response`                            |
+| Adyen         | `CHARGEBACK`, `SECOND_CHARGEBACK`                                                        | chargeback, `needs_response` (reopens a closed one)  |
+| Adyen         | `CHARGEBACK_REVERSED`                                                                    | chargeback, `won`                                    |
+
+The fake provider's lever is `setFakeDispute(providerRef, state)` (`scenarios/support/doubles/payments/fake.ts`):
+it returns the delivery to hand to `applyWebhookDelivery`, and `signFakeDelivery` signs it for the
+real route. The demo profile's `POST /__test/payments/dispute` does it for an order.
 
 ## Bank transfer
 
@@ -851,7 +921,7 @@ provider's `setFakeRefundFailure` simulates each code.
 `paymentService.methodMix` groups the payments that took money (`succeeded`) by
 method, provider and currency, for [`stats`](./stats.md).
 
-**Needs attention** lists two sources, both an open refund record: a provider refund open longer
+**Needs attention** lists three sources: a dispute the shop has to answer ([Disputes](#disputes)), and two that are an open refund record: a provider refund open longer
 than `NODE_PAYMENT_ATTENTION_MINUTES`, and a refund owed by hand on a `manual` payment (nothing but
 the operator finishes it, so it shows at any age). A `refused_refund` row that pays a withdrawal or
 a return also carries `refundDueBy`, the refund's creation plus 14 days (Consumer Rights Directive,
@@ -881,14 +951,16 @@ see [Bank transfer](#bank-transfer).
 Payments feeds the order's [timeline](./orders.md#the-timeline) through `orderService.appendTimeline`,
 in the transaction of the fact each row describes, so a write that lost its race leaves no row.
 
-| Row                | Written when                                                 | Carries                                     |
-| ------------------ | ------------------------------------------------------------ | ------------------------------------------- |
-| `paid`             | the payment settles (`orders` writes it; payments names how) | `method`: `card`, or what staff recorded    |
-| `payment_declined` | the provider declines an attempt                             | `paymentId`                                 |
-| `refund_issued`    | a refund record is opened, before the provider is asked      | `refundId`, `amount`, `currency`, `reason`  |
-| `refund_settled`   | the record settles                                           | the same                                    |
-| `refund_failed`    | the provider refuses (staff only)                            | the same, and the closed `failureReason`    |
-| `refund_canceled`  | staff void the record (staff only)                           | the same; the note is only in the audit row |
+| Row                | Written when                                                     | Carries                                                       |
+| ------------------ | ---------------------------------------------------------------- | ------------------------------------------------------------- |
+| `paid`             | the payment settles (`orders` writes it; payments names how)     | `method`: `card`, or what staff recorded                      |
+| `payment_declined` | the provider declines an attempt                                 | `paymentId`                                                   |
+| `refund_issued`    | a refund record is opened, before the provider is asked          | `refundId`, `amount`, `currency`, `reason`                    |
+| `refund_settled`   | the record settles                                               | the same                                                      |
+| `refund_failed`    | the provider refuses (staff only)                                | the same, and the closed `failureReason`                      |
+| `refund_canceled`  | staff void the record (staff only)                               | the same; the note is only in the audit row                   |
+| `dispute_opened`   | the provider first reports a dispute (staff only)                | `disputeId`, `kind`, `status`, `reason`, `amount`, `currency` |
+| `dispute_closed`   | a dispute first reads won, lost, accepted or closed (staff only) | the same                                                      |
 
 The provider's wording is never copied: it can carry anything, and only the closed code is stored.
 The `actor` is the operator who asked or recorded the money; an automatic refund has none.
@@ -1052,6 +1124,10 @@ throws. `retrieveRefund(refundRef)` returns the refund's own status: Stripe `can
 
 `parseWebhook(rawBody, headers)` receives every header: Stripe signs in `Stripe-Signature`, PayPal
 in several. A charge under dispute (`charge_disputed`, `refund_disputed_payment`) is `disputed`.
+
+| Stripe event                                                                             | Delivery                                                                |
+| ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `charge.dispute.created`, `.updated`, `.closed`, `.funds_withdrawn`, `.funds_reinstated` | `{id, providerRef: payment_intent, dispute}`, see [Disputes](#disputes) |
 
 ### Refund errors
 

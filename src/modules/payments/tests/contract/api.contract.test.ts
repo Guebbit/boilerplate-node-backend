@@ -89,6 +89,26 @@ const paidOrder = async () => {
     return { bearer, order, paymentId };
 };
 
+// Literals, as the rest of this file: a delivery's inputs come from the contract, not the double.
+/** A dispute delivery for an intent, as the contract spells it. */
+const disputeEvent = (providerRef: string, over: Record<string, unknown> = {}) => ({
+    id: 'evt_dp',
+    providerRef,
+    dispute: {
+        disputeRef: 'dp_contract',
+        kind: 'chargeback',
+        status: 'needs_response',
+        reason: 'product_not_received',
+        amount: 20,
+        currency: 'EUR',
+        fundsWithdrawn: true,
+        evidenceDueBy: '2026-10-20T10:00:00.000Z',
+        observedAt: '2026-10-10T10:00:00.000Z',
+        dashboardUrl: 'https://dashboard.example/disputes/dp_contract',
+        ...over
+    }
+});
+
 describe('GET /payments/methods', () => {
     it('matches the contract, unauthenticated included — methods are pre-purchase information', async () => {
         const response = await api().get('/payments/methods');
@@ -1441,5 +1461,62 @@ describe('the staff Payments page', () => {
 
         expect(response.status).toBe(200);
         expect(response.body).toEqual({ items: [] });
+    });
+
+    it('a signed dispute delivery is acknowledged, shown to staff, and closes the refund door', async () => {
+        const { paymentId } = await paidOrder();
+        const { bearer: adminBearer } = await authenticateAs('admin');
+        const payment = await paymentRepository.findById(paymentId);
+
+        const delivered = await deliver(disputeEvent(String(payment!.providerRef)));
+        const read = await api().get(`/payments/${paymentId}`).set('Authorization', adminBearer);
+        const attention = await api().get('/payments/attention').set('Authorization', adminBearer);
+        const filtered = await api()
+            .get('/payments')
+            .query({ disputed: true })
+            .set('Authorization', adminBearer);
+        const refused = await api()
+            .post(`/payments/${paymentId}/refunds`)
+            .set('Authorization', adminBearer)
+            .set('Idempotency-Key', freshKey());
+
+        expect(delivered.status).toBe(204);
+        expect(read.body.disputes).toEqual([
+            expect.objectContaining({ disputeRef: 'dp_contract', status: 'needs_response' })
+        ]);
+        expect(read.body.actions.refund).toBe(false);
+        expect(attention.body.items).toEqual([
+            expect.objectContaining({
+                kind: 'dispute_needs_response',
+                disputeId: 'dp_contract',
+                dueBy: '2026-10-20T10:00:00.000Z'
+            })
+        ]);
+        expect(filtered.body.items).toHaveLength(1);
+        expect(refused.status).toBe(409);
+        expect(refused.body.errors[0].code).toBe('PAYMENT_DISPUTED');
+    });
+
+    it('keeps the dispute off the payer`s own read of the payment', async () => {
+        const { paymentId, bearer } = await paidOrder();
+        const payment = await paymentRepository.findById(paymentId);
+        await deliver(disputeEvent(String(payment!.providerRef)));
+
+        const response = await api().get(`/payments/${paymentId}`).set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.disputes).toBeUndefined();
+    });
+
+    it('refuses a dispute delivery with a kind the contract does not name', async () => {
+        const { paymentId } = await paidOrder();
+        const payment = await paymentRepository.findById(paymentId);
+
+        const response = await deliver(
+            disputeEvent(String(payment!.providerRef), { kind: 'surprise' })
+        );
+
+        expect(response.status).toBe(400);
+        expect((await paymentRepository.findById(paymentId))!.disputes).toHaveLength(0);
     });
 });

@@ -22,6 +22,7 @@ import {
     CONFIRMABLE_PAYMENT_STATUSES,
     IN_FLIGHT_PAYMENT_STATUSES,
     REFUNDABLE_PAYMENT_STATUS,
+    hasOpenChargeback,
     isHandRecorded,
     isOpenTransfer,
     mayBeSettledByHand,
@@ -238,11 +239,13 @@ export const withActions = (
     actions: {
         pay: mayPay(payment, order, authContext),
         sync: maySync(payment, authContext),
-        // Only an operator returns money, and only money that actually arrived.
+        // Only an operator returns money, and only money that actually arrived and the bank has
+        // not taken back: an open chargeback closes the door (`PAYMENT_DISPUTED`).
         refund:
             mayRefund(authContext) &&
             payment.status === REFUNDABLE_PAYMENT_STATUS &&
-            remainingOf(payment) > 0,
+            remainingOf(payment) > 0 &&
+            !hasOpenChargeback(payment),
         settleByHand: settleableByHand(payment, authContext),
         cancelRefund: cancelableRefunds(payment, authContext)
     }

@@ -704,6 +704,8 @@ components:
                 - refund_failed
                 - refund_canceled
                 - refund_reversed
+                - dispute_opened
+                - dispute_closed
                 - shipment_shipped
                 - shipment_delivered
                 - shipment_lost
@@ -724,12 +726,12 @@ components:
             description: >-
                 What happened. Order: `created`, `paid`, `processing`, `shipped`, `delivered`,
                 `cancelled`, `status_overridden`. Payment: `payment_declined`, `refund_issued`,
-                `refund_settled`, `refund_failed`, `refund_canceled`, `refund_reversed`. Shipments: `shipment_shipped`,
+                `refund_settled`, `refund_failed`, `refund_canceled`, `refund_reversed`, `dispute_opened`, `dispute_closed`. Shipments: `shipment_shipped`,
                 `shipment_delivered`, `shipment_lost`, `fulfillment_held`, `fulfillment_released`,
                 `remainder_cancelled`. Returns: `return_requested`, `return_approved`,
                 `return_declined`, `return_received`, `return_closed`, `return_canceled`. Documents: `invoice_issued`,
                 `credit_note_issued`. Preorders: `release_date_moved`, `delay_notice_sent`.
-                Staff-only: `address_corrected`, `refund_canceled`, `refund_reversed`.
+                Staff-only: `address_corrected`, `refund_canceled`, `refund_reversed`, `dispute_opened`, `dispute_closed`.
 
         OrderTimelineEntry:
             type: object

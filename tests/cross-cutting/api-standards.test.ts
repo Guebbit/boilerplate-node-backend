@@ -136,6 +136,10 @@ describe('a resource with a lifecycle status publishes required actions', () => 
             'a read-only row of the preorder board; every move is on `FulfillmentOrder`, one id away',
         'payments.Refund':
             'a line of its payment: refunds are moved through `PaymentActions` (settleByHand, cancelRefund)',
+        'payments.Dispute':
+            "a line of its payment: the shop answers it in the provider's dashboard, so there is no move to offer",
+        'payments.DisputeReport':
+            "the provider's own word inside a webhook delivery, not a record a caller acts on",
         'payments.RefundListItem':
             'a read-only log row of the Refunds tab; its moves are `PaymentActions` on the payment'
     };
