@@ -459,12 +459,12 @@ describe('DELETE /products/{id}/hard', () => {
     });
 });
 
-describe('GET /products/categories', () => {
+describe('GET /products/facets', () => {
     it('matches the contract, and only counts the public catalogue', async () => {
         await createProduct({ categories: ['pets'], tags: ['cute'] });
         await createProduct({ categories: ['secret'], tags: [], active: false });
 
-        const response = await api().get('/products/categories');
+        const response = await api().get('/products/facets');
 
         expect(response.status).toBe(200);
         expect(response.body.categories).toEqual([{ name: 'pets', count: 1 }]);
@@ -472,13 +472,13 @@ describe('GET /products/categories', () => {
     });
 
     it('keeps its own cache header over the no-store default', async () => {
-        const response = await api().get('/products/categories');
+        const response = await api().get('/products/facets');
 
         expect(response.headers['cache-control']).toMatch(/^public, max-age=\d+/);
     });
 
     it('matches the contract for an empty catalogue', async () => {
-        const response = await api().get('/products/categories');
+        const response = await api().get('/products/facets');
 
         expect(response.status).toBe(200);
         expect(response.body.categories).toEqual([]);

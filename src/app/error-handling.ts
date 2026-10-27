@@ -9,7 +9,7 @@
 import type { Express, Request, Response, NextFunction } from 'express';
 import { MulterError } from 'multer';
 import { logger, auditLogger } from '@infrastructure/adapters/logger';
-import { rejectResponse } from '@infrastructure/http/response';
+import { fieldError, rejectResponse } from '@infrastructure/http/response';
 import { databaseErrorInterpreter, rejectServiceUnavailable } from '@infrastructure/http/errors';
 import {
     getActiveSpanContext,
@@ -149,13 +149,16 @@ export const handleUncaughtError = (
     // The one throw shape this handler translates by hand: multer's `code` names which limit was
     // hit and stays in the item, but its English `message` is replaced by one translated text.
     // `status` is the 413-or-400 `resolveStatus` already chose.
-    if (error instanceof MulterError)
+    // `field` is set only when multer knows which form field broke the rule; then the item names it
+    // (`details.field`), as every one-field refusal does. `fieldError` supplies that shape.
+    if (error instanceof MulterError) {
+        const message = t('generic.error-upload-refused');
         return rejectResponse(response, status, [
-            {
-                code: error.code,
-                message: t('generic.error-upload-refused')
-            }
+            error.field === undefined || error.field === ''
+                ? { code: error.code, message }
+                : { ...fieldError(error.field, message), code: error.code }
         ]);
+    }
 
     // A dependency outage — the same answer a controller's own `.catch` gives it.
     if (status === 503) return rejectServiceUnavailable(response);

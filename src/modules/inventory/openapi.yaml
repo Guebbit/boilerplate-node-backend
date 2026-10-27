@@ -72,7 +72,7 @@ paths:
         get:
             tags: [Inventory]
             summary: Get one product's stock level
-            description: One row of the stock board by product, with its counters and availability — the record `receive`, `adjust` and `backorder-limit` act on. Same audience as the board (`read:StockLevel`). An unknown product, one with no level row and a malformed id are the same 404.
+            description: One row of the stock board by product, with its counters and availability — the record `receive`, `adjust` and the `PATCH` act on. Same audience as the board (`read:StockLevel`). An unknown product, one with no level row and a malformed id are the same 404.
             operationId: getInventoryLevel
             security:
                 - bearerAuth: []
@@ -93,16 +93,14 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-
-    /inventory/levels/{productId}/backorder-limit:
-        put:
+        patch:
             tags: [Inventory]
-            summary: Set a product's preorder limit
+            summary: Edit a product's stock level
             description: |
-                Sets how many units of the product may be backordered at once: the allowance an order claims when it is placed. `0` closes it; `null` removes the cap, so the shop keeps selling whatever the date promises. Lowering it below what is already outstanding is allowed and leaves those orders alone; only new ones are refused. Absolute and idempotent, so a retry is safe.
+                Merges the given fields into the level (RFC 7396). Only the preorder limit is editable; the counters move through `receive` and `adjust`. `backorderLimit` is how many units of the product may be backordered at once: the allowance an order claims when it is placed. `0` closes it; `null` removes the cap, so the shop keeps selling whatever the date promises. Lowering it below what is already outstanding is allowed and leaves those orders alone; only new ones are refused. A body that names no field changes nothing and answers the level as it is. Absolute and idempotent, so a retry is safe.
 
-                Not a stock movement: nothing on the shelf changes, so it leaves no ledger row (it is audited).
-            operationId: setBackorderLimit
+                Not a stock movement: nothing on the shelf changes, so it leaves no ledger row (it is audited). Needs `update:StockLevel`.
+            operationId: updateInventoryLevel
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -117,10 +115,13 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/BackorderLimitRequest'
+                            $ref: '#/components/schemas/UpdateInventoryLevelRequest'
+                    application/merge-patch+json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateInventoryLevelRequest'
             responses:
                 '200':
-                    description: The counters after the change
+                    description: The level after the change
                     content:
                         application/json:
                             schema:
@@ -471,10 +472,9 @@ components:
                 meta:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
 
-        BackorderLimitRequest:
+        UpdateInventoryLevelRequest:
             type: object
             additionalProperties: false
-            required: [backorderLimit]
             properties:
                 backorderLimit:
                     type: [integer, 'null']

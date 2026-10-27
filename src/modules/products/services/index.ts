@@ -15,7 +15,7 @@ import type { ProductDocument } from '../model';
 import { presentProduct } from '../presenter';
 import { canSeeStock, redactStock } from './stock-view';
 import { search, searchForCaller, facets } from './search';
-import { callerScope, getById, getByIdForCaller, getAdmin } from './read';
+import { callerScope, getById, getByIdForCaller } from './read';
 import { create, updateById, clearOmittedLocales } from './translated-write';
 import { removeById, restoreById } from './remove';
 import {
@@ -57,7 +57,6 @@ export const productService = {
     facets,
     getById,
     getByIdForCaller,
-    getAdmin,
     create,
     updateById,
     clearOmittedLocales,

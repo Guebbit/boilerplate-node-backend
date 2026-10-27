@@ -395,7 +395,8 @@ The problem's `title` stays the English status phrase on purpose: it is the deve
 label, `detail` and `errors[]` are what a person reads ([the shape](../api/errors.md#problem-details)). The locale is
 negotiated before request parsing, so the global limiter's 429 and a parser's 400 / 413 / 415
 speak the caller's language and carry `Content-Language` too. A `MulterError` keeps its `code`,
-and its English text is replaced by `generic.error-upload-refused`.
+and its English text is replaced by `generic.error-upload-refused`. When multer names the
+form field that broke the rule, the item also carries `details.field`.
 
 ### The database branch is a safety net, not a substitute
 

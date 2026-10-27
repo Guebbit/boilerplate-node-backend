@@ -114,7 +114,22 @@ describe('the 500 handler', () => {
 
         expect(response.status).toBe(status);
         expect(response.body.errors).toEqual([
-            { code, message: t('generic.error-upload-refused') }
+            {
+                code,
+                message: t('generic.error-upload-refused'),
+                details: { field: 'avatar' }
+            }
+        ]);
+    });
+
+    it('adds no details when multer names no field', async () => {
+        const multer = await import('multer');
+
+        const response = await answerFor(new multer.MulterError('LIMIT_FILE_COUNT'));
+
+        expect(response.status).toBe(400);
+        expect(response.body.errors).toEqual([
+            { code: 'LIMIT_FILE_COUNT', message: t('generic.error-upload-refused') }
         ]);
     });
 });
