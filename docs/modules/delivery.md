@@ -41,6 +41,7 @@ flowchart LR
     products -. "product.restock_date_changed" .-> delivery
     delivery -. "fulfillment_order.delayed" .-> notifications
     delivery -. "fulfillment_order.hold_noticed" .-> notifications
+    delivery -. "shipment.lost" .-> notifications
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -123,11 +124,12 @@ erDiagram
     }
     SHIPMENT {
         int number "unique with orderId"
-        string status "shipped | delivered"
+        string status "shipped | delivered | lost"
         string trackingCode
         bool forced
         date shippedAt
         date deliveredAt
+        date lostAt
     }
 ```
 
@@ -153,8 +155,9 @@ stateDiagram-v2
 ```
 
 - `closed` — nothing remains, and something shipped from it. `cancelled` — nothing ever shipped from it.
-- A shipment is born `shipped` and becomes `delivered`; a **digital** fulfilment is born delivered, in
-  the same write (Shopify fulfils digital goods without shipping them too).
+- A shipment is born `shipped` and becomes `delivered`, or `lost` when staff report it will not arrive
+  ([Lost in transit](#lost-in-transit)); a **digital** fulfilment is born delivered, in the same write
+  (Shopify fulfils digital goods without shipping them too).
 
 ### The grouping rule
 
@@ -489,8 +492,97 @@ was the last undelivered shipment **and** nothing remains to ship, and its withd
 delivery of the last item"). One window per order, from the last good; per-shipment windows would be
 shorter than the law allows.
 
+A `lost` shipment that turns up is recorded here too, when every unit on it is still open
+([Lost in transit](#the-lost-parcel-turns-up)).
+
 A remainder **cancelled after** every shipment was delivered makes the order `shipped` and `delivered`
 in one transaction, the clock counted from the cancellation: the order only became complete then.
+
+## Lost in transit
+
+`POST /delivery/shipments/{id}/lost` (`update:Shipment`, no step-up) is for a parcel that left and
+will not arrive: `{ reason: lost | damaged, note?, message? }`. **`damaged` means damaged in
+transit and reported before its arrival was recorded.** Damage found after the buyer has the goods is
+a [return](./returns.md), not this door. Only a `shipped` physical shipment on a `processing` or
+`shipped` order can be reported (`DELIVERY_NOT_LOSABLE`).
+
+The replacement lives on **the same order**: no new order, invoice, revenue or `order_created`, and the
+shipping is not charged again. (A €0 order would need a price override, a fake `paid` and a €0 invoice,
+and the original order would stay `shipped` for ever. Shopify's native model, like Solidus', also keeps
+the lines on the same order.) The EU rules agree: risk passes only when the buyer has the goods (CRD
+Art. 20), the reship is the original delivery duty (Art. 18), and the withdrawal clock and the
+guarantee start at the replacement's arrival, which `markDelivered` already counts.
+
+```mermaid
+sequenceDiagram
+    participant S as Staff
+    participant D as delivery
+    participant I as inventory
+    participant O as orders
+    participant B as Buyer
+    S->>D: POST /shipments/{id}/lost
+    Note over D,O: one transaction
+    D->>D: shipment lost, units off shippedQuantity
+    D->>I: top the hold up (shelf + owed)
+    I-->>D: per product: shelf, owed
+    D->>D: owed units: a new fulfillment order on hold
+    D->>O: summary; shipped → processing
+    D-->>B: shipment.lost (mail, inbox row, webhook)
+    S->>D: ship again (the ordinary door)
+```
+
+| Step              | What it does                                                                                                                                                                                                                                                 |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Shipment          | `shipped → lost`, with `lostAt`, `lostReason`, `lostMessage` (kept) and `lostNote` (reaped with the hold notes). One conditional write, so two reports of one parcel cannot both land                                                                        |
+| Fulfillment order | every lost unit comes off the line's `shippedQuantity`, so the units are open again; staff ship them with the ordinary ship door. The net `shippedQuantity` is what `returns` gates on, so a buyer can never return twice what they bought                   |
+| Stock             | the hold is topped up with the shelf units that are free, never units held for another order. What the shelf cannot cover is **owed**: see below                                                                                                             |
+| Order             | a `shipped` order steps back to `processing` (the system-only `reopen` edge, the one backward move); a `processing` one stays                                                                                                                                |
+| Records           | timeline `shipment_lost` (buyer-visible), audit `admin.shipment.lost` (the reason code only), event and webhook `shipment.lost` (the reason code, never the free text)                                                                                       |
+| Buyer             | a mail with a fixed text per reason, what the parcel carried, what is owed and when, and staff's `message` in a quote; the same in the inbox (`notifications.shipment-lost`). Always sent, there is no switch. The `note` is for colleagues and never leaves |
+| Untouched         | no invoice, no credit note, no revenue                                                                                                                                                                                                                       |
+
+A lost shipment still counts as shipped in the order's summary (`shipped: true`), which keeps the
+whole-order cancel closed; it counts as neither out nor arrived (`undelivered` leaves it out).
+
+### Owed after a loss, when the shelf is short
+
+The lost units were already taken off the shelf when the parcel shipped, so only what the shelf has
+free can be set aside again. The rest becomes a claim on the restock that **ignores the backorder
+cap** (the cap limits new sales, not a promise the shop already made), first in the queue by the
+original payment ([inventory](./inventory-reservations.md#owed-after-a-loss)). Those units go to a
+**new fulfillment order**, `on_hold` for `awaiting_stock`, `cause: backorder`, dated by the products'
+restock dates or the 30-day default, and linked to the loss (`sourceShipmentId`). The original
+fulfillment order is not held: the units the shelf covered ship at once.
+
+On the original line, `shippedQuantity` drops by **all** the lost units and `quantity` drops by the
+owed part, which the new order carries, so what the order holds never exceeds what was bought. Stock
+arriving releases the owed order through the same allocation as any backorder; the buyer can still
+cancel it, and a product deleted since has no stock row, so the loss is recorded with no claim.
+
+### The lost parcel turns up
+
+`POST /delivery/shipments/{id}/deliver` accepts a `lost` shipment **if and only if every unit on it is
+still open**: the shelf part still unshipped and uncancelled on the original fulfillment order, and
+every owed unit still unshipped and uncancelled on the orders linked to the loss. All or nothing, in
+the arrival's transaction:
+
+- the shipment becomes `delivered` (`lostAt` and `lostReason` stay as history);
+- the units go back onto the original order as shipped, and the owed orders close with
+  `cancelReason: found` and no refund;
+- the top-up is given back and the hold ends `shipped`, not `released`;
+- the order settles as for any arrival, the clock starting at this one.
+
+Otherwise it answers `409 DELIVERY_LOST_SUPERSEDED`, which protects the counts, not a policy: taking
+them back would count the goods twice. `ShipmentActions.deliver` is true for a lost shipment exactly
+when the condition holds.
+
+**What the shop does about the second parcel** is a guide matter: ask for one back or let the buyer
+keep it ([The lost parcel arrived](../demo-ecommerce/when-something-goes-wrong.md#lost-parcel-arrived)).
+A parcel returned to sender needs no door of its own: receive the units
+([It came back to us](../demo-ecommerce/when-something-goes-wrong.md#parcel-came-back)), then ship them again.
+
+For the accountant, the shipment with its tracking code and note is the loss documentation: Italy
+presumes goods that went missing were sold unless the loss is documented (DPR 441/1997).
 
 ## Digital fulfilment
 
@@ -524,7 +616,7 @@ at a time**, by [`returns`](./returns.md#cancelling-what-has-not-shipped)
 (a Return of `kind: cancellation`) — it moves the money, the stock and the shipping rule, and is the
 only module that already reaches all of them. This module only marks the lines:
 `cancelRemainder(fulfillmentOrderId, orderId, session, reason)`, called inside `returns`' own
-transaction, and stores who cancelled (`cancelReason`: `buyer`, `staff` or `order`). The
+transaction, and stores who cancelled (`cancelReason`: `buyer`, `staff`, `order`, or `found` for the owed units of a lost parcel that turned up). The
 result says whether the fulfillment order was held for stock (`waitingForStock`), because then what
 is given back is the preorder allowance and not shelf units.
 
@@ -537,6 +629,7 @@ Each act writes its rows to the order's [timeline](./orders.md#the-timeline) in 
 | ---------------------- | -------------------------------------------------------------- | ------------------------------------------------------------ |
 | `shipment_shipped`     | a shipment is cut (also a digital fulfilment)                  | shipment and fulfillment order ids, `number`, `trackingCode` |
 | `shipment_delivered`   | a shipment arrives                                             | the same ids                                                 |
+| `shipment_lost`        | staff report a shipment lost or damaged                        | the same ids, `reason` code; never the note or the message   |
 | `fulfillment_held`     | staff hold one, or a preorder group is born on hold            | `reason` code; never the note (staff only)                   |
 | `fulfillment_released` | staff, or an allocation of stock, release it (staff only)      | fulfillment order id                                         |
 | `remainder_cancelled`  | `returns` cancels what had not shipped                         | fulfillment order id                                         |
@@ -555,18 +648,19 @@ date this order was expecting, not the product's previous date.
 
 ## Routes and events
 
-| Route                                                      | Key                                                | Answers                                                        |
-| ---------------------------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------- |
-| `GET /delivery/methods`                                    | public                                             | the shipping methods and what each costs                       |
-| `GET /delivery/fulfillment-orders` · `/summary`            | `display:Order`                                    | [the preorder board](#the-preorder-board)'s two reads          |
-| `GET /delivery/fulfillment-orders/restock-date-impact`     | `update:Product` + `display:Order`                 | orders a restock-date move would email, before it is saved     |
-| `GET /orders/{id}/fulfillment-orders` · `/shipments`       | the owner, or staff                                | `{ items[] }` each, every item with its own `actions`; unpaged |
-| `POST /orders/{id}/process`                                | `start:Shipment`                                   | the order, `processing`                                        |
-| `POST /delivery/fulfillment-orders/{id}/shipments`         | `update:Shipment`                                  | `201` + the shipment                                           |
-| `POST /delivery/fulfillment-orders/{id}/fulfill`           | `update:Shipment` (+ `start:Shipment` from `paid`) | the shipment, delivered                                        |
-| `POST /delivery/fulfillment-orders/{id}/hold` · `/release` | `update:Shipment`                                  | the fulfillment order                                          |
-| `PATCH /delivery/shipments/{id}`                           | `update:Shipment`                                  | the shipment, tracking added or corrected, at any time         |
-| `POST /delivery/shipments/{id}/deliver`                    | `update:Shipment`                                  | the shipment                                                   |
+| Route                                                      | Key                                                | Answers                                                                             |
+| ---------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `GET /delivery/methods`                                    | public                                             | the shipping methods and what each costs                                            |
+| `GET /delivery/fulfillment-orders` · `/summary`            | `display:Order`                                    | [the preorder board](#the-preorder-board)'s two reads                               |
+| `GET /delivery/fulfillment-orders/restock-date-impact`     | `update:Product` + `display:Order`                 | orders a restock-date move would email, before it is saved                          |
+| `GET /orders/{id}/fulfillment-orders` · `/shipments`       | the owner, or staff                                | `{ items[] }` each, every item with its own `actions`; unpaged                      |
+| `POST /orders/{id}/process`                                | `start:Shipment`                                   | the order, `processing`                                                             |
+| `POST /delivery/fulfillment-orders/{id}/shipments`         | `update:Shipment`                                  | `201` + the shipment                                                                |
+| `POST /delivery/fulfillment-orders/{id}/fulfill`           | `update:Shipment` (+ `start:Shipment` from `paid`) | the shipment, delivered                                                             |
+| `POST /delivery/fulfillment-orders/{id}/hold` · `/release` | `update:Shipment`                                  | the fulfillment order                                                               |
+| `PATCH /delivery/shipments/{id}`                           | `update:Shipment`                                  | the shipment, tracking added or corrected, at any time (shipped, delivered or lost) |
+| `POST /delivery/shipments/{id}/deliver`                    | `update:Shipment`                                  | the shipment                                                                        |
+| `POST /delivery/shipments/{id}/lost`                       | `update:Shipment`                                  | the shipment, `lost`                                                                |
 
 Every button a client draws comes from the record's own `actions` (or `GET /returns/options`): the
 frontend never re-derives a rule. Every staff door asks the key and nothing else: [no rank](../theory/authorization.md#protecting-people).
@@ -574,12 +668,14 @@ frontend never re-derives a rule. Every staff door asks the key and nothing else
 `FulfillmentOrderActions.ship` and `fulfill` are true on a `paid` order only for a caller who also holds
 `start:Shipment`. The forced arrival has its own flag beside the ordinary one: `forceDeliver` (the
 arrival is open, as for `deliver`, and the caller also holds `override:Order`; true beside `deliver`,
-since forcing only skips the carrier's confirmation). `ShipmentActions.update` is the tracking-code edit.
+since forcing only skips the carrier's confirmation). `ShipmentActions.update` is the tracking-code edit
+and `markLost` the lost-parcel report.
 
 | Event                                                 | Payload                                                    | Public webhook                 |
 | ----------------------------------------------------- | ---------------------------------------------------------- | ------------------------------ |
 | `shipment.shipped`                                    | `{orderId, shipmentId, fulfillmentOrderId, lines}`         | yes — replaces `order.shipped` |
 | `shipment.delivered`                                  | the same                                                   | yes                            |
+| `shipment.lost`                                       | the same, `reason`, and what the buyer is told             | yes — the reason code only     |
 | `fulfillment_order.held` · `.released` · `.cancelled` | `{orderId, fulfillmentOrderId, reason?}`                   | no                             |
 | `fulfillment_order.hold_noticed`                      | `{orderId, fulfillmentOrderId, userId?, notice, message?}` | no                             |
 | `fulfillment_order.delayed`                           | the dates, the titles, `reason` (`moved` or `due`)         | no                             |
@@ -595,17 +691,17 @@ own subject, only when the code actually changed; best effort, after the save. T
 that left without one says "your tracking code is ready"; a replacement says it changed, with an apology
 for the earlier code. The audit row records the code before and after.
 
-The code can be set at any time, delivered shipments included: it is most useful later, as dispute
+The code can be set at any time, delivered and lost shipments included: it is most useful later, as dispute
 evidence. A digital shipment never had a carrier and refuses it with `DELIVERY_NOT_PHYSICAL`; the
 shipment stores the fulfillment order's `kind` for that reason.
 
 ## Your data
 
 A shipment and a fulfillment order are the buyer's data by way of their order: `POST /account/export`
-carries a `shipments` section (lines, number, tracking, dates) and a `fulfillmentOrders` section
+carries a `shipments` section (lines, number, tracking, dates, and for a loss its reason, message and **staff's note**) and a `fulfillmentOrders` section
 (lines, dates, hold reason, **staff's hold note**): a note a person typed about a person is that
 person's data, and the record holds no staff id, so none is exported. The note is also **reaped** — `npm run job reap:delivery` unsets it once the fulfillment order has not
-changed for `NODE_HOLD_NOTE_RETENTION_DAYS` (default 365), exactly as `reap:returns` does for a return's
+changed for `NODE_HOLD_NOTE_RETENTION_DAYS` (default 365), and a lost parcel's `lostNote` with it (`lostMessage` stays: it was sent to the buyer), exactly as `reap:returns` does for a return's
 text ([why](../theory/data-retention.md#free-text-on-holds)). Lines, status and dates stay: they are the
 trail.
 
@@ -631,10 +727,10 @@ Every rule this module declares and who holds it, role by role. The rule is what
 
 <!-- permissions:start -->
 
-| Rule              | Set                  | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                                             |
-| ----------------- | -------------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `update:Shipment` | `DeliveryManagement` | —       | —            | —          | —         | ✅          | —         | —        | —           | ✅      | —          | ✅         | Cut a shipment from a fulfillment order, record its arrival, correct its tracking code, and hold or release a fulfillment order. |
-| `start:Shipment`  | `DeliveryStart`      | —       | —            | —          | ✅        | ✅          | —         | —        | —           | ✅      | —          | ✅         | Begin fulfilling a paid order — the move into `processing`, before any parcel exists to record.                                  |
+| Rule              | Set                  | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                                                                              |
+| ----------------- | -------------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `update:Shipment` | `DeliveryManagement` | —       | —            | —          | —         | ✅          | —         | —        | —           | ✅      | —          | ✅         | Cut a shipment from a fulfillment order, record its arrival, correct its tracking code, report a parcel lost or damaged, and hold or release a fulfillment order. |
+| `start:Shipment`  | `DeliveryStart`      | —       | —            | —          | ✅        | ✅          | —         | —        | —           | ✅      | —          | ✅         | Begin fulfilling a paid order — the move into `processing`, before any parcel exists to record.                                                                   |
 
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in

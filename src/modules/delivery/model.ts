@@ -6,8 +6,9 @@
  * - a **fulfillment order** is a group of an order's lines that should leave together, made by rule
  *   when the order is paid (Shopify's `FulfillmentOrder`);
  * - a **shipment** is what actually left, at one time, with one tracking code (Shopify's
- *   `Fulfillment`). Its two statuses mirror the tail of the order's lifecycle rather than replacing
- *   it, since the tracking code and delivery timestamp are carrier facts the order has no field for.
+ *   `Fulfillment`). Its statuses mirror the tail of the order's lifecycle rather than replacing
+ *   it, since the tracking code and delivery timestamp are carrier facts the order has no field for;
+ *   `lost` is the one a parcel reaches when staff report it will not arrive.
  *
  * See: docs/modules/delivery.md
  */
@@ -20,6 +21,7 @@ import {
     FulfillmentHoldReason,
     FulfillmentOrderKind,
     FulfillmentOrderStatus,
+    ShipmentLostReason,
     ShipmentStatus
 } from '@types';
 import type { OrderAddress } from '@types';
@@ -72,6 +74,12 @@ export interface FulfillmentOrderDocument extends Document {
     /** Who cancelled what was left, once something was. */
     cancelReason?: FulfillmentCancelReason;
     /**
+     * The lost shipment whose owed units this fulfillment order waits for: present on the order made
+     * by a loss the shelf could not cover, and copied to the order a short stock delivery splits
+     * off it. What lets the parcel turning up find, and close, every part that is still owed.
+     */
+    sourceShipmentId?: Types.ObjectId;
+    /**
      * Counts every write. A shipment or a cancel claims the fulfillment order by matching this, so
      * two of them racing the same remainder cannot both land.
      */
@@ -102,6 +110,13 @@ export interface ShipmentDocument extends Document {
     forced: boolean;
     shippedAt: Date;
     deliveredAt?: Date;
+    /** When staff reported it lost or damaged; kept when it turns up and is then delivered. */
+    lostAt?: Date;
+    lostReason?: ShipmentLostReason;
+    /** Staff's free text about the loss. Reaped like `holdNote`. */
+    lostNote?: string;
+    /** What staff wrote FOR the buyer about the loss. Kept with the order, never reaped. */
+    lostMessage?: string;
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -169,6 +184,7 @@ export const fulfillmentOrderSchema = new Schema<FulfillmentOrderDocument>(
         lastNoticeAt: { type: Date },
         dueNoticeFor: { type: Date },
         cancelReason: { type: String, enum: Object.values(FulfillmentCancelReason) },
+        sourceShipmentId: { type: Schema.Types.ObjectId, ref: 'Shipment' },
         revision: { type: Number, required: true, default: 0 }
     },
     { timestamps: true }
@@ -187,6 +203,12 @@ fulfillmentOrderSchema.index(
 fulfillmentOrderSchema.index(
     { status: 1, holdReason: 1, expectedAt: 1 },
     { name: 'fulfillmentorders_status_holdReason_expectedAt' }
+);
+
+// Finds every fulfillment order a lost parcel left owing, when the parcel turns up.
+fulfillmentOrderSchema.index(
+    { sourceShipmentId: 1 },
+    { name: 'fulfillmentorders_sourceShipmentId', sparse: true }
 );
 
 // The preorder board's order (earliest expected first) and its product filter.
@@ -232,7 +254,11 @@ export const shipmentSchema = new Schema<ShipmentDocument>(
         destination: { type: destinationSchema },
         forced: { type: Boolean, required: true, default: false },
         shippedAt: { type: Date, required: true },
-        deliveredAt: { type: Date }
+        deliveredAt: { type: Date },
+        lostAt: { type: Date },
+        lostReason: { type: String, enum: Object.values(ShipmentLostReason) },
+        lostNote: { type: String, maxlength: 1000 },
+        lostMessage: { type: String, maxlength: 500 }
     },
     { timestamps: true }
 );

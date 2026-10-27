@@ -1,7 +1,7 @@
 /**
  * @module
  * Contract tests for /delivery over real HTTP — every response is judged against the spec
- * automatically (`@tests/contract`). Nine routes, three audiences: the methods list is public, the
+ * automatically (`@tests/contract`). Ten routes, three audiences: the methods list is public, the
  * fulfilment read is the owner's, the write doors are staff's. These pin that each contract
  * branch is reached over HTTP; the acts' own rules live in the unit and integration suites.
  */
@@ -122,7 +122,8 @@ describe('GET /orders/{id}/fulfillment-orders and /shipments', () => {
         expect(left.body.items[0].actions).toEqual({
             deliver: false,
             forceDeliver: false,
-            update: false
+            update: false,
+            markLost: false
         });
     });
 
@@ -631,6 +632,111 @@ describe('POST /delivery/shipments/{id}/deliver', () => {
         expect(again.status).toBe(409);
         expect(again.body.errors[0].code).toBe('DELIVERY_NOT_DELIVERABLE');
         expect(missing.status).toBe(404);
+    });
+});
+
+describe('POST /delivery/shipments/{id}/lost', () => {
+    it('matches the contract: the shipment is lost, the order steps back, the buyer reads the message but not the note', async () => {
+        const { bearer: customer, order } = await authenticateWithShipment();
+        const { bearer } = await authenticateAs('admin');
+        const [shipment] = await shipmentsOf(String(order._id));
+
+        const response = await api()
+            .post(`/delivery/shipments/${String(shipment._id)}/lost`)
+            .set('Authorization', bearer)
+            .send({ reason: 'lost', note: 'carrier claim 7', message: 'A new one is on its way.' });
+        const own = await api()
+            .get(`/orders/${String(order._id)}/shipments`)
+            .set('Authorization', customer);
+
+        expect(response.status).toBe(200);
+        expect(response.body).toMatchObject({
+            status: 'lost',
+            lostReason: 'lost',
+            lostNote: 'carrier claim 7',
+            lostMessage: 'A new one is on its way.'
+        });
+        expect(response.body.actions).toMatchObject({ markLost: false, deliver: true });
+        expect(own.body.items[0]).toMatchObject({
+            status: 'lost',
+            lostMessage: 'A new one is on its way.'
+        });
+        expect(own.body.items[0].lostNote).toBeUndefined();
+        expect(await readOrder(String(order._id)).then((one) => one?.status)).toBe(
+            OrderStatus.processing
+        );
+    });
+
+    it('answers 422 for a missing reason, an unknown one, an empty message and one past 500 characters', async () => {
+        const { order } = await authenticateWithShipment();
+        const { bearer } = await authenticateAs('admin');
+        const [shipment] = await shipmentsOf(String(order._id));
+        const url = `/delivery/shipments/${String(shipment._id)}/lost`;
+
+        const bodies = [
+            {},
+            { reason: 'stolen' },
+            { reason: 'lost', message: '' },
+            { reason: 'lost', message: 'x'.repeat(501) }
+        ];
+        const statuses: number[] = [];
+        for (const body of bodies) {
+            const response = await api().post(url).set('Authorization', bearer).send(body);
+            statuses.push(response.status);
+        }
+
+        expect(statuses).toEqual([422, 422, 422, 422]);
+    });
+
+    it('answers 409 DELIVERY_NOT_LOSABLE for a parcel already delivered or already lost, and 404 for a missing one', async () => {
+        const { order } = await authenticateWithShipment();
+        const { bearer } = await authenticateAs('admin');
+        const [shipment] = await shipmentsOf(String(order._id));
+        const url = `/delivery/shipments/${String(shipment._id)}/lost`;
+        await api().post(url).set('Authorization', bearer).send({ reason: 'lost' });
+
+        const again = await api().post(url).set('Authorization', bearer).send({ reason: 'lost' });
+        const missing = await api()
+            .post(`/delivery/shipments/${MISSING_ID}/lost`)
+            .set('Authorization', bearer)
+            .send({ reason: 'lost' });
+
+        expect(again.status).toBe(409);
+        expect(again.body.errors[0].code).toBe('DELIVERY_NOT_LOSABLE');
+        expect(missing.status).toBe(404);
+    });
+
+    it('answers 409 DELIVERY_LOST_SUPERSEDED when the lost parcel arrives after its units were shipped again', async () => {
+        const { order } = await authenticateWithShipment();
+        const { bearer } = await authenticateAs('admin');
+        const [shipment] = await shipmentsOf(String(order._id));
+        await api()
+            .post(`/delivery/shipments/${String(shipment._id)}/lost`)
+            .set('Authorization', bearer)
+            .send({ reason: 'lost' });
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
+        await api()
+            .post(`/delivery/fulfillment-orders/${String(fulfillmentOrder._id)}/shipments`)
+            .set('Authorization', bearer)
+            .send({});
+
+        const arrived = await api()
+            .post(`/delivery/shipments/${String(shipment._id)}/deliver`)
+            .set('Authorization', bearer);
+
+        expect(arrived.status).toBe(409);
+        expect(arrived.body.errors[0].code).toBe('DELIVERY_LOST_SUPERSEDED');
+    });
+
+    it('refuses a buyer with 403 and an anonymous caller with 401', async () => {
+        const { bearer: customer, order } = await authenticateWithShipment();
+        const [shipment] = await shipmentsOf(String(order._id));
+        const url = `/delivery/shipments/${String(shipment._id)}/lost`;
+
+        const buyer = await api().post(url).set('Authorization', customer).send({ reason: 'lost' });
+        const anonymous = await api().post(url).send({ reason: 'lost' });
+
+        expect([buyer.status, anonymous.status]).toEqual([403, 401]);
     });
 });
 

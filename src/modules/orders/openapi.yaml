@@ -706,6 +706,7 @@ components:
                 - refund_reversed
                 - shipment_shipped
                 - shipment_delivered
+                - shipment_lost
                 - fulfillment_held
                 - fulfillment_released
                 - remainder_cancelled
@@ -724,7 +725,7 @@ components:
                 What happened. Order: `created`, `paid`, `processing`, `shipped`, `delivered`,
                 `cancelled`, `status_overridden`. Payment: `payment_declined`, `refund_issued`,
                 `refund_settled`, `refund_failed`, `refund_canceled`, `refund_reversed`. Shipments: `shipment_shipped`,
-                `shipment_delivered`, `fulfillment_held`, `fulfillment_released`,
+                `shipment_delivered`, `shipment_lost`, `fulfillment_held`, `fulfillment_released`,
                 `remainder_cancelled`. Returns: `return_requested`, `return_approved`,
                 `return_declined`, `return_received`, `return_closed`, `return_canceled`. Documents: `invoice_issued`,
                 `credit_note_issued`. Preorders: `release_date_moved`, `delay_notice_sent`.

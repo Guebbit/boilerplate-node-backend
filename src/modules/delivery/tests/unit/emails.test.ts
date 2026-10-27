@@ -9,6 +9,7 @@
 import {
     fulfillmentDelayedEmail,
     shipmentDeliveredEmail,
+    shipmentLostEmail,
     shipmentShippedEmail
 } from '@modules/delivery/emails';
 
@@ -215,5 +216,52 @@ describe('fulfillmentDelayedEmail', () => {
             expect(value).not.toBe('');
             expect(value).not.toMatch(/^delivery\./);
         }
+    });
+});
+
+describe('shipmentLostEmail', () => {
+    const base = {
+        reason: 'lost' as const,
+        lines: LINES,
+        owed: [],
+        orderUrl: 'https://shop.example/orders/o1'
+    };
+
+    it('names its own template and a fixed text per reason, in both languages', () => {
+        for (const locale of ['en', 'it']) {
+            const lost = shipmentLostEmail(locale, NAME, base);
+            const damaged = shipmentLostEmail(locale, NAME, { ...base, reason: 'damaged' });
+
+            expect(lost.template).toBe('delivery.shipment-lost');
+            expect(lost.subject).not.toBe(damaged.subject);
+            expect(lost.data.body).not.toBe(damaged.data.body);
+            expect(JSON.stringify([lost, damaged])).not.toMatch(/delivery\.email-lost|\{\{/);
+        }
+    });
+
+    it('lists what the parcel carried and greets the buyer', () => {
+        const mail = shipmentLostEmail('en', NAME, base);
+
+        expect(mail.data.lines).toEqual(['2 × Analytical Engine', '1 × Punch cards']);
+        expect(mail.data.greeting).toContain(NAME);
+    });
+
+    it('says what is owed and when, only when something is', () => {
+        const owed = shipmentLostEmail('en', NAME, {
+            ...base,
+            owed: [{ title: 'Punch cards', quantity: 1 }],
+            expectedAt: new Date(Date.UTC(2026, 11, 20, 12))
+        });
+
+        expect(String(owed.data.owedIntro)).toContain('December');
+        expect(owed.data.owedLines).toEqual(['1 × Punch cards']);
+        expect(shipmentLostEmail('en', NAME, base).data.owedIntro).toBe('');
+    });
+
+    it('always carries the message as a string, empty when staff wrote none', () => {
+        expect(shipmentLostEmail('en', NAME, base).data.message).toBe('');
+        expect(shipmentLostEmail('en', NAME, { ...base, message: 'Sorry!' }).data.message).toBe(
+            'Sorry!'
+        );
     });
 });

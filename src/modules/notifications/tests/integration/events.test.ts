@@ -26,7 +26,6 @@ import { enabledModules } from '../../../../modules';
 
 setupTestDb();
 
-/** A user's inbox, newest first. */
 /** A `fulfillment_order.hold_noticed` fact for `userId`, absent for an erased account. */
 const heldFor = (userId: string | undefined) => ({
     orderId: 'order-1',
@@ -36,7 +35,21 @@ const heldFor = (userId: string | undefined) => ({
     message: 'Is the flat number right?'
 });
 
+/** A user's inbox, newest first. */
 const inboxOf = (userId: string) => notificationsService.list(userId).then(({ items }) => items);
+
+/** A `shipment.lost` fact for the given buyer. */
+const lostFor = (userId: string | undefined) => ({
+    orderId: 'order-1',
+    shipmentId: 'shipment-1',
+    fulfillmentOrderId: 'fo-1',
+    lines: [{ productId: 'p1', quantity: 2 }],
+    reason: 'lost' as const,
+    ...(userId ? { userId } : {}),
+    message: 'A new one ships on Monday.',
+    owed: [{ title: 'Blue mug', quantity: 1 }],
+    expectedAt: '2026-12-20T00:00:00.000Z'
+});
 
 describe('the module subscriptions', () => {
     beforeEach(() => {
@@ -331,6 +344,54 @@ describe('the module subscriptions', () => {
 
         it('writes no row at all for a buyer whose account was erased', async () => {
             await emitDomainEvent('fulfillment_order.hold_noticed', heldFor(undefined));
+
+            await expect(notificationModel.countDocuments({})).resolves.toBe(0);
+        });
+    });
+
+    describe('a parcel reported lost', () => {
+        it('lands in the buyer inbox with the message and what is owed, nothing staff typed', async () => {
+            const user = await createUser();
+
+            await emitDomainEvent('shipment.lost', lostFor(user.id));
+
+            const [message, ...rest] = await inboxOf(user.id);
+            expect(rest).toEqual([]);
+            expect(message).toMatchObject({
+                code: 'notifications.shipment-lost',
+                severity: 'warning',
+                params: {
+                    orderId: 'order-1',
+                    shipmentId: 'shipment-1',
+                    reason: 'lost',
+                    message: 'A new one ships on Monday.',
+                    owed: ['Blue mug'],
+                    expectedAt: '2026-12-20T00:00:00.000Z'
+                }
+            });
+            expect(JSON.stringify(message)).not.toMatch(/note/i);
+        });
+
+        it('leaves out the owed list and the date when the shelf covered everything', async () => {
+            const user = await createUser();
+
+            await emitDomainEvent('shipment.lost', {
+                ...lostFor(user.id),
+                message: undefined,
+                owed: [],
+                expectedAt: undefined
+            });
+
+            const [message] = await inboxOf(user.id);
+            expect(message?.params).toEqual({
+                orderId: 'order-1',
+                shipmentId: 'shipment-1',
+                reason: 'lost'
+            });
+        });
+
+        it('writes no row at all for a buyer whose account was erased', async () => {
+            await emitDomainEvent('shipment.lost', lostFor(undefined));
 
             await expect(notificationModel.countDocuments({})).resolves.toBe(0);
         });

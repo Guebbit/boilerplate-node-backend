@@ -39,13 +39,14 @@ import {
     FULFILLMENT_ORDER_DELAYED,
     FULFILLMENT_ORDER_HOLD_NOTICED,
     SHIPMENT_DELIVERED,
+    SHIPMENT_LOST,
     SHIPMENT_SHIPPED,
     type ShipmentEventPayload
 } from './events';
 import { deliveryJobs } from './jobs';
 
 /**
- * What both `shipment.*` webhooks carry: the shipment, its fulfillment order and what is in it.
+ * What every `shipment.*` webhook carries: the shipment, its fulfillment order and what is in it.
  * @param payload - the domain event's payload
  */
 const shipmentData = (payload: ShipmentEventPayload) => ({
@@ -72,6 +73,13 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
         toPublicEvent: (payload: DomainEventMap[typeof SHIPMENT_DELIVERED]) => ({
             eventType: 'shipment.delivered',
             data: shipmentData(payload)
+        })
+    },
+    [SHIPMENT_LOST]: {
+        // The reason code only: the sentence staff wrote for the buyer is free text and stays out.
+        toPublicEvent: (payload: DomainEventMap[typeof SHIPMENT_LOST]) => ({
+            eventType: 'shipment.lost',
+            data: { ...shipmentData(payload), reason: payload.reason }
         })
     }
 };
@@ -131,9 +139,10 @@ export default {
         onDomainEvent(PREORDER_ALLOCATED, ({ orderId, productId, waiting }) =>
             deliveryService.releaseAllocated(orderId, productId, waiting)
         );
-        // This module's own three mails, from its own facts — see `./services/notify.ts`.
+        // This module's own mails, from its own facts — see `./services/notify.ts`.
         onDomainEvent(SHIPMENT_SHIPPED, deliveryService.mailShipped);
         onDomainEvent(SHIPMENT_DELIVERED, deliveryService.mailDelivered);
+        onDomainEvent(SHIPMENT_LOST, deliveryService.mailLost);
         onDomainEvent(FULFILLMENT_ORDER_DELAYED, deliveryService.mailDelayed);
         onDomainEvent(FULFILLMENT_ORDER_HOLD_NOTICED, deliveryService.mailHoldNoticed);
         onDomainEvent(PRODUCT_RELEASE_DATE_CHANGED, ({ productId }) =>

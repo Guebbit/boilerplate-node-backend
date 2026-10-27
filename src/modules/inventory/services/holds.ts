@@ -391,6 +391,22 @@ export const releaseLinesForOrder = (
 ): Promise<boolean> => takeLines(orderId, lines, StockMovementReason.release, 'released', session);
 
 /**
+ * Give back what a lost parcel's top-up set aside, because the parcel turned up: `reserved` drops
+ * by the shelf part, `backordered` by the owed part, and the hold ends `shipped` (not `released`)
+ * once nothing is left on it — the goods it named left for good.
+ *
+ * @param orderId - the order whose parcel was found
+ * @param lines - the shelf part as stock, the owed part as a `backorder` line
+ * @param session - the caller's transaction; see {@link refreshStockCacheForOrder}
+ * @returns whether an open hold was there to take from
+ */
+export const releaseTopUpForOrder = (
+    orderId: string,
+    lines: readonly StockLine[],
+    session: ClientSession
+): Promise<boolean> => takeLines(orderId, lines, StockMovementReason.release, 'shipped', session);
+
+/**
  * Give an order's hold back — the units become sellable again.
  *
  * Same claim-then-act shape as the commit, so a cancel racing the sweep releases once. The two

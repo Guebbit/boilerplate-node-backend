@@ -11,7 +11,7 @@ import { holds } from '@kernel/ability';
 import { canRecordArrival, isAwaitingGoods } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { isOpenForShipment } from './ship-gate';
-import { FulfillmentOrderKind } from '@types';
+import { FulfillmentOrderKind, ShipmentStatus } from '@types';
 import type {
     AuthContext,
     FulfillmentOrder,
@@ -78,19 +78,30 @@ export const fulfillmentOrderActions = (
  * @param shipment - the shipment
  * @param order - the order it belongs to
  * @param standing - how the caller stands to it
+ * @param restorable - for a `lost` shipment: whether every unit on it is still open (see `./found`)
  */
 export const shipmentActions = (
     shipment: ShipmentDocument,
     order: OrderDocument,
-    standing: Standing
+    standing: Standing,
+    restorable = false
 ): ShipmentActions => {
-    const open = standing.staff && shipment.status === 'shipped' && canRecordArrival(order.status);
+    const mayAct = standing.staff && canRecordArrival(order.status);
+    // A `lost` parcel may still arrive while every unit on it is open: the caller says whether.
+    const open =
+        mayAct &&
+        (shipment.status === ShipmentStatus.shipped ||
+            (shipment.status === ShipmentStatus.lost && restorable));
     // The forced arrival has the same state gate as the ordinary one; it adds the override key.
     return {
         deliver: open,
         forceDeliver: open && standing.override,
         // The tracking code is a record staff may fix at any time, once and after arrival, on a parcel.
-        update: standing.staff && shipment.kind === FulfillmentOrderKind.physical
+        update: standing.staff && shipment.kind === FulfillmentOrderKind.physical,
+        markLost:
+            mayAct &&
+            shipment.status === ShipmentStatus.shipped &&
+            shipment.kind === FulfillmentOrderKind.physical
     };
 };
 
@@ -119,12 +130,14 @@ export const viewFulfillmentOrder = (
  * @param shipment - the shipment
  * @param order - the order it belongs to
  * @param authContext - the caller
+ * @param restorable - for a `lost` shipment: whether it can still be recorded as arrived
  */
 export const viewShipment = (
     shipment: ShipmentDocument,
     order: OrderDocument,
-    authContext: AuthContext | undefined
-): Shipment => presentShipmentFor(shipment, order, standingOn(authContext));
+    authContext: AuthContext | undefined,
+    restorable = false
+): Shipment => presentShipmentFor(shipment, order, standingOn(authContext), restorable);
 
 /**
  * A shipment as the wire carries it, for a caller whose standing is already known — the list read
@@ -132,14 +145,17 @@ export const viewShipment = (
  * @param shipment - the shipment
  * @param order - the order it belongs to
  * @param standing - how the caller stands to it
+ * @param restorable - for a `lost` shipment: whether it can still be recorded as arrived
  */
 export const presentShipmentFor = (
     shipment: ShipmentDocument,
     order: OrderDocument,
-    standing: Standing
+    standing: Standing,
+    restorable = false
 ): Shipment =>
     presentShipment(
         shipment,
-        shipmentActions(shipment, order, standing),
-        isAwaitingTracking(shipment, order.shippingMethod)
+        shipmentActions(shipment, order, standing, restorable),
+        isAwaitingTracking(shipment, order.shippingMethod),
+        standing.staff
     );

@@ -5,6 +5,9 @@
  * the order moves to `delivered` and its withdrawal clock starts from THAT arrival (CRD Art.
  * 9(2)(b)(i): the last good) — all in one transaction, with `shipment.delivered`.
  *
+ * A `lost` shipment that turns up is accepted too, when every unit on it is still open
+ * ({@link restoreLostShipment}): the same door for the same real-world fact.
+ *
  * See: docs/modules/delivery.md#delivering
  */
 
@@ -17,14 +20,15 @@ import {
 import { recordAudit } from '@infrastructure/observability/audit';
 import { canRecordArrival, orderService } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
+import { ShipmentStatus } from '@types';
 import type { AuthContext, CallerContext, Shipment } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { deliveryAuditActions } from '../audit';
 import { shipmentRepository } from '../repository';
 import type { ShipmentDocument } from '../model';
 import { refuse, refuseMissing, runAct } from './act';
-import { viewShipment } from './actions';
 import { announceDelivered } from './announce';
+import { restoreLostShipment, viewShipmentOf } from './found';
 import { refuseUnearnedForce } from './force';
 import { reportProgress, settleOrder } from './progress';
 
@@ -40,6 +44,8 @@ export interface DeliverInput {
 interface Delivered {
     shipment: ShipmentDocument;
     order: OrderDocument;
+    /** The shipment had been reported lost and turned up. */
+    wasLost: boolean;
 }
 
 /**
@@ -68,7 +74,10 @@ const deliverAct = async (
     // One instant for the shipment and, when it completes the order, the withdrawal deadline: the
     // two must never disagree about when the goods arrived.
     const at = new Date();
-    const shipment = await shipmentRepository.markDelivered(shipmentId, at, session);
+    const wasLost = found.status === ShipmentStatus.lost;
+    const shipment = wasLost
+        ? await restoreLostShipment(found, at, session)
+        : await shipmentRepository.markDelivered(shipmentId, at, session);
     if (!shipment)
         return refuse(409, ERROR_CODES.DELIVERY_NOT_DELIVERABLE, 'delivery.not-deliverable');
 
@@ -94,7 +103,7 @@ const deliverAct = async (
         );
     await announceDelivered(shipment, session, context.caller.id);
 
-    return { shipment, order };
+    return { shipment, order, wasLost };
 };
 
 /**
@@ -118,6 +127,7 @@ export const deliverShipment = (
     return runAct((session) => deliverAct(shipmentId, input, context, session)).then((result) => {
         if (result.refused) return result.reject;
         const { shipment } = result.value;
+        const lostFlag = result.value.wasLost ? { wasLost: true } : {};
         recordAudit(context, {
             action: deliveryAuditActions.ADMIN_ORDER_DELIVERED,
             outcome: 'success',
@@ -126,9 +136,17 @@ export const deliverShipment = (
             // A forced arrival is a sanctioned bypass: its reason is the justification.
             metadata:
                 input.forced === true
-                    ? { shipmentId, forced: true, reason: input.reason }
-                    : { shipmentId, forced: false }
+                    ? { shipmentId, forced: true, reason: input.reason, ...lostFlag }
+                    : { shipmentId, forced: false, ...lostFlag }
         });
-        return generateSuccess(viewShipment(shipment, result.value.order, authContext));
+        // A restore moved the stock hold: the catalogue's copy follows the commit.
+        const shelf = result.value.wasLost
+            ? orderService.refreshShelf(shipment.lines.map(({ productId }) => productId))
+            : Promise.resolve();
+        return shelf.then(() =>
+            viewShipmentOf(shipment, result.value.order, authContext).then((view) =>
+                generateSuccess(view)
+            )
+        );
     });
 };

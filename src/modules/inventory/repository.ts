@@ -30,7 +30,7 @@ import {
     type Wire
 } from '@infrastructure/persistence/create-repository';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
-import type { CounterDelta, HoldKind } from './domain';
+import { withAdded, type CounterDelta, type HoldKind } from './domain';
 import { StockMovementReason, type StockMovement } from '@types';
 
 /**
@@ -47,12 +47,14 @@ import { StockMovementReason, type StockMovement } from '@types';
  * @param reason - the transition
  * @param quantity - how many units; signed only for `adjust`
  * @param kind - what the units are; a preorder claim is released against `backordered`, not `reserved`
+ * @param uncapped - a claim the shop owes (a lost parcel) ignores the backorder cap
  * @returns the Mongo condition `applyDelta` must match for the transition to apply
  */
 const conditionFor = (
     reason: StockMovementReason,
     quantity: number,
-    kind: HoldKind
+    kind: HoldKind,
+    uncapped: boolean
 ): QueryFilter<StockLevelDocument> => {
     switch (reason) {
         case StockMovementReason.reserve: {
@@ -72,6 +74,7 @@ const conditionFor = (
         // the stored null, where `{ backorderLimit: null }` would also match an absent one, and
         // `$ifNull` below reads that absent field as zero, closed.
         case StockMovementReason.backorder: {
+            if (uncapped) return {};
             return {
                 $or: [
                     { backorderLimit: { $type: 'null' } },
@@ -222,7 +225,8 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
         quantity: number,
         delta: CounterDelta,
         session?: ClientSession,
-        kind?: HoldKind
+        kind?: HoldKind,
+        uncapped?: boolean
     ) => Promise<boolean>;
     setBackorderLimit: (productId: string, backorderLimit: number | null) => Promise<boolean>;
     preorderBoard: (options: {
@@ -317,6 +321,7 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
      * @param delta - the columns `counterDeltaFor` computed for this transition
      * @param session - the caller's transaction, when the write belongs to one
      * @param kind - what the units are; `stock` unless the claim is a preorder's
+     * @param uncapped - the claim is owed (a lost parcel): the backorder cap does not apply
      * @returns whether the condition matched and the counters actually moved
      */
     applyDelta: (
@@ -325,11 +330,15 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
         quantity: number,
         delta,
         session?: ClientSession,
-        kind: HoldKind = 'stock'
+        kind: HoldKind = 'stock',
+        uncapped = false
     ) =>
         stockLevelModel
             .updateOne(
-                { productId: toObjectId(productId), ...conditionFor(reason, quantity, kind) },
+                {
+                    productId: toObjectId(productId),
+                    ...conditionFor(reason, quantity, kind, uncapped)
+                },
                 {
                     $inc: {
                         onHand: delta.onHandDelta,
@@ -524,6 +533,11 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
         endsAs: ReservationStatus | undefined,
         session: ClientSession
     ) => Promise<ReservationDocument | null>;
+    topUpItems: (
+        orderId: string,
+        added: readonly { productId: string; quantity: number; kind?: HoldKind }[],
+        session: ClientSession
+    ) => Promise<boolean>;
     findPaidPreorderHolds: (
         productId: string,
         session: ClientSession
@@ -637,6 +651,74 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
                 { returnDocument: 'after', session }
             )
             .exec(),
+
+    /**
+     * Set more units aside on the order's hold, whatever state it is in: an open hold grows, a hold
+     * that already ended (`shipped`, `released`) is reopened as `committed` with ONLY the added
+     * units, because what it named before has left or been given back. The queue key
+     * (`committedAt`) keeps the original payment when there is one. With no hold at all, a
+     * `committed` one is made. Conditional on the status read, so a racing cancel loses cleanly.
+     *
+     * @param orderId - the order
+     * @param added - the units set aside on top
+     * @param session - the caller's transaction
+     * @returns whether the hold now names the added units
+     */
+    topUpItems: (orderId, added, session) =>
+        reservationModel
+            .findOne({ orderId: toObjectId(orderId) })
+            .session(session)
+            .exec()
+            .then((hold) => {
+                if (!hold)
+                    return reservationModel
+                        .create(
+                            [
+                                {
+                                    orderId: toObjectId(orderId),
+                                    items: toReservationItems(added),
+                                    status: 'committed',
+                                    committedAt: new Date(),
+                                    expiresAt: new Date()
+                                }
+                            ],
+                            { session }
+                        )
+                        .then(() => true);
+                const open = hold.status === 'held' || hold.status === 'committed';
+                const items = withAdded(
+                    open
+                        ? hold.items.map(({ productId, quantity, kind }) => ({
+                              productId: String(productId),
+                              quantity,
+                              kind: kind ?? 'stock'
+                          }))
+                        : [],
+                    added.map(({ productId, quantity, kind = 'stock' }) => ({
+                        productId,
+                        quantity,
+                        kind
+                    }))
+                );
+                return reservationModel
+                    .updateOne(
+                        { _id: hold._id, status: hold.status },
+                        {
+                            $set: {
+                                items: toReservationItems(items),
+                                ...(open
+                                    ? {}
+                                    : {
+                                          status: 'committed',
+                                          committedAt: hold.committedAt ?? new Date()
+                                      })
+                            }
+                        },
+                        { session }
+                    )
+                    .exec()
+                    .then(({ modifiedCount }) => modifiedCount > 0);
+            }),
 
     /**
      * The paid holds that still wait for stock of one product, oldest payment first — the queue a

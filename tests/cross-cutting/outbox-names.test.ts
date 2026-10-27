@@ -193,6 +193,7 @@ it('publishes the set the pair agreed on', () => {
         'delivery.fulfillment-delayed',
         'delivery.hold-notice',
         'delivery.shipment-delivered',
+        'delivery.shipment-lost',
         'delivery.shipment-shipped',
         'example.published',
         'feedback.contact',

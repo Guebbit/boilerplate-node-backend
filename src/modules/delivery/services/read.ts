@@ -23,9 +23,9 @@ import {
     standingOn,
     fulfillmentOrderActions,
     presentShipmentFor,
-    viewFulfillmentOrder,
-    viewShipment
+    viewFulfillmentOrder
 } from './actions';
+import { restorableIds, viewShipmentOf } from './found';
 import { ensureFulfillmentOrders } from './ensure';
 import { presentFulfillmentOrder } from '../presenter';
 
@@ -84,13 +84,21 @@ export const listShipmentsForOrder = (
 
         const standing = standingOn(authContext);
 
-        return shipmentRepository
-            .findByOrderId(orderId)
-            .then((shipments) =>
+        return shipmentRepository.findByOrderId(orderId).then((shipments) =>
+            // A lost parcel's `deliver` flag asks the fulfillment orders; one read for the order.
+            restorableIds(shipments, orderId).then((restorable) =>
                 generateSuccess(
-                    shipments.map((shipment) => presentShipmentFor(shipment, order, standing))
+                    shipments.map((shipment) =>
+                        presentShipmentFor(
+                            shipment,
+                            order,
+                            standing,
+                            restorable.has(String(shipment._id))
+                        )
+                    )
                 )
-            );
+            )
+        );
     });
 
 /**
@@ -113,7 +121,9 @@ export const getShipment = (
             .getById(String(found.orderId), orderService.callerScope(authContext))
             .then((order) =>
                 order
-                    ? generateSuccess(viewShipment(found, order, authContext))
+                    ? viewShipmentOf(found, order, authContext).then((view) =>
+                          generateSuccess(view)
+                      )
                     : generateReject(404, [t('delivery.shipment-not-found')])
             );
     });

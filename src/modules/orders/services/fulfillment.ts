@@ -10,7 +10,7 @@
  */
 
 import type { ClientSession } from 'mongoose';
-import { inventoryService, type StockLine } from '@modules/inventory';
+import { inventoryService, type StockLine, type TopUp } from '@modules/inventory';
 import type { OrderDocument } from '../model';
 import { orderRepository } from '../repository';
 import { isPayable, type FulfillmentSummary } from '../domain';
@@ -100,6 +100,39 @@ export const shipStock = (
     lines: readonly { productId: string; quantity: number }[],
     session: ClientSession
 ): Promise<boolean> => inventoryService.shipLinesForOrder(orderId, lines, session);
+
+/**
+ * Set units aside again for a shipment that was reported lost, in the caller's transaction: the
+ * shelf units there are, and the rest as a claim on the restock (outside the backorder cap). The
+ * units the lost parcel carried left the shelf when it shipped, so they are not on it to take back.
+ * The mirror of {@link shipStock} for the one case where goods that left must be found again.
+ *
+ * @param orderId - the order whose parcel was lost
+ * @param lines - what the lost shipment carried
+ * @param session - the act's transaction
+ * @returns per product, how many units were set aside from the shelf and how many are owed
+ */
+export const topUpStock = (
+    orderId: string,
+    lines: readonly { productId: string; quantity: number }[],
+    session: ClientSession
+): Promise<TopUp[]> => inventoryService.reserveMoreForOrder(orderId, lines, session);
+
+/**
+ * Give back what {@link topUpStock} set aside, because the lost parcel arrived after all, in the
+ * caller's transaction. Unlike {@link releaseStock} the hold ends `shipped`, not `released`: its
+ * goods left the shelf for good.
+ *
+ * @param orderId - the order whose parcel turned up
+ * @param lines - the units to give back; a `backorder` line gives back the claim on the restock
+ * @param session - the act's transaction
+ * @returns whether an open hold was there to take from
+ */
+export const releaseTopUp = (
+    orderId: string,
+    lines: readonly StockLine[],
+    session: ClientSession
+): Promise<boolean> => inventoryService.releaseTopUpForOrder(orderId, lines, session);
 
 /**
  * Give some of an order's held units back, in the caller's transaction: a cancelled remainder

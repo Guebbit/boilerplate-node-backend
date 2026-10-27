@@ -20,7 +20,12 @@ import {
 } from './model';
 import type { FulfillmentOrderDocument, ShipmentDocument } from './model';
 import { DUE_NOTICE_LEAD_MS, type FulfillmentOrderDraft, type WaitCause } from './domain';
-import { FulfillmentHoldReason, FulfillmentOrderStatus, PreorderFulfillmentState } from '@types';
+import {
+    FulfillmentHoldReason,
+    FulfillmentOrderStatus,
+    PreorderFulfillmentState,
+    ShipmentLostReason
+} from '@types';
 import {
     createRepository,
     toObjectId,
@@ -472,6 +477,16 @@ export const fulfillmentOrderRepository: Repository<
             .then((result) => result.modifiedCount)
 };
 
+/** What reporting a parcel lost writes on the shipment. */
+export interface LossRecord {
+    lostAt: Date;
+    lostReason: ShipmentLostReason;
+    /** Staff's free text; reaped. */
+    lostNote?: string | undefined;
+    /** What the buyer reads; kept. */
+    lostMessage?: string | undefined;
+}
+
 /** The shared factory's CRUD surface plus the shipment's own reads and conditional writes. */
 export const shipmentRepository: Repository<ShipmentDocument, Wire<ShipmentDocument>> & {
     findByOrderId: (orderId: string, session?: ClientSession) => Promise<ShipmentDocument[]>;
@@ -487,6 +502,17 @@ export const shipmentRepository: Repository<ShipmentDocument, Wire<ShipmentDocum
         session: ClientSession
     ) => Promise<ShipmentDocument | null>;
     setTrackingCode: (id: string, trackingCode: string) => Promise<ShipmentDocument | null>;
+    markLost: (
+        id: string,
+        loss: LossRecord,
+        session: ClientSession
+    ) => Promise<ShipmentDocument | null>;
+    markFound: (
+        id: string,
+        deliveredAt: Date,
+        session: ClientSession
+    ) => Promise<ShipmentDocument | null>;
+    scrubLostNotesBefore: (cutoff: Date) => Promise<number>;
     unsetDestinations: (orderId: string) => Promise<number>;
     reencrypt: (
         spec: ReencryptSpec<ShipmentDocument>,
@@ -575,6 +601,63 @@ export const shipmentRepository: Repository<ShipmentDocument, Wire<ShipmentDocum
                 { returnDocument: 'after', session }
             )
             .exec(),
+
+    /**
+     * Report a shipment lost, but only from `shipped` — atomically, in the filter, so two reports
+     * racing the same parcel cannot both land and top the stock hold up twice.
+     * @param id - the shipment
+     * @param loss - when, why, and what staff wrote
+     * @param session - the act's transaction
+     */
+    markLost: (id, { lostAt, lostReason, lostNote, lostMessage }, session) =>
+        shipmentModel
+            .findOneAndUpdate(
+                { _id: toObjectId(id), status: 'shipped' },
+                {
+                    $set: {
+                        status: 'lost',
+                        lostAt,
+                        lostReason,
+                        ...(lostNote ? { lostNote } : {}),
+                        ...(lostMessage ? { lostMessage } : {})
+                    }
+                },
+                { returnDocument: 'after', session }
+            )
+            .exec(),
+
+    /**
+     * Record that a lost parcel turned up, but only from `lost`. `lostAt` and `lostReason` stay as
+     * history.
+     * @param id - the shipment
+     * @param deliveredAt - when it arrived
+     * @param session - the act's transaction
+     */
+    markFound: (id, deliveredAt, session) =>
+        shipmentModel
+            .findOneAndUpdate(
+                { _id: toObjectId(id), status: 'lost' },
+                { $set: { status: 'delivered', deliveredAt } },
+                { returnDocument: 'after', session }
+            )
+            .exec(),
+
+    /**
+     * Unset the loss note on every shipment not changed since `cutoff` that still holds one. Like
+     * the hold note's wipe: `timestamps: false` keeps it from moving the clock it reads, and a
+     * rerun matches nothing. `lostMessage` is never touched: it was sent to the buyer.
+     * @param cutoff - shipments with `updatedAt` at or before this are wiped
+     * @returns how many lost their note
+     */
+    scrubLostNotesBefore: (cutoff) =>
+        shipmentModel
+            .updateMany(
+                { updatedAt: { $lte: cutoff }, lostNote: { $exists: true } },
+                { $unset: { lostNote: 1 } },
+                { timestamps: false }
+            )
+            .exec()
+            .then((result) => result.modifiedCount),
 
     /**
      * Set or correct the tracking code of a shipment, whatever its status: the code is most

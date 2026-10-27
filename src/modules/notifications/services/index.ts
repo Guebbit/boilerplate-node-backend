@@ -13,6 +13,7 @@ import {
     onFulfillmentOrderDelayed,
     onStockAlertSent,
     onFulfillmentOrderHoldNoticed,
+    onShipmentLost,
     onPurchaseHoldPlaced,
     onWebhookSubscriptionAutoDisabled
 } from './subscribers';
@@ -38,6 +39,7 @@ export const notificationsService = {
     onFulfillmentOrderDelayed,
     onStockAlertSent,
     onFulfillmentOrderHoldNoticed,
+    onShipmentLost,
     onPurchaseHoldPlaced,
     onWebhookSubscriptionAutoDisabled
 };

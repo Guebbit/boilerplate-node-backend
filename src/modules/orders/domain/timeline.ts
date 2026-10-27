@@ -44,6 +44,7 @@ export const TIMELINE_AUDIENCE: Readonly<Record<OrderTimelineType, TimelineAudie
     refund_reversed: 'staff',
     shipment_shipped: 'buyer',
     shipment_delivered: 'buyer',
+    shipment_lost: 'buyer',
     fulfillment_held: 'staff',
     fulfillment_released: 'staff',
     remainder_cancelled: 'buyer',

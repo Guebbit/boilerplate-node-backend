@@ -4,7 +4,7 @@
  * remainder, pure.
  */
 
-import { takeFromHold } from '../../domain';
+import { takeFromHold, withAdded } from '../../domain';
 
 describe('takeFromHold', () => {
     const hold = [
@@ -126,5 +126,31 @@ describe('takeFromHold, with preorder claims', () => {
             remaining: claimOnly,
             taken: []
         });
+    });
+});
+
+describe('withAdded', () => {
+    it('grows a product already on the hold under the same kind', () => {
+        expect(
+            withAdded([{ productId: 'a', quantity: 2 }], [{ productId: 'a', quantity: 1 }])
+        ).toEqual([{ productId: 'a', quantity: 3 }]);
+    });
+
+    it('keeps the two kinds of one product as separate lines', () => {
+        expect(
+            withAdded(
+                [{ productId: 'a', quantity: 1 }],
+                [{ productId: 'a', quantity: 2, kind: 'backorder' }]
+            )
+        ).toEqual([
+            { productId: 'a', quantity: 1 },
+            { productId: 'a', quantity: 2, kind: 'backorder' }
+        ]);
+    });
+
+    it('is just the added lines for a hold that ended', () => {
+        expect(withAdded([], [{ productId: 'b', quantity: 4 }])).toEqual([
+            { productId: 'b', quantity: 4 }
+        ]);
     });
 });

@@ -41,13 +41,15 @@ const presentLines = (lines: FulfillmentOrderDocument['lines']): FulfillmentOrde
  * @param shipment - the stored shipment
  * @param actions - what this caller may do to it
  * @param awaitingTracking - whether it left on a tracked method and still has no code
+ * @param staffView - whether the caller may read staff's note about a loss
  */
 export const presentShipment = (
     shipment: ShipmentDocument,
     actions: ShipmentActions,
-    awaitingTracking: boolean
+    awaitingTracking: boolean,
+    staffView: boolean
 ): Shipment => ({
-    ...presentExportShipment(shipment),
+    ...presentExportShipment(shipment, staffView),
     forced: shipment.forced,
     awaitingTracking,
     actions,
@@ -57,9 +59,15 @@ export const presentShipment = (
 
 /**
  * The shipment as an account export carries it: the record, with no `actions` and no `forced`.
+ * Staff's note about a loss is in (their assessment is the buyer's data, GDPR Art. 15) unless the
+ * reader is a buyer looking at the order page.
  * @param shipment - the stored shipment
+ * @param withNote - whether staff's loss note is part of the answer
  */
-export const presentExportShipment = (shipment: ShipmentDocument): ExportShipment => ({
+export const presentExportShipment = (
+    shipment: ShipmentDocument,
+    withNote = true
+): ExportShipment => ({
     id: String(shipment._id),
     orderId: String(shipment.orderId),
     fulfillmentOrderId: String(shipment.fulfillmentOrderId),
@@ -75,7 +83,11 @@ export const presentExportShipment = (shipment: ShipmentDocument): ExportShipmen
         ? { destination: decryptDestination(shipment.destination, String(shipment._id)) }
         : {}),
     ...(shipment.trackingCode ? { trackingCode: shipment.trackingCode } : {}),
-    ...(shipment.deliveredAt ? { deliveredAt: shipment.deliveredAt.toISOString() } : {})
+    ...(shipment.deliveredAt ? { deliveredAt: shipment.deliveredAt.toISOString() } : {}),
+    ...(shipment.lostAt ? { lostAt: shipment.lostAt.toISOString() } : {}),
+    ...(shipment.lostReason ? { lostReason: shipment.lostReason } : {}),
+    ...(shipment.lostMessage ? { lostMessage: shipment.lostMessage } : {}),
+    ...(withNote && shipment.lostNote ? { lostNote: shipment.lostNote } : {})
 });
 
 /**
