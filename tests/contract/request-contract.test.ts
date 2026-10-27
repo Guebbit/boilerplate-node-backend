@@ -328,7 +328,11 @@ const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
         // A cancellation names a fulfillment order and sends no lines; the schema cannot say so, so
         // the legal body is the goods return the generated `lines` belong to.
         kind: () => 'return',
-        fulfillmentOrderId: () => undefined
+        fulfillmentOrderId: () => undefined,
+        // A buyer's own return takes neither field: the server sets the date, and a channel belongs
+        // to a withdrawal that staff record. The schema declares both for the staff path.
+        requestedAt: () => undefined,
+        statedVia: () => undefined
     },
     changePassword: {
         currentPassword: () => PLAIN_PASSWORD,
