@@ -6,12 +6,15 @@
  * same remainder cannot both land.
  */
 
+import { Types } from 'mongoose';
 import type { ClientSession } from 'mongoose';
 import { orderService } from '@modules/orders';
 import { ERROR_CODES } from '@api/error-codes';
+import { FulfillmentOrderKind } from '@types';
 import { statusOfLines, withShipped, type ProductQuantity } from '../domain';
 import { fulfillmentOrderRepository, shipmentRepository } from '../repository';
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
+import { encryptDestination } from '../pii';
 import { refuse } from './act';
 
 /** What one shipment is made from. */
@@ -37,6 +40,25 @@ export interface Cut {
     shipment: ShipmentDocument;
     fulfillmentOrder: FulfillmentOrderDocument;
 }
+
+/**
+ * The order's shipping address, encrypted for a shipment about to be written under `shipmentId`;
+ * `undefined` for a digital fulfilment and for an order that ships nowhere.
+ * @param before - the fulfillment order the shipment leaves from
+ * @param shipmentId - the shipment's pre-allocated `_id`
+ * @param session - the act's transaction
+ */
+const destinationFor = (
+    before: FulfillmentOrderDocument,
+    shipmentId: Types.ObjectId,
+    session: ClientSession
+): Promise<ShipmentDocument['destination']> =>
+    before.kind === FulfillmentOrderKind.physical
+        ? orderService.readOrder(String(before.orderId), session).then((order) => {
+              const address = order ? orderService.shippingAddressOf(order) : undefined;
+              return address ? encryptDestination(address, shipmentId) : undefined;
+          })
+        : Promise.resolve(undefined);
 
 /**
  * Cut the shipment: claim the fulfillment order with the shipped lines added, write the shipment,
@@ -66,34 +88,42 @@ export const cutShipment = (input: CutInput, session: ClientSession): Promise<Cu
         .then((claimed) => {
             if (!claimed)
                 return refuse(409, ERROR_CODES.DELIVERY_NOT_SHIPPABLE, 'delivery.not-shippable');
-            return shipmentRepository.nextNumber(orderId, session).then((number) =>
-                shipmentRepository
-                    .create(
-                        {
-                            orderId: before.orderId,
-                            fulfillmentOrderId: before._id,
-                            number,
-                            status: delivered ? 'delivered' : 'shipped',
-                            lines: lines.map(({ productId, quantity }) => ({
-                                productId,
-                                quantity,
-                                title:
-                                    before.lines.find((line) => line.productId === productId)
-                                        ?.title ?? ''
-                            })),
-                            forced: input.forced,
-                            shippedAt: at,
-                            ...(input.trackingCode ? { trackingCode: input.trackingCode } : {}),
-                            ...(delivered ? { deliveredAt: at } : {})
-                        },
-                        session
-                    )
-                    .then((shipment) =>
-                        (input.takeStock
-                            ? orderService.shipStock(orderId, lines, session)
-                            : Promise.resolve(true)
-                        ).then(() => ({ shipment, fulfillmentOrder: claimed }))
-                    )
+            // Allocated first: the destination's ciphertext is bound to the shipment's own id.
+            const shipmentId = new Types.ObjectId();
+            // One read after the other: a transaction's session does not take parallel operations.
+            return destinationFor(before, shipmentId, session).then((destination) =>
+                shipmentRepository.nextNumber(orderId, session).then((number) =>
+                    shipmentRepository
+                        .create(
+                            {
+                                _id: shipmentId,
+                                ...(destination ? { destination } : {}),
+                                orderId: before.orderId,
+                                fulfillmentOrderId: before._id,
+                                number,
+                                kind: before.kind,
+                                status: delivered ? 'delivered' : 'shipped',
+                                lines: lines.map(({ productId, quantity }) => ({
+                                    productId,
+                                    quantity,
+                                    title:
+                                        before.lines.find((line) => line.productId === productId)
+                                            ?.title ?? ''
+                                })),
+                                forced: input.forced,
+                                shippedAt: at,
+                                ...(input.trackingCode ? { trackingCode: input.trackingCode } : {}),
+                                ...(delivered ? { deliveredAt: at } : {})
+                            },
+                            session
+                        )
+                        .then((shipment) =>
+                            (input.takeStock
+                                ? orderService.shipStock(orderId, lines, session)
+                                : Promise.resolve(true)
+                            ).then(() => ({ shipment, fulfillmentOrder: claimed }))
+                        )
+                )
             );
         });
 };

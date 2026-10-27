@@ -18,7 +18,8 @@ import { postProcessOrder } from './controllers/post-process-order';
 /** Express router for the delivery operations that live under an order. */
 export const orderRouter = Router();
 
-// POST /orders/:id/process — begins fulfilment; moves the order paid -> processing.
+// POST /orders/:id/process — begins fulfilment; moves the order paid -> processing. Optional:
+// shipping from `paid` makes the same move itself.
 // No `forced` variant, so no step-up guard: the admin override is the other reachable path here.
 orderRouter.post(
     '/:id/process',

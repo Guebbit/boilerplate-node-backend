@@ -6,7 +6,7 @@
  * announces `order.status_overridden` so `delivery` can bring its own records in step — `orders`
  * never touches a shipment itself.
  *
- * `orders` stays the only status writer even here: a forced shipment recorded through `delivery`
+ * `orders` stays the only status writer even here: a forced arrival recorded through `delivery`
  * writes its own history row through `recordForcedFulfilment`, not through this door.
  *
  * See `docs/theory/tactical-ddd.md` §1 "Who writes the status".

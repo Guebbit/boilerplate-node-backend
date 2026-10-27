@@ -166,7 +166,7 @@ export const markPaid = (
  * (`orders/services/override.ts`'s `overrideStatus`) reaches `processing` too, but does not call
  * this function — `applyOverride` writes that move itself.
  * @param orderId - the order fulfilment started on
- * @param session - the caller's transaction, when this move belongs to one (a forced first
+ * @param session - the caller's transaction, when this move belongs to one (a first
  *   shipment makes it implicitly); absent, the move opens its own
  * @param actor - the staff member who started it, for the timeline
  * @returns the order as it now stands, or `null` if it was not awaiting fulfilment

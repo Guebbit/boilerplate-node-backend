@@ -72,10 +72,11 @@ describe('ShipmentActions.update and forceDeliver', () => {
             .send({})
             .expect(200);
 
+        // Delivered: the arrival is closed, but the tracking code stays editable (dispute evidence).
         expect(await shipmentActionsFor(orderId, admin.bearer)).toEqual({
             deliver: false,
             forceDeliver: false,
-            update: false
+            update: true
         });
     });
 });

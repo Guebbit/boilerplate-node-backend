@@ -1,8 +1,9 @@
 /**
  * @module
- * Staff correcting where an unshipped order ships (`PUT /orders/{id}/shipping-address`): the new
+ * Staff correcting where an order's unsent units ship (`PUT /orders/{id}/shipping-address`): the new
  * address replaces the old one under the order's own encryption, the history names who and never
- * what, and it stops being possible the moment something ships.
+ * what, it stays possible while units remain to send, and it never names a country the shop
+ * does not ship to.
  *
  * See: docs/modules/orders.md#correcting-the-shipping-address
  */
@@ -29,7 +30,7 @@ const BEFORE = {
     street: '12 Analytical Engine Rd',
     city: 'London',
     zip: 'SW1A',
-    country: 'GB'
+    country: 'IT'
 };
 const AFTER = { ...BEFORE, street: '14 Analytical Engine Rd', zip: 'SW1B' };
 
@@ -102,7 +103,7 @@ describe('PUT /orders/{id}/shipping-address', () => {
         expect(JSON.stringify(timeline.body)).not.toContain('address_corrected');
     });
 
-    it('offers the correction to staff in `actions`, and refuses it once the order has shipped', async () => {
+    it('offers the correction to staff in `actions`, and refuses it once nothing is left to send', async () => {
         const { order } = await seedPaidOrder();
         const { bearer } = await authenticateAsRole('admin');
         const read = () =>
@@ -113,7 +114,12 @@ describe('PUT /orders/{id}/shipping-address', () => {
 
         expect(await read()).toBe(true);
 
-        await orderModel.updateOne({ _id: order._id }, { 'fulfillment.shipped': true }).exec();
+        await orderModel
+            .updateOne(
+                { _id: order._id },
+                { 'fulfillment.shipped': true, 'fulfillment.remaining': 0 }
+            )
+            .exec();
 
         expect(await read()).toBe(false);
         const refused = await api()
@@ -122,6 +128,47 @@ describe('PUT /orders/{id}/shipping-address', () => {
             .send(AFTER);
         expect(refused.status).toBe(409);
         expect(refused.body.errors[0].code).toBe('ORDER_ADDRESS_LOCKED');
+    });
+
+    it('stays open for the rest of a partly shipped order, and closes with the last unit', async () => {
+        const { order } = await seedPaidOrder(OrderStatus.processing);
+        const { bearer } = await authenticateAsRole('admin');
+        await orderModel
+            .updateOne(
+                { _id: order._id },
+                { 'fulfillment.shipped': true, 'fulfillment.remaining': 1 }
+            )
+            .exec();
+        const put = () =>
+            api()
+                .put(`/orders/${String(order._id)}/shipping-address`)
+                .set('Authorization', bearer)
+                .send(AFTER);
+
+        const whileUnitsRemain = await put();
+        await orderModel.updateOne({ _id: order._id }, { 'fulfillment.remaining': 0 }).exec();
+        const afterTheLast = await put();
+
+        expect(whileUnitsRemain.status).toBe(200);
+        expect(whileUnitsRemain.body.shippingAddress).toMatchObject(AFTER);
+        expect(afterTheLast.status).toBe(409);
+    });
+
+    it('refuses a country the shop does not ship to with 422, and writes nothing', async () => {
+        const { order } = await seedPaidOrder();
+        const { bearer } = await authenticateAsRole('admin');
+
+        const response = await api()
+            .put(`/orders/${String(order._id)}/shipping-address`)
+            .set('Authorization', bearer)
+            .send({ ...AFTER, country: 'US' });
+
+        expect(response.status).toBe(422);
+        expect(response.body.errors[0].code).toBe('ORDER_SHIP_TO_COUNTRY_NOT_SUPPORTED');
+        const read = await api()
+            .get(`/orders/${String(order._id)}`)
+            .set('Authorization', bearer);
+        expect(read.body.shippingAddress).toMatchObject(BEFORE);
     });
 
     it('refuses an order with no shipping address to redirect', async () => {

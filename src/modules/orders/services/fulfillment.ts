@@ -56,7 +56,7 @@ export interface ForcedFulfilment {
 }
 
 /**
- * Leave a timeline row for a forced fulfilment act — a shipment from `paid`, a delivery without a
+ * Leave a timeline row for a forced fulfilment act — a delivery without a
  * carrier confirmation. The act does not always move the order, but staff skipped a step and the
  * row says so, the same `status_overridden` a status override writes. `to` is whatever the order's
  * status is once the act's own moves have landed, read in the act's snapshot.

@@ -1,7 +1,6 @@
 /**
  * @module
- * What `forced: true` asks of a caller. One rule for both doors that accept it (ship and deliver),
- * so they cannot drift on what "forced" requires.
+ * What `forced: true` asks of a caller on the deliver door: `override:Order` and a written reason.
  */
 
 import { t } from '@infrastructure/i18n';

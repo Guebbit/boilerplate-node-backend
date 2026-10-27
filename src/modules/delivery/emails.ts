@@ -17,6 +17,9 @@ export interface EmailLine {
     quantity: number;
 }
 
+/** Why a shipped mail is sent again after the shipment left. */
+export type TrackingVariant = 'added' | 'corrected';
+
 /** What the shipped email says about this shipment. */
 export interface ShippedEmailInput {
     /** What the shipment carries. */
@@ -25,8 +28,11 @@ export interface ShippedEmailInput {
     trackingCode?: string | undefined;
     /** Units of the order still to come in later shipments; `0` when this one completes it. */
     remainingUnits: number;
-    /** The mail corrects a code already sent: its own subject and an apology for the earlier one. */
-    corrected?: boolean | undefined;
+    /**
+     * Set when the mail follows a code change: `added` for the first code of a shipment that left
+     * without one, `corrected` for a replacement of one already sent. Each has its own subject and body.
+     */
+    variant?: TrackingVariant | undefined;
 }
 
 /** What the delivered email says about this shipment. */
@@ -87,8 +93,8 @@ export const shipmentShippedEmail = (
     return {
         template: 'delivery.shipment-shipped',
         subject: t(
-            input.corrected
-                ? 'delivery.email-shipped.corrected-subject'
+            input.variant
+                ? `delivery.email-shipped.${input.variant}-subject`
                 : 'delivery.email-shipped.subject'
         ),
         data: {
@@ -96,8 +102,8 @@ export const shipmentShippedEmail = (
             pageMetaTitle: t('delivery.email-shipped.meta-title'),
             greeting: t('delivery.email-shipped.greeting', { name }),
             body: t(
-                input.corrected
-                    ? 'delivery.email-shipped.corrected-body'
+                input.variant
+                    ? `delivery.email-shipped.${input.variant}-body`
                     : 'delivery.email-shipped.body'
             ),
             lines: lineTexts(t, input.lines),

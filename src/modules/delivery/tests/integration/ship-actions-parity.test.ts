@@ -1,10 +1,9 @@
 /**
  * @module
- * `FulfillmentOrderActions.forceShip` says the forced door would open while the ordinary one is
- * closed; the door behind it says what it accepts. For every role × order status, a forced ship is
- * accepted exactly when `forceShip` is true (wherever `ship` is off), and `forceShip` is never true beside `ship`.
- * Each case gets its own order, because the door writes. A paid order with one fulfillment order
- * awaiting stock is part of the sweep: `override` drops `shipped` there, `forceShip` must not.
+ * `FulfillmentOrderActions.ship` says the ship door would accept; the door behind it says what it
+ * accepts. For every role × order status, a ship is accepted exactly when `ship` is true. Shipping
+ * from `paid` is in the sweep: it needs `start:Shipment` as well as `update:Shipment`.
+ * Each case gets its own order, because the door writes.
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { registerCheckoutModules } from '@tests/checkout-modules';
@@ -21,7 +20,7 @@ beforeEach(() => {
     registerCheckoutModules([]);
 });
 
-/** The roles swept: staff who differ in `update:Shipment` and `override:Order`. */
+/** The roles swept: staff who differ in `update:Shipment` and `start:Shipment`. */
 const ROLES = ['admin', 'manager', 'warehouse', 'support'] as const;
 
 /** The statuses a shipment could be cut from, or refused at. */
@@ -35,14 +34,14 @@ const STATUSES = [
 /** Whether a response is the door opening. */
 const accepted = ({ status }: { status: number }): boolean => status >= 200 && status < 300;
 
-describe('forceShip and the forced ship door agree', () => {
+describe('the ship action and the ship door agree', () => {
     it('for every role and every status', async () => {
         const owner = await authenticateAsRole('customer');
         const signedIn = await Promise.all(
             ROLES.map(async (role) => ({ role, staff: await authenticateAsRole(role) }))
         );
         const disagreements: string[] = [];
-        let forcedOnly = 0;
+        let shippedFromPaid = 0;
 
         for (const status of STATUSES)
             for (const { role, staff } of signedIn) {
@@ -58,31 +57,26 @@ describe('forceShip and the forced ship door agree', () => {
                 const view = await api()
                     .get(`/orders/${orderId}/fulfillment-orders`)
                     .set('Authorization', staff.bearer);
-                const shown = (view.body as { items?: FulfillmentOrder[] }).items?.[0]?.actions;
-                const ship = shown?.ship ?? false;
-                const forceShip = shown?.forceShip ?? false;
+                const ship =
+                    (view.body as { items?: FulfillmentOrder[] }).items?.[0]?.actions.ship ?? false;
                 const opened = accepted(
                     await api()
                         .post(
                             `/delivery/fulfillment-orders/${String(fulfillmentOrder._id)}/shipments`
                         )
                         .set('Authorization', staff.bearer)
-                        .send({ forced: true, reason: 'parity sweep' })
+                        .send({})
                 );
 
-                if (forceShip && !ship && opened) forcedOnly += 1;
-                if (ship && forceShip)
-                    disagreements.push(`${role} on ${status}: ship and forceShip`);
-                // With the ordinary door open a forced request is still its own question (it needs
-                // `override:Order`), so the door is compared only where `ship` is off.
-                if (!ship && opened !== forceShip)
+                if (opened && status === OrderStatus.paid) shippedFromPaid += 1;
+                if (opened !== ship)
                     disagreements.push(
-                        `${role} on ${status}: forceShip ${String(forceShip)}, door ${String(opened)}`
+                        `${role} on ${status}: ship ${String(ship)}, door ${String(opened)}`
                     );
             }
 
         expect(disagreements).toEqual([]);
-        // A sweep where nothing is ever forced would agree too: some cell must be forced-only.
-        expect(forcedOnly).toBeGreaterThan(0);
+        // A sweep where nothing ever ships from `paid` would agree too: admin and warehouse must.
+        expect(shippedFromPaid).toBe(2);
     });
 });
