@@ -468,18 +468,10 @@ itself, in its own transaction, so the caller holds `update:Shipment` **and** `s
 same way. `processing` has one effect for the buyer: self-cancel closes (it works from `pending` and
 `paid` only); the legal right of withdrawal is not affected.
 
-### `forced` (deliver only)
+### Audit rows
 
-`forced` on a delivery records an arrival without a carrier confirmation. It needs
-`override:Order` (itself step-up gated, and the route asks for the fresh session before the
-controller runs) and a `reason`. It leaves a `status_overridden` row on the order's [timeline](./orders.md#the-timeline) —
-`orderService.recordForcedFulfilment` appends it without a move of its own. `Shipment.forced` is
-different: it marks a shipment cut by an admin status override.
-
-The audit row of a forced delivery carries the `reason` too (an ordinary one says `forced: false`
-and nothing else): forcing is a sanctioned bypass, and a record that cannot say why it was allowed
-cannot be investigated alone. The copy dies first — the audit trail keeps 90 days, the timeline text
-1095 ([retention](../theory/data-retention.md)) — and only operators read it. A hold's and a release's
+`Shipment.forced` marks a shipment cut by an admin status override; arrival has no forced variant,
+so recording one is a single act with a single door. A hold's and a release's
 audit rows carry the hold's reason **code** (a release, the code of the hold it ended), never the
 `holdNote`: free commentary that has no business in the operator log.
 
@@ -672,27 +664,25 @@ date this order was expecting, not the product's previous date.
 
 ## Routes and events
 
-| Route                                                      | Key                                                | Answers                                                                             |
-| ---------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `GET /delivery/methods`                                    | public                                             | the shipping methods and what each costs                                            |
-| `GET /delivery/fulfillment-orders` · `/summary`            | `display:Order`                                    | [the preorder board](#the-preorder-board)'s two reads                               |
-| `GET /delivery/fulfillment-orders/restock-date-impact`     | `update:Product` + `display:Order`                 | orders a restock-date move would email, before it is saved                          |
-| `GET /orders/{id}/fulfillment-orders` · `/shipments`       | the owner, or staff                                | `{ items[] }` each, every item with its own `actions`; unpaged                      |
-| `POST /orders/{id}/process`                                | `start:Shipment`                                   | the order, `processing`                                                             |
-| `POST /delivery/fulfillment-orders/{id}/shipments`         | `update:Shipment`                                  | `201` + the shipment                                                                |
-| `POST /delivery/fulfillment-orders/{id}/fulfill`           | `update:Shipment` (+ `start:Shipment` from `paid`) | the shipment, delivered                                                             |
-| `POST /delivery/fulfillment-orders/{id}/hold` · `/release` | `update:Shipment`                                  | the fulfillment order                                                               |
-| `PATCH /delivery/shipments/{id}`                           | `update:Shipment`                                  | the shipment, tracking added or corrected, at any time (shipped, delivered or lost) |
-| `POST /delivery/shipments/{id}/deliver`                    | `update:Shipment`                                  | the shipment                                                                        |
-| `POST /delivery/shipments/{id}/lost`                       | `update:Shipment`                                  | the shipment, `lost`                                                                |
+| Route                                                      | Key                                                | Answers                                                                                           |
+| ---------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `GET /delivery/methods`                                    | public                                             | the shipping methods and what each costs                                                          |
+| `GET /delivery/fulfillment-orders` · `/summary`            | `display:Order`                                    | [the preorder board](#the-preorder-board)'s two reads                                             |
+| `GET /delivery/fulfillment-orders/restock-date-impact`     | `update:Product` + `display:Order`                 | orders a restock-date move would email, before it is saved                                        |
+| `GET /orders/{id}/fulfillment-orders` · `/shipments`       | the owner, or staff                                | `{ items[] }` each, every item with its own `actions`; unpaged                                    |
+| `POST /orders/{id}/process`                                | `start:Shipment`                                   | the order, `processing`                                                                           |
+| `POST /delivery/fulfillment-orders/{id}/shipments`         | `update:Shipment`                                  | `201` + `Location` + the shipment; optional `Idempotency-Key` (a retry would cut a second parcel) |
+| `POST /delivery/fulfillment-orders/{id}/fulfill`           | `update:Shipment` (+ `start:Shipment` from `paid`) | `201` + `Location` like ship, the shipment delivered; same optional `Idempotency-Key`             |
+| `POST /delivery/fulfillment-orders/{id}/hold` · `/release` | `update:Shipment`                                  | the fulfillment order                                                                             |
+| `PATCH /delivery/shipments/{id}`                           | `update:Shipment`                                  | the shipment, tracking added or corrected, at any time (shipped, delivered or lost)               |
+| `POST /delivery/shipments/{id}/deliver`                    | `update:Shipment`                                  | the shipment                                                                                      |
+| `POST /delivery/shipments/{id}/lost`                       | `update:Shipment`                                  | the shipment, `lost`                                                                              |
 
 Every button a client draws comes from the record's own `actions` (or `GET /returns/options`): the
 frontend never re-derives a rule. Every staff door asks the key and nothing else: [no rank](../theory/authorization.md#protecting-people).
 
 `FulfillmentOrderActions.ship` and `fulfill` are true on a `paid` order only for a caller who also holds
-`start:Shipment`. The forced arrival has its own flag beside the ordinary one: `forceDeliver` (the
-arrival is open, as for `deliver`, and the caller also holds `override:Order`; true beside `deliver`,
-since forcing only skips the carrier's confirmation). `ShipmentActions.update` is the tracking-code edit
+`start:Shipment`. `ShipmentActions.update` is the tracking-code edit
 and `markLost` the lost-parcel report.
 
 | Event                                                 | Payload                                                    | Public webhook                 |

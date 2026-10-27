@@ -97,7 +97,6 @@ export const deliverEverything = async (orderId: string): Promise<Shipment[]> =>
         if (shipment.status !== 'shipped') continue;
         const result = await deliveryService.deliverShipment(
             String(shipment._id),
-            {},
             asAdmin(),
             callerContextAs('admin')
         );

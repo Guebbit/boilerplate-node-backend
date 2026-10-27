@@ -103,7 +103,6 @@
             "expectedTotal": "totale previsto",
             "expiresAt": "data di scadenza",
             "fields": "campi",
-            "forced": "forzato",
             "fulfillmentOrderId": "ordine di evasione",
             "fulfillmentStatus": "stato di evasione",
             "fullName": "nome completo",
