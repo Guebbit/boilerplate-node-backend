@@ -11,6 +11,7 @@
 import type { ClientSession } from 'mongoose';
 import { buyerIdOf, orderService } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
+import { promisedAfterNotice } from '../domain';
 import { fulfillmentOrderRepository } from '../repository';
 import type { FulfillmentOrderPatch } from '../repository';
 import type { FulfillmentOrderDocument } from '../model';
@@ -35,21 +36,28 @@ export interface SentNotice {
  * @param fulfillmentOrder - the fulfillment order as it now stands
  * @param order - its order
  * @param input - what the notice says
+ * @param promisedBefore - the date the buyer held before this notice
  */
 const payloadOf = (
     fulfillmentOrder: FulfillmentOrderDocument,
     order: OrderDocument,
-    input: NoticeInput
-): FulfillmentOrderDelayed => ({
-    orderId: String(fulfillmentOrder.orderId),
-    fulfillmentOrderId: String(fulfillmentOrder._id),
-    ...(buyerIdOf(order) ? { userId: buyerIdOf(order) } : {}),
-    titles: fulfillmentOrder.lines.map(({ title }) => title),
-    agreedAt: (fulfillmentOrder.agreedAt ?? new Date(0)).toISOString(),
-    // What the buyer is told is the date NOW expected; a cleared date promises nothing new.
-    ...(input.expectedAt ? { expectedAt: input.expectedAt.toISOString() } : {}),
-    reason: input.reason
-});
+    input: NoticeInput,
+    promisedBefore: Date | undefined
+): FulfillmentOrderDelayed => {
+    const shipCountry = orderService.shippingAddressOf(order)?.country;
+    return {
+        orderId: String(fulfillmentOrder.orderId),
+        fulfillmentOrderId: String(fulfillmentOrder._id),
+        ...(buyerIdOf(order) ? { userId: buyerIdOf(order) } : {}),
+        titles: fulfillmentOrder.lines.map(({ title }) => title),
+        agreedAt: (fulfillmentOrder.agreedAt ?? new Date(0)).toISOString(),
+        ...(promisedBefore ? { promisedAt: promisedBefore.toISOString() } : {}),
+        ...(shipCountry ? { shipCountry } : {}),
+        // What the buyer is told is the date NOW expected; a cleared date promises nothing new.
+        ...(input.expectedAt ? { expectedAt: input.expectedAt.toISOString() } : {}),
+        reason: input.reason
+    };
+};
 
 /**
  * Record a notice on a fulfillment order and announce it, inside the caller's transaction.
@@ -74,6 +82,7 @@ export const recordNotice = async (
     const order = await orderService.readOrder(String(fulfillmentOrder.orderId), session);
     if (!order) return undefined;
 
+    const promised = promisedAfterNotice(fulfillmentOrder.promisedAt, input.expectedAt);
     const patch: FulfillmentOrderPatch = {
         lastNoticeAt: now,
         // The sweep's dedupe: this very date is told about once, a moved one again.
@@ -81,8 +90,16 @@ export const recordNotice = async (
             ? { dueNoticeFor: fulfillmentOrder.expectedAt }
             : {}),
         ...(input.expectedAt ? { expectedAt: input.expectedAt } : {}),
-        // A cleared date leaves no `expectedAt`, so a redelivery finds nothing to move.
-        ...(input.expectedAt === null ? { unset: ['expectedAt' as const] } : {})
+        ...(promised instanceof Date ? { promisedAt: promised } : {}),
+        // A cleared date leaves no `expectedAt` (and no promise), so a redelivery finds nothing to move.
+        ...(input.expectedAt === null
+            ? {
+                  unset: [
+                      'expectedAt' as const,
+                      ...(promised === null ? ['promisedAt' as const] : [])
+                  ]
+              }
+            : {})
     };
     const claimed = await fulfillmentOrderRepository.claim(
         String(fulfillmentOrder._id),
@@ -92,6 +109,6 @@ export const recordNotice = async (
     );
     if (!claimed) return undefined;
 
-    await announceDelayed(payloadOf(claimed, order, input), session);
+    await announceDelayed(payloadOf(claimed, order, input, fulfillmentOrder.promisedAt), session);
     return { fulfillmentOrder: claimed };
 };

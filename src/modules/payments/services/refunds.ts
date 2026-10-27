@@ -33,7 +33,7 @@ import type { AuthContext } from '@types';
 import { RefundFailureReason, RefundStatus, type CallerContext, type RefundReason } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { DomainEventMap } from '@kernel/events';
-import { announceInTransaction } from '@kernel/outbox';
+import { announceInTransaction, enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { systemCallerContext } from '@kernel/permissions';
 import {
@@ -53,7 +53,7 @@ import { PaymentProviderError } from '../providers';
 import { paymentProviderRegistry } from '../providers/registry';
 import { paymentEffectRetryMinutes } from '../config';
 import { paymentRepository } from '../repository';
-import { PAYMENT_REFUND_CANCELED } from '../events';
+import { PAYMENT_REFUND_CANCELED, PAYMENT_REFUND_OWED_BY_HAND } from '../events';
 import type { PaymentDocument, RefundLine, RefundRecord } from '../model';
 import {
     exceedsRemaining,
@@ -221,6 +221,35 @@ const leaveForOperator = (
     });
 
 /**
+ * Announce a refund that opened on a hand-recorded payment, in the transaction that opens it: the
+ * money is owed outside the app, so a person has to send it. A card refund is sent by the
+ * provider and announces nothing here.
+ *
+ * @param payment - the payment the refund is taken from
+ * @param refund - the record being opened
+ * @param session - the transaction that opens it
+ */
+const announceOwedByHand = (
+    payment: PaymentDocument,
+    refund: RefundRecord,
+    session: ClientSession
+): Promise<void> =>
+    isHandRecorded(payment)
+        ? enqueueOutboxEvent(
+              PAYMENT_REFUND_OWED_BY_HAND,
+              {
+                  paymentId: String(payment._id),
+                  orderId: String(payment.orderId),
+                  refundId: String(refund._id),
+                  amount: refund.amount,
+                  currency: refund.currency
+              },
+              String(payment.orderId),
+              session
+          )
+        : Promise.resolve();
+
+/**
  * Open a refund on a payment: reserve the amount and append its record in one conditional write.
  *
  * A miss means another write moved `amountRefunded` between the caller's read and this one — so the
@@ -295,11 +324,19 @@ export const openRefund = (
                               },
                               active
                           )
+                          .then(() => announceOwedByHand(payment, refund, active))
                           .then(() => updated)
                     : updated
             );
 
-    return (session ? write(session) : withTransaction(write)).then((updated) => {
+    return (
+        session
+            ? write(session)
+            : withTransaction(write).then((written) => {
+                  if (written) nudgeOutbox();
+                  return written;
+              })
+    ).then((updated) => {
         if (updated) return { payment: updated, refund };
         // Inside a caller's transaction the payment is the one that caller just wrote: a miss is
         // final, and a re-read outside the transaction would see something older.

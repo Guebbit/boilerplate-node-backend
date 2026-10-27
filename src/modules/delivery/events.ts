@@ -63,6 +63,13 @@ export interface FulfillmentOrderDelayed {
     titles: string[];
     /** The date promised when ordering (ISO 8601). */
     agreedAt: string;
+    /**
+     * The date the buyer held before this notice (ISO 8601); absent once an earlier notice told
+     * them there was no date yet. With `shipCountry`, what `tickets` decides a consent reminder on.
+     */
+    promisedAt?: string;
+    /** The country the order ships to (ISO 3166-1 alpha-2); absent for a pickup or digital order. */
+    shipCountry?: string;
     /** The date now expected, absent when there is none (the date was cleared). */
     expectedAt?: string;
     /** `moved`: the date was changed. `due`: the expected date is a day away or gone and there is still no stock. */

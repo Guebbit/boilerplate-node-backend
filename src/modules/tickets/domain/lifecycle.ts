@@ -122,3 +122,15 @@ export const reopen = (ticket: TicketFacts): Transition =>
                   unset: ['closedAt', 'resolution']
               }
           };
+
+/**
+ * The system closes a ticket because the situation it was opened for ended: `resolved`, with
+ * `resolution: cleared` so "the system closed it" shows. The caller applies it only to a ticket
+ * that is still open, so a ticket staff closed first is never touched; notes are kept.
+ *
+ * @param now - the clock
+ */
+export const clear = (now: Date): TicketPatch => ({
+    set: { status: TicketStatus.resolved, resolution: 'cleared', closedAt: now },
+    unset: ['openKey']
+});

@@ -42,6 +42,18 @@ declare module '@kernel/events' {
          * No in-process subscriber; it exists for the `user.updated` webhook (GDPR Art. 19).
          */
         'user.profile_changed': { userId: string; changed: UserChangedField[] };
+        /**
+         * The shop's rule flagged an account for staff review without pausing it (paid
+         * cancellations over the limit), committed with the flag. Emitted once per flag set; the
+         * automatic hold has its own staff notice and is not announced here. `tickets` opens
+         * the review ticket from it. Internal only: no AsyncAPI channel carries it.
+         */
+        'user.review_flagged': { userId: string };
+        /**
+         * Staff acted on an account's review flag: they placed a hold or lifted it. Committed
+         * with the save. `tickets` closes the review ticket from it. Internal only.
+         */
+        'user.review_cleared': { userId: string };
     }
 }
 
@@ -59,3 +71,9 @@ export const USER_ERASED = 'user.erased';
 
 /** See `DomainEventMap['user.profile_changed']` above. */
 export const USER_PROFILE_CHANGED = 'user.profile_changed';
+
+/** See `DomainEventMap['user.review_flagged']` above. */
+export const USER_REVIEW_FLAGGED = 'user.review_flagged';
+
+/** See `DomainEventMap['user.review_cleared']` above. */
+export const USER_REVIEW_CLEARED = 'user.review_cleared';

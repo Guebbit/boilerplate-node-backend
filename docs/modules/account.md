@@ -20,10 +20,12 @@ flowchart LR
     access["access"]
     api_keys["api-keys"]
     shop["shop"]
+    tickets["tickets"]
     users["users"]
 
     api_keys --> account
     shop --> account
+    tickets --> account
     account --> access
     account --> users
     users -. "user.deactivated" .-> account
@@ -31,13 +33,15 @@ flowchart LR
     users -. "user.setup-requested" .-> account
     account -. "account.authenticator-removed" .-> api_keys
     account -. "account.sessions-revoked" .-> api_keys
+    account -. "account.export_failed" .-> tickets
+    account -. "account.export_ready" .-> tickets
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class shop supporting;
-    class access,api_keys,users generic;
+    class access,api_keys,tickets,users generic;
     class account centre;
 ```
 
@@ -301,6 +305,10 @@ flowchart LR
     class X warn;
     class R,W,I,B,F,M done;
 ```
+
+A failed build announces `account.export_failed` in the same write that marks the row, and a ready one
+`account.export_ready`; [tickets](./tickets.md#system-tickets) opens a ticket for the first (the person is
+still owed the file within a month, GDPR Art. 12(3)) and closes it on the next ready export.
 
 Why the export lives in `account` and not in a `privacy` module: GDPR export, erasure and
 minimising are three jobs with three homes. Each module declares its own `personalData` section

@@ -13,7 +13,7 @@ import { systemCallerContext } from '@kernel/permissions';
 import type { ReservationStatus } from '../model';
 import { reservationRepository } from '../repository';
 import { inventoryAuditActions } from '../audit';
-import { STOCK_RETAKEN } from '../events';
+import { HOLD_ORPHANED, STOCK_RETAKEN } from '../events';
 import { inventoryCommitOrphanedTotal } from './orphan-counter';
 import { takeFromHold } from '../domain';
 import type { StockLine } from './types';
@@ -213,7 +213,7 @@ export const retakeReleasedForOrder = async (
 const commitWithin = async (
     orderId: string,
     session: ClientSession
-): Promise<{ committed: boolean; allocated: number; retook?: boolean }> => {
+): Promise<{ committed: boolean; allocated: number; retook?: boolean; orphaned?: boolean }> => {
     const hold = await reservationRepository.claimStatus(orderId, 'held', 'committed', session);
     if (hold) {
         // Paid preorder units wait for stock; stock that already arrived serves them now.
@@ -241,7 +241,10 @@ const commitWithin = async (
         return commitWithin(orderId, session).then((done) => ({ ...done, retook: true }));
 
     raiseOrphanAlarm(orderId, existing?.status ?? 'none', 'commit');
-    return { committed: false, allocated: 0 };
+    // Only the payment's step is a situation to work: a missing hold at shipping means the goods
+    // already left, so the alarm and the audit row are the whole record.
+    await enqueueOutboxEvent(HOLD_ORPHANED, { orderId }, orderId, session);
+    return { committed: false, allocated: 0, orphaned: true };
 };
 
 /**
@@ -270,8 +273,8 @@ export const commitForOrder = (orderId: string, session?: ClientSession): Promis
     if (session) return commitWithin(orderId, session).then(({ committed }) => committed);
 
     return withTransaction((active) => commitWithin(orderId, active)).then(
-        ({ committed, allocated, retook }) => {
-            if (allocated === 0 && !retook) return committed;
+        ({ committed, allocated, retook, orphaned }) => {
+            if (allocated === 0 && !retook && !orphaned) return committed;
             nudgeOutbox();
             return refreshStockCacheForOrder(orderId).then(() => committed);
         }

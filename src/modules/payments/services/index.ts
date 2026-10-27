@@ -52,6 +52,7 @@ import {
 import { listPayments, listRefunds, listAttention } from './list';
 import { methodMix } from './stats';
 import { listPaymentMethods } from '../config';
+import { refundDueAt } from './deadline';
 
 export { RefundLeftOpenError } from './errors';
 export type { OfflinePaymentInput } from './offline';
@@ -78,6 +79,7 @@ export const paymentService = {
     listForOrder,
     getRefund,
     refundOf,
+    refundDueAt,
     refundPayment,
     openReturnRefund,
     sendOpenedRefund,
@@ -107,3 +109,5 @@ export const paymentService = {
     buyerOrderScope,
     readsAllPayments
 };
+
+export { paymentAttentionMinutes } from '../config';

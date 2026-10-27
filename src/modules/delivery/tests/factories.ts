@@ -152,10 +152,18 @@ export interface WantedPreorder {
  * @param wanted - the lines, one product each
  * @param buyer - the buyer's address (a new account is made; distinct per order in a test that makes
  *   two), or an account that already exists, such as the one a test is logged in as
+ * @param shippingAddress - where the order ships to; absent, the order has no address
  */
 export const paidPreorderOrder = async (
     wanted: readonly WantedPreorder[],
-    buyer: string | UserDocument = 'buyer@example.com'
+    buyer: string | UserDocument = 'buyer@example.com',
+    shippingAddress?: {
+        fullName: string;
+        street: string;
+        city: string;
+        zip: string;
+        country: string;
+    }
 ) => {
     const user = typeof buyer === 'string' ? await createUser({ email: buyer }) : buyer;
     const products = await Promise.all(
@@ -166,7 +174,7 @@ export const paidPreorderOrder = async (
     const order = await createOrder(
         user,
         products.map((product, index) => toOrderItem(product, wanted[index].quantity)),
-        { status: OrderStatus.paid }
+        { status: OrderStatus.paid, ...(shippingAddress ? { shippingAddress } : {}) }
     );
     const orderId = String(order._id);
     const lines = products.map((product, index) => ({

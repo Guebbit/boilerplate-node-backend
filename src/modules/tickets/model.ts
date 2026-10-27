@@ -65,6 +65,8 @@ export interface TicketDocument
     notes: TicketNoteDocument[];
     /** Set only while a linked system ticket is open: the dedup key. */
     openKey?: string;
+    /** The last system events that opened or touched it: what makes a redelivered event a no-op. */
+    eventIds?: string[];
     dueAt?: Date;
     lastSeenAt?: Date;
     closedAt?: Date;
@@ -137,6 +139,10 @@ export const ticketSchema = new Schema<TicketDocument, TicketModel>(
         openKey: {
             type: String
         },
+        eventIds: {
+            type: [String],
+            default: undefined
+        },
         assigneeId: {
             type: Schema.Types.ObjectId,
             ref: 'User'
@@ -208,6 +214,12 @@ ticketSchema.index(
 );
 
 /*
+ * "Have I seen this event?" - asked before every system open, so a redelivery after the ticket
+ * closed cannot open a second one. Partial: visitor tickets carry none.
+ */
+ticketSchema.index({ eventIds: 1 }, { partialFilterExpression: { eventIds: { $exists: true } } });
+
+/*
  * The two branches of the data-subject query (`./domain/ownership`): an account's own id, and an
  * exact verified address. An `$or` is served by an index only when every branch has one. The
  * staff search on `email` is a case-insensitive unanchored regex that no B-tree serves; it scans
@@ -237,7 +249,7 @@ ticketSchema.index({ closedAt: 1 }, { expireAfterSeconds: retentionDays * 24 * 6
  * same logic — see `./service` `search()`.
  */
 export const applyTicketTransform = applySerialization(ticketSchema, {
-    omit: ['openKey'],
+    omit: ['openKey', 'eventIds'],
     after: (serialized) => {
         // References and dates leave as the strings the wire declares, not as ObjectId and Date.
         for (const [key, value] of Object.entries(serialized)) {

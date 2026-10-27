@@ -52,6 +52,7 @@ describe('ticketSchema', () => {
             'assigneeId_1_status_1: assigneeId+1, status+1',
             'closedAt_1: closedAt+1',
             'email_1: email+1',
+            'eventIds_1: eventIds+1',
             'openKey_1: openKey+1',
             'routeSet_1_status_1_dueAt_1: routeSet+1, status+1, dueAt+1',
             'subjectId_1: subjectId+1'
@@ -70,6 +71,7 @@ describe('ticketSchema', () => {
             'assigneeId_1_status_1: partialFilterExpression={"assigneeId":{"$exists":true}}',
             `closedAt_1: expireAfterSeconds=${RETENTION_SECONDS}`,
             'email_1: partialFilterExpression={"email":{"$exists":true}}',
+            'eventIds_1: partialFilterExpression={"eventIds":{"$exists":true}}',
             'openKey_1: partialFilterExpression={"openKey":{"$exists":true}}, unique=true',
             'routeSet_1_status_1_dueAt_1: (none)',
             'subjectId_1: partialFilterExpression={"subjectId":{"$exists":true}}'

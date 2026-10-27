@@ -149,13 +149,14 @@ export type FulfillmentOrderPatch = Partial<
         | 'holdNote'
         | 'holdMessage'
         | 'expectedAt'
+        | 'promisedAt'
         | 'lastNoticeAt'
         | 'dueNoticeFor'
         | 'cancelReason'
     >
 > & {
     /** Fields to remove — a released hold carries no reason or note, a cleared date no expected date. */
-    unset?: readonly ('holdReason' | 'holdNote' | 'holdMessage' | 'expectedAt')[];
+    unset?: readonly ('holdReason' | 'holdNote' | 'holdMessage' | 'expectedAt' | 'promisedAt')[];
 };
 
 /** The shared factory's CRUD surface plus the fulfillment order's own reads and claims. */
@@ -260,7 +261,9 @@ export const fulfillmentOrderRepository: Repository<
                         ...(draft.holdReason ? { holdReason: draft.holdReason } : {}),
                         ...(draft.cause ? { cause: draft.cause } : {}),
                         ...(draft.defaulted ? { defaulted: true } : {}),
-                        ...(draft.agreedAt ? { agreedAt: draft.agreedAt } : {}),
+                        ...(draft.agreedAt
+                            ? { agreedAt: draft.agreedAt, promisedAt: draft.agreedAt }
+                            : {}),
                         ...(draft.expectedAt ? { expectedAt: draft.expectedAt } : {})
                     }
                 },

@@ -40,6 +40,14 @@ declare module '@kernel/events' {
          * announcement. Eventual is fine, and a redelivery is harmless: it only re-reads.
          */
         'inventory.stock_retaken': { orderId: string; productIds: string[] };
+
+        /**
+         * An order was paid and nothing was set aside for it: its hold never existed, or was given
+         * up and the shelf could not cover it again. Written in the payment's own transaction.
+         * `tickets` opens the work from it and closes it when the order is cancelled or ships.
+         * Internal only: no AsyncAPI channel carries it.
+         */
+        'inventory.hold_orphaned': { orderId: string };
     }
 }
 
@@ -54,3 +62,6 @@ export const PREORDER_ALLOCATED = 'inventory.backorder_allocated';
 
 /** See `DomainEventMap['inventory.stock_retaken']` above; announced by the payment's own transaction. */
 export const STOCK_RETAKEN = 'inventory.stock_retaken';
+
+/** See `DomainEventMap['inventory.hold_orphaned']` above. */
+export const HOLD_ORPHANED = 'inventory.hold_orphaned';

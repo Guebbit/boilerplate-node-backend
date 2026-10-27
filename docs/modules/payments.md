@@ -24,11 +24,13 @@ flowchart LR
     returns["returns"]
     shop["shop"]
     stats["stats"]
+    tickets["tickets"]
 
     cart --> payments
     invoicing --> payments
     returns --> payments
     stats --> payments
+    tickets --> payments
     payments --> access
     payments --> orders
     payments --> shop
@@ -36,6 +38,13 @@ flowchart LR
     orders -. "order.created" .-> payments
     payments -. "payment.refunded" .-> invoicing
     payments -. "payment.refunded" .-> returns
+    payments -. "payment.amount_mismatch" .-> tickets
+    payments -. "payment.dispute_opened" .-> tickets
+    payments -. "payment.dispute_updated" .-> tickets
+    payments -. "payment.refund_canceled" .-> tickets
+    payments -. "payment.refund_failed" .-> tickets
+    payments -. "payment.refund_owed_by_hand" .-> tickets
+    payments -. "payment.refunded" .-> tickets
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -43,7 +52,7 @@ flowchart LR
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
     class invoicing,returns,shop,stats supporting;
-    class access generic;
+    class access,tickets generic;
     class payments centre;
 ```
 
@@ -67,7 +76,10 @@ and the relay delivers the event again. After it, a provider refusal is logged a
 answered: the refund sweep (`retryOpenRefunds`) finishes the open record with the same idempotency
 key, for as long as it takes. A hand-paid order opens its record too and waits for an operator:
 it shows on the needs-attention list as `manual_refund_owed`, and `settleRefundByHand` (the
-operator confirming the money went back) is what settles it.
+operator confirming the money went back) is what settles it. Opening that record announces
+`payment.refund_owed_by_hand` in the same transaction, and [tickets](./tickets.md#system-tickets) opens a
+`manual_refund_owed` ticket from it; a refusal that ends the retrying (`payment.refund_failed` with
+`final: true`), an amount mismatch and a dispute open theirs the same way.
 
 **`settlePayment` is the one place where the money and the goods agree.** It moves the order to
 `paid` in the same transaction, and `markPaid` commits the order's held units there rather than

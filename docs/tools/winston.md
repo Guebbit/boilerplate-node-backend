@@ -238,6 +238,8 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `tickets`        | `ADMIN_TICKET_RESOLVED`                      | `admin.ticket.resolved`                      | —                      |
 | `tickets`        | `ADMIN_TICKET_UNASSIGNED`                    | `admin.ticket.unassigned`                    | `ticket`               |
 | `tickets`        | `ADMIN_TICKET_VIEWED`                        | `admin.ticket.viewed`                        | `ticket`               |
+| `tickets`        | `SYSTEM_TICKET_CLEARED`                      | `system.ticket.cleared`                      | `ticket`               |
+| `tickets`        | `SYSTEM_TICKET_OPENED`                       | `system.ticket.opened`                       | `ticket`               |
 | `users`          | `ADMIN_USER_BANNED`                          | `admin.user.banned`                          | `user`                 |
 | `users`          | `ADMIN_USER_CREATED`                         | `admin.user.created`                         | `user`                 |
 | `users`          | `ADMIN_USER_ERASED`                          | `admin.user.erased`                          | `user`                 |

@@ -10,6 +10,7 @@ import { callerContextAs, testCallerContext } from '@tests/callers';
 import * as auditPort from '@infrastructure/observability/audit';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import type { ResponseReject } from '@infrastructure/http/response';
+import { outboxEventModel } from '@kernel/outbox';
 import { userService } from '@modules/users/services';
 import { createUser, userRepository } from '@modules/users/tests/factories';
 import { reapExpiredPurchaseHolds } from '../../services/purchase-hold';
@@ -240,6 +241,59 @@ describe('liftPurchaseHold', () => {
         );
 
         expect((result as ResponseReject).status).toBe(404);
+    });
+});
+
+/** The names of the outbox rows written so far, oldest first. */
+const announced = () =>
+    outboxEventModel
+        .find({ name: { $in: ['user.review_flagged', 'user.review_cleared'] } })
+        .sort({ _id: 1 })
+        .lean()
+        .exec()
+        .then((rows) => rows.map(({ name }) => name));
+
+describe('the review flag announced', () => {
+    it('writes user.review_flagged with the flag, once even when two calls race', async () => {
+        const buyer = await createUser();
+
+        await Promise.all([
+            userService.flagPurchaseHoldReview(buyer.id, testCallerContext),
+            userService.flagPurchaseHoldReview(buyer.id, testCallerContext)
+        ]);
+
+        expect(await announced()).toEqual(['user.review_flagged']);
+    });
+
+    it('writes user.review_cleared when staff place a hold on, or lift, a flagged account', async () => {
+        const placed = await createUser({ purchaseHoldFlaggedAt: inDays(-1) });
+        const lifted = await createUser({
+            email: 'lifted@example.com',
+            username: 'lifted',
+            purchaseHoldFlaggedAt: inDays(-1)
+        });
+
+        await userService.setPurchaseHold(
+            placed.id,
+            { until: inDays(2) },
+            callerContextAs('moderator')
+        );
+        await userService.liftPurchaseHold(lifted.id, callerContextAs('moderator'));
+
+        expect(await announced()).toEqual(['user.review_cleared', 'user.review_cleared']);
+    });
+
+    it('announces nothing when the account carried no flag', async () => {
+        const buyer = await createUser();
+
+        await userService.setPurchaseHold(
+            buyer.id,
+            { until: inDays(2) },
+            callerContextAs('moderator')
+        );
+        await userService.liftPurchaseHold(buyer.id, callerContextAs('moderator'));
+
+        expect(await announced()).toEqual([]);
     });
 });
 

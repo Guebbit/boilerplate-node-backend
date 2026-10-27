@@ -24,10 +24,12 @@ flowchart LR
     products["products"]
     returns["returns"]
     shop["shop"]
+    tickets["tickets"]
 
     cart --> delivery
     notifications --> delivery
     returns --> delivery
+    tickets --> delivery
     delivery --> inventory
     delivery --> orders
     delivery --> products
@@ -42,6 +44,9 @@ flowchart LR
     delivery -. "fulfillment_order.delayed" .-> notifications
     delivery -. "fulfillment_order.hold_noticed" .-> notifications
     delivery -. "shipment.lost" .-> notifications
+    delivery -. "fulfillment_order.cancelled" .-> tickets
+    delivery -. "fulfillment_order.delayed" .-> tickets
+    delivery -. "shipment.shipped" .-> tickets
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -49,6 +54,7 @@ flowchart LR
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders,products core;
     class inventory,notifications,returns,shop supporting;
+    class tickets generic;
     class delivery centre;
 ```
 
@@ -349,6 +355,12 @@ Selling to the **EU** needs no warning or clause for this, because the shop neve
 own. Selling to **US** buyers adds the FTC's mail-order rule (16 CFR 435.2): for a long delay the
 buyer's express OK is needed. Staff ask for it by email by hand, and cancel with a refund if there is
 no OK within 30 days. See [before you sell](../demo-ecommerce/before-you-sell.md).
+
+The reminder is a ticket: a delay to a ship-to country in `NODE_TICKETS_FTC_COUNTRIES` opens a
+`consent_due` ticket for the staff who hold `OrderEditing`, due 30 days after the agreed date (or on
+the date the buyer last held), and shipping or cancelling closes it. The human rule above is
+unchanged. `promisedAt` on the fulfillment order is the date the buyer holds now; the rule is in
+[tickets](tickets.md#system-tickets).
 
 ### The preorder board
 
@@ -702,14 +714,14 @@ frontend never re-derives a rule. Every staff door asks the key and nothing else
 `start:Shipment`. `ShipmentActions.update` is the tracking-code edit
 and `markLost` the lost-parcel report.
 
-| Event                                                 | Payload                                                    | Public webhook                 |
-| ----------------------------------------------------- | ---------------------------------------------------------- | ------------------------------ |
-| `shipment.shipped`                                    | `{orderId, shipmentId, fulfillmentOrderId, lines}`         | yes — replaces `order.shipped` |
-| `shipment.delivered`                                  | the same                                                   | yes                            |
-| `shipment.lost`                                       | the same, `reason`, and what the buyer is told             | yes — the reason code only     |
-| `fulfillment_order.held` · `.released` · `.cancelled` | `{orderId, fulfillmentOrderId, reason?}`                   | no                             |
-| `fulfillment_order.hold_noticed`                      | `{orderId, fulfillmentOrderId, userId?, notice, message?}` | no                             |
-| `fulfillment_order.delayed`                           | the dates, the titles, `reason` (`moved` or `due`)         | no                             |
+| Event                                                 | Payload                                                                                               | Public webhook                 |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `shipment.shipped`                                    | `{orderId, shipmentId, fulfillmentOrderId, lines}`                                                    | yes — replaces `order.shipped` |
+| `shipment.delivered`                                  | the same                                                                                              | yes                            |
+| `shipment.lost`                                       | the same, `reason`, and what the buyer is told                                                        | yes — the reason code only     |
+| `fulfillment_order.held` · `.released` · `.cancelled` | `{orderId, fulfillmentOrderId, reason?}`                                                              | no                             |
+| `fulfillment_order.hold_noticed`                      | `{orderId, fulfillmentOrderId, userId?, notice, message?}`                                            | no                             |
+| `fulfillment_order.delayed`                           | the dates (`agreedAt`, the held `promisedAt`), the titles, `shipCountry`, `reason` (`moved` or `due`) | no                             |
 
 All are written through the outbox **in the act's transaction**. An order shipped in two goes fires
 `shipment.shipped` twice, and the order reaching `shipped` is the last of them.

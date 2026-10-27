@@ -126,6 +126,11 @@ flowchart TD
     stock_alerts --> products
     stock_alerts --> users
     tickets --> access
+    tickets --> account
+    tickets --> delivery
+    tickets --> inventory
+    tickets --> orders
+    tickets --> payments
     tickets --> users
     users --> access
     wishlist --> cart
@@ -143,23 +148,23 @@ flowchart TD
 
 |                 | Reaches                                                                          | Reached by                                                                              |
 | --------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `orders`        | access, inventory, products, shop, users                                         | cart, delivery, invoicing, notifications, payments, returns, stats                      |
+| `orders`        | access, inventory, products, shop, users                                         | cart, delivery, invoicing, notifications, payments, returns, stats, tickets             |
 | `cart`          | addresses, delivery, inventory, orders, payments, products, shop, users          | notifications, wishlist                                                                 |
 | `access`        | —                                                                                | account, api-keys, audit-logs, notifications, orders, payments, returns, tickets, users |
 | `notifications` | access, cart, delivery, orders, stock-alerts, tickets, users, webhooks, wishlist | —                                                                                       |
 | `shop`          | account                                                                          | cart, delivery, invoicing, orders, payments, products, returns, stats                   |
 | `users`         | access                                                                           | account, api-keys, cart, example, notifications, orders, stock-alerts, tickets          |
+| `delivery`      | inventory, orders, products, shop                                                | cart, notifications, returns, tickets                                                   |
+| `payments`      | access, orders, shop                                                             | cart, invoicing, returns, stats, tickets                                                |
 | `products`      | shop                                                                             | cart, delivery, inventory, orders, sitemap, stock-alerts, wishlist                      |
-| `delivery`      | inventory, orders, products, shop                                                | cart, notifications, returns                                                            |
-| `payments`      | access, orders, shop                                                             | cart, invoicing, returns, stats                                                         |
+| `tickets`       | access, account, delivery, inventory, orders, payments, users                    | notifications                                                                           |
 | `returns`       | access, delivery, inventory, orders, payments, shop                              | stats                                                                                   |
-| `inventory`     | products                                                                         | cart, delivery, orders, returns                                                         |
+| `inventory`     | products                                                                         | cart, delivery, orders, returns, tickets                                                |
+| `account`       | access, users                                                                    | api-keys, shop, tickets                                                                 |
 | `stats`         | invoicing, orders, payments, returns, shop                                       | —                                                                                       |
-| `account`       | access, users                                                                    | api-keys, shop                                                                          |
 | `invoicing`     | orders, payments, shop                                                           | stats                                                                                   |
 | `api-keys`      | access, account, users                                                           | —                                                                                       |
 | `stock-alerts`  | products, users                                                                  | notifications                                                                           |
-| `tickets`       | access, users                                                                    | notifications                                                                           |
 | `wishlist`      | cart, products                                                                   | notifications                                                                           |
 | `audit-logs`    | access                                                                           | observability                                                                           |
 | `addresses`     | —                                                                                | cart                                                                                    |
@@ -233,7 +238,6 @@ Ships with every deployment, whatever the project becomes.
 - [`audit-logs`](./audit-logs.md) — Owns the audit trail; the read endpoint is its own, the platform operator's view lives in observability.
 - [`locales`](./locales.md) — Language discovery and the API's own message dictionary.
 - [`observability`](./observability.md) — Health, metrics, the platform operator's audit read and the SSE stream.
-- [`tickets`](./tickets.md) — Situations someone must take and close: contact messages and system-opened tickets, routed to the staff who hold the matching permission set.
 - [`users`](./users.md) — Admin-side user management; the self-service half is account.
 - [`webhooks`](./webhooks.md) — Outbound event delivery to a subscriber's own URL.
 
@@ -254,6 +258,7 @@ The pet-supply e-commerce domain this boilerplate demos itself with. Nothing in 
 - [`sitemap`](./sitemap.md) — sitemap.xml for search engines: the shop pages and every public product, once per language.
 - [`stats`](./stats.md) — Sales numbers, read on demand from the modules that own them.
 - [`stock-alerts`](./stock-alerts.md) — Back-in-stock requests: a signed-in buyer asks to be told once when a product they cannot order can be again.
+- [`tickets`](./tickets.md) — Situations someone must take and close: contact messages and system-opened tickets, routed to the staff who hold the matching permission set.
 - [`wishlist`](./wishlist.md) — Saved products, one list per user. The smallest shop domain.
 
 ### Example

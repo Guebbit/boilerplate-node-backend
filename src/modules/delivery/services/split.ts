@@ -138,6 +138,7 @@ const splitAct = async (
             lines,
             revision: 0,
             ...(held.agreedAt ? { agreedAt: held.agreedAt } : {}),
+            ...(held.promisedAt ? { promisedAt: held.promisedAt } : {}),
             ...(held.expectedAt ? { expectedAt: held.expectedAt } : {}),
             // Units owed for a lost parcel stay linked to it after the split, so it turning up
             // finds every part that is still owed.

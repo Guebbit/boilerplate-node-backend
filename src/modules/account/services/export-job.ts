@@ -15,6 +15,7 @@
  */
 
 import { DAY_MS } from '@domain-primitives/time';
+import { announceInTransaction } from '@kernel/outbox';
 import { logger } from '@infrastructure/adapters/logger';
 import {
     removeExport,
@@ -25,6 +26,7 @@ import { personalDataSubjectOf, userService } from '@modules/users';
 import type { AccountExportJobPayload } from '@types';
 import type { PersonalDataSection, PersonalDataSubject } from '@kernel/registry';
 import { exportRetentionMs } from '../config';
+import { ACCOUNT_EXPORT_FAILED, ACCOUNT_EXPORT_READY } from '../events';
 import { exportFailedEmail, exportReadyEmail, greetableName } from '../emails';
 import { accountExportFailedTotal } from '../metrics';
 import { accountExportRepository, type AccountExportRow } from '../repository';
@@ -101,6 +103,34 @@ const mailLink = (job: AccountExportJobPayload): Promise<void> => {
 };
 
 /**
+ * Move a `building` row to `ready` or `failed` and announce it, as one transaction: `tickets`
+ * opens work for a failure and closes it on the next success, so the event exists exactly when
+ * the move does.
+ *
+ * @param row - the row this run was filling in
+ * @param status - how the build ended
+ * @returns the settled row, or `null` when it was no longer `building`
+ */
+const settleAnnouncing = (
+    row: AccountExportRow,
+    status: 'ready' | 'failed'
+): Promise<AccountExportRow | null> =>
+    announceInTransaction(
+        (session) =>
+            accountExportRepository.settleBuilding(
+                String(row._id),
+                status,
+                new Date(Date.now() + exportRetentionMs()),
+                session
+            ),
+        (settled) => ({
+            name: status === 'ready' ? ACCOUNT_EXPORT_READY : ACCOUNT_EXPORT_FAILED,
+            payload: { userId: String(settled.userId), exportId: String(settled._id) },
+            aggregateId: String(settled.userId)
+        })
+    );
+
+/**
  * Build the file, then move the row to `ready`.
  *
  * @param subject - who the export is about, taken from the stored account and not from the queue
@@ -113,12 +143,7 @@ const buildAndSettle = (
     row: AccountExportRow
 ): Promise<AccountExportRow | null> =>
     writeExport(row.file, (append) => appendSections(personalDataSections(), subject, append)).then(
-        () =>
-            accountExportRepository.settleBuilding(
-                String(row._id),
-                'ready',
-                new Date(Date.now() + exportRetentionMs())
-            )
+        () => settleAnnouncing(row, 'ready')
     );
 
 /**
@@ -186,17 +211,15 @@ const fail = (
 ): Promise<void> => {
     logger.error({ message: 'account export failed', exportId: String(row._id), error });
 
-    return accountExportRepository
-        .settleBuilding(String(row._id), 'failed', new Date(Date.now() + exportRetentionMs()))
-        .then((settled) => {
-            // Otherwise a sibling settled the row (its file is good) or the row is gone (its file
-            // is nobody's).
-            if (!settled) return removeFileIfRowGone(row);
+    return settleAnnouncing(row, 'failed').then((settled) => {
+        // Otherwise a sibling settled the row (its file is good) or the row is gone (its file
+        // is nobody's).
+        if (!settled) return removeFileIfRowGone(row);
 
-            // This run's own failure: its half-built file goes, and only this run tells the person.
-            accountExportFailedTotal.inc();
-            return removeExport(row.file).then(() => mailFailure(job));
-        });
+        // This run's own failure: its half-built file goes, and only this run tells the person.
+        accountExportFailedTotal.inc();
+        return removeExport(row.file).then(() => mailFailure(job));
+    });
 };
 
 /**

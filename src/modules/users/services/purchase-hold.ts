@@ -22,6 +22,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
+import { announceInTransaction } from '@kernel/outbox';
 import { ERROR_CODES } from '@api/error-codes';
 import { accessService } from '@modules/access';
 import type { CallerContext } from '@types';
@@ -29,6 +30,7 @@ import type { PurchaseHoldRecord, UserDocument } from '../model';
 import { usersAuditActions } from '../audit';
 import { contactFrontendLink, privacyFrontendLink } from '../config';
 import { purchaseHoldPlacedEmail } from '../emails';
+import { USER_REVIEW_CLEARED, USER_REVIEW_FLAGGED } from '../events';
 import { userRepository } from '../repository';
 
 /** What a checkout (or a banner) needs to know about a hold in force. */
@@ -144,6 +146,26 @@ const notifyBuyer = (
 };
 
 /**
+ * Save the account after staff acted on it, and announce the review flag cleared in the same
+ * transaction when it had one: the ticket that waits on the flag closes exactly when the flag does.
+ *
+ * @param user - the account, already changed in memory
+ * @param wasFlagged - whether it carried the review flag before the change
+ */
+const saveAnnouncingReview = (user: UserDocument, wasFlagged: boolean): Promise<UserDocument> =>
+    announceInTransaction(
+        (session) => userRepository.save(user, session),
+        (saved) =>
+            wasFlagged
+                ? {
+                      name: USER_REVIEW_CLEARED,
+                      payload: { userId: String(saved._id) },
+                      aggregateId: String(saved._id)
+                  }
+                : []
+    );
+
+/**
  * Put a manual hold on an account, replacing any hold it has. The note is written for the buyer to
  * read (GDPR Art. 22(3): the reason, and a way to contest it).
  *
@@ -178,10 +200,11 @@ export const setPurchaseHold = (
                 setBy: context.caller.id ?? undefined,
                 setAt: now
             };
+            const wasFlagged = user.purchaseHoldFlaggedAt !== undefined;
             user.purchaseHold = hold;
             // Placing a hold is acting on a flagged account, so the flag has done its job.
             user.purchaseHoldFlaggedAt = undefined;
-            return userRepository.save(user).then((saved) => {
+            return saveAnnouncingReview(user, wasFlagged).then((saved) => {
                 notifyBuyer(saved, hold);
                 recordAudit(context, {
                     action: usersAuditActions.ADMIN_USER_PURCHASE_HOLD_SET,
@@ -225,10 +248,11 @@ export const liftPurchaseHold = (
 
             const now = new Date();
             const wasInForce = activeHoldOf(user, now) !== undefined;
+            const wasFlagged = user.purchaseHoldFlaggedAt !== undefined;
             user.purchaseHold = undefined;
             user.purchaseHoldFlaggedAt = undefined;
             user.purchaseHoldResetAt = now;
-            return userRepository.save(user).then((saved) => {
+            return saveAnnouncingReview(user, wasFlagged).then((saved) => {
                 recordAudit(context, {
                     action: usersAuditActions.ADMIN_USER_PURCHASE_HOLD_LIFTED,
                     outcome: 'success',
@@ -304,7 +328,18 @@ export const takeAutomaticPurchaseHold = (
  * @returns whether this call set the flag
  */
 export const flagPurchaseHoldReview = (id: string, context: CallerContext): Promise<boolean> =>
-    userRepository.claimPurchaseHoldReview(id, new Date()).then((flagged) => {
+    announceInTransaction(
+        (session) =>
+            userRepository
+                .claimPurchaseHoldReview(id, new Date(), session)
+                .then((flagged) => (flagged ? { id } : null)),
+        ({ id: flaggedId }) => ({
+            name: USER_REVIEW_FLAGGED,
+            payload: { userId: flaggedId },
+            aggregateId: flaggedId
+        })
+    ).then((written) => {
+        const flagged = written !== null;
         if (flagged)
             recordAudit(context, {
                 action: usersAuditActions.SYSTEM_USER_PURCHASE_HOLD_FLAGGED,

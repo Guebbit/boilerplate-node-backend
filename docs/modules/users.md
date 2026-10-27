@@ -39,6 +39,8 @@ flowchart LR
     users -. "user.deactivated" .-> account
     users -. "user.deletion-cancelled" .-> account
     users -. "user.setup-requested" .-> account
+    users -. "user.review_cleared" .-> tickets
+    users -. "user.review_flagged" .-> tickets
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -263,7 +265,10 @@ free text. A mail that cannot be built or queued is logged and never undoes the 
 in the same write as an automatic hold, or alone when only PAID cancellations reached the limit
 (`system.user.purchase_hold_flagged`; those are statutory withdrawals and never pause anyone). It
 outlives the hold, so an unreviewed pause does not drop off the staff list when it ends by itself; it
-stays until a staff member acts. Placing a hold or lifting one clears it. The `/users` reads show it
+stays until a staff member acts. Placing a hold or lifting one clears it. Setting the flag alone (paid
+cancellations only) announces `user.review_flagged` and clearing it `user.review_cleared`, in the same
+transaction: [`tickets`](./tickets.md#system-tickets) opens and closes the review ticket from them. The
+automatic hold announces neither; it has its own staff notice. The `/users` reads show it
 (never `/account`); the data export carries it with the rest of the profile.
 
 Audit: `admin.user.purchase_hold_set`; `admin.user.purchase_hold_lifted` (`metadata.inForce` says

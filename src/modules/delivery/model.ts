@@ -65,6 +65,12 @@ export interface FulfillmentOrderDocument extends Document {
     defaulted?: boolean;
     /** The date promised when ordering, frozen from the line snapshot. */
     agreedAt?: Date;
+    /**
+     * The date the buyer holds now: starts as `agreedAt`, a later date from a notice replaces it,
+     * a cleared date ("no date yet") removes it. What the next slip's consent reminder is
+     * measured against (`tickets`, 16 CFR 435.2); the buyer is never asked.
+     */
+    promisedAt?: Date;
     /** When it is now expected to ship. */
     expectedAt?: Date;
     /** When the buyer was last told the date moved or would be missed. */
@@ -180,6 +186,7 @@ export const fulfillmentOrderSchema = new Schema<FulfillmentOrderDocument>(
         cause: { type: String, enum: ['preorder', 'backorder'] },
         defaulted: { type: Boolean },
         agreedAt: { type: Date },
+        promisedAt: { type: Date },
         expectedAt: { type: Date },
         lastNoticeAt: { type: Date },
         dueNoticeFor: { type: Date },

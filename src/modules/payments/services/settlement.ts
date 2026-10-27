@@ -55,7 +55,7 @@ import {
 import { syncProviderRefunds } from './external-refunds';
 import { applyDisputeDelivery } from './disputes';
 import { recordDecline } from './announce';
-import { PAYMENT_SUCCEEDED } from '../events';
+import { PAYMENT_AMOUNT_MISMATCH, PAYMENT_SUCCEEDED } from '../events';
 import { notPayable, paymentNotFound } from './errors';
 import { ERROR_CODES } from '@api/error-codes';
 
@@ -170,6 +170,12 @@ const settleMismatch = (
         // durable without the record that returns it.
         if (recorded) {
             await openRefund(recorded, CANCELLATION_REQUEST, undefined, session);
+            await enqueueOutboxEvent(
+                PAYMENT_AMOUNT_MISMATCH,
+                { paymentId: String(payment._id), orderId },
+                orderId,
+                session
+            );
             // The order now has a succeeded payment and a refund pointing at it: no hard delete.
             await orderService.markMoneyReceived(orderId, session);
         }
@@ -177,6 +183,7 @@ const settleMismatch = (
     }).then(async (recorded) => {
         if (!recorded) return { payment, orderLost: true, transitioned: false };
 
+        nudgeOutbox();
         for (const field of fields) paymentAmountMismatchTotal.inc({ field });
         // Stryker disable all
         logger.error({
