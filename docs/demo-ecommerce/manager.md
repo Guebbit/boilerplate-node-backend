@@ -69,23 +69,25 @@ other way. Cancelling and refunding are one action by default and two when you n
 ## Correcting a mistake
 
 The ordinary sequence above sometimes cannot be followed — a parcel was scanned against the wrong
-order, or fulfilment needs to be corrected out of the normal order. Staff with the right permission
-can force a move, but it always needs a reason, and it is always written down:
+order, or fulfilment needs to be corrected out of the normal order. If a real parcel exists, record it
+with the ordinary ship and deliver buttons: there is no separate "forced" version of either. If there
+is no parcel to record, staff with the right permission can correct the status alone, which always
+needs a reason and is always written down:
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%
 flowchart LR
     M["something is wrong<br/>with the ordinary sequence"] --> R["you write down why"]
     R --> C{"does a real parcel<br/>exist to record?"}
-    C -->|yes| F["force the ship/deliver<br/>screen — same fields,<br/>plus your reason"]
+    C -->|yes| F["use the ordinary<br/>ship / deliver buttons"]
     C -->|no| S["correct the status<br/>alone — no parcel,<br/>no email"]
-    F --> H["order's history shows<br/>who, when, and why"]
-    S --> H
+    F --> H["order's history shows<br/>who and when"]
+    S --> H2["order's history shows<br/>who, when, and why"]
 
     classDef ask fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
     class C ask;
-    class H done;
+    class H,H2 done;
 ```
 
 Neither path can move an order backward, and neither can ever mark one **paid** by hand — money

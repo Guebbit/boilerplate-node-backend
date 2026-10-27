@@ -13,7 +13,10 @@ import {
     setFakeRefundFailure,
     setFakeRefundTimeout,
     ageFakeRefundKeys,
-    setFakeReceipt
+    setFakeReceipt,
+    setFakeDispute,
+    fakeDisputeOf,
+    signFakeDelivery
 } from '@scenarios/support/doubles/payments/fake';
 import {
     PaymentInFlightError,
@@ -298,6 +301,35 @@ describe('fakePaymentProvider.parseWebhook', () => {
         await expect(fakePaymentProvider.parseWebhook(body, signed(body))).rejects.toThrow(
             'Body is not valid JSON'
         );
+    });
+});
+
+describe('fakePaymentProvider — disputes', () => {
+    const dispute = {
+        disputeRef: 'dp_1',
+        kind: 'chargeback',
+        status: 'needs_response',
+        reason: 'fraudulent',
+        amount: 50,
+        currency: 'EUR',
+        fundsWithdrawn: true,
+        observedAt: '2026-10-01T10:00:00.000Z'
+    } as const;
+
+    it('builds a delivery naming the intent and carrying the dispute, and remembers it', () => {
+        const delivery = setFakeDispute('fake_pi_d', dispute);
+
+        expect(delivery).toMatchObject({ providerRef: 'fake_pi_d', dispute });
+        expect(fakeDisputeOf('fake_pi_d', 'dp_1')).toEqual(dispute);
+        expect(fakeDisputeOf('fake_pi_d', 'dp_other')).toBeUndefined();
+    });
+
+    it('signs a delivery that the webhook parse accepts, dispute and all', async () => {
+        const { body, headers } = signFakeDelivery(setFakeDispute('fake_pi_d2', dispute));
+
+        await expect(
+            fakePaymentProvider.parseWebhook(Buffer.from(body), headers)
+        ).resolves.toMatchObject({ providerRef: 'fake_pi_d2', dispute });
     });
 });
 

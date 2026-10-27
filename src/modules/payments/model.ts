@@ -13,6 +13,9 @@ import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { moneyPath, moneyPlugin } from '@infrastructure/persistence/money-field';
 import {
+    DisputeKind,
+    DisputeReason,
+    DisputeStatus,
     PaymentStatus,
     PaymentMethod,
     RefundFailureReason,
@@ -105,6 +108,34 @@ export interface RefundRecord {
 }
 
 /**
+ * One dispute the buyer's bank opened on the payment, as the provider's newest report left it.
+ * Embedded and unique per `disputeRef`: a provider reports the same dispute many times, and each
+ * report overwrites this one only if it is newer (`observedAt`). Staff only on the wire.
+ */
+export interface DisputeRecord {
+    /** The provider's dispute id. */
+    disputeRef: string;
+    kind: DisputeKind;
+    status: DisputeStatus;
+    reason: DisputeReason;
+    /** Decimal, in `currency`. */
+    amount: number;
+    currency: string;
+    /** When the provider stops taking evidence. */
+    evidenceDueBy?: Date;
+    /** Whether the bank has taken the money out of the shop's balance. */
+    fundsWithdrawn: boolean;
+    /** The provider's time of the first report. */
+    openedAt: Date;
+    /** When it last reached a closed status; cleared if a closed dispute reopens. */
+    closedAt?: Date;
+    /** The provider's time of the newest report applied: the fence for out-of-order deliveries. */
+    observedAt: Date;
+    /** Where staff answer it, in the provider's dashboard. */
+    dashboardUrl?: string;
+}
+
+/**
  * What settling a refund records beyond the status: the provider's own refund id when it answered,
  * or that an operator returned the money outside the application.
  */
@@ -174,6 +205,8 @@ export interface PaymentDocument extends Document {
     amountRefunded: number;
     /** One record per refund attempt, oldest first. */
     refunds: RefundRecord[];
+    /** Disputes the buyer's bank opened on this payment, oldest first. Staff only on the wire. */
+    disputes: DisputeRecord[];
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -217,6 +250,25 @@ const refundSchema = new Schema<RefundRecord>(
         reversedAt: { type: Date }
     },
     { timestamps: { createdAt: true, updatedAt: false } }
+);
+
+/** One dispute, embedded. Addressed by `disputeRef`, which the conditional writes match on. */
+const disputeSchema = new Schema<DisputeRecord>(
+    {
+        disputeRef: { type: String, required: true },
+        kind: { type: String, enum: Object.values(DisputeKind), required: true },
+        status: { type: String, enum: Object.values(DisputeStatus), required: true },
+        reason: { type: String, enum: Object.values(DisputeReason), required: true },
+        amount: moneyPath({ required: true, nonNegative: true }),
+        currency: { type: String, required: true },
+        evidenceDueBy: { type: Date },
+        fundsWithdrawn: { type: Boolean, required: true },
+        openedAt: { type: Date, required: true },
+        closedAt: { type: Date },
+        observedAt: { type: Date, required: true },
+        dashboardUrl: { type: String }
+    },
+    { _id: false }
 );
 
 /** Mongoose schema for persisted payment documents. */
@@ -284,6 +336,10 @@ export const paymentSchema = new Schema<PaymentDocument>(
         refunds: {
             type: [refundSchema],
             default: []
+        },
+        disputes: {
+            type: [disputeSchema],
+            default: []
         }
     },
     {
@@ -301,6 +357,8 @@ paymentSchema.index({ createdAt: -1 }, { name: 'payments_createdAt' });
 paymentSchema.index({ status: 1, createdAt: -1 }, { name: 'payments_status_createdAt' });
 // The Awaiting tab: bank transfers by deadline.
 paymentSchema.index({ method: 1, payBy: 1 }, { name: 'payments_method_payBy' });
+// The needs-attention read and the `disputed` filter, which `$match` on an open dispute.
+paymentSchema.index({ 'disputes.status': 1 }, { name: 'payments_disputes_status', sparse: true });
 // The Refunds tab and the needs-attention read, which `$match` on a refund's status first.
 paymentSchema.index(
     { 'refunds.status': 1, 'refunds.createdAt': -1 },

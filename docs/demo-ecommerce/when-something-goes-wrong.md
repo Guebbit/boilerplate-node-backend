@@ -11,6 +11,7 @@ note field, and leaves the decision to a person. Each entry below has the same t
 | A refund is owed and the money must be paid back by hand               | [A refund owed by hand](#refund-owed-by-hand)                  |
 | The card refused to take a refund back                                 | [A card refund the card refused](#card-refund-refused)         |
 | The bank sent a refund back after the shop had marked it paid          | [A refund the bank sent back](#refund-bounced)                 |
+| A buyer asked their bank to take a card payment back (a dispute)       | [A card dispute](#card-dispute)                                |
 | The buyer was asked how they want their money and has not answered     | [The buyer does not answer](#buyer-silent)                     |
 | A refund was also made in the provider's own dashboard                 | [Refunded in the dashboard as well](#refund-covered-elsewhere) |
 | Two refunds were opened by mistake                                     | [Two refunds by mistake](#two-refunds)                         |
@@ -27,8 +28,8 @@ note field, and leaves the decision to a person. Each entry below has the same t
 | A parcel came back to the shop (returned to sender)                    | [It came back to us](#parcel-came-back)                        |
 
 ::: tip More entries come with their features
-Each entry here describes something the shop does today. When a new tool lands (disputes, a buyer
-who never answers), its entry lands on this page in the same change as the tool.
+Each entry here describes something the shop does today. When a new tool lands (a buyer who never
+answers, say), its entry lands on this page in the same change as the tool.
 :::
 
 ## A refund owed by hand {#refund-owed-by-hand}
@@ -138,6 +139,41 @@ refund returned after you paid them, never before.
 
 **Whose job.** Whoever holds the refund permission: the [moderator](./moderator.md) or the admin.
 → [`payments`](../modules/payments.md#when-the-bank-sends-a-refund-back)
+
+## A card dispute {#card-dispute}
+
+**What you see.** The order is on the "needs attention" list as **Dispute to answer**, with a
+deadline. On the order's payment a banner shows the dispute: its kind (a question from the bank, or
+a **chargeback**, where the bank has already taken the money back), the reason the buyer gave, the
+amount and the day your evidence is due. The **Refund** button is off while a chargeback is open.
+If you had already refunded part of the payment, the row says how much: that refund is evidence.
+
+**What to do.**
+
+1. Open the dispute in your payment provider's dashboard (the banner links to it) before the deadline.
+2. Send the evidence there: proof of delivery, the tracking page, the order and the emails, and any
+   refund you already made.
+3. Wait for the bank. The banner updates by itself when the provider reports a decision.
+
+If the shop **wins**, the money comes back to you and the refund button returns. If it **loses**, the
+bank keeps the money: what you can still refund is reduced by that amount. A refund that was waiting
+on the payment can then be pressed **Mark returned**, because the bank paid the buyer. If the goods
+came back, the credit note follows as usual.
+
+::: warning Do not refund a payment under a chargeback
+The bank already took the money back. A refund on top pays the buyer twice, and the shop cannot get
+the second payment back. The shop refuses it for you; the dashboard may too.
+:::
+
+::: tip The shop does not hold the goods by itself
+If the parcel has not left yet, use the usual **hold** on the shipment ("high risk") and decide.
+:::
+
+**Whose job.** Whoever holds the refund permission: the [moderator](./moderator.md) or the admin.
+A lost chargeback with no goods returned is a non-payment, not a credit note; ask your accountant
+how your country books it (in Italy: DPR 633/72 art. 26 allows a credit-note adjustment only inside
+insolvency).
+→ [`payments`](../modules/payments.md#disputes)
 
 ## The buyer does not answer {#buyer-silent}
 

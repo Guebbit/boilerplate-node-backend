@@ -161,6 +161,31 @@ answered about THIS refund.
 The two retried-and-unclear codes are never offered for hand settlement because the refund may have
 gone through: the sweep resends under the same key, and a timeout then gets the real answer.
 
+## Disputes {#disputes}
+
+A dispute is the one thing a delivery carries beyond a pointer. Adyen has no endpoint that reads a
+dispute, so its signed notification IS the state; Stripe's adapter re-reads `disputes.retrieve` and
+fills the report from the answer instead of from the body. Return it as `ProviderWebhookEvent.dispute`
+(`ProviderDisputeState`), next to the `providerRef` of the intent it is on. A charge or refund the
+bank blocks because of a dispute (Stripe `charge_disputed`, `refund_disputed_payment`) is thrown as
+`disputed`.
+
+| Field                | Meaning                                                                                     |
+| -------------------- | ------------------------------------------------------------------------------------------- |
+| `disputeRef`         | the provider's dispute id; one per payment                                                  |
+| `kind`               | `inquiry` (information asked, no money taken) or `chargeback` (money taken back)            |
+| `status`             | `needs_response`, `under_review`, `won`, `lost`, `accepted`, `closed`                       |
+| `reason`             | Stripe's closed list (`fraudulent`, `product_not_received`, ...); map your provider onto it |
+| `amount`, `currency` | decimal, in the payment's currency; a report in another currency is dropped                 |
+| `evidenceDueBy`      | the evidence deadline, when the provider gives one                                          |
+| `fundsWithdrawn`     | whether the bank has taken the money out of the shop's balance                              |
+| `observedAt`         | the provider's own event time: every write is conditional on it being newer                 |
+| `dashboardUrl`       | where staff answer it                                                                       |
+
+Send every report you get, repeated and out of order: the application keeps only the newest per
+`disputeRef`. Dates are ISO strings, as the contract's schema parses them. Behaviour:
+[payments: Disputes](./payments.md#disputes).
+
 ## A key the provider forgot
 
 A provider remembers an idempotency key for a limited time (Stripe: a day from its FIRST use; reuse
@@ -173,8 +198,8 @@ for a partial refund pays the buyer twice. So the adapter must not rely on the k
 
 The fake behaves this way: it replays an answer (a definite refusal too) for a day, forgets the key
 after, and adopts by `refundId` for an old record. Its levers (`scenarios/support/doubles/payments/fake.ts`):
-`setFakeRefundFailure`, `setFakeRefundTimeout` (the refund runs, the answer is lost) and
-`ageFakeRefundKeys`.
+`setFakeRefundFailure`, `setFakeRefundTimeout` (the refund runs, the answer is lost),
+`ageFakeRefundKeys` and `setFakeDispute` (a dispute delivery, see [Disputes](#disputes)).
 
 ## Retiring a provider
 

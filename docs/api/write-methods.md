@@ -50,7 +50,8 @@ flowchart TD
   (`tests/support/response-contract.ts`) fails a 201 without it.
 - A retried create under its `Idempotency-Key` replays the `Location` with the body.
 - A sub-collection create is a create too: `POST /delivery/fulfillment-orders/{id}/shipments`
-  answers 201 with `Location` naming the shipment, and `POST /payments/{id}/refunds` answers 201
+  and the digital door `POST /delivery/fulfillment-orders/{id}/fulfill` answer 201 with `Location`
+  naming the shipment, and `POST /payments/{id}/refunds` answers 201
   with the new `Refund` and `Location: /payments/{id}/refunds/{refundId}`. The payment's running
   totals are one `GET /payments/{id}` away.
 - **A 201 means something was created** (RFC 9110 §15.3.2). An intent that only refreshes the
@@ -61,8 +62,9 @@ flowchart TD
 
 - `POST /orders/{id}/cancel`, `/restore`, `/status-override`: a state change on a
   thing that already exists. 200, with the thing as it now stands.
-- An action may create a record on the side (a shipment, a stock movement). It still answers the
-  thing the caller acts on next.
+- When the body answered IS the new record, it is a create (201 + `Location`). When an action
+  answers the thing acted on, it may create records on the side (refunds, credit notes, override
+  shipments, stock movements) and stays 200.
 
 #### Action or field
 
@@ -109,6 +111,25 @@ action"). Medusa v2 (`POST`/`DELETE /store/carts/{id}/line-items[/{line_id}]`), 
 (`POST /carts/{id}/items`, `POST`/`DELETE /wishlists/{id}/items[/{item_id}]`), Shopify's
 `cartLinesAdd`/`Update`/`Remove`, commercetools' cart update actions and Auth0's identity unlink
 all answer the parent.
+
+### A child created under its parent
+
+A **child** with a life of its own (an id, a status, actions of its own) may be created at
+`POST /parent/{id}/children` with no `GET` on that path (it answers 405 with `Allow: POST`), when:
+
+1. each child has its own `GET` by id;
+2. all of a parent's children come back from one **named read**;
+3. the POST's `description` names that read.
+
+| Create                                                  | Listed by                         | One child                           |
+| ------------------------------------------------------- | --------------------------------- | ----------------------------------- |
+| `POST /payments/{id}/refunds`                           | `GET /payments/{id}` (`refunds`)  | `GET /payments/{id}/refunds/{refundId}` |
+| `POST /delivery/fulfillment-orders/{id}/shipments`      | `GET /orders/{id}/shipments`      | `GET /delivery/shipments/{id}`      |
+
+Why: Solidus (the reference for API shape) creates under the parent with no index, and Shopify's
+current API reads children through the parent. AIP-121 says a resource "must support List"; a list
+here is a small additive change the day a real caller asks for one. A **line** (above) differs: it
+has no id or read of its own.
 
 ### Repeating an action (409)
 
@@ -176,9 +197,9 @@ A row the caller may not see, an unknown id and a malformed one are the same 404
 ### Retrying a POST
 
 A POST is not idempotent: sent twice, it may create twice. Every POST that moves money, stock or
-an account takes an `Idempotency-Key` — orders, checkout, payments, stock receipts and
-adjustments. The exception is `POST /payments`, which takes none: asking again refreshes the same
-intent. See [Idempotency](../tools/idempotency.md).
+an account takes an `Idempotency-Key` — orders, checkout, payment moves, shipments, stock receipts
+and adjustments. That is a minimum: signup takes one too. The POSTs that move none and are left
+without are named, in four classes, in [Idempotency](../tools/idempotency.md#named-exceptions).
 
 ## PUT — replace
 

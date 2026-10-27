@@ -73,32 +73,42 @@ source of truth, so — like every other durable, TTL-bound collection in this r
 
 ## Where it is mounted
 
-| Route                                                                                     | Why                                                                                              |
-| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `POST /orders`                                                                            | Admin order creation; a retried request must replay the same order, not mint a second one.       |
-| `POST /cart/checkout`                                                                     | Places the order; a retry after a lost response must replay it, never place a second.            |
-| `POST /cart/merge`                                                                        | A retry must not add the guest's quantities twice.                                               |
-| `POST /payments/{id}/confirm`                                                             | Charges the card.                                                                                |
-| `POST /orders/{id}/payments`                                                              | An admin recording money by hand; a repeat must not record it twice.                             |
-| `POST /payments/{id}/refunds`                                                             | Returns money — a double submit must refund once. The key is REQUIRED: no header, a 400.         |
-| `POST /returns`, `POST /returns/{id}/receive`                                             | A retried return request or receipt must replay, not open or receive twice.                      |
-| `POST /inventory/levels/{productId}/receive`, `POST /inventory/levels/{productId}/adjust` | Stock never moves twice for one delivery or one correction.                                      |
-| `POST /account/signup`                                                                    | Sybil accounts aside, a retried signup must not create two.                                      |
-| `POST /examples`                                                                          | The template's idempotent create: a retried create replays the first answer, not a second draft. |
-| `POST /tickets`                                                                           | The public contact form has no other identity to dedupe a retry on.                              |
+| Route                                                                                                | Why                                                                                                                                                                                       |
+| ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /orders`                                                                                       | Admin order creation; a retried request must replay the same order, not mint a second one.                                                                                                |
+| `POST /cart/checkout`                                                                                | Places the order; a retry after a lost response must replay it, never place a second.                                                                                                     |
+| `POST /cart/merge`                                                                                   | A retry must not add the guest's quantities twice.                                                                                                                                        |
+| `POST /payments/{id}/confirm`                                                                        | Charges the card.                                                                                                                                                                         |
+| `POST /orders/{id}/payments`                                                                         | An admin recording money by hand; a repeat must not record it twice.                                                                                                                      |
+| `POST /payments/{id}/refunds`                                                                        | Returns money — a double submit must refund once. The key is REQUIRED: no header, a 400.                                                                                                  |
+| `POST /payments/{id}/refunds/{refundId}/settle`                                                      | Books a refund the provider could not settle; a repeat must not book it twice.                                                                                                            |
+| `POST /delivery/fulfillment-orders/{id}/shipments`, `POST /delivery/fulfillment-orders/{id}/fulfill` | A partial ship creates a NEW shipment, so no state machine catches a retry: it would cut a second parcel and take the stock twice. Both shipment doors take the key so they answer alike. |
+| `POST /returns`, `POST /returns/{id}/receive`                                                        | A retried return request or receipt must replay, not open or receive twice.                                                                                                               |
+| `POST /inventory/levels/{productId}/receive`, `POST /inventory/levels/{productId}/adjust`            | Stock never moves twice for one delivery or one correction.                                                                                                                               |
+| `POST /account/signup`                                                                               | Sybil accounts aside, a retried signup must not create two.                                                                                                                               |
+| `POST /examples`                                                                                     | The template's idempotent create: a retried create replays the first answer, not a second draft.                                                                                          |
+| `POST /tickets`                                                                                      | The public contact form has no other identity to dedupe a retry on.                                                                                                                       |
 
 The refund uses `requireIdempotencyKey`: the IETF Idempotency-Key draft makes a missing key on a
 non-idempotent write a client error, and a refund repeated by a retry returns the money twice. Its
 contract parameter is `RequiredIdempotencyKeyHeader`, and the error code `IDEMPOTENCY_KEY_REQUIRED`.
-Password reset, email change, cancel, sync and `DELETE /account` stay without a key: a repeat of
-those is either harmless or already guarded by the domain.
 
-`POST /payments/{id}/sync` deliberately has no `idempotencyKey`: it is already idempotent by
-construction, keyed on the provider's own payment reference rather than a client-supplied one.
+## Named exceptions
 
-`POST /payments` has none either, and for a second reason: the ledger stores the replayed
-response, and that response carries the `clientSecret`. Asking again already refreshes the same
-intent, so a retry needs no key. The two share one per-account hourly budget instead
+The rule is a minimum: every POST that moves money, stock or an account takes a key
+([write methods](../api/write-methods.md#retrying-a-post)), and a few others take one on top
+(signup, the contact form). A POST that moves money, stock or an account and takes none belongs
+to one of these classes, and the IETF draft only asks that the exception be published:
+
+| Class                                 | Why a retry is safe                                   | Examples                                                                                                                                                |
+| ------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a state-guarded transition            | the repeat is refused with a 409 by the state machine | `POST /orders/{id}/cancel`, `/shipments/{id}/deliver`, `/shipments/{id}/lost`                                                                           |
+| a secondary key                       | the domain refuses a duplicate (Zalando 231)          | `POST /users` (unique email)                                                                                                                            |
+| an answer carrying a one-time secret  | the ledger would store the secret and replay it       | `POST /payments` (`clientSecret`; asking again refreshes the same intent), `POST /api-keys`, `POST /webhooks/subscriptions`, 2FA setup and backup codes |
+| keyed on the provider's own reference | the provider's id is the key                          | `POST /payments/{id}/sync`, `POST /payments/webhook`                                                                                                    |
+| a repeat that is harmless             | running it twice leaves the same state                | password reset, email change, `DELETE /account`                                                                                                         |
+
+`POST /payments` and `POST /payments/{id}/sync` share one per-account hourly budget instead
 (`NODE_PAYMENT_INTENT_RATE_LIMIT_MAX`, 30).
 
 ## What a failure stores

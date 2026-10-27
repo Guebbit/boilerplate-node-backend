@@ -66,6 +66,9 @@ run one is committed, not remembered. Both repos carry it:
 | `.npmrc` `allow-scripts-pin`    | `false`: an approval is written by package name, not `name@version`               |
 | `package.json` `allowScripts`   | `name: true` allows every version of it; `name: false` denies every version of it |
 
+`.npmrc` `min-release-age=7` also makes npm refuse any version released less than 7 days ago, so a hijacked release is
+usually yanked before a local install can reach it; override once with `--min-release-age=0`.
+
 `engine-strict` is what makes the first row true: an older npm does not know
 `strict-allow-scripts`, ignores it without a word, and runs every script.
 
