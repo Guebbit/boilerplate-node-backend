@@ -11,17 +11,17 @@
 
 import { NotificationSeverity } from '@types';
 import type { Caller } from '@types';
-import { holds } from '@kernel/ability';
-import { findRule, PERMISSION_SETS } from '@kernel/permissions';
+import { holdsSet } from '@kernel/ability';
 import type { NotificationBody, StaffNotificationCode } from './model';
 
 /** One work notice's routing: its audience, its mail class and how loud it is. */
 export interface StaffRoute {
     /**
      * Permission sets whose holders are told, plus every unrestricted role. Empty means
-     * administrators only.
+     * administrators only. `per-notice`: the producer names them (a ticket's set depends on its
+     * kind), see {@link setsOfRoute}.
      */
-    sets: readonly string[];
+    sets: readonly string[] | 'per-notice';
     /** `now`: one mail per recipient when the notice is first written. `none`: the bell only. */
     email: 'now' | 'none';
     severity: NotificationSeverity;
@@ -40,8 +40,31 @@ export const STAFF_ROUTES: Readonly<Record<StaffNotificationCode, StaffRoute>> =
         sets: ['WebhookManagement'],
         email: 'none',
         severity: NotificationSeverity.warning
+    },
+    // A ticket opened: whoever works its kind takes it. Mailed now because a person waits on it
+    // (a visitor's message, a refund owed, a legal clock).
+    'notifications.staff.ticket-opened': {
+        sets: 'per-notice',
+        email: 'now',
+        severity: NotificationSeverity.info
+    },
+    // Told to the one person it was given to: the bell is enough, they are already working.
+    'notifications.staff.ticket-assigned': {
+        sets: 'per-notice',
+        email: 'none',
+        severity: NotificationSeverity.info
     }
 };
+
+/**
+ * The sets a notice is for: its route's, or the ones the producer named for a `per-notice` route.
+ * A `per-notice` route with none named is administrators only, never everyone.
+ *
+ * @param route - the code's routing
+ * @param named - the producer's sets, for a `per-notice` route
+ */
+export const setsOfRoute = (route: StaffRoute, named: readonly string[] = []): readonly string[] =>
+    route.sets === 'per-notice' ? named : route.sets;
 
 /** The body of a work notice: a staff code with its own params. */
 export type StaffNoticeBody = Extract<NotificationBody, { code: StaffNotificationCode }>;
@@ -69,6 +92,10 @@ export const staffLinkOf = (body: StaffNoticeBody): StaffLink => {
                 parameters: { id: body.params.subscriptionId }
             };
         }
+        case 'notifications.staff.ticket-opened':
+        case 'notifications.staff.ticket-assigned': {
+            return { template: 'tickets/{id}', parameters: { id: body.params.ticketId } };
+        }
     }
 };
 
@@ -76,16 +103,10 @@ export const staffLinkOf = (body: StaffNoticeBody): StaffLink => {
  * Does the caller hold one of these permission sets right now? Read at the moment of asking, so a
  * member who lost the role stops seeing the notice, and an administrator sees every one.
  *
- * A set is held when every rule it bundles is. An empty list is for administrators alone.
+ * An empty list is for administrators alone.
  *
  * @param caller - the reader, in tenant scope
  * @param sets - the notice's `sets`
  */
 export const callerHoldsAnySet = (caller: Caller, sets: readonly string[]): boolean =>
-    caller.unrestricted ||
-    PERMISSION_SETS.filter((set) => sets.includes(set.name)).some((set) =>
-        set.rules.every((id) => {
-            const rule = findRule(id);
-            return rule !== undefined && holds(caller, rule.action, rule.subject);
-        })
-    );
+    caller.unrestricted || sets.some((setName) => holdsSet(caller, setName));

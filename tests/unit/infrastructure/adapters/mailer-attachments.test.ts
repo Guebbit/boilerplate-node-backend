@@ -87,6 +87,20 @@ describe('resolveAttachments — resolving attachments', () => {
             expect(sent).not.toHaveProperty(key);
     });
 
+    it('passes a Reply-To through as the replyTo header, and sets none when the request has none', async () => {
+        await sendTemplatedEmail(
+            { to: 'desk@example.com', replyTo: 'ada@example.com' },
+            'account.reset-confirm',
+            DATA
+        );
+        await sendTemplatedEmail({ to: 'desk@example.com' }, 'account.reset-confirm', DATA);
+
+        const [withReply] = sendMailMock.mock.calls[0] as [Record<string, unknown>];
+        const [withoutReply] = sendMailMock.mock.calls[1] as [Record<string, unknown>];
+        expect(withReply.replyTo).toBe('ada@example.com');
+        expect(withoutReply).not.toHaveProperty('replyTo');
+    });
+
     it('carries no attachments key at all when the request names none', async () => {
         await sendTemplatedEmail({ to: 'ada@example.com' }, 'account.reset-confirm', DATA);
 

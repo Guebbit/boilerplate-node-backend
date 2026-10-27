@@ -492,6 +492,85 @@ components:
                 subscriptionId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
 
+        TicketOpenedParams:
+            type: object
+            additionalProperties: false
+            required: [ticketId, kind]
+            description: >-
+                A ticket opened in the caller's jurisdiction. Ids and closed codes only: the ticket
+                page has the rest, and no visitor text travels in a notice.
+            properties:
+                ticketId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                kind:
+                    type: string
+                    description: The ticket's kind (`contact`, `account_review`, ...).
+                category:
+                    type: string
+                    description: A contact ticket's category, when the visitor chose one.
+
+        TicketAssignedParams:
+            type: object
+            additionalProperties: false
+            required: [ticketId, kind]
+            description: A ticket was given to the caller by someone else.
+            properties:
+                ticketId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                kind:
+                    type: string
+                    description: The ticket's kind.
+
+        NotificationStaffTicketOpened:
+            type: object
+            additionalProperties: false
+            description: A ticket opened in a jurisdiction the caller works; whoever holds its permission set takes it.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [notifications.staff.ticket-opened]
+                params:
+                    $ref: '#/components/schemas/TicketOpenedParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationStaffTicketAssigned:
+            type: object
+            additionalProperties: false
+            description: A colleague gave the caller a ticket.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [notifications.staff.ticket-assigned]
+                params:
+                    $ref: '#/components/schemas/TicketAssignedParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
         NotificationStaffPurchaseHoldPlaced:
             type: object
             additionalProperties: false
@@ -568,6 +647,8 @@ components:
                 - $ref: '#/components/schemas/NotificationStockAlert'
                 - $ref: '#/components/schemas/NotificationStaffPurchaseHoldPlaced'
                 - $ref: '#/components/schemas/NotificationStaffWebhookDisabled'
+                - $ref: '#/components/schemas/NotificationStaffTicketOpened'
+                - $ref: '#/components/schemas/NotificationStaffTicketAssigned'
             discriminator:
                 propertyName: code
                 mapping:
@@ -580,6 +661,8 @@ components:
                     notifications.stock-alert: '#/components/schemas/NotificationStockAlert'
                     notifications.staff.purchase-hold-placed: '#/components/schemas/NotificationStaffPurchaseHoldPlaced'
                     notifications.staff.webhook-disabled: '#/components/schemas/NotificationStaffWebhookDisabled'
+                    notifications.staff.ticket-opened: '#/components/schemas/NotificationStaffTicketOpened'
+                    notifications.staff.ticket-assigned: '#/components/schemas/NotificationStaffTicketAssigned'
 
         NotificationsResponse:
             type: object

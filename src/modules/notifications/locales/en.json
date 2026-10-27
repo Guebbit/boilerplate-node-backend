@@ -9,6 +9,33 @@
                 "meta-title": "Purchase hold placed",
                 "title": "A purchase hold was placed",
                 "summary": "A buyer cancelled or let expire several unpaid orders, so their checkout is paused until {{until}}. Every cancellation was processed normally; nothing is blocked except placing a new order. The pause ends by itself; place a manual hold on the account to keep it longer."
+            },
+            "ticket-opened": {
+                "subject": "New ticket: {{what}}",
+                "meta-title": "New ticket",
+                "title": "A new ticket needs someone",
+                "summary": "A ticket was opened and your role works this kind: {{what}}. Open it to see the details and take it."
+            },
+            "ticket-kind": {
+                "contact": "Contact message",
+                "account_review": "Account review",
+                "manual_refund_owed": "Refund owed by hand",
+                "amount_mismatch": "Payment amount mismatch",
+                "paid_without_hold": "Paid order without stock hold",
+                "export_failed": "Data export failed",
+                "consent_due": "Buyer consent due",
+                "refund_refused": "Refund refused",
+                "dispute": "Payment dispute"
+            },
+            "ticket-category": {
+                "order": "Order",
+                "cancellation": "Cancellation",
+                "return": "Return",
+                "payment": "Payment",
+                "account": "Account",
+                "privacy": "Privacy",
+                "other": "Other",
+                "none": "Uncategorised"
             }
         }
     }

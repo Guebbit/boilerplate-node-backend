@@ -43,6 +43,14 @@ describe('contactRequestEmail', () => {
         expect(data.createdAt).toBe(REQUEST.createdAt);
     });
 
+    it('carries the category, or the translated placeholder when the sender chose none', () => {
+        expect(contactRequestEmail('en', { ...REQUEST, category: 'privacy' }).data.category).toBe(
+            'privacy'
+        );
+        expect(contactRequestEmail('en', REQUEST).data.category).not.toBeUndefined();
+        expect(contactRequestEmail('en', REQUEST).data.category).not.toMatch(/^tickets\./);
+    });
+
     it('falls back to translated copy when the sender left no name', () => {
         // `||`, not `??`: an empty string is as nameless as an absent field, and the form allows
         // one. The fallback must be the translated placeholder, never a blank line.
@@ -63,6 +71,7 @@ describe('contactRequestEmail', () => {
             'labelEmail',
             'labelSubject',
             'labelMessage',
+            'labelCategory',
             'labelCreatedAt'
         ]) {
             expect(data[key]).not.toBe('');

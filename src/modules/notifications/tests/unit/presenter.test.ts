@@ -106,7 +106,15 @@ describe('presentNotification, per code', () => {
             code: 'notifications.staff.purchase-hold-placed',
             params: { userId: 'u1', until: '2026-10-30T09:00:00.000Z' }
         },
-        { code: 'notifications.staff.webhook-disabled', params: { subscriptionId: 's1' } }
+        { code: 'notifications.staff.webhook-disabled', params: { subscriptionId: 's1' } },
+        {
+            code: 'notifications.staff.ticket-opened',
+            params: { ticketId: 't1', kind: 'contact', category: 'privacy' }
+        },
+        {
+            code: 'notifications.staff.ticket-assigned',
+            params: { ticketId: 't1', kind: 'dispute' }
+        }
     ];
 
     it.each(bodies)('answers $code with its own params, untouched', (body) => {

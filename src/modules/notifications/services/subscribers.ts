@@ -12,7 +12,8 @@ import { Types } from 'mongoose';
 import type { DomainEventMap } from '@kernel/events';
 import type { NewNotification } from '../repository';
 import { notificationsCreate } from './inbox';
-import { notifyStaff } from './staff';
+import { ticketService } from '@modules/tickets';
+import { notifyStaff, notifyStaffMember } from './staff';
 
 /** One row per owner of a removed product, all the same message. */
 const removedFor = (
@@ -149,7 +150,7 @@ export const onPurchaseHoldPlaced = ({
         tenantId,
         body: { code: 'notifications.staff.purchase-hold-placed', params: { userId, until } },
         dedupeKey: `purchase-hold-placed:${userId}:${until}`
-    });
+    }).then(() => undefined);
 
 /** A subscription was switched off: the staff who manage webhooks hear of it, once per disable. */
 export const onWebhookSubscriptionAutoDisabled = ({
@@ -161,4 +162,52 @@ export const onWebhookSubscriptionAutoDisabled = ({
         tenantId,
         body: { code: 'notifications.staff.webhook-disabled', params: { subscriptionId } },
         dedupeKey: `webhook-disabled:${subscriptionId}:${disabledAt}`
+    }).then(() => undefined);
+
+/**
+ * Who hears of a new ticket: the sets that WORK it. A contact message is read by those who may
+ * read it (`TicketDisplay`, which includes managers) but worked by `TicketManagement`; alerting
+ * the readers too would tell people who cannot act on it.
+ *
+ * @param opened - the `ticket.opened` fact
+ */
+const alertSetsOf = ({ kind, routeSet }: DomainEventMap['ticket.opened']): string[] =>
+    kind === 'contact' ? ['TicketManagement'] : [routeSet];
+
+/**
+ * A ticket was opened: everyone who works its kind hears of it once, by id and kind alone.
+ *
+ * A contact message nobody could be told of (no staff with an address) goes to the fallback
+ * mailbox instead, with the message in it: that mailbox is then the whole inbox. With even one
+ * permitted recipient the mailbox hears nothing.
+ */
+export const onTicketOpened = (opened: DomainEventMap['ticket.opened']): Promise<void> =>
+    notifyStaff({
+        tenantId: opened.tenantId,
+        body: {
+            code: 'notifications.staff.ticket-opened',
+            params: {
+                ticketId: opened.ticketId,
+                kind: opened.kind,
+                ...(opened.category ? { category: opened.category } : {})
+            }
+        },
+        sets: alertSetsOf(opened),
+        dedupeKey: `ticket-opened:${opened.ticketId}`
+    }).then((told) =>
+        told === 0 && opened.kind === 'contact'
+            ? ticketService.mailFallbackMailbox(opened.ticketId)
+            : undefined
+    );
+
+/** A ticket was given to a colleague: the one who now holds it hears, and nobody else. */
+export const onTicketAssigned = (assigned: DomainEventMap['ticket.assigned']): Promise<void> =>
+    notifyStaffMember(assigned.assigneeId, {
+        tenantId: assigned.tenantId,
+        body: {
+            code: 'notifications.staff.ticket-assigned',
+            params: { ticketId: assigned.ticketId, kind: assigned.kind }
+        },
+        sets: [assigned.routeSet],
+        dedupeKey: `ticket-assigned:${assigned.ticketId}:${assigned.assignedAt}`
     });

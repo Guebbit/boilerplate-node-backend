@@ -113,6 +113,8 @@ const renderMessage = (
         to: envelope.to,
         subject: envelope.subject,
         text: envelope.text,
+        // nodemailer `replyTo`: sets the Reply-To header — https://nodemailer.com/message/
+        ...(envelope.replyTo === undefined ? {} : { replyTo: envelope.replyTo }),
         // A producer that supplied its own HTML keeps it; otherwise the rendered template.
         html: envelope.html ?? html,
         ...(resolvedAttachments.length > 0 ? { attachments: resolvedAttachments } : {})

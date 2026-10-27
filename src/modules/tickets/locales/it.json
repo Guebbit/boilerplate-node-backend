@@ -8,6 +8,7 @@
             "label-email": "Email",
             "label-subject": "Oggetto",
             "label-message": "Messaggio",
+            "label-category": "Categoria",
             "label-created-at": "Creata il",
             "not-available": "N/D"
         },

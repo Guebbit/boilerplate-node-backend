@@ -13,7 +13,10 @@ import { ticketRepository } from '@modules/tickets/repository';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import * as auditPort from '@infrastructure/observability/audit';
 import { ticketsAuditActions } from '@modules/tickets/audit';
-import { TicketStatus } from '@types';
+import { TicketKind, TicketSource, TicketStatus } from '@types';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { onDomainEvent, resetDomainEvents, type DomainEventMap } from '@kernel/events';
+import { TICKET_OPENED } from '@modules/tickets/events';
 import { asReject } from '@tests/response';
 import { MISSING_ID } from '@tests/ids';
 import { setEnvironment } from '@tests/environment';
@@ -32,16 +35,26 @@ jest.mock('@infrastructure/observability/audit', () =>
 
 setupTestDb();
 
+/** The `ticket.opened` facts announced since the test began. */
+let opened: DomainEventMap['ticket.opened'][] = [];
+
 /*
- * `notifyMailbox()` reads `NODE_CONTACT_NOTIFY_EMAIL` from the environment at call time. `.env`
- * supplies it via `dotenv/config` in `src/app.ts`, which a service-level suite never imports — so
- * without this the honeypot tests below would pass for the wrong reason (nothing configured to
- * notify, rather than the honeypot suppressing the notification).
+ * `mailFallbackMailbox` reads `NODE_CONTACT_NOTIFY_EMAIL` at call time. `.env` supplies it via
+ * `dotenv/config` in `src/app.ts`, which a service-level suite never imports, so it is set here.
+ * Modules are not registered: the announcement is caught by a listener of the test's own.
  */
 beforeEach(() => {
     setEnvironment({ NODE_CONTACT_NOTIFY_EMAIL: 'admin@example.com' });
+    opened = [];
+    resetDomainEvents();
+    onDomainEvent(TICKET_OPENED, (fact) => {
+        opened.push(fact);
+    });
 });
-afterEach(() => jest.clearAllMocks());
+afterEach(() => {
+    jest.clearAllMocks();
+    resetDomainEvents();
+});
 
 /** A valid creation payload; overrides let each test vary one field at a time. */
 const makePayload = (overrides: Record<string, string> = {}) => ({
@@ -117,7 +130,7 @@ describe('create', () => {
     });
 });
 
-describe('create — the operator notification', () => {
+describe('create — the announcement', () => {
     it('files a request that names nobody', async () => {
         const { name: _omitted, ...withoutName } = makePayload();
 
@@ -127,53 +140,118 @@ describe('create — the operator notification', () => {
         expect(ticket.email).toBe('ada@example.com');
     });
 
-    it('goes to the configured mailbox, with the ticket’s own words and the moment it was filed', async () => {
-        const ticket = await ticketService.create(makePayload());
+    it('announces ticket.opened with ids and closed codes only, never the visitor’s words', async () => {
+        const ticket = await ticketService.create(makePayload({ category: 'cancellation' }));
 
-        const [envelope, template, data] = mockEnqueueEmail.mock.calls[0];
-        expect(envelope).toMatchObject({ to: 'admin@example.com' });
-        expect(envelope.subject).toContain('Broken checkout');
-        expect(template).toBe('tickets.contact');
-        expect(data).toMatchObject({
-            name: 'Ada Lovelace',
-            email: 'ada@example.com',
-            subject: 'Broken checkout',
-            message: 'The cart total is wrong.',
-            createdAt: ticket.createdAt?.toISOString()
-        });
+        expect(opened).toEqual([
+            {
+                tenantId: DEPLOYMENT_TENANT_ID,
+                ticketId: String(ticket._id),
+                kind: 'contact',
+                routeSet: 'TicketDisplay',
+                category: 'cancellation'
+            }
+        ]);
+        expect(JSON.stringify(opened)).not.toContain('Ada');
+        expect(JSON.stringify(opened)).not.toContain('ada@example.com');
+        expect(JSON.stringify(opened)).not.toContain('cart total');
     });
 
-    it('sends nothing when no mailbox is configured at all', async () => {
-        setEnvironment({ NODE_CONTACT_NOTIFY_EMAIL: undefined, NODE_SMTP_SENDER: undefined });
+    it('leaves the category out of the announcement when the visitor chose none', async () => {
+        await ticketService.create(makePayload());
 
-        const ticket = await ticketService.create(makePayload());
+        expect(opened[0]).not.toHaveProperty('category');
+    });
 
-        expect(ticket.status).toBe(TicketStatus.new);
+    it('sends no mail itself: telling people is the subscriber’s business', async () => {
+        await ticketService.create(makePayload());
+
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
     });
 });
 
-describe('create — honeypot', () => {
-    it('sends the operator notification when the honeypot is empty', async () => {
-        await ticketService.create(makePayload());
+describe('mailFallbackMailbox', () => {
+    it('mails the configured mailbox the full message, the category and a Reply-To of the bare address', async () => {
+        const ticket = await ticketService.create(
+            makePayload({ name: '"Ada" <evil@example.com>', category: 'privacy' })
+        );
 
-        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+        await ticketService.mailFallbackMailbox(String(ticket._id));
+
+        const [envelope, template, data] = mockEnqueueEmail.mock.calls[0];
+        expect(envelope).toEqual({
+            to: 'admin@example.com',
+            subject: expect.stringContaining('Broken checkout'),
+            replyTo: 'ada@example.com'
+        });
+        expect(template).toBe('tickets.contact');
+        expect(data).toMatchObject({
+            message: 'The cart total is wrong.',
+            category: 'privacy',
+            createdAt: ticket.createdAt?.toISOString()
+        });
     });
 
-    it('writes a suspected-spam submission as status "spam" and sends no notification', async () => {
+    it('sends nothing when no fallback mailbox is configured', async () => {
+        setEnvironment({ NODE_CONTACT_NOTIFY_EMAIL: undefined });
+        const ticket = await ticketService.create(makePayload());
+
+        await ticketService.mailFallbackMailbox(String(ticket._id));
+
+        expect(mockEnqueueEmail).not.toHaveBeenCalled();
+    });
+
+    it('sends nothing for a ticket that is gone', async () => {
+        await ticketService.mailFallbackMailbox(MISSING_ID);
+
+        expect(mockEnqueueEmail).not.toHaveBeenCalled();
+    });
+
+    it('sends nothing for a ticket the system opened: only a visitor’s message has a Reply-To', async () => {
+        const system = await ticketRepository.create({
+            source: TicketSource.system,
+            kind: TicketKind.manual_refund_owed,
+            routeSet: 'PaymentRefunding',
+            subject: 'A refund is owed by hand',
+            message: 'Refund refund-1 needs a person.'
+        });
+
+        await ticketService.mailFallbackMailbox(String(system._id));
+
+        expect(mockEnqueueEmail).not.toHaveBeenCalled();
+    });
+
+    it('logs and swallows a mail that cannot be queued: the ticket is already stored', async () => {
+        const ticket = await ticketService.create(makePayload());
+        mockEnqueueEmail.mockRejectedValueOnce(new Error('queue down'));
+
+        await expect(
+            ticketService.mailFallbackMailbox(String(ticket._id))
+        ).resolves.toBeUndefined();
+    });
+});
+
+describe('create — honeypot', () => {
+    it('announces the ticket when the honeypot is empty', async () => {
+        await ticketService.create(makePayload());
+
+        expect(opened).toHaveLength(1);
+    });
+
+    it('writes a suspected-spam submission as status "spam" and announces nothing', async () => {
         const ticket = await ticketService.create(
             makePayload({ website: 'https://spammer.example' })
         );
 
         expect(ticket.status).toBe(TicketStatus.spam);
-        expect(mockEnqueueEmail).not.toHaveBeenCalled();
+        expect(opened).toEqual([]);
     });
 
     it('treats a whitespace-only honeypot as empty, same as a real client leaves it', async () => {
         const ticket = await ticketService.create(makePayload({ website: '   ' }));
 
         expect(ticket.status).toBe(TicketStatus.new);
-        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+        expect(opened).toHaveLength(1);
     });
 
     it('never persists or returns the honeypot field itself', async () => {
@@ -191,13 +269,13 @@ describe('create — honeypot', () => {
 
 describe('create — disposable-email policy', () => {
     // Every anti-automation rung must be provably off by default.
-    it('is off by default — a known disposable domain still notifies as normal', async () => {
+    it('is off by default — a known disposable domain is announced as normal', async () => {
         setEnvironment({ NODE_ANTIBOT_EMAIL_POLICY: undefined });
 
         const ticket = await ticketService.create(makePayload({ email: 'someone@mailinator.com' }));
 
         expect(ticket.status).toBe(TicketStatus.new);
-        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+        expect(opened).toHaveLength(1);
     });
 
     it('files a disposable-domain submission as spam, same as the honeypot, with a 201-shaped result', async () => {
@@ -208,7 +286,7 @@ describe('create — disposable-email policy', () => {
         // Filed and returned exactly like the honeypot catches a bot: no visible refusal that
         // would tell a spam script which signal caught it.
         expect(ticket.status).toBe(TicketStatus.spam);
-        expect(mockEnqueueEmail).not.toHaveBeenCalled();
+        expect(opened).toEqual([]);
     });
 });
 

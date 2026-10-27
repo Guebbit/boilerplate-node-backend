@@ -135,6 +135,13 @@ components:
                             type: string
                         html:
                             type: string
+                        replyTo:
+                            type: string
+                            format: email
+                            description: >-
+                                Bare address replies go to, set as the `Reply-To` header. The
+                                producer has already validated it; `From` stays the configured
+                                sender either way.
                         attachments:
                             type: array
                             description: >-

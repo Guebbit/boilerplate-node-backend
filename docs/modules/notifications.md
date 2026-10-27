@@ -22,6 +22,7 @@ flowchart LR
     delivery["delivery"]
     orders["orders"]
     stock_alerts["stock-alerts"]
+    tickets["tickets"]
     users["users"]
     webhooks["webhooks"]
     wishlist["wishlist"]
@@ -31,6 +32,7 @@ flowchart LR
     notifications --> delivery
     notifications --> orders
     notifications --> stock_alerts
+    notifications --> tickets
     notifications --> users
     notifications --> webhooks
     notifications --> wishlist
@@ -41,6 +43,8 @@ flowchart LR
     delivery -. "shipment.lost" .-> notifications
     orders -. "order.purchase_hold_placed" .-> notifications
     stock_alerts -. "stock_alert.sent" .-> notifications
+    tickets -. "ticket.assigned" .-> notifications
+    tickets -. "ticket.opened" .-> notifications
     webhooks -. "webhook.subscription_auto_disabled" .-> notifications
     wishlist -. "wishlist.items_removed" .-> notifications
 
@@ -50,7 +54,7 @@ flowchart LR
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
     class delivery,stock_alerts,wishlist supporting;
-    class access,users,webhooks generic;
+    class access,tickets,users,webhooks generic;
     class notifications centre;
 ```
 
@@ -163,8 +167,14 @@ flowchart LR
   both kinds.
 - **Retention.** Work notices have their own cap (`NODE_NOTIFICATIONS_STAFF_MAX_PER_USER`) and a TTL
   (`NODE_NOTIFICATIONS_STAFF_TTL_DAYS`), so a flood of them cannot push a person's own messages out.
-- **Today's codes.** `notifications.staff.purchase-hold-placed` (mail `now`: abuse defence) and
-  `notifications.staff.webhook-disabled` (bell only).
+- **Today's codes.** `notifications.staff.purchase-hold-placed` (mail `now`: abuse defence),
+  `notifications.staff.webhook-disabled` (bell only), `notifications.staff.ticket-opened` (mail
+  `now`: a person waits) and `notifications.staff.ticket-assigned` (bell only, the assignee alone).
+- **Ticket notices.** The two ticket codes name their sets per notice (`per-notice` in the route
+  table): the set of the opened ticket's kind. Params are the ticket id, its kind and a contact
+  message's category, nothing the visitor typed. A contact message that finds no recipient with
+  an address is handed to the tickets module's fallback mailbox
+  ([`tickets`](./tickets.md#who-is-told)).
 
 ## What decides what
 

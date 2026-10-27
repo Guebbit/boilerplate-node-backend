@@ -24,6 +24,7 @@ import {
     SHIPMENT_LOST
 } from '@modules/delivery';
 import { ORDER_PURCHASE_HOLD_PLACED } from '@modules/orders';
+import { TICKET_ASSIGNED, TICKET_OPENED } from '@modules/tickets';
 import { WEBHOOK_SUBSCRIPTION_AUTO_DISABLED } from '@modules/webhooks';
 import { WISHLIST_ITEMS_REMOVED } from '@modules/wishlist';
 import { STOCK_ALERT_SENT } from '@modules/stock-alerts';
@@ -66,6 +67,8 @@ export default {
             WEBHOOK_SUBSCRIPTION_AUTO_DISABLED,
             notificationsService.onWebhookSubscriptionAutoDisabled
         );
+        onDomainEvent(TICKET_OPENED, notificationsService.onTicketOpened);
+        onDomainEvent(TICKET_ASSIGNED, notificationsService.onTicketAssigned);
     },
     locales: path.join(__dirname, 'locales'),
     templates: path.join(__dirname, 'templates')

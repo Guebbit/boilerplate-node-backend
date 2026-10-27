@@ -15,7 +15,9 @@ import {
     onFulfillmentOrderHoldNoticed,
     onShipmentLost,
     onPurchaseHoldPlaced,
-    onWebhookSubscriptionAutoDisabled
+    onWebhookSubscriptionAutoDisabled,
+    onTicketOpened,
+    onTicketAssigned
 } from './subscribers';
 import { streamNotifications, publishToUser, openStreamCount } from './stream';
 
@@ -41,5 +43,7 @@ export const notificationsService = {
     onFulfillmentOrderHoldNoticed,
     onShipmentLost,
     onPurchaseHoldPlaced,
-    onWebhookSubscriptionAutoDisabled
+    onWebhookSubscriptionAutoDisabled,
+    onTicketOpened,
+    onTicketAssigned
 };
