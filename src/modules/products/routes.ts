@@ -2,7 +2,7 @@
  * @module
  * Express router for the product catalogue: public read, admin write, cached where the response
  * does not depend on the caller. Route order matters where a static segment (`/search`,
- * `/categories`, `/settings`) would otherwise be swallowed by `/:id`.
+ * `/facets`, `/settings`) would otherwise be swallowed by `/:id`.
  */
 
 import type { Request } from 'express';
@@ -22,13 +22,13 @@ import { replaceProduct, updateProduct } from './controllers/update-product';
 import { deleteProducts } from './controllers/delete-products';
 import { restoreProducts } from './controllers/restore-products';
 import { getProductItem } from './controllers/get-product-item';
-import { getProductAdmin } from './controllers/get-product-admin';
 import { getCatalogueFacets } from './controllers/get-catalogue-facets';
 import { invalidateCache, searchCache, setCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 import { hasAnonymousReadScope } from '@kernel/access/query';
 import { productService } from './services';
 import { canSeeStock } from './services/stock-view';
+import { canSeeTranslations } from './services/translation-view';
 
 /** Express router for product catalogue endpoints (public read, admin write). */
 export const router = Router();
@@ -44,14 +44,16 @@ router.use(getAuth);
 
 /**
  * A caller who reads exactly what a guest reads shares the guest's cached entry; a caller who
- * sees more (admins — inactive products included, or the exact stock counters) bypasses Redis
- * entirely rather than risk
- * serving or storing their wider answer under that shared key. `hasAnonymousReadScope` is what
- * makes this safe BY CONSTRUCTION — see its own docblock.
+ * sees more (admins — inactive products included, the exact stock counters, or every language's
+ * `translations`) bypasses Redis entirely rather than risk serving or storing their wider answer
+ * under that shared key. `hasAnonymousReadScope` is what makes the scope half safe BY
+ * CONSTRUCTION — see its own docblock; the two field-level checks are separate on purpose, since
+ * a custom API key can hold `read:Translation` or `read:StockLevel` alone.
  */
 const cacheScopeKey = (request: Request): boolean =>
     hasAnonymousReadScope(productService.callerScope, request.caller) &&
-    !canSeeStock(request.caller);
+    !canSeeStock(request.caller) &&
+    !canSeeTranslations(request.caller);
 
 /*
  * `previewDraftLanguage` leads each of the three catalogue reads: it must run before `setCache`,
@@ -103,18 +105,18 @@ router.delete(
     deleteProducts
 );
 
-// GET /products/categories — the filter chips; a static segment, so declared before /:id
+// GET /products/facets — the filter chips; a static segment, so declared before /:id
 // for the same readability rule the create route follows. `() => true`, not `cacheScopeKey`:
 // `productService.facets()` scopes to active rows UNCONDITIONALLY (see its own comment) — it
 // never reads more for an admin the way search/`:id` do, so every caller already shares one
 // answer and there is nobody to bypass the cache for.
 router.get(
-    '/categories',
+    '/facets',
     setCache(3600, { tags: ['products'], keyParameters: [], scopeKey: () => true }),
     getCatalogueFacets
 );
 
-// GET /products/:id — public
+// GET /products/:id — public; a holder of `read:Translation` also gets every language
 router.get(
     '/:id',
     previewDraftLanguage,
@@ -153,16 +155,6 @@ router.patch(
     invalidateCache(['products']),
     upload.image(),
     updateProduct
-);
-
-// GET /products/:id/admin — admin only, every language at once. Never cached: the screen someone
-// is actively editing, the same reasoning `GET /locales/:locale/entries` already applies.
-router.get(
-    '/:id/admin',
-    isAuthOrCredential,
-    requirePermission('update', 'Product'),
-    requirePermission('read', 'Translation'),
-    getProductAdmin
 );
 
 // DELETE /products/:id — admin only (soft delete unless ?hardDelete=true)

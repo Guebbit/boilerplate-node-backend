@@ -157,7 +157,7 @@ export const listLevels = async (
 
 /**
  * One product's stock level — the item read of a board row, the record `receive`, `adjust` and
- * `backorder-limit` act on. A product that is gone and one with no level row are the same 404.
+ * `PATCH` act on. A product that is gone and one with no level row are the same 404.
  *
  * @param productId - the product
  * @returns its level, or the 404

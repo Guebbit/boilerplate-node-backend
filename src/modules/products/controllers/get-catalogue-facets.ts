@@ -11,7 +11,7 @@ import { catchAs } from '@infrastructure/http/controller';
 import type { CatalogueFacetsResponse } from '@types';
 
 /**
- * GET /products/categories
+ * GET /products/facets
  * Every category and tag the public catalogue carries, with counts — the storefront's filter
  * chips. Public and cached like the listing it filters; the products cache tag invalidates it
  * whenever the catalogue changes.

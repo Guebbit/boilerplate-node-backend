@@ -130,7 +130,7 @@ export const installSecurity = (app: Express): void => {
      * `Vary: Origin` on EVERY response. `cors` adds it only when it reflects an allowed origin, so
      * a refused origin's answer (no CORS headers) could be stored by a shared cache under the same
      * key as the real frontend's, which would then be served the header-less variant and fail
-     * CORS in the browser. `GET /products/categories` is publicly cached, so this is reachable.
+     * CORS in the browser. `GET /products/facets` is publicly cached, so this is reachable.
      * Express merges it with the one `cors` adds, never doubling it.
      * https://expressjs.com/en/api.html#res.vary
      */

@@ -1,6 +1,6 @@
 /**
  * The multilingual product write surface, over real HTTP: `POST /products`, `PUT`/`PATCH
- * /products/{id}` and `GET /products/{id}/admin`. Cross-module by nature, sitting at the top level rather than
+ * /products/{id}` and the `translations` map of `GET /products/{id}`. Cross-module by nature, sitting at the top level rather than
  * under `src/modules/products/tests/`: driving these routes needs a real `locales` collection
  * row, which `products` may only reach through the `kernel/translation.ts` port.
  */
@@ -238,7 +238,7 @@ describe('PUT /products/{id}', () => {
                 tags: [],
                 translations: { en: { title: 'Dog Bed, replaced' } }
             });
-        const admin = await api().get(`/products/${id}/admin`).set('Authorization', bearer);
+        const admin = await api().get(`/products/${id}`).set('Authorization', bearer);
 
         expect(response.status).toBe(200);
         expect(Object.keys(admin.body.translations)).toEqual(['en']);
@@ -372,7 +372,7 @@ const seeded = async () => {
 /** The whole `en` entry as the editor's form would read it back. */
 const readEnglish = (bearer: string, id: string) =>
     api()
-        .get(`/products/${id}/admin`)
+        .get(`/products/${id}`)
         .set('Authorization', bearer)
         .then((response) => response.body.translations.en as Record<string, unknown>);
 
@@ -585,7 +585,7 @@ describe('GET /products/{id}/admin', () => {
             });
 
         const response = await api()
-            .get(`/products/${String(created.body.id)}/admin`)
+            .get(`/products/${String(created.body.id)}`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
@@ -635,10 +635,10 @@ describe('the stock counters on the product writes follow read:StockLevel', () =
         const admin = await authenticateAsRole('admin');
 
         const byEditor = await api()
-            .get(`/products/${product.id}/admin`)
+            .get(`/products/${product.id}`)
             .set('Authorization', editor.bearer);
         const byAdmin = await api()
-            .get(`/products/${product.id}/admin`)
+            .get(`/products/${product.id}`)
             .set('Authorization', admin.bearer);
 
         expect(COUNTERS.filter((field) => field in byEditor.body)).toEqual([]);

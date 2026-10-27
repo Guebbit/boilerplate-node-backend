@@ -64,6 +64,21 @@ flowchart TD
 - An action may create a record on the side (a shipment, a stock movement). It still answers the
   thing the caller acts on next.
 
+#### Action or field
+
+A status or flag moves through an action when the move has its OWN effect, guard or permission.
+Otherwise it is a field of `PUT` / `PATCH`.
+
+| The move has... | So it is | Example |
+| --- | --- | --- |
+| a side effect of its own (ends sessions, clears a cache, resets a streak, releases a hold) | an action | `POST /users/{id}/deactivate`, `POST /orders/{id}/cancel` |
+| a guard or a permission of its own | an action | `POST /locales/{locale}/deactivate` (fallback guard) |
+| consequences that come only from the state it leaves behind | a field | `Product.active`, `purchasable`, `allowBackorder` |
+
+`product.buyable_again` does not make `active` an action: it follows the derived `buyable` state,
+whichever of five fields or a stock receipt changed it. The same test is written from the domain
+side in [`tactical-ddd.md`](../theory/tactical-ddd.md#action-endpoints-execute-update-does-not-decide).
+
 ### A line is written through its parent
 
 A **line** is a part of a per-user parent with no life of its own: a cart line, a saved product, a
@@ -258,7 +273,7 @@ A path the contract declares, asked with a method it does not give it, answers *
 - **`Allow` is sorted**, with HEAD beside GET. `OPTIONS` is never judged: the CORS layer answers
   a preflight before any route runs.
 - **A trailing slash is the same path.** `/things/` reads as `/things`.
-- **A literal path wins over a templated one.** `DELETE /products/categories` would otherwise
+- **A literal path wins over a templated one.** `DELETE /products/facets` would otherwise
   read `categories` as the `{id}` of `/products/{id}` and answer 404, so the guard runs a second
   time before the routers, for paths with no `{param}` only.
 - **A module this build does not serve stays a 404**: its paths are in the table, but nothing is
@@ -355,7 +370,7 @@ and the bundler adds the header parameter, the 412 and the response header from 
 
 | Resource | Read that sends `ETag` | Writes that take `If-Match` |
 | --- | --- | --- |
-| product | `GET /products/{id}`, `GET /products/{id}/admin` | `PUT`, `PATCH`, `DELETE /products/{id}`, `DELETE /products/{id}/hard` |
+| product | `GET /products/{id}` | `PUT`, `PATCH`, `DELETE /products/{id}`, `DELETE /products/{id}/hard` |
 | user | `GET /users/{id}` | `PUT`, `PATCH`, `DELETE /users/{id}`, `DELETE /users/{id}/hard` |
 | order | `GET /orders/{id}` | `PUT`, `PATCH`, `DELETE /orders/{id}`, `DELETE /orders/{id}/hard` |
 | the caller's account | `GET /account` | `PUT`, `PATCH /account` |

@@ -15,7 +15,7 @@ import { getInventoryLevels } from './controllers/get-inventory-levels';
 import { getInventoryLevel } from './controllers/get-inventory-level';
 import { getStockMovements } from './controllers/get-stock-movements';
 import { getPreorderLevels } from './controllers/get-preorder-levels';
-import { putBackorderLimit } from './controllers/put-backorder-limit';
+import { patchInventoryLevel } from './controllers/patch-inventory-level';
 import { postReceipt } from './controllers/post-receipt';
 import { postAdjustment } from './controllers/post-adjustment';
 import { postReservationsSweep } from './controllers/post-reservations-sweep';
@@ -42,14 +42,11 @@ router.get('/levels/:productId', requirePermission('read', 'StockLevel'), getInv
 // GET /inventory/preorders — the preorder board: allowance, outstanding, paid vs unpaid
 router.get('/preorders', requirePermission('read', 'StockLevel'), getPreorderLevels);
 
-// PUT /inventory/levels/:productId/backorder-limit — how many units may be backordered at once.
-// `create:StockMovement`, the warehouse's own key: it is a promise about stock that does not exist
-// yet, and absolute, so a retried request is harmless without an idempotency key.
-router.put(
-    '/levels/:productId/backorder-limit',
-    requirePermission('create', 'StockMovement'),
-    putBackorderLimit
-);
+// PATCH /inventory/levels/:productId — edit the level: today only how many units may be backordered
+// at once. `update:StockLevel`, not the movement key: it edits the record without moving stock, a
+// promise about units that do not exist yet. Absolute, so a retry is harmless without an
+// idempotency key.
+router.patch('/levels/:productId', requirePermission('update', 'StockLevel'), patchInventoryLevel);
 
 // GET /inventory/movements — the ledger, newest first
 router.get('/movements', requirePermission('read', 'StockLevel'), getStockMovements);

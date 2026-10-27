@@ -8,7 +8,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { testCallerContext } from '@tests/callers';
+import { callerContextAs, testCallerContext } from '@tests/callers';
 import { runWithLocale } from '@infrastructure/i18n';
 import { registerTranslationPort } from '@kernel/translation';
 import { createProduct } from '@modules/products/tests/factories';
@@ -72,11 +72,15 @@ describe('productService.updateById — no translation provider', () => {
     });
 });
 
-describe('productService.getAdmin — no translation provider', () => {
+describe('productService.getByIdForCaller — no translation provider', () => {
     it('builds the fallback tab from the product’s own columns', async () => {
         const product = await createProduct({ title: 'Bookshelf', description: 'Oak, 5 shelves' });
 
-        const admin = await productService.getAdmin(product.id);
+        const admin = await productService.getByIdForCaller(
+            product.id,
+            undefined,
+            callerContextAs('admin')
+        );
 
         expect(admin?.translations).toEqual({
             [FALLBACK]: { title: 'Bookshelf', description: 'Oak, 5 shelves' }
