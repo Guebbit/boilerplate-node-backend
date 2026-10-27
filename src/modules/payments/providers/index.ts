@@ -12,7 +12,7 @@
  */
 
 import type { IncomingHttpHeaders } from 'node:http';
-import type { RefundFailureReason } from '@types';
+import type { DisputeReport, RefundFailureReason } from '@types';
 import { requireProvider } from '@infrastructure/runtime/provider-registry';
 import { defineProbe } from '@infrastructure/config/define';
 import { paymentsConfig } from '../config';
@@ -121,12 +121,23 @@ export interface ProviderRefund extends ProviderRefundState {
 }
 
 /**
+ * One dispute (an inquiry or a chargeback) as the provider reports it. The one thing a delivery
+ * carries beyond a pointer: Adyen has no endpoint to read a dispute, its signed notification IS the
+ * state, so the port cannot insist on a re-read. Stripe's adapter re-reads `disputes.retrieve` and
+ * fills this from the answer instead of from the body. Every write is conditional on `observedAt`
+ * being newer than the stored one, which is what makes an out-of-order delivery harmless.
+ * https://docs.stripe.com/api/disputes/object
+ */
+export type ProviderDisputeState = DisputeReport;
+
+/**
  * A webhook delivery, normalised — the provider owns the translation from its own event shape.
  *
  * THIN on purpose: it names an intent and nothing about what happened to it. The body of a
  * delivery is never trusted for the outcome; `settlement.ts` asks the provider for the state
  * (`retrieve`). A provider does not guarantee delivery order (Stripe says so), and a thin event
- * costs one provider call to make that harmless.
+ * costs one provider call to make that harmless. The exception is a dispute
+ * ({@link ProviderWebhookEvent.dispute}): it carries its own state, ordered by `observedAt`.
  * https://docs.stripe.com/webhooks#handle-events-asynchronously
  */
 export interface ProviderWebhookEvent {
@@ -139,6 +150,12 @@ export interface ProviderWebhookEvent {
      * `charge.refunded`). Still thin: the refund's status is re-read with `retrieveRefund`.
      */
     refundRef?: string;
+    /**
+     * The dispute the event is about, with its state. Present only for a dispute event
+     * (Stripe `charge.dispute.created` / `.updated` / `.closed`, Adyen `CHARGEBACK` and friends);
+     * the adapter maps its own status and reason codes onto the closed lists.
+     */
+    dispute?: ProviderDisputeState;
 }
 
 /**
@@ -219,7 +236,7 @@ export interface PaymentProvider {
      * `failed`/`canceled`). A network error, a timeout, a 5xx or a 429 is `provider_unavailable`;
      * anything unclassified is `unknown`. The two unclear classes are never offered for hand
      * settlement, because the refund may have gone through. A charge under dispute (Stripe
-     * `charge_disputed`, `refund_disputed_payment`) is `disputed`: final, and never settled by hand.
+     * `charge_disputed`, `refund_disputed_payment`) is `disputed`: final, and not settled by hand while a chargeback is open.
      *
      * A refund the provider accepted but has not settled answers `status: 'pending'`; it is
      * finished later with {@link retrieveRefund}, never sent again.

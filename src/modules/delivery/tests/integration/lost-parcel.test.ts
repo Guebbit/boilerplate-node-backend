@@ -211,7 +211,7 @@ describe('reporting a parcel lost', () => {
         expect(second.success).toBe(true);
         expect(await statusOf(orderId)).toBe(OrderStatus.shipped);
         const replacement = await shipmentWith(orderId, 'shipped');
-        await deliveryService.deliverShipment(String(replacement._id), {}, asAdmin(), admin);
+        await deliveryService.deliverShipment(String(replacement._id), asAdmin(), admin);
 
         const order = await readOrder(orderId);
         expect(order?.status).toBe(OrderStatus.delivered);
@@ -277,7 +277,7 @@ describe('the admin override after a loss', () => {
 describe('what it refuses', () => {
     it('a shipment already delivered, already lost, or on a cancelled order', async () => {
         const delivered = await shippedOrder(1, 10, 'd@example.com');
-        await deliveryService.deliverShipment(delivered.shipmentId, {}, asAdmin(), admin);
+        await deliveryService.deliverShipment(delivered.shipmentId, asAdmin(), admin);
         const lost = await shippedOrder(1, 10, 'l@example.com');
         await reportLost(lost.shipmentId);
         const cancelled = await shippedOrder(1, 10, 'c@example.com');
@@ -524,7 +524,7 @@ describe('the lost parcel arrives after all', () => {
         const view = await deliveryService.getShipment(shipmentId, asAdmin());
         expect(view.success && view.data.actions.deliver).toBe(true);
 
-        const result = await deliveryService.deliverShipment(shipmentId, {}, asAdmin(), admin);
+        const result = await deliveryService.deliverShipment(shipmentId, asAdmin(), admin);
         await settleOutboxNudges();
 
         expect(result.success && result.data.status).toBe('delivered');
@@ -544,7 +544,7 @@ describe('the lost parcel arrives after all', () => {
         const { orderId, productId, shipmentId } = await shippedOrder(3, 4);
         await reportLost(shipmentId);
 
-        const result = await deliveryService.deliverShipment(shipmentId, {}, asAdmin(), admin);
+        const result = await deliveryService.deliverShipment(shipmentId, asAdmin(), admin);
 
         expect(result.success && result.data.status).toBe('delivered');
         expect(await levelOf(productId)).toMatchObject({ reserved: 0, backordered: 0 });
@@ -560,7 +560,7 @@ describe('the lost parcel arrives after all', () => {
         await reship(orderId);
 
         const view = await deliveryService.getShipment(shipmentId, asAdmin());
-        const result = await deliveryService.deliverShipment(shipmentId, {}, asAdmin(), admin);
+        const result = await deliveryService.deliverShipment(shipmentId, asAdmin(), admin);
 
         expect(view.success && view.data.actions.deliver).toBe(false);
         expect(asReject(result).status).toBe(409);
@@ -579,7 +579,7 @@ describe('the lost parcel arrives after all', () => {
             admin
         );
 
-        const result = await deliveryService.deliverShipment(shipmentId, {}, asAdmin(), admin);
+        const result = await deliveryService.deliverShipment(shipmentId, asAdmin(), admin);
 
         expect(asReject(result).errors[0].code).toBe('DELIVERY_LOST_SUPERSEDED');
     });
@@ -592,7 +592,7 @@ describe('the lost parcel arrives after all', () => {
             .collection('fulfillmentorders')
             .updateOne({ _id: all[1]._id }, { $set: { 'lines.0.cancelledQuantity': 2 } });
 
-        const result = await deliveryService.deliverShipment(shipmentId, {}, asAdmin(), admin);
+        const result = await deliveryService.deliverShipment(shipmentId, asAdmin(), admin);
 
         expect(asReject(result).errors[0].code).toBe('DELIVERY_LOST_SUPERSEDED');
     });

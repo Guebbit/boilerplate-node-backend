@@ -621,8 +621,7 @@ paths:
                 Moves the order identified by `{id}` forward to `to` with no shipped email — for a
                 manual correction, never for the ordinary shipping flow
                 (`POST /delivery/fulfillment-orders/{id}/shipments` and
-                `POST /delivery/shipments/{id}/deliver` are that door, with their own `forced`
-                option). Delivery then keeps its own records in step: forward to `shipped` ships every
+                `POST /delivery/shipments/{id}/deliver` are that door). Delivery then keeps its own records in step: forward to `shipped` ships every
                 remainder, forward to `delivered` delivers them, all stamped with the same instant.
                 Refused while any unit still awaits stock (`ORDER_OVERRIDE_AWAITING_STOCK`). Only `processing`, `shipped` and `delivered` are legal
                 destinations, and only moving forward from wherever the order currently stands,
@@ -690,6 +689,8 @@ components:
                 - refund_failed
                 - refund_canceled
                 - refund_reversed
+                - dispute_opened
+                - dispute_closed
                 - shipment_shipped
                 - shipment_delivered
                 - shipment_lost
@@ -710,12 +711,12 @@ components:
             description: >-
                 What happened. Order: `created`, `paid`, `processing`, `shipped`, `delivered`,
                 `cancelled`, `status_overridden`. Payment: `payment_declined`, `refund_issued`,
-                `refund_settled`, `refund_failed`, `refund_canceled`, `refund_reversed`. Shipments: `shipment_shipped`,
+                `refund_settled`, `refund_failed`, `refund_canceled`, `refund_reversed`, `dispute_opened`, `dispute_closed`. Shipments: `shipment_shipped`,
                 `shipment_delivered`, `shipment_lost`, `fulfillment_held`, `fulfillment_released`,
                 `remainder_cancelled`. Returns: `return_requested`, `return_approved`,
                 `return_declined`, `return_received`, `return_closed`, `return_canceled`. Documents: `invoice_issued`,
                 `credit_note_issued`. Preorders: `release_date_moved`, `delay_notice_sent`.
-                Staff-only: `address_corrected`, `refund_canceled`, `refund_reversed`.
+                Staff-only: `address_corrected`, `refund_canceled`, `refund_reversed`, `dispute_opened`, `dispute_closed`.
 
         OrderTimelineEntry:
             type: object
@@ -754,7 +755,7 @@ components:
                     additionalProperties: true
                     description: >-
                         What the type needs to say, as ids, codes and numbers — never another
-                        module's free text. `status_overridden`: `mode` (`status` or `forced`),
+                        module's free text. `status_overridden`: `mode` (`status`),
                         `from`, `to`. `paid`: `method`. `delivered`: `withdrawUntil`. `cancelled`:
                         `by`, `cause` (why: `customer`, `operator`, `withdrawal`, `reservation_expired`,
                         `erasure`, `payment_mismatch` or `lost`: a lost parcel refunded with nothing ever delivered; `by` is shared by the
@@ -814,7 +815,7 @@ components:
                     additionalProperties: true
                     description: >-
                         What the type needs to say, as ids, codes and numbers — never another
-                        module's free text. `status_overridden`: `mode` (`status` or `forced`),
+                        module's free text. `status_overridden`: `mode` (`status`),
                         `from`, `to`. `paid`: `method`. `delivered`: `withdrawUntil`. `cancelled`:
                         `by`, `cause` (why: `customer`, `operator`, `withdrawal`, `reservation_expired`,
                         `erasure`, `payment_mismatch` or `lost`: a lost parcel refunded with nothing ever delivered; `by` is shared by the

@@ -86,7 +86,7 @@ describe('shipping and delivering', () => {
         );
         const [shipment] = await shipmentsOf(orderId);
 
-        await deliveryService.deliverShipment(String(shipment._id), {}, asAdmin(), admin);
+        await deliveryService.deliverShipment(String(shipment._id), asAdmin(), admin);
 
         const rows = await timelineOf(orderId);
         expect(rows.map(({ type }) => type)).toEqual([

@@ -14,7 +14,6 @@ import { inventoryService, type StockLine, type TopUp } from '@modules/inventory
 import type { OrderDocument } from '../model';
 import { orderRepository } from '../repository';
 import { isPayable, type FulfillmentSummary } from '../domain';
-import { appendTimeline } from './timeline';
 
 /**
  * Report where the goods stand, replacing the last report. The write is conditional on the order
@@ -42,50 +41,6 @@ export const recordFulfillmentProgress = (
  */
 export const readOrder = (orderId: string, session: ClientSession): Promise<OrderDocument | null> =>
     orderRepository.findInSession(orderId, session);
-
-/** What a forced fulfilment act reports about itself. */
-export interface ForcedFulfilment {
-    /** Why the normal door did not apply — recorded as the timeline row's text. */
-    reason: string;
-    /** The override holder who forced it. */
-    actorUserId: string;
-    /** When it happened. */
-    at: Date;
-    /** The order's status before the act began. */
-    from: OrderDocument['status'];
-}
-
-/**
- * Leave a timeline row for a forced fulfilment act — a delivery without a
- * carrier confirmation. The act does not always move the order, but staff skipped a step and the
- * row says so, the same `status_overridden` a status override writes. `to` is whatever the order's
- * status is once the act's own moves have landed, read in the act's snapshot.
- *
- * @param orderId - the order
- * @param forced - who forced it, why, and when
- * @param session - the act's transaction
- * @returns the order as it now stands, or `null` when it does not exist
- */
-export const recordForcedFulfilment = (
-    orderId: string,
-    forced: ForcedFulfilment,
-    session: ClientSession
-): Promise<OrderDocument | null> =>
-    orderRepository.findInSession(orderId, session).then((order) =>
-        order
-            ? appendTimeline(
-                  orderId,
-                  {
-                      type: 'status_overridden',
-                      actor: forced.actorUserId,
-                      text: forced.reason,
-                      data: { mode: 'forced', from: forced.from, to: order.status },
-                      at: forced.at
-                  },
-                  session
-              ).then(() => order)
-            : null
-    );
 
 /**
  * Take what one shipment carries off the shelf, in the shipment's transaction. Shelf count drops

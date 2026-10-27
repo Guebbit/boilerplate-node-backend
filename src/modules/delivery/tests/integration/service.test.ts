@@ -423,12 +423,12 @@ describe('shipping in parts', () => {
         await shipFrom(orderId);
         const [one, two] = await shipmentsOf(orderId);
 
-        await deliveryService.deliverShipment(String(one._id), {}, asAdmin(), admin);
+        await deliveryService.deliverShipment(String(one._id), asAdmin(), admin);
         let stored = await orderService.getById(orderId);
         expect(stored!.status).toBe(OrderStatus.shipped);
         expect(stored!.withdrawUntil).toBeUndefined();
 
-        await deliveryService.deliverShipment(String(two._id), {}, asAdmin(), admin);
+        await deliveryService.deliverShipment(String(two._id), asAdmin(), admin);
         stored = await orderService.getById(orderId);
         const last = await shipmentsOf(orderId).then((all) => all.at(-1)!);
         expect(stored!.status).toBe(OrderStatus.delivered);
@@ -447,7 +447,6 @@ describe('delivering', () => {
 
         const result = await deliveryService.deliverShipment(
             String(shipment._id),
-            {},
             asAdmin(),
             admin
         );
@@ -471,7 +470,7 @@ describe('delivering', () => {
         await shipFrom(String(order._id));
         const [shipment] = await shipmentsOf(String(order._id));
 
-        await deliveryService.deliverShipment(String(shipment._id), {}, asAdmin(), admin);
+        await deliveryService.deliverShipment(String(shipment._id), asAdmin(), admin);
 
         const [delivered] = await shipmentsOf(String(order._id));
         const stored = await orderService.getById(String(order._id));
@@ -489,70 +488,19 @@ describe('delivering', () => {
         const { order } = await processingOrderOf();
         await shipFrom(String(order._id));
         const [shipment] = await shipmentsOf(String(order._id));
-        await deliveryService.deliverShipment(String(shipment._id), {}, asAdmin(), admin);
+        await deliveryService.deliverShipment(String(shipment._id), asAdmin(), admin);
 
-        const again = await deliveryService.deliverShipment(
-            String(shipment._id),
-            {},
-            asAdmin(),
-            admin
-        );
+        const again = await deliveryService.deliverShipment(String(shipment._id), asAdmin(), admin);
 
         expect(asReject(again).status).toBe(409);
         expect(asReject(again).errors[0].code).toBe('DELIVERY_NOT_DELIVERABLE');
-    });
-
-    it('records a forced delivery against the override history', async () => {
-        const { order } = await processingOrderOf();
-        await shipFrom(String(order._id));
-        const [shipment] = await shipmentsOf(String(order._id));
-
-        const result = await deliveryService.deliverShipment(
-            String(shipment._id),
-            { forced: true, reason: 'carrier confirmed by phone' },
-            asAdmin(),
-            admin
-        );
-
-        expect(result.success).toBe(true);
-        const stored = await orderService.getById(String(order._id));
-        expect(await lastOverrideOf(String(order._id))).toMatchObject({
-            text: 'carrier confirmed by phone',
-            data: { mode: 'forced' }
-        });
-        expect(stored!.status).toBe(OrderStatus.delivered);
-    });
-
-    it('refuses a forced delivery from a caller without the override key, and one with no reason', async () => {
-        const { order } = await processingOrderOf();
-        await shipFrom(String(order._id));
-        const [shipment] = await shipmentsOf(String(order._id));
-
-        const noKey = await deliveryService.deliverShipment(
-            String(shipment._id),
-            { forced: true, reason: 'x' },
-            asAdmin(),
-            callerContextAs('customer')
-        );
-        const noReason = await deliveryService.deliverShipment(
-            String(shipment._id),
-            { forced: true },
-            asAdmin(),
-            admin
-        );
-
-        expect(asReject(noKey).status).toBe(403);
-        expect(asReject(noReason).errors[0]).toMatchObject({
-            code: 'DELIVERY_OVERRIDE_REASON_REQUIRED',
-            details: { field: 'reason' }
-        });
     });
 
     it('sets the code at any time, delivered shipments included, and audits the code before and after', async () => {
         const { order } = await processingOrderOf();
         await shipFrom(String(order._id), { trackingCode: 'TRK-TYPO0001' });
         const [shipment] = await shipmentsOf(String(order._id));
-        await deliveryService.deliverShipment(String(shipment._id), {}, asAdmin(), admin);
+        await deliveryService.deliverShipment(String(shipment._id), asAdmin(), admin);
         const audited = collectAudit();
 
         const late = await deliveryService.editShipmentTracking(
@@ -786,30 +734,16 @@ describe('what the audit rows carry', () => {
         ]);
     });
 
-    it('a forced delivery names its reason, an ordinary one only says it was not forced', async () => {
-        const forcedOrder = await processingOrderOf();
-        const plainOrder = await processingOrderOf([1], {}, 'plain@example.com');
-        await shipFrom(String(forcedOrder.order._id));
-        await shipFrom(String(plainOrder.order._id));
-        const [forcedShipment] = await shipmentsOf(String(forcedOrder.order._id));
-        const [plainShipment] = await shipmentsOf(String(plainOrder.order._id));
+    it('an arrival audit row carries the shipment and nothing about a reason', async () => {
+        const { order } = await processingOrderOf();
+        await shipFrom(String(order._id));
+        const [shipment] = await shipmentsOf(String(order._id));
         const audited = collectAudit();
 
-        await deliveryService.deliverShipment(
-            String(forcedShipment._id),
-            { forced: true, reason: 'carrier confirmed by phone' },
-            asAdmin(),
-            admin
-        );
-        await deliveryService.deliverShipment(String(plainShipment._id), {}, asAdmin(), admin);
+        await deliveryService.deliverShipment(String(shipment._id), asAdmin(), admin);
 
         expect(metadataOf(audited, 'admin.order.delivered')).toEqual([
-            {
-                shipmentId: String(forcedShipment._id),
-                forced: true,
-                reason: 'carrier confirmed by phone'
-            },
-            { shipmentId: String(plainShipment._id), forced: false }
+            { shipmentId: String(shipment._id) }
         ]);
     });
 

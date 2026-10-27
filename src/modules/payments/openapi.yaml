@@ -13,6 +13,7 @@ x-error-codes:
     PAYMENT_IN_FLIGHT: { status: 409, description: 'Another payment attempt for this order is already being recorded.' }
     PAYMENT_NOT_CONFIRMABLE: { status: 409, description: 'The payment is not in a state this confirmation can apply to.' }
     PAYMENT_NOT_REFUNDABLE: { status: 409, description: 'The payment is not in a state that can still be refunded, or nothing of it is left to refund.' }
+    PAYMENT_DISPUTED: { status: 409, description: 'The buyer disputed the card payment (a chargeback is open), so the shop cannot refund it: the bank has taken the money back already and the answer goes to the provider as evidence.' }
     PAYMENT_REFUND_EXCEEDS_REMAINING: { status: 422, description: 'The refund asks for more than the payment still has left to give back.' }
     PAYMENT_ORDER_NOT_PAYABLE: { status: 409, description: 'The order is not in a state that can still accept a payment.' }
     PAYMENT_REFUND_NOT_OPEN: { status: 409, description: 'The refund was already settled (another operator confirmed it first).' }
@@ -107,6 +108,13 @@ paths:
                   in: query
                   schema:
                       $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                - name: disputed
+                  in: query
+                  description: >-
+                      `true` keeps only payments with a dispute still open (an inquiry or a chargeback
+                      the shop has not answered or the bank has not decided). `false` or absent is
+                      no filter.
+                  schema: { type: boolean }
                 - name: reference
                   in: query
                   schema: { type: string, maxLength: 120 }
@@ -304,6 +312,10 @@ paths:
                 `pending` and the payment's `actions.settleByHand` lists it, because nobody here
                 can tell the money went back. `POST /payments/{id}/refunds/{refundId}/settle` is
                 what confirms it.
+
+                There is no list at this path: a payment's refunds are listed by `GET /payments/{id}`
+                (`refunds`), and one by `GET /payments/{id}/refunds/{refundId}`.
+
                 Requires an `Idempotency-Key` header: a retry that repeats the key replays the first
                 answer instead of returning the money again, and a request without it answers 400
                 `IDEMPOTENCY_KEY_REQUIRED`.
@@ -337,7 +349,8 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # Nothing to return: the payment never succeeded, or all of it already went back
-                # (`PAYMENT_NOT_REFUNDABLE`) — or `Idempotency-Key` names a request still in flight.
+                # (`PAYMENT_NOT_REFUNDABLE`), a chargeback is open on it (`PAYMENT_DISPUTED`) — or
+                # `Idempotency-Key` names a request still in flight.
                 # A provider refusal is not here: it answers 201 with the failed record.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -930,6 +943,17 @@ components:
                     description: >-
                         The only card digits a payment system may remember. Survives a refund —
                         refunding does not clear it.
+                # Staff only (`display:Payment`): a payer is not shown the shop's dispute file.
+                disputes:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Dispute'
+                    description: >-
+                        Disputes the buyer's bank opened on this card payment, oldest first. Sent only
+                        to a caller holding `display:Payment`. A payment with none omits the field. An
+                        open chargeback blocks refunds (`actions.refund` is false and the refund door
+                        answers 409 `PAYMENT_DISPUTED`); a lost one shrinks what is left to refund by
+                        its amount. `displayStatus` does not change: a dispute is a separate fact.
                 # Computed per CALLER, not stored — the same idea as `Order.actions`, for the half
                 # of the question this module owns.
                 actions:
@@ -1034,12 +1058,126 @@ components:
                 hand settlement.
 
                 `disputed`: the buyer's bank took the money back in a dispute (chargeback). It is
-                final like the refusals above, and it is never offered for hand settlement: the
-                bank already returned the money.
+                final like the refusals above, and it is not offered for hand settlement while the
+                chargeback is open: the bank already returned the money. Once the chargeback is
+                lost for an amount that covers the refund, the refund may be marked returned (the
+                bank paid the buyer); once the dispute is decided in the shop's favour the refund
+                may only be canceled.
 
                 `canceled` is not a refusal: staff voided the refund
                 (`POST /payments/{id}/refunds/{refundId}/cancel`). Nothing was sent, it is never
                 retried and it can neither be settled by hand nor canceled again.
+
+        DisputeKind:
+            type: string
+            enum: [inquiry, chargeback]
+            description: >-
+                `inquiry` — the bank asks for information before taking any money (Stripe's
+                `warning_*` states); refunds stay allowed, and a full refund ends it. `chargeback` —
+                the bank took the money back and the shop may send evidence.
+
+        DisputeStatus:
+            type: string
+            enum: [needs_response, under_review, won, lost, accepted, closed]
+            description: >-
+                `needs_response` — waiting for the shop's evidence; `under_review` — evidence sent,
+                the bank decides; `won` — decided for the shop (funds reinstated); `lost` — decided
+                against it; `accepted` — the shop gave up and accepted the chargeback; `closed` — an
+                inquiry that ended without a charge. `needs_response` and `under_review` are open.
+                A closed dispute can still flip (a late win, a second chargeback).
+
+        DisputeReason:
+            type: string
+            enum: [bank_cannot_process, check_returned, credit_not_processed, customer_initiated, debit_not_authorized, duplicate, fraudulent, general, incorrect_account_details, insufficient_funds, product_not_received, product_unacceptable, subscription_canceled, unrecognized]
+            description: Why the buyer's bank says the charge is disputed — Stripe's closed list, which an adapter for another provider maps its own codes onto.
+
+        DisputeReport:
+            type: object
+            additionalProperties: false
+            required: [disputeRef, kind, status, reason, amount, currency, fundsWithdrawn, observedAt]
+            description: >-
+                One dispute as the provider reports it, inside a webhook delivery. It is not
+                re-read: some providers cannot be asked about a dispute, so the body of a verified
+                delivery is the state. A report is applied only if `observedAt` is newer than the one
+                already stored for the same `disputeRef`, so an out-of-order delivery changes nothing.
+            properties:
+                disputeRef:
+                    type: string
+                    maxLength: 200
+                    description: The provider's dispute id (Stripe's `dp_…`). One dispute per id on a payment.
+                kind:
+                    $ref: '#/components/schemas/DisputeKind'
+                status:
+                    $ref: '#/components/schemas/DisputeStatus'
+                reason:
+                    $ref: '#/components/schemas/DisputeReason'
+                amount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: The disputed amount, in `currency`.
+                currency:
+                    type: string
+                    maxLength: 3
+                    description: ISO-4217 code, upper case.
+                evidenceDueBy:
+                    type: string
+                    format: date-time
+                    description: When the provider stops accepting evidence. Absent when it gave no deadline.
+                fundsWithdrawn:
+                    type: boolean
+                    description: Whether the bank has taken the money out of the shop's balance (`false` for an inquiry, and again after a win reinstated it).
+                observedAt:
+                    type: string
+                    format: date-time
+                    description: The provider's own time for this event, which orders deliveries.
+                dashboardUrl:
+                    type: string
+                    maxLength: 500
+                    description: Where staff answer the dispute, in the provider's dashboard.
+
+        Dispute:
+            type: object
+            additionalProperties: false
+            required: [disputeRef, kind, status, reason, amount, currency, fundsWithdrawn, openedAt, observedAt]
+            description: >-
+                A dispute on a payment, as the last delivery left it. Staff only. Answered in the
+                provider's dashboard: this API shows it and alerts, it never sends evidence.
+            properties:
+                disputeRef:
+                    type: string
+                    description: The provider's dispute id.
+                kind:
+                    $ref: '#/components/schemas/DisputeKind'
+                status:
+                    $ref: '#/components/schemas/DisputeStatus'
+                reason:
+                    $ref: '#/components/schemas/DisputeReason'
+                amount:
+                    type: number
+                    format: double
+                    minimum: 0
+                currency:
+                    type: string
+                evidenceDueBy:
+                    type: string
+                    format: date-time
+                fundsWithdrawn:
+                    type: boolean
+                openedAt:
+                    type: string
+                    format: date-time
+                    description: The provider's time of the first report of this dispute.
+                closedAt:
+                    type: string
+                    format: date-time
+                    description: When it last reached a closed status (`won`, `lost`, `accepted`, `closed`). Absent while open, and cleared if a closed one reopens.
+                observedAt:
+                    type: string
+                    format: date-time
+                    description: The provider's time of the newest report applied.
+                dashboardUrl:
+                    type: string
 
         CancelRefundRequest:
             type: object
@@ -1111,6 +1249,11 @@ components:
                 amountMax: { type: number, format: double, minimum: 0 }
                 orderId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                disputed:
+                    type: boolean
+                    description: >-
+                        `true` keeps only payments with a dispute still open. `false` or absent is no
+                        filter.
                 reference: { type: string, maxLength: 120 }
                 transferReference:
                     type: string
@@ -1172,7 +1315,7 @@ components:
 
         PaymentAttentionKind:
             type: string
-            enum: [stale_refund, refused_refund, reversed_refund, refund_exceeds_remaining, manual_refund_owed]
+            enum: [stale_refund, refused_refund, reversed_refund, refund_exceeds_remaining, manual_refund_owed, dispute_needs_response]
             description: >-
                 `stale_refund` — a provider refund open past the threshold, still waiting for the
                 provider's answer or its next retry;
@@ -1185,13 +1328,17 @@ components:
                 open refund here counted on: the open one is held unsent (the provider would refuse it)
                 and `exceedsBy` says by how much. Staff cancel it or mark it returned;
                 `manual_refund_owed` — money to hand back outside the system on a `manual` payment.
-                Both are an open refund record on a payment: a cancel or a refund opens it before
-                anything is asked of a provider, so no refund is owed without one.
+                Each of those is an open refund record on a payment: a cancel or a refund opens it
+                before anything is asked of a provider, so no refund is owed without one;
+                `dispute_needs_response` — the buyer's bank opened a dispute the shop has to answer
+                in the provider's own dashboard before `dueBy`. It names the dispute (`disputeId`),
+                not a refund, and says what was already refunded (`alreadyRefunded`) because that
+                refund is the evidence for a refund-then-chargeback.
 
         PaymentAttentionItem:
             type: object
             additionalProperties: false
-            required: [kind, orderId, paymentId, refundId, amount, currency, since]
+            required: [kind, orderId, paymentId, amount, currency, since]
             properties:
                 kind:
                     $ref: '#/components/schemas/PaymentAttentionKind'
@@ -1201,6 +1348,24 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 refundId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                disputeId:
+                    type: string
+                    maxLength: 200
+                    description: The provider's dispute id, on a `dispute_needs_response` row (which has no `refundId`).
+                dueBy:
+                    type: string
+                    format: date-time
+                    description: >-
+                        On a `dispute_needs_response` row, when the provider's evidence window closes.
+                        Absent when the provider gave none. A past date means the window has gone.
+                alreadyRefunded:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: >-
+                        On a `dispute_needs_response` row, how much of the payment was already
+                        refunded successfully, in its currency. Above zero it is a refund-then-chargeback:
+                        send the refund as evidence. Absent when nothing was refunded.
                 amount: { type: number, format: double, minimum: 0 }
                 currency: { type: string }
                 failureReason:
@@ -1304,8 +1469,9 @@ components:
                         Whether `POST /payments/{id}/refunds` would be accepted: the caller
                         holds `create:Refund`, the payment is `succeeded` and something is left to
                         refund. False once nothing is left (fully refunded, or the rest already asked
-                        back), which is what greys the control out rather than letting the
-                        operator discover it by clicking. A refund still open counts against what
+                        back, or a lost chargeback took the rest) or a chargeback is open on the
+                        payment (`PAYMENT_DISPUTED`), which is what greys the control out rather
+                        than letting the operator discover it by clicking. A refund still open counts against what
                         is left but does not hide the control while money remains. On a hand-paid
                         payment the refund only opens a record; `settleByHand` confirms it.
                 settleByHand:
@@ -1338,7 +1504,9 @@ components:
             description: >-
                 One delivery, in this module's normalised shape: which event it is, which intent
                 it names and, for a refund event (`refund.created`, `refund.updated`, `refund.failed`,
-                `charge.refunded`), which refund, and nothing about what happened. A refund made in the
+                `charge.refunded`), which refund, and nothing about what happened — except a dispute
+                event (`charge.dispute.created`, `.updated`, `.closed`), which carries the
+                dispute's own state because a provider such as Adyen cannot be asked about one. A refund made in the
                 provider's own dashboard arrives the same way and is imported. A real provider sends its OWN event
                 shape and its implementation of the provider port translates it into this. The
                 outcome is never read from the body: once the delivery is authenticated, the
@@ -1361,6 +1529,8 @@ components:
                         `refund.updated`, `refund.failed`, `charge.refunded`). Still only a pointer:
                         the server re-reads that refund's own status from the provider, so a refund
                         that settled and then bounced is noticed even days later.
+                dispute:
+                    $ref: '#/components/schemas/DisputeReport'
 
         CreatePaymentRequest:
             type: object

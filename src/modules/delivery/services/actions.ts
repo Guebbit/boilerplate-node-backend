@@ -29,14 +29,12 @@ import {
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
 import { presentFulfillmentOrder, presentShipment } from '../presenter';
 
-/** How the caller stands to an order: may they update fulfilment, start it, force an arrival. */
+/** How the caller stands to an order: may they update fulfilment or start it. */
 export interface Standing {
     /** The caller holds `update:Shipment`. */
     staff: boolean;
     /** The caller holds `start:Shipment`: shipping from `paid` makes the start move itself. */
     start: boolean;
-    /** The caller holds `override:Order`: the forced arrival. */
-    override: boolean;
 }
 
 /**
@@ -47,10 +45,9 @@ export const standingOn = (authContext: AuthContext | undefined): Standing =>
     authContext
         ? {
               staff: holds(callerForSubject(authContext, 'Shipment'), 'update', 'Shipment'),
-              start: holds(callerForSubject(authContext, 'Shipment'), 'start', 'Shipment'),
-              override: holds(callerForSubject(authContext, 'Order'), 'override', 'Order')
+              start: holds(callerForSubject(authContext, 'Shipment'), 'start', 'Shipment')
           }
-        : { staff: false, start: false, override: false };
+        : { staff: false, start: false };
 
 /**
  * What the caller may do to one fulfillment order.
@@ -92,10 +89,8 @@ export const shipmentActions = (
         mayAct &&
         (shipment.status === ShipmentStatus.shipped ||
             (shipment.status === ShipmentStatus.lost && restorable));
-    // The forced arrival has the same state gate as the ordinary one; it adds the override key.
     return {
         deliver: open,
-        forceDeliver: open && standing.override,
         // The tracking code is a record staff may fix at any time, once and after arrival, on a parcel.
         update: standing.staff && shipment.kind === FulfillmentOrderKind.physical,
         markLost:

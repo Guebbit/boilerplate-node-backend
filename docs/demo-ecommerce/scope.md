@@ -14,8 +14,10 @@ the [overview](/demo-ecommerce/) if you landed here first.
   platform — it's the shop a single business runs.
 - **Three shipping methods** (standard, express and pickup), each at a flat rate. No live carrier rates. An order can ship in several shipments, so partial shipments exist.
 - **Guest checkout isn't offered yet** — every order belongs to a signed-in account.
-- **No coupons, no discounts, no chargebacks.** A price is the price; a dispute is handled by hand,
-  outside the shop.
+- **No coupons, no discounts.** A price is the price.
+- **A card dispute (chargeback) is shown, not fought.** The shop receives it from the payment
+  provider, shows it with its deadline, alerts staff and stops refunds while it is open. You answer it
+  in the provider's own dashboard: the shop sends no evidence for you.
 - **No partial payments.** An order is paid in full, in one attempt, or it isn't paid.
 - **Editing a placed order is its own separate action**, not a return trip through checkout — the
   shop and the customer see the same trail of what changed and when.
@@ -55,7 +57,7 @@ Not "not yet" — these would change what kind of shop this is, and aren't plann
   the EU's distance-selling threshold).
 - More than one warehouse.
 - Subscriptions or recurring billing.
-- Chargebacks, until this ships against a real payment provider rather than the demo one.
+- Sending evidence for a chargeback from the shop itself: that is done in the provider's dashboard.
 - Country-specific e-invoicing formats (Italy's SdI, the EU's Peppol network) — the `invoicing`
   module ships a PDF provider and a port for one of these to plug into, not the adapter itself.
 

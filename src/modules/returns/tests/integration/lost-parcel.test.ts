@@ -194,12 +194,7 @@ describe('settling an order whose every parcel was lost and refunded', () => {
         await cancelRemainder(parcel);
 
         const view = await deliveryService.getShipment(parcel.shipmentId, asAdmin());
-        const found = await deliveryService.deliverShipment(
-            parcel.shipmentId,
-            {},
-            asAdmin(),
-            admin
-        );
+        const found = await deliveryService.deliverShipment(parcel.shipmentId, asAdmin(), admin);
 
         expect(view.success && view.data.actions.deliver).toBe(false);
         expect(asReject(found).errors[0].code).toBe('DELIVERY_NOT_DELIVERABLE');
@@ -217,7 +212,7 @@ describe('settling an order whose every parcel was lost and refunded', () => {
         );
         const shipments = await shipmentsOf(parcel.orderId);
         const replacement = shipments.find(({ status }) => status === 'shipped');
-        await deliveryService.deliverShipment(String(replacement?._id), {}, asAdmin(), admin);
+        await deliveryService.deliverShipment(String(replacement?._id), asAdmin(), admin);
 
         await cancelRemainder(parcel);
 

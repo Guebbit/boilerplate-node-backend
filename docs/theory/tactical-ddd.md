@@ -136,10 +136,9 @@ sequenceDiagram
 
 `delivery` never assigns `order.status` itself — `markShipped`/`markDelivered`/`markFulfilmentComplete`
 (`services/status.ts`) are the ordinary doors, each taking the act's own session so the move commits with
-the shipment. A `forced` shipment skips a step but writes the same moves and leaves its history row
-through `recordForcedFulfilment`. A third door, `overrideStatus`, moves the status alone and
+the shipment. A second door, `overrideStatus`, moves the status alone and
 announces it, so `delivery` keeps its records in step — see
-[Who writes the status](../modules/orders.md#who-writes-the-status) for all three.
+[Who writes the status](../modules/orders.md#who-writes-the-status) for both.
 
 ### The actor is part of the table, not beside it
 
