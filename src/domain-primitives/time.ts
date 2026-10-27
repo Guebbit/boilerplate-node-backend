@@ -7,8 +7,11 @@
  * ends a deadline at the end of a printed day, needs them without importing a module.
  */
 
+/** One hour, in milliseconds. */
+export const HOUR_MS = 60 * 60 * 1000;
+
 /** One day, in milliseconds. */
-export const DAY_MS = 24 * 60 * 60 * 1000;
+export const DAY_MS = 24 * HOUR_MS;
 
 /**
  * The last millisecond of the UTC day an instant falls in.

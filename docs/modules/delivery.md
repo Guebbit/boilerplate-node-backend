@@ -197,6 +197,10 @@ once in `domain/hold-notice.ts`:
 | `incorrect_address`  | `check_address`: the buyer can act       | always                                          |
 | `high_risk`, `other` | `delayed`: the same plain delay for both | only when staff wrote a `message` for the buyer |
 
+A staff hold also records `heldAt` (removed on release; never set for `awaiting_stock`). The
+daily staff digest counts holds older than `NODE_STAFF_HOLD_OPEN_DAYS` from it
+([`notifications`](./notifications.md#the-daily-digest)).
+
 Hiding the hold instead would put a false "being prepared" on a held order (UCPD Art. 6(1)(b)) and leave
 a wrong address unfixable. `holdReason` and `holdNote` are staff's (and the buyer's own GDPR export);
 `holdMessage`, the optional sentence staff write **for** the buyer (`message` on `…/hold`, at most 500

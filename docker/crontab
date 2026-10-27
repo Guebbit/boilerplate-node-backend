@@ -37,6 +37,10 @@
 8 2 * * * cd /app && node --import tsx scripts/ops/run-job.ts reap:invoice-pdfs
 # Blanks an invoice's or credit note's buyer block once its tax retention has ended; the numbered document stays and its cached PDF is deleted.
 14 2 * * * cd /app && node --import tsx scripts/ops/run-job.ts reap:invoices
+# Rewrites the staff summary rows (transfers due, unshipped, undecided returns, open holds, missing tracking codes, undelivered parcels, stale refunds, low stock) and mails each person the overdue ones that appeared or grew.
+30 6 * * * cd /app && node --import tsx scripts/ops/run-job.ts sweep:staff-digest
+# Rewrites the late-preorder summary row for the staff who edit orders, and mails it when it appeared or grew.
+30 6 * * 1 cd /app && node --import tsx scripts/ops/run-job.ts sweep:staff-weekly
 # Anonymizes an order's remaining PII once its retention window has passed, and unsets a timeline row's staff text once its own window has.
 10 2 * * * cd /app && node --import tsx scripts/ops/run-job.ts reap:orders
 # Deletes abandoned (never-settled) payment attempts past their retention window.

@@ -34,6 +34,54 @@ const BODIES: Record<(typeof STAFF_NOTIFICATION_CODES)[number], StaffNoticeBody>
     'notifications.staff.ticket-assigned': {
         code: 'notifications.staff.ticket-assigned',
         params: { ticketId: 't1', kind: 'dispute' }
+    },
+    'notifications.staff.return-requested': {
+        code: 'notifications.staff.return-requested',
+        params: { returnId: 'r1', orderId: 'o1' }
+    },
+    'notifications.staff.outbox-dead': {
+        code: 'notifications.staff.outbox-dead',
+        params: { eventName: 'order.paid', aggregateId: 'o1' }
+    },
+    'notifications.staff.transfers-due': {
+        code: 'notifications.staff.transfers-due',
+        params: { count: 3 }
+    },
+    'notifications.staff.preorders-late': {
+        code: 'notifications.staff.preorders-late',
+        params: { count: 3 }
+    },
+    'notifications.staff.delivery-holds-open': {
+        code: 'notifications.staff.delivery-holds-open',
+        params: { count: 3 }
+    },
+    'notifications.staff.withdrawals-awaiting-goods': {
+        code: 'notifications.staff.withdrawals-awaiting-goods',
+        params: { count: 3 }
+    },
+    'notifications.staff.returns-undecided': {
+        code: 'notifications.staff.returns-undecided',
+        params: { count: 3 }
+    },
+    'notifications.staff.low-stock': {
+        code: 'notifications.staff.low-stock',
+        params: { count: 3 }
+    },
+    'notifications.staff.unshipped': {
+        code: 'notifications.staff.unshipped',
+        params: { count: 3 }
+    },
+    'notifications.staff.awaiting-tracking': {
+        code: 'notifications.staff.awaiting-tracking',
+        params: { count: 3 }
+    },
+    'notifications.staff.undelivered': {
+        code: 'notifications.staff.undelivered',
+        params: { count: 3 }
+    },
+    'notifications.staff.stale-refunds': {
+        code: 'notifications.staff.stale-refunds',
+        params: { count: 3 }
     }
 };
 
@@ -79,6 +127,34 @@ describe('staffLinkOf', () => {
             template: 'webhooks/subscriptions/{id}',
             parameters: { id: 's1' }
         });
+    });
+});
+
+describe('staffLinkOf for the later notices', () => {
+    it('points a return request at the return', () => {
+        expect(staffLinkOf(BODIES['notifications.staff.return-requested'])).toEqual({
+            template: 'returns/{id}',
+            parameters: { id: 'r1' }
+        });
+    });
+
+    it('points a dead event at the order or account it was about, and at home when it names neither', () => {
+        expect(staffLinkOf(BODIES['notifications.staff.outbox-dead'])).toEqual({
+            template: 'orders/{id}',
+            parameters: { id: 'o1' }
+        });
+        expect(
+            staffLinkOf({
+                code: 'notifications.staff.outbox-dead',
+                params: { eventName: 'user.registered', aggregateId: 'u1' }
+            }).template
+        ).toBe('users/{id}');
+        expect(
+            staffLinkOf({
+                code: 'notifications.staff.outbox-dead',
+                params: { eventName: 'stock.moved', aggregateId: 'p1' }
+            })
+        ).toEqual({ template: '', parameters: {} });
     });
 });
 

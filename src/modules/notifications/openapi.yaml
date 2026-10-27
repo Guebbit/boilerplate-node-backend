@@ -616,6 +616,340 @@ components:
                     type: string
                     format: date-time
 
+        ReturnRequestedParams:
+            type: object
+            additionalProperties: false
+            required: [returnId, orderId]
+            description: A return request is waiting for a decision. Ids only, the return's page has the rest.
+            properties:
+                returnId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+
+        OutboxDeadParams:
+            type: object
+            additionalProperties: false
+            required: [eventName, aggregateId]
+            description: A domain event parked as dead. The name and the record it was about, the payload stays in the outbox.
+            properties:
+                eventName:
+                    type: string
+                    description: The domain event's name (`order.paid`).
+                aggregateId:
+                    type: string
+                    description: What the event was about (an order or account id).
+
+        NotificationStaffReturnRequested:
+            type: object
+            additionalProperties: false
+            description: A buyer asked to return goods; staff who decide returns take it.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [notifications.staff.return-requested]
+                params:
+                    $ref: '#/components/schemas/ReturnRequestedParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationStaffOutboxDead:
+            type: object
+            additionalProperties: false
+            description: A domain event could not be delivered after every retry and was parked; administrators look at the record it names.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [notifications.staff.outbox-dead]
+                params:
+                    $ref: '#/components/schemas/OutboxDeadParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        WorkCountParams:
+            type: object
+            additionalProperties: false
+            required: [count]
+            description: A summary row of how many items need the reader today. The screen it points at lists them.
+            properties:
+                count:
+                    type: integer
+                    minimum: 1
+
+        NotificationStaffTransfersDue:
+            type: object
+            additionalProperties: false
+            description: Bank transfers still unpaid whose pay-by date is near.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [notifications.staff.transfers-due]
+                params:
+                    $ref: '#/components/schemas/WorkCountParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationStaffPreordersLate:
+            type: object
+            additionalProperties: false
+            description: Preorders and backorders past their expected date with units still owed.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [notifications.staff.preorders-late]
+                params:
+                    $ref: '#/components/schemas/WorkCountParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationStaffDeliveryHoldsOpen:
+            type: object
+            additionalProperties: false
+            description: Fulfillment orders held for a reason other than waiting for stock, for longer than the shop allows.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [notifications.staff.delivery-holds-open]
+                params:
+                    $ref: '#/components/schemas/WorkCountParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationStaffWithdrawalsAwaitingGoods:
+            type: object
+            additionalProperties: false
+            description: Withdrawals after dispatch whose goods have not been received back.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [notifications.staff.withdrawals-awaiting-goods]
+                params:
+                    $ref: '#/components/schemas/WorkCountParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationStaffReturnsUndecided:
+            type: object
+            additionalProperties: false
+            description: Return requests still awaiting a decision after the shop reminder time.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [notifications.staff.returns-undecided]
+                params:
+                    $ref: '#/components/schemas/WorkCountParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationStaffLowStock:
+            type: object
+            additionalProperties: false
+            description: Products at or under the low-stock threshold.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [notifications.staff.low-stock]
+                params:
+                    $ref: '#/components/schemas/WorkCountParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationStaffUnshipped:
+            type: object
+            additionalProperties: false
+            description: Paid orders not handed to a carrier for longer than the shop allows.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [notifications.staff.unshipped]
+                params:
+                    $ref: '#/components/schemas/WorkCountParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationStaffAwaitingTracking:
+            type: object
+            additionalProperties: false
+            description: Shipped parcels on a tracked method that still have no tracking code.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [notifications.staff.awaiting-tracking]
+                params:
+                    $ref: '#/components/schemas/WorkCountParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationStaffUndelivered:
+            type: object
+            additionalProperties: false
+            description: Parcels shipped and never marked arrived, the buyer withdrawal window and guarantee have not started.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [notifications.staff.undelivered]
+                params:
+                    $ref: '#/components/schemas/WorkCountParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationStaffStaleRefunds:
+            type: object
+            additionalProperties: false
+            description: Provider refunds open past the attention threshold.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [notifications.staff.stale-refunds]
+                params:
+                    $ref: '#/components/schemas/WorkCountParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
         StaffNoticeExport:
             type: object
             additionalProperties: false
@@ -644,6 +978,18 @@ components:
                 - $ref: '#/components/schemas/NotificationStaffWebhookDisabled'
                 - $ref: '#/components/schemas/NotificationStaffTicketOpened'
                 - $ref: '#/components/schemas/NotificationStaffTicketAssigned'
+                - $ref: '#/components/schemas/NotificationStaffReturnRequested'
+                - $ref: '#/components/schemas/NotificationStaffOutboxDead'
+                - $ref: '#/components/schemas/NotificationStaffTransfersDue'
+                - $ref: '#/components/schemas/NotificationStaffPreordersLate'
+                - $ref: '#/components/schemas/NotificationStaffDeliveryHoldsOpen'
+                - $ref: '#/components/schemas/NotificationStaffWithdrawalsAwaitingGoods'
+                - $ref: '#/components/schemas/NotificationStaffReturnsUndecided'
+                - $ref: '#/components/schemas/NotificationStaffLowStock'
+                - $ref: '#/components/schemas/NotificationStaffUnshipped'
+                - $ref: '#/components/schemas/NotificationStaffAwaitingTracking'
+                - $ref: '#/components/schemas/NotificationStaffUndelivered'
+                - $ref: '#/components/schemas/NotificationStaffStaleRefunds'
             discriminator:
                 propertyName: code
                 mapping:
@@ -658,6 +1004,18 @@ components:
                     notifications.staff.webhook-disabled: '#/components/schemas/NotificationStaffWebhookDisabled'
                     notifications.staff.ticket-opened: '#/components/schemas/NotificationStaffTicketOpened'
                     notifications.staff.ticket-assigned: '#/components/schemas/NotificationStaffTicketAssigned'
+                    notifications.staff.return-requested: '#/components/schemas/NotificationStaffReturnRequested'
+                    notifications.staff.outbox-dead: '#/components/schemas/NotificationStaffOutboxDead'
+                    notifications.staff.transfers-due: '#/components/schemas/NotificationStaffTransfersDue'
+                    notifications.staff.preorders-late: '#/components/schemas/NotificationStaffPreordersLate'
+                    notifications.staff.delivery-holds-open: '#/components/schemas/NotificationStaffDeliveryHoldsOpen'
+                    notifications.staff.withdrawals-awaiting-goods: '#/components/schemas/NotificationStaffWithdrawalsAwaitingGoods'
+                    notifications.staff.returns-undecided: '#/components/schemas/NotificationStaffReturnsUndecided'
+                    notifications.staff.low-stock: '#/components/schemas/NotificationStaffLowStock'
+                    notifications.staff.unshipped: '#/components/schemas/NotificationStaffUnshipped'
+                    notifications.staff.awaiting-tracking: '#/components/schemas/NotificationStaffAwaitingTracking'
+                    notifications.staff.undelivered: '#/components/schemas/NotificationStaffUndelivered'
+                    notifications.staff.stale-refunds: '#/components/schemas/NotificationStaffStaleRefunds'
 
         NotificationsResponse:
             type: object

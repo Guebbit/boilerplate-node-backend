@@ -77,6 +77,7 @@ const holdAct = async (
         {
             status: statusOfLines(fulfillmentOrder.lines, true),
             holdReason: input.reason,
+            heldAt: new Date(),
             ...(input.note ? { holdNote: input.note } : {}),
             ...(input.message ? { holdMessage: input.message } : {})
         },
@@ -109,7 +110,7 @@ const releaseAct = async (
         fulfillmentOrder.revision,
         {
             status: statusOfLines(fulfillmentOrder.lines, false),
-            unset: ['holdReason', 'holdNote', 'holdMessage']
+            unset: ['holdReason', 'heldAt', 'holdNote', 'holdMessage']
         },
         session
     );

@@ -17,7 +17,9 @@ import {
     onPurchaseHoldPlaced,
     onWebhookSubscriptionAutoDisabled,
     onTicketOpened,
-    onTicketAssigned
+    onTicketAssigned,
+    onReturnRequested,
+    onOutboxEventDead
 } from './subscribers';
 import { streamNotifications, publishToUser, openStreamCount } from './stream';
 
@@ -45,5 +47,7 @@ export const notificationsService = {
     onPurchaseHoldPlaced,
     onWebhookSubscriptionAutoDisabled,
     onTicketOpened,
-    onTicketAssigned
+    onTicketAssigned,
+    onReturnRequested,
+    onOutboxEventDead
 };

@@ -926,9 +926,20 @@ describe('holds', () => {
         );
         const refused = await shipFrom(String(order._id));
         const stored = await orderService.getById(String(order._id));
+        const heldRecord = await fulfillmentOrderRepository.findByIdRaw(id);
+        const longAfter = new Date(Date.now() + 4 * 86_400_000);
+        const counted = await deliveryService.deliveryDigest(longAfter, {
+            holdDays: 3,
+            trackingHours: 24,
+            undeliveredDays: 14
+        });
         const released = await deliveryService.releaseFulfillmentOrder(id, asAdmin(), admin);
+        const releasedRecord = await fulfillmentOrderRepository.findByIdRaw(id);
         const shipped = await shipFrom(String(order._id));
 
+        expect(heldRecord?.heldAt).toBeInstanceOf(Date);
+        expect(counted.holdsOpen).toBe(1);
+        expect(releasedRecord?.heldAt).toBeUndefined();
         expect(held.success && held.data.status).toBe('on_hold');
         expect(held.success && held.data.holdNote).toBe('check');
         expect(asReject(refused).errors[0].code).toBe('DELIVERY_NOT_SHIPPABLE');

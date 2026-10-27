@@ -58,6 +58,21 @@ const tell = (contact: StaffContact, notice: StaffNotice): Promise<void> => {
 };
 
 /**
+ * The members of the shop whose role does this work and who can act today, with where to reach
+ * them. Shared by a notice told once and by the digest's daily rewrite.
+ *
+ * @param tenantId - the shop
+ * @param sets - the permission sets whose holders do the work (empty: administrators only)
+ */
+export const staffRecipients = (
+    tenantId: string,
+    sets: readonly string[]
+): Promise<StaffContact[]> =>
+    accessService
+        .membersHolding(tenantId, sets)
+        .then((members) => userService.staffContacts(members));
+
+/**
  * Tell every member of the shop who does this work and can act today.
  *
  * Recipients are told one after another: an audience is a handful of people, and one failing
@@ -69,11 +84,7 @@ const tell = (contact: StaffContact, notice: StaffNotice): Promise<void> => {
  */
 export const notifyStaff = async (notice: StaffNotice): Promise<number> => {
     const route = STAFF_ROUTES[notice.body.code];
-    const members = await accessService.membersHolding(
-        notice.tenantId,
-        setsOfRoute(route, notice.sets)
-    );
-    const contacts = await userService.staffContacts(members);
+    const contacts = await staffRecipients(notice.tenantId, setsOfRoute(route, notice.sets));
 
     for (const contact of contacts) await tell(contact, notice);
     return contacts.length;

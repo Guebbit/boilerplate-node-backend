@@ -17,7 +17,7 @@ import { OrderStatus } from '@types';
 import type { Shipment } from '@types';
 import { deliveryService } from '../services';
 import { fulfillmentOrderRepository, shipmentRepository } from '../repository';
-import { fulfillmentOrderModel } from '../model';
+import { fulfillmentOrderModel, shipmentModel } from '../model';
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
 
 /** What a test may pass to {@link shipEverything}. */
@@ -230,3 +230,14 @@ export const paidBackorderOrder = async (
     await inventoryService.commitForOrder(orderId);
     return { user, orderId, productId };
 };
+
+/**
+ * Make every shipment look as if it left `daysAgo` days ago — the clock only the digest's
+ * "shipped and never arrived" window reads, which no door lets a test move.
+ *
+ * @param daysAgo - how long ago they left
+ */
+export const backdateShipments = (daysAgo: number): Promise<unknown> =>
+    shipmentModel
+        .updateMany({}, { $set: { shippedAt: new Date(Date.now() - daysAgo * 86_400_000) } })
+        .exec();

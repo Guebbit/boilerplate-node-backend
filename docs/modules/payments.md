@@ -20,6 +20,7 @@ flowchart LR
     access["access"]
     cart["cart"]
     invoicing["invoicing"]
+    notifications["notifications"]
     orders["orders"]
     returns["returns"]
     shop["shop"]
@@ -27,6 +28,7 @@ flowchart LR
 
     cart --> payments
     invoicing --> payments
+    notifications --> payments
     returns --> payments
     stats --> payments
     payments --> access
@@ -42,7 +44,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class invoicing,returns,shop,stats supporting;
+    class invoicing,notifications,returns,shop,stats supporting;
     class access generic;
     class payments centre;
 ```

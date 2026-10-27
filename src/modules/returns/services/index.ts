@@ -16,6 +16,7 @@ import { getReturnOptions } from './options';
 import { scrubReturnText } from './retention';
 import { mailReturnRequested, mailReturnDecided, mailReturnClosed } from './notify';
 import { returnedBuckets, returnedByProduct, returnedSeries } from './stats';
+import { returnsDigest } from './digest';
 
 export type { CreateReturnInput, CreateReturnOutcome } from './create';
 export type { ReceiveReturnInput } from './receive';
@@ -24,6 +25,7 @@ export type { ReturnedBucket } from './stats';
 
 /** The service's one handle. Named for the record it serves. */
 export const returnService = {
+    returnsDigest,
     createReturn,
     approveReturn,
     declineReturn,

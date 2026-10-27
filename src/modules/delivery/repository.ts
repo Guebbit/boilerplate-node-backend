@@ -146,6 +146,7 @@ export type FulfillmentOrderPatch = Partial<
         | 'lines'
         | 'status'
         | 'holdReason'
+        | 'heldAt'
         | 'holdNote'
         | 'holdMessage'
         | 'expectedAt'
@@ -155,7 +156,7 @@ export type FulfillmentOrderPatch = Partial<
     >
 > & {
     /** Fields to remove — a released hold carries no reason or note, a cleared date no expected date. */
-    unset?: readonly ('holdReason' | 'holdNote' | 'holdMessage' | 'expectedAt')[];
+    unset?: readonly ('holdReason' | 'heldAt' | 'holdNote' | 'holdMessage' | 'expectedAt')[];
 };
 
 /** The shared factory's CRUD surface plus the fulfillment order's own reads and claims. */

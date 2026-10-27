@@ -149,7 +149,7 @@ it('publishes the set the pair agreed on', () => {
      * boilerplate-php-laravel-backend: the admin "create a user, let them set their own password"
      * flow, the inactive-account reaper and the email second factor only exist on this backend so
      * far — and neither does the pending-email-change notice, nor bank transfer, which the PHP
-     * twin has no equivalent feature for at all. `example.published` is Node-only until the twin builds its `example` module. `notifications.staff-notice` is the same
+     * twin has no equivalent feature for at all. `example.published` is Node-only until the twin builds its `example` module. `notifications.staff-notice` and `notifications.staff-digest` are the same
      * story: the PHP twin has no work notices for staff yet. `returns.notice` is the same story: the PHP twin has no returns module yet. So are
      * `payments.payment-received` (a payment settling to `succeeded` mails the buyer) and
      * `orders.order-card-expired` (a `card` hold's own expiry notice, the twin of
@@ -196,6 +196,7 @@ it('publishes the set the pair agreed on', () => {
         'delivery.shipment-lost',
         'delivery.shipment-shipped',
         'example.published',
+        'notifications.staff-digest',
         'notifications.staff-notice',
         'orders.order-cancelled',
         'orders.order-card-expired',

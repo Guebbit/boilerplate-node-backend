@@ -19,6 +19,8 @@ import { callerInScope } from '@kernel/permissions';
 import { emitDomainEvent, resetDomainEvents } from '@kernel/events';
 import { registerModules } from '@kernel/registry';
 import { ORDER_PURCHASE_HOLD_PLACED } from '@modules/orders';
+import { OUTBOX_EVENT_DEAD } from '@kernel/outbox';
+import { RETURN_REQUESTED } from '@modules/returns';
 import { WEBHOOK_SUBSCRIPTION_AUTO_DISABLED } from '@modules/webhooks';
 import { DAY_MS } from '@domain-primitives/time';
 import { enabledModules } from '../../../../modules';
@@ -178,6 +180,71 @@ describe('a webhook subscription auto-disabled', () => {
         ]);
         await expect(bellOf('moderator', moderator.id)).resolves.toEqual([]);
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
+    });
+});
+
+/** A `return.requested` fact; a withdrawal is a right, any other reason awaits a decision. */
+const returnRequested = (returnId: string, reason = 'defective') => ({
+    returnId,
+    orderId: '64b7f1a2c3d4e5f607182940',
+    reason,
+    requestedAt: '2026-10-26T10:00:00.000Z'
+});
+
+describe('a return requested', () => {
+    it('tells the people who decide returns, bell only, once per request', async () => {
+        const support = await staff('support', 'support@example.com');
+        const warehouse = await staff('warehouse', 'warehouse@example.com');
+        const fact = returnRequested('64b7f1a2c3d4e5f607182941');
+
+        await emitDomainEvent(RETURN_REQUESTED, fact);
+        await emitDomainEvent(RETURN_REQUESTED, fact);
+
+        await expect(bellOf('support', support.id)).resolves.toMatchObject([
+            {
+                audience: 'staff',
+                code: 'notifications.staff.return-requested',
+                params: {
+                    returnId: '64b7f1a2c3d4e5f607182941',
+                    orderId: '64b7f1a2c3d4e5f607182940'
+                }
+            }
+        ]);
+        await expect(bellOf('warehouse', warehouse.id)).resolves.toEqual([]);
+        expect(mockEnqueueEmail).not.toHaveBeenCalled();
+    });
+
+    it('says nothing of a withdrawal, which is a right and awaits no decision', async () => {
+        const support = await staff('support', 'support@example.com');
+
+        await emitDomainEvent(
+            RETURN_REQUESTED,
+            returnRequested('64b7f1a2c3d4e5f607182942', 'withdrawal')
+        );
+
+        await expect(bellOf('support', support.id)).resolves.toEqual([]);
+    });
+});
+
+describe('an outbox event parked as dead', () => {
+    it('tells the administrators alone, once per event, and names the record, not its payload', async () => {
+        const admin = await staff('admin', 'admin@example.com');
+        const manager = await staff('manager', 'manager@example.com');
+        const fact = {
+            eventId: 'e1',
+            eventName: 'order.paid',
+            aggregateId: '64b7f1a2c3d4e5f607182943'
+        };
+
+        await emitDomainEvent(OUTBOX_EVENT_DEAD, fact);
+        await emitDomainEvent(OUTBOX_EVENT_DEAD, fact);
+        await emitDomainEvent(OUTBOX_EVENT_DEAD, { ...fact, eventId: 'e2' });
+
+        await expect(bellOf('admin', admin.id)).resolves.toMatchObject([
+            { code: 'notifications.staff.outbox-dead', severity: 'error' },
+            { code: 'notifications.staff.outbox-dead', severity: 'error' }
+        ]);
+        await expect(bellOf('manager', manager.id)).resolves.toEqual([]);
     });
 });
 

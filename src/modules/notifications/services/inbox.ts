@@ -149,6 +149,57 @@ export const notificationsCreateStaffOnce = (row: NewStaffNotification): Promise
     });
 
 /**
+ * What writing a summary row did: it appeared, its count rose, or nothing the reader needs to
+ * know changed (the count is the same or lower).
+ */
+export type SummaryOutcome = 'appeared' | 'grew' | 'unchanged';
+
+/** The count a summary row's `params` carries. */
+const countOf = (row: { params: object } | null): number =>
+    row !== null && 'count' in row.params ? Number(row.params.count) : 0;
+
+/**
+ * Write one recipient's summary row for today's count. A row that appears or whose count rose is
+ * unread again and pushed to the person's open tabs (as a delete then a create, so a tab holds one
+ * copy, not two). A count that fell is quietly updated: good news does not need a ping.
+ *
+ * @param row - the summary, keyed by its code
+ * @returns what happened to the row, so the digest mails only what appeared or grew
+ */
+export const notificationsWriteSummary = async (
+    row: NewStaffNotification
+): Promise<SummaryOutcome> => {
+    const userId = String(row.userId);
+    const before = await notificationRepository.findSummary(userId, row.dedupeKey);
+    const outcome: SummaryOutcome =
+        before === null ? 'appeared' : countOf(row) > countOf(before) ? 'grew' : 'unchanged';
+    const written = await notificationRepository.writeSummary(row, outcome !== 'unchanged');
+    if (written === null || outcome === 'unchanged') return outcome;
+
+    if (before !== null)
+        publishToUser(userId, NOTIFICATIONS_CHANNELS.DELETED, {
+            all: false,
+            ids: [String(before._id)]
+        });
+    publishToUser(userId, NOTIFICATIONS_CHANNELS.CREATED, {
+        notification: presentNotification(written)
+    });
+    await trimInbox(userId, 'staff');
+    return outcome;
+};
+
+/**
+ * Remove every recipient's summary row for a code whose count fell to zero, and tell their tabs.
+ *
+ * @param code - the summary code (its own dedupe key)
+ */
+export const notificationsClearSummary = (code: string): Promise<void> =>
+    notificationRepository.deleteSummaries(code).then((gone) => {
+        for (const { id, userId } of gone)
+            publishToUser(userId, NOTIFICATIONS_CHANNELS.DELETED, { all: false, ids: [id] });
+    });
+
+/**
  * Delete one of the caller's notifications. 404 whether the id is unknown or someone else's, so a
  * probe cannot tell the two apart.
  */

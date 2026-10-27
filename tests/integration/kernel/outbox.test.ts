@@ -14,6 +14,7 @@ import {
     announceWithin,
     enqueueOutboxEvent,
     nudgeOutbox,
+    OUTBOX_EVENT_DEAD,
     outboxEventModel,
     relayOutbox,
     settleOutboxNudges
@@ -160,6 +161,27 @@ describe('relayOutbox', () => {
                 status: 'dead',
                 attempts: 2
             });
+        });
+    });
+
+    it('announces a parked event once, with its row id, name and aggregate', async () => {
+        const announced: unknown[] = [];
+        onDomainEvent(OUTBOX_EVENT_DEAD, (fact) => {
+            announced.push(fact);
+        });
+        await withEnvironmentOverrides({ NODE_OUTBOX_MAX_ATTEMPTS: '2' }, async () => {
+            subscribe(() => true);
+            await write(1, 'agg-dead');
+
+            await relayOutbox();
+            expect(announced).toEqual([]);
+            await makeDue();
+            await relayOutbox();
+
+            const row = await outboxEventModel.findOne().lean();
+            expect(announced).toEqual([
+                { eventId: String(row?._id), eventName: 'test.outbox', aggregateId: 'agg-dead' }
+            ]);
         });
     });
 
