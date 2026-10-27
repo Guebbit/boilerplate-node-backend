@@ -8,7 +8,7 @@
 
 import type { ClientSession } from 'mongoose';
 import { OrderStatus } from '@types';
-import { orderService } from '@modules/orders';
+import { canProcessOrder, orderService } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { ERROR_CODES } from '@api/error-codes';
 import { summarize, type FulfillmentReport } from '../domain';
@@ -52,6 +52,25 @@ export const reportProgress = (orderId: string, session: ClientSession): Promise
                 });
         })
     );
+
+/**
+ * Make the `paid → processing` move inside the act, when the order is still `paid` — shipping and
+ * fulfilling digital goods both do it themselves, so no separate "start" is needed first. Runs
+ * before {@link reportProgress}, so the summary write and {@link settleOrder} see `processing`.
+ * @param order - the order as the act read it
+ * @param session - the act's transaction
+ * @param actor - the staff member whose act this is, for the order's timeline
+ * @throws {ActRefusal} 409 `ORDER_NOT_PAID` when the order moved away from `paid` since the read
+ */
+export const startFulfilment = async (
+    order: OrderDocument,
+    session: ClientSession,
+    actor: string | null | undefined
+): Promise<void> => {
+    if (!canProcessOrder(order.status)) return;
+    const moved = await orderService.markProcessing(String(order._id), session, actor);
+    if (!moved) refuse(409, ERROR_CODES.ORDER_NOT_PAID, 'delivery.not-paid');
+};
 
 /**
  * The order's status move failed to land: it was not where the act needed it. The act aborts.

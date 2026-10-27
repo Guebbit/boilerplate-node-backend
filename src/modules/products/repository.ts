@@ -66,6 +66,10 @@ export const productRepository: Repository<ProductDocument, Product> & {
         scope?: Record<string, unknown>
     ) => Promise<ProductDocument | null>;
     findPublicById: (productId: string) => Promise<ProductDocument | null>;
+    findByIdRawScoped: (
+        productId: string,
+        scope: Record<string, unknown>
+    ) => Promise<Lean<ProductDocument> | null>;
     facets: () => Promise<{ categories: FacetCount[]; tags: FacetCount[] }>;
     listedPage: (skip: number, limit: number) => Promise<ListedProduct[]>;
     syncStockCache: (
@@ -113,6 +117,21 @@ export const productRepository: Repository<ProductDocument, Product> & {
      */
     findByIdScoped: async (productId: string, scope?: Record<string, unknown>) =>
         productRepository.findOne({ _id: toObjectId(productId), ...scope }),
+
+    /**
+     * One product as a plain, untransformed object, narrowed to a caller's scope by the same query
+     * that finds it — {@link findByIdScoped} for a reader that embeds a snapshot (an order line).
+     * `async` because `toObjectId` throws on a malformed id.
+     *
+     * @param productId - the product's id
+     * @param scope - the caller's filter fragment (`{}` reads everything, the admin branch)
+     * @returns the product if it matches the scope, otherwise `null`
+     */
+    findByIdRawScoped: async (productId: string, scope: Record<string, unknown>) =>
+        productModel
+            .findOne({ _id: toObjectId(productId), ...scope })
+            .lean<Lean<ProductDocument> | null>()
+            .exec(),
 
     /**
      * The publicly visible product with this id, or `null` — {@link findByIdScoped} bound to the

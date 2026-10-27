@@ -10,7 +10,7 @@ tags:
 
 x-error-codes:
     ORDER_INSUFFICIENT_STOCK: { status: 409, description: 'An admin-created order references a quantity beyond the product''s available stock. `errors[].details.lines` names each short line with its `productId`, `title` and `requested` quantity; `available` is added only for a caller who reads stock (`read:StockLevel`).' }
-    ORDER_PRODUCT_UNAVAILABLE: { status: 409, description: 'An admin-created order names a product that is hidden (`active: false`), off sale (`purchasable: false`) or soft-deleted: refused exactly as checkout refuses it. `errors[].details.productIds` names each one.' }
+    ORDER_PRODUCT_UNAVAILABLE: { status: 409, description: 'An admin-created order names a product that has been removed (soft-deleted). Hidden and off-sale products can be sold by hand, so only a removed one is refused. `errors[].details.productIds` names each one.' }
     ORDER_EXPORT_TOO_LARGE: { status: 422, description: 'The export would carry more orders than `NODE_ORDER_EXPORT_MAX_ROWS` allows. The message names the cap; narrow the filters and ask again.' }
     ORDER_INVOICED: { status: 409, description: 'This action is not allowed once an order has been invoiced.' }
     ORDER_LINE_LIMIT_EXCEEDED: { status: 422, description: 'An admin-created order has more lines, or a larger quantity on one line, than this deployment allows (`NODE_ADMIN_ORDER_MAX_LINES`, `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`). The message names the limit.' }
@@ -19,7 +19,8 @@ x-error-codes:
     ORDER_HAS_MONEY_HISTORY: { status: 409, description: 'A hard delete is refused: money was recorded on the order after it was cancelled (a late payment and its refund still point at it). Soft delete it instead.' }
     ORDER_NOT_DELETED: { status: 409, description: 'A restore is refused: the order is not soft-deleted.' }
     ORDER_OVERRIDE_NOT_ALLOWED: { status: 409, description: 'This status transition is not on the admin override''s allowed list.' }
-    ORDER_ADDRESS_LOCKED: { status: 409, description: 'The order cannot be redirected: something has shipped, or it has no shipping address (a pickup, a digital order).' }
+    ORDER_ADDRESS_LOCKED: { status: 409, description: 'The order cannot be redirected: nothing is left to send (every unit has shipped or been cancelled), it is over, or it has no shipping address (a pickup, a digital order).' }
+    ORDER_SHIP_TO_COUNTRY_NOT_SUPPORTED: { status: 422, description: 'The corrected shipping address names a country outside the shop''s ship-to list (`Shop.shipToCountries`), the list checkout refuses by; VAT is charged at the shop''s own rates.' }
     ORDER_OVERRIDE_AWAITING_STOCK: { status: 409, description: 'The order still has units awaiting stock; overriding it forward would ship goods the stock ledger never counted out.' }
 
 # This module's section of the account data export (`POST /account/export`): the bundler
@@ -134,9 +135,12 @@ paths:
                 Creates a new order directly from the supplied payload, for the account named in
                 `userId`. Raising one for oneself is allowed.
 
-                It sells the shelf a shopper buys from: a hidden, off-sale or soft-deleted product is
-                refused with `409 ORDER_PRODUCT_UNAVAILABLE`, exactly as checkout refuses it, and
-                stock is held the same way (`409 ORDER_INSUFFICIENT_STOCK`).
+                Staff may sell a hidden (`active: false`) or off-sale (`purchasable: false`) product by
+                hand, as Solidus and Shopify draft orders allow; only a removed (soft-deleted) one is
+                refused, with `409 ORDER_PRODUCT_UNAVAILABLE`. A product the caller may not read
+                (hidden, to a role without `display:Product`) answers `404` like an unknown id, so an
+                order never widens what the caller reads. Stock is held as at checkout
+                (`409 ORDER_INSUFFICIENT_STOCK`).
 
                 A body is bounded twice. The schema caps it at 1000 lines of at most 999999 units
                 (what the contract promises); a deployment may set a lower limit in
@@ -589,9 +593,11 @@ paths:
             summary: Correct where an unshipped order ships (staff)
             description: >-
                 Replaces the order's shipping address, as staff do when a fulfillment order was held
-                for `incorrect_address` and the buyer wrote back. Needs `update:Order`. Allowed only
-                while nothing has shipped and the order has a shipping address at all: after that the
-                parcel went where it went (`409 ORDER_ADDRESS_LOCKED`). Leaves a staff-only timeline row,
+                for `incorrect_address` and the buyer wrote back. Needs `update:Order`. Allowed while
+                units remain to send (held and awaiting-stock ones included) and the order has a
+                shipping address at all (`409 ORDER_ADDRESS_LOCKED` otherwise). A parcel already cut
+                keeps the address it went to: each shipment stores its own `destination`. The country
+                must be on the shop's ship-to list (`422 ORDER_SHIP_TO_COUNTRY_NOT_SUPPORTED`). Leaves a staff-only timeline row,
                 `address_corrected`, and an audit row naming who changed it, never what it says.
                 `OrderActions.correctAddress` says whether this would be accepted.
             operationId: correctOrderShippingAddress
@@ -1294,8 +1300,8 @@ components:
                     type: boolean
                     description: >-
                         Whether `PUT /orders/{id}/shipping-address` would be accepted for this caller:
-                        they hold `update:Order`, the order has a shipping address, and nothing has
-                        shipped.
+                        they hold `update:Order`, the order has a shipping address, and units remain
+                        to send.
                 withdraw:
                     type: boolean
                     description: >-

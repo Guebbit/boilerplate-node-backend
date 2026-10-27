@@ -5,49 +5,46 @@
  * shelf, the order's summary and (when this shipment leaves nothing behind) its status, and
  * `shipment.shipped`. The mail and the audit row follow the commit.
  *
- * `forced` widens WHICH orders may ship (from `paid`, skipping `start`) — it never widens what gets
- * written, and it never ships from `on_hold`.
+ * A `paid` order ships too: the act makes the `paid → processing` move itself, so the caller needs
+ * `start:Shipment` as well as `update:Shipment`. Nothing ships from `on_hold`.
  *
  * See: docs/modules/delivery.md#shipping
  */
 
 import type { ClientSession } from 'mongoose';
-import { t } from '@infrastructure/i18n';
 import {
-    fieldError,
     generateSuccess,
-    generateReject,
     type ResponseReject,
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { canProcessOrder, orderService } from '@modules/orders';
+import { orderService } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { OrderStatus } from '@types';
 import type { AuthContext, CallerContext, Shipment } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
-import { checkShipLines, findShippingMethod, isShippable } from '../domain';
-import { isOpenForShipment } from './ship-gate';
+import { checkShipLines, isShippable } from '../domain';
+import {
+    auditUnearnedStart,
+    isOpenForShipment,
+    mayStartFulfilment,
+    refuseUnearnedStart
+} from './ship-gate';
 import type { ProductQuantity } from '../domain';
 import { deliveryAuditActions } from '../audit';
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
-import { ActRefusal, readWithOrder, refuse, runAct } from './act';
+import { readWithOrder, refuse, runAct } from './act';
 import { viewShipment } from './actions';
 import { announceShipped } from './announce';
 import { cutShipment } from './cut';
-import { refuseUnearnedForce } from './force';
-import { reportProgress, settleOrder } from './progress';
+import { reportProgress, settleOrder, startFulfilment } from './progress';
 
 /** What staff sends to ship. */
 export interface ShipInput {
     /** What ships, per product; absent means everything that remains. */
     lines?: ProductQuantity[] | undefined;
-    /** The carrier's handle; required when the order's shipping method is tracked. */
+    /** The carrier's handle. Optional: a tracked method may get its code later, from the shipment. */
     trackingCode?: string | undefined;
-    /** Skip the `start` step: ship from `paid`. Needs `override:Order` and a `reason`. */
-    forced?: boolean | undefined;
-    /** Why the normal door did not apply; recorded on the order's override history. */
-    reason?: string | undefined;
 }
 
 /** What a committed ship leaves for the steps that follow it. */
@@ -58,16 +55,18 @@ interface Shipped {
 }
 
 /**
- * Whether the order is in a state a shipment may leave from: `processing`, or `paid` when forced.
- * A `cancelled` or `pending` order is not shippable at all — a different refusal, because the
- * remedy differs (nothing to do, versus start fulfilment).
+ * Whether the order is in a state a shipment may leave from: `processing`, or `paid` for a caller
+ * who may start it. A `cancelled` or `pending` order is not shippable at all — a different refusal,
+ * because the remedy differs (nothing to do, versus start fulfilment).
  * @param status - the order's status
- * @param forced - whether the caller forces the first shipment
+ * @param mayStart - whether the caller holds `start:Shipment`
+ * @throws {ActRefusal} 409 for a closed or unpaid order, 403 for a `paid` one the caller may not start
  */
-const gateOrder = (status: OrderStatus, forced: boolean): void => {
+const gateOrder = (status: OrderStatus, mayStart: boolean): void => {
     if (status === OrderStatus.cancelled || status === OrderStatus.pending)
         refuse(409, ERROR_CODES.DELIVERY_NOT_SHIPPABLE, 'delivery.not-shippable');
-    if (!isOpenForShipment(status, forced))
+    refuseUnearnedStart(status, mayStart);
+    if (!isOpenForShipment(status, mayStart))
         refuse(409, ERROR_CODES.ORDER_NOT_PROCESSING, 'delivery.not-processing');
 };
 
@@ -92,27 +91,6 @@ const gateFulfillmentOrder = (
 };
 
 /**
- * A tracked method needs a tracking code on every shipment. The method is looked up live, not
- * frozen at checkout, so a rate change also changes what the door requires.
- * @param order - the order
- * @param trackingCode - what staff sent
- * @throws {ActRefusal} a 422 naming `trackingCode` when a tracked method has none
- */
-const gateTracking = (order: OrderDocument, trackingCode: string | undefined): void => {
-    const method = order.shippingMethod ? findShippingMethod(order.shippingMethod) : undefined;
-    if (method?.tracked && !trackingCode)
-        throw new ActRefusal(
-            generateReject(422, [
-                fieldError(
-                    'trackingCode',
-                    t('delivery.tracking-code-required'),
-                    ERROR_CODES.DELIVERY_TRACKING_CODE_REQUIRED
-                )
-            ])
-        );
-};
-
-/**
  * The act itself, in its transaction. Refusals are decided first, from the snapshot the writes land
  * in; then the shipment is cut, `orders` is told, and the event is written.
  * @param fulfillmentOrderId - the fulfillment order to ship from
@@ -124,34 +102,29 @@ const shipAct = async (
     fulfillmentOrderId: string,
     input: ShipInput,
     context: CallerContext,
+    mayStart: boolean,
     session: ClientSession
 ): Promise<Shipped> => {
-    const forced = input.forced === true;
     const { fulfillmentOrder, order } = await readWithOrder(fulfillmentOrderId, session);
     const orderId = String(fulfillmentOrder.orderId);
-    gateOrder(order.status, forced);
+    gateOrder(order.status, mayStart);
     const lines = gateFulfillmentOrder(fulfillmentOrder, input.lines);
-    gateTracking(order, input.trackingCode);
 
     const { shipment } = await cutShipment(
         {
             fulfillmentOrder,
             lines,
             trackingCode: input.trackingCode,
-            forced,
+            forced: false,
             delivered: false,
             at: new Date(),
             takeStock: true
         },
         session
     );
-    // A forced first shipment from `paid` makes the `start` move itself, as it always has.
+    // The first shipment from `paid` makes the `start` move itself, in this transaction.
     const actor = context.caller.id;
-    if (
-        canProcessOrder(order.status) &&
-        !(await orderService.markProcessing(orderId, session, actor))
-    )
-        refuse(409, ERROR_CODES.ORDER_NOT_PAID, 'delivery.not-paid');
+    await startFulfilment(order, session, actor);
 
     const progress = await reportProgress(orderId, session);
     await settleOrder(
@@ -162,17 +135,6 @@ const shipAct = async (
         session,
         actor
     );
-    if (forced)
-        await orderService.recordForcedFulfilment(
-            orderId,
-            {
-                reason: input.reason ?? '',
-                actorUserId: context.caller.id ?? '',
-                at: shipment.shippedAt,
-                from: order.status
-            },
-            session
-        );
     await announceShipped(shipment, session, actor, progress.summary.remaining);
 
     return { shipment, order, remainingUnits: progress.summary.remaining };
@@ -182,24 +144,16 @@ const shipAct = async (
  * What follows a committed shipment: the shelf's stock cache and the audit row. The buyer's mail
  * rides `shipment.shipped`.
  * @param shipped - what the act left
- * @param reason - why the shipment was forced; carried to the audit row only when it was
  * @param context - the caller
  */
-const afterShipped = (
-    shipped: Shipped,
-    reason: string | undefined,
-    context: CallerContext
-): Promise<void> =>
+const afterShipped = (shipped: Shipped, context: CallerContext): Promise<void> =>
     orderService.refreshShelf(shipped.shipment.lines.map(({ productId }) => productId)).then(() => {
         recordAudit(context, {
             action: deliveryAuditActions.ADMIN_ORDER_SHIPPED,
             outcome: 'success',
             targetType: 'order',
             targetId: String(shipped.shipment.orderId),
-            // A forced shipment is a sanctioned bypass: its reason is the justification.
-            metadata: shipped.shipment.forced
-                ? { shipmentId: String(shipped.shipment._id), forced: true, reason }
-                : { shipmentId: String(shipped.shipment._id), forced: false }
+            metadata: { shipmentId: String(shipped.shipment._id) }
         });
     });
 
@@ -207,7 +161,7 @@ const afterShipped = (
  * Ship some or all of a fulfillment order's remainder.
  *
  * @param fulfillmentOrderId - the fulfillment order to ship from
- * @param input - the lines, tracking code and the `forced` flag with its reason
+ * @param input - the lines and the tracking code
  * @param authContext - the caller, for the response's own `actions`
  * @param context - the caller, for the audit entry
  * @returns the shipment as it left, or the refusal naming which case it was
@@ -218,13 +172,16 @@ export const shipFulfillmentOrder = (
     authContext: AuthContext | undefined,
     context: CallerContext
 ): Promise<ResponseSuccess<Shipment> | ResponseReject> => {
-    const unearned = refuseUnearnedForce(context, input.forced, input.reason);
-    if (unearned) return Promise.resolve(unearned);
+    // Decided before the transaction opens: a retried transaction must not change the verdict.
+    const mayStart = mayStartFulfilment(context);
 
-    return runAct((session) => shipAct(fulfillmentOrderId, input, context, session)).then(
+    return runAct((session) => shipAct(fulfillmentOrderId, input, context, mayStart, session)).then(
         (result) => {
-            if (result.refused) return result.reject;
-            return afterShipped(result.value, input.reason, context).then(() =>
+            if (result.refused) {
+                auditUnearnedStart(context, result.reject, fulfillmentOrderId);
+                return result.reject;
+            }
+            return afterShipped(result.value, context).then(() =>
                 generateSuccess(
                     viewShipment(result.value.shipment, result.value.order, authContext),
                     201

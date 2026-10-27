@@ -42,6 +42,9 @@ export type {
     ActionCandidate
 } from './fulfillment';
 
+export { isAwaitingTracking } from './tracking';
+export type { TrackingFacts } from './tracking';
+
 export {
     judgeSlip,
     judgeMove,

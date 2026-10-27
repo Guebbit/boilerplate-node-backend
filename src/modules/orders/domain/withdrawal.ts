@@ -32,18 +32,25 @@ export const isBeforeDispatch = (order: DispatchCandidate): boolean =>
     ORDER_STATUS_TRAITS[order.status].beforeDispatch && order.fulfillment?.shipped !== true;
 
 /** What {@link canCorrectAddress} reads off an order. */
-export interface AddressCandidate extends DispatchCandidate {
+export interface AddressCandidate {
+    status: OrderStatus;
+    /** What `delivery` last reported; absent before the order's fulfillment orders exist. */
+    fulfillment?: Pick<FulfillmentSummary, 'shipped' | 'remaining'> | undefined;
     /** Present only when a line ships to an address (not an all-digital order, not a pickup). */
     shippingAddress?: unknown;
 }
 
 /**
- * Whether staff may still correct where the order ships: it has an address, and nothing has left
- * yet. A parcel already on its way went where it went, and that is a carrier's problem, not an edit.
+ * Whether staff may still redirect the order: it has an address, is not over (`shipped`,
+ * `delivered`, `cancelled`) and still has units to send. A parcel already on its way went where it
+ * went — each shipment keeps its own copy of that address — but the rest of the order, held,
+ * waiting for stock or simply not cut yet, may go somewhere else.
  * @param order - the order's status, fulfilment summary and address
  */
 export const canCorrectAddress = (order: AddressCandidate): boolean =>
-    Boolean(order.shippingAddress) && isBeforeDispatch(order);
+    Boolean(order.shippingAddress) &&
+    ORDER_STATUS_TRAITS[order.status].beforeDispatch &&
+    (order.fulfillment?.shipped !== true || order.fulfillment.remaining > 0);
 
 /**
  * When the withdrawal window closes, counted from the moment its clock starts.
