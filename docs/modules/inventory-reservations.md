@@ -93,11 +93,11 @@ A preorder is sold before its units exist, so it claims an **allowance** instead
 stock level gains two counters, a third ledger column and two `reason` values; the hold's lines gain
 a `kind` (`stock` or `backorder`).
 
-| Counter / column   | Meaning                                                                                       |
-| ------------------ | --------------------------------------------------------------------------------------------- |
-| `backorderLimit`   | how many units may be owed at once; set by an admin, `0` closes it, `null` is no cap          |
-| `backordered`      | units claimed against it and not yet allocated stock, paid or not                             |
-| `backorderedDelta` | the ledger column that makes `backordered` replayable, like `onHandDelta` and `reservedDelta` |
+| Counter / column   | Meaning                                                                                                                          |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `backorderLimit`   | how many units may be owed at once; set by staff holding `update:StockLevel` (admin, warehouse), `0` closes it, `null` is no cap |
+| `backordered`      | units claimed against it and not yet allocated stock, paid or not                                                                |
+| `backorderedDelta` | the ledger column that makes `backordered` replayable, like `onHandDelta` and `reservedDelta`                                    |
 
 A claim is a `backorder` movement (`backordered` +n, nothing else), guarded in the write's own filter by
 `backordered + n <= backorderLimit`. The shelf is never read: 50 units on hand do not widen the
@@ -147,8 +147,8 @@ board's `lowOnly` view is unchanged, since a restocker wants to see it.
 
 `GET /inventory/preorders` is the preorder board's read: per product the cap, `backordered`, its split
 between `held` (unpaid, frees itself) and `paid`, `left`, and `ordered`, the lifetime count read off the
-ledger's `backorder` rows. `PUT /inventory/levels/{productId}/backorder-limit` sets the allowance under
-`create:StockMovement`; it is not a stock movement and leaves no ledger row, only an audit entry.
+ledger's `backorder` rows. `PATCH /inventory/levels/{productId}` sets the allowance under
+`update:StockLevel`; it is not a stock movement and leaves no ledger row, only an audit entry.
 
 ## Backorders
 

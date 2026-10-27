@@ -54,6 +54,45 @@ describe('GET /products/:id with an api key', () => {
     });
 });
 
+describe('GET /products/:id: translations follow read:Translation', () => {
+    it('gives every language to a key holding read:Translation, and none to a guest', async () => {
+        const product = await createProduct({ title: 'On sale', active: true });
+        const secret = await credentialHolding(['read:Translation']);
+        const path = `/products/${String(product._id)}`;
+
+        const keyed = await api().get(path).set('Authorization', bearerOf(secret));
+        const guest = await api().get(path);
+
+        expect(keyed.body.translations).toMatchObject({ en: { title: 'On sale' } });
+        expect(guest.body).not.toHaveProperty('translations');
+    });
+
+    // The key reads the same rows a guest does, so only the field-level check keeps its wider
+    // answer out of the guest's cached entry.
+    it('never lets that key seed the guest’s cached answer', async () => {
+        const product = await createProduct({ title: 'On sale', active: true });
+        const secret = await credentialHolding(['read:Translation']);
+        const path = `/products/${String(product._id)}`;
+
+        await api().get(path).set('Authorization', bearerOf(secret));
+        const guest = await api().get(path);
+
+        expect(guest.status).toBe(200);
+        expect(guest.body).not.toHaveProperty('translations');
+    });
+
+    it('is not the guest scope for a key holding read:Translation', async () => {
+        const secret = await credentialHolding(['read:Translation']);
+        const product = await createProduct({ active: true });
+
+        const keyed = await api()
+            .get(`/products/${String(product._id)}`)
+            .set('Authorization', bearerOf(secret));
+
+        expect(keyed.headers['cache-control']).toMatch(/private/);
+    });
+});
+
 /** The titles a search answers, however the response wraps them. */
 const titlesAt = async (secret: string): Promise<string[]> => {
     const response = await api().get('/products').set('Authorization', bearerOf(secret));

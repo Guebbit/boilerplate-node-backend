@@ -50,6 +50,7 @@ admin-permissions: &admin_permissions
     - read:Stats
     - read:StockLevel
     - create:StockMovement
+    - update:StockLevel
     - sweep:StockLevel
     - update:Shipment
     - start:Shipment
@@ -786,6 +787,28 @@ cases:
       caller: { id: usr_12, scope: tenant, tenantId: shop_1, permissions: [read:StockLevel] }
       action: create
       subject: StockMovement
+      resource: { tenantId: shop_1 }
+      expect: deny
+
+    - name: a warehouse holder may set a product's preorder limit
+      # The control for the two denies below: `update:StockLevel` is the rule that guards the edit.
+      caller: { id: usr_15, scope: tenant, tenantId: shop_1, permissions: [update:StockLevel] }
+      action: update
+      subject: StockLevel
+      resource: { tenantId: shop_1 }
+      expect: allow
+
+    - name: recording a movement does not grant editing the level
+      caller: { id: usr_16, scope: tenant, tenantId: shop_1, permissions: [create:StockMovement] }
+      action: update
+      subject: StockLevel
+      resource: { tenantId: shop_1 }
+      expect: deny
+
+    - name: read:StockLevel does not grant editing the level
+      caller: { id: usr_17, scope: tenant, tenantId: shop_1, permissions: [read:StockLevel] }
+      action: update
+      subject: StockLevel
       resource: { tenantId: shop_1 }
       expect: deny
 

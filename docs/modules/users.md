@@ -105,8 +105,10 @@ covers soft delete, hard delete, restore, the purchase hold and the activate / d
 refused attempt on a staff account is audited as `security.forbidden` with
 `metadata.reason: role_protected`.
 
-`active` is not a field of `PUT` / `PATCH`: a status change is an action endpoint
-([Activating and deactivating](#activating-and-deactivating)).
+`active` is not a field of a user's `PUT` / `PATCH`: here the flip ends sessions and needs its own
+permission, so it is an action endpoint ([Activating and deactivating](#activating-and-deactivating)).
+A product's `active` has no such effect and stays a field
+(the [action-or-field test](../api/write-methods.md#action-or-field)).
 
 **The fresh-login step-up** asks only a caller holding `assign:Role`, and only when the write changes
 who holds powers: a role that differs from the stored one, an account created deactivated, or a

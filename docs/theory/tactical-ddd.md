@@ -194,6 +194,10 @@ may cancel from `pending` and `paid`, an operator also from `processing`.
 
 ### Action endpoints execute; `update` does not decide
 
+Whether a flip is an action or a field is one test, written once in
+[`write-methods.md`](../api/write-methods.md#action-or-field): does the move have an effect, guard
+or permission of its own? The order's status does; a product's `active` does not.
+
 `orders/services/crud.ts`'s `update` carries no status logic at all: `UpdateOrderByIdRequest`
 declares `email` only, so there is no move left for it to refuse or apply, and no partial-write
 window between an email save and a status move to guard against — impossible by construction

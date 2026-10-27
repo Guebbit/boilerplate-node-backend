@@ -306,7 +306,7 @@ describe('a product edited through its translations', () => {
         const { bearer } = await authenticateAs('admin');
         const product = await createProduct();
         const path = `/products/${product.id}`;
-        const before = etagOf(await api().get(`${path}/admin`).set('Authorization', bearer));
+        const before = etagOf(await api().get(path).set('Authorization', bearer));
 
         const write = await api()
             .patch(path)
@@ -316,9 +316,7 @@ describe('a product edited through its translations', () => {
 
         expect(write.status).toBe(200);
         expect(etagOf(write)).not.toBe(before);
-        expect(etagOf(await api().get(`${path}/admin`).set('Authorization', bearer))).toBe(
-            etagOf(write)
-        );
+        expect(etagOf(await api().get(path).set('Authorization', bearer))).toBe(etagOf(write));
     });
 });
 
@@ -328,7 +326,7 @@ describe('a product edited only through the locales translations route', () => {
     it('moves the ETag even for a locale that is not the fallback', async () => {
         const { bearer } = await authenticateAs('admin');
         const product = await createProduct();
-        const admin = `/products/${product.id}/admin`;
+        const admin = `/products/${product.id}`;
         const before = etagOf(await api().get(admin).set('Authorization', bearer));
 
         await api()
@@ -344,7 +342,7 @@ describe('a product edited only through the locales translations route', () => {
         const { bearer } = await authenticateAs('admin');
         const product = await createProduct();
         const path = `/products/${product.id}`;
-        const stale = etagOf(await api().get(`${path}/admin`).set('Authorization', bearer));
+        const stale = etagOf(await api().get(path).set('Authorization', bearer));
         await api()
             .patch(`/locales/translations/product/${product.id}`)
             .set('Authorization', bearer)

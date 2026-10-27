@@ -237,8 +237,8 @@ scenarios/products.ts its own seed data — outside src/, see Demo profile
 Its `openapi.yaml` holds every operation under `/products`:
 
 ```
-/products                /products/search      /products/categories
-/products/{id}           /products/{id}/admin  /products/{id}/restore
+/products                /products/search      /products/facets
+/products/{id}           /products/{id}/restore
 /products/{id}/hard
 ```
 

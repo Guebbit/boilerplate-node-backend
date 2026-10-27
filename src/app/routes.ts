@@ -42,7 +42,7 @@ export const installRoutes = (app: Express): void => {
 
     /**
      * 405 + `Allow` for a literal contract path (no `{param}`) asked with a method it does not
-     * declare. Before the routers: otherwise `DELETE /products/categories` reaches the
+     * declare. Before the routers: otherwise `DELETE /products/facets` reaches the
      * `/products/:id` handler and answers 404, where the contract matches the literal path first.
      */
     const servedModules = new Set(enabledModules.map(({ name }) => name));
