@@ -380,7 +380,7 @@ until something proves otherwise.
 ## What an unhandled error tells the client
 
 The global handler answers in four branches, and the order is the point: a `MulterError` becomes
-400; a library that follows the `http-errors` contract (`expose: true`, a 4xx `.status`/
+413 for a size limit (`LIMIT_FILE_SIZE`, `LIMIT_FIELD_VALUE`) and 400 for any other limit; a library that follows the `http-errors` contract (`expose: true`, a 4xx `.status`/
 `.statusCode`) — body-parser's oversized-body and malformed-body rejections among them — answers
 that declared status (400/413/415), never the library's own message; a driver failure that
 `databaseErrorInterpreter` recognises as a _client_ mistake becomes that 4xx; and everything else

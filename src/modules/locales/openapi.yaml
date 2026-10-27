@@ -110,7 +110,6 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/LocaleCapabilities'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         post:
             tags: [Locales]
             summary: Add a language
@@ -144,7 +143,6 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /locales/apps:
         get:
@@ -170,7 +168,6 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/LocaleApps'
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /locales/{locale}/dictionary:
         get:
@@ -202,7 +199,6 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/LocaleDictionary'
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /locales/{locale}:
         get:
@@ -234,7 +230,6 @@ paths:
                                 $ref: '#/components/schemas/Language'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         put:
             tags: [Locales]
             summary: Replace a language
@@ -269,7 +264,6 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         patch:
             tags: [Locales]
             summary: Edit a language
@@ -307,7 +301,6 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
             tags: [Locales]
             summary: Remove a language
@@ -330,7 +323,6 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /locales/{locale}/activate:
         post:
@@ -361,7 +353,6 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /locales/{locale}/deactivate:
         post:
@@ -394,7 +385,6 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /locales/{locale}/messages:
         get:
@@ -444,7 +434,6 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # A malformed `app`: repeated, empty, or not an app id.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /locales/{locale}/entries:
         get:
@@ -478,7 +467,6 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     # One app's slice of a language's entries — the target of every write. The app is a
     # path segment (Google AIP-122, Microsoft REST guidelines: a parent resource belongs in the
@@ -517,7 +505,6 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         post:
             tags: [Locales]
             summary: Add one translation entry
@@ -552,7 +539,6 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         put:
             tags: [Locales]
             summary: Replace every entry
@@ -594,7 +580,6 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         patch:
             tags: [Locales]
             summary: Merge entries
@@ -633,7 +618,6 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     # An entry is addressed by its id and not by its key, and that is not a preference. Keys
     # contain dots by design (`products.list.title`) and may contain anything else awkward in a URL
@@ -670,7 +654,6 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # An app this deployment does not serve.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         put:
             tags: [Locales]
             summary: Edit one translation entry
@@ -703,7 +686,6 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
             tags: [Locales]
             summary: Remove one translation entry
@@ -722,7 +704,6 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     # The generic, entity-agnostic admin door onto user-authored content — the `translator`'s door,
     # never the entity's own write path. `entityType` is a `translatables` registry key (`product`
@@ -752,7 +733,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         put:
             tags: [Locales]
             summary: Replace every translation an entity has
@@ -797,7 +777,6 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         patch:
             tags: [Locales]
             summary: Merge one or more of an entity's translations
@@ -854,7 +833,6 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
 components:
     parameters:

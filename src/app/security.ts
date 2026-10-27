@@ -188,7 +188,7 @@ export const installSecurity = (app: Express): void => {
                 // would otherwise fail the preflight.
                 'Session-Passive'
             ],
-            // What a browser client may read off a response: the rate-limit answer (draft-7
+            // What a browser client may read off a response: the rate-limit answer (IETF draft-11
             // headers, see `rate-limit.ts`) is what lets it back off instead of retrying blind.
             exposedHeaders: [
                 'x-request-id',
@@ -197,7 +197,14 @@ export const installSecurity = (app: Express): void => {
                 'RateLimit',
                 'RateLimit-Policy',
                 // The version an edit form sends back as `If-Match`.
-                'ETag'
+                'ETag',
+                // Where a create put the new resource, on the 201 and on an idempotent replay.
+                'Location',
+                // The server-chosen download name (invoice number, dated export): a browser client
+                // cannot read it unless it is listed here.
+                'Content-Disposition',
+                // Whether an `Idempotency-Key` request was answered from its stored first answer.
+                'Idempotent-Replay'
             ]
         })
     );

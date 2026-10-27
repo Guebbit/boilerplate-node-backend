@@ -98,18 +98,23 @@ describe('the 500 handler', () => {
     });
 
     /**
-     * The other side of the rule: a deliberate refusal is still answered as a 400 and not a blank
+     * The other side of the rule: a deliberate refusal is still answered as a 4xx and not a blank
      * 500. `MulterError` is the one throw shape this handler still translates by hand: its `code`
-     * names the limit, and its English text is replaced by one translated sentence.
+     * names the limit, and its English text is replaced by one translated sentence. A byte limit
+     * is a 413; a count or shape limit stays a 400.
      */
-    it('answers a deliberate error with its code and a translated sentence', async () => {
+    it.each([
+        ['LIMIT_FILE_SIZE', 413],
+        ['LIMIT_FIELD_VALUE', 413],
+        ['LIMIT_FILE_COUNT', 400]
+    ] as const)('answers multer %s with %i and a translated sentence', async (code, status) => {
         const multer = await import('multer');
 
-        const response = await answerFor(new multer.MulterError('LIMIT_FILE_SIZE', 'avatar'));
+        const response = await answerFor(new multer.MulterError(code, 'avatar'));
 
-        expect(response.status).toBe(400);
+        expect(response.status).toBe(status);
         expect(response.body.errors).toEqual([
-            { code: 'LIMIT_FILE_SIZE', message: t('generic.error-upload-refused') }
+            { code, message: t('generic.error-upload-refused') }
         ]);
     });
 });

@@ -79,7 +79,6 @@ paths:
                                 $ref: '#/components/schemas/ReturnsResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         post:
             tags: [Returns]
             summary: Open a return, or withdraw from the contract
@@ -160,7 +159,6 @@ paths:
                 # `RETURN_LINES_INVALID`, `RETURN_CANCELLATION_INVALID`, `RETURN_STATEMENT_INVALID`, or a malformed body.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /returns/options:
         get:
@@ -198,7 +196,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /returns/{id}:
         get:
@@ -221,7 +218,6 @@ paths:
                                 $ref: '#/components/schemas/Return'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /returns/{id}/approve:
         post:
@@ -248,7 +244,6 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # `RETURN_NOT_DECIDABLE`
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /returns/{id}/decline:
         post:
@@ -284,7 +279,6 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /returns/{id}/close:
         post:
@@ -325,7 +319,6 @@ paths:
                 # `RETURN_NOT_CLOSABLE`
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /returns/{id}/cancel:
         post:
@@ -372,7 +365,6 @@ paths:
                 # `RETURN_NOT_CANCELABLE`
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /returns/{id}/receive:
         post:
@@ -435,7 +427,6 @@ paths:
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 # `RETURN_DEDUCTION_INVALID`, `RETURN_RESTOCK_INVALID`, `RETURN_REMEDY_INVALID`, or a malformed body.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
 components:
     schemas:

@@ -136,7 +136,9 @@ const fileOf = (name: string): Promise<string> => readFile(path.join(root, name)
 
 /** What a download of this export streams, or `undefined` when there is nothing to send. */
 const downloadOf = (userId: string): Promise<string | undefined> =>
-    openOwnExport(userId, testCallerContext).then((stream) => (stream ? text(stream) : undefined));
+    openOwnExport(userId, testCallerContext).then((opened) =>
+        opened ? text(opened.stream) : undefined
+    );
 
 /** A section that holds the build until the case lets it go. */
 const gate = () => {

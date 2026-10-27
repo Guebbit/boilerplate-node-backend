@@ -60,7 +60,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         post:
             tags: [Examples]
             summary: Create an example
@@ -93,7 +92,6 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 # `createExampleLimiter` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /examples/search:
         post:
@@ -120,7 +118,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /examples/{id}:
         # Bundler: adds the `If-Match` parameter and 412 to the writes listed, and `ETag` to the 200s.
@@ -149,7 +146,6 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/Example'
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         put:
             tags: [Examples]
             summary: Replace an example
@@ -176,7 +172,6 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         patch:
             tags: [Examples]
             summary: Update an example
@@ -206,7 +201,6 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
             tags: [Examples]
             summary: Delete an example
@@ -221,7 +215,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     # One door per lifecycle event, not a PATCH field and not one generic door: a move into
     # `published` writes an outbox event and mails the owner, and `update` does not decide
@@ -254,7 +247,6 @@ paths:
                 # `errors[].code` is `EXAMPLE_NOT_PUBLISHABLE`: not a move from the current status, or a racing
                 # move landed first.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /examples/{id}/archive:
         post:
@@ -282,7 +274,6 @@ paths:
                 # `errors[].code` is `EXAMPLE_NOT_ARCHIVABLE`: not a move from the current status, or a racing
                 # move landed first.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /examples/{id}/unarchive:
         post:
@@ -311,7 +302,6 @@ paths:
                 # `errors[].code` is `EXAMPLE_NOT_UNARCHIVABLE`: not a move from the current status, or a racing
                 # move landed first.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     # Its own route rather than a field on create and update: an upload travels as multipart, and
     # keeping it apart leaves the JSON writes above plain. Delete `controllers/put-example-cover.ts`,
@@ -345,7 +335,6 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 # `uploadLimiter` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
 components:
     schemas:

@@ -98,7 +98,7 @@ describe('an admin write invalidates the cached public dictionary', () => {
 
         // First read renders from Mongo and stores the response under the `locales` tag.
         const first = await api().get('/locales/pt/messages');
-        expect(first.headers['x-cache']).toBe('MISS');
+        expect(first.headers['cache-status']).toContain('fwd=miss');
         expect(first.body.messages).toEqual({ cart: { title: 'Carrinho' } });
 
         /*
@@ -106,7 +106,7 @@ describe('an admin write invalidates the cached public dictionary', () => {
          * third read meaningful: without a proven HIT here, a MISS below would prove nothing.
          */
         const cached = await api().get('/locales/pt/messages');
-        expect(cached.headers['x-cache']).toBe('HIT');
+        expect(cached.headers['cache-status']).toMatch(/; hit; ttl=\d+/);
 
         const listed = await api().get('/locales/pt/entries').set('Authorization', bearer);
         const entryId = listed.body.items[0].id;
@@ -119,7 +119,7 @@ describe('an admin write invalidates the cached public dictionary', () => {
         // The stored response is gone, so the next anonymous reader gets the edit rather than the
         // hour-old copy.
         const afterEdit = await api().get('/locales/pt/messages');
-        expect(afterEdit.headers['x-cache']).toBe('MISS');
+        expect(afterEdit.headers['cache-status']).toContain('fwd=miss');
         expect(afterEdit.body.messages).toEqual({ cart: { title: 'O seu carrinho' } });
     });
 
@@ -131,7 +131,7 @@ describe('an admin write invalidates the cached public dictionary', () => {
 
         await api().get('/locales');
         const cached = await api().get('/locales');
-        expect(cached.headers['x-cache']).toBe('HIT');
+        expect(cached.headers['cache-status']).toMatch(/; hit; ttl=\d+/);
 
         await api()
             .post('/locales')
@@ -140,7 +140,7 @@ describe('an admin write invalidates the cached public dictionary', () => {
 
         const afterCreate = await api().get('/locales');
 
-        expect(afterCreate.headers['x-cache']).toBe('MISS');
+        expect(afterCreate.headers['cache-status']).toContain('fwd=miss');
         expect(afterCreate.body.locales.some(({ tag }: { tag: string }) => tag === 'pt')).toBe(
             true
         );
@@ -161,11 +161,11 @@ describe('the cached dictionary is per app', () => {
         const warm = await api().get('/locales/pt/messages?app=demo-fe');
         expect(warm.body.messages).toEqual({ cart: { title: 'Carrinho' } });
         const again = await api().get('/locales/pt/messages?app=demo-fe');
-        expect(again.headers['x-cache']).toBe('HIT');
+        expect(again.headers['cache-status']).toMatch(/; hit; ttl=\d+/);
 
         const other = await api().get('/locales/pt/messages?app=kiosk');
 
-        expect(other.headers['x-cache']).toBe('MISS');
+        expect(other.headers['cache-status']).toContain('fwd=miss');
         expect(other.body.messages).toEqual({ cart: { title: 'Quiosque' } });
     });
 });

@@ -1007,8 +1007,8 @@ describe('GET /account/export/file', () => {
 
         expect(response.status).toBe(200);
         expect(response.headers['content-type']).toContain('application/json');
-        expect(response.headers['content-disposition']).toBe(
-            'attachment; filename="account-export.json"'
+        expect(response.headers['content-disposition']).toMatch(
+            /^attachment; filename="account-export-\d{4}-\d{2}-\d{2}\.json"$/
         );
         expect(response.headers['cache-control']).toBe('private, no-store');
     });

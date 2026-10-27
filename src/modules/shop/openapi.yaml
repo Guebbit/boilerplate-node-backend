@@ -28,7 +28,6 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Shop'
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
 components:
     schemas:

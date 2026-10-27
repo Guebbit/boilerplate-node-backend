@@ -12,6 +12,8 @@ import { rejectResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs, namedHandler, parseBody } from '@infrastructure/http/controller';
 import { mergedSearchInput } from '@infrastructure/surfaces/create-search-controller';
+import { dayInZone } from '@domain-primitives/time';
+import { shopTimezone } from '@modules/shop';
 import { orderService } from '../services';
 import { honourUserIdFilter, searchOrdersQuerySchema } from './get-orders';
 
@@ -43,10 +45,12 @@ export const getOrdersExport = namedHandler(
                     return undefined;
                 }
 
+                // Express: `attachment(name)` sets `Content-Disposition: attachment; filename=…`
+                // (RFC 6266). The name carries the shop's calendar day, not the server's.
+                response.attachment(`orders-${dayInZone(new Date(), shopTimezone())}.csv`);
                 response
                     .status(200)
                     .setHeader('Content-Type', 'text/csv; charset=utf-8')
-                    .setHeader('Content-Disposition', 'attachment; filename="orders.csv"')
                     .setHeader('Cache-Control', 'private, no-store');
 
                 // Node: pipes with backpressure and destroys every stream on error. Rejects if

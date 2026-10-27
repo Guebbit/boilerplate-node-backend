@@ -43,8 +43,9 @@ paths:
                 numbered and issued once, the moment the order moved `pending → paid`, never
                 re-rendered from today's config. Refuses with `404` for an order that has not been
                 invoiced yet (never paid, or paid while its invoice listener failed: such an
-                order is not invoiced yet, and takes no number from the gap-free series). The client should stream or save the response with an
-                appropriate `Content-Disposition` header.
+                order is not invoiced yet, and takes no number from the gap-free series). The server names
+                the file: `Content-Disposition` carries `invoice-<invoice number>.pdf`, so a client
+                saves it under that name rather than inventing one.
             operationId: getOrderInvoice
             security:
                 - bearerAuth: []
@@ -53,6 +54,10 @@ paths:
             responses:
                 '200':
                     description: Invoice PDF
+                    headers:
+                        Content-Disposition:
+                            description: '`inline; filename="invoice-<invoice number>.pdf"`, e.g. `invoice-2026-0042.pdf`.'
+                            schema: { type: string }
                     content:
                         application/pdf:
                             schema:
@@ -66,7 +71,6 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # `invoicingLimiter` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
                 # Every render slot is busy and the bounded queue behind them is full: nothing was
                 # started, `Retry-After` says when to ask again. A stored copy never meets this.
                 '503': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ServiceUnavailable' }
@@ -96,7 +100,6 @@ paths:
                                 $ref: '#/components/schemas/CreditNotesResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /orders/{id}/credit-notes/{creditNoteId}:
         get:
@@ -121,6 +124,10 @@ paths:
             responses:
                 '200':
                     description: Credit note PDF
+                    headers:
+                        Content-Disposition:
+                            description: '`inline; filename="credit-note-<credit note number>.pdf"`, e.g. `credit-note-2026-0007.pdf`.'
+                            schema: { type: string }
                     content:
                         application/pdf:
                             schema:
@@ -131,7 +138,6 @@ paths:
                 # no such credit note; `orders.not-found` for a genuinely unknown/inaccessible order.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
                 # See `GET /orders/{id}/invoice`: a full render queue answers 503 with `Retry-After`.
                 '503': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ServiceUnavailable' }
 

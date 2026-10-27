@@ -265,8 +265,11 @@ The guard is `requireDeclaredContentType`, built from `api/request-content-types
 `npm run gen:api` derives from the contract's own `requestBody` media types. A request with no
 bytes is not judged: a missing required body is the schema's own 422.
 
-A `DELETE` that declares no body is listed with no types at all (`types: []`), and the guard refuses
-ANY body on it, `details.accepted` empty. That is why `DELETE /products/{id}` takes no `{hardDelete}`
+Any write (`POST`, `PUT`, `PATCH`, `DELETE`) that declares no body is listed with no types at all
+(`types: []`), and the guard refuses ANY body on it, `{}` included, `details.accepted` empty. An
+action button (`POST /users/{id}/deactivate`) therefore never drops a `{"reason": …}` with a 200:
+the sender is told the field was not read. The contract declares the 415 on every such operation.
+For a `DELETE` that is also why `DELETE /products/{id}` takes no `{hardDelete}`
 body: a client or gateway that drops it would turn a hard delete into a soft one, so the flag lives
 in the query or the `/hard` path and a body is refused instead of ignored.
 
@@ -335,7 +338,7 @@ answered with a silent 200: **409** with `<RESOURCE>_ALREADY_<STATE>` and a plai
 Google AIP-216 asks for a state that cannot be moved to, kept at 409 because RFC 9110 §15.5.10
 defines it as a conflict with the current state. `DELETE` stays idempotent (RFC 9110 §9.2.2).
 
-The app-wide ones (400, 413, 429, 503) come from `x-app-level-responses` — see
+The app-wide ones (400, 413, 415, 429, 500, 503) come from `x-app-level-responses` — see
 [Regenerating](./regenerating.md).
 
 ## Conditional writes: ETag and If-Match

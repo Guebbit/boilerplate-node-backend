@@ -17,9 +17,9 @@ import type { Response } from 'supertest';
 import { api } from '@tests/http';
 import { currentEnvironment } from '@infrastructure/config/store';
 
-/** The global budget's `remaining`, off the draft-7 `RateLimit` header (`limit=…, remaining=…`). */
+/** The global budget's `remaining`, off the draft-11 `RateLimit` header (`"global";r=…;t=…`). */
 const remainingOf = (response: Response): number =>
-    Number(/remaining=(\d+)/.exec(response.headers.ratelimit ?? '')?.[1]);
+    Number(/"global";r=(\d+)/.exec(response.headers.ratelimit ?? '')?.[1]);
 
 describe('helmet', () => {
     /*

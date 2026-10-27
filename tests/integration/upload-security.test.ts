@@ -127,7 +127,7 @@ describe('upload content validation', () => {
 
         const response = await uploadAvatarWith(oversized, 'huge.png', 'image/png');
 
-        expect(response.status).toBe(400);
+        expect(response.status).toBe(413);
         expect(uploadedFiles()).toEqual([]);
     });
 });

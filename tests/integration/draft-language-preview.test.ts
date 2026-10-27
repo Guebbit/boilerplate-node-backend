@@ -151,8 +151,8 @@ describe('a staff credential that holds display:Locale and nothing else', () => 
         const visitor = await api().get(`/products/${id}`).set(asking('en'));
         const staff = await api().get(`/products/${id}`).set(asking('en', key));
 
-        expect(visitor.headers['x-cache']).toBe('MISS');
-        expect(staff.headers['x-cache']).toBe('HIT');
+        expect(visitor.headers['cache-status']).toContain('fwd=miss');
+        expect(staff.headers['cache-status']).toMatch(/; hit; ttl=\d+/);
     });
 
     it.each(READS)(
@@ -166,15 +166,15 @@ describe('a staff credential that holds display:Locale and nothing else', () => 
             const visitorAgain = await read(id, asking('de'));
 
             expect(titleOf(visitor.body)).toBe(LIVE_TITLE);
-            expect(visitor.headers['x-cache']).toBe('MISS');
+            expect(visitor.headers['cache-status']).toContain('fwd=miss');
 
             expect(titleOf(preview.body)).toBe(DRAFT_TITLE);
             expect(preview.headers['content-language']).toBe('de');
             expect(preview.headers['cache-control']).toBe('private, no-store');
-            expect(preview.headers['x-cache']).toBeUndefined();
+            expect(preview.headers['cache-status']).toBeUndefined();
 
             expect(titleOf(visitorAgain.body)).toBe(LIVE_TITLE);
-            expect(visitorAgain.headers['x-cache']).toBe('HIT');
+            expect(visitorAgain.headers['cache-status']).toMatch(/; hit; ttl=\d+/);
             expect(cacheDouble.storedValues().join('\n')).not.toContain(DRAFT_TITLE);
         }
     );
@@ -187,7 +187,7 @@ describe('a staff credential that holds display:Locale and nothing else', () => 
         const visitor = await api().get(`/products/${id}`).set(asking('de'));
 
         expect(cacheDouble.storedValues().join('\n')).not.toContain(DRAFT_TITLE);
-        expect(visitor.headers['x-cache']).toBe('MISS');
+        expect(visitor.headers['cache-status']).toContain('fwd=miss');
         expect(visitor.body.title).toBe(LIVE_TITLE);
     });
 
@@ -246,7 +246,7 @@ describe('everyone else asking for the draft', () => {
         expect(response.status).toBe(200);
         expect(response.body.title).toBe(LIVE_TITLE);
         expect(response.headers['content-language']).toBe('en');
-        expect(response.headers['x-cache']).toBe('MISS');
+        expect(response.headers['cache-status']).toContain('fwd=miss');
     });
 
     it('gets the live pick too: a customer, who may not read drafts', async () => {

@@ -10,7 +10,7 @@
  * the MODULE files, which are authored, not in the bundle, which nobody reads by hand. Five steps
  * run after it, on the bundle: {@link withCookieAuth} adds `cookieAuth` to every operation that
  * takes a bearer, with the origin `403` on its unsafe methods; {@link withAppLevelResponses} merges the root's
- * `x-app-level-responses` (429, and 400/413/415 for a body-carrying operation) into every
+ * `x-app-level-responses` (429, 500 and 503 for every operation; 400/413/415 for a body-carrying one, and 415 for a body-less write too) into every
  * operation that doesn't already declare its own; {@link withVersionedResources} hangs `ETag`,
  * `If-Match` and 412 on every path marked `x-versioned`; {@link withModuleStamps} tags every operation
  * with the `x-module` its owning fragment names — never hand-written per operation; and
@@ -140,10 +140,13 @@ export const sectionPaths = (section: SectionName): string[] =>
  */
 const OPERATION_METHODS = ['get', 'put', 'post', 'patch', 'delete', 'head', 'options', 'trace'];
 
+/** The methods a client may mistakenly send a body to: every state-changing one. */
+const WRITE_METHODS: ReadonlySet<string> = new Set(['post', 'put', 'patch', 'delete']);
+
 /** One entry of the root's `x-app-level-responses` map — see the comment beside it there. */
 interface AppLevelResponse {
     response: string;
-    appliesTo: 'all' | 'requestBody' | 'requestBodyOrDelete';
+    appliesTo: 'all' | 'requestBody' | 'requestBodyOrBodyless';
 }
 
 /** As much of an OpenAPI operation as this step reads. */
@@ -205,8 +208,8 @@ const operationsOf = (document_: BundledDocument): MethodOperation[] =>
  * its size exactly as a `POST` can, and a `GET` that accepts none cannot. The operation's own
  * declaration is the only thing that knows.
  *
- * `requestBodyOrDelete` adds every `DELETE`: one that declares no body still refuses one with a
- * 415, so the guard's answer is part of its contract.
+ * `requestBodyOrBodyless` adds every write (`POST`, `PUT`, `PATCH`, `DELETE`): one that declares no
+ * body still refuses one with a 415, so the guard's answer is part of its contract.
  */
 const appliesToOperation = (
     entry: AppLevelResponse,
@@ -214,7 +217,7 @@ const appliesToOperation = (
 ): boolean =>
     entry.appliesTo === 'all' ||
     'requestBody' in operation ||
-    (entry.appliesTo === 'requestBodyOrDelete' && method === 'delete');
+    (entry.appliesTo === 'requestBodyOrBodyless' && WRITE_METHODS.has(method));
 
 /**
  * This operation's responses, plus every app-level one it does not already answer for itself.

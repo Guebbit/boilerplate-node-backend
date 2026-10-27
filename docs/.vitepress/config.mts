@@ -321,7 +321,8 @@ export default withMermaid(
                                 text: 'Contract Ownership & Fragmentation',
                                 link: '/api/contract-fragmentation'
                             },
-                            { text: 'AsyncAPI Workflow', link: '/api/asyncapi-workflow' }
+                            { text: 'AsyncAPI Workflow', link: '/api/asyncapi-workflow' },
+                            { text: 'Versioning & Retiring', link: '/api/versioning' }
                         ]
                     }
                 ]

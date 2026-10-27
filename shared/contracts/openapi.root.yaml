@@ -118,13 +118,13 @@ x-error-codes:
         { status: 400, description: 'A multipart upload carries too many parts (multer).' }
     LIMIT_FILE_SIZE:
         {
-            status: 400,
+            status: 413,
             description: "An uploaded file exceeds this deployment's size limit (multer)."
         }
     LIMIT_FILE_COUNT:
         { status: 400, description: 'A multipart upload carries too many files (multer).' }
     LIMIT_FIELD_KEY: { status: 400, description: 'A multipart field name is too long (multer).' }
-    LIMIT_FIELD_VALUE: { status: 400, description: 'A multipart field value is too long (multer).' }
+    LIMIT_FIELD_VALUE: { status: 413, description: 'A multipart field value is too long (multer).' }
     LIMIT_FIELD_COUNT:
         {
             status: 400,
@@ -181,18 +181,21 @@ servers:
 
 # ---------- Responses the APPLICATION answers, on operations that never declare them. ----------
 #
-# Two middlewares sit in front of every route and can refuse before it runs: the global rate
-# limiter (`app.use(rateLimiter)`), and the body parser — whose size, syntax and encoding checks
-# account for three of the four statuses below. Neither is any one endpoint's business, so
-# neither belongs in a module fragment — an operation left to declare its own would either
-# duplicate these four everywhere or answer a status its own contract denies.
+# Four things can answer before any route runs, or in place of one:
+#   - the global rate limiter (`app.use(rateLimiter)`): 429;
+#   - the body parser and the content-type guard: 400, 413 and 415;
+#   - the global error handler, for anything a route did not catch: 500;
+#   - the dependency probes' outage answer: 503.
+# None is any one endpoint's business, so none belongs in a module fragment — an operation left to
+# declare its own would either duplicate these everywhere or answer a status its own contract denies.
 #
 # Declared ONCE here and merged into every matching operation by `scripts/contracts/openapi-bundle.ts`,
 # rather than hand-copied into each fragment. A hand-copied list is a published claim with no guard
 # behind it: it goes stale silently, and the next app-level response repeats the whole exercise.
 #
 # `appliesTo` — `all` for what any request can trigger, `requestBody` for what only a request
-# carrying a body can, `requestBodyOrDelete` for the 415, which a body-less DELETE answers too.
+# carrying a body can, `requestBodyOrBodyless` for the 415, which a body-less write (POST, PUT,
+# PATCH, DELETE) answers too when handed a body.
 x-app-level-responses:
     '400':
         response: BadRequest
@@ -202,9 +205,12 @@ x-app-level-responses:
         appliesTo: requestBody
     '415':
         response: UnsupportedMediaType
-        appliesTo: requestBodyOrDelete
+        appliesTo: requestBodyOrBodyless
     '429':
         response: TooManyRequests
+        appliesTo: all
+    '500':
+        response: InternalError
         appliesTo: all
     '503':
         response: ServiceUnavailable
@@ -416,6 +422,26 @@ components:
             schema:
                 type: string
 
+        RateLimit-Policy:
+            required: false
+            description: >-
+                The rate-limit budgets this request passed, as a list in the current IETF draft's
+                syntax (`draft-ietf-httpapi-ratelimit-headers`): `"login";q=5;w=900` is a budget
+                named `login` that allows `q` requests per `w` seconds. One list item per budget the
+                request passed, named as in the budget table. Any response may carry it; no
+                identifier of the caller is ever included.
+            schema:
+                type: string
+
+        RateLimit:
+            required: false
+            description: >-
+                What is left of each budget in `RateLimit-Policy`, same names and order:
+                `"login";r=3;t=600` is 3 requests remaining, and the window resets in 600 seconds.
+                Back off before `r` reaches 0. Any response may carry it.
+            schema:
+                type: string
+
         Retry-After:
             required: false
             description: >-
@@ -495,10 +521,12 @@ components:
                         $ref: '#/components/schemas/Problem'
         PayloadTooLarge:
             description: >-
-                The request body is larger than this deployment accepts
-                (`NODE_JSON_BODY_LIMIT`, 100kb by default; multipart uploads are bounded separately
-                by `NODE_MAX_UPLOAD_BYTES`). Refused by the body parser before any route runs,
-                which is why it is declared for every body-accepting operation rather than by hand.
+                The request body is larger than this deployment accepts: a JSON body over
+                `NODE_JSON_BODY_LIMIT` (100kb by default), an uploaded file over
+                `NODE_MAX_UPLOAD_BYTES`, or a multipart field value over 100 KB. Refused by the
+                body parser or the upload middleware, which is why it is declared for every
+                body-accepting operation rather than by hand. The other multipart limits (counts,
+                shapes) answer `400`.
             content:
                 application/problem+json:
                     schema:
@@ -518,6 +546,10 @@ components:
             headers:
                 Retry-After:
                     $ref: '#/components/headers/Retry-After'
+                RateLimit-Policy:
+                    $ref: '#/components/headers/RateLimit-Policy'
+                RateLimit:
+                    $ref: '#/components/headers/RateLimit'
             content:
                 application/problem+json:
                     schema:

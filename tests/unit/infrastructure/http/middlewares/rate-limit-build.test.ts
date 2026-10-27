@@ -42,6 +42,7 @@ interface Outcome {
     status: number | undefined;
     headers: Record<string, unknown>;
     request: Request;
+    response: Response;
 }
 
 /**
@@ -67,6 +68,11 @@ const hit = async (
         headersSent: false,
         setHeader: (name: string, value: unknown) => {
             headers[name.toLowerCase()] = value;
+        },
+        // Express joins repeated values of a list header with a comma on the wire.
+        append: (name: string, value: string) => {
+            const key = name.toLowerCase();
+            headers[key] = key in headers ? `${String(headers[key])}, ${value}` : value;
         },
         getHeader: (name: string) => headers[name.toLowerCase()],
         removeHeader: (name: string) => {
@@ -100,7 +106,7 @@ const hit = async (
     // A passed request finishes; the library counts it as successful or failed on `finish`.
     if (passed) for (const listener of listeners.get('finish') ?? []) listener();
     await new Promise((resolve) => setImmediate(resolve));
-    return { passed, status, headers, request };
+    return { passed, status, headers, request, response };
 };
 
 /** Whether one request got through `limiter`. */
@@ -131,11 +137,58 @@ describe('buildRateLimiter — the limit', () => {
         expect(refused.status).toBe(429);
     });
 
-    it('sends draft-7 RateLimit headers and no X-RateLimit-* ones', async () => {
+    it('sends the named draft-11 RateLimit entries and no X-RateLimit-* ones', async () => {
+        const budget = budgetOf(5);
+        const { headers } = await hit(buildRateLimiter(budget));
+
+        expect(headers['ratelimit-policy']).toBe(`"${budget.namespace}";q=5;w=60`);
+        expect(headers.ratelimit).toMatch(
+            new RegExp(String.raw`^"${budget.namespace}";r=4;t=\d+$`)
+        );
+        expect(headers['x-ratelimit-limit']).toBeUndefined();
+    });
+
+    it('never names the caller: no partition key, no address', async () => {
         const { headers } = await hit(buildRateLimiter(budgetOf(5)));
 
-        expect(headers.ratelimit).toEqual(expect.stringContaining('limit=5'));
-        expect(headers['x-ratelimit-limit']).toBeUndefined();
+        expect(JSON.stringify(headers)).not.toMatch(/pk=|203\.0\.113\.9/);
+    });
+
+    it('shows every stacked budget instead of the last one overwriting the rest', async () => {
+        const first = budgetOf(5);
+        const second = budgetOf(9);
+        const firstLimiter = buildRateLimiter(first);
+        const secondLimiter = buildRateLimiter(second);
+        const shared = await hit(firstLimiter);
+
+        // The same request and response through the second limiter, as `app.use` chains them.
+        await new Promise<void>((resolve) => {
+            void secondLimiter(shared.request, shared.response, () => {
+                resolve();
+            });
+        });
+
+        expect(shared.headers['ratelimit-policy']).toBe(
+            `"${first.namespace}";q=5;w=60, "${second.namespace}";q=9;w=60`
+        );
+    });
+
+    it('adds nothing when the limiter skipped the request', async () => {
+        const { headers } = await hit(buildRateLimiter(budgetOf(5, { skip: () => true })));
+
+        expect(headers.ratelimit).toBeUndefined();
+        expect(headers['ratelimit-policy']).toBeUndefined();
+    });
+
+    it('answers a refusal with its own entry and a Retry-After of at least a second', async () => {
+        const limiter = buildRateLimiter(budgetOf(1));
+        await hit(limiter);
+
+        const { headers, status } = await hit(limiter);
+
+        expect(status).toBe(429);
+        expect(headers.ratelimit).toMatch(/;r=0;t=\d+$/);
+        expect(Number(headers['retry-after'])).toBeGreaterThanOrEqual(1);
     });
 });
 
