@@ -544,6 +544,30 @@ sequenceDiagram
 A lost shipment still counts as shipped in the order's summary (`shipped: true`), which keeps the
 whole-order cancel closed; it counts as neither out nor arrived (`undelivered` leaves it out).
 
+### Cancelled and refunded after a loss
+
+The buyer may take the money instead of a second parcel: cancelling the open units refunds them
+(shipping included) and gives the stock back. What the order then ends as depends on whether anything
+ever arrived:
+
+| What arrived                                  | The order ends | Why                                                                                       |
+| --------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------- |
+| something (another parcel, or a digital line) | `delivered`    | part of the contract was performed; the clocks start at the cancel, as for any completion |
+| nothing at all                                | `cancelled`    | nothing was delivered, so `delivered` would be untrue                                     |
+
+The second row is our choice, not Shopify's: Shopify leaves such an order open and refunded unless the
+merchant cancels it. We settle it for them, with `settleOrder` asking `orders`' `markUndeliverable`
+(cause `lost`, the system's, `refund: false` because the remainder cancel already refunded). Nothing
+else runs: no withdrawal or guarantee clock, no `delivered` row, no second refund, no second stock
+release, and no mail (the loss and the refund were already mailed). The `cancelled` row is the
+system's. The `order.cancelled` listeners treat `lost` as no purchase-hold count and no refund.
+
+The move is its own lifecycle constant (`UNDELIVERABLE_EVENT`), not an actor on `cancelInFulfilment`:
+a `system` actor on `processing → cancelled` would let the three existing system cancels match orders
+in fulfilment. The order is retained as "paid, cancelled without delivery" by the PII sweep, not on a
+guarantee clock it never had. A parcel found afterwards answers `DELIVERY_NOT_DELIVERABLE`, and
+`actions.deliver` is false.
+
 ### Owed after a loss, when the shelf is short
 
 The lost units were already taken off the shelf when the parcel shipped, so only what the shelf has

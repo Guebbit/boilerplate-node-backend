@@ -88,9 +88,11 @@ const expectMoved = (moved: OrderDocument | null): void => {
  * | units remain, or nothing shipped | nowhere |
  * | nothing remains, a shipment is still out | `processing → shipped` |
  * | nothing remains, every shipment arrived | `shipped → delivered`, or both at once from `processing` |
+ * | nothing remains, nothing out, nothing ever arrived | `processing → cancelled` (cause `lost`) |
  *
- * The last row from `processing` is the one named double move: a digital fulfilment, or a remainder
- * cancelled after every shipment had already arrived.
+ * The third row from `processing` is the one named double move: a digital fulfilment, or a remainder
+ * cancelled after every shipment had already arrived. The last row is a lost parcel whose remainder
+ * was cancelled and refunded: the order never delivered anything, so it does not claim to have.
  *
  * @param orderId - the order
  * @param status - the order's status as the summary write left it
@@ -114,6 +116,9 @@ export const settleOrder = (
             ? orderService.markShipped(orderId, session, actor).then(expectMoved)
             : Promise.resolve();
 
+    // A digital fulfilment is a shipment born delivered, so `lastDeliveredAt` covers it too.
+    if (status === OrderStatus.processing && !summary.lastDeliveredAt)
+        return orderService.markUndeliverable(orderId, session).then(expectMoved);
     if (status === OrderStatus.processing)
         return orderService.markFulfilmentComplete(orderId, at, session, actor).then(expectMoved);
     if (status === OrderStatus.shipped)
