@@ -17,17 +17,17 @@ import { createHash } from 'node:crypto';
 import { chmod, writeFile } from 'node:fs/promises';
 
 /** The supercronic release to install; bump it together with the digests below. */
-const VERSION = 'v0.2.49';
+const VERSION = 'v0.2.51';
 
 /** Release asset digests, keyed by Node's `process.arch`. */
 const SHA256 = {
     x64: {
         asset: 'amd64',
-        digest: 'a53ae236602c7338aba3fbaff40bda6300eae3b9fedb8261eb06cfe3724430c1'
+        digest: 'cc232108374e8e2b537045f2d5eaa1229f619db314c3ba6a14d38b35dc0aa123'
     },
     arm64: {
         asset: 'arm64',
-        digest: '02aa0cb229ba09050cba6638059dadb9eedc2276632ea43d6a57a2f8c1629dd5'
+        digest: '4ae22576a78223d8ccdf5f3b3660a5cbb5288416bf0ca96afc4a36d195932b94'
     }
 };
 

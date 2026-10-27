@@ -29,21 +29,18 @@ describe('GET /livez', () => {
 });
 
 describe('GET /readyz', () => {
-    it('matches the contract while booting (503, empty body)', async () => {
-        // Runs before `markServerListening` below — `src/app.ts`'s auto-start never fires under
-        // `NODE_ENV=test`, so this file's process starts, and stays, in the 'booting' phase until
-        // a test says otherwise.
-        const response = await api().get('/readyz');
+    // One case walks booting then ready: `src/app.ts`'s auto-start never fires under
+    // `NODE_ENV=test`, so this file's process starts in 'booting', and the phase only moves
+    // forward. Separate cases would pass only in file order.
+    it('matches the contract while booting (503) and once ready (200), empty body both times', async () => {
+        const booting = await api().get('/readyz');
 
-        expect(response.status).toBe(503);
-    });
+        expect(booting.status).toBe(503);
 
-    it('matches the contract once ready (200, empty body)', async () => {
         markServerListening();
+        const ready = await api().get('/readyz');
 
-        const response = await api().get('/readyz');
-
-        expect(response.status).toBe(200);
+        expect(ready.status).toBe(200);
     });
 });
 

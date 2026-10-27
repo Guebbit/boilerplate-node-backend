@@ -139,7 +139,7 @@ so it **skips a database that already holds anything** and exits 0. That is what
 rebuilds on purpose.
 
 A deployment never runs any of it: `docker/deploy.sh <client>` starts the stack and its one-shot
-`setup` runs `npm run deploy:setup`, which is `db:sync` plus `access:bootstrap`, which upserts the shop row and
+`setup` runs `db:sync` and then `access:bootstrap` (the same scripts as `npm run deploy:setup`, started with `node --import tsx` because the image has no npm), which upserts the shop row and
 nothing else, and `scenario:apply` refuses outright unless `NODE_ENV` is `development` or `test`.
 See [Deploy and rollback](./tools/deploy-and-rollback.md).
 

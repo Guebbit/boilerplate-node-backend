@@ -14,7 +14,15 @@ import { resetDomainEvents } from '@kernel/events';
 import { asAdmin, asCustomer, callerContextAs } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
-import { createOrder, forceOrderStatus, toOrderItem } from '@modules/orders/tests/factories';
+import {
+    createOrder,
+    forceOrderStatus,
+    readOrder,
+    timelineOf,
+    toOrderItem
+} from '@modules/orders/tests/factories';
+import { reservationRepository } from '@modules/inventory/tests/factories';
+import { asReject } from '@tests/response';
 import { fulfillmentOrdersOf, shipmentsOf } from '@modules/delivery/tests/factories';
 import { deliveryService } from '@modules/delivery';
 import { OrderStatus } from '@types';
@@ -133,6 +141,84 @@ describe('cancelling what a lost parcel carried', () => {
             reserved: 0,
             available: 9
         });
+    });
+});
+
+/** Cancel what the lost parcel carried, as the buyer does. */
+const cancelRemainder = (parcel: Parcel) =>
+    returnService.createReturn(
+        {
+            orderId: parcel.orderId,
+            reason: 'withdrawal',
+            kind: 'cancellation',
+            fulfillmentOrderId: parcel.fulfillmentOrderId
+        },
+        asCustomer(parcel.user.id),
+        callerContextAs('customer', parcel.user.id)
+    );
+
+describe('settling an order whose every parcel was lost and refunded', () => {
+    it('ends cancelled with cause lost: no clocks, no delivered row, one refund, nothing reserved', async () => {
+        const parcel = await shippedParcel();
+        await lose(parcel);
+
+        await cancelRemainder(parcel);
+
+        const order = await readOrder(parcel.orderId);
+        expect(order?.status).toBe(OrderStatus.cancelled);
+        expect(order?.paymentStatus).toBe('refunded');
+        expect(order?.withdrawUntil).toBeUndefined();
+        expect(order?.conformityUntil).toBeUndefined();
+        const rows = await timelineOf(parcel.orderId);
+        // The one real `shipped` row is the parcel leaving; the settle adds none, nor a `delivered`.
+        expect(rows.filter(({ type }) => type === 'shipped')).toHaveLength(1);
+        expect(rows.some(({ type }) => type === 'delivered')).toBe(false);
+        const cancelledRows = rows.filter(({ type }) => type === 'cancelled');
+        expect(cancelledRows).toHaveLength(1);
+        expect(cancelledRows[0].actor).toBeUndefined();
+        expect(cancelledRows[0].data).toMatchObject({ by: 'system', cause: 'lost', refund: false });
+        expect(await refundsOf(parcel.orderId)).toEqual([{ reason: 'cancellation', amount: 75 }]);
+        expect(await reservationRepository.findByOrderId(parcel.orderId)).toMatchObject({
+            status: 'released'
+        });
+        expect(await countersOf(parcel.shirt._id)).toEqual({
+            onHand: 8,
+            reserved: 0,
+            available: 8
+        });
+    });
+
+    it('answers a parcel found later with DELIVERY_NOT_DELIVERABLE and offers no deliver action', async () => {
+        const parcel = await shippedParcel();
+        await lose(parcel);
+        await cancelRemainder(parcel);
+
+        const view = await deliveryService.getShipment(parcel.shipmentId, asAdmin());
+        const found = await deliveryService.deliverShipment(parcel.shipmentId, asAdmin(), admin);
+
+        expect(view.success && view.data.actions.deliver).toBe(false);
+        expect(asReject(found).errors[0].code).toBe('DELIVERY_NOT_DELIVERABLE');
+    });
+
+    it('stays delivered when another parcel did arrive', async () => {
+        const parcel = await shippedParcel();
+        // The shirts go out again and arrive; only the mug stays lost and is then cancelled.
+        await lose(parcel);
+        await deliveryService.shipFulfillmentOrder(
+            parcel.fulfillmentOrderId,
+            { lines: [{ productId: String(parcel.shirt._id), quantity: 2 }] },
+            asAdmin(),
+            admin
+        );
+        const shipments = await shipmentsOf(parcel.orderId);
+        const replacement = shipments.find(({ status }) => status === 'shipped');
+        await deliveryService.deliverShipment(String(replacement?._id), asAdmin(), admin);
+
+        await cancelRemainder(parcel);
+
+        const order = await readOrder(parcel.orderId);
+        expect(order?.status).toBe(OrderStatus.delivered);
+        expect(order?.withdrawUntil).toBeDefined();
     });
 });
 

@@ -25,7 +25,7 @@ tags:
 # ── Two tiers, and they never merge ──────────────────────────────────────────────────────────
 #
 # TIER 1 — the API's OWN copy. Files under `src/locales/` and `src/modules/*/locales/`, loaded
-# into i18next at boot. It is what `t()` resolves and what `GET /locales/{locale}` serves.
+# into i18next at boot. It is what `t()` resolves and what `GET /locales/{locale}/dictionary` serves.
 # Editable only by a deploy, permanently: it exists to let a client render copy when NO RESPONSE
 # ARRIVES, and putting it behind a database would make it unavailable in exactly the situation it
 # was created for.
@@ -172,7 +172,7 @@ paths:
                                 $ref: '#/components/schemas/LocaleApps'
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /locales/{locale}:
+    /locales/{locale}/dictionary:
         get:
             tags: [Locales]
             summary: API message dictionary
@@ -201,6 +201,38 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/LocaleDictionary'
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /locales/{locale}:
+        get:
+            tags: [Locales]
+            summary: Read a language
+            description: |
+                One language, in the shape `GET /locales` lists it and every write on this URL
+                answers: a merge of what the two tiers know about the tag.
+
+                Answered under the same caller scoping as the list. A registered language that is
+                switched off is `404` to a visitor and shown to a holder of `display:Locale`; a
+                language with only a deployed file is `200` with `source: static`, no `id` or
+                timestamps (it has no row) and every `actions` flag `false`.
+
+                `POST /locales` answers `Location` at this URL, so following it reads what was
+                created.
+            operationId: getLocale
+            security:
+                - {}
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/LocalePathParam'
+            responses:
+                '200':
+                    description: The language
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Language'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         put:
@@ -370,7 +402,7 @@ paths:
             summary: Client message dictionary
             description: |
                 The dynamic dictionary for one language, built from its stored entries into the
-                same nested shape `GET /locales/{locale}` serves — so a client has ONE merge path
+                same nested shape `GET /locales/{locale}/dictionary` serves — so a client has ONE merge path
                 for both tiers rather than two.
 
                 ONE frontend app's rows — the client's own keyspace, the one named by `app`
@@ -998,11 +1030,16 @@ components:
         Language:
             type: object
             additionalProperties: false
-            required: [id, tag, baseLanguage, name, nativeName, direction, active, revision, actions]
+            required: [tag, baseLanguage, name, nativeName, direction, active, apps, source, entryCount, revision, actions]
             description: >-
-                A language registered in the DYNAMIC tier. Its existence means entries can be
-                translated into it and a client can download the result — never that the API can
-                answer a request in it, which is decided by a deployed file and nothing else.
+                One language, as `GET /locales` lists it, `GET /locales/{locale}` reads it and
+                every write on that URL answers it: a merge of whatever the two tiers each know
+                about the tag. A tag present in both appears once, carrying both apps.
+
+                A language that exists only as a deployed file has no row, hence no `id` and no
+                timestamps, and every `actions` flag is `false`. Its existence means entries can
+                be translated into it and a client can download the result — whether the API can
+                answer a request in it is decided by a deployed file and nothing else.
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -1032,57 +1069,16 @@ components:
                     example: Español
                 direction:
                     $ref: '#/components/schemas/LocaleDirection'
-                # Inactive means invisible to every PUBLIC route: never picked for a request, 404 on
-                # the dictionary, and its translated entity text is not served. A registered
-                # language is absent from the visitor manifest; one with a deployed file stays in
-                # it, as `active: false`, so a client that bundles it knows to stop offering it. Staff holding
-                # `display:Locale` still see the manifest row and the dictionary, entity text
-                # can be drafted into it, and its product text is served to them, uncached, when
-                # they ask for it first. It is the state a half-finished translation lives in,
-                # and the state a language must be put into before it can be deleted.
-                active:
-                    type: boolean
-                # Bumped on ANY write to this language's entries, in the same operation as the
-                # write. A client stores the revision it downloaded and re-fetches only when the
-                # manifest reports a higher one. A counter rather than a content hash because a
-                # hash would mean reading and hashing every row of every language on each manifest
-                # request — an O(rows) cost on the most-cached endpoint in the API, to answer a
-                # question a counter answers exactly as well.
-                revision:
-                    type: integer
-                    minimum: 0
-                actions:
-                    $ref: '#/components/schemas/LanguageActions'
-                createdAt:
-                    type: string
-                    format: date-time
-                updatedAt:
-                    type: string
-                    format: date-time
-
-        LocaleCapability:
-            type: object
-            additionalProperties: false
-            required: [tag, name, nativeName, direction, active, apps, source, entryCount, revision, actions]
-            description: >-
-                One language as the manifest describes it: a merge of whatever the two tiers each
-                know about it. A tag present in both appears once, carrying both apps.
-            properties:
-                tag:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
-                name:
-                    type: string
-                    example: Spanish
-                nativeName:
-                    type: string
-                    example: Español
-                direction:
-                    $ref: '#/components/schemas/LocaleDirection'
                 # Whether a VISITOR may select the language — the flag's only job, the same rule
-                # products and users follow. A registered language that is switched off is absent
-                # from a visitor's manifest; one with a deployed file is listed as `false`. An
-                # admin's manifest includes every row. Only a deployed file with no row of its own
-                # is always true: it has no off switch.
+                # products and users follow. Inactive means invisible to every PUBLIC route: never
+                # picked for a request, 404 on the dictionary, and its translated entity text is not
+                # served. A registered language that is switched off is absent from a visitor's
+                # manifest; one with a deployed file is listed as `false`, so a client that bundles
+                # it knows to stop offering it. Staff holding `display:Locale` still see the row and
+                # the dictionary, can draft entity text into it, and are served its product text,
+                # uncached, when they ask for it first. It is the state a half-finished translation
+                # lives in, and the state a language must be put into before it can be deleted. Only
+                # a deployed file with no row of its own is always true: it has no off switch.
                 active:
                     type: boolean
                 apps:
@@ -1104,11 +1100,23 @@ components:
                 entryCount:
                     type: integer
                     minimum: 0
+                # Bumped on ANY write to this language's entries, in the same operation as the
+                # write. A client stores the revision it downloaded and re-fetches only when the
+                # manifest reports a higher one. A counter rather than a content hash because a
+                # hash would mean reading and hashing every row of every language on each manifest
+                # request — an O(rows) cost on the most-cached endpoint in the API, to answer a
+                # question a counter answers exactly as well.
                 revision:
                     type: integer
                     minimum: 0
                 actions:
                     $ref: '#/components/schemas/LanguageActions'
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
 
         LocaleCapabilities:
             type: object
@@ -1122,7 +1130,7 @@ components:
                 locales:
                     type: array
                     items:
-                        $ref: '#/components/schemas/LocaleCapability'
+                        $ref: '#/components/schemas/Language'
                     description: Every language, ordered by tag so the response is stable.
                 default:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'

@@ -26,7 +26,9 @@ import {
     PAYMENT_FAILED,
     PAYMENT_REFUNDED,
     PAYMENT_REFUND_FAILED,
-    PAYMENT_REFUND_REVERSED
+    PAYMENT_REFUND_REVERSED,
+    PAYMENT_DISPUTE_OPENED,
+    PAYMENT_DISPUTE_UPDATED
 } from './events';
 import { paymentsConfig } from './config';
 import { paymentProviderProbe } from './providers';
@@ -77,6 +79,20 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
                 failureReason: payload.failureReason,
                 final: payload.final
             }
+        })
+    },
+    [PAYMENT_DISPUTE_OPENED]: {
+        toPublicEvent: (payload: DomainEventMap[typeof PAYMENT_DISPUTE_OPENED]) => ({
+            eventType: 'payment.dispute_opened',
+            // The domain payload is already the public one: ids, closed codes and money, no free text.
+            data: { ...payload }
+        })
+    },
+    [PAYMENT_DISPUTE_UPDATED]: {
+        toPublicEvent: (payload: DomainEventMap[typeof PAYMENT_DISPUTE_UPDATED]) => ({
+            eventType: 'payment.dispute_updated',
+            // The domain payload is already the public one: ids, closed codes and money, no free text.
+            data: { ...payload }
         })
     },
     [PAYMENT_REFUND_REVERSED]: {

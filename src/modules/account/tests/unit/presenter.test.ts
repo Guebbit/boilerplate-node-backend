@@ -6,7 +6,7 @@
 
 import { Types } from 'mongoose';
 import type { SessionRow } from '../../repository';
-import { presentExportRequest, presentExportSession, presentSession } from '../../presenter';
+import { presentExport, presentExportSession, presentSession } from '../../presenter';
 
 /** A session row with a credential on it, to prove none reaches the wire. */
 const row = {
@@ -50,13 +50,37 @@ describe('presentExportSession', () => {
     });
 });
 
-describe('presentExportRequest', () => {
-    it('answers the export’s id and a build in flight', () => {
-        const id = new Types.ObjectId('64b64b64b64b64b64b64b64c');
+describe('presentExport', () => {
+    const exportRow = {
+        _id: new Types.ObjectId('64b64b64b64b64b64b64b64c'),
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        expiresAt: new Date('2026-01-08T00:00:00Z')
+    };
 
-        expect(presentExportRequest({ _id: id })).toEqual({
+    it('answers the id, the status and when it was asked for', () => {
+        expect(presentExport(exportRow, 'building')).toEqual({
             id: '64b64b64b64b64b64b64b64c',
-            status: 'building'
+            status: 'building',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            actions: { download: false, request: false }
+        });
+    });
+
+    it('names when the file goes only once it is ready', () => {
+        expect(presentExport(exportRow, 'ready')).toMatchObject({
+            expiresAt: '2026-01-08T00:00:00.000Z'
+        });
+        expect(presentExport(exportRow, 'failed')).not.toHaveProperty('expiresAt');
+    });
+
+    it('offers the download only when ready, and a new request unless one is building', () => {
+        expect(presentExport(exportRow, 'ready').actions).toEqual({
+            download: true,
+            request: true
+        });
+        expect(presentExport(exportRow, 'failed').actions).toEqual({
+            download: false,
+            request: true
         });
     });
 });

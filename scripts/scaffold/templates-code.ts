@@ -291,7 +291,8 @@ export const domainIndexFile = (names: ModuleNames): string => `/**
  * and every tier. A module gets a domain/ folder once it has a closed vocabulary with rules of its
  * own.
  * Here: the actions a caller has on a ${names.entityCamel}. The first status, limit or state machine
- * this module grows is written beside it.
+ * this module grows is written beside it: a state machine as an as const event table through
+ * defineLifecycle (see the example module), never as a contract extension.
  *
  * See: docs/theory/domain-layer.md, docs/modules/${names.kebab}.md
  */
@@ -304,7 +305,8 @@ export const domainRulesFile = (names: ModuleNames): string => `/**
  * @module
  * In any module: the rules that decide, with no I/O.
  * Here: what a caller may do to a ${names.entityCamel}. Today that is just their keys; a lifecycle
- * (see the example module) would add one flag per event here, so the client never re-derives it.
+ * (an event table built with defineLifecycle, see the example module) would add one flag per
+ * event here, so the client never re-derives it.
  *
  * See: docs/theory/domain-layer.md, docs/modules/${names.kebab}.md
  */

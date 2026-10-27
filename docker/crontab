@@ -12,42 +12,42 @@
 # No output redirects: supercronic hands each job's stdout/stderr straight to its own
 # (`-passthrough-logs`), which is the container's log stream Promtail ships.
 # Deletes quarantined upload files past their retention window.
-0 2 * * * cd /app && npm run job reap:quarantine
+0 2 * * * cd /app && node --import tsx scripts/ops/run-job.ts reap:quarantine
 # Deletes a stored image or thumbnail no document names, once it is over an hour old.
-3 2 * * * cd /app && npm run job reap:orphaned-images
+3 2 * * * cd /app && node --import tsx scripts/ops/run-job.ts reap:orphaned-images
 # Deletes a spooled email attachment older than its retention window — a mail job died mid-flight.
-30 2 * * * cd /app && npm run job reap:mail-spool
+30 2 * * * cd /app && node --import tsx scripts/ops/run-job.ts reap:mail-spool
 # Publishes every due outbox event — the backstop for the writer's own after-commit nudge.
-* * * * * cd /app && npm run job sweep:outbox
+* * * * * cd /app && node --import tsx scripts/ops/run-job.ts sweep:outbox
 # Minimises an account inactive past NODE_INACTIVE_MINIMISE_DAYS; with deletion turned on, warns, then soft-, then hard-deletes one inactive past NODE_INACTIVE_ACCOUNT_DAYS.
-5 2 * * * cd /app && npm run job reap:inactive-accounts
+5 2 * * * cd /app && node --import tsx scripts/ops/run-job.ts reap:inactive-accounts
 # Forgets the previous email of an account whose undo link has lapsed (sessions and one-time tokens delete themselves at their own expiry date).
-7 2 * * * cd /app && npm run job reap:previous-emails
+7 2 * * * cd /app && node --import tsx scripts/ops/run-job.ts reap:previous-emails
 # Deletes built data exports (file and row) past NODE_ACCOUNT_EXPORT_TTL_DAYS; the account can ask again.
-9 2 * * * cd /app && npm run job reap:account-exports
+9 2 * * * cd /app && node --import tsx scripts/ops/run-job.ts reap:account-exports
 # Erases, cascade included, every account whose owner asked to delete it and whose grace (NODE_ACCOUNT_DELETION_GRACE_DAYS) has run out, then mails the goodbye.
-13 * * * * cd /app && npm run job reap:scheduled-deletions
+13 * * * * cd /app && node --import tsx scripts/ops/run-job.ts reap:scheduled-deletions
 # Unsets a fulfillment order's hold note and a shipment's loss note once they have not changed for their retention window.
-11 2 * * * cd /app && npm run job reap:delivery
+11 2 * * * cd /app && node --import tsx scripts/ops/run-job.ts reap:delivery
 # Tells the buyer of a preorder whose expected date is a day away or gone, with the goods still not here, that it will miss the date, once. It asks nothing and cancels nothing.
-20 2 * * * cd /app && npm run job sweep:preorders
+20 2 * * * cd /app && node --import tsx scripts/ops/run-job.ts sweep:preorders
 # Drains every stale checkout hold (batches of 200) and cancels the order behind each.
-*/5 * * * * cd /app && npm run job sweep:reservations
+*/5 * * * * cd /app && node --import tsx scripts/ops/run-job.ts sweep:reservations
 # Deletes stored invoice and credit-note PDFs past their retention window; the next download renders again.
-8 2 * * * cd /app && npm run job reap:invoice-pdfs
+8 2 * * * cd /app && node --import tsx scripts/ops/run-job.ts reap:invoice-pdfs
 # Blanks an invoice's or credit note's buyer block once its tax retention has ended; the numbered document stays and its cached PDF is deleted.
-14 2 * * * cd /app && npm run job reap:invoices
+14 2 * * * cd /app && node --import tsx scripts/ops/run-job.ts reap:invoices
 # Anonymizes an order's remaining PII once its retention window has passed, and unsets a timeline row's staff text once its own window has.
-10 2 * * * cd /app && npm run job reap:orders
+10 2 * * * cd /app && node --import tsx scripts/ops/run-job.ts reap:orders
 # Deletes abandoned (never-settled) payment attempts past their retention window.
-15 2 * * * cd /app && npm run job reap:payments
+15 2 * * * cd /app && node --import tsx scripts/ops/run-job.ts reap:payments
 # Retries refunds the provider has not answered, and settles unsettled payments whose webhook never arrived.
-*/5 * * * * cd /app && npm run job sweep:payment-effects
+*/5 * * * * cd /app && node --import tsx scripts/ops/run-job.ts sweep:payment-effects
 # Unsets a return's free text (`note`, `declineMessage`) once the return has not changed for its retention window.
-12 2 * * * cd /app && npm run job reap:returns
+12 2 * * * cd /app && node --import tsx scripts/ops/run-job.ts reap:returns
 # Answers waiting back-in-stock requests for a product that can be ordered again without any write announcing it, such as a preorder whose release date passed.
-35 * * * * cd /app && npm run job sweep:stock-alerts
+35 * * * * cd /app && node --import tsx scripts/ops/run-job.ts sweep:stock-alerts
 # Reduces every expired purchase hold to the date that restarts the count of cancellations, dropping its note and who set it.
-12 2 * * * cd /app && npm run job reap:purchase-holds
+12 2 * * * cd /app && node --import tsx scripts/ops/run-job.ts reap:purchase-holds
 # Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.
-* * * * * cd /app && npm run job sweep:webhook-retries
+* * * * * cd /app && node --import tsx scripts/ops/run-job.ts sweep:webhook-retries

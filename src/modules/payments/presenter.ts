@@ -91,7 +91,10 @@ const nextActionOf = (document: PaymentDocument): PaymentNextAction | undefined 
  */
 export const presentPayment = (document: PaymentDocument, staff = false): Payment => {
     const nextAction = nextActionOf(document);
-    const serialized = document.toJSON() as Omit<Payment, 'displayStatus' | 'nextAction'>;
+    const { disputes, ...serialized } = document.toJSON() as Omit<
+        Payment,
+        'displayStatus' | 'nextAction'
+    >;
     const wire = {
         ...serialized,
         // The buyer's half of a refund owed another way: no reason, only that they will be asked.
@@ -104,5 +107,10 @@ export const presentPayment = (document: PaymentDocument, staff = false): Paymen
         displayStatus: displayStatusOf(document),
         ...(nextAction ? { nextAction } : {})
     };
-    return staff ? withStaffFields(wire, staffFieldsOf(document)) : wire;
+    if (!staff) return wire;
+    // The dispute file is the shop's own: a payer is not shown it, and a payment with none omits it.
+    return withStaffFields(
+        { ...wire, ...(disputes && disputes.length > 0 ? { disputes } : {}) },
+        staffFieldsOf(document)
+    );
 };

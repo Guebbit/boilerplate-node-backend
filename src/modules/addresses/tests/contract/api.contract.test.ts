@@ -57,9 +57,12 @@ describe('the address book: /account/addresses', () => {
         const removed = await api()
             .delete(`/account/addresses/${officeId}`)
             .set('Authorization', bearer);
-        expect(removed.status).toBe(200);
+        expect(removed.status).toBe(204);
+        expect(removed.body).toEqual({});
+
         // The promoted survivor keeps the book at exactly one default.
-        expect(removed.body.addresses.map(({ default: d }: { default: boolean }) => d)).toEqual([
+        const after = await api().get('/account/addresses').set('Authorization', bearer);
+        expect(after.body.addresses.map(({ default: d }: { default: boolean }) => d)).toEqual([
             true
         ]);
     });

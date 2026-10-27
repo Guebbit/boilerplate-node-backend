@@ -139,6 +139,7 @@ flowchart LR
 | `expireReservationById`        | `reservation_expired` | system     | the expiry notice      | whatever was paid                     |
 | `cancelForErasureById`         | `erasure`             | system     | nobody                 | whatever was paid                     |
 | `cancelForPaymentMismatchById` | `payment_mismatch`    | system     | nobody                 | whatever was paid                     |
+| `markUndeliverable`            | `lost`                | system     | nobody                 | none: the remainder cancel refunded   |
 
 The one door that serves two actors, `cancelOnRequestById`, resolves which inside the service: a
 caller holding `update:Order` is the operator. The controller never makes that decision. A new
@@ -286,6 +287,7 @@ flowchart LR
     PR -->|"system: the shipment that leaves<br/>nothing remaining"| SH["shipped"]
     SH -->|"system: the last shipment arrives"| DE["delivered"]
     SH -->|"system, the one backward move:<br/>a shipment is reported lost"| PR
+    PR -->|"system: every parcel lost, remainder<br/>cancelled and refunded (cause lost)"| CA
     PR -->|"system: a digital fulfilment, or a<br/>remainder cancelled after every<br/>shipment arrived — both moves at once"| DE
     P -.->|"admin · or an expired hold"| CA["cancelled<br/><i>units released</i>"]
     PA -.->|"admin · refund due"| CA
@@ -308,15 +310,16 @@ override all ASK for a move, never assign the field themselves. See
 
 ## Who writes the status
 
-| Move                                        | Who asks                                                                         | Through                                                                                                                                                                          |
-| ------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pending` → `paid`                          | `system`                                                                         | `payments`' settlement, on confirm                                                                                                                                               |
-| `paid` → `processing`                       | `system`                                                                         | `POST /orders/{id}/process`, `start:Shipment` — a first shipment or fulfil from `paid` makes it too — or `POST /orders/{id}/status-override`, `override:Order`                   |
-| `processing` → `shipped`                    | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/shipments` — only the shipment that leaves **nothing** remaining                                                                         |
-| `shipped` → `delivered`                     | `system`                                                                         | `POST /delivery/shipments/{id}/deliver` — only the last arrival, with nothing left to ship                                                                                       |
-| `shipped` → `processing`                    | `system`                                                                         | `POST /delivery/shipments/{id}/lost` — the `reopen` event, the one backward move; `canOverrideTo` stays forward-only, so no override makes it. `order.status_changed` carries it |
-| `processing` → `delivered`                  | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/fulfill` (digital), or a remainder cancel after every shipment arrived — `markFulfilmentComplete`, the one named double move             |
-| `pending`/`paid`/`processing` → `cancelled` | `customer` (own order, `pending`/`paid` only) or an operator (also `processing`) | `POST /orders/{id}/cancel` — **only while nothing has shipped**, conditional on `fulfillment.shipped` in the write's own filter                                                  |
+| Move                                        | Who asks                                                                         | Through                                                                                                                                                                                                        |
+| ------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pending` → `paid`                          | `system`                                                                         | `payments`' settlement, on confirm                                                                                                                                                                             |
+| `paid` → `processing`                       | `system`                                                                         | `POST /orders/{id}/process`, `start:Shipment` — a first shipment or fulfil from `paid` makes it too — or `POST /orders/{id}/status-override`, `override:Order`                                                 |
+| `processing` → `shipped`                    | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/shipments` — only the shipment that leaves **nothing** remaining                                                                                                       |
+| `shipped` → `delivered`                     | `system`                                                                         | `POST /delivery/shipments/{id}/deliver` — only the last arrival, with nothing left to ship                                                                                                                     |
+| `shipped` → `processing`                    | `system`                                                                         | `POST /delivery/shipments/{id}/lost` — the `reopen` event, the one backward move; `canOverrideTo` stays forward-only, so no override makes it. `order.status_changed` carries it                               |
+| `processing` → `delivered`                  | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/fulfill` (digital), or a remainder cancel after every shipment arrived — `markFulfilmentComplete`, the one named double move                                           |
+| `processing` → `cancelled`                  | `system`                                                                         | `markUndeliverable`: a lost parcel's remainder was cancelled and refunded and nothing ever arrived — cause `lost`, `refund: false`, no clock. Outside the actor table, so the system cancels stay on `pending` |
+| `pending`/`paid`/`processing` → `cancelled` | `customer` (own order, `pending`/`paid` only) or an operator (also `processing`) | `POST /orders/{id}/cancel` — **only while nothing has shipped**, conditional on `fulfillment.shipped` in the write's own filter                                                                                |
 
 ### The fulfilment summary
 
@@ -392,14 +395,12 @@ summary), `shipped`, `fulfilled`. The edges between statuses are not traits; the
 
 A correction the ordinary table above cannot express — a mis-scanned parcel, a shipment recorded
 against the wrong order — needs `override:Order`, a step-up permission granted to `admin` by
-name. Two modes, both requiring a `reason`, both writing a `status_overridden` row on the
-[timeline](#the-timeline) (who, when, from → to, mode, reason):
+name. It needs a `reason` and writes a `status_overridden` row on the
+[timeline](#the-timeline) (who, when, from → to, reason). It never lands on `paid` (that stays
+`system`-only, absolute). Shipping from `paid` is no override: the ship act makes `paid → processing`
+itself, and recording an arrival has no forced variant either.
 
-- **Forced** — `delivery`'s deliver door accepts `forced: true`. The regular operation still runs; the
-  order skips the carrier confirmation and leaves a history row through `recordForcedFulfilment` — a
-  row **without** a move of its own. It never lands on `paid` (that stays `system`-only, absolute).
-  Shipping from `paid` is no override: the ship act makes `paid → processing` itself.
-- **Status-only** — `POST /orders/{id}/status-override` with `{ to, reason }` moves the status
+- `POST /orders/{id}/status-override` with `{ to, reason }` moves the status
   alone, forward to `processing`/`shipped`/`delivered` only. No shipped email — but webhooks still fire,
   since a subscriber's own view of the order genuinely changed.
 

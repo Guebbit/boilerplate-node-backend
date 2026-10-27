@@ -29,8 +29,10 @@ import { paymentModel } from '@modules/payments/model';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 
 /**
- * A one-shot switch: the next `emptyDatabase()` call rejects instead of doing its real work, then
- * un-arms itself. Named `mock*` — `jest.mock` below is hoisted above this file's imports and may
+ * A one-shot switch: the next database step of a restore (`emptyDatabase()` for a scenario that is
+ * not built yet, `restoreDatabaseCopy()` for one already cached) rejects instead of doing its real
+ * work, then un-arms itself. Failing whichever comes first keeps the case independent of which
+ * scenarios an earlier test built. Named `mock*` — `jest.mock` below is hoisted above this file's imports and may
  * only close over identifiers with that prefix (see `tests/integration/two-factor.test.ts`).
  */
 const mockFailNextEmptyDatabase = { armed: false };
@@ -46,11 +48,21 @@ jest.mock('@scenarios/support/database-snapshot', () => {
             if (!mockFailNextEmptyDatabase.armed) return actual.emptyDatabase();
             mockFailNextEmptyDatabase.armed = false;
             return Promise.reject(new Error('emptyDatabase failed on purpose'));
+        },
+        restoreDatabaseCopy: (copy: Parameters<typeof actual.restoreDatabaseCopy>[0]) => {
+            if (!mockFailNextEmptyDatabase.armed) return actual.restoreDatabaseCopy(copy);
+            mockFailNextEmptyDatabase.armed = false;
+            return Promise.reject(new Error('restoreDatabaseCopy failed on purpose'));
         }
     };
 });
 
 setupTestDb();
+
+// Whatever a case left armed must not fail the next scenario build.
+afterEach(() => {
+    mockFailNextEmptyDatabase.armed = false;
+});
 
 // A `shop` build uploads a replacement product picture through the real route — the file is this test's to remove.
 afterAll(emptyFileSandbox);
@@ -128,8 +140,6 @@ describe('POST /__test/restore', () => {
         mockFailNextEmptyDatabase.armed = true;
         const app = testApp();
 
-        // 'blank' rather than 'shop': 'shop' is already cached by the test above, and a cached
-        // restore never calls `emptyDatabase()` again — it would skip the failure this induces.
         const response = await request(app).post('/__test/restore').send({ scenario: 'blank' });
 
         expect(response.status).toBe(500);
@@ -221,6 +231,44 @@ describe('POST /__test/payments/refund-failure', () => {
         const bad = await request(testApp())
             .post('/__test/payments/refund-failure')
             .send({ orderId: '64b64b64b64b64b64b64b64b', reason: 'because' });
+
+        expect(unknown.status).toBe(404);
+        expect(bad.status).toBe(400);
+    });
+});
+
+describe('POST /__test/payments/dispute', () => {
+    it('opens a chargeback for the whole payment, then moves the same dispute along', async () => {
+        const user = await createUser();
+        const order = await createOrder(user, [toOrderItem(await createProduct({ price: 25 }), 2)]);
+        await payByCard(order, user);
+
+        const opened = await request(testApp())
+            .post('/__test/payments/dispute')
+            .send({ orderId: String(order._id) });
+        const lost = await request(testApp())
+            .post('/__test/payments/dispute')
+            .send({ orderId: String(order._id), status: 'lost' });
+
+        expect([opened.status, lost.status]).toEqual([204, 204]);
+        const payment = await paymentModel.findOne({ orderId: order._id });
+        expect(payment?.disputes).toHaveLength(1);
+        expect(payment?.disputes[0]).toMatchObject({
+            disputeRef: 'dp_demo',
+            kind: 'chargeback',
+            status: 'lost',
+            amount: 50,
+            currency: payment?.currency
+        });
+    });
+
+    it('answers 404 for an order without a payment, and 400 for a status it does not know', async () => {
+        const unknown = await request(testApp())
+            .post('/__test/payments/dispute')
+            .send({ orderId: '64b64b64b64b64b64b64b64b' });
+        const bad = await request(testApp())
+            .post('/__test/payments/dispute')
+            .send({ orderId: '64b64b64b64b64b64b64b64b', status: 'because' });
 
         expect(unknown.status).toBe(404);
         expect(bad.status).toBe(400);

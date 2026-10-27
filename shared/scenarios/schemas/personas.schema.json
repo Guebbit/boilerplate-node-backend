@@ -1,0 +1,1219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "staffTotpSecret": {
+      "type": "string",
+      "minLength": 1
+    },
+    "accounts": {
+      "type": "object",
+      "properties": {
+        "admin": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email",
+              "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+            },
+            "username": {
+              "type": "string",
+              "minLength": 1
+            },
+            "defaultPassword": {
+              "type": "string",
+              "minLength": 1
+            },
+            "memberships": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "tenant",
+                      "platform"
+                    ]
+                  },
+                  "role": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "scope",
+                  "role"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "state": {
+              "type": "object",
+              "properties": {
+                "verified": {
+                  "type": "boolean"
+                },
+                "active": {
+                  "type": "boolean"
+                },
+                "twoFactor": {
+                  "type": "boolean"
+                },
+                "authenticator": {
+                  "type": "boolean"
+                },
+                "pendingEmail": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "email",
+                      "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "analyticsConsent": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "verified",
+                "active",
+                "twoFactor",
+                "authenticator",
+                "pendingEmail",
+                "analyticsConsent"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "email",
+            "username",
+            "defaultPassword",
+            "memberships",
+            "state"
+          ],
+          "additionalProperties": false
+        },
+        "user": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email",
+              "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+            },
+            "username": {
+              "type": "string",
+              "minLength": 1
+            },
+            "defaultPassword": {
+              "type": "string",
+              "minLength": 1
+            },
+            "memberships": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "tenant",
+                      "platform"
+                    ]
+                  },
+                  "role": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "scope",
+                  "role"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "state": {
+              "type": "object",
+              "properties": {
+                "verified": {
+                  "type": "boolean"
+                },
+                "active": {
+                  "type": "boolean"
+                },
+                "twoFactor": {
+                  "type": "boolean"
+                },
+                "authenticator": {
+                  "type": "boolean"
+                },
+                "pendingEmail": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "email",
+                      "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "analyticsConsent": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "verified",
+                "active",
+                "twoFactor",
+                "authenticator",
+                "pendingEmail",
+                "analyticsConsent"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "email",
+            "username",
+            "defaultPassword",
+            "memberships",
+            "state"
+          ],
+          "additionalProperties": false
+        },
+        "editor": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email",
+              "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+            },
+            "username": {
+              "type": "string",
+              "minLength": 1
+            },
+            "defaultPassword": {
+              "type": "string",
+              "minLength": 1
+            },
+            "memberships": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "tenant",
+                      "platform"
+                    ]
+                  },
+                  "role": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "scope",
+                  "role"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "state": {
+              "type": "object",
+              "properties": {
+                "verified": {
+                  "type": "boolean"
+                },
+                "active": {
+                  "type": "boolean"
+                },
+                "twoFactor": {
+                  "type": "boolean"
+                },
+                "authenticator": {
+                  "type": "boolean"
+                },
+                "pendingEmail": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "email",
+                      "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "analyticsConsent": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "verified",
+                "active",
+                "twoFactor",
+                "authenticator",
+                "pendingEmail",
+                "analyticsConsent"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "email",
+            "username",
+            "defaultPassword",
+            "memberships",
+            "state"
+          ],
+          "additionalProperties": false
+        },
+        "moderator": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email",
+              "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+            },
+            "username": {
+              "type": "string",
+              "minLength": 1
+            },
+            "defaultPassword": {
+              "type": "string",
+              "minLength": 1
+            },
+            "memberships": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "tenant",
+                      "platform"
+                    ]
+                  },
+                  "role": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "scope",
+                  "role"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "state": {
+              "type": "object",
+              "properties": {
+                "verified": {
+                  "type": "boolean"
+                },
+                "active": {
+                  "type": "boolean"
+                },
+                "twoFactor": {
+                  "type": "boolean"
+                },
+                "authenticator": {
+                  "type": "boolean"
+                },
+                "pendingEmail": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "email",
+                      "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "analyticsConsent": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "verified",
+                "active",
+                "twoFactor",
+                "authenticator",
+                "pendingEmail",
+                "analyticsConsent"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "email",
+            "username",
+            "defaultPassword",
+            "memberships",
+            "state"
+          ],
+          "additionalProperties": false
+        },
+        "unverified": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email",
+              "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+            },
+            "username": {
+              "type": "string",
+              "minLength": 1
+            },
+            "defaultPassword": {
+              "type": "string",
+              "minLength": 1
+            },
+            "memberships": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "tenant",
+                      "platform"
+                    ]
+                  },
+                  "role": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "scope",
+                  "role"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "state": {
+              "type": "object",
+              "properties": {
+                "verified": {
+                  "type": "boolean"
+                },
+                "active": {
+                  "type": "boolean"
+                },
+                "twoFactor": {
+                  "type": "boolean"
+                },
+                "authenticator": {
+                  "type": "boolean"
+                },
+                "pendingEmail": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "email",
+                      "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "analyticsConsent": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "verified",
+                "active",
+                "twoFactor",
+                "authenticator",
+                "pendingEmail",
+                "analyticsConsent"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "email",
+            "username",
+            "defaultPassword",
+            "memberships",
+            "state"
+          ],
+          "additionalProperties": false
+        },
+        "twoFactor": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email",
+              "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+            },
+            "username": {
+              "type": "string",
+              "minLength": 1
+            },
+            "defaultPassword": {
+              "type": "string",
+              "minLength": 1
+            },
+            "memberships": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "tenant",
+                      "platform"
+                    ]
+                  },
+                  "role": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "scope",
+                  "role"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "state": {
+              "type": "object",
+              "properties": {
+                "verified": {
+                  "type": "boolean"
+                },
+                "active": {
+                  "type": "boolean"
+                },
+                "twoFactor": {
+                  "type": "boolean"
+                },
+                "authenticator": {
+                  "type": "boolean"
+                },
+                "pendingEmail": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "email",
+                      "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "analyticsConsent": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "verified",
+                "active",
+                "twoFactor",
+                "authenticator",
+                "pendingEmail",
+                "analyticsConsent"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "email",
+            "username",
+            "defaultPassword",
+            "memberships",
+            "state"
+          ],
+          "additionalProperties": false
+        },
+        "pendingEmail": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email",
+              "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+            },
+            "username": {
+              "type": "string",
+              "minLength": 1
+            },
+            "defaultPassword": {
+              "type": "string",
+              "minLength": 1
+            },
+            "memberships": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "tenant",
+                      "platform"
+                    ]
+                  },
+                  "role": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "scope",
+                  "role"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "state": {
+              "type": "object",
+              "properties": {
+                "verified": {
+                  "type": "boolean"
+                },
+                "active": {
+                  "type": "boolean"
+                },
+                "twoFactor": {
+                  "type": "boolean"
+                },
+                "authenticator": {
+                  "type": "boolean"
+                },
+                "pendingEmail": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "email",
+                      "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "analyticsConsent": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "verified",
+                "active",
+                "twoFactor",
+                "authenticator",
+                "pendingEmail",
+                "analyticsConsent"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "email",
+            "username",
+            "defaultPassword",
+            "memberships",
+            "state"
+          ],
+          "additionalProperties": false
+        },
+        "banned": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email",
+              "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+            },
+            "username": {
+              "type": "string",
+              "minLength": 1
+            },
+            "defaultPassword": {
+              "type": "string",
+              "minLength": 1
+            },
+            "memberships": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "tenant",
+                      "platform"
+                    ]
+                  },
+                  "role": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "scope",
+                  "role"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "state": {
+              "type": "object",
+              "properties": {
+                "verified": {
+                  "type": "boolean"
+                },
+                "active": {
+                  "type": "boolean"
+                },
+                "twoFactor": {
+                  "type": "boolean"
+                },
+                "authenticator": {
+                  "type": "boolean"
+                },
+                "pendingEmail": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "email",
+                      "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "analyticsConsent": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "verified",
+                "active",
+                "twoFactor",
+                "authenticator",
+                "pendingEmail",
+                "analyticsConsent"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "email",
+            "username",
+            "defaultPassword",
+            "memberships",
+            "state"
+          ],
+          "additionalProperties": false
+        },
+        "secondShopper": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email",
+              "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+            },
+            "username": {
+              "type": "string",
+              "minLength": 1
+            },
+            "defaultPassword": {
+              "type": "string",
+              "minLength": 1
+            },
+            "memberships": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "tenant",
+                      "platform"
+                    ]
+                  },
+                  "role": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "scope",
+                  "role"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "state": {
+              "type": "object",
+              "properties": {
+                "verified": {
+                  "type": "boolean"
+                },
+                "active": {
+                  "type": "boolean"
+                },
+                "twoFactor": {
+                  "type": "boolean"
+                },
+                "authenticator": {
+                  "type": "boolean"
+                },
+                "pendingEmail": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "email",
+                      "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "analyticsConsent": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "verified",
+                "active",
+                "twoFactor",
+                "authenticator",
+                "pendingEmail",
+                "analyticsConsent"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "email",
+            "username",
+            "defaultPassword",
+            "memberships",
+            "state"
+          ],
+          "additionalProperties": false
+        },
+        "manager": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email",
+              "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+            },
+            "username": {
+              "type": "string",
+              "minLength": 1
+            },
+            "defaultPassword": {
+              "type": "string",
+              "minLength": 1
+            },
+            "memberships": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "tenant",
+                      "platform"
+                    ]
+                  },
+                  "role": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "scope",
+                  "role"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "state": {
+              "type": "object",
+              "properties": {
+                "verified": {
+                  "type": "boolean"
+                },
+                "active": {
+                  "type": "boolean"
+                },
+                "twoFactor": {
+                  "type": "boolean"
+                },
+                "authenticator": {
+                  "type": "boolean"
+                },
+                "pendingEmail": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "email",
+                      "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "analyticsConsent": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "verified",
+                "active",
+                "twoFactor",
+                "authenticator",
+                "pendingEmail",
+                "analyticsConsent"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "email",
+            "username",
+            "defaultPassword",
+            "memberships",
+            "state"
+          ],
+          "additionalProperties": false
+        },
+        "warehouse": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email",
+              "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+            },
+            "username": {
+              "type": "string",
+              "minLength": 1
+            },
+            "defaultPassword": {
+              "type": "string",
+              "minLength": 1
+            },
+            "memberships": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "tenant",
+                      "platform"
+                    ]
+                  },
+                  "role": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "scope",
+                  "role"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "state": {
+              "type": "object",
+              "properties": {
+                "verified": {
+                  "type": "boolean"
+                },
+                "active": {
+                  "type": "boolean"
+                },
+                "twoFactor": {
+                  "type": "boolean"
+                },
+                "authenticator": {
+                  "type": "boolean"
+                },
+                "pendingEmail": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "email",
+                      "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "analyticsConsent": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "verified",
+                "active",
+                "twoFactor",
+                "authenticator",
+                "pendingEmail",
+                "analyticsConsent"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "email",
+            "username",
+            "defaultPassword",
+            "memberships",
+            "state"
+          ],
+          "additionalProperties": false
+        },
+        "support": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email",
+              "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+            },
+            "username": {
+              "type": "string",
+              "minLength": 1
+            },
+            "defaultPassword": {
+              "type": "string",
+              "minLength": 1
+            },
+            "memberships": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "tenant",
+                      "platform"
+                    ]
+                  },
+                  "role": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "scope",
+                  "role"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "state": {
+              "type": "object",
+              "properties": {
+                "verified": {
+                  "type": "boolean"
+                },
+                "active": {
+                  "type": "boolean"
+                },
+                "twoFactor": {
+                  "type": "boolean"
+                },
+                "authenticator": {
+                  "type": "boolean"
+                },
+                "pendingEmail": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "email",
+                      "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "analyticsConsent": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "verified",
+                "active",
+                "twoFactor",
+                "authenticator",
+                "pendingEmail",
+                "analyticsConsent"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "email",
+            "username",
+            "defaultPassword",
+            "memberships",
+            "state"
+          ],
+          "additionalProperties": false
+        },
+        "operator": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email",
+              "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+            },
+            "username": {
+              "type": "string",
+              "minLength": 1
+            },
+            "defaultPassword": {
+              "type": "string",
+              "minLength": 1
+            },
+            "memberships": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "tenant",
+                      "platform"
+                    ]
+                  },
+                  "role": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "scope",
+                  "role"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "state": {
+              "type": "object",
+              "properties": {
+                "verified": {
+                  "type": "boolean"
+                },
+                "active": {
+                  "type": "boolean"
+                },
+                "twoFactor": {
+                  "type": "boolean"
+                },
+                "authenticator": {
+                  "type": "boolean"
+                },
+                "pendingEmail": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "email",
+                      "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "analyticsConsent": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "verified",
+                "active",
+                "twoFactor",
+                "authenticator",
+                "pendingEmail",
+                "analyticsConsent"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "email",
+            "username",
+            "defaultPassword",
+            "memberships",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "admin",
+        "user",
+        "editor",
+        "moderator",
+        "unverified",
+        "twoFactor",
+        "pendingEmail",
+        "banned",
+        "secondShopper",
+        "manager",
+        "warehouse",
+        "support",
+        "operator"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "staffTotpSecret",
+    "accounts"
+  ],
+  "additionalProperties": false
+}

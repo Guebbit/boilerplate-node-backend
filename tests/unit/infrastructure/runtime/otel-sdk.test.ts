@@ -30,7 +30,9 @@ import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { asStub } from '@tests/stub';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { NoopSpanProcessor } from '@opentelemetry/sdk-trace';
+import packageJson from '../../../../package.json';
 import {
+    SERVICE_VERSION,
     buildProcessors,
     linkInboundTrace,
     publicEndpointPropagator,
@@ -215,5 +217,12 @@ describe('otel-sdk — linkInboundTrace', () => {
         );
 
         expect(addLink).not.toHaveBeenCalled();
+    });
+});
+
+describe('otel-sdk — SERVICE_VERSION', () => {
+    it('is the version package.json declares, not an npm-injected variable', () => {
+        expect(SERVICE_VERSION).toBe(packageJson.version);
+        expect(SERVICE_VERSION).not.toBe('0.0.0');
     });
 });

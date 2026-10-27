@@ -9,6 +9,7 @@
  */
 
 import { OrderStatus } from '@types';
+import { defineLifecycle } from '@domain-primitives/lifecycle';
 import type { OrderActions } from '@types';
 import { ORDER_STATUS_TRAITS } from './status-traits';
 
@@ -87,11 +88,26 @@ export const ORDER_EVENTS = {
     }
 } as const satisfies Record<string, OrderEvent>;
 
+/**
+ * The settlement of a lost parcel nobody reshipped: `processing -> cancelled`, written by the
+ * system as cause `lost`. Deliberately NOT in {@link ORDER_EVENTS}: a `system` actor on that
+ * edge would make `statusesLeadingTo(cancelled, 'system')` include `processing`, and the three
+ * system cancels (`cancel()` reads that column) would start matching orders in fulfilment. Its
+ * one door, `markUndeliverable`, filters on this `from` itself.
+ */
+export const UNDELIVERABLE_EVENT = {
+    from: [OrderStatus.processing],
+    to: OrderStatus.cancelled
+} as const satisfies Omit<OrderEvent, 'actors'>;
+
 /** The name of one lifecycle event. */
 export type OrderEventName = keyof typeof ORDER_EVENTS;
 
-/** Every event, as a list — what the edge queries below walk. */
-const EVERY_EVENT: readonly OrderEvent[] = Object.values(ORDER_EVENTS);
+/** The table, checked once at load and turned into the edge queries below. */
+const lifecycle = defineLifecycle<OrderStatus, OrderEventName, OrderActor>(
+    Object.values(OrderStatus),
+    { initial: OrderStatus.pending, events: ORDER_EVENTS }
+);
 
 /**
  * @param from - current status
@@ -102,9 +118,7 @@ const EVERY_EVENT: readonly OrderEvent[] = Object.values(ORDER_EVENTS);
  * `from` filter, not by this table.
  */
 export const canTransition = (from: OrderStatus, to: OrderStatus, actor: OrderActor): boolean =>
-    EVERY_EVENT.some(
-        (event) => event.to === to && event.from.includes(from) && event.actors.includes(actor)
-    );
+    lifecycle.canTransition(from, to, actor);
 
 /**
  * Whether an order in `status` may still be paid — the one question every payment door asks

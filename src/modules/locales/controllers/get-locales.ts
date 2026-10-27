@@ -1,15 +1,15 @@
 /**
  * @module
- * `GET /locales` and `GET /locales/:locale` controllers — the manifest, over
- * `localeService.listCapabilities`, and the API's own filesystem dictionary.
+ * `GET /locales`, `GET /locales/:locale` and `GET /locales/:locale/dictionary` controllers — the
+ * manifest and one of its rows, over `localeService`, and the API's own filesystem dictionary.
  */
 
 import type { Request, Response } from 'express';
-import type { LocaleCapabilities, LocaleDictionary } from '@types';
+import type { Language, LocaleCapabilities, LocaleDictionary } from '@types';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { hasServedDictionary, readLocaleDictionary, t } from '@infrastructure/i18n';
 import { localeService } from '../services';
-import { catchAs } from '@infrastructure/http/controller';
+import { catchAs, refused } from '@infrastructure/http/controller';
 
 /**
  * GET /locales
@@ -30,6 +30,24 @@ export const getLocales = (request: Request, response: Response) =>
 
 /**
  * GET /locales/:locale
+ * One language, as the list shows it, under the same caller scoping and standing.
+ */
+export const getLocale = (request: Request<{ locale: string }>, response: Response) =>
+    localeService
+        .readLanguage(
+            request.params.locale,
+            localeService.callerScope(request.caller),
+            localeService.readStanding(request.caller)
+        )
+        .then((result) => {
+            if (refused(response, result)) return;
+
+            return successResponse<Language>(response, result.data);
+        })
+        .catch(catchAs(response, 'getLocale'));
+
+/**
+ * GET /locales/:locale/dictionary
  * This API's own dictionary for one language — its ~60 message keys, nothing else.
  * Separate keyspace from client UI copy (`GET /locales/:locale/messages`, database-backed);
  * this one reads the filesystem, since it exists for the outage where that route is not.

@@ -2,8 +2,8 @@
  * @module
  * The scenario registries, generated from the file tree instead of listed by hand.
  *
- * Owns:    `scenarios/shop-modules.generated.ts`, `scenarios/scenarios.generated.ts` and
- *          `scenarios/support/doubles/modules.generated.ts`.
+ * Owns:    `scenarios/shop-modules.generated.ts`, `scenarios/scenarios.generated.ts`,
+ *          `scenarios/support/doubles/modules.generated.ts` and `scenarios/support/doubles/levers.generated.ts`.
  * Reads:   the file names and one `export const` line per file — never its body.
  * Why:     removing a module (or the whole shop) is then only deleting files; the next generation
  *          drops what is gone. No edit has to match text a person may have reworded.
@@ -15,6 +15,7 @@
  * | `scenarios/<module>.ts`                      | `shopModule`              | `shopModuleFixtures`    |
  * | `scenarios/<name>.scenario.ts`               | `scenario`                | `scenarioFixtures`      |
  * | `scenarios/support/doubles/<module>/register.ts` | `registerDouble`      | `registerModuleDoubles` |
+ * | `scenarios/support/doubles/<module>/levers.ts`   | `installLever`        | `installModuleLevers`   |
  *
  * See: docs/tools/demo-profile.md#how-a-scenario-is-built
  */
@@ -37,6 +38,9 @@ export const SCENARIO_REGISTRY = 'scenarios/scenarios.generated.ts';
 
 /** The registry of per-module test doubles, relative to the repo root. */
 export const DOUBLES_REGISTRY = 'scenarios/support/doubles/modules.generated.ts';
+
+/** The registry of per-module demo levers, relative to the repo root. */
+export const LEVERS_REGISTRY = 'scenarios/support/doubles/levers.generated.ts';
 
 /** The notice every generated file opens with. */
 const HEADER = `/**
@@ -171,6 +175,42 @@ const renderDoublesRegistry = (repoRoot: string): string => {
 };
 
 /**
+ * The levers registry: one call per module folder that carries a levers file.
+ * @param repoRoot - the checkout to read
+ */
+const renderLeversRegistry = (repoRoot: string): string => {
+    const doubles = path.join(repoRoot, 'scenarios', 'support', 'doubles');
+    const folders = existsSync(doubles)
+        ? readdirSync(doubles, { withFileTypes: true })
+              .filter((entry) => entry.isDirectory())
+              .map((entry) => entry.name)
+              .filter((name) => declares(path.join(doubles, name, 'levers.ts'), 'installLever'))
+              .toSorted()
+        : [];
+
+    return [
+        HEADER,
+        "import type { Express } from 'express';",
+        ...folders.map(
+            (name) => `import { installLever as ${identifier(name)}Lever } from './${name}/levers';`
+        ),
+        '',
+        '/** The `installLever` of each module that has a folder here. */',
+        `const levers: readonly ((app: Express) => void)[] = [${folders.map((name) => `${identifier(name)}Lever`).join(', ')}];`,
+        '',
+        '/**',
+        " * Mounts the demo levers of every module that has a folder here. Called by `../demo.ts`'s",
+        ' * `installDemo`; deleting a module deletes its folder, and the next generation drops its entry.',
+        ' * @param app - the application being assembled',
+        ' */',
+        'export const installModuleLevers = (app: Express): void => {',
+        '    for (const install of levers) install(app);',
+        '};',
+        ''
+    ].join('\n');
+};
+
+/**
  * What the registries should hold for the tree at `repoRoot`, formatted the way `prettier:check`
  * wants it.
  * @param repoRoot - the checkout to read
@@ -187,7 +227,8 @@ export const renderScenarioRegistries = (
             [
                 { file: FIXTURE_REGISTRY, content: renderFixtureRegistry(repoRoot) },
                 { file: SCENARIO_REGISTRY, content: renderScenarioRegistry(repoRoot) },
-                { file: DOUBLES_REGISTRY, content: renderDoublesRegistry(repoRoot) }
+                { file: DOUBLES_REGISTRY, content: renderDoublesRegistry(repoRoot) },
+                { file: LEVERS_REGISTRY, content: renderLeversRegistry(repoRoot) }
             ].map(({ file, content }) =>
                 format(repoRoot, path.join(repoRoot, file), content).then((formatted) => ({
                     file,

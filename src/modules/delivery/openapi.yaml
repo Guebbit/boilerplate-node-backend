@@ -9,7 +9,6 @@ tags:
       description: Fulfilling an order — the fulfillment orders it splits into, and the shipments that leave.
 
 x-error-codes:
-    DELIVERY_OVERRIDE_REASON_REQUIRED: { status: 422, description: 'A forced shipment or delivery requires a reason and none was supplied.' }
     DELIVERY_LINES_INVALID: { status: 422, description: 'A shipment line names a product that is not on the fulfillment order, asks for more than remains of it, or names the same product twice.' }
     DELIVERY_NOT_SHIPPABLE: { status: 409, description: 'The fulfillment order cannot ship now: it is on hold, closed or cancelled, or the order is cancelled, or still `pending` (never paid: start or pay it first).' }
     DELIVERY_NOT_PHYSICAL: { status: 409, description: 'A digital fulfillment order has nothing to ship (fulfil it instead), and a digital shipment has no tracking code to set.' }
@@ -371,12 +370,22 @@ paths:
                 order to `processing` itself, in the same transaction, so it also needs `start:Shipment`
                 (403 without it); `POST /orders/{id}/process` stays as an optional "mark in progress".
                 Never ships from `on_hold`.
+
+                There is no list at this path: an order's shipments are listed by
+                `GET /orders/{id}/shipments`, and one by `GET /delivery/shipments/{id}`.
+
+
+                Send an `Idempotency-Key`: a partial ship creates a NEW shipment, so a retry without one
+                (a dropped connection, a double click) would cut a second parcel and take the stock twice.
+                The same key replays the first answer; a 409 means the first request is still running, a
+                422 means the key was reused with another body.
             operationId: shipFulfillmentOrder
             security:
                 - bearerAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                   description: The fulfillment order to ship from
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
                 required: false
                 content:
@@ -410,15 +419,21 @@ paths:
                 remaining and nothing undelivered the order moves to `delivered`, its withdrawal
                 clock counted from payment (digital content, Art. 9(2)(c)). Works from `paid` too: it
                 moves the order to `processing` itself, so it also needs `start:Shipment` (403 without it).
+                Answers like the create it is: 201 with `Location` pointing at the new shipment. Send an
+                `Idempotency-Key`, as for shipping (a 409 is the first request still running, a 422 the key
+                reused with another body).
             operationId: fulfillFulfillmentOrder
             security:
                 - bearerAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                   description: The digital fulfillment order to fulfil
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             responses:
-                '200':
+                '201':
                     description: The shipment, already delivered
+                    headers:
+                        Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
                     content:
                         application/json:
                             schema:
@@ -427,6 +442,7 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /delivery/fulfillment-orders/{id}/hold:
@@ -554,8 +570,9 @@ paths:
             description: >-
                 Stamps the shipment delivered. The order moves `shipped → delivered` when this was
                 the last undelivered shipment and nothing remains to ship; its withdrawal clock then
-                starts from the LAST delivery (CRD Art. 9(2)(b)(i)). Refuses a shipment already
-                delivered with `DELIVERY_NOT_DELIVERABLE`.
+                starts from the LAST delivery (CRD Art. 9(2)(b)(i)). Only a `shipped` shipment can be
+                delivered, or a `lost` one that turns up (below): any other answers
+                `DELIVERY_NOT_DELIVERABLE`.
 
 
                 A `lost` shipment that turns up is accepted too, but only while every unit on it is
@@ -570,12 +587,6 @@ paths:
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                   description: The shipment that arrived
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/DeliverShipmentRequest'
             responses:
                 '200':
                     description: The shipment
@@ -587,7 +598,6 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
-                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /delivery/shipments/{id}/lost:
@@ -870,19 +880,12 @@ components:
         ShipmentActions:
             type: object
             additionalProperties: false
-            required: [deliver, forceDeliver, update, markLost]
+            required: [deliver, update, markLost]
             description: What the requesting caller may do to this shipment, decided by the server.
             properties:
                 deliver:
                     type: boolean
                     description: Whether `POST /delivery/shipments/{id}/deliver` would be accepted — still `shipped`, or `lost` with every unit on it still open (see the operation).
-                forceDeliver:
-                    type: boolean
-                    description: >-
-                        Whether `POST /delivery/shipments/{id}/deliver` with `forced: true` would be
-                        accepted: the arrival is open (as for `deliver`) and the caller also holds
-                        `override:Order`. True beside `deliver`, not instead of it: forcing records the
-                        arrival without a carrier confirmation and needs a `reason`.
                 update:
                     type: boolean
                     description: Whether `PATCH /delivery/shipments/{id}` (the tracking code) would be accepted — any physical shipment, shipped, delivered or lost.
@@ -1091,19 +1094,6 @@ components:
                     maxLength: 100
                     minLength: 1
                     description: The carrier's handle on the parcel. Optional — for a tracked method, add it now or later with `PATCH /delivery/shipments/{id}`.
-
-        DeliverShipmentRequest:
-            type: object
-            additionalProperties: false
-            properties:
-                forced:
-                    type: boolean
-                    description: Record the arrival without a carrier confirmation — the caller must hold `override:Order`, and `reason` is then required.
-                reason:
-                    type: string
-                    maxLength: 1000
-                    minLength: 1
-                    description: Required exactly when `forced` is `true`.
 
         MarkShipmentLostRequest:
             type: object

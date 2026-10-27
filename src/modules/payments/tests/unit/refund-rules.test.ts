@@ -3,10 +3,13 @@
  * The pure refund rules added by staff's instruments: which refunds are still open, which may be
  * voided, and the legal deadline of a refund that pays for a withdrawal or a return.
  */
-import { RefundFailureReason, RefundStatus } from '@types';
+import { DisputeKind, DisputeStatus, RefundFailureReason, RefundStatus } from '@types';
 import {
     exceedsRemaining,
+    hasOpenChargeback,
+    hasOpenDispute,
     isOpenRefund,
+    lostToChargebacks,
     mayBeCanceled,
     mayBeSettledByHand,
     refundDueBy
@@ -135,5 +138,87 @@ describe('refundDueBy', () => {
 
     it('is absent for a refund that pays no return', () => {
         expect(refundDueBy({ createdAt })).toBeUndefined();
+    });
+});
+
+/** A chargeback of `amount` (100.00 unless said) in the given state. */
+const chargeback = (status: DisputeStatus, amount = 100) => ({
+    kind: DisputeKind.chargeback,
+    status,
+    amount,
+    currency: 'EUR'
+});
+
+/** An inquiry of 100.00 in the given state. */
+const inquiry = (status: DisputeStatus) => ({
+    kind: DisputeKind.inquiry,
+    status,
+    amount: 100,
+    currency: 'EUR'
+});
+
+describe('the dispute rules', () => {
+    it('closes the refund door for an open chargeback only, not for an inquiry', () => {
+        expect(hasOpenChargeback({ disputes: [chargeback(DisputeStatus.needs_response)] })).toBe(
+            true
+        );
+        expect(hasOpenChargeback({ disputes: [chargeback(DisputeStatus.under_review)] })).toBe(
+            true
+        );
+        expect(hasOpenChargeback({ disputes: [inquiry(DisputeStatus.needs_response)] })).toBe(
+            false
+        );
+        expect(hasOpenChargeback({ disputes: [chargeback(DisputeStatus.won)] })).toBe(false);
+        expect(hasOpenChargeback({})).toBe(false);
+    });
+
+    it('counts any open dispute, inquiry included, for the list filter', () => {
+        expect(hasOpenDispute({ disputes: [inquiry(DisputeStatus.needs_response)] })).toBe(true);
+        expect(hasOpenDispute({ disputes: [inquiry(DisputeStatus.closed)] })).toBe(false);
+    });
+
+    it('takes only lost or accepted chargebacks off what can be refunded', () => {
+        const taken = (disputes: ReturnType<typeof chargeback>[]) =>
+            lostToChargebacks({ disputes }, 'EUR');
+        expect(taken([chargeback(DisputeStatus.lost, 40)])).toBe(4000);
+        expect(
+            taken([chargeback(DisputeStatus.accepted, 40), chargeback(DisputeStatus.lost, 10)])
+        ).toBe(5000);
+        expect(
+            taken([chargeback(DisputeStatus.won, 40), chargeback(DisputeStatus.needs_response)])
+        ).toBe(0);
+        expect(lostToChargebacks({ disputes: [{ ...inquiry(DisputeStatus.lost) }] }, 'EUR')).toBe(
+            0
+        );
+    });
+
+    describe('a refund refused as disputed', () => {
+        const card = paymentOn('stripe');
+        const refused = refundIn({
+            status: RefundStatus.failed,
+            failureReason: RefundFailureReason.disputed
+        });
+
+        it('is not settled by hand while the chargeback is open', () => {
+            const open = { ...card, disputes: [chargeback(DisputeStatus.needs_response)] };
+            expect(mayBeSettledByHand(open, refused)).toBe(false);
+            expect(mayBeCanceled(open, refused)).toBe(false);
+        });
+
+        it('is settled by hand once a lost chargeback covers it (the bank paid the buyer)', () => {
+            const lost = { ...card, disputes: [chargeback(DisputeStatus.lost, 30)] };
+            expect(mayBeSettledByHand(lost, refused)).toBe(true);
+        });
+
+        it('is not settled by hand when the lost chargeback is smaller than the refund', () => {
+            const lost = { ...card, disputes: [chargeback(DisputeStatus.lost, 29.99)] };
+            expect(mayBeSettledByHand(lost, refused)).toBe(false);
+        });
+
+        it('may be voided, not settled, once the shop won', () => {
+            const won = { ...card, disputes: [chargeback(DisputeStatus.won)] };
+            expect(mayBeSettledByHand(won, refused)).toBe(false);
+            expect(mayBeCanceled(won, refused)).toBe(true);
+        });
     });
 });

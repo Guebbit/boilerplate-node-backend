@@ -10,6 +10,7 @@
 import { OrderStatus } from '@types';
 import {
     ORDER_EVENTS,
+    UNDELIVERABLE_EVENT,
     canTransition,
     canOverrideTo,
     isPayable,
@@ -88,6 +89,14 @@ describe('the named events', () => {
             to: OrderStatus.delivered,
             actors: ['system']
         });
+    });
+
+    it('keeps the lost-parcel settlement out of the actor table, so the system cancels stay on pending', () => {
+        expect(UNDELIVERABLE_EVENT).toEqual({
+            from: [OrderStatus.processing],
+            to: OrderStatus.cancelled
+        });
+        expect(statusesLeadingTo(OrderStatus.cancelled, 'system')).toEqual([OrderStatus.pending]);
     });
 
     it('keeps the expiry apart from every cancel an order that landed a payment may take', () => {

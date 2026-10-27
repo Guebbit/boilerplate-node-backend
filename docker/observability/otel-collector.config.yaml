@@ -26,7 +26,7 @@ connectors:
     # Without this nothing produces those series, and the `serviceMap` setting in
     # `grafana.datasources.yaml` points at a Prometheus that has never held a single one of them —
     # the tab renders empty with no indication that the metrics were never generated.
-    servicegraph:
+    service_graph:
         # Where the *derived metrics* are sent (a pipeline name below), not where traces go.
         latency_histogram_buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]
         store:
@@ -37,7 +37,7 @@ connectors:
 
 exporters:
     # Send traces to Tempo over the internal Docker network.
-    otlp/tempo:
+    otlp_grpc/tempo:
         endpoint: tempo:4317
         tls:
             # Internal local stack; no TLS termination between collector and Tempo.
@@ -65,9 +65,18 @@ service:
     # 0.0.0.0 draws the same "exposes this server to every network interface" warning the OTLP
     # receivers above already draw, and for the same reason it is acceptable here: nothing in this
     # compose stack is published outside the host.
+    #
+    # `readers` is the collector's own metrics reader (the `address:` shorthand was removed in
+    # 0.162): a pull reader serves the Prometheus exposition on :8888.
+    # https://opentelemetry.io/docs/collector/internal-telemetry/
     telemetry:
         metrics:
-            address: 0.0.0.0:8888
+            readers:
+                - pull:
+                      exporter:
+                          prometheus:
+                              host: 0.0.0.0
+                              port: 8888
 
     pipelines:
         # Trace pipeline: receive OTLP -> batch -> store in Tempo, and fork the same spans into
@@ -76,9 +85,9 @@ service:
         traces:
             receivers: [otlp]
             processors: [batch]
-            exporters: [otlp/tempo, servicegraph]
+            exporters: [otlp_grpc/tempo, service_graph]
 
         # Metrics pipeline: the connector's output, published for Prometheus to scrape.
         metrics/servicegraph:
-            receivers: [servicegraph]
+            receivers: [service_graph]
             exporters: [prometheus]

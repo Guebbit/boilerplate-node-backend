@@ -136,10 +136,9 @@ sequenceDiagram
 
 `delivery` never assigns `order.status` itself — `markShipped`/`markDelivered`/`markFulfilmentComplete`
 (`services/status.ts`) are the ordinary doors, each taking the act's own session so the move commits with
-the shipment. A `forced` shipment skips a step but writes the same moves and leaves its history row
-through `recordForcedFulfilment`. A third door, `overrideStatus`, moves the status alone and
+the shipment. A second door, `overrideStatus`, moves the status alone and
 announces it, so `delivery` keeps its records in step — see
-[Who writes the status](../modules/orders.md#who-writes-the-status) for all three.
+[Who writes the status](../modules/orders.md#who-writes-the-status) for both.
 
 ### The actor is part of the table, not beside it
 
@@ -218,9 +217,16 @@ delta, refund/charge, tax) is a feature of its own.
 
 ### Deciding and enforcing stay separate
 
-The table decides. `updateStatusIfIn` in `src/modules/orders/repository.ts` still enforces, and is
-unchanged — it is the conditional write that makes exactly one racing writer win. The table only
-decides which `from` set that write is handed.
+The table decides. `updateStatusIfIn` (`src/infrastructure/persistence/conditional-status.ts`) enforces:
+it is the conditional write that makes exactly one racing writer win, and the nine places that move a
+status (orders, payments, returns, inventory, example, delivery) all call it, so none can forget
+`status` in its filter. The table only decides which `from` set that write is handed.
+
+The table itself is TypeScript, an event table (`{ initial, events: { name: { from[], to, actors? } } }`)
+built with `defineLifecycle` (`src/domain-primitives/lifecycle.ts`), which refuses at load a status that
+does not exist and an event that lands inside its own `from` — the self-move is illegal by
+construction. `example` and `orders` build theirs with it; payments, feedback, delivery fulfillment
+and webhook deliveries keep a header saying why a table does not fit them.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%
@@ -308,6 +314,11 @@ A record with a lifecycle `status` therefore lists `actions` in `required`, on e
 list rows included; a read-only projection or a line of its parent is the exception, and
 `tests/cross-cutting/api-standards.test.ts` names each one with its reason. The same file keeps a
 presenter honest: it maps what a service decided and imports no ability, caller or service.
+
+The transition graph itself is not published in the contract, on purpose: no mature API does (Google
+AIP-216 names one verb per move; Shopify and Stripe describe the graph in prose and a diagram). A
+client reads `actions`, and each verb endpoint's description names the statuses it may start from
+in one line, which the endpoint's 409 test pins.
 
 So the server sends the answer. `Order.actions` and `PaymentActions` are computed per REQUEST, not
 stored. `example` is the minimal worked case: `Example.actions` is flags `{ publish, archive, unarchive, update, delete }` (one door per lifecycle event, like `User.actions`),

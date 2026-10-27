@@ -1,0 +1,217 @@
+# The 13 demo login accounts: who they are, what they may do, what state they start in.
+# Ids, images, address books and the 10 filler customers stay in `scenarios/` code.
+# Each password is public on purpose: the demo profile never reaches a database anyone but a
+# developer or CI can see. `NODE_SEED_<NAME>_PASSWORD` overrides it per account.
+# The paired frontend's Cypress suite reads each login from the scenario description (`GET
+# /__test/scenario`), so it keeps no copy. The generated tables in `docs/tools/demo-profile.md`
+# read this file.
+#
+# state:
+#   verified          proved the address (no verify-your-email nag)
+#   active            false = an admin switched it off, every login is refused
+#   twoFactor         email 2FA armed, with five known single-use backup codes
+#   authenticator     an authenticator app armed with `staffTotpSecret` (a staff role grants
+#                     nothing without one)
+#   pendingEmail      the address it asked to move to and has not confirmed, or null
+#   analyticsConsent  opted in to analytics (the consent gate is opt-in)
+#
+# Every account's memberships name a role from `shared/authorization-roles.yaml`. A customer holds
+# none: it is computed from `verified`, never granted.
+
+# Base32, 160 bits. One secret for every authenticator: a demo fixture gains nothing from seven.
+staffTotpSecret: JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP
+
+accounts:
+    admin:
+        email: root@root.it
+        username: root
+        defaultPassword: Demo-Admin1!
+        # The shop's owner AND the installation's operator: two jobs, two memberships.
+        memberships:
+            - { scope: tenant, role: admin }
+            - { scope: platform, role: operator }
+        state:
+            {
+                verified: true,
+                active: true,
+                twoFactor: false,
+                authenticator: true,
+                pendingEmail: null,
+                analyticsConsent: false
+            }
+    user:
+        email: customer@example.com
+        username: customer
+        defaultPassword: Demo-User1!
+        memberships: []
+        # Opted in: the cart analytics journey logs in as this account.
+        state:
+            {
+                verified: true,
+                active: true,
+                twoFactor: false,
+                authenticator: false,
+                pendingEmail: null,
+                analyticsConsent: true
+            }
+    editor:
+        email: editor@example.com
+        username: editor
+        defaultPassword: Demo-Editor1!
+        memberships:
+            - { scope: tenant, role: editor }
+        state:
+            {
+                verified: true,
+                active: true,
+                twoFactor: false,
+                authenticator: true,
+                pendingEmail: null,
+                analyticsConsent: false
+            }
+    moderator:
+        email: moderator@example.com
+        username: moderator
+        defaultPassword: Demo-Moderator1!
+        memberships:
+            - { scope: tenant, role: moderator }
+        state:
+            {
+                verified: true,
+                active: true,
+                twoFactor: false,
+                authenticator: true,
+                pendingEmail: null,
+                analyticsConsent: false
+            }
+    unverified:
+        email: unverified@example.com
+        username: unverified
+        defaultPassword: Demo-Unverified1!
+        memberships: []
+        state:
+            {
+                verified: false,
+                active: true,
+                twoFactor: false,
+                authenticator: false,
+                pendingEmail: null,
+                analyticsConsent: false
+            }
+    twoFactor:
+        email: two-factor@example.com
+        username: two-factor
+        defaultPassword: Demo-TwoFactor1!
+        memberships: []
+        state:
+            {
+                verified: true,
+                active: true,
+                twoFactor: true,
+                authenticator: false,
+                pendingEmail: null,
+                analyticsConsent: false
+            }
+    pendingEmail:
+        email: pending-email@example.com
+        username: pending-email
+        defaultPassword: Demo-PendingEmail1!
+        memberships: []
+        state:
+            {
+                verified: true,
+                active: true,
+                twoFactor: false,
+                authenticator: false,
+                pendingEmail: pending-new-address@example.com,
+                analyticsConsent: false
+            }
+    banned:
+        email: banned@example.com
+        username: banned
+        defaultPassword: Demo-Banned1!
+        memberships: []
+        state:
+            {
+                verified: true,
+                active: false,
+                twoFactor: false,
+                authenticator: false,
+                pendingEmail: null,
+                analyticsConsent: false
+            }
+    secondShopper:
+        email: second-shopper@example.com
+        username: second-shopper
+        defaultPassword: Demo-SecondShopper1!
+        memberships: []
+        state:
+            {
+                verified: true,
+                active: true,
+                twoFactor: false,
+                authenticator: false,
+                pendingEmail: null,
+                analyticsConsent: false
+            }
+    manager:
+        email: manager@example.com
+        username: manager
+        defaultPassword: Demo-Manager1!
+        memberships:
+            - { scope: tenant, role: manager }
+        state:
+            {
+                verified: true,
+                active: true,
+                twoFactor: false,
+                authenticator: true,
+                pendingEmail: null,
+                analyticsConsent: false
+            }
+    warehouse:
+        email: warehouse@example.com
+        username: warehouse
+        defaultPassword: Demo-Warehouse1!
+        memberships:
+            - { scope: tenant, role: warehouse }
+        state:
+            {
+                verified: true,
+                active: true,
+                twoFactor: false,
+                authenticator: true,
+                pendingEmail: null,
+                analyticsConsent: false
+            }
+    support:
+        email: support@example.com
+        username: support
+        defaultPassword: Demo-Support1!
+        memberships:
+            - { scope: tenant, role: support }
+        state:
+            {
+                verified: true,
+                active: true,
+                twoFactor: false,
+                authenticator: true,
+                pendingEmail: null,
+                analyticsConsent: false
+            }
+    operator:
+        email: operator@example.com
+        username: operator
+        defaultPassword: Demo-Operator1!
+        # Platform role only: no shop membership, so it holds none of a shop's keys.
+        memberships:
+            - { scope: platform, role: operator }
+        state:
+            {
+                verified: true,
+                active: true,
+                twoFactor: false,
+                authenticator: true,
+                pendingEmail: null,
+                analyticsConsent: false
+            }

@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — which languages this deployment speaks, and the runtime overrides layered over the bundled copy.
-**Depends on** — nothing. Only [`sitemap`](./sitemap.md) imports it (its `localeService`, for the languages a sitemap lists); no other sibling needs a translated dictionary directly.
+**Depends on** — nothing. No sibling imports it: [`sitemap`](./sitemap.md) reads the served-language list in `@infrastructure/i18n`, which this module's writes refresh.
 **Breaks if you change** — the `app` field. It decides which of two dictionaries a row patches.
 :::
 
@@ -10,24 +10,7 @@
 
 <!-- module-graph:locales:start -->
 
-_Solid arrows are imports. Dotted arrows are domain events — the return path an import
-graph cannot see._
-
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
-flowchart LR
-    locales["locales<br/><i>this module</i>"]
-    sitemap["sitemap"]
-
-    sitemap --> locales
-
-    classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
-    classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
-    classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
-    classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
-    class sitemap generic;
-    class locales centre;
-```
+_Nothing reaches `locales` and it reaches nothing — no imports either way, no events either way. Deleting it takes one folder and this page, and no other page changes._
 
 <!-- module-graph:locales:end -->
 
@@ -69,6 +52,12 @@ frontend app) stay two questions. The seeded scenario (`scenarios/locales.ts`) r
 no `src/locales/es.json` behind it precisely so the answers really are _no_ and _yes_. <!-- doc-paths:ignore -->
 :::
 
+One language has one shape. `GET /locales` lists it, `GET /locales/{locale}` reads it, and
+`POST`, `PUT`, `PATCH`, `activate` and `deactivate` answer it: the `Language` schema, a merge of both
+tiers. A language that is only a deployed file reads as `200` with `source: static`, no `id` and no
+timestamps, every `actions` flag `false`. The deployed message file is a sub-resource,
+`GET /locales/{locale}/dictionary`.
+
 Nothing here is awaited on the request path. Mongo down, a language half-translated, a malformed
 key — the worst outcome is one endpoint failing and the overlay going stale, while every other
 response still resolves its copy from the files.
@@ -79,18 +68,18 @@ response still resolves its copy from the files.
 (`200`) and stored, never served: Shopify, WPML and Polylang let an editor translate before
 publishing, and none refuses the write. A tag this deployment has no language for is a `422`.
 
-| Path                                                                                                                          | A switched-off language                                                                                                                                                                                                                                                                                                                                                                            |
-| ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A product's translated title and description on a read                                                                        | Not served: the fallback text answers. Only the languages that are on, plus the fallback, are read (except to staff [previewing it](#previewing-a-draft))                                                                                                                                                                                                                                          |
-| Free-text search                                                                                                              | Not searched: a draft word finds nothing (except to staff previewing it)                                                                                                                                                                                                                                                                                                                           |
-| The names copied into a message that outlives its product (an inbox row, the stream, the data export, the back-in-stock mail) | Not copied: a customer can never read a draft title back from a message                                                                                                                                                                                                                                                                                                                            |
-| A row whose language no longer exists (a write racing a delete)                                                               | Served by nothing, for the same reason: the read is an allow-list of live languages                                                                                                                                                                                                                                                                                                                |
-| The editor's admin read, `GET /products/{id}/admin`                                                                           | Lists every row, drafts included                                                                                                                                                                                                                                                                                                                                                                   |
-| `GET /locales/{locale}/messages` and the dictionary                                                                           | `404` to everyone but staff holding `display:Locale`                                                                                                                                                                                                                                                                                                                                               |
-| The manifest, `GET /locales`                                                                                                  | Listed `active: false`, a language with a deployed file (`src/locales/it.json`) included: the frontend bundles that file, and the flag is how it learns to stop offering it. A registered language is absent for a visitor. Staff holding `display:Locale` see every row                                                                                                                           |
-| The sitemap                                                                                                                   | Lists the active languages only: the switched-off one has no page and no `hreflang`                                                                                                                                                                                                                                                                                                                |
-| The API itself: negotiation, the dictionary, mail, order snapshots                                                            | Never picks it. `Accept-Language` for it gets the default language, `GET /locales/{locale}` answers `404`, mail to a buyer who saved it goes out in the default language, and a snapshot freezes the default language's text. The list the pick is made from is refreshed in the worker that took the write at once, and in the others within one refresh interval (except a staff preview, below) |
-| Cached product responses                                                                                                      | Cleared when the flag changes and when the language is deleted, since both change what is served and no entity was written                                                                                                                                                                                                                                                                         |
+| Path                                                                                                                          | A switched-off language                                                                                                                                                                                                                                                                                                                                                                                       |
+| ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A product's translated title and description on a read                                                                        | Not served: the fallback text answers. Only the languages that are on, plus the fallback, are read (except to staff [previewing it](#previewing-a-draft))                                                                                                                                                                                                                                                     |
+| Free-text search                                                                                                              | Not searched: a draft word finds nothing (except to staff previewing it)                                                                                                                                                                                                                                                                                                                                      |
+| The names copied into a message that outlives its product (an inbox row, the stream, the data export, the back-in-stock mail) | Not copied: a customer can never read a draft title back from a message                                                                                                                                                                                                                                                                                                                                       |
+| A row whose language no longer exists (a write racing a delete)                                                               | Served by nothing, for the same reason: the read is an allow-list of live languages                                                                                                                                                                                                                                                                                                                           |
+| The editor's admin read, `GET /products/{id}/admin`                                                                           | Lists every row, drafts included                                                                                                                                                                                                                                                                                                                                                                              |
+| `GET /locales/{locale}/messages` and the dictionary                                                                           | `404` to everyone but staff holding `display:Locale`                                                                                                                                                                                                                                                                                                                                                          |
+| The manifest, `GET /locales`                                                                                                  | Listed `active: false`, a language with a deployed file (`src/locales/it.json`) included: the frontend bundles that file, and the flag is how it learns to stop offering it. A registered language is absent for a visitor. Staff holding `display:Locale` see every row                                                                                                                                      |
+| The sitemap                                                                                                                   | Lists the active languages only: the switched-off one has no page and no `hreflang`                                                                                                                                                                                                                                                                                                                           |
+| The API itself: negotiation, the dictionary, mail, order snapshots                                                            | Never picks it. `Accept-Language` for it gets the default language, `GET /locales/{locale}/dictionary` answers `404`, mail to a buyer who saved it goes out in the default language, and a snapshot freezes the default language's text. The list the pick is made from is refreshed in the worker that took the write at once, and in the others within one refresh interval (except a staff preview, below) |
+| Cached product responses                                                                                                      | Cleared when the flag changes and when the language is deleted, since both change what is served and no entity was written                                                                                                                                                                                                                                                                                    |
 
 Staff holding `display:Locale` see a draft whole: the manifest row and the dictionary (the
 interface), and, by choosing it in the switcher, its product text on the catalogue reads

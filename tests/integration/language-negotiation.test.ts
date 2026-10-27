@@ -209,7 +209,7 @@ describe('a language with a deployed file that an admin switches off', () => {
         await givenLocale('it', { active: false });
         await refreshLocaleOverrides();
 
-        const response = await api().get('/locales/it');
+        const response = await api().get('/locales/it/dictionary');
 
         expect(response.status).toBe(404);
     });

@@ -31,6 +31,14 @@ Hard limits, enforced by each file's schema rather than by review:
 - Key generators, `run` functions and library calls stay code. Only their data fields move.
 - Prefer a cases file. It adds tests and changes no code.
 
+Two things deliberately do **not** go to YAML:
+
+- **Module lifecycles stay code.** A status machine is a typed TypeScript event table read by
+  `defineLifecycle` (`src/domain-primitives/lifecycle.ts`); the contract carries only the status enum
+  and the `actions` flags, and clients read `actions`. No mature API publishes its transition graph.
+- **Shop-only tables stay code until a second reader exists.** Order events, status traits, VAT and
+  shipping tables belong to the commerce modules; moving them early would build a reader for nobody.
+
 ## 2 · Is this standard?
 
 | Name                                     | Examples                                                                                                 |
@@ -84,18 +92,20 @@ twin validate the same file without Zod; `npm run check` refuses a stale one.
 
 ## 7 · Today
 
-| File                                        | Read by                                                            |
-| ------------------------------------------- | ------------------------------------------------------------------ |
-| `rules/log-redaction.yaml`                  | `adapters/logger.ts`, `runtime/otel-sdk.ts`                        |
-| `rules/password-hash.yaml`                  | `security/password-hash.ts`                                        |
-| `rules/breached-passwords.txt`              | `security/breached-passwords`                                      |
-| `cases/log-redaction.cases.yaml`            | `tests/cross-cutting/log-redaction-conformance.test.ts`            |
-| `cases/crypto.cases.yaml`                   | `tests/cross-cutting/crypto-conformance.test.ts`                   |
-| `cases/env-booleans.cases.yaml`             | `tests/cross-cutting/env-booleans-conformance.test.ts`             |
-| `cases/money.cases.yaml`                    | `tests/cross-cutting/money-conformance.test.ts`                    |
-| `cases/normalize-email.cases.yaml`          | `tests/cross-cutting/normalize-email-conformance.test.ts`          |
-| `cases/outbox-backoff.cases.yaml`           | `tests/cross-cutting/outbox-backoff-conformance.test.ts`           |
-| `cases/permission-model-version.cases.yaml` | `tests/cross-cutting/permission-model-version-conformance.test.ts` |
-| `cases/rate-limit-keys.cases.yaml`          | `tests/cross-cutting/rate-limit-keys-conformance.test.ts`          |
-| `cases/request-headers.cases.yaml`          | `tests/cross-cutting/request-headers-conformance.test.ts`          |
-| `cases/ssrf.cases.yaml`                     | `tests/cross-cutting/ssrf-conformance.test.ts`                     |
+| File                                        | Read by                                                                                                              |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `rules/frontend-links.yaml`                 | `http/frontend-link.ts`, read by account, users, orders, sitemap; handed to the frontend, whose router spec walks it |
+| `scenarios/personas.yaml`                   | `scenarios/accounts.ts`, `users.ts`, `config.ts`; the generated account tables in `docs/tools/demo-profile.md`       |
+| `rules/log-redaction.yaml`                  | `adapters/logger.ts`, `runtime/otel-sdk.ts`                                                                          |
+| `rules/password-hash.yaml`                  | `security/password-hash.ts`                                                                                          |
+| `rules/breached-passwords.txt`              | `security/breached-passwords`                                                                                        |
+| `cases/log-redaction.cases.yaml`            | `tests/cross-cutting/log-redaction-conformance.test.ts`                                                              |
+| `cases/crypto.cases.yaml`                   | `tests/cross-cutting/crypto-conformance.test.ts`                                                                     |
+| `cases/env-booleans.cases.yaml`             | `tests/cross-cutting/env-booleans-conformance.test.ts`                                                               |
+| `cases/money.cases.yaml`                    | `tests/cross-cutting/money-conformance.test.ts`                                                                      |
+| `cases/normalize-email.cases.yaml`          | `tests/cross-cutting/normalize-email-conformance.test.ts`                                                            |
+| `cases/outbox-backoff.cases.yaml`           | `tests/cross-cutting/outbox-backoff-conformance.test.ts`                                                             |
+| `cases/permission-model-version.cases.yaml` | `tests/cross-cutting/permission-model-version-conformance.test.ts`                                                   |
+| `cases/rate-limit-keys.cases.yaml`          | `tests/cross-cutting/rate-limit-keys-conformance.test.ts`                                                            |
+| `cases/request-headers.cases.yaml`          | `tests/cross-cutting/request-headers-conformance.test.ts`                                                            |
+| `cases/ssrf.cases.yaml`                     | `tests/cross-cutting/ssrf-conformance.test.ts`                                                                       |

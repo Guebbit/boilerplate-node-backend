@@ -19,6 +19,9 @@ cases:
     - name: an OAuth state cookie is redacted
       key: __Host-oauth_state
       expect: redact
+    - name: the account-deletion claim-check cookie is redacted
+      key: __Host-oauth_deletion_challenge
+      expect: redact
     - name: a fragment makes a compound key sensitive
       key: webhookSecret
       expect: redact

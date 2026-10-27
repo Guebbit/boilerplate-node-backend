@@ -5,18 +5,19 @@
  * without ever implying they are the same capability.
  */
 
-import {
-    LocaleDirection,
-    LocaleSource,
-    type LocaleCapabilities,
-    type LocaleCapability
-} from '@types';
+import { LocaleDirection, LocaleSource, type Language, type LocaleCapabilities } from '@types';
 import { getDefaultLocale, getFallbackLocale, listSupportedLocales } from '@infrastructure/i18n';
+import {
+    generateSuccess,
+    type ResponseReject,
+    type ResponseSuccess
+} from '@infrastructure/http/response';
 import { logger } from '@infrastructure/adapters/logger';
 import type { Caller } from '@types';
 import { accessibleFilterFor } from '@kernel/access/query';
 import { deriveBaseLanguage, type LocaleDocument } from '../model';
 import { localeEntryRepository, localeRepository } from '../repository';
+import { languageNotFound } from './languages';
 import { backendApp, frontendApp } from '../apps';
 import {
     NO_ACTIONS,
@@ -73,8 +74,9 @@ export const describeLanguage = (tag: string, inLanguage: string): string => {
  *   selectable unless a row registered for the same tag switches it off. A visitor still gets that
  *   row, as `active: false`, so a client that bundles the language itself knows to stop offering it.
  */
-export const staticCapability = (tag: string, active = true): LocaleCapability => ({
+export const staticCapability = (tag: string, active = true): Language => ({
     tag,
+    baseLanguage: deriveBaseLanguage(tag),
     name: describeLanguage(tag, 'en'),
     nativeName: describeLanguage(tag, tag),
     direction: isRightToLeft(tag) ? LocaleDirection.rtl : LocaleDirection.ltr,
@@ -89,16 +91,23 @@ export const staticCapability = (tag: string, active = true): LocaleCapability =
     actions: NO_ACTIONS
 });
 
-/** How the manifest describes a language that exists as rows. */
+/**
+ * How the manifest describes a language that exists as rows. The row's own `id` and timestamps
+ * ride along when it has them; a static language has no row, so none is invented.
+ */
 export const dynamicCapability = (
     language: Pick<
         LocaleDocument,
         'tag' | 'name' | 'nativeName' | 'direction' | 'active' | 'revision'
-    >,
+    > &
+        Partial<Pick<LocaleDocument, '_id' | 'createdAt' | 'updatedAt'>>,
     entryCount: number,
     standing: LanguageStanding = NO_STANDING
-): LocaleCapability => ({
+): Language => ({
+    // Read off `_id`: the manifest's rows come straight from `.lean()`, before the `id` transform.
+    ...(language._id ? { id: String(language._id) } : {}),
     tag: language.tag,
+    baseLanguage: deriveBaseLanguage(language.tag),
     name: language.name,
     nativeName: language.nativeName,
     direction: language.direction,
@@ -107,7 +116,9 @@ export const dynamicCapability = (
     source: LocaleSource.dynamic,
     entryCount,
     revision: language.revision,
-    actions: languageActions(language, standing)
+    actions: languageActions(language, standing),
+    ...(language.createdAt ? { createdAt: language.createdAt.toISOString() } : {}),
+    ...(language.updatedAt ? { updatedAt: language.updatedAt.toISOString() } : {})
 });
 
 /**
@@ -121,8 +132,8 @@ export const mergeCapabilities = (
     entryCounts: ReadonlyMap<string, number>,
     inactiveTags: ReadonlySet<string> = new Set(),
     standing: LanguageStanding = NO_STANDING
-): LocaleCapability[] => {
-    const rows = new Map<string, LocaleCapability>();
+): Language[] => {
+    const rows = new Map<string, Language>();
 
     for (const tag of staticTags) rows.set(tag, staticCapability(tag, !inactiveTags.has(tag)));
 
@@ -224,3 +235,47 @@ export const listCapabilities = (
         default: getDefaultLocale(),
         fallback: getFallbackLocale()
     }));
+
+/**
+ * One language as the manifest would list it, or a 404 when the caller cannot see it.
+ *
+ * Reads through {@link listCapabilities} on purpose: `GET /locales/{locale}`, the writes' answers
+ * and the list are then the same representation under the same scoping, by construction.
+ *
+ * @param tag - the language
+ * @param scope - which rows this caller may read ({@link callerScope}); omit to read every row,
+ *   as a write's answer does
+ * @param standing - what the caller may do to a registered language ({@link readStanding})
+ */
+export const readLanguage = (
+    tag: string,
+    scope?: Record<string, unknown>,
+    standing: LanguageStanding = NO_STANDING
+): Promise<ResponseSuccess<Language> | ResponseReject> =>
+    listCapabilities(scope, standing).then(({ locales }) => {
+        const language = locales.find((candidate) => candidate.tag === tag);
+
+        return language ? generateSuccess(language) : languageNotFound();
+    });
+
+/**
+ * A registered language as the manifest would list it, for the answer to a write on its row.
+ *
+ * @param document - the row just written
+ * @param standing - what the caller may do to a registered language ({@link standingOn})
+ */
+export const describeStoredLanguage = (
+    document: LocaleDocument,
+    standing: LanguageStanding
+): Promise<Language> =>
+    localeEntryRepository.countEntriesByLocale().then((entryCounts) => {
+        const [row] = mergeCapabilities(
+            listSupportedLocales().filter((tag) => tag === document.tag),
+            [document],
+            entryCounts,
+            new Set(),
+            standing
+        );
+        // `document` is in the merge, so a row for its tag always comes back.
+        return row;
+    });

@@ -78,7 +78,7 @@ const STEP_UP_ROUTES: Record<string, string[]> = {
     // The data export adopts this same guard in place of a bespoke password check — see the
     // route's own comment in `account/routes.ts`.
     'account POST /export': [`requireFreshAuth(sensitive)`],
-    'account GET /export': [`requireFreshAuth(sensitive)`],
+    'account GET /export/file': [`requireFreshAuth(sensitive)`],
     // Enrolling, confirming or disabling a second factor is itself a sensitive action —
     // critical tier, same as `DELETE /` and the checkout/payment routes above.
     'account POST /2fa/methods/:method/setup': [`requireFreshAuth(critical)`],
@@ -89,11 +89,6 @@ const STEP_UP_ROUTES: Record<string, string[]> = {
     // Regenerating backup codes discards the old set — the same stolen-but-fresh-session risk
     // as disabling a factor.
     'account POST /2fa/backup-codes': [`requireFreshAuth(critical)`],
-    // Freshness here is a property of the REQUEST, not the route: a plain deliver never needs it,
-    // a `forced: true` one does — the same `override:Order` tier the direct status-override route
-    // inherits automatically through `requirePermission`, restated here because the service's own
-    // permission check has no way to demand a step-up on its own. Shipping has no forced variant.
-    'delivery POST /shipments/:id/deliver': [`requireFreshAuthWhen(critical)`],
     // A remainder cancel by a caller holding the refund key is staff's money-out door, at that
     // key's own tier; the buyer's own withdrawal, on the same route, is never prompted.
     'returns POST /': [`requireFreshAuthWhen(critical)`],

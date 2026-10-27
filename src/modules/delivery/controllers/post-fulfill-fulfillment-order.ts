@@ -6,7 +6,7 @@
 
 import type { Request, Response } from 'express';
 import type { Shipment } from '@types';
-import { successResponse } from '@infrastructure/http/response';
+import { createdResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { requireId } from '@infrastructure/http/ids';
 import { deliveryService } from '../services';
@@ -24,7 +24,11 @@ export const postFulfillFulfillmentOrder = (
         .fulfillFulfillmentOrder(id, request.authContext, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse<Shipment>(response, result.data);
+            createdResponse<Shipment>(
+                response,
+                result.data,
+                `/delivery/shipments/${result.data.id}`
+            );
         })
         .catch(catchAs(response, 'postFulfillFulfillmentOrder'));
 };

@@ -121,7 +121,6 @@ describe('GET /orders/{id}/fulfillment-orders and /shipments', () => {
         // The buyer sees their goods, and nothing they could act on as staff.
         expect(left.body.items[0].actions).toEqual({
             deliver: false,
-            forceDeliver: false,
             update: false,
             markLost: false
         });
@@ -324,6 +323,41 @@ describe('POST /delivery/fulfillment-orders/{id}/shipments', () => {
         expect(response.body.errors[0].code).toBe('DELIVERY_NOT_PHYSICAL');
     });
 
+    it('replays a retried partial ship under the same Idempotency-Key: one shipment, one stock draw', async () => {
+        const { bearer, orderId, fulfillmentOrderId, productId } = await adminWithOrder(3);
+        const ship = () =>
+            api()
+                .post(`/delivery/fulfillment-orders/${fulfillmentOrderId}/shipments`)
+                .set('Authorization', bearer)
+                .set('Idempotency-Key', 'ship-two-of-three')
+                .send({ lines: [{ productId, quantity: 2 }] });
+
+        const first = await ship();
+        const retry = await ship();
+
+        expect(first.status).toBe(201);
+        expect(retry.status).toBe(201);
+        expect(retry.headers['idempotent-replay']).toBe('true');
+        expect(retry.headers.location).toBe(first.headers.location);
+        expect(retry.body.id).toBe(first.body.id);
+        expect(await shipmentsOf(orderId)).toHaveLength(1);
+    });
+
+    it('refuses the same key reused for another body with 422', async () => {
+        const { bearer, fulfillmentOrderId, productId } = await adminWithOrder(3);
+        const ship = (quantity: number) =>
+            api()
+                .post(`/delivery/fulfillment-orders/${fulfillmentOrderId}/shipments`)
+                .set('Authorization', bearer)
+                .set('Idempotency-Key', 'one-key-two-bodies')
+                .send({ lines: [{ productId, quantity }] });
+
+        await ship(1);
+        const reused = await ship(2);
+
+        expect(reused.status).toBe(422);
+    });
+
     it('answers 404 to an id that is not a fulfillment order', async () => {
         const { bearer } = await authenticateAs('admin');
 
@@ -349,7 +383,8 @@ describe('POST /delivery/fulfillment-orders/{id}/fulfill', () => {
             .post(`/delivery/fulfillment-orders/${String(fulfillmentOrder._id)}/fulfill`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(201);
+        expect(response.headers.location).toBe(`/delivery/shipments/${String(response.body.id)}`);
         expect(response.body).toMatchObject({ status: 'delivered', number: 1 });
         expect(await readOrder(String(order._id)).then((one) => one?.status)).toBe(
             OrderStatus.delivered
@@ -358,6 +393,27 @@ describe('POST /delivery/fulfillment-orders/{id}/fulfill', () => {
         expect(
             await shipmentsOf(String(order._id)).then(([first]) => first.trackingCode)
         ).toBeUndefined();
+    });
+
+    it('replays a retried fulfil under the same Idempotency-Key', async () => {
+        const { user, bearer } = await authenticateAs('admin');
+        const digital = await createProduct({ requiresShipping: false });
+        const order = await createOrder(user, [toOrderItem(digital, 1)], {
+            status: OrderStatus.processing
+        });
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
+        const fulfil = () =>
+            api()
+                .post(`/delivery/fulfillment-orders/${String(fulfillmentOrder._id)}/fulfill`)
+                .set('Authorization', bearer)
+                .set('Idempotency-Key', 'fulfil-once');
+
+        const first = await fulfil();
+        const retry = await fulfil();
+
+        expect(retry.status).toBe(201);
+        expect(retry.headers['idempotent-replay']).toBe('true');
+        expect(retry.body.id).toBe(first.body.id);
     });
 
     it('matches the error contract for a fulfillment order that still has a physical line', async () => {
@@ -764,23 +820,8 @@ const staleButRefreshedBearer = async (jwtCookie: string): Promise<`Bearer ${str
     return bearerForCookie(jwtCookie);
 };
 
-describe('forced deliver demands the same step-up POST /orders/{id}/status-override does (SD-10)', () => {
+describe('shipping and delivering never demand a step-up (SD-10)', () => {
     afterEach(() => jest.useRealTimers());
-
-    it('answers 401 for a forced deliver from a stale-but-refreshed session', async () => {
-        freezeDate();
-        const jwtCookie = await loginAdminRemembered();
-        const bearer = await staleButRefreshedBearer(jwtCookie);
-        const { order } = await authenticateWithShipment();
-        const [shipment] = await shipmentsOf(String(order._id));
-
-        const response = await api()
-            .post(`/delivery/shipments/${String(shipment._id)}/deliver`)
-            .set('Authorization', bearer)
-            .send({ forced: true, reason: 'testing the step-up gate' });
-
-        expect(response.status).toBe(401);
-    });
 
     it('never demands step-up for a ship from `paid`, even from the same stale session', async () => {
         freezeDate();
@@ -800,7 +841,7 @@ describe('forced deliver demands the same step-up POST /orders/{id}/status-overr
         expect(response.status).toBe(201);
     });
 
-    it('never demands step-up for a plain, unforced deliver from the same stale session', async () => {
+    it('never demands step-up for a deliver from the same stale session', async () => {
         freezeDate();
         const jwtCookie = await loginAdminRemembered();
         const bearer = await staleButRefreshedBearer(jwtCookie);

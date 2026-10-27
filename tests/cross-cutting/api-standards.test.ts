@@ -136,6 +136,10 @@ describe('a resource with a lifecycle status publishes required actions', () => 
             'a read-only row of the preorder board; every move is on `FulfillmentOrder`, one id away',
         'payments.Refund':
             'a line of its payment: refunds are moved through `PaymentActions` (settleByHand, cancelRefund)',
+        'payments.Dispute':
+            "a line of its payment: the shop answers it in the provider's dashboard, so there is no move to offer",
+        'payments.DisputeReport':
+            "the provider's own word inside a webhook delivery, not a record a caller acts on",
         'payments.RefundListItem':
             'a read-only log row of the Refunds tab; its moves are `PaymentActions` on the payment'
     };
@@ -154,7 +158,8 @@ describe('a resource with a lifecycle status publishes required actions', () => 
 
     it('finds the records it means to check', () => {
         // A canary: a changed fragment layout would leave the sweep empty and passing.
-        expect(lifecycleRecords.length).toBeGreaterThanOrEqual(8);
+        // Floors are what the foundation modules alone clear, so the sweep also holds with the shop stripped.
+        expect(lifecycleRecords.length).toBeGreaterThanOrEqual(3);
     });
 
     it('lists `actions` in `required` on every one', () => {
@@ -190,7 +195,7 @@ describe('presenters', () => {
     const FORBIDDEN_IMPORT = /@kernel\/ability|\bAuthContext\b|\bCaller\b|\b\w+Service\b/;
 
     it('exists in every module that serves HTTP and owns a model', () => {
-        expect(presentingModules.length).toBeGreaterThanOrEqual(15);
+        expect(presentingModules.length).toBeGreaterThanOrEqual(1);
         expect(presentingModules.filter((module) => presenterFiles(module).length === 0)).toEqual(
             []
         );
@@ -224,7 +229,7 @@ describe('a 409 refusal carries an error code', () => {
     });
 
     it('finds the refusals it means to check', () => {
-        expect(refusals.length).toBeGreaterThanOrEqual(60);
+        expect(refusals.length).toBeGreaterThanOrEqual(20);
     });
 
     it('names a code at every one (a bare message cannot be told apart by a client)', () => {
@@ -279,7 +284,7 @@ describe('a paged list takes `sort` or states its one fixed order', () => {
     );
 
     it('finds the paged operations it means to check', () => {
-        expect(paged.length).toBeGreaterThanOrEqual(20);
+        expect(paged.length).toBeGreaterThanOrEqual(10);
     });
 
     it('gives each a `sort` or a stated fixed order', () => {

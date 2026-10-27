@@ -7,6 +7,7 @@
  * See: docs/theory/layers.md
  */
 
+import { updateStatusIfIn as conditionalStatus } from '@infrastructure/persistence/conditional-status';
 import type { ClientSession } from 'mongoose';
 import {
     exampleModel,
@@ -96,16 +97,10 @@ export const exampleRepository: Repository<ExampleDocument, ExampleRow> & {
      * @returns the saved example, or `null` when a peer changed the status first
      */
     moveFrom: (id, before, fields, session) =>
-        exampleModel
-            .findOneAndUpdate(
-                { _id: toObjectId(id), status: before },
-                { $set: fields },
-                // `returnDocument: 'after'` answers the written row; `session` (when given) joins the
-                // transaction.
-                // https://mongoosejs.com/docs/api/model.html#Model.findOneAndUpdate()
-                { returnDocument: 'after', ...(session && { session }) }
-            )
-            .exec(),
+        conditionalStatus(exampleModel, { _id: toObjectId(id) }, [before], fields.status, {
+            set: fields,
+            session
+        }),
 
     /**
      * The image pipeline's writeback — see `ImageTarget.writeback`. Matches on the pending key, so

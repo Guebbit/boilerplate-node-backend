@@ -24,6 +24,8 @@ import {
     WebhookRejected,
     type PaymentProvider,
     type ProviderPaymentState,
+    signWebhookPayload,
+    type ProviderDisputeState,
     type ProviderRefundState,
     type ProviderWebhookEvent
 } from '@modules/payments/providers';
@@ -140,6 +142,57 @@ export const setFakeRefundFailure = (
 ): void => {
     if (reason) refundFailures.set(providerRef, reason);
     else refundFailures.delete(providerRef);
+};
+
+/** The latest dispute state the fake holds, by `providerRef` then `disputeRef`. */
+const disputes = new Map<string, Map<string, ProviderDisputeState>>();
+
+/**
+ * Test lever: the provider's newest word on a dispute of this intent, as a delivery. A real
+ * provider's adapter would translate its own `charge.dispute.*` event into this same shape; the
+ * fake's webhook carries it as it is. The state is remembered, so a test can read the dispute
+ * back with {@link fakeDisputeOf}.
+ *
+ * @param providerRef - the intent the dispute is on
+ * @param dispute - the dispute's state; `observedAt` orders it against earlier ones
+ * @returns the delivery to hand to `applyWebhookDelivery`, or to sign with {@link signFakeDelivery}
+ */
+export const setFakeDispute = (
+    providerRef: string,
+    dispute: ProviderDisputeState
+): ProviderWebhookEvent => {
+    const known = disputes.get(providerRef) ?? new Map<string, ProviderDisputeState>();
+    known.set(dispute.disputeRef, dispute);
+    disputes.set(providerRef, known);
+    return {
+        id: `evt_dispute_${dispute.disputeRef}_${dispute.observedAt}`,
+        providerRef,
+        dispute
+    };
+};
+
+/**
+ * What the fake last said about one dispute.
+ *
+ * @param providerRef - the intent
+ * @param disputeRef - the provider's dispute id
+ */
+export const fakeDisputeOf = (
+    providerRef: string,
+    disputeRef: string
+): ProviderDisputeState | undefined => disputes.get(providerRef)?.get(disputeRef);
+
+/**
+ * A delivery as the provider would send it: the exact body and the header that verifies it. For
+ * the tests and levers that go through the real webhook route instead of calling the service.
+ *
+ * @param event - the delivery from {@link setFakeDispute}
+ */
+export const signFakeDelivery = (
+    event: ProviderWebhookEvent
+): { body: string; headers: Record<string, string> } => {
+    const body = JSON.stringify(event);
+    return { body, headers: { [WEBHOOK_SIGNATURE_HEADER]: signWebhookPayload(body) } };
 };
 
 /** Intents whose next refund runs at the provider but whose answer is lost (a timeout). */

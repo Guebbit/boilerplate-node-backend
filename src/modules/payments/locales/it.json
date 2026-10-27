@@ -8,6 +8,7 @@
         "intent-conflict": "Esiste già un pagamento aperto per questo ordine. Ricarica e riprova.",
         "declined": "Il pagamento è stato rifiutato dall'emittente della carta.",
         "not-refundable": "Questo pagamento non può essere rimborsato — nessun importo è arrivato, oppure è già stato restituito.",
+        "disputed": "La banca dell'acquirente ha contestato questo pagamento, quindi non può essere rimborsato da qui. Rispondi alla contestazione nella dashboard del fornitore di pagamenti.",
         "refund-not-open": "Questo rimborso è già chiuso: è stato concluso o annullato.",
         "refund-in-flight": "Il gestore della carta non ha ancora dato una risposta definitiva su questo rimborso, quindi non si può ancora segnare come restituito a mano né annullare. Viene ritentato automaticamente.",
         "in-flight": "Per questo ordine è già in corso un pagamento con carta — attendi che si concluda prima di registrare un pagamento a mano.",
