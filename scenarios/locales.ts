@@ -177,7 +177,7 @@ const LOCALE_ENTRIES: LocaleEntryRow[] = [
         '65e0200a9a7d4b2e1c0f3002',
         'downloadable',
         'backend',
-        'generic.error-internal',
+        'generic.error-internal-server-error',
         'Algo ha fallado por nuestra parte. Inténtalo de nuevo.'
     ],
 
@@ -196,7 +196,7 @@ const LOCALE_ENTRIES: LocaleEntryRow[] = [
         '65e0200a9a7d4b2e1c0f3102',
         'answerable',
         'backend',
-        'generic.error-internal',
+        'generic.error-internal-server-error',
         'Qualcosa è andato storto dalla nostra parte. Riprova.'
     ],
 

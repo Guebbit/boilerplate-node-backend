@@ -21,7 +21,7 @@ export const createWebhookSubscriptionSecret = (
     request: Request<{ id: string }>,
     response: Response
 ) => {
-    const id = requireId(request, response, { notFound: 'generic.error-not-found' });
+    const id = requireId(request, response, { notFound: 'generic.error-item-gone' });
     if (!id) return;
 
     const context = tenantCallerContextOf(request);

@@ -74,7 +74,7 @@ const notOpen = (): ResponseReject =>
     generateReject(409, [{ code: ERROR_CODES.TICKET_NOT_OPEN, message: t('tickets.not-open') }]);
 
 /** The 404 a missing or out-of-jurisdiction ticket earns: it does not admit to existing. */
-const notFound = (): ResponseReject => generateReject(404, [t('generic.error-not-found')]);
+const notFound = (): ResponseReject => generateReject(404, [t('generic.error-item-gone')]);
 
 /**
  * A ticket's facts, as the lifecycle rules read them.

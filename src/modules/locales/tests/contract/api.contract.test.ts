@@ -1330,7 +1330,7 @@ describe('GET /locales/:locale/messages?app=', () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
         await createEntry(bearer, 'pt', 'cart.title', 'Carrinho', 'demo-fe');
-        await createEntry(bearer, 'pt', 'generic.error-internal', 'Falha', 'demo-be');
+        await createEntry(bearer, 'pt', 'generic.error-internal-server-error', 'Falha', 'demo-be');
 
         const named = await api().get('/locales/pt/messages?app=demo-fe');
         expect(named.status).toBe(200);

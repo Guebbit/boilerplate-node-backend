@@ -249,7 +249,7 @@ const getById = (
 ): Promise<ResponseSuccess<Ticket> | ResponseReject> =>
     ticketRepository.findById(id).then((ticket) => {
         if (!ticket || !inJurisdiction(context.caller, ticket))
-            return generateReject(404, [t('generic.error-not-found')]);
+            return generateReject(404, [t('generic.error-item-gone')]);
 
         return Promise.all([
             assigneeNamesOf([ticket.assigneeId?.toString()]),
@@ -309,7 +309,7 @@ const removeById = (
 ): Promise<ResponseSuccess<undefined> | ResponseReject> =>
     ticketRepository.findById(id).then((ticket) => {
         if (!ticket || !inJurisdiction(context.caller, ticket))
-            return generateReject(404, [t('generic.error-not-found')]);
+            return generateReject(404, [t('generic.error-item-gone')]);
         if (!mayDelete(context.caller, ticket))
             return generateReject(403, [t('generic.error-forbidden')]);
 

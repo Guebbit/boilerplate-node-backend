@@ -117,7 +117,7 @@ describe('requireId', () => {
 
         expect(sent.status).toBe(404);
         expect(errorsOf(sent)).toEqual([
-            { code: 'NOT_FOUND', message: t('generic.error-nothing-found') }
+            { code: 'NOT_FOUND', message: t('generic.error-not-found') }
         ]);
     });
 

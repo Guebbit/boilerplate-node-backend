@@ -1273,6 +1273,8 @@ describe('the per-account wrong-code lock', () => {
             .send({ code: await codeFor(secret, 1) });
 
         expect(refused.status).toBe(429);
+        // The lock is a wrong-code budget: it answers with the rate limiter's own code.
+        expect(refused.body.errors[0].code).toBe('RATE_LIMITED');
         expect(await lockStateOf(user.id)).toEqual({
             failures: 10,
             lockedUntil: expect.any(Date)

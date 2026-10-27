@@ -9,9 +9,9 @@
  *   directions because it is the one a well-meaning simplification would drop.
  *
  *   **`code` is what clients branch on, `message` is what they display.** The status → code map
- *   is therefore pinned per status, including the two catch-alls: any unmapped 4xx collapses to
- *   `REQUEST_ERROR`, and every 5xx collapses to `INTERNAL_ERROR` so the flavour of a server
- *   failure cannot leak.
+ *   is therefore pinned per status: a status-only error's code is the RFC 9110 name in UPPER_SNAKE,
+ *   an uncatalogued 4xx is `CLIENT_ERROR`, and every 5xx but 503 collapses to
+ *   `INTERNAL_SERVER_ERROR` so the flavour of a server failure cannot leak.
  *
  *   **Status is written twice** — HTTP status and body — specifically so the two cannot disagree.
  */
@@ -27,7 +27,7 @@ import {
     rejectResponse
 } from '@infrastructure/http/response';
 import { makeResponseStub } from '@tests/express';
-import type { ErrorCode } from '@api/error-codes';
+import { ERROR_CODES, type ErrorCode } from '@api/error-codes';
 import { t, translator } from '@infrastructure/i18n';
 
 /** Express response stub with a chainable status().json(). */
@@ -130,7 +130,7 @@ describe('generateReject', () => {
         const response = generateReject(404);
 
         expect(response.errors).toEqual([
-            { code: 'NOT_FOUND', message: t('generic.error-nothing-found') }
+            { code: 'NOT_FOUND', message: t('generic.error-not-found') }
         ]);
     });
 
@@ -174,14 +174,15 @@ describe('generateReject', () => {
         [400, 'generic.error-bad-request'],
         [401, 'generic.error-unauthorized'],
         [403, 'generic.error-forbidden'],
-        [404, 'generic.error-nothing-found'],
+        [404, 'generic.error-not-found'],
         [409, 'generic.error-conflict'],
         [412, 'generic.error-precondition-failed'],
-        [422, 'generic.error-invalid-data'],
-        [429, 'generic.error-rate-limited'],
-        [500, 'generic.error-internal'],
-        [502, 'generic.error-internal'],
-        [418, 'generic.error-unknown']
+        [422, 'generic.error-unprocessable-content'],
+        [429, 'generic.error-too-many-requests'],
+        [503, 'generic.error-service-unavailable'],
+        [500, 'generic.error-internal-server-error'],
+        [502, 'generic.error-internal-server-error'],
+        [418, 'generic.error-client-error']
     ])('%i answers its fallback item from %s, in the active language', (status, key) => {
         expect(generateReject(status).errors[0]?.message).toBe(t(key));
     });
@@ -191,7 +192,7 @@ describe('generateReject', () => {
 
         // Every mapped status has an Italian text of its own, not the English one reused.
         for (const key of [
-            'generic.error-nothing-found',
+            'generic.error-not-found',
             'generic.error-conflict',
             'generic.error-precondition-failed'
         ])
@@ -205,7 +206,7 @@ describe('generateReject', () => {
     it('falls back to the status wording for the synthesised error item too', () => {
         // `normalizeErrors` reuses it when `errors` is empty, so the two cannot drift apart.
         expect(generateReject(429).errors).toEqual([
-            { code: 'REQUEST_ERROR', message: t('generic.error-rate-limited') }
+            { code: 'TOO_MANY_REQUESTS', message: t('generic.error-too-many-requests') }
         ]);
     });
 
@@ -217,32 +218,53 @@ describe('generateReject', () => {
         expect(response.data).toBeUndefined();
     });
 
-    it('maps each status to its own stable code', () => {
-        // Clients branch on `code`, never on `message`. Distinct statuses must not collapse.
-
-        expect(codeFor(400)).toBe('BAD_REQUEST');
-        expect(codeFor(401)).toBe('UNAUTHORIZED');
-        expect(codeFor(403)).toBe('FORBIDDEN');
-        expect(codeFor(404)).toBe('NOT_FOUND');
-        expect(codeFor(409)).toBe('CONFLICT');
-        expect(codeFor(412)).toBe('PRECONDITION_FAILED');
+    /*
+     * The rule, pinned for every status that has a code of its own: UPPER_SNAKE of the RFC 9110
+     * name. A client branches on `code`, so distinct statuses must not collapse and a rename of
+     * Node's phrase table must not silently rename a code.
+     */
+    it.each([
+        [400, 'BAD_REQUEST'],
+        [401, 'UNAUTHORIZED'],
+        [403, 'FORBIDDEN'],
+        [404, 'NOT_FOUND'],
+        [405, 'METHOD_NOT_ALLOWED'],
+        [409, 'CONFLICT'],
+        [412, 'PRECONDITION_FAILED'],
+        [413, 'CONTENT_TOO_LARGE'],
+        [415, 'UNSUPPORTED_MEDIA_TYPE'],
+        [422, 'UNPROCESSABLE_CONTENT'],
+        [429, 'TOO_MANY_REQUESTS'],
+        [500, 'INTERNAL_SERVER_ERROR'],
+        [503, 'SERVICE_UNAVAILABLE']
+    ])('%i answers %s', (status, code) => {
+        expect(codeFor(status)).toBe(code);
+        expect(ERROR_CODES).toHaveProperty(code);
     });
 
-    it('collapses any 5xx to a single internal code', () => {
-        expect(codeFor(500)).toBe('INTERNAL_ERROR');
-        expect(codeFor(502)).toBe('INTERNAL_ERROR');
-        expect(codeFor(599)).toBe('INTERNAL_ERROR');
+    it('gives every derived code a locale key of the same name', () => {
+        for (const status of [
+            400, 401, 403, 404, 405, 409, 412, 413, 415, 422, 429, 500, 503, 418
+        ]) {
+            const key = `generic.error-${codeFor(status).toLowerCase().replaceAll('_', '-')}`;
+            expect(t(key)).not.toBe(key);
+        }
+    });
+
+    it('collapses any 5xx but 503 to a single internal code', () => {
+        expect(codeFor(502)).toBe('INTERNAL_SERVER_ERROR');
+        expect(codeFor(599)).toBe('INTERNAL_SERVER_ERROR');
     });
 
     it('treats 499 as a client error, not a server one', () => {
         // The `>= 500` boundary from below. With `> 500`, a plain 500 would fall through to
-        // REQUEST_ERROR and clients would stop recognising server failures.
-        expect(generateReject(499, ['y']).errors[0].code).toBe('REQUEST_ERROR');
+        // CLIENT_ERROR and clients would stop recognising server failures.
+        expect(codeFor(499)).toBe('CLIENT_ERROR');
     });
 
-    it('falls back to REQUEST_ERROR for unmapped 4xx statuses', () => {
-        expect(codeFor(422)).toBe('REQUEST_ERROR');
-        expect(codeFor(429)).toBe('REQUEST_ERROR');
+    it('answers CLIENT_ERROR for a 4xx whose name the catalogue does not list', () => {
+        expect(codeFor(418)).toBe('CLIENT_ERROR');
+        expect(codeFor(410)).toBe('CLIENT_ERROR');
     });
 
     it('normalises a mixed list of strings and structured items', () => {
@@ -254,7 +276,7 @@ describe('generateReject', () => {
         ]);
 
         expect(response.errors).toEqual([
-            { code: 'REQUEST_ERROR', message: 'Email is required' },
+            { code: 'UNPROCESSABLE_CONTENT', message: 'Email is required' },
             { code: 'TOO_SHORT', message: 'Password too short' }
         ]);
     });
@@ -407,7 +429,7 @@ describe('rejectResponse', () => {
         expect(response.json).toHaveBeenCalledWith(
             expect.objectContaining({
                 title: 'Unprocessable Content',
-                detail: t('generic.error-invalid-data'),
+                detail: t('generic.error-unprocessable-content'),
                 instance: 'urn:uuid:5b0c9a1e-7a3d-4a3e-9c53-0d6b5d5c2e11'
             })
         );

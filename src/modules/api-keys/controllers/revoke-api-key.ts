@@ -19,7 +19,7 @@ import { apiKeysService } from '../services';
  */
 export const revokeApiKey = (request: Request<{ id: string }>, response: Response) => {
     // A malformed id answers as an unknown one, before the database is asked.
-    const id = requireId(request, response, { notFound: 'generic.error-not-found' });
+    const id = requireId(request, response, { notFound: 'generic.error-item-gone' });
     if (!id) return;
 
     return apiKeysService

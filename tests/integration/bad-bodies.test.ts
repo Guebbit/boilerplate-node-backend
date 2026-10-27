@@ -76,7 +76,7 @@ describe('a body the parser refused', () => {
             .send(OVERSIZED_BODY);
 
         expect(response.status).toBe(413);
-        expect(response.body.errors[0].code).toBe('PAYLOAD_TOO_LARGE');
+        expect(response.body.errors[0].code).toBe('CONTENT_TOO_LARGE');
     });
 
     it('answers 400 when the JSON is malformed', async () => {

@@ -14,6 +14,7 @@ import { asStub } from '@tests/stub';
 import { makeResponseStub } from '@tests/express';
 import { logger } from '@infrastructure/adapters/logger';
 import { handleUncaughtError, handleUnhandledRejection } from '@app/error-handling';
+import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { processUnhandledRejectionsTotal } from '@infrastructure/observability/metrics-process';
 
 /** Enough of a `Request` for the one field the handler reads: `requestId`, for the log line. */
@@ -32,6 +33,37 @@ describe('handleUncaughtError', () => {
         handleUncaughtError(error, requestStub(), response, NEXT);
 
         expect(response.status).toHaveBeenCalledWith(416);
+    });
+
+    it("answers a declared client status with that status's own code, not a handler-specific one", () => {
+        const error = Object.assign(new Error('too big'), { expose: true, status: 413 });
+
+        const response = makeResponseStub();
+        handleUncaughtError(error, requestStub(), response, NEXT);
+
+        expect(response.json.mock.calls[0]![0].errors[0].code).toBe('CONTENT_TOO_LARGE');
+    });
+
+    it('answers a client status the catalogue does not name with CLIENT_ERROR', () => {
+        const error = Object.assign(new Error('bad range'), { expose: true, status: 416 });
+
+        const response = makeResponseStub();
+        handleUncaughtError(error, requestStub(), response, NEXT);
+
+        expect(response.json.mock.calls[0]![0].errors[0].code).toBe('CLIENT_ERROR');
+    });
+
+    it('gives a CastError the same code whether a controller caught it or it escaped', () => {
+        const cast = Object.assign(new Error('Cast to ObjectId failed'), { kind: 'ObjectId' });
+
+        const caught = makeResponseStub();
+        rejectDatabaseError(caught, 'test', cast);
+        const escaped = makeResponseStub();
+        handleUncaughtError(cast, requestStub(), escaped, NEXT);
+
+        const codeOf = (response: typeof caught) => response.json.mock.calls[0]![0].errors[0].code;
+        expect(codeOf(escaped)).toBe('UNPROCESSABLE_CONTENT');
+        expect(codeOf(escaped)).toBe(codeOf(caught));
     });
 
     it('prefers status over statusCode when an error carries both', () => {

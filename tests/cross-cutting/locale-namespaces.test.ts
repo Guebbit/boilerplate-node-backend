@@ -6,7 +6,7 @@
  * failure modes nothing else would catch — both silent, both producing wrong COPY rather than an
  * error:
  *
- *   1. **A module shadowing a shared key.** `generic.error-internal` and its three siblings are a
+ *   1. **A module shadowing a shared key.** `generic.error-internal-server-error` and its three siblings are a
  *      cross-repo contract: the paired frontend reads them by name off `GET /locales/:locale` to
  *      render API copy when no response arrives. A module quietly redefining one changes text the
  *      other repo depends on, in a file nobody would think to look in.

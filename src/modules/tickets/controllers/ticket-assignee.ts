@@ -19,7 +19,7 @@ export const putTicketAssignee = (
     request: Request<{ id: string }, unknown, AssignTicketRequest>,
     response: Response
 ) => {
-    const id = requireId(request, response, { notFound: 'generic.error-not-found' });
+    const id = requireId(request, response, { notFound: 'generic.error-item-gone' });
     if (!id) return Promise.resolve();
     const body = parseBody(AssignTicketBody, request.body, response);
     if (!body) return Promise.resolve();
@@ -35,7 +35,7 @@ export const putTicketAssignee = (
 
 /** DELETE /tickets/:id/assignee (staff) — give the ticket back. */
 export const deleteTicketAssignee = (request: Request<{ id: string }>, response: Response) => {
-    const id = requireId(request, response, { notFound: 'generic.error-not-found' });
+    const id = requireId(request, response, { notFound: 'generic.error-item-gone' });
     if (!id) return Promise.resolve();
 
     return ticketService

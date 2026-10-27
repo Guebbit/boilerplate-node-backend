@@ -929,11 +929,11 @@ describe('list', () => {
 describe('readApiOverrides', () => {
     it('returns only the API’s half, nested', async () => {
         await givenLanguage('es');
-        await givenEntry('es', BACKEND, 'generic.error-internal', 'Fallo interno');
+        await givenEntry('es', BACKEND, 'generic.error-internal-server-error', 'Fallo interno');
         await givenEntry('es', FRONTEND, 'cart.title', 'Tu carrito');
 
         expect(await localeService.readApiOverrides()).toEqual({
-            es: { generic: { ['error-internal']: 'Fallo interno' } }
+            es: { generic: { ['error-internal-server-error']: 'Fallo interno' } }
         });
     });
 
@@ -954,12 +954,12 @@ describe('readApiOverrides', () => {
     it('groups by language', async () => {
         await givenLanguage('es');
         await givenLanguage('it');
-        await givenEntry('es', BACKEND, 'generic.error-internal', 'Fallo interno');
-        await givenEntry('it', BACKEND, 'generic.error-internal', 'Errore interno');
+        await givenEntry('es', BACKEND, 'generic.error-internal-server-error', 'Fallo interno');
+        await givenEntry('it', BACKEND, 'generic.error-internal-server-error', 'Errore interno');
 
         expect(await localeService.readApiOverrides()).toEqual({
-            es: { generic: { ['error-internal']: 'Fallo interno' } },
-            it: { generic: { ['error-internal']: 'Errore interno' } }
+            es: { generic: { ['error-internal-server-error']: 'Fallo interno' } },
+            it: { generic: { ['error-internal-server-error']: 'Errore interno' } }
         });
     });
 
@@ -970,10 +970,10 @@ describe('readApiOverrides', () => {
      */
     it('includes an inactive language', async () => {
         await givenLanguage('fr', {}, { active: false });
-        await givenEntry('fr', BACKEND, 'generic.error-internal', 'Erreur interne');
+        await givenEntry('fr', BACKEND, 'generic.error-internal-server-error', 'Erreur interne');
 
         expect(await localeService.readApiOverrides()).toEqual({
-            fr: { generic: { ['error-internal']: 'Erreur interne' } }
+            fr: { generic: { ['error-internal-server-error']: 'Erreur interne' } }
         });
     });
 
@@ -992,11 +992,11 @@ describe('readApiOverrides', () => {
         await givenLanguage('es');
         await givenLanguage('it');
         await givenEntry('es', BACKEND, 'generic', 'a string');
-        await givenEntry('es', BACKEND, 'generic.error-internal', 'and a group');
-        await givenEntry('it', BACKEND, 'generic.error-internal', 'Errore interno');
+        await givenEntry('es', BACKEND, 'generic.error-internal-server-error', 'and a group');
+        await givenEntry('it', BACKEND, 'generic.error-internal-server-error', 'Errore interno');
 
         expect(await localeService.readApiOverrides()).toEqual({
-            it: { generic: { ['error-internal']: 'Errore interno' } }
+            it: { generic: { ['error-internal-server-error']: 'Errore interno' } }
         });
     });
 });

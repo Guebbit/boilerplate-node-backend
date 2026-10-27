@@ -113,11 +113,14 @@ export const rejectWrongCode = (user: UserDocument): Promise<ResponseReject> =>
 const MFA_LOCK_MINUTES = MFA_LOCK_MS / 60_000;
 
 /**
- * The rejection a locked account earns: 429, before any code was compared. The lock is the same
- * brake a login's own budgets use, so a client already renders it.
+ * The rejection a locked account earns: 429, before any code was compared. The lock is a
+ * per-account wrong-code budget, the same brake a login's own budgets use, so it answers with
+ * their `RATE_LIMITED` code and a client already renders it.
  */
 export const rejectLocked = (): ResponseReject =>
-    generateReject(429, [t('account.two-factor.locked')]);
+    generateReject(429, [
+        { code: ERROR_CODES.RATE_LIMITED, message: t('account.two-factor.locked') }
+    ]);
 
 /**
  * Tell the account holder, out of band, that wrong codes just locked their 2FA checks. Fire-and-

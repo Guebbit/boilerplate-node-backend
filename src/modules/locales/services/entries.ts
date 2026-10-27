@@ -103,7 +103,7 @@ export const createEntry = async (
     const key = payload.key.trim();
     /*
      * Both checks below are narrowed to the app being written. The same key legitimately
-     * exists in two apps — `generic.error-internal` is one string in each — so checking against
+     * exists in two apps — `generic.error-internal-server-error` is one string in each — so checking against
      * every row would refuse the second half of a perfectly correct pair, and a collision between
      * `products.list` and `products.list.title` only matters inside the tree they share.
      */

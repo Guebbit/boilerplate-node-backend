@@ -17,7 +17,7 @@ import { apiKeysService } from '../services';
  * tenant's all answer 404.
  */
 export const getApiKey = (request: Request<{ id: string }>, response: Response) => {
-    const id = requireId(request, response, { notFound: 'generic.error-not-found' });
+    const id = requireId(request, response, { notFound: 'generic.error-item-gone' });
     if (!id) return Promise.resolve();
 
     return apiKeysService

@@ -16,7 +16,7 @@ import { webhooksService } from '../services';
  * One delivery of this tenant's log. A miss, a malformed id and another shop's delivery all answer 404.
  */
 export const getWebhookDelivery = (request: Request<{ id: string }>, response: Response) => {
-    const id = requireId(request, response, { notFound: 'generic.error-not-found' });
+    const id = requireId(request, response, { notFound: 'generic.error-item-gone' });
     if (!id) return;
 
     return webhooksService

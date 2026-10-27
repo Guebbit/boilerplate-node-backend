@@ -276,7 +276,7 @@ export const update = (
     webhookSubscriptionRepository
         .findByIdInTenant(id, context.caller.tenantId)
         .then(async (subscription) => {
-            if (!subscription) return generateReject(404, [t('generic.error-not-found')]);
+            if (!subscription) return generateReject(404, [t('generic.error-item-gone')]);
 
             const unknownEvents = refuseUnknownEvents(body.eventTypes);
             if (unknownEvents) return unknownEvents;
@@ -331,7 +331,7 @@ export const enable = (
     webhookSubscriptionRepository
         .findByIdInTenant(id, context.caller.tenantId)
         .then((subscription) => {
-            if (!subscription) return generateReject(404, [t('generic.error-not-found')]);
+            if (!subscription) return generateReject(404, [t('generic.error-item-gone')]);
             if (!subscription.disabledAt)
                 return rejectAlready(
                     ERROR_CODES.WEBHOOK_SUBSCRIPTION_ALREADY_ENABLED,
@@ -370,7 +370,7 @@ export const disable = (
     webhookSubscriptionRepository
         .findByIdInTenant(id, context.caller.tenantId)
         .then((subscription) => {
-            if (!subscription) return generateReject(404, [t('generic.error-not-found')]);
+            if (!subscription) return generateReject(404, [t('generic.error-item-gone')]);
             if (subscription.disabledAt)
                 return rejectAlready(
                     ERROR_CODES.WEBHOOK_SUBSCRIPTION_ALREADY_DISABLED,
@@ -404,7 +404,7 @@ export const createSecret = (
     webhookSubscriptionRepository
         .findByIdInTenant(id, context.caller.tenantId)
         .then((subscription) => {
-            if (!subscription) return generateReject(404, [t('generic.error-not-found')]);
+            if (!subscription) return generateReject(404, [t('generic.error-item-gone')]);
 
             const minted = mintRingSecret();
             // Prune what has expired, and keep only the newest survivor beside the new secret:
@@ -440,13 +440,13 @@ export const removeSecret = (
     webhookSubscriptionRepository
         .findByIdInTenant(id, context.caller.tenantId)
         .then((subscription) => {
-            if (!subscription) return generateReject(404, [t('generic.error-not-found')]);
+            if (!subscription) return generateReject(404, [t('generic.error-item-gone')]);
 
             const remaining = removeRingSecret(subscription.secrets, secretId);
             // An id the ring doesn't carry filters out nothing — same length back. Nothing was
             // removed, so this is a 404, not a silent success.
             if (remaining.length === subscription.secrets.length)
-                return generateReject(404, [t('generic.error-not-found')]);
+                return generateReject(404, [t('generic.error-item-gone')]);
             // Never let this empty the ring — a subscription with no secret can never sign a
             // delivery. The schema's own `validate` (`../model.ts`) is the second guard; this is
             // the one that answers 422 instead of a save-time throw.
@@ -473,7 +473,7 @@ export const remove = (
     webhookSubscriptionRepository
         .findByIdInTenant(id, context.caller.tenantId)
         .then((subscription) => {
-            if (!subscription) return generateReject(404, [t('generic.error-not-found')]);
+            if (!subscription) return generateReject(404, [t('generic.error-item-gone')]);
 
             return webhookSubscriptionRepository.deleteOne(subscription).then(() => {
                 recordAudit(context, {

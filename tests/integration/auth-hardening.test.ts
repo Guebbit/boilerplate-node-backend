@@ -48,7 +48,7 @@ describe('the 500 handler', () => {
         expect(JSON.stringify(response.body)).not.toContain('internal-db');
         // A chosen, translated message still reaches the user, and the stable code still reaches
         // the client's error handling.
-        expect(response.body.errors[0].code).toBe('INTERNAL_ERROR');
+        expect(response.body.errors[0].code).toBe('INTERNAL_SERVER_ERROR');
         expect(response.body.errors[0].message).toBeTruthy();
     });
 
@@ -70,7 +70,7 @@ describe('the 500 handler', () => {
             .send(JSON.stringify({ padding: 'x'.repeat(500) }));
 
         expect(response.status).toBe(413);
-        expect(response.body.errors[0].code).toBe('PAYLOAD_TOO_LARGE');
+        expect(response.body.errors[0].code).toBe('CONTENT_TOO_LARGE');
     });
 
     /**
@@ -84,7 +84,7 @@ describe('the 500 handler', () => {
         );
 
         expect(response.status).toBe(500);
-        expect(response.body.errors[0].code).toBe('INTERNAL_ERROR');
+        expect(response.body.errors[0].code).toBe('INTERNAL_SERVER_ERROR');
     });
 
     /** And the range is the other half — an exposed 5xx is still a server fault. */

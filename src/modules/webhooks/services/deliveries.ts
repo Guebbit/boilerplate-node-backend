@@ -89,7 +89,7 @@ export const get = (
     context: TenantCallerContext
 ): Promise<ResponseSuccess<WebhookDelivery> | ResponseReject> =>
     webhookDeliveryRepository.findByIdInTenant(id, context.caller.tenantId).then((delivery) => {
-        if (!delivery) return generateReject(404, [t('generic.error-not-found')]);
+        if (!delivery) return generateReject(404, [t('generic.error-item-gone')]);
 
         return webhookSubscriptionRepository
             .findEnabledIdsAmong([subscriptionIdOf(delivery)])
@@ -140,7 +140,7 @@ export const replay = async (
     context: TenantCallerContext
 ): Promise<ResponseSuccess<WebhookDelivery> | ResponseReject> => {
     const delivery = await webhookDeliveryRepository.findByIdInTenant(id, context.caller.tenantId);
-    if (!delivery) return generateReject(404, [t('generic.error-not-found')]);
+    if (!delivery) return generateReject(404, [t('generic.error-item-gone')]);
 
     const subscription = await webhookSubscriptionRepository.findById(
         String(delivery.subscriptionId)

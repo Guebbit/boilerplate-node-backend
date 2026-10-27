@@ -19,7 +19,7 @@ import { ticketService } from '../service';
  * Permanently removes a ticket. A malformed, unknown or out-of-jurisdiction id answers 404.
  */
 export const deleteTicket = (request: Request<{ id: string }>, response: Response) => {
-    const id = requireId(request, response, { notFound: 'generic.error-not-found' });
+    const id = requireId(request, response, { notFound: 'generic.error-item-gone' });
     if (!id) return Promise.resolve();
 
     return ticketService

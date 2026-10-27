@@ -17,7 +17,6 @@ import {
 } from '@infrastructure/observability/tracer';
 import { processUnhandledRejectionsTotal } from '@infrastructure/observability/metrics-process';
 import { t } from '@infrastructure/i18n';
-import { ERROR_CODES, type ErrorCode } from '@api/error-codes';
 import { isTestEnvironment } from '@infrastructure/runtime/config';
 
 /**
@@ -44,25 +43,6 @@ const clientErrorStatus = (error: Error): number | undefined => {
         'status' in error ? error.status : 'statusCode' in error ? error.statusCode : undefined;
 
     return typeof declared === 'number' && declared >= 400 && declared < 500 ? declared : undefined;
-};
-
-/**
- * The copy a declared client error answers with.
- *
- * A CONSTANT per status, never `error.message`. `expose: true` is body-parser's judgement about
- * its own text, not a licence for this handler to start forwarding library strings — the rule
- * that the client learns the status and nothing else is what keeps field paths, hosts and
- * filesystem layout out of responses.
- *
- * See: docs/theory/request-flow.md#the-500-branch-says-nothing
- */
-const CLIENT_ERROR_COPY: Record<number, { code: ErrorCode; messageKey: string }> = {
-    400: { code: ERROR_CODES.BAD_REQUEST, messageKey: 'generic.error-bad-request' },
-    413: { code: ERROR_CODES.PAYLOAD_TOO_LARGE, messageKey: 'generic.error-payload-too-large' },
-    415: {
-        code: ERROR_CODES.UNSUPPORTED_MEDIA_TYPE,
-        messageKey: 'generic.error-unsupported-media-type'
-    }
 };
 
 /**
@@ -187,28 +167,19 @@ export const handleUncaughtError = (
      *
      * See: docs/theory/request-flow.md#the-500-branch-says-nothing
      */
-    if (status >= 500)
-        return rejectResponse(response, 500, [
-            {
-                code: ERROR_CODES.INTERNAL_ERROR,
-                message: t('generic.error-internal')
-            }
-        ]);
+    if (status >= 500) return rejectResponse(response, 500);
 
     /*
      * A client error, from either source: a library that declared its own status (an oversized or
      * malformed body), or a driver failure that is really about the request — a malformed
      * ObjectId, a duplicate key — which `databaseErrorInterpreter` is the single place to judge.
-     * Statuses with no copy of their own fall back to the generic one rather than inventing any.
+     * The code and copy are the status's own (`rejectResponse` derives both), a CONSTANT, never
+     * `error.message`: `expose: true` is body-parser's judgement about its own text, not a licence to
+     * forward library strings.
      *
      * See: docs/theory/request-flow.md#the-database-branch-is-a-safety-net-not-a-substitute
      */
-    const copy = CLIENT_ERROR_COPY[status] ?? {
-        code: ERROR_CODES.INVALID_REQUEST,
-        messageKey: 'generic.error-unknown'
-    };
-
-    rejectResponse(response, status, [{ code: copy.code, message: t(copy.messageKey) }]);
+    rejectResponse(response, status);
 };
 
 /**

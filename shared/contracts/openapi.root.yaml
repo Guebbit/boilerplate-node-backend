@@ -87,17 +87,17 @@ x-error-codes:
             status: 422,
             description: 'One or more fields failed schema validation — see `errors[].details.field`.'
         }
-    REQUEST_ERROR:
+    UNPROCESSABLE_CONTENT:
         {
             status: 422,
-            description: 'A 4xx with no more specific code of its own. Mostly a 422 refused for a reason that is not one field (a field-level failure is `VALIDATION_ERROR`); also a 429 and any other 4xx the status table does not name.'
+            description: 'A 422 with no more specific code of its own: refused for a reason that is not one field (a field-level failure is `VALIDATION_ERROR`). The derived code of a status-only 422.'
         }
-    INVALID_REQUEST:
+    CLIENT_ERROR:
         {
-            status: 422,
-            description: 'A 4xx nobody handled on the way, answered by the global error handler with no copy of its own: a driver failure that is really about the request (a refused write is a 422, a duplicate key a 409, a stale `If-Match` a 412) or a library declaring its own 4xx. A route that catches the failure answers with the status-derived code instead.'
+            status: 400,
+            description: 'A 4xx whose status has no code of its own in this catalogue (the derived name is not listed here), so no wording is invented for it. Never a 5xx.'
         }
-    INTERNAL_ERROR:
+    INTERNAL_SERVER_ERROR:
         {
             status: 500,
             description: 'An unexpected server-side failure. Never carries library or stack detail.'
@@ -107,7 +107,7 @@ x-error-codes:
             status: 405,
             description: 'The path exists, but not with this method. The `Allow` header lists the methods it does answer.'
         }
-    PAYLOAD_TOO_LARGE:
+    CONTENT_TOO_LARGE:
         { status: 413, description: "The request body exceeds this deployment's size limit." }
     UNSUPPORTED_MEDIA_TYPE:
         {
@@ -145,7 +145,12 @@ x-error-codes:
     RATE_LIMITED:
         {
             status: 429,
-            description: 'The caller exceeded a rate-limit budget. Carries a `Retry-After` hint.'
+            description: "The caller spent a rate-limit budget: a request limiter, a mailbox's send budget, or an account's wrong-code budget (the 2FA lock). Carries `Retry-After` when the wait is known."
+        }
+    TOO_MANY_REQUESTS:
+        {
+            status: 429,
+            description: 'The derived code of a status-only 429, one no budget named. Nothing sends it today; it keeps the status-to-code rule total.'
         }
     IDEMPOTENCY_KEY_REQUIRED:
         {
@@ -729,7 +734,12 @@ components:
             properties:
                 code:
                     type: string
-                    description: Stable machine-readable error code
+                    description: >-
+                        Stable machine-readable error code. An error that names no cause of its
+                        own gets the official RFC 9110 name of its status, in UPPER_SNAKE
+                        (404 `NOT_FOUND`, 422 `UNPROCESSABLE_CONTENT`, 500
+                        `INTERNAL_SERVER_ERROR`); a 4xx whose name is not catalogued is
+                        `CLIENT_ERROR`, a 5xx other than 503 is `INTERNAL_SERVER_ERROR`.
                     example: VALIDATION_ERROR
                 message:
                     type: string

@@ -14,6 +14,6 @@ import { webhooksService } from '../services';
  */
 export const getWebhookSubscription = createItemController({
     entity: 'webhookSubscription',
-    notFoundKey: 'generic.error-not-found',
+    notFoundKey: 'generic.error-item-gone',
     fetch: (id, request) => webhooksService.getSubscription(id, tenantCallerContextOf(request))
 });

@@ -59,6 +59,43 @@ rejection into a problem, so no service or controller builds the body itself.
 A response always carries at least one item: a status-only failure (a bare 404) answers one built
 from the status.
 
+### The status-only code
+
+An error that names no cause of its own gets the **official RFC 9110 name of its status**, in
+UPPER_SNAKE: the same name `title` shows. There is no table; `resolveErrorCode`
+(`src/infrastructure/http/response.ts`) derives it, and the message is the locale key
+`generic.error-<the code in kebab-case>`.
+
+| Status | Code |
+| --- | --- |
+| 400 | `BAD_REQUEST` |
+| 401 | `UNAUTHORIZED` |
+| 403 | `FORBIDDEN` |
+| 404 | `NOT_FOUND` |
+| 405 | `METHOD_NOT_ALLOWED` |
+| 409 | `CONFLICT` |
+| 412 | `PRECONDITION_FAILED` |
+| 413 | `CONTENT_TOO_LARGE` |
+| 415 | `UNSUPPORTED_MEDIA_TYPE` |
+| 422 | `UNPROCESSABLE_CONTENT` |
+| 429 | `TOO_MANY_REQUESTS` |
+| 500, and any 5xx but 503 | `INTERNAL_SERVER_ERROR` |
+| 503 | `SERVICE_UNAVAILABLE` |
+| any other 4xx | `CLIENT_ERROR` |
+
+Two rules keep it total:
+
+- a derived name the contract's `x-error-codes` does not list is `CLIENT_ERROR`, so no wording is
+  invented for it;
+- a 5xx other than 503 is always `INTERNAL_SERVER_ERROR`, because the flavour of a server fault
+  would leak internals.
+
+`RATE_LIMITED` is a cause, not a status default: it is what a spent budget answers (a request
+limiter, a mailbox's send budget, the 2FA wrong-code lock). `TOO_MANY_REQUESTS` is only the
+derived code of a bare 429, which nothing sends today. A global error handler and a controller's
+own `.catch` both go through `rejectResponse(status)`, so one failure has one code wherever it is
+caught.
+
 ## Language
 
 `detail` and `errors[].message` follow `Accept-Language`; `title` is always English.

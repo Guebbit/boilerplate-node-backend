@@ -13,12 +13,7 @@
 import { STATUS_CODES } from 'node:http';
 import type { Response } from 'express';
 import type { ZodError } from 'zod';
-// Type-only: this file sits on `contracts:bundle`'s own incidental module-load path (it loads a
-// scenario, which loads `access`, which reaches this for every response), and that step runs
-// BEFORE `gen:api` produces `@api/error-codes` — a value import here would make a fresh
-// `npm run regenerate` unable to take its own second step. `satisfies ErrorCode` below still gets
-// the compiler's check, just at `ts-check` time, by which point the file exists.
-import type { ErrorCode } from '@api/error-codes';
+import { ERROR_CODES, type ErrorCode } from '@api/error-codes';
 import { t } from '@infrastructure/i18n';
 
 /** Fields shared by both internal outcomes — the discriminant plus human/machine status. */
@@ -148,45 +143,6 @@ export const createdOrOk = <T>(
  */
 export const noContentResponse = (response: Response) => response.status(204).end();
 
-/** One status's wording: its stable code and the key of its translated text. */
-interface StatusEnvelope {
-    /** Machine code; absent where the status shares the generic one. */
-    code?: ErrorCode;
-    /** The `generic.*` locale key the status-only `errors[0].message` is translated from. */
-    messageKey: string;
-}
-
-/**
- * Every status the envelope names, with the code and the translated text it answers with.
- *
- * One list, so adding 402 or 423 cannot reach the text and miss the code. An absent `code` is
- * deliberate: 422 and 429 get the generic code, because a client branches on "the request was
- * wrong", not on which flavour of wrong.
- */
-const STATUS_ENVELOPE: Readonly<Partial<Record<number, StatusEnvelope>>> = {
-    400: { code: 'BAD_REQUEST', messageKey: 'generic.error-bad-request' },
-    401: { code: 'UNAUTHORIZED', messageKey: 'generic.error-unauthorized' },
-    403: { code: 'FORBIDDEN', messageKey: 'generic.error-forbidden' },
-    404: { code: 'NOT_FOUND', messageKey: 'generic.error-nothing-found' },
-    405: { code: 'METHOD_NOT_ALLOWED', messageKey: 'generic.error-method-not-allowed' },
-    409: { code: 'CONFLICT', messageKey: 'generic.error-conflict' },
-    412: { code: 'PRECONDITION_FAILED', messageKey: 'generic.error-precondition-failed' },
-    422: { messageKey: 'generic.error-invalid-data' },
-    429: { messageKey: 'generic.error-rate-limited' }
-};
-
-/** What every 5xx answers with. One code: the flavour would leak internals. */
-const SERVER_FAULT = {
-    code: 'INTERNAL_ERROR',
-    messageKey: 'generic.error-internal'
-} as const satisfies StatusEnvelope;
-
-/** What an unmapped 4xx answers with. */
-const UNMAPPED_REQUEST_FAULT = {
-    code: 'REQUEST_ERROR',
-    messageKey: 'generic.error-unknown'
-} as const satisfies StatusEnvelope;
-
 /**
  * The two statuses whose RFC 9110 name is newer than Node's `STATUS_CODES`, which still carries the
  * names from RFC 7231 (413 "Payload Too Large", 422 "Unprocessable Entity").
@@ -194,18 +150,6 @@ const UNMAPPED_REQUEST_FAULT = {
 const CURRENT_STATUS_TITLES: Readonly<Partial<Record<number, string>>> = {
     413: 'Content Too Large',
     422: 'Unprocessable Content'
-};
-
-/**
- * Maps HTTP status codes to stable machine-readable error codes.
- *
- * @param status - HTTP status code
- * @returns a code from the generated catalogue
- */
-const resolveErrorCode = (status: number): ErrorCode => {
-    if (status >= 500) return SERVER_FAULT.code;
-    // An entry with no `code` of its own is the deliberate asymmetry above, not a gap.
-    return STATUS_ENVELOPE[status]?.code ?? UNMAPPED_REQUEST_FAULT.code;
 };
 
 /**
@@ -227,16 +171,42 @@ export const resolveErrorTitle = (status: number): string => {
 };
 
 /**
- * The translated text of a status-only failure, in the request's language.
+ * Whether a derived name is a code the contract catalogues.
+ *
+ * @param name - UPPER_SNAKE candidate
+ */
+const isErrorCode = (name: string): name is ErrorCode => Object.hasOwn(ERROR_CODES, name);
+
+/**
+ * The code of an error that names no cause of its own: the status's RFC 9110 name in UPPER_SNAKE
+ * (404 `NOT_FOUND`, 422 `UNPROCESSABLE_CONTENT`), the same name the problem's `title` carries.
+ *
+ * A name the catalogue does not list is `CLIENT_ERROR`, so no wording is invented for it. A 5xx
+ * other than 503 is `INTERNAL_SERVER_ERROR`: the flavour of a server fault would leak internals.
+ *
+ * See: docs/api/errors.md#the-errors-extension
  *
  * @param status - HTTP status code
- * @returns the `generic.*` copy for that status
+ * @returns a code from the generated catalogue
+ */
+const resolveErrorCode = (status: number): ErrorCode => {
+    if (status >= 500 && status !== 503) return ERROR_CODES.INTERNAL_SERVER_ERROR;
+    const derived = resolveErrorTitle(status)
+        .replaceAll("'", '')
+        .replaceAll(/[^A-Za-z0-9]+/g, '_')
+        .toUpperCase();
+    return isErrorCode(derived) ? derived : ERROR_CODES.CLIENT_ERROR;
+};
+
+/**
+ * The translated text of a status-only failure, in the request's language: the `generic.*` key
+ * is the code in kebab-case, so a code and its sentence cannot be listed apart.
+ *
+ * @param status - HTTP status code
+ * @returns the `generic.error-<code>` copy for that status
  */
 const resolveErrorText = (status: number): string =>
-    t(
-        (status >= 500 ? SERVER_FAULT : (STATUS_ENVELOPE[status] ?? UNMAPPED_REQUEST_FAULT))
-            .messageKey
-    );
+    t(`generic.error-${resolveErrorCode(status).toLowerCase().replaceAll('_', '-')}`);
 
 /**
  * Normalizes mixed error inputs into the structured API error item shape.

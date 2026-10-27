@@ -17,7 +17,7 @@ import { viewSubscription } from '../services/actions';
  * Turns a subscription back on, from either kind of off; 409 when it already is.
  */
 export const enableWebhookSubscription = (request: Request<{ id: string }>, response: Response) => {
-    const id = requireId(request, response, { notFound: 'generic.error-not-found' });
+    const id = requireId(request, response, { notFound: 'generic.error-item-gone' });
     if (!id) return;
 
     const context = tenantCallerContextOf(request);

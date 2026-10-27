@@ -204,7 +204,7 @@ export const get = (
 ): Promise<ResponseSuccess<ApiKey> | ResponseReject> =>
     apiKeyRepository.findById(id).then((apiKey) => {
         if (apiKey?.tenant !== context.caller.tenantId)
-            return generateReject(404, [t('generic.error-not-found')]);
+            return generateReject(404, [t('generic.error-item-gone')]);
         return withStatus([presentApiKey(apiKey)], context).then(([row]) => generateSuccess(row));
     });
 
@@ -287,7 +287,7 @@ export const revoke = (
 ): Promise<ResponseSuccess<undefined> | ResponseReject> =>
     apiKeyRepository.findById(id).then((apiKey) => {
         if (apiKey?.tenant !== context.caller.tenantId)
-            return generateReject(404, [t('generic.error-not-found')]);
+            return generateReject(404, [t('generic.error-item-gone')]);
         if (apiKey.revokedAt) return generateSuccess(undefined);
 
         apiKey.revokedAt = new Date();

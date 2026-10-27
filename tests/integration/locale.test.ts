@@ -203,7 +203,7 @@ describe('a failure with no message of its own', () => {
 
         expect(response.status).toBe(404);
         expect(response.headers['content-language']).toBe('it');
-        expect(messagesOf(response.body)).toEqual([italian('generic.error-nothing-found')]);
+        expect(messagesOf(response.body)).toEqual([italian('generic.error-not-found')]);
     });
 
     it('answers a malformed JSON body in the caller’s language', async () => {
@@ -227,7 +227,7 @@ describe('a failure with no message of its own', () => {
 
         expect(response.status).toBe(413);
         expect(response.headers['content-language']).toBe('it');
-        expect(messagesOf(response.body)).toEqual([italian('generic.error-payload-too-large')]);
+        expect(messagesOf(response.body)).toEqual([italian('generic.error-content-too-large')]);
     });
 
     it('keeps the title in English while detail and errors[] are translated', async () => {
@@ -235,6 +235,6 @@ describe('a failure with no message of its own', () => {
 
         expect(response.body.title).toBe('Not Found');
         expect(response.body.detail).toBe(response.body.errors[0].message);
-        expect(response.body.detail).toBe(italian('generic.error-nothing-found'));
+        expect(response.body.detail).toBe(italian('generic.error-not-found'));
     });
 });

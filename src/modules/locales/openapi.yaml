@@ -1170,7 +1170,7 @@ components:
                 already exists.
 
                 `app` is part of the identity, not a label on it: two apps may both declare
-                a top-level `generic`, so `generic.error-internal` names one string in the API's
+                a top-level `generic`, so `generic.error-internal-server-error` names one string in the API's
                 copy and a different one in a client's. Without it in the key, one would overwrite
                 the other.
             properties:

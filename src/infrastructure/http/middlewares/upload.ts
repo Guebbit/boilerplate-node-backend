@@ -257,7 +257,7 @@ export const validateUploadedImages: RequestHandler = (request, response, next) 
             // Stryker restore all
 
             return Promise.all(rejected.map((path) => deleteFile(path))).then(() => {
-                rejectResponse(response, 422, [t('generic.error-invalid-data')]);
+                rejectResponse(response, 422, [t('generic.error-unprocessable-content')]);
             });
         })
         .catch((error: unknown) => next(error));

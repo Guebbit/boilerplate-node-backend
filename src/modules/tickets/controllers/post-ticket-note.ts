@@ -19,7 +19,7 @@ export const postTicketNote = (
     request: Request<{ id: string }, unknown, CreateTicketNoteRequest>,
     response: Response
 ) => {
-    const id = requireId(request, response, { notFound: 'generic.error-not-found' });
+    const id = requireId(request, response, { notFound: 'generic.error-item-gone' });
     if (!id) return Promise.resolve();
     const body = parseBody(CreateTicketNoteBody, request.body, response);
     if (!body) return Promise.resolve();

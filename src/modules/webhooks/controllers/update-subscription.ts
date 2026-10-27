@@ -20,7 +20,7 @@ export const { replace: replaceWebhookSubscription, update: updateWebhookSubscri
     createUpdateController({
         versioned: false,
         entity: 'webhookSubscription',
-        notFoundKey: 'generic.error-not-found',
+        notFoundKey: 'generic.error-item-gone',
         replaceSchema: ReplaceWebhookSubscriptionBody,
         patchSchema: UpdateWebhookSubscriptionBody,
         update: (id, changes, request) =>

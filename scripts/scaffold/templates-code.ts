@@ -523,7 +523,7 @@ export const updateById = (
     context: CallerContext
 ): Promise<ResponseSuccess<${names.entity}> | ResponseReject> =>
     ${names.entityCamel}Repository.findById(id).then<ResponseSuccess<${names.entity}> | ResponseReject>((found) => {
-        if (!found) return generateReject(404, [t('generic.error-not-found')]);
+        if (!found) return generateReject(404, [t('generic.error-item-gone')]);
         return applyUpdate(found, payload).then((saved) => {
             ${auditCall(
                 names,
@@ -548,7 +548,7 @@ export const removeById = (
     ${options.audit ? 'context' : '_context'}: CallerContext
 ): Promise<ResponseSuccess<undefined> | ResponseReject> =>
     ${names.entityCamel}Repository.findById(id).then((found) => {
-        if (!found) return generateReject(404, [t('generic.error-not-found')]);
+        if (!found) return generateReject(404, [t('generic.error-item-gone')]);
         return ${names.entityCamel}Repository.deleteOne(found).then(() => {
             ${auditCall(
                 names,
@@ -694,7 +694,7 @@ import { ${names.entityCamel}Service } from '../services';
 /** GET ${names.basePath}/:id (admin). */
 export const get${names.entity} = createItemController({
     entity: '${names.entityCamel}',
-    notFoundKey: 'generic.error-not-found',
+    notFoundKey: 'generic.error-item-gone',
     fetch: (id, request) => ${names.entityCamel}Service.getById(id, callerContextOf(request))
 });
 `;
@@ -756,7 +756,7 @@ export const { replace: replace${names.entity}, update: update${names.entity} } 
         // The scaffolded contract declares no If-Match: add the header there, then flip this.
         versioned: false,
         entity: '${names.entityCamel}',
-        notFoundKey: 'generic.error-not-found',
+        notFoundKey: 'generic.error-item-gone',
         replaceSchema: Replace${names.entity}ByIdBody,
         patchSchema: Update${names.entity}ByIdBody,
         update: (id, changes, request) =>
@@ -788,7 +788,7 @@ import { ${names.entityCamel}Service } from '../services';
  * A malformed or unknown id both answer 404.
  */
 export const delete${names.entity} = (request: Request<{ id: string }>, response: Response) => {
-    const id = requireId(request, response, { notFound: 'generic.error-not-found' });
+    const id = requireId(request, response, { notFound: 'generic.error-item-gone' });
     if (!id) return Promise.resolve();
 
     return ${names.entityCamel}Service

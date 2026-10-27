@@ -291,7 +291,9 @@ describe('draft languages', () => {
             const preview = createPreviewContext('de');
             const fallbackT = translator(getFallbackLocale());
 
-            expect(preview.t('generic.error-unknown')).toBe(fallbackT('generic.error-unknown'));
+            expect(preview.t('generic.error-client-error')).toBe(
+                fallbackT('generic.error-client-error')
+            );
         });
     });
 });

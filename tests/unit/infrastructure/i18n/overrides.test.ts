@@ -85,7 +85,9 @@ describe('locale overrides', () => {
 
         await refreshLocaleOverrides();
 
-        expect(t('generic.error-internal')).toBe(enTranslation.generic['error-internal']);
+        expect(t('generic.error-internal-server-error')).toBe(
+            enTranslation.generic['error-internal-server-error']
+        );
     });
 
     /**

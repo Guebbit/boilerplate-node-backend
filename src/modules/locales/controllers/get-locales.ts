@@ -58,7 +58,7 @@ export const getLocaleDictionary = (request: Request<{ locale?: string }>, respo
     // The supported list is derived from the directory itself, so this doubles as the 404 check and
     // the path-traversal guard. A language switched off answers 404 like an unknown one.
     if (!locale || !hasServedDictionary(locale))
-        return rejectResponse(response, 404, [t('generic.error-invalid-data')]);
+        return rejectResponse(response, 404, [t('generic.error-unprocessable-content')]);
 
     return successResponse<LocaleDictionary>(response, {
         locale,
