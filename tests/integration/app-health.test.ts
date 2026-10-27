@@ -71,53 +71,34 @@ describe('System routes', () => {
     });
 });
 
-describe('GET /livez', () => {
-    // Runs before `GET /readyz`'s cases below, so the process is still booting here: the property
-    // that defines liveness is that it does not care.
-    it('answers 200 with an empty body while /readyz still answers 503', async () => {
-        const ready = await api().get('/readyz');
-        const live = await api().get('/livez');
+describe('GET /livez and GET /readyz across the process lifecycle', () => {
+    // The phase only moves forward (`readiness.ts`), and `src/app.ts`'s auto-start is skipped under
+    // `NODE_ENV=test` (see `tests/support/http.ts`'s own docblock), so this process starts in
+    // 'booting' and never calls `markServerListening` on its own. One case walks the whole path,
+    // because separate cases would pass only in file order, and the suite also runs shuffled.
+    it('answers 503 booting, 200 listening, 503 draining, while /livez stays 200 with an empty body', async () => {
+        const booting = await api().get('/readyz');
+        // Liveness does not care that the process is still booting.
+        const liveWhileBooting = await api().get('/livez');
 
-        expect(ready.status).toBe(503);
-        expect(live.status).toBe(200);
-        expect(live.text).toBe('');
-    });
-});
+        expect(booting.status).toBe(503);
+        expect(booting.body).toEqual({});
+        expect(booting.text).toBe('');
+        expect(liveWhileBooting.status).toBe(200);
+        expect(liveWhileBooting.text).toBe('');
 
-describe('GET /readyz', () => {
-    // `src/app.ts`'s auto-start is skipped under `NODE_ENV=test` (see `tests/support/http.ts`'s
-    // own docblock), so this process never calls `markServerListening` on its own — every case
-    // below drives the phase directly instead. The 'still booting' case must run first: it is the
-    // one case this file does not itself set up, and would otherwise pass by accident after a
-    // later case marks the process listening.
-    it('answers 503 with an empty body while still booting', async () => {
-        const response = await api().get('/readyz');
-
-        expect(response.status).toBe(503);
-        expect(response.body).toEqual({});
-        expect(response.text).toBe('');
-    });
-
-    it('answers 200 with an empty body once listening, database included', async () => {
         markServerListening();
+        const listening = await api().get('/readyz');
 
-        const response = await api().get('/readyz');
+        expect(listening.status).toBe(200);
+        expect(listening.text).toBe('');
 
-        expect(response.status).toBe(200);
-        expect(response.text).toBe('');
-    });
-
-    it('answers 503 again once draining starts, even though the database is still up', async () => {
         markServerDraining();
+        const draining = await api().get('/readyz');
+        // A shutdown is not a reason to restart, so liveness holds while draining.
+        const liveWhileDraining = await api().get('/livez');
 
-        const response = await api().get('/readyz');
-
-        expect(response.status).toBe(503);
-    });
-
-    it('leaves /livez at 200 while draining: a shutdown is not a reason to restart', async () => {
-        const response = await api().get('/livez');
-
-        expect(response.status).toBe(200);
+        expect(draining.status).toBe(503);
+        expect(liveWhileDraining.status).toBe(200);
     });
 });

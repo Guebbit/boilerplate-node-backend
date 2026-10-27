@@ -64,9 +64,17 @@ interface RegisteredModel {
     schema: { indexes: () => [Record<string, unknown>, Record<string, unknown>][] };
 }
 
-/** Every index actually stored for a model, by key spec, `_id_` excluded. */
+/**
+ * Every index actually stored for a model, by key spec, `_id_` excluded. A collection that does not
+ * exist (code 26, NamespaceNotFound) has none: an earlier case may have dropped it, and sync only
+ * re-creates the collections whose schema declares an index.
+ */
 const storedKeys = async (model: RegisteredModel): Promise<Set<string>> => {
-    const indexes = await model.collection.indexes();
+    const indexes = await model.collection.indexes().catch((error: unknown) => {
+        if (typeof error === 'object' && error !== null && 'code' in error && error.code === 26)
+            return [];
+        throw error;
+    });
     return new Set(
         indexes.filter((index) => index.name !== '_id_').map((index) => JSON.stringify(index.key))
     );
