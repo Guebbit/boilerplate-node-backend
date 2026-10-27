@@ -672,29 +672,60 @@ jobs:
               # `npm run test:integration` runs them in jwt mode; this is the other mode.
               run: npm run test:journeys:cookie
 
+    resolve-frontend:
+        # One `git ls-remote` per push, so every `frontend-e2e` slice checks out the SAME frontend
+        # commit. Slices start minutes apart (20 concurrent jobs on this plan); a frontend that
+        # moved in between would make slices compute different splits, and a spec would run twice
+        # or never — nothing in the runner can tell.
+        runs-on: ubuntu-latest
+        timeout-minutes: 2
+        permissions:
+            contents: read
+        outputs:
+            sha: ${{ steps.resolve.outputs.sha }}
+        steps:
+            - name: Resolve the paired frontend's default branch
+              id: resolve
+              env:
+                  REPOSITORY: ${{ vars.SPEC_SIBLING_REPO || 'Guebbit/boilerplate-vue-frontend' }}
+                  TOKEN: ${{ secrets.SPEC_SIBLING_TOKEN || github.token }}
+              run: |
+                  # `HEAD` is the remote's default branch. An unreachable repo leaves the output
+                  # empty, and the checkout below then fails with its own message.
+                  sha=$(git ls-remote "https://x-access-token:${TOKEN}@github.com/${REPOSITORY}.git" HEAD | cut -f1 || true)
+                  echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+
     frontend-e2e:
         # The paired frontend's own Cypress suite, against THIS change's backend. The frontend runs
         # the same suite against the backend's main; only this job can say whether a backend PR
         # breaks the app people actually use before it merges, rather than the morning after.
         #
         # Demo profile: the frontend's shard runner boots one `npm run demo` of this checkout per
-        # shard (in-memory Mongo, cache and queue off) — see the frontend's
-        # `scripts/e2e/run-shards.ts`. The frontend is checked out at its default branch, the
-        # version a merge here would meet.
+        # slice (in-memory Mongo, cache and queue off) — see the frontend's
+        # `scripts/e2e/run-shards.ts`. The frontend is checked out at the commit `resolve-frontend`
+        # pinned, its default branch: the version a merge here would meet.
         #
-        # Three shards, not the runner's default four: each shard is a Chrome plus a backend plus a
-        # mongod, and four of them on this 4-vCPU runner starved each other — eight specs missed a
-        # 15-second wait that passes in seconds on a developer machine. 75 minutes covers the
-        # longer wall-clock that buys.
+        # A matrix, ONE SLICE PER RUNNER: the whole suite on one 4-vCPU runner measured ~178 min of
+        # Cypress time against a 75-minute limit, so every run was cancelled. `E2E_SLICE` names the
+        # slice this job owns (the frontend's docs/tools/live-e2e.md#ci-slices): shard 1..5 of its
+        # balanced split, plus `antibot`, the specs that need the human-challenge provider on. This
+        # job is jwt only; the frontend's own CI covers both session modes. The slice count (5) is
+        # also in `E2E_SLICE` below; change both. The frontend must be pushed first: a runner
+        # without `E2E_SLICE` support would run the whole suite in every slice.
+        needs: resolve-frontend
         runs-on: ubuntu-latest
-        timeout-minutes: 75
+        timeout-minutes: 45
+        strategy:
+            fail-fast: false
+            matrix:
+                shard: [1, 2, 3, 4, 5, antibot]
         permissions:
             contents: read
         env:
             # Where the frontend lands, beside this checkout rather than inside its tree walks.
             FRONTEND_PATH: .frontend
-            # Read by the frontend's `scripts/e2e/run-shards.ts`; the antibot run is one more.
-            E2E_SHARDS: 3
+            # Read by the frontend's `scripts/e2e/run-shards.ts`.
+            E2E_SLICE: ${{ matrix.shard == 'antibot' && 'antibot' || format('{0}/5', matrix.shard) }}
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -715,6 +746,7 @@ jobs:
                   # Override with a repository variable when the pair lives elsewhere.
                   repository: ${{ vars.SPEC_SIBLING_REPO || 'Guebbit/boilerplate-vue-frontend' }}
                   path: ${{ env.FRONTEND_PATH }}
+                  ref: ${{ needs.resolve-frontend.outputs.sha }}
                   # Only needed when the sibling is private; falls back to this repo's token.
                   token: ${{ secrets.SPEC_SIBLING_TOKEN || github.token }}
                   persist-credentials: false # no step after the checkout needs the token on disk
@@ -742,10 +774,12 @@ jobs:
               run: npm run test:e2e
 
             - name: Upload failing-shard logs
-              if: failure()
+              # `cancelled()` too: the 45-minute budget cancels the job, and a plain `failure()`
+              # skips the upload on exactly the run that most needs the logs.
+              if: failure() || cancelled()
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
               with:
-                  name: frontend-e2e-shard-logs
+                  name: frontend-e2e-shard-logs-${{ matrix.shard }}
                   path: .frontend/reports/e2e/
                   retention-days: 14
                   if-no-files-found: ignore
@@ -754,7 +788,7 @@ jobs:
               if: failure()
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
               with:
-                  name: frontend-e2e-screenshots
+                  name: frontend-e2e-screenshots-${{ matrix.shard }}
                   path: .frontend/tests/e2e/screenshots
                   retention-days: 14
                   if-no-files-found: ignore
@@ -1052,6 +1086,7 @@ jobs:
             - test-contract
             - test-contract-cookie
             - container-gate
+            - resolve-frontend
             - frontend-e2e
             # `boot`, `backup-drill`, `deploy-drill`, `publish-image`, `audit` and (until its first
             # green run) `demo-strip-measure` are deliberately excluded — see their own comments above.
