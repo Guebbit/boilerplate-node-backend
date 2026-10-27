@@ -10,14 +10,7 @@
  * runner (`GET /__test/scenario`), so it cannot be a literal.
  */
 
-import {
-    SEED_ADMIN_ID,
-    SEED_ADMIN_EMAIL,
-    SEED_ADMIN_PASSWORD,
-    SEED_USER_ID,
-    SEED_USER_EMAIL,
-    SEED_USER_PASSWORD
-} from '@scenarios/accounts';
+import { SEED_ADMIN_ID, SEED_USER_ID, seedCredentials } from '@scenarios/accounts';
 
 /**
  * The admin and the ordinary user — id and login — the pair
@@ -26,6 +19,14 @@ import {
  * fixed against the paired frontend's own `.env` copy.
  */
 export const SUBJECTS = {
-    admin: { id: SEED_ADMIN_ID, email: SEED_ADMIN_EMAIL, password: SEED_ADMIN_PASSWORD },
-    user: { id: SEED_USER_ID, email: SEED_USER_EMAIL, password: SEED_USER_PASSWORD }
+    admin: {
+        id: SEED_ADMIN_ID,
+        email: seedCredentials.admin.email,
+        password: seedCredentials.admin.password
+    },
+    user: {
+        id: SEED_USER_ID,
+        email: seedCredentials.user.email,
+        password: seedCredentials.user.password
+    }
 } as const;

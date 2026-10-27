@@ -20,7 +20,7 @@ import {
     list,
     remove,
     removeSecret,
-    rotateSecret,
+    createSecret,
     update
 } from '../../services/subscriptions';
 import { webhookSubscriptionRepository, webhookDeliveryRepository } from '../../repository';
@@ -188,7 +188,7 @@ describe('listing', () => {
             delete: false,
             enable: false,
             disable: false,
-            rotateSecret: false,
+            createSecret: false,
             removeSecret: false
         });
     });
@@ -532,7 +532,7 @@ describe('the secret ring', () => {
     it('answers 404 for an unknown subscription on every ring action', async () => {
         const id = 'a'.repeat(24);
 
-        const rotated = await rotateSecret(id, context);
+        const rotated = await createSecret(id, context);
         const removed = await removeSecret(id, 'whatever', context);
 
         expect([rotated, removed].map((result) => !result.success && result.status)).toEqual([
@@ -544,7 +544,7 @@ describe('the secret ring', () => {
         const created = await subscribe();
         const before = await stored(String(created._id));
 
-        const rotated = await rotateSecret(String(created._id), context);
+        const rotated = await createSecret(String(created._id), context);
 
         if (!rotated.success || !rotated.data) throw new Error('rotation refused');
         expect(rotated.data.newSecret).toEqual(expect.any(String));
@@ -559,10 +559,10 @@ describe('the secret ring', () => {
     it('never holds more than two: rotating again drops the oldest', async () => {
         const created = await subscribe();
         const [original] = await ringIds(String(created._id));
-        await rotateSecret(String(created._id), context);
+        await createSecret(String(created._id), context);
         const [, second] = await ringIds(String(created._id));
 
-        await rotateSecret(String(created._id), context);
+        await createSecret(String(created._id), context);
 
         const ring = (await read(String(created._id), 'secrets')) ?? [];
         expect(ring).toHaveLength(2);
@@ -572,7 +572,7 @@ describe('the secret ring', () => {
 
     it('removes one entry by id and audits it', async () => {
         const created = await subscribe();
-        await rotateSecret(String(created._id), context);
+        await createSecret(String(created._id), context);
         const [old, newest] = (await read(String(created._id), 'secrets')) ?? [];
 
         const removed = await removeSecret(String(created._id), old.id, context);

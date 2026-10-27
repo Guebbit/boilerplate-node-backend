@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "links": {
+      "type": "object",
+      "properties": {
+        "verify": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reset": {
+          "type": "string",
+          "minLength": 1
+        },
+        "restore": {
+          "type": "string",
+          "minLength": 1
+        },
+        "emailChange": {
+          "type": "string",
+          "minLength": 1
+        },
+        "emailUndo": {
+          "type": "string",
+          "minLength": 1
+        },
+        "export": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order": {
+          "type": "string",
+          "minLength": 1
+        },
+        "product": {
+          "type": "string",
+          "minLength": 1
+        },
+        "contact": {
+          "type": "string",
+          "minLength": 1
+        },
+        "privacy": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "verify",
+        "reset",
+        "restore",
+        "emailChange",
+        "emailUndo",
+        "export",
+        "order",
+        "product",
+        "contact",
+        "privacy"
+      ],
+      "additionalProperties": false
+    },
+    "staticPages": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "links",
+    "staticPages"
+  ],
+  "additionalProperties": false
+}

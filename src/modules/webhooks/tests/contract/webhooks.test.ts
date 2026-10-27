@@ -59,7 +59,7 @@ describe('GET /webhooks/subscriptions', () => {
             delete: true,
             enable: false,
             disable: true,
-            rotateSecret: true,
+            createSecret: true,
             removeSecret: false
         });
     });
@@ -439,8 +439,8 @@ describe('POST /webhooks/subscriptions/:id/disable and /enable', () => {
     );
 });
 
-describe('POST /webhooks/subscriptions/:id/rotate-secret', () => {
-    it('rotates the secret ring, returning newSecret and leaving the old one active too', async () => {
+describe('POST /webhooks/subscriptions/:id/secrets', () => {
+    it('adds a secret to the ring, returning newSecret and leaving the old one active too', async () => {
         const { bearer } = await authenticateAsRole('manager');
         const created = await api()
             .post('/webhooks/subscriptions')
@@ -448,7 +448,7 @@ describe('POST /webhooks/subscriptions/:id/rotate-secret', () => {
             .send(subscriptionBody());
 
         const response = await api()
-            .post(`/webhooks/subscriptions/${String(created.body.id)}/rotate-secret`)
+            .post(`/webhooks/subscriptions/${String(created.body.id)}/secrets`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
@@ -468,7 +468,7 @@ describe('POST /webhooks/subscriptions/:id/rotate-secret', () => {
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
             .send(subscriptionBody());
-        const url = `/webhooks/subscriptions/${String(created.body.id)}/rotate-secret`;
+        const url = `/webhooks/subscriptions/${String(created.body.id)}/secrets`;
 
         const first = await api().post(url).set('Authorization', bearer);
         const second = await api().post(url).set('Authorization', bearer);
@@ -483,7 +483,7 @@ describe('POST /webhooks/subscriptions/:id/rotate-secret', () => {
         const { bearer } = await authenticateAsRole('manager');
 
         const response = await api()
-            .post('/webhooks/subscriptions/000000000000000000000000/rotate-secret')
+            .post('/webhooks/subscriptions/000000000000000000000000/secrets')
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
@@ -531,7 +531,7 @@ describe('DELETE /webhooks/subscriptions/:id/secrets/:secretId', () => {
             .send(subscriptionBody());
         const [originalSecretId] = created.body.secretIds as string[];
         await api()
-            .post(`/webhooks/subscriptions/${String(created.body.id)}/rotate-secret`)
+            .post(`/webhooks/subscriptions/${String(created.body.id)}/secrets`)
             .set('Authorization', bearer);
 
         const response = await api()

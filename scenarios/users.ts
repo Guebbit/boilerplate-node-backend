@@ -2,46 +2,26 @@
  * @module
  * The user directory's slice of the demo dataset: `root` is the owner every admin-only route
  * needs a caller for, and the `customer` account is the shopper every scoping rule needs someone
- * to be scoped against. Alongside them, one account per newer tenant role — editor, moderator —
- * so each can be logged into and tried on its own rather than only read about. Ids and
- * credentials for all four come from `@scenarios/accounts`, since other files in this folder
- * seed rows belonging to these people.
+ * to be scoped against. Alongside them, one account per newer tenant role, the personas and the
+ * staff, so each can be logged into and tried on its own rather than only read about. All 13 are
+ * `shared/scenarios/personas.yaml`; ids and credentials come from `@scenarios/accounts`, since
+ * other files in this folder seed rows belonging to these people.
  *
  * Ten further customers (`SEED_CUSTOMER_IDS`) sit alongside them, purely so the flow runner has
  * more than one shopper to vary an order history across. None is wired into `@scenarios/accounts`
- * — there is no login promise attached to any of the ten, only to the four named accounts above.
+ * — there is no login promise attached to any of the ten, only to the 13 named accounts above.
  * They log in with `makeUser`'s own default password, which is how
  * `scenarios/flows/shop-history.ts` shops as them.
  */
 
 import {
-    SEED_ADMIN_EMAIL,
-    SEED_ADMIN_ID,
-    SEED_ADMIN_PASSWORD,
-    SEED_USER_EMAIL,
-    SEED_USER_ID,
-    SEED_USER_PASSWORD,
-    SEED_EDITOR_EMAIL,
-    SEED_EDITOR_ID,
-    SEED_EDITOR_PASSWORD,
-    SEED_MODERATOR_EMAIL,
-    SEED_MODERATOR_ID,
-    SEED_MODERATOR_PASSWORD,
-    seedPersonaCredentials,
-    SEED_UNVERIFIED_ID,
-    SEED_TWO_FACTOR_ID,
+    SEED_IDS,
+    seedCredentials,
     SEED_TWO_FACTOR_BACKUP_CODES,
-    SEED_PENDING_EMAIL_ID,
-    SEED_SECOND_SHOPPER_ID,
-    SEED_PENDING_EMAIL_TARGET,
-    SEED_BANNED_ID,
-    seedStaffCredentials,
-    SEED_MANAGER_ID,
-    SEED_WAREHOUSE_ID,
-    SEED_SUPPORT_ID,
-    SEED_OPERATOR_ID,
     SEED_STAFF_TOTP_SECRET
 } from '@scenarios/accounts';
+import { personas, PERSONA_NAMES } from '@scenarios/personas-schema';
+import type { PersonaName } from '@scenarios/personas-schema';
 import { Types } from 'mongoose';
 import { generateBackupCodeSalt, hashBackupCodes } from '@modules/account/two-factor/backup-codes';
 import { encryptTotpSecret } from '@modules/account/two-factor/totp';
@@ -111,142 +91,60 @@ const armedAuthenticator = (
 };
 
 /**
- * The five personas — customers in one particular state each, written straight to the collection
- * because reaching the state through the API needs a mail or a code the seeder does not read.
- * Ids, addresses and passwords come from `@scenarios/accounts`.
+ * One demo account as a user row, built from its entry in `shared/scenarios/personas.yaml`. The
+ * state flags map onto the row: an unverified account has no `verifiedAt`, an armed authenticator
+ * gets the shared staff secret, email 2FA gets the fixed backup codes. Written straight to the
+ * collection, because reaching a state through the API needs a mail or a code the seeder does not
+ * read. Ids and passwords come from `@scenarios/accounts`.
+ *
+ * @param name - the account
  */
-const personaUsers = [
-    // Signed up, never proved the address: no `verifiedAt`, so the verify-your-email nag shows.
-    makeUser({
-        id: SEED_UNVERIFIED_ID,
-        username: 'unverified',
-        ...seedPersonaCredentials.unverified,
-        ...userImages.customer
-    }),
-    // Email 2FA armed. A login mails a code (read it from the outbox or Mailpit), or a backup code
-    // from `SEED_TWO_FACTOR_BACKUP_CODES` gets in instead.
-    makeUser({
-        id: SEED_TWO_FACTOR_ID,
-        username: 'two-factor',
-        email: seedPersonaCredentials.twoFactor.email,
-        password: seedPersonaCredentials.twoFactor.password,
-        verifiedAt: new Date(),
-        twoFactorEnabledAt: new Date().toISOString(),
-        twoFactorMethods: [{ method: 'email', enrolledAt: new Date() }],
-        twoFactorBackupCodes: hashBackupCodes(
-            SEED_TWO_FACTOR_BACKUP_CODES,
-            twoFactorBackupCodeSalt
-        ),
-        twoFactorBackupCodeSalt,
-        ...userImages.customer
-    }),
-    // An address change asked for and not confirmed: `pendingEmail` set, the live email unchanged.
-    makeUser({
-        id: SEED_PENDING_EMAIL_ID,
-        username: 'pending-email',
-        ...seedPersonaCredentials.pendingEmail,
-        verifiedAt: new Date(),
-        pendingEmail: SEED_PENDING_EMAIL_TARGET,
-        ...userImages.customer
-    }),
-    // Switched off by an admin: `active: false`, so a login is refused.
-    makeUser({
-        id: SEED_BANNED_ID,
-        username: 'banned',
-        ...seedPersonaCredentials.banned,
-        verifiedAt: new Date(),
-        active: false,
-        ...userImages.customer
-    }),
-    // No special state: verified, so it can shop. Its address book is seeded by `addresses.ts`.
-    makeUser({
-        id: SEED_SECOND_SHOPPER_ID,
-        username: 'second-shopper',
-        ...seedPersonaCredentials.secondShopper,
-        verifiedAt: new Date(),
-        ...userImages.customer
-    })
-];
+const userOf = (name: PersonaName) => {
+    const { username, state } = personas.accounts[name];
+    const id = SEED_IDS[name];
+    const { email, password } = seedCredentials[name];
 
-/**
- * The four staff accounts — three shop roles and a platform-only operator. Verified, because each
- * exists to be logged into; the role itself is a membership, assigned by `seedAccessModel`.
- */
-const staffUsers = (
-    [
-        { name: 'manager', id: SEED_MANAGER_ID },
-        { name: 'warehouse', id: SEED_WAREHOUSE_ID },
-        { name: 'support', id: SEED_SUPPORT_ID },
-        { name: 'operator', id: SEED_OPERATOR_ID }
-    ] as const
-).map(({ name, id }) =>
-    makeUser({
+    return makeUser({
         id,
-        username: name,
-        email: seedStaffCredentials[name].email,
-        password: seedStaffCredentials[name].password,
-        verifiedAt: new Date(),
-        ...armedAuthenticator(id),
-        ...userImages.root
-    })
-);
+        username,
+        email,
+        password,
+        // A seed account exists to be logged into, not to demonstrate the verify-your-email nag.
+        ...(state.verified ? { verifiedAt: new Date() } : {}),
+        ...(state.active ? {} : { active: false }),
+        ...(state.pendingEmail === null ? {} : { pendingEmail: state.pendingEmail }),
+        // The consent gate is opt-in and needs its date: with no `analyticsConsentAt` the account
+        // counts as never asked, and the gate reads the header.
+        ...(state.analyticsConsent
+            ? { analyticsConsent: true, analyticsConsentAt: new Date() }
+            : {}),
+        ...(state.authenticator ? armedAuthenticator(id) : {}),
+        ...(state.twoFactor ? emailTwoFactor() : {}),
+        // Armed accounts are the people who run the shop; they wear the owner's photo.
+        ...(state.authenticator ? userImages.root : userImages.customer)
+    });
+};
 
 /**
- * The test-critical accounts — one per role a person actually logs in as. Exported so the
- * `blank` scenario ({@link seedNamedUsersCollection}) can seed exactly these and none of the
- * filler customer base below — `blank` has no shop for a customer to shop in.
+ * Email 2FA armed: a login mails a code (read it from the outbox or Mailpit), or one of the
+ * fixed backup codes gets in instead.
  */
-const namedUsers = [
-    makeUser({
-        id: SEED_ADMIN_ID,
-        username: 'root',
-        email: SEED_ADMIN_EMAIL,
-        password: SEED_ADMIN_PASSWORD,
-        ...armedAuthenticator(SEED_ADMIN_ID),
-        /*
-         * Verified, not the schema's absent-until-proven default — a seed account exists to be
-         * logged into, not to demonstrate the "verify your email" nag banner to everyone who boots
-         * the demo. The role itself is a membership, assigned by `@scenarios/accounts`'s
-         * `seedAccessModel` — this file only builds the document.
-         */
-        verifiedAt: new Date(),
-        ...userImages.root
-    }),
-    makeUser({
-        id: SEED_USER_ID,
-        username: 'customer',
-        email: SEED_USER_EMAIL,
-        password: SEED_USER_PASSWORD,
-        verifiedAt: new Date(),
-        // `<paired-frontend>/src/modules/cart/tests/e2e/analytics.cy.ts` logs in as this account
-        // and asserts the backend fires `cart_item_added` — `emitAnalyticsEvent`'s consent gate
-        // is opt-in, so this is the account that has opted in. The answer needs its date: with no
-        // `analyticsConsentAt` the account counts as never asked, and the gate reads the header.
-        analyticsConsent: true,
-        analyticsConsentAt: new Date(),
-        ...userImages.customer
-    }),
-    makeUser({
-        id: SEED_EDITOR_ID,
-        username: 'editor',
-        email: SEED_EDITOR_EMAIL,
-        password: SEED_EDITOR_PASSWORD,
-        verifiedAt: new Date(),
-        ...armedAuthenticator(SEED_EDITOR_ID),
-        ...userImages.root
-    }),
-    makeUser({
-        id: SEED_MODERATOR_ID,
-        username: 'moderator',
-        email: SEED_MODERATOR_EMAIL,
-        password: SEED_MODERATOR_PASSWORD,
-        verifiedAt: new Date(),
-        ...armedAuthenticator(SEED_MODERATOR_ID),
-        ...userImages.root
-    }),
-    ...personaUsers,
-    ...staffUsers
-];
+const emailTwoFactor = (): Pick<
+    UserOverrides,
+    'twoFactorEnabledAt' | 'twoFactorMethods' | 'twoFactorBackupCodes' | 'twoFactorBackupCodeSalt'
+> => ({
+    twoFactorEnabledAt: new Date().toISOString(),
+    twoFactorMethods: [{ method: 'email', enrolledAt: new Date() }],
+    twoFactorBackupCodes: hashBackupCodes(SEED_TWO_FACTOR_BACKUP_CODES, twoFactorBackupCodeSalt),
+    twoFactorBackupCodeSalt
+});
+
+/**
+ * The test-critical accounts — all 13 of `personas.yaml`, in its order. Used by the `blank`
+ * scenario ({@link seedNamedUsersCollection}) to seed exactly these and none of the filler
+ * customer base below — `blank` has no shop for a customer to shop in.
+ */
+const namedUsers = PERSONA_NAMES.map((name) => userOf(name));
 
 /**
  * The ten further customers — plain shoppers, built from `SEED_CUSTOMER_IDS` in the same order so
@@ -314,7 +212,7 @@ const seedUsersCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(userFixtures.map((user) => insertIfAbsent(userRepository, user)));
 
 /**
- * Seed only the four named accounts — `blank`'s contribution to `users`. Called by
+ * Seed only the 13 named accounts — `blank`'s contribution to `users`. Called by
  * `scenarios/blank.ts`'s `seedBlank`, never by `scenarios/apply.ts`.
  */
 export const seedNamedUsersCollection = (): Promise<SeedOutcome[]> =>

@@ -12,6 +12,7 @@ src/types/asyncapi.generated.ts
 # from are formatted as normal.
 openapi.yaml
 shared/rules/schemas/
+shared/scenarios/schemas/
 
 # Stryker's own incremental cache — gitignored (see `.gitignore`) but still present on disk
 # between local runs, and written by Stryker, not by anyone typing JSON. Same reasoning as the

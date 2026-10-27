@@ -11,6 +11,7 @@ import {
     type ReencryptSpec,
     type ReencryptReport
 } from '@infrastructure/security/reencrypt';
+import { updateStatusIfIn as conditionalStatus } from '@infrastructure/persistence/conditional-status';
 import type { ClientSession, QueryFilter } from 'mongoose';
 import {
     fulfillmentOrderModel,
@@ -594,13 +595,10 @@ export const shipmentRepository: Repository<ShipmentDocument, Wire<ShipmentDocum
      * @param session - the act's transaction
      */
     markDelivered: (id, deliveredAt, session) =>
-        shipmentModel
-            .findOneAndUpdate(
-                { _id: toObjectId(id), status: 'shipped' },
-                { $set: { status: 'delivered', deliveredAt } },
-                { returnDocument: 'after', session }
-            )
-            .exec(),
+        conditionalStatus(shipmentModel, { _id: toObjectId(id) }, ['shipped'], 'delivered', {
+            set: { deliveredAt },
+            session
+        }),
 
     /**
      * Report a shipment lost, but only from `shipped` — atomically, in the filter, so two reports

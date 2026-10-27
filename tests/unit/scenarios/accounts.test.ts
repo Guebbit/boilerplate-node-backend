@@ -6,8 +6,6 @@
  */
 import { SignupBody } from '@api/schemas.zod';
 import {
-    SEED_ADMIN_EMAIL,
-    SEED_USER_EMAIL,
     SEED_ADMIN_PASSWORD,
     SEED_USER_PASSWORD,
     SEED_TWO_FACTOR_BACKUP_CODES,
@@ -34,7 +32,7 @@ afterEach(() => {
 
 describe('the demo identities', () => {
     it('gives each account its own login address', () => {
-        expect(SEED_ADMIN_EMAIL).not.toBe(SEED_USER_EMAIL);
+        expect(seedCredentials.admin.email).not.toBe(seedCredentials.user.email);
     });
 });
 
@@ -82,12 +80,12 @@ describe('seedCredentials', () => {
      */
     it('publishes exactly what each account was seeded with', () => {
         expect(seedCredentials.admin).toEqual({
-            email: SEED_ADMIN_EMAIL,
+            email: 'root@root.it',
             password: SEED_ADMIN_PASSWORD,
             totpSecret: SEED_STAFF_TOTP_SECRET
         });
         expect(seedCredentials.user).toEqual({
-            email: SEED_USER_EMAIL,
+            email: 'customer@example.com',
             password: SEED_USER_PASSWORD
         });
     });
