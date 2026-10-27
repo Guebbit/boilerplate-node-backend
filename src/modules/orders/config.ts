@@ -15,7 +15,7 @@
 
 import { defineConfig } from '@infrastructure/config/define';
 import { int, text } from '@infrastructure/config/fields';
-import { frontendLink } from '@infrastructure/http/frontend-link';
+import { frontendLink, FRONTEND_LINK_RULES } from '@infrastructure/http/frontend-link';
 import { createOrderBodyItemsMax, createOrderBodyItemsItemQuantityMax } from '@api/schemas.zod';
 
 /** The rules an order lives by. */
@@ -31,7 +31,7 @@ export const ordersConfig = defineConfig({
         NODE_ORDER_EXPORT_MAX_ROWS: int({ default: 20_000, min: 1 }),
         NODE_PURCHASE_HOLD_CANCEL_COUNT: int({ default: 3, min: 2 }),
         NODE_PURCHASE_HOLD_WINDOW_DAYS: int({ default: 7, min: 1 }),
-        NODE_FRONTEND_LINK_ORDER: text({ default: 'orders/{id}' })
+        NODE_FRONTEND_LINK_ORDER: text({ default: FRONTEND_LINK_RULES.links.order })
     }
 });
 

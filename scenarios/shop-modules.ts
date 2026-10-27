@@ -24,7 +24,7 @@ export interface ShopModuleEntry {
     /**
      * Also seeded by `blank` — the harness-only scenario that exists before there is a shop.
      * `locales` is the one entry today: a spec that creates its own product still needs the
-     * fallback language active. `users` is NOT baseline — `blank` seeds four NAMED accounts
+     * fallback language active. `users` is NOT baseline — `blank` seeds the 13 NAMED accounts
      * (`./users`'s `seedNamedUsersCollection`), not the full demo set this entry's `seed` writes.
      */
     baseline?: boolean;

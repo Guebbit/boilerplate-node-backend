@@ -4,6 +4,7 @@ import path from 'node:path';
 import {
     DOUBLES_REGISTRY,
     FIXTURE_REGISTRY,
+    LEVERS_REGISTRY,
     SCENARIO_REGISTRY,
     renderScenarioRegistries,
     staleScenarioRegistries,
@@ -39,6 +40,10 @@ beforeEach(() => {
     write(
         'scenarios/support/doubles/payments/register.ts',
         'export const registerDouble = () => {};\n'
+    );
+    write(
+        'scenarios/support/doubles/payments/levers.ts',
+        'export const installLever = () => {};\n'
     );
     write('scenarios/support/doubles/mail.ts');
 });
@@ -82,6 +87,15 @@ describe('scenario registries', () => {
         expect(text).toContain('= [paymentsDouble];');
     });
 
+    it('mounts the `installLever` of each doubles folder that has a levers file', async () => {
+        const text = await rendered(LEVERS_REGISTRY);
+
+        expect(text).toContain(
+            "import { installLever as paymentsLever } from './payments/levers';"
+        );
+        expect(text).toContain('= [paymentsLever];');
+    });
+
     it('drops an entry the moment its file is deleted, with no text to edit', async () => {
         rmSync(path.join(root, 'scenarios/products.ts'));
         rmSync(path.join(root, 'scenarios/shop.scenario.ts'));
@@ -90,24 +104,28 @@ describe('scenario registries', () => {
         const fixtures = await rendered(FIXTURE_REGISTRY);
         const scenarios = await rendered(SCENARIO_REGISTRY);
         const doubles = await rendered(DOUBLES_REGISTRY);
+        const levers = await rendered(LEVERS_REGISTRY);
 
         expect(fixtures).not.toContain('products');
         expect(scenarios).not.toContain('shop.scenario');
         expect(scenarios).toContain('export const scenarioFixtures = {  };');
         expect(doubles).not.toContain('payments');
+        expect(levers).not.toContain('payments');
     });
 
     it('writes the registries once and reports them stale only until then', async () => {
         await expect(staleScenarioRegistries(root, identity)).resolves.toEqual([
             FIXTURE_REGISTRY,
             SCENARIO_REGISTRY,
-            DOUBLES_REGISTRY
+            DOUBLES_REGISTRY,
+            LEVERS_REGISTRY
         ]);
 
         await expect(writeScenarioRegistries(root, identity)).resolves.toEqual([
             FIXTURE_REGISTRY,
             SCENARIO_REGISTRY,
-            DOUBLES_REGISTRY
+            DOUBLES_REGISTRY,
+            LEVERS_REGISTRY
         ]);
 
         await expect(staleScenarioRegistries(root, identity)).resolves.toEqual([]);

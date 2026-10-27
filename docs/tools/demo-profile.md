@@ -24,7 +24,7 @@ It is also the lightest way for a human to get a working API for anything — a 
 
 | Route                                  | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /__test/restore`                 | Empty every collection and put a named scenario back — `{ "scenario": "shop" }` (the default, the furnished shop) or `{ "scenario": "blank" }` (roles, the four named accounts and locales only) — then clear the outbox, refresh the locale overlay and flush the cache. A REPLAY of the copy this process built at boot, not a rebuild: roughly 10 ms, fast enough to run once per e2e spec                                                                                                                                                                        |
+| `POST /__test/restore`                 | Empty every collection and put a named scenario back — `{ "scenario": "shop" }` (the default, the furnished shop) or `{ "scenario": "blank" }` (roles, the 13 named accounts and locales only) — then clear the outbox, refresh the locale overlay and flush the cache. A REPLAY of the copy this process built at boot, not a rebuild: roughly 10 ms, fast enough to run once per e2e spec                                                                                                                                                                          |
 | `GET /__test/scenario`                 | What is currently restored: the name, every seed account's login, and `subjects` — one row id per guarantee name (`order.paid`, `product.outOfStock`, …). The only way to address a specific order, since order ids are minted at boot rather than pinned                                                                                                                                                                                                                                                                                                            |
 | `GET /__test/clock`                    | The demo clock: `{ now, offsetMs }` — what `Date.now()` answers, and how far it is ahead of real time                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `POST /__test/clock`                   | Move the clock FORWARD: `{ "advanceMs": 3600000 }`. Never back (a negative or non-numeric value is a 400). Moves nothing else: a job that should react is triggered through its own door — the reservation sweep is `POST /inventory/reservations/sweep`. A restore puts it back to real time. Jumps beyond the refresh-token lifetime end the session, so log in again                                                                                                                                                                                              |
@@ -112,11 +112,21 @@ flowchart LR
 
 ## The named accounts
 
-Their ids and credentials live in `scenarios/accounts.ts` — outside `src/` entirely, like every
-other scenario file, even though `users` owns the record. Four of them, one per tenant role worth
-trying on its own: `admin` (who is also the platform operator — `root@root.it`), `user` (the
-ordinary customer — `customer@example.com`), `editor` (`editor@example.com`) and `moderator`
-(`moderator@example.com`).
+Who they are, what they hold and the state they start in is `shared/scenarios/personas.yaml`; their
+ids live in `scenarios/accounts.ts` — outside `src/` entirely, like every other scenario file, even
+though `users` owns the record. Four of them are the owner and the ordinary customer, plus one per
+tenant role worth trying on its own. The tables on this page are generated from that file.
+
+<!-- persona-named:start -->
+
+| Account     | Login                   | Roles                                | State                                  |
+| ----------- | ----------------------- | ------------------------------------ | -------------------------------------- |
+| `admin`     | `root@root.it`          | tenant `admin` + platform `operator` | authenticator app armed (`totpSecret`) |
+| `user`      | `customer@example.com`  | customer                             | opted in to analytics                  |
+| `editor`    | `editor@example.com`    | tenant `editor`                      | authenticator app armed (`totpSecret`) |
+| `moderator` | `moderator@example.com` | tenant `moderator`                   | authenticator app armed (`totpSecret`) |
+
+<!-- persona-named:end -->
 
 Several scenario files need a piece of them: `users` seeds the accounts, `account` seeds the address
 book an order ships to, `wishlist` seeds a row belonging to a person, and `flows/shop-history.ts`
@@ -152,13 +162,17 @@ Five more customers, each in one state a journey starts from. They are written s
 collection (`scenarios/users.ts`), because reaching the state through the API needs a mail or a
 code the seeder never reads. Each password is `NODE_SEED_<NAME>_PASSWORD`.
 
-| Persona         | Login                        | State                                                                                                |
-| --------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `unverified`    | `unverified@example.com`     | signed up, never proved the address                                                                  |
-| `twoFactor`     | `two-factor@example.com`     | email 2FA armed; five known single-use backup codes (published as `backupCodes`)                     |
-| `pendingEmail`  | `pending-email@example.com`  | asked to move to another address, has not confirmed                                                  |
-| `banned`        | `banned@example.com`         | switched off (`active: false`), so a login is refused                                                |
-| `secondShopper` | `second-shopper@example.com` | a plain verified customer with a default billing address: the second buyer of a two-shoppers journey |
+<!-- persona-persona:start -->
+
+| Account         | Login                        | Roles    | State                                                           |
+| --------------- | ---------------------------- | -------- | --------------------------------------------------------------- |
+| `unverified`    | `unverified@example.com`     | customer | never proved the address                                        |
+| `twoFactor`     | `two-factor@example.com`     | customer | email 2FA armed; five known backup codes (`backupCodes`)        |
+| `pendingEmail`  | `pending-email@example.com`  | customer | asked to move to `pending-new-address@example.com`, unconfirmed |
+| `banned`        | `banned@example.com`         | customer | switched off (`active: false`), every login refused             |
+| `secondShopper` | `second-shopper@example.com` | customer | verified customer                                               |
+
+<!-- persona-persona:end -->
 
 The banned persona is separate from `marcus`, whom the shop flow bans through the API so the audit
 trail records it. The persona exists so `blank` carries one too.
@@ -169,12 +183,16 @@ Four more logins, each holding exactly one role. Three are shop roles; the opera
 platform role only, with no shop membership, so it holds none of a shop's keys. Each password is
 `NODE_SEED_<NAME>_PASSWORD`.
 
-| Account     | Login                   | Role                              |
-| ----------- | ----------------------- | --------------------------------- |
-| `manager`   | `manager@example.com`   | shop `manager`                    |
-| `warehouse` | `warehouse@example.com` | shop `warehouse`                  |
-| `support`   | `support@example.com`   | shop `support`                    |
-| `operator`  | `operator@example.com`  | platform `operator`, nothing else |
+<!-- persona-staff:start -->
+
+| Account     | Login                   | Roles               | State                                  |
+| ----------- | ----------------------- | ------------------- | -------------------------------------- |
+| `manager`   | `manager@example.com`   | tenant `manager`    | authenticator app armed (`totpSecret`) |
+| `warehouse` | `warehouse@example.com` | tenant `warehouse`  | authenticator app armed (`totpSecret`) |
+| `support`   | `support@example.com`   | tenant `support`    | authenticator app armed (`totpSecret`) |
+| `operator`  | `operator@example.com`  | platform `operator` | authenticator app armed (`totpSecret`) |
+
+<!-- persona-staff:end -->
 
 None of them keeps an address book of its own seeding: staff and administrators do not shop, so
 no persona above needs a billing address to check out. The second shopper a two-customer journey
@@ -235,13 +253,14 @@ Nothing central lists the shop. Each file declares what it is, and `npm run rege
 | `scenarios/<module>.ts`                          | `shopModule`       | `shopModuleFixtures` in `shop-modules.generated.ts` |
 | `scenarios/<name>.scenario.ts`                   | `scenario`         | `scenarioFixtures` in `scenarios.generated.ts`      |
 | `scenarios/support/doubles/<module>/register.ts` | `registerDouble`   | `registerModuleDoubles` in `modules.generated.ts`   |
+| `scenarios/support/doubles/<module>/levers.ts`   | `installLever`     | `installModuleLevers` in `levers.generated.ts`      |
 | `scenarios/values/<module>.ts`                   | `collectionValues` | scanned by the client-collections bundler           |
 
 ```mermaid
 flowchart LR
     Strip["demo:remove<br/>deletes files only"] --> Gone["scenarios/shop.scenario.ts<br/>scenarios/products.ts<br/>scenarios/values/products.ts ..."]
     Gone --> Gen["npm run regenerate"]
-    Gen --> Reg["shop-modules.generated.ts<br/>scenarios.generated.ts<br/>modules.generated.ts"]
+    Gen --> Reg["shop-modules.generated.ts<br/>scenarios.generated.ts<br/>modules.generated.ts<br/>levers.generated.ts"]
     Reg --> Index["scenarios/index.ts<br/>SCENARIOS = shop? + blank"]
     Index --> Default["DEFAULT_SCENARIO<br/>shop if registered, else blank"]
 ```

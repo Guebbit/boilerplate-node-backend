@@ -7,11 +7,13 @@
  */
 
 import type { z } from 'zod';
+import { frontendLinksSchema } from './frontend-links';
 import { logRedactionSchema } from './log-redaction';
 import { passwordHashSchema } from './password-hash';
 
 /** File name (without `.yaml`) to the Zod schema its content must satisfy. */
 export const SHARED_RULE_SCHEMAS: Readonly<Record<string, z.ZodType>> = {
+    'frontend-links': frontendLinksSchema,
     'log-redaction': logRedactionSchema,
     'password-hash': passwordHashSchema
 };

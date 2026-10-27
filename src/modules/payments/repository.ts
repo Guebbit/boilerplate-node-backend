@@ -6,6 +6,7 @@
  * because Mongoose's generics are too large for TypeScript to infer at an export boundary (TS7056).
  */
 
+import { updateStatusIfIn as conditionalStatus } from '@infrastructure/persistence/conditional-status';
 import type { ClientSession, PipelineStage, Types } from 'mongoose';
 import { paymentModel, applyPaymentTransform } from './model';
 import { PaymentStatus, PaymentMethod, RefundStatus } from '@types';
@@ -531,13 +532,10 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * caller's transaction — the outbox row announcing the move rides in the same one.
      */
     updateStatusIfIn: (orderId, from, to, extra = {}, session) =>
-        paymentModel
-            .findOneAndUpdate(
-                { orderId: toObjectId(orderId), status: { $in: [...from] } },
-                { $set: { status: to, ...extra } },
-                { returnDocument: 'after', ...(session ? { session } : {}) }
-            )
-            .exec(),
+        conditionalStatus(paymentModel, { orderId: toObjectId(orderId) }, from, to, {
+            set: extra,
+            session
+        }),
 
     /**
      * Unset `userId` on every payment this account made. No `anonymizeAfter` scheduling needed,

@@ -1,6 +1,6 @@
 /**
  * @module
- * Controller for `POST /webhooks/subscriptions/:id/rotate-secret`.
+ * Controller for `POST /webhooks/subscriptions/:id/secrets`.
  */
 
 import type { Request, Response } from 'express';
@@ -13,11 +13,11 @@ import { webhooksService } from '../services';
 import { viewSubscription } from '../services/actions';
 
 /**
- * POST /webhooks/subscriptions/:id/rotate-secret
+ * POST /webhooks/subscriptions/:id/secrets
  * Mints a new ring secret and returns its plaintext once, in `newSecret` — the old secret stays
  * active until `DELETE .../secrets/:secretId` drops it.
  */
-export const rotateWebhookSubscriptionSecret = (
+export const createWebhookSubscriptionSecret = (
     request: Request<{ id: string }>,
     response: Response
 ) => {
@@ -26,7 +26,7 @@ export const rotateWebhookSubscriptionSecret = (
 
     const context = tenantCallerContextOf(request);
     return webhooksService
-        .rotateSubscriptionSecret(id, context)
+        .createSubscriptionSecret(id, context)
         .then((result) => {
             if (refused(response, result)) return;
             return successResponse<WebhookSubscriptionCreated>(response, {
@@ -34,5 +34,5 @@ export const rotateWebhookSubscriptionSecret = (
                 newSecret: result.data.newSecret
             });
         })
-        .catch(catchAs(response, 'rotateWebhookSubscriptionSecret'));
+        .catch(catchAs(response, 'createWebhookSubscriptionSecret'));
 };

@@ -140,9 +140,20 @@ run_previous() {
     compose up -d --no-build --no-deps app cron
 }
 
-# Prints what the failed services said, for whoever reads the CI or terminal log.
+# Prints what the failed services said, for whoever reads the CI or terminal log. `database` comes
+# first, with the health probe's own output: compose reports "database is unhealthy" and nothing
+# else, and the app never starts to say why. One call per service, because a service the active
+# profiles do not carry (an external database) makes compose refuse the whole call.
 show_logs() {
-    compose logs --tail 40 setup app cron 2>&1 || true
+    local service id
+    for service in database setup app cron; do
+        compose logs --tail 40 "$service" 2>&1 || true
+    done
+    id="$(container_of database)"
+    if [ -n "$id" ]; then
+        echo "deploy: database health probes:"
+        $ENGINE inspect --format '{{.State.Status}}: {{range .State.Health.Log}}[exit {{.ExitCode}}] {{.Output}}{{"\n"}}{{end}}' "$id" 2>&1 || true
+    fi
 }
 
 # No-registry path only: removes local `boilerplate-api:<tag>` images older than the last $KEEP good ones.
@@ -185,7 +196,9 @@ fi
 
 echo "deploy: starting $APP_IMAGE"
 # `--no-build`: the image is already what we mean to run; compose must never build over it.
-compose up -d --no-build
+# A stack that is unhealthy at once makes `up` itself exit non-zero; say why, then take the same
+# failure path as one that went unhealthy later.
+compose up -d --no-build || { echo "deploy: compose up failed" >&2; show_logs; }
 
 if wait_healthy full; then
     record deploy

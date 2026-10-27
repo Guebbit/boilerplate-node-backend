@@ -11,7 +11,7 @@
 
 import { defineConfig } from '@infrastructure/config/define';
 import { text, withPresence } from '@infrastructure/config/fields';
-import { frontendLink } from '@infrastructure/http/frontend-link';
+import { frontendLink, FRONTEND_LINK_RULES } from '@infrastructure/http/frontend-link';
 import { PII_ENCRYPTION_KEY_FIELD } from '@infrastructure/security/config';
 
 /**
@@ -30,8 +30,8 @@ export const usersConfig = defineConfig({
         }),
         // The frontend's own contact page, pre-filled for an account question: the way to ask a
         // person about a purchase hold (GDPR Art. 22(3)).
-        NODE_FRONTEND_LINK_CONTACT: text({ default: 'contact?category=account' }),
-        NODE_FRONTEND_LINK_PRIVACY: text({ default: 'privacy' })
+        NODE_FRONTEND_LINK_CONTACT: text({ default: FRONTEND_LINK_RULES.links.contact }),
+        NODE_FRONTEND_LINK_PRIVACY: text({ default: FRONTEND_LINK_RULES.links.privacy })
     }
 });
 

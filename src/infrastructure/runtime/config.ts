@@ -89,14 +89,13 @@ export const stockConfig = defineConfig({
     }
 });
 
-/** Trace export, whether inbound trace context is trusted, and the version stamped on it. */
+/** Trace export, and whether inbound trace context is trusted. */
 export const tracingConfig = defineConfig({
     name: 'tracing',
     shape: {
         OTEL_EXPORTER_OTLP_ENDPOINT: text(),
         OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: text(),
-        NODE_TRUSTED_INGRESS: flag({ default: false }),
-        npm_package_version: text({ default: '0.0.0' })
+        NODE_TRUSTED_INGRESS: flag({ default: false })
     }
 });
 
