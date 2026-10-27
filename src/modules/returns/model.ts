@@ -5,7 +5,8 @@
  * link (`orders`' own `detachUserId` breaks the order's), which is the Art. 17(3)(b)/(e) retention
  * exemption `invoicing` already documents — a return is the same kind of legal/accounting record.
  *
- * Lifecycle: `requested → approved → received → closed`, or `requested → declined`. A withdrawal
+ * Lifecycle: `requested → approved → received → closed`, or `requested → declined`, or
+ * `approved → canceled` (the goods never came). A withdrawal
  * (`reason: withdrawal`) is a right, not a request, so it is born `approved`. See
  * `docs/modules/returns.md`.
  */
@@ -14,7 +15,16 @@ import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { moneyPath, moneyPlugin } from '@infrastructure/persistence/money-field';
-import { ReturnKind, ReturnPostagePayer, ReturnReason, ReturnStatus } from '@types';
+import {
+    ReturnDeclineReason,
+    ReturnKind,
+    ReturnOpenedBy,
+    ReturnPolicyException,
+    ReturnPostagePayer,
+    ReturnReason,
+    ReturnStatementChannel,
+    ReturnStatus
+} from '@types';
 
 /** One line of a return — a snapshot of what is coming back, so it reads the same later. */
 export interface ReturnLine {
@@ -26,6 +36,8 @@ export interface ReturnLine {
     title: string;
     /** The gross unit price the order froze — what a refund of this line is computed from. */
     unitPrice: number;
+    /** How many of {@link quantity} went back on sale at receipt. Absent until the goods are received. */
+    restocked?: number;
 }
 
 /** Return Document interface. */
@@ -46,8 +58,21 @@ export interface ReturnDocument extends Document {
     lines: ReturnLine[];
     /** Who pays to send the goods back. Frozen from `NODE_RETURN_POSTAGE_PAYER` at creation: what the customer was told beforehand. */
     returnPostage: ReturnPostagePayer;
-    /** Why staff declined. Present only on a `declined` return. */
-    declineReason?: string;
+    /**
+     * When the buyer asked — or, for a withdrawal, stated it. The server stamps now for the buyer;
+     * staff recording a phone call or a letter give the day it was made. Deadlines are judged on it.
+     */
+    requestedAt: Date;
+    /** How a withdrawal was stated; `online` is the shop's own button. Absent on any other reason. */
+    statedVia?: ReturnStatementChannel;
+    /** The order's buyer, or staff acting on the buyer's behalf. */
+    openedBy: ReturnOpenedBy;
+    /** The rules staff waived when they opened it: frozen at creation, empty for a buyer's. */
+    policyExceptions: ReturnPolicyException[];
+    /** Why staff declined, as a code. Present only on a `declined` return; not free text, so it outlives the reaper. */
+    declineReason?: ReturnDeclineReason;
+    /** What staff wrote to the buyer beside the code (required for `other`). Free text: the reaper unsets it. */
+    declineMessage?: string;
     /** When staff approved or declined it — or, for a withdrawal, when it was opened approved. */
     decidedAt?: Date;
     /** When the goods arrived and went back on sale. */
@@ -67,6 +92,8 @@ export interface ReturnDocument extends Document {
     shippingRefund?: number;
     /** When the money went back and the return was finished. */
     closedAt?: Date;
+    /** When staff canceled an approved return whose goods never came. */
+    canceledAt?: Date;
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -80,7 +107,8 @@ const returnLineSchema = new Schema<ReturnLine>(
         productId: { type: Schema.Types.ObjectId, required: true },
         quantity: { type: Number, required: true, min: 1 },
         title: { type: String, required: true },
-        unitPrice: moneyPath({ required: true, nonNegative: true })
+        unitPrice: moneyPath({ required: true, nonNegative: true }),
+        restocked: { type: Number, min: 0 }
     },
     { _id: false }
 );
@@ -111,13 +139,27 @@ export const returnSchema = new Schema<ReturnDocument>(
         note: { type: String, maxlength: 1000 },
         lines: { type: [returnLineSchema], required: true },
         returnPostage: { type: String, enum: Object.values(ReturnPostagePayer), required: true },
-        declineReason: { type: String, maxlength: 500 },
+        requestedAt: { type: Date, required: true, default: Date.now },
+        statedVia: { type: String, enum: Object.values(ReturnStatementChannel) },
+        openedBy: {
+            type: String,
+            enum: Object.values(ReturnOpenedBy),
+            required: true,
+            default: ReturnOpenedBy.buyer
+        },
+        policyExceptions: {
+            type: [{ type: String, enum: Object.values(ReturnPolicyException) }],
+            default: []
+        },
+        declineReason: { type: String, enum: Object.values(ReturnDeclineReason) },
+        declineMessage: { type: String, maxlength: 500 },
         decidedAt: { type: Date },
         receivedAt: { type: Date },
         handlingDeduction: moneyPath({ nonNegative: true }),
         refundAmount: moneyPath({ nonNegative: true }),
         shippingRefund: moneyPath({ nonNegative: true }),
-        closedAt: { type: Date }
+        closedAt: { type: Date },
+        canceledAt: { type: Date }
     },
     { timestamps: true }
 );

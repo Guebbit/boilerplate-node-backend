@@ -45,6 +45,7 @@ import {
 import {
     paymentReceivedEmail,
     refundIssuedEmail,
+    refundUndeliverableEmail,
     transferExpiredEmail,
     transferInstructionsEmail
 } from '@modules/payments/emails';
@@ -194,6 +195,14 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         '2026-000041',
         { amount: 7, currency: 'EUR' },
         true
+    ),
+    'payments.refund-undeliverable': refundUndeliverableEmail(
+        locale,
+        'Ada',
+        '2026-000041',
+        { amount: 7, currency: 'EUR' },
+        'shop@example.com',
+        'an-order-id'
     ),
     'delivery.shipment-shipped': shipmentShippedEmail(locale, 'Ada', {
         lines: [{ title: 'Widget', quantity: 1 }],

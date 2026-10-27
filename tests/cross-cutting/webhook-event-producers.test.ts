@@ -26,7 +26,13 @@ import {
 } from '@modules/orders';
 import { USER_ERASED, USER_PROFILE_CHANGED } from '@modules/users';
 import usersModule from '@modules/users/module';
-import { PAYMENT_SUCCEEDED, PAYMENT_FAILED, PAYMENT_REFUNDED } from '@modules/payments';
+import {
+    PAYMENT_SUCCEEDED,
+    PAYMENT_FAILED,
+    PAYMENT_REFUNDED,
+    PAYMENT_REFUND_FAILED,
+    PAYMENT_REFUND_REVERSED
+} from '@modules/payments';
 import ordersModule from '@modules/orders/module';
 import paymentsModule from '@modules/payments/module';
 import returnsModule from '@modules/returns/module';
@@ -120,10 +126,29 @@ describe('every public webhook event has exactly one producer, and no producer n
             currency: 'EUR',
             full: true
         });
+        await emitDomainEvent(PAYMENT_REFUND_FAILED, {
+            paymentId: PAYMENT_ID,
+            orderId: ORDER_ID,
+            refundId: 'r'.repeat(24),
+            amount: 20,
+            currency: 'EUR',
+            failureReason: 'declined',
+            final: true
+        });
+        await emitDomainEvent(PAYMENT_REFUND_REVERSED, {
+            paymentId: PAYMENT_ID,
+            orderId: ORDER_ID,
+            refundId: 'r'.repeat(24),
+            amount: 20,
+            currency: 'EUR',
+            failureReason: 'declined'
+        });
         await emitDomainEvent(RETURN_REQUESTED, {
             returnId: 'q'.repeat(24),
             orderId: ORDER_ID,
-            reason: 'withdrawal'
+            reason: 'withdrawal',
+            requestedAt: '2026-01-02T03:04:05.000Z',
+            statedVia: 'online'
         });
         await emitDomainEvent(RETURN_RECEIVED, { returnId: 'q'.repeat(24), orderId: ORDER_ID });
         await emitDomainEvent(RETURN_CLOSED, {

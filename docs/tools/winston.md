@@ -226,6 +226,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `products`       | `ADMIN_PRODUCT_RESTORED`                     | `admin.product.restored`                     | `product`              |
 | `products`       | `ADMIN_PRODUCT_UPDATED`                      | `admin.product.updated`                      | `product`              |
 | `returns`        | `ADMIN_RETURN_APPROVED`                      | `admin.return.approved`                      | `return`               |
+| `returns`        | `ADMIN_RETURN_CANCELED`                      | `admin.return.canceled`                      | `return`               |
 | `returns`        | `ADMIN_RETURN_CLOSED`                        | `admin.return.closed`                        | `return`               |
 | `returns`        | `ADMIN_RETURN_DECLINED`                      | `admin.return.declined`                      | `return`               |
 | `returns`        | `ADMIN_RETURN_RECEIVED`                      | `admin.return.received`                      | `return`               |

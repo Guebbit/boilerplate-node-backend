@@ -413,7 +413,7 @@ credential, else the signed-in account (`getAuth` has resolved one by the time a
 else the address block. A session behind a proxy pool does not get 20 per address, and staff behind
 one office NAT do not share 20.
 
-**A fifth, on the one unauthenticated WRITE.** `webhookLimiter` guards `POST /payments/webhook`.
+**A fifth, on the one unauthenticated WRITE.** `webhookLimiter` guards `POST /payments/webhook/{provider}`.
 The signature check is the actual defence — an unsigned flood costs one HMAC each, then a `400` —
 so this budget is not bounding an attack, it is closing the gap that every other route already had
 a stated ceiling and this one didn't. Shaped like `submissionLimiter`: `skipSuccessfulRequests` off,

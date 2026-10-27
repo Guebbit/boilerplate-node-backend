@@ -35,8 +35,13 @@ describe('rawBodyPaths', () => {
                 )
             );
 
+            // A declared path also covers the routes under it (`/webhook` covers
+            // `/webhook/:provider`): the allowlist matches at a segment boundary, prefix included.
+            const covers = (path: string): boolean =>
+                [...mounted].some((route) => route === path || route.startsWith(`${path}/`));
+
             return paths
-                .filter((path) => !mounted.has(path))
+                .filter((path) => !covers(path))
                 .map(
                     (path) =>
                         `${appModule.name}: rawBodyPaths declares "${path}", which no route on its own router mounts`

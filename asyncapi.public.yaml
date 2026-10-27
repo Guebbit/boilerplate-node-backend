@@ -156,6 +156,22 @@ channels:
         messages:
             PaymentRefundedEvent:
                 $ref: '#/components/messages/PaymentRefundedEvent'
+    payment.refund_failed:
+        address: payment.refund_failed
+        description: The provider refused a refund, or reported one failed.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            PaymentRefundFailedEvent:
+                $ref: '#/components/messages/PaymentRefundFailedEvent'
+    payment.refund_reversed:
+        address: payment.refund_reversed
+        description: The provider took back a refund it had settled.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            PaymentRefundReversedEvent:
+                $ref: '#/components/messages/PaymentRefundReversedEvent'
     return.requested:
         address: return.requested
         description: A return was opened — a withdrawal or a request.
@@ -334,9 +350,27 @@ operations:
             $ref: '#/channels/payment.refunded'
         summary: A refund on a payment settled.
         description: >-
-            One-to-one with the `payment.refunded` domain event — see `payments/services/refunds.ts`'s `settleRefund`. Fired once per refund, whether an operator asked for it directly, a cancel opened it, or the refund retry sweep completed it; never fired while a hand-paid refund waits for an operator to confirm it by hand.
+            One-to-one with the `payment.refunded` domain event — see `payments/services/refunds.ts`'s `settleRefund`. Fired once per refund, whether an operator asked for it directly, a cancel opened it, or the refund retry sweep completed it; never fired while a hand-paid refund waits for an operator to confirm it by hand. It may fire again for the same `refundId` after a `payment.refund_reversed`, once the money is returned another way and an operator marks the refund returned. A refund made in the provider's own dashboard is imported and announced here too, with `reason: external`.
         messages:
             - $ref: '#/channels/payment.refunded/messages/PaymentRefundedEvent'
+    webhookPaymentRefundFailed:
+        action: send
+        channel:
+            $ref: '#/channels/payment.refund_failed'
+        summary: The provider refused a refund, or reported one failed.
+        description: >-
+            One-to-one with the `payment.refund_failed` domain event. Fired once per NEW refusal of a refund record (the first, or a changed reason), not on every retry. `final` says the refusal ends the retrying and the money has to go back another way; `false` means the sweep retries it.
+        messages:
+            - $ref: '#/channels/payment.refund_failed/messages/PaymentRefundFailedEvent'
+    webhookPaymentRefundReversed:
+        action: send
+        channel:
+            $ref: '#/channels/payment.refund_reversed'
+        summary: The provider took back a refund it had settled.
+        description: >-
+            One-to-one with the `payment.refund_reversed` domain event. The refund is owed again, another way; the credit note issued when it settled stays.
+        messages:
+            - $ref: '#/channels/payment.refund_reversed/messages/PaymentRefundReversedEvent'
     webhookReturnRequested:
         action: send
         channel:
@@ -495,6 +529,20 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/PaymentRefundedEnvelope'
+        PaymentRefundFailedEvent:
+            name: PaymentRefundFailedEvent
+            title: Payment refund failed
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/PaymentRefundFailedEnvelope'
+        PaymentRefundReversedEvent:
+            name: PaymentRefundReversedEvent
+            title: Payment refund reversed
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/PaymentRefundReversedEnvelope'
         ReturnReceivedEvent:
             name: ReturnReceivedEvent
             title: Return received
@@ -819,6 +867,64 @@ components:
                     type: string
                     description: ISO-4217, e.g. `EUR`.
             additionalProperties: false
+        PaymentRefundReversedPayload:
+            type: object
+            required:
+                - paymentId
+                - orderId
+                - refundId
+                - amount
+                - currency
+                - failureReason
+            properties:
+                paymentId:
+                    type: string
+                orderId:
+                    type: string
+                refundId:
+                    type: string
+                amount:
+                    type: number
+                    description: This refund's amount, two decimal places.
+                currency:
+                    type: string
+                    description: ISO-4217, e.g. `EUR`.
+                failureReason:
+                    type: string
+                    description: >-
+                        The closed code for why the provider took it back (`declined`, `expired_or_canceled_card`, `lost_or_stolen_card`, …); never the provider's wording.
+            additionalProperties: false
+        PaymentRefundFailedPayload:
+            type: object
+            required:
+                - paymentId
+                - orderId
+                - refundId
+                - amount
+                - currency
+                - failureReason
+                - final
+            properties:
+                paymentId:
+                    type: string
+                orderId:
+                    type: string
+                refundId:
+                    type: string
+                amount:
+                    type: number
+                    description: This refund's amount, two decimal places.
+                currency:
+                    type: string
+                    description: ISO-4217, e.g. `EUR`.
+                failureReason:
+                    type: string
+                    description: The closed code for the refusal; never the provider's wording.
+                final:
+                    type: boolean
+                    description: >-
+                        `true` when the refusal ends the retrying: the money has to go back another way. `false` when the sweep retries it.
+            additionalProperties: false
         PaymentSucceededEnvelope:
             type: object
             required:
@@ -873,12 +979,49 @@ components:
                 data:
                     $ref: '#/components/schemas/PaymentRefundedPayload'
             additionalProperties: false
+        PaymentRefundFailedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: PaymentRefundFailedEventType
+                    type: string
+                    enum:
+                        - payment.refund_failed
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/PaymentRefundFailedPayload'
+            additionalProperties: false
+        PaymentRefundReversedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: PaymentRefundReversedEventType
+                    type: string
+                    enum:
+                        - payment.refund_reversed
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/PaymentRefundReversedPayload'
+            additionalProperties: false
         ReturnRequestedPayload:
             type: object
             required:
                 - returnId
                 - orderId
                 - reason
+                - requestedAt
             properties:
                 returnId:
                     type: string
@@ -887,6 +1030,19 @@ components:
                 reason:
                     type: string
                     description: Why the goods come back — `withdrawal`, `defective`, `wrong_item` or `other`.
+                requestedAt:
+                    type: string
+                    format: date-time
+                    description: When the buyer asked, or for a withdrawal when they stated it. Staff recording a phone call or a letter set the day it was made.
+                statedVia:
+                    type: string
+                    enum:
+                        - online
+                        - phone
+                        - email
+                        - letter
+                        - other
+                    description: How a withdrawal was stated. Present on a withdrawal only.
             additionalProperties: false
         ReturnReceivedPayload:
             type: object

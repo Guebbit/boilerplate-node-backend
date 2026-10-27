@@ -104,7 +104,12 @@ describe('return.requested', () => {
         });
         expect(heard).toEqual([
             [
-                { returnId: String(outcome.data._id), orderId, reason: 'defective' },
+                {
+                    returnId: String(outcome.data._id),
+                    orderId,
+                    reason: 'defective',
+                    requestedAt: outcome.data.requestedAt.toISOString()
+                },
                 String(rows[0]?._id)
             ]
         ]);
@@ -132,7 +137,12 @@ describe('return.decided', () => {
         ['approved', (id: string) => returnService.approveReturn(id, callerContextAs('admin'))],
         [
             'declined',
-            (id: string) => returnService.declineReturn(id, 'Worn', callerContextAs('admin'))
+            (id: string) =>
+                returnService.declineReturn(
+                    id,
+                    { reason: 'return_period_ended' },
+                    callerContextAs('admin')
+                )
         ]
     ])('is written with the %s decision, keyed on the order', async (decision, decide) => {
         const { user, orderId } = await orderIn(OrderStatus.delivered);

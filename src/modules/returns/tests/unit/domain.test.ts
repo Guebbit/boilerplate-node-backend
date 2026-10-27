@@ -5,15 +5,19 @@
  */
 import {
     BACK_RETURN_STATUSES,
+    CANCELABLE_RETURN_STATUSES,
     DECIDABLE_RETURN_STATUSES,
     QUANTITY_HOLDING_RETURN_STATUSES,
     RECEIVABLE_RETURN_STATUSES,
     accountsOf,
     checkRequestedLines,
+    checkStatement,
+    policyExceptionsOf,
     holdsReturnedGoods,
     initialStatusFor,
     quantitiesByProduct,
     reasonsOpenAt,
+    resolveRestock,
     returnableLinesOf,
     returnableQuantities,
     takesLastUnit,
@@ -40,6 +44,16 @@ describe('the lifecycle sets', () => {
 
     it('lets goods be received only against an approved return', () => {
         expect(RECEIVABLE_RETURN_STATUSES).toEqual(['approved']);
+    });
+
+    it('lets only an approved return be canceled — the goods are awaited, not yet in', () => {
+        expect(CANCELABLE_RETURN_STATUSES).toEqual(['approved']);
+    });
+
+    it('does not count a canceled return against what can still come back, nor as goods back', () => {
+        expect(QUANTITY_HOLDING_RETURN_STATUSES).not.toContain('canceled');
+        expect(BACK_RETURN_STATUSES).not.toContain('canceled');
+        expect(holdsReturnedGoods({ kind: 'return', status: 'canceled' })).toBe(false);
     });
 
     it('does not count a declined return against what can still come back', () => {
@@ -265,7 +279,12 @@ describe('accountsOf', () => {
                     status: 'approved',
                     lines: [{ productId: id('a'), quantity: 9 }]
                 },
-                { kind: 'return', status: 'declined', lines: [{ productId: id('a'), quantity: 9 }] }
+                {
+                    kind: 'return',
+                    status: 'declined',
+                    lines: [{ productId: id('a'), quantity: 9 }]
+                },
+                { kind: 'return', status: 'canceled', lines: [{ productId: id('a'), quantity: 9 }] }
             ],
             'EUR'
         );
@@ -331,5 +350,171 @@ describe('reasonsOpenAt', () => {
 
     it('treats the deadline instant itself as still open', () => {
         expect(reasonsOpenAt({ withdrawUntil: NOW, conformityUntil: NOW }, NOW)).toHaveLength(4);
+    });
+});
+
+describe('resolveRestock', () => {
+    const returned = [
+        { productId: id('a'), quantity: 3 },
+        { productId: id('b'), quantity: 1 }
+    ];
+
+    it('puts everything back when no counts are given', () => {
+        expect(resolveRestock(returned, undefined)).toEqual({ ok: true, restocked: [3, 1] });
+        expect(resolveRestock(returned, [])).toEqual({ ok: true, restocked: [3, 1] });
+    });
+
+    it('puts back the named count and the rest in full, in the line order', () => {
+        expect(resolveRestock(returned, [{ productId: 'b', restock: 0 }])).toEqual({
+            ok: true,
+            restocked: [3, 0]
+        });
+        expect(resolveRestock(returned, [{ productId: 'a', restock: 2 }])).toEqual({
+            ok: true,
+            restocked: [2, 1]
+        });
+    });
+
+    it('accepts exactly the line quantity, and zero', () => {
+        expect(
+            resolveRestock(returned, [
+                { productId: 'a', restock: 3 },
+                { productId: 'b', restock: 0 }
+            ])
+        ).toEqual({ ok: true, restocked: [3, 0] });
+    });
+
+    it('refuses a product the return does not hold, pointing at its entry', () => {
+        expect(
+            resolveRestock(returned, [
+                { productId: 'a', restock: 1 },
+                { productId: 'z', restock: 1 }
+            ])
+        ).toEqual({ ok: false, index: 1, reason: 'unknown-product' });
+    });
+
+    it('refuses a product named twice, at the second entry', () => {
+        expect(
+            resolveRestock(returned, [
+                { productId: 'a', restock: 1 },
+                { productId: 'a', restock: 2 }
+            ])
+        ).toEqual({ ok: false, index: 1, reason: 'duplicate' });
+    });
+
+    it('refuses one more than the line holds', () => {
+        expect(resolveRestock(returned, [{ productId: 'b', restock: 2 }])).toEqual({
+            ok: false,
+            index: 0,
+            reason: 'too-many'
+        });
+    });
+});
+
+describe('checkStatement', () => {
+    const now = new Date('2026-06-10T12:00:00Z');
+    const orderCreatedAt = new Date('2026-05-01T12:00:00Z');
+    const base = { kind: 'return' as const, orderCreatedAt, now };
+
+    it('stamps the buyer’s own request with now, and a withdrawal online', () => {
+        expect(checkStatement({ ...base, byBuyer: true, reason: 'defective' })).toEqual({
+            ok: true,
+            requestedAt: now
+        });
+        expect(checkStatement({ ...base, byBuyer: true, reason: 'withdrawal' })).toEqual({
+            ok: true,
+            requestedAt: now,
+            statedVia: 'online'
+        });
+    });
+
+    it('refuses the buyer sending either field', () => {
+        expect(
+            checkStatement({ ...base, byBuyer: true, reason: 'withdrawal', requestedAt: now })
+        ).toEqual({ ok: false, field: 'requestedAt', reason: 'forbidden' });
+        expect(
+            checkStatement({ ...base, byBuyer: true, reason: 'withdrawal', statedVia: 'phone' })
+        ).toEqual({ ok: false, field: 'statedVia', reason: 'forbidden' });
+    });
+
+    it('requires both fields of staff recording a withdrawal', () => {
+        const staff = { ...base, byBuyer: false, reason: 'withdrawal' as const };
+        expect(checkStatement(staff)).toEqual({
+            ok: false,
+            field: 'requestedAt',
+            reason: 'required'
+        });
+        expect(checkStatement({ ...staff, requestedAt: now })).toEqual({
+            ok: false,
+            field: 'statedVia',
+            reason: 'required'
+        });
+        expect(checkStatement({ ...staff, requestedAt: now, statedVia: 'letter' })).toEqual({
+            ok: true,
+            requestedAt: now,
+            statedVia: 'letter'
+        });
+    });
+
+    it('defaults staff’s date to now for another reason, and takes no channel', () => {
+        const staff = { ...base, byBuyer: false, reason: 'other' as const };
+        expect(checkStatement(staff)).toEqual({ ok: true, requestedAt: now });
+        expect(checkStatement({ ...staff, statedVia: 'phone' })).toEqual({
+            ok: false,
+            field: 'statedVia',
+            reason: 'forbidden'
+        });
+    });
+
+    it('takes no date on a staff remainder cancel for their own reason', () => {
+        expect(
+            checkStatement({
+                ...base,
+                kind: 'cancellation',
+                byBuyer: false,
+                reason: 'other',
+                requestedAt: now
+            })
+        ).toEqual({ ok: false, field: 'requestedAt', reason: 'forbidden' });
+    });
+
+    it('bounds the date by the order and now, both ends inclusive', () => {
+        const staff = { ...base, byBuyer: false, reason: 'other' as const };
+        expect(checkStatement({ ...staff, requestedAt: orderCreatedAt }).ok).toBe(true);
+        expect(checkStatement({ ...staff, requestedAt: now }).ok).toBe(true);
+        expect(checkStatement({ ...staff, requestedAt: new Date(now.getTime() + 1) })).toEqual({
+            ok: false,
+            field: 'requestedAt',
+            reason: 'future'
+        });
+        expect(
+            checkStatement({ ...staff, requestedAt: new Date(orderCreatedAt.getTime() - 1) })
+        ).toEqual({ ok: false, field: 'requestedAt', reason: 'before-order' });
+    });
+});
+
+describe('policyExceptionsOf', () => {
+    const asked = new Date('2026-06-10T12:00:00Z');
+    const open = { withdrawUntil: new Date('2026-06-20T00:00:00Z') };
+    const closed = { withdrawUntil: new Date('2026-06-01T00:00:00Z') };
+
+    it('records nothing when the deadline was open that day and no excluded goods are taken', () => {
+        expect(policyExceptionsOf(open, 'other', asked, false)).toEqual([]);
+    });
+
+    it('records window_closed when the deadline had passed on the day the buyer asked', () => {
+        expect(policyExceptionsOf(closed, 'other', asked, false)).toEqual(['window_closed']);
+    });
+
+    it('records excluded_goods for a goodwill return, never for the guarantee', () => {
+        expect(policyExceptionsOf(open, 'other', asked, true)).toEqual(['excluded_goods']);
+        expect(policyExceptionsOf(open, 'defective', asked, true)).toEqual([]);
+    });
+
+    it('records both, in that order', () => {
+        expect(policyExceptionsOf(closed, 'other', asked, true)).toEqual([
+            'window_closed',
+            'excluded_goods'
+        ]);
     });
 });

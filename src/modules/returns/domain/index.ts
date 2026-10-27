@@ -8,6 +8,7 @@ export {
     DECIDABLE_RETURN_STATUSES,
     RECEIVABLE_RETURN_STATUSES,
     CLOSABLE_RETURN_STATUSES,
+    CANCELABLE_RETURN_STATUSES,
     QUANTITY_HOLDING_RETURN_STATUSES,
     BACK_RETURN_STATUSES,
     holdsReturnedGoods,
@@ -30,9 +31,22 @@ export {
     WITHDRAWAL_WINDOW_REASONS,
     isGuaranteeReason,
     isReasonOpen,
+    policyExceptionsOf,
     reasonsOpenAt
 } from './reasons';
-export type { FrozenDeadlines } from './reasons';
+export type { FrozenDeadlines, PolicyException } from './reasons';
+
+export { checkStatement } from './statement';
+export type {
+    Statement,
+    StatementChannel,
+    StatementInput,
+    StatementVerdict,
+    StaffStatementChannel
+} from './statement';
+
+export { resolveRestock } from './restock';
+export type { RestockRequest, RestockVerdict } from './restock';
 
 export { projectReturnStatus } from './status-projection';
 export type { ProjectedReturn, ProjectedReturnStatus } from './status-projection';
