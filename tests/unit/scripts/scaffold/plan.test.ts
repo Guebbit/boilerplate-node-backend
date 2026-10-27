@@ -56,6 +56,9 @@ describe('planModule', () => {
             'src/modules/field-notes/controllers/delete-field-notes.ts',
             'src/modules/field-notes/openapi.yaml',
             'src/modules/field-notes/authorization.yaml',
+            'src/modules/field-notes/rules.yaml',
+            'src/modules/field-notes/rules.schema.ts',
+            'src/modules/field-notes/rules.generated.ts',
             'src/modules/field-notes/audit.ts',
             'src/modules/field-notes/tests/unit/routes.test.ts',
             'src/modules/field-notes/tests/unit/factories.test.ts',
@@ -78,11 +81,27 @@ describe('planModule', () => {
         const files = planModule(quiet).files.map((file) => file.path);
 
         expect(files).not.toContain('src/modules/field-notes/audit.ts');
+        expect(files).not.toContain('src/modules/field-notes/rules.yaml');
+        expect(files).not.toContain('src/modules/field-notes/rules.generated.ts');
         expect(contentOf(quiet, 'services/crud.ts')).not.toMatch(/recordAudit|AuditActions/);
         // The context still arrives: `actions` are decided per caller, audit or not.
         expect(contentOf(quiet, 'services/crud.ts')).toContain('context: CallerContext');
         expect(contentOf(quiet, 'module.yaml')).toContain('noAudit:');
         expect(contentOf(OPTIONS, 'module.yaml')).not.toContain('noAudit');
+    });
+});
+
+describe('the audit rules', () => {
+    it('lists the same actions in rules.yaml and in the pre-rendered rules.generated.ts', () => {
+        const listed = (
+            parseYaml(contentOf(OPTIONS, 'rules.yaml')) as { audit: { value: string }[] }
+        ).audit.map((entry) => entry.value);
+
+        expect(listed).toHaveLength(4);
+        for (const value of listed)
+            expect(contentOf(OPTIONS, 'rules.generated.ts')).toContain(
+                `'${value}'`.replaceAll("'", '"')
+            );
     });
 });
 

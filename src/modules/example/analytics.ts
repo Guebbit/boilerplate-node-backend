@@ -8,10 +8,10 @@
  * See: docs/tools/analytics.md#naming
  */
 
-/** The event names this module fires, keyed by intent. */
-export const exampleAnalyticsEvents = {
-    EXAMPLE_PUBLISHED: 'example_published'
-} as const;
+import { exampleAnalyticsEvents } from './rules.generated';
+
+/** The event names this module fires, generated from `rules.yaml`. */
+export { exampleAnalyticsEvents } from './rules.generated';
 
 /** Registers this module's event names into the analytics port's app-wide union. */
 declare module '@infrastructure/observability/analytics' {

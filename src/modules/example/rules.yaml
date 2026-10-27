@@ -1,0 +1,20 @@
+# The example module's audit and analytics names.
+#
+# Not read at boot. `npm run regenerate` writes `rules.generated.ts` from it, because the strings
+# type the app-wide `AuditActionMap` / `AnalyticsEventMap` unions and a loaded list would widen to
+# `string`. The constant's key is derived from `value`: uppercase, `.` to `_`.
+audit:
+    - value: example.created
+      description: An example was created.
+    - value: example.updated
+      description: An example's fields were edited.
+    - value: example.status_changed
+      description: An example moved between statuses.
+    - value: example.deleted
+      description: An example was deleted.
+    - value: example.cover_changed
+      description: An example's cover image was set or removed.
+
+analytics:
+    - value: example_published
+      description: An example was published.

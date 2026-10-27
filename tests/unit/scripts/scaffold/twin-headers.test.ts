@@ -29,6 +29,7 @@ const TWINS: Readonly<Record<string, string>> = {
     'routes.ts': 'routes.ts',
     'factories.ts': 'factories.ts',
     'audit.ts': 'audit.ts',
+    'rules.schema.ts': 'rules.schema.ts',
     'services/index.ts': 'services/index.ts',
     'services/crud.ts': 'services/crud.ts',
     'services/actions.ts': 'services/actions.ts',
@@ -72,7 +73,9 @@ describe('scaffolded headers against their example twin', () => {
         const unpaired = [...generated.keys()].filter(
             (file) =>
                 !(file in TWINS) &&
-                !/^(tests\/|docs\/|module\.yaml$|openapi\.yaml$|authorization\.yaml$)/.test(file)
+                !/^(tests\/|docs\/|rules\.yaml$|rules\.generated\.ts$|module\.yaml$|openapi\.yaml$|authorization\.yaml$)/.test(
+                    file
+                )
         );
 
         expect(unpaired).toEqual([]);

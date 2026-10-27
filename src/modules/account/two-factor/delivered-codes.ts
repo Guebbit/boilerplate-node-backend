@@ -11,15 +11,16 @@ import { constantTimeEqual } from '@infrastructure/security/constant-time';
 import { deriveSubkey } from '@infrastructure/security/subkey';
 import { getTotpEncryptionKeyRing } from '../session/config';
 import { cooldownRemaining } from '../cooldown';
+import { twoFactorRules } from '../rules.generated';
 
-/** Digits in a delivered code — six, the length every authenticator app has taught people to expect. */
-const DELIVERED_CODE_DIGITS = 6;
+/** Digits in a delivered code (`rules.yaml`) — six, the length every authenticator app has taught people to expect. */
+const DELIVERED_CODE_DIGITS: number = twoFactorRules.deliveredCodes.digits;
 
 /** How long a delivered code is accepted. Ten minutes covers an SMTP queue and a person switching apps. */
-export const DELIVERED_CODE_TTL_MS = 600_000;
+export const DELIVERED_CODE_TTL_MS: number = twoFactorRules.deliveredCodes.ttlMs;
 
 /** Seconds between two deliveries of the same method — what the client counts down before re-enabling its button. */
-export const DELIVERED_CODE_RESEND_SECONDS = 30;
+export const DELIVERED_CODE_RESEND_SECONDS: number = twoFactorRules.deliveredCodes.resendSeconds;
 
 /**
  * Wrong guesses one code tolerates before it is burned.
@@ -27,7 +28,7 @@ export const DELIVERED_CODE_RESEND_SECONDS = 30;
  * This, not the hash below, is what actually protects six digits: it caps an online attack at
  * five tries out of a million per delivery, which no amount of stretching would improve on.
  */
-export const DELIVERED_CODE_MAX_ATTEMPTS = 5;
+export const DELIVERED_CODE_MAX_ATTEMPTS: number = twoFactorRules.deliveredCodes.maxAttempts;
 
 /**
  * A delivered code's stored form — HMAC-SHA256 under an HKDF subkey of `NODE_TOTP_ENCRYPTION_KEY`

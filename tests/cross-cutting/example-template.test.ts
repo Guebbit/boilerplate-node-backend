@@ -30,7 +30,10 @@ const sourceFiles = (directory: string, prefix = ''): string[] =>
             return entry.name === 'tests'
                 ? []
                 : sourceFiles(path.join(directory, entry.name), relative);
-        return entry.name.endsWith('.ts') ? [relative] : [];
+        // A `.generated.ts` is machine output with its own do-not-edit header.
+        return entry.name.endsWith('.ts') && !entry.name.endsWith('.generated.ts')
+            ? [relative]
+            : [];
     });
 
 /**
