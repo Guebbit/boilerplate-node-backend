@@ -180,6 +180,22 @@ channels:
         messages:
             PaymentRefundReversedEvent:
                 $ref: '#/components/messages/PaymentRefundReversedEvent'
+    payment.dispute_opened:
+        address: payment.dispute_opened
+        description: The buyer's bank disputed a card payment.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            PaymentDisputeOpenedEvent:
+                $ref: '#/components/messages/PaymentDisputeOpenedEvent'
+    payment.dispute_updated:
+        address: payment.dispute_updated
+        description: A dispute on a card payment changed (evidence sent, decided, reopened).
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            PaymentDisputeUpdatedEvent:
+                $ref: '#/components/messages/PaymentDisputeUpdatedEvent'
     return.requested:
         address: return.requested
         description: A return was opened — a withdrawal or a request.
@@ -388,6 +404,24 @@ operations:
             One-to-one with the `payment.refund_reversed` domain event. The refund is owed again, another way; the credit note issued when it settled stays.
         messages:
             - $ref: '#/channels/payment.refund_reversed/messages/PaymentRefundReversedEvent'
+    webhookPaymentDisputeOpened:
+        action: send
+        channel:
+            $ref: '#/channels/payment.dispute_opened'
+        summary: The buyer's bank disputed a card payment.
+        description: >-
+            One-to-one with the `payment.dispute_opened` domain event. Fired once per dispute, the first time the provider reports it. No refund and no credit note follow: a chargeback is not a refund. The shop answers in the provider's dashboard before `evidenceDueBy`.
+        messages:
+            - $ref: '#/channels/payment.dispute_opened/messages/PaymentDisputeOpenedEvent'
+    webhookPaymentDisputeUpdated:
+        action: send
+        channel:
+            $ref: '#/channels/payment.dispute_updated'
+        summary: A dispute on a card payment changed.
+        description: >-
+            One-to-one with the `payment.dispute_updated` domain event. Fired for each newer report of a known dispute (under review, won, lost, accepted, reopened); an older or repeated report is dropped and announces nothing.
+        messages:
+            - $ref: '#/channels/payment.dispute_updated/messages/PaymentDisputeUpdatedEvent'
     webhookReturnRequested:
         action: send
         channel:
@@ -567,6 +601,20 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/PaymentRefundReversedEnvelope'
+        PaymentDisputeOpenedEvent:
+            name: PaymentDisputeOpenedEvent
+            title: Payment dispute opened
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/PaymentDisputeOpenedEnvelope'
+        PaymentDisputeUpdatedEvent:
+            name: PaymentDisputeUpdatedEvent
+            title: Payment dispute updated
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/PaymentDisputeUpdatedEnvelope'
         ReturnReceivedEvent:
             name: ReturnReceivedEvent
             title: Return received
@@ -1003,6 +1051,57 @@ components:
                     description: >-
                         `true` when the refusal ends the retrying: the money has to go back another way. `false` when the sweep retries it.
             additionalProperties: false
+        PaymentDisputePayload:
+            type: object
+            required:
+                - paymentId
+                - orderId
+                - disputeId
+                - kind
+                - status
+                - reason
+                - amount
+                - currency
+                - fundsWithdrawn
+            properties:
+                paymentId:
+                    type: string
+                orderId:
+                    type: string
+                disputeId:
+                    type: string
+                    description: The provider's dispute id.
+                kind:
+                    type: string
+                    enum:
+                        - inquiry
+                        - chargeback
+                status:
+                    type: string
+                    enum:
+                        - needs_response
+                        - under_review
+                        - won
+                        - lost
+                        - accepted
+                        - closed
+                reason:
+                    type: string
+                    description: The closed code for why the bank disputes the charge (`fraudulent`, `product_not_received`, …).
+                amount:
+                    type: number
+                    description: The disputed amount, two decimal places.
+                currency:
+                    type: string
+                    description: ISO-4217, e.g. `EUR`.
+                fundsWithdrawn:
+                    type: boolean
+                    description: Whether the bank has taken the money out of the shop's balance.
+                evidenceDueBy:
+                    type: string
+                    format: date-time
+                    description: When the provider stops accepting evidence. Absent when it gave no deadline.
+            additionalProperties: false
         PaymentSucceededEnvelope:
             type: object
             required:
@@ -1092,6 +1191,42 @@ components:
                     format: date-time
                 data:
                     $ref: '#/components/schemas/PaymentRefundReversedPayload'
+            additionalProperties: false
+        PaymentDisputeOpenedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: PaymentDisputeOpenedEventType
+                    type: string
+                    enum:
+                        - payment.dispute_opened
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/PaymentDisputePayload'
+            additionalProperties: false
+        PaymentDisputeUpdatedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: PaymentDisputeUpdatedEventType
+                    type: string
+                    enum:
+                        - payment.dispute_updated
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/PaymentDisputePayload'
             additionalProperties: false
         ReturnRequestedPayload:
             type: object

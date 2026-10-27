@@ -43,7 +43,6 @@ import { mailShipped, mailDelivered, mailLost, mailDelayed, mailHoldNoticed } fr
 
 export type { RemainderOption } from './read';
 export type { ShipInput } from './ship';
-export type { DeliverInput } from './deliver';
 export type { LostInput } from './lost';
 export type { HoldInput } from './holds';
 export type { RemainderCancel } from './cancel-remainder';

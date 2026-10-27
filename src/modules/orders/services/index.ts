@@ -54,7 +54,6 @@ import { extendGuarantee } from './guarantee';
 import {
     readOrder,
     recordFulfillmentProgress,
-    recordForcedFulfilment,
     shipStock,
     topUpStock,
     releaseStock,
@@ -86,7 +85,6 @@ import {
 export type { OrderBrief } from './read';
 export type { PlaceOrderInput, PlaceOrderLine, PlaceOrderOutcome } from './place';
 export type { CancelCause } from './cancel';
-export type { ForcedFulfilment } from './fulfillment';
 export type { OrderExport } from './export';
 export type {
     PaidBucket,
@@ -151,7 +149,6 @@ export const orderService = {
     markMoneyReceived,
     readOrder,
     recordFulfillmentProgress,
-    recordForcedFulfilment,
     shipStock,
     topUpStock,
     releaseStock,

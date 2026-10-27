@@ -26,10 +26,12 @@ import {
     displayStatusFilter,
     exceedsBy,
     exceedsRemaining,
+    openDisputeFilter,
     parseReference,
     refundDueBy
 } from '../domain';
-import { toDecimalAmount } from '@domain-primitives/money';
+import { addMoney, toDecimalAmount, toMinorUnits } from '@domain-primitives/money';
+import { DisputeStatus } from '@types';
 import type { PaymentDocument, RefundRecord } from '../model';
 import { paymentRepository, type RefundFilters, type RefundRow } from '../repository';
 import { callerScope } from './scope';
@@ -80,10 +82,15 @@ export const listPayments = (
             meta: buildPaginatedMeta(normalizePagination(filters), 0)
         });
 
+    // The two label filters (what the page shows, an open dispute) are not fields of the row.
+    const labels = [
+        filters.displayStatus ? displayStatusFilter(filters.displayStatus) : undefined,
+        filters.disputed ? openDisputeFilter() : undefined
+    ].filter((label) => label !== undefined);
     return paymentRepository
         .searchStaff(
             canonical === undefined ? filters : { ...filters, transferReference: canonical },
-            filters.displayStatus ? displayStatusFilter(filters.displayStatus) : undefined,
+            labels.length > 0 ? { $and: labels } : undefined,
             callerScope(authContext)
         )
         .then(({ items, meta }) =>
@@ -192,6 +199,49 @@ const exceedingRows = (payments: PaymentDocument[]): PaymentAttentionItem[] =>
     );
 
 /**
+ * How much of a payment has been returned for good: its settled refunds that were not taken back.
+ * @param payment - the payment
+ */
+const refundedForGood = (payment: PaymentDocument): number =>
+    toDecimalAmount(
+        addMoney(
+            ...payment.refunds
+                .filter((refund) => refund.status === 'succeeded' && !refund.reversedAt)
+                .map((refund) => toMinorUnits(refund.amount, refund.currency))
+        ),
+        payment.currency
+    );
+
+/**
+ * The disputes waiting on the shop's evidence, as attention rows: one per dispute, due when the
+ * provider's evidence window closes. A payment already refunded says how much, because that
+ * refund is what the shop sends as evidence.
+ *
+ * @param payments - payments holding an open dispute
+ */
+const disputeRows = (payments: PaymentDocument[]): PaymentAttentionItem[] =>
+    payments.flatMap((payment) =>
+        payment.disputes
+            .filter((dispute) => dispute.status === DisputeStatus.needs_response)
+            .map((dispute): PaymentAttentionItem => {
+                const refunded = refundedForGood(payment);
+                return {
+                    kind: PaymentAttentionKind.dispute_needs_response,
+                    orderId: String(payment.orderId),
+                    paymentId: String(payment._id),
+                    disputeId: dispute.disputeRef,
+                    amount: dispute.amount,
+                    currency: dispute.currency,
+                    since: dispute.openedAt.toISOString(),
+                    ...(dispute.evidenceDueBy
+                        ? { dueBy: dispute.evidenceDueBy.toISOString() }
+                        : {}),
+                    ...(refunded > 0 ? { alreadyRefunded: refunded } : {})
+                };
+            })
+    );
+
+/**
  * Every problem still recorded on a payment, oldest first: refunds open past the threshold, refunds the
  * provider refused for good (at once), and refunds owed by hand. A refund owed is always an open record, so a fixed problem has closed it
  * and is not here.
@@ -219,8 +269,10 @@ export const listAttention = (): Promise<{ items: PaymentAttentionItem[] }> => {
             limit: ATTENTION_LIMIT
         }),
         // An open refund an outside refund left no room for: shown once, as its own kind.
-        paymentRepository.findOverRefunded(ATTENTION_LIMIT).then(exceedingRows)
-    ]).then(([stale, refused, manual, reversed, exceeding]) => {
+        paymentRepository.findOverRefunded(ATTENTION_LIMIT).then(exceedingRows),
+        // A dispute the shop has to answer, with its deadline.
+        paymentRepository.findWithOpenDisputes(ATTENTION_LIMIT).then(disputeRows)
+    ]).then(([stale, refused, manual, reversed, exceeding, disputes]) => {
         const held = new Set(exceeding.map((item) => item.refundId));
         const others = (row: RefundRow): boolean => !held.has(String(row.refund._id));
         return {
@@ -235,6 +287,7 @@ export const listAttention = (): Promise<{ items: PaymentAttentionItem[] }> => {
                     refundAttention(row, PaymentAttentionKind.reversed_refund)
                 ),
                 ...exceeding,
+                ...disputes,
                 ...manual.map((row) =>
                     refundAttention(row, PaymentAttentionKind.manual_refund_owed)
                 )

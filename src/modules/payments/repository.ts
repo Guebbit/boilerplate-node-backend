@@ -14,11 +14,12 @@ import { reviveDecimals } from '@infrastructure/persistence/money-field';
 import type { ReportWindow } from '@infrastructure/persistence/report';
 import { RefundFailureReason, type RefundReason } from '@types';
 import { paymentProviderRegistry } from './providers/registry';
-import type { PaymentDocument, RefundRecord, RefundSettlement } from './model';
+import type { DisputeRecord, PaymentDocument, RefundRecord, RefundSettlement } from './model';
 import {
     CONFIRMABLE_PAYMENT_STATUSES,
     MANUAL_PROVIDER,
     OPEN_REFUND_STATUSES,
+    openDisputeFilter,
     FINAL_REFUND_FAILURES,
     REFUNDABLE_PAYMENT_STATUS,
     SETTLEABLE_PAYMENT_STATUSES,
@@ -77,6 +78,16 @@ export interface MixSums {
     _id: { method: PaymentMethod; provider: string; currency: string };
     payments: number;
     amount: unknown;
+}
+
+/** What {@link paymentRepository.recordDispute} did with a report. */
+export interface RecordedDispute {
+    /** `opened`: the first report of this dispute. `updated`: a newer report replaced the stored one. */
+    outcome: 'opened' | 'updated';
+    /** The payment: after the write for `opened`, as it stood before it for `updated`. */
+    payment: PaymentDocument;
+    /** The stored dispute before an `updated` write, to tell open from closed. */
+    previous?: DisputeRecord;
 }
 
 /** One refund with the ids of the payment it sits on, as `$unwind` hands it back. */
@@ -386,6 +397,12 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         refusal?: 'final' | 'not-final' | 'reversed';
         limit: number;
     }) => Promise<RefundRow[]>;
+    recordDispute: (
+        paymentId: string,
+        dispute: DisputeRecord,
+        session?: ClientSession
+    ) => Promise<RecordedDispute | null>;
+    findWithOpenDisputes: (limit: number) => Promise<PaymentDocument[]>;
     findWithOpenRefunds: (updatedBefore: Date, limit: number) => Promise<PaymentDocument[]>;
     findStaleInFlight: (updatedBefore: Date, limit: number) => Promise<PaymentDocument[]>;
 } = {
@@ -1031,6 +1048,71 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
             .sort({ updatedAt: 1 })
             .limit(limit)
             .exec(),
+
+    /**
+     * Put a provider's report of a dispute on its payment, in at most two conditional writes, each
+     * one atomic on the payment document: replace the stored dispute when the report is NEWER
+     * (`observedAt`), else append it when no dispute holds this `disputeRef`. A report that is older
+     * than, or as old as, what is stored matches neither, so an out-of-order or repeated delivery
+     * changes and announces nothing. There is no terminal state: a closed dispute may flip.
+     *
+     * @param paymentId - the payment
+     * @param dispute - the report, with dates revived
+     * @param session - the caller's transaction, so the timeline row and the event commit with it
+     * @returns what was done, or `null` when the report was stale or repeated
+     */
+    recordDispute: (paymentId, dispute, session) => {
+        // `openedAt` is the first report's time and never moves, so it stays out of the update.
+        const { disputeRef, observedAt, openedAt: _firstReport, ...fields } = dispute;
+        const options = { returnDocument: 'before' as const, ...(session ? { session } : {}) };
+        // Optional fields the report left out keep what is stored; a closed time follows the status.
+        const { closedAt, evidenceDueBy, dashboardUrl, ...always } = fields;
+        const set = {
+            ...Object.fromEntries(
+                Object.entries(always).map(([key, value]) => [`disputes.$.${key}`, value])
+            ),
+            'disputes.$.observedAt': observedAt,
+            ...(closedAt ? { 'disputes.$.closedAt': closedAt } : {}),
+            ...(evidenceDueBy ? { 'disputes.$.evidenceDueBy': evidenceDueBy } : {}),
+            ...(dashboardUrl ? { 'disputes.$.dashboardUrl': dashboardUrl } : {})
+        };
+        return paymentModel
+            .findOneAndUpdate(
+                {
+                    _id: toObjectId(paymentId),
+                    disputes: { $elemMatch: { disputeRef, observedAt: { $lt: observedAt } } }
+                },
+                closedAt ? { $set: set } : { $set: set, $unset: { 'disputes.$.closedAt': 1 } },
+                options
+            )
+            .exec()
+            .then((before) => {
+                if (before)
+                    return {
+                        outcome: 'updated' as const,
+                        payment: before,
+                        previous: before.disputes.find((known) => known.disputeRef === disputeRef)
+                    };
+                return paymentModel
+                    .findOneAndUpdate(
+                        { _id: toObjectId(paymentId), 'disputes.disputeRef': { $ne: disputeRef } },
+                        { $push: { disputes: dispute } },
+                        { ...options, returnDocument: 'after' }
+                    )
+                    .exec()
+                    .then((after) =>
+                        after ? { outcome: 'opened' as const, payment: after } : null
+                    );
+            });
+    },
+
+    /**
+     * Payments with a dispute still open, oldest first: the needs-attention read.
+     *
+     * @param limit - the most to return
+     */
+    findWithOpenDisputes: (limit: number) =>
+        paymentModel.find(openDisputeFilter()).sort({ updatedAt: 1 }).limit(limit).exec(),
 
     /**
      * Payments the provider may have moved on without this application hearing of it: still in a

@@ -12,7 +12,6 @@
         "not-holdable": "Only an open fulfillment order can be put on hold",
         "not-releasable": "This fulfillment order is not on hold, or waits for stock and is released only by it arriving",
         "not-deliverable": "This shipment has already been delivered, or its order cannot take a delivery now",
-        "override-reason-required": "A reason is required to force this move",
         "email-line": "{{quantity}} × {{title}}",
         "email-shipped": {
             "subject": "Your order is on its way",

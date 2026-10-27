@@ -12,7 +12,6 @@
         "not-holdable": "Solo un ordine di evasione aperto può essere messo in attesa",
         "not-releasable": "Questo ordine di evasione non è in attesa, oppure attende le scorte e si sblocca solo quando arrivano",
         "not-deliverable": "Questa spedizione è già stata consegnata, oppure il suo ordine non può ricevere una consegna ora",
-        "override-reason-required": "Per forzare questo spostamento è richiesto un motivo",
         "email-line": "{{quantity}} × {{title}}",
         "email-shipped": {
             "subject": "Il tuo ordine è in viaggio",

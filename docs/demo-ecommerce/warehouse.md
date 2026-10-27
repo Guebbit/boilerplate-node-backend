@@ -188,9 +188,8 @@ the normal button. → [A parcel lost or damaged](./when-something-goes-wrong.md
 
 ::: tip When the ordinary sequence does not fit
 A parcel scanned against the wrong order, or a correction needed outside the normal pack → ship →
-deliver order, goes through an admin's forced correction instead — see
-[Correcting a mistake](./manager.md#correcting-a-mistake). It still creates the same record; it
-just carries a reason and skips the ordinary gate.
+deliver order, goes through an admin's status correction instead when there is no parcel to record — see
+[Correcting a mistake](./manager.md#correcting-a-mistake). It carries a reason and skips the ordinary gate.
 :::
 
 ## A returned parcel arrives {#a-returned-parcel-arrives}

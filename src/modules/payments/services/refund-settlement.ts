@@ -20,17 +20,27 @@ import { paymentEffectRetryMinutes } from '../config';
 import { paymentRepository } from '../repository';
 import { PAYMENT_REFUNDED, PAYMENT_REFUND_FAILED, PAYMENT_REFUND_REVERSED } from '../events';
 import type { PaymentDocument, RefundRecord, RefundSettlement } from '../model';
-import { isFinalFailure, isOpenRefund, nextRefundAttemptAt, OPEN_REFUND_STATUSES } from '../domain';
+import {
+    isFinalFailure,
+    isOpenRefund,
+    lostToChargebacks,
+    nextRefundAttemptAt,
+    OPEN_REFUND_STATUSES
+} from '../domain';
 
 /**
  * What is still refundable on a payment, in minor units: what was paid minus what has been asked
- * back (pending counts — see `PaymentDocument.amountRefunded`).
+ * back (pending counts — see `PaymentDocument.amountRefunded`) minus what lost chargebacks took,
+ * since the shop cannot return money the bank kept.
  * @param payment - the payment
  */
 export const remainingOf = (payment: PaymentDocument): Money =>
     subtractMoney(
-        toMinorUnits(payment.amount, payment.currency),
-        toMinorUnits(payment.amountRefunded, payment.currency)
+        subtractMoney(
+            toMinorUnits(payment.amount, payment.currency),
+            toMinorUnits(payment.amountRefunded, payment.currency)
+        ),
+        lostToChargebacks(payment, payment.currency)
     );
 
 /**

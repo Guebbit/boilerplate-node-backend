@@ -31,6 +31,7 @@ import { systemCallerContext } from '@kernel/permissions';
 import {
     providerNamed,
     WebhookRejected,
+    type ProviderDisputeState,
     type ProviderPaymentState,
     type ProviderWebhookEvent
 } from '../providers';
@@ -52,6 +53,7 @@ import {
     recordOwedByHand
 } from './refunds';
 import { syncProviderRefunds } from './external-refunds';
+import { applyDisputeDelivery } from './disputes';
 import { recordDecline } from './announce';
 import { PAYMENT_SUCCEEDED } from '../events';
 import { notPayable, paymentNotFound } from './errors';
@@ -724,6 +726,7 @@ export const applyWebhookDelivery = (
         refundRef: event.refundRef
     });
     // Stryker restore all
+    if (event.dispute) return applyDisputeEvent(event.providerRef, event.dispute, providerName);
     return event.refundRef
         ? applyRefundDelivery(event.providerRef, event.refundRef, providerName)
         : applyWebhookSettlement(event.providerRef, providerName);
@@ -747,6 +750,35 @@ const isForeignDelivery = (payment: PaymentDocument, providerName: string | unde
     // Stryker restore all
     return true;
 };
+
+/**
+ * Apply a delivery that carries a dispute: the payment it belongs to is found by its intent. Unlike
+ * a refund, the dispute is not re-read from the provider (some cannot be asked); it is stored, and
+ * its `observedAt` orders it against the ones already stored.
+ *
+ * @param providerRef - the intent the delivery names
+ * @param dispute - the dispute's state, from the verified body
+ * @param providerName - the endpoint's provider
+ */
+const applyDisputeEvent = (
+    providerRef: string,
+    dispute: ProviderDisputeState,
+    providerName: string
+): Promise<void> =>
+    paymentRepository.findByProviderRef(providerRef).then((payment) => {
+        if (!payment) {
+            // Stryker disable all
+            logger.warn({
+                message:
+                    'Payment webhook named a dispute on an intent this application does not know.',
+                providerRef
+            });
+            // Stryker restore all
+            return undefined;
+        }
+        if (isForeignDelivery(payment, providerName)) return undefined;
+        return applyDisputeDelivery(payment, dispute);
+    });
 
 /**
  * Apply a delivery that names a refund: the payment it belongs to is found by its intent, and the
