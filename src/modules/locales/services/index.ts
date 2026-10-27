@@ -51,7 +51,7 @@ import { readMessages, readApiOverrides, readLocaleOverlay } from './messages';
 import { setTranslatables } from './translatables';
 import {
     getEntityTranslations,
-    upsertEntityTranslations,
+    updateEntityTranslations,
     replaceEntityTranslations
 } from './translations';
 import { localeDisplayName } from '../model';
@@ -91,7 +91,7 @@ export const localeService = {
     importEntries,
     setTranslatables,
     getEntityTranslations,
-    upsertEntityTranslations,
+    updateEntityTranslations,
     replaceEntityTranslations,
     // A controller may not reach `../model` directly (the persistence wall), so the two
     // controllers validating a display name ride through the service instead.

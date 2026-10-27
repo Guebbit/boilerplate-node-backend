@@ -372,10 +372,17 @@ const findEntityLocale = (
  * An allow-list, not a deny-list of the switched-off: a row whose language no longer exists (a
  * delete racing a write, the cascade is not transactional) is served by nothing. Languages are a
  * handful of rows, so this is one tiny query.
+ *
+ * @param draftTag - the one draft language a staff preview may also read, if any
  */
-const servedTags = (): Promise<string[]> =>
+const servedTags = (draftTag?: string): Promise<string[]> =>
     localeModel
-        .distinct('tag', { active: true })
+        // A draft preview adds ONE tag to the allow-list, and only while its row exists: a
+        // deleted draft has no row, so nothing is served for it.
+        .distinct(
+            'tag',
+            draftTag ? { $or: [{ active: true }, { tag: draftTag }] } : { active: true }
+        )
         .exec()
         .then((active) => [...new Set([...active, getFallbackLocale()])]);
 
@@ -408,9 +415,10 @@ const findServedEntityTranslations = (
 const resolveEntityFields = (
     entityType: string,
     entityIds: string[],
-    localeCandidates: string[]
+    localeCandidates: string[],
+    draftTag?: string
 ): Promise<Map<string, TranslationFields>> =>
-    servedTags()
+    servedTags(draftTag)
         .then((served) =>
             translationModel
                 .find({
@@ -460,9 +468,10 @@ const findEntityIdsByFieldMatch = (
     entityType: string,
     fields: readonly string[],
     pattern: string,
-    localeCandidates: string[]
+    localeCandidates: string[],
+    draftTag?: string
 ): Promise<string[]> =>
-    servedTags()
+    servedTags(draftTag)
         .then((served) =>
             translationModel
                 .find({
@@ -657,13 +666,15 @@ export const translationRepository: Repository<TranslationDocument, Translation>
     resolveEntityFields: (
         entityType: string,
         entityIds: string[],
-        localeCandidates: string[]
+        localeCandidates: string[],
+        draftTag?: string
     ) => Promise<Map<string, TranslationFields>>;
     findEntityIdsByFieldMatch: (
         entityType: string,
         fields: readonly string[],
         pattern: string,
-        localeCandidates: string[]
+        localeCandidates: string[],
+        draftTag?: string
     ) => Promise<string[]>;
     upsertEntityLocale: (
         entityType: string,

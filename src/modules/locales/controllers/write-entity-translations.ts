@@ -1,14 +1,18 @@
 /**
  * @module
  * `PUT` and `PATCH /locales/translations/:entityType/:id` — thin HTTP adapters over
- * `localeService.replaceEntityTranslations`/`upsertEntityTranslations`. PUT replaces (a stored
+ * `localeService.replaceEntityTranslations`/`updateEntityTranslations`. PUT replaces (a stored
  * locale the body doesn't name is deleted), PATCH merges (an absent locale is left alone) — the
  * same replace/merge split `write-locale-entries.ts` already uses for its own bulk import pair.
  */
 
 import type { Request, Response } from 'express';
-import { ReplaceEntityTranslationsBody, UpsertEntityTranslationsBody } from '@api/schemas.zod';
-import type { CallerContext, MergeTranslationsRequest, UpsertTranslationsRequest } from '@types';
+import { ReplaceEntityTranslationsBody, UpdateEntityTranslationsBody } from '@api/schemas.zod';
+import type {
+    CallerContext,
+    UpdateEntityTranslationsRequest,
+    ReplaceEntityTranslationsRequest
+} from '@types';
 import type { ZodType } from 'zod';
 import {
     successResponse,
@@ -45,7 +49,7 @@ const writeEntityTranslations =
         request: Request<
             { entityType: string; id: string },
             unknown,
-            UpsertTranslationsRequest | MergeTranslationsRequest
+            ReplaceEntityTranslationsRequest | UpdateEntityTranslationsRequest
         >,
         response: Response
     ) => {
@@ -87,8 +91,8 @@ export const replaceEntityTranslations = writeEntityTranslations(
  * No `<EntityTranslations>` on `successResponse` — see `get-entity-translations.ts`'s docblock for
  * why: the rows are already the wire shape by the time they get here.
  */
-export const upsertEntityTranslations = writeEntityTranslations(
-    UpsertEntityTranslationsBody,
-    localeService.upsertEntityTranslations,
-    'upsertEntityTranslations'
+export const updateEntityTranslations = writeEntityTranslations(
+    UpdateEntityTranslationsBody,
+    localeService.updateEntityTranslations,
+    'updateEntityTranslations'
 );

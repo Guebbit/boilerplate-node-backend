@@ -45,6 +45,7 @@ export {
 
 export {
     dictionaryLocaleFor,
+    draftLocaleFor,
     hasServedDictionary,
     isServedLocale,
     listServedLocales,
@@ -55,6 +56,7 @@ export {
 
 export {
     createLocaleContext,
+    createPreviewContext,
     getCurrentLocale,
     getLocaleContext,
     runWithLocale,

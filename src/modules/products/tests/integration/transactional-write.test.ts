@@ -37,7 +37,8 @@ beforeEach(() => {
             }),
         write: (...args) => write(...args) as Promise<void>,
         readAll: () => Promise.resolve(new Map()),
-        readServed: () => Promise.resolve(new Map())
+        readServed: () => Promise.resolve(new Map()),
+        canPreviewDrafts: () => false
     });
 });
 

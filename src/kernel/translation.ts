@@ -20,7 +20,14 @@
 
 import type { ClientSession } from 'mongoose';
 import { fieldError, generateReject, type ResponseReject } from '@infrastructure/http/response';
-import { t, getCurrentLocale, getFallbackLocale, localeCandidatesFor } from '@infrastructure/i18n';
+import {
+    t,
+    getCurrentLocale,
+    getFallbackLocale,
+    getLocaleContext,
+    localeCandidatesFor
+} from '@infrastructure/i18n';
+import type { Caller } from '@types';
 import { carryVersion } from '@infrastructure/persistence/versioning';
 
 /**
@@ -39,7 +46,7 @@ export type TranslationFieldChanges = Record<string, string | null>;
 /**
  * One or more locales for one entity, keyed by locale tag — an object upserts that locale's row,
  * `null` deletes it. The kernel's own vocabulary for what `modules/locales`' contract calls
- * `UpsertTranslationsRequest`: a caller building this needs no import from `src/modules/*`, and
+ * `ReplaceEntityTranslationsRequest`: a caller building this needs no import from `src/modules/*`, and
  * this file keeps working (falling back, see {@link planTranslations}) with `locales` absent.
  */
 export type TranslationBatch = Record<
@@ -59,12 +66,16 @@ export interface TranslationPort {
      * whole page with one indexed query instead of one per candidate. The fields returned for
      * each entity are already merged in that candidate order, most specific field wins.
      *
+     * `draftTag` joins the served languages for this one call: a staff draft preview reading a
+     * switched-off language (see {@link previewDraftTag}). Omitted, only served languages count.
+     *
      * @returns fields per entityId; an id with no row at all is simply absent from the map
      */
     resolve: (
         entityType: string,
         entityIds: string[],
-        localeCandidates: string[]
+        localeCandidates: string[],
+        draftTag?: string
     ) => Promise<Map<string, TranslatedFields>>;
 
     /**
@@ -86,17 +97,27 @@ export interface TranslationPort {
      * `pattern` arrives already escaped — see {@link applyTranslations}'s caller-side sibling,
      * `search()` — so an implementation never touches raw caller input.
      *
+     * `draftTag` is as in {@link resolve}.
+     *
      * @returns entity ids, deduplicated
      */
     search: (
         entityType: string,
         fields: readonly string[],
         pattern: string,
-        localeCandidates: string[]
+        localeCandidates: string[],
+        draftTag?: string
     ) => Promise<string[]>;
 
     /**
-     * Validates a PATCH-shaped batch — see `UpsertTranslationsRequest` — against the `locales`
+     * Whether this caller may read a draft language's entity text: the same rule as the draft
+     * dictionary, so whoever sees a draft's interface strings sees its product text. The kernel
+     * names no subject, so the answer comes from the module that owns languages.
+     */
+    canPreviewDrafts: (caller: Caller | undefined) => boolean;
+
+    /**
+     * Validates a PATCH-shaped batch — see `ReplaceEntityTranslationsRequest` — against the `locales`
      * collection and the registry's declared fields, WITHOUT writing anything. No entity id: every
      * check is about the locale and the field names, never about a specific row, which is what
      * lets a caller creating a new entity in the SAME request (`productService.write`'s
@@ -180,11 +201,12 @@ export const registerTranslationPort = (port?: TranslationPort): void => {
 export const resolveTranslations = (
     entityType: string,
     entityIds: string[],
-    localeCandidates: string[]
+    localeCandidates: string[],
+    draftTag?: string
 ): Promise<Map<string, TranslatedFields>> =>
     !translationPort || entityIds.length === 0
         ? Promise.resolve(new Map<string, TranslatedFields>())
-        : translationPort.resolve(entityType, entityIds, localeCandidates);
+        : translationPort.resolve(entityType, entityIds, localeCandidates, draftTag);
 
 /**
  * The hard-delete path's entry point. A no-op — zero removed, no query — when nothing is
@@ -205,11 +227,31 @@ export const searchTranslatedEntityIds = (
     entityType: string,
     fields: readonly string[],
     pattern: string,
-    localeCandidates: string[]
+    localeCandidates: string[],
+    draftTag?: string
 ): Promise<string[]> =>
     translationPort
-        ? translationPort.search(entityType, fields, pattern, localeCandidates)
+        ? translationPort.search(entityType, fields, pattern, localeCandidates, draftTag)
         : Promise.resolve([]);
+
+/**
+ * The draft language the ambient request is previewing, or `undefined`. Only a request the
+ * preview middleware bound says anything; a worker or an order snapshot (`runWithLocale`) never
+ * does, so a draft's text cannot reach a message that outlives the request.
+ */
+export const previewDraftTag = (): string | undefined => {
+    const context = getLocaleContext();
+    return context?.preview ? context.locale : undefined;
+};
+
+/**
+ * Whether the caller may preview draft languages. `false` with no port registered: without
+ * `locales` there are no drafts to read.
+ *
+ * @param caller - `request.caller`, or `undefined` for an anonymous request
+ */
+export const canPreviewDraftLanguages = (caller: Caller | undefined): boolean =>
+    translationPort?.canPreviewDrafts(caller) ?? false;
 
 /**
  * Whether a write can resolve to more than the fallback language — `false` once nothing is
@@ -336,7 +378,8 @@ export const applyTranslations = async <T extends Translatable>(
     const resolved = await resolveTranslations(
         entityType,
         items.map((item) => item.id),
-        candidates
+        candidates,
+        previewDraftTag()
     );
 
     if (resolved.size === 0) return [...items];

@@ -150,6 +150,19 @@ describe('product routes — caching', () => {
         expect(optionsOf(chainOf(router, 'GET /'), 'setCache').keyParameters).not.toHaveLength(0);
     });
 
+    // The cache key is built from `request.locale`: a preview mounted after `setCache` would
+    // store a draft answer under a live language's key.
+    it.each(['GET /', 'POST /search', 'GET /:id'])(
+        '%s mounts the draft preview before the cache',
+        (signature) => {
+            const chain = chainOf(router, signature);
+            const cache = chain.findIndex((entry) => entry.startsWith('setCache'));
+
+            expect(chain.indexOf('previewDraftLanguage')).toBeGreaterThanOrEqual(0);
+            expect(chain.indexOf('previewDraftLanguage')).toBeLessThan(cache);
+        }
+    );
+
     it.each(['GET /categories', 'GET /:id'])(
         '%s is cached under the catalogue tag',
         (signature) => {

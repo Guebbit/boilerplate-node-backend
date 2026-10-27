@@ -62,6 +62,24 @@ caller's compiled CASL read filter to an anonymous caller's, byte for byte, rath
 on a role name — safe BY CONSTRUCTION, since a role change that widens visibility makes the two
 filters unequal on its own, with nobody needing to remember to touch the cache key too.
 
+## Draft previews
+
+A third case beside `scopeKey`'s `true` and `false`: the draft-preview flag. A staff caller whose
+first `Accept-Language` choice is a switched-off language is answered in it ([previewing a draft](../modules/locales.md#previewing-a-draft)), and that answer must never meet a
+visitor.
+
+|          | Behaviour                                                                                   |
+| -------- | ------------------------------------------------------------------------------------------- |
+| Flag     | `markDraftPreview` sets `response.locals.draftPreview`; `isDraftPreview` reads it           |
+| Decision | `cacheable = !draftPreview && scopeKey(request)`. The flag wins over `scopeKey`             |
+| Redis    | No key is built, nothing is read, nothing is written. `armCacheWrite` refuses a second time |
+| Headers  | `private, no-store` on GET and POST. `privateNoCache` keeps it. `Vary` is unchanged         |
+| 304      | `If-None-Match` / `If-Modified-Since` are dropped, as `noStore` does                        |
+| Order    | Mount before `setCache`: its key is built from `request.locale`                             |
+
+Why not trust `scopeKey`: a custom role or an API key can hold `display:Locale` without
+`display:Product`, which reads the anonymous catalogue scope and so shares the visitors' entry.
+
 ## Response headers
 
 `applyCacheHeaders` (`infrastructure/http/middlewares/cache.ts`) sets every `Cache-Control` header

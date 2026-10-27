@@ -334,7 +334,7 @@ describe('a product edited only through the locales translations route', () => {
         await api()
             .patch(`/locales/translations/product/${product.id}`)
             .set('Authorization', bearer)
-            .send({ it: { fields: { title: 'Un titolo italiano' } } })
+            .send({ it: { fields: { title: 'Un titolo italiano' }, origin: 'human' } })
             .expect(200);
 
         expect(etagOf(await api().get(admin).set('Authorization', bearer))).not.toBe(before);
@@ -348,7 +348,7 @@ describe('a product edited only through the locales translations route', () => {
         await api()
             .patch(`/locales/translations/product/${product.id}`)
             .set('Authorization', bearer)
-            .send({ it: { fields: { title: 'Un titolo italiano' } } })
+            .send({ it: { fields: { title: 'Un titolo italiano' }, origin: 'human' } })
             .expect(200);
 
         const write = await api()

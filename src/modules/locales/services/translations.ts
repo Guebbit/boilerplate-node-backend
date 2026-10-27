@@ -6,17 +6,16 @@
  */
 
 import type { ClientSession } from 'mongoose';
-import type {
-    MergeTranslationsRequest,
-    Translation,
-    TranslationOrigin,
-    UpsertTranslationsRequest
-} from '@types';
+import type { Translation, TranslationOrigin, ReplaceEntityTranslationsRequest } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { getFallbackLocale, t } from '@infrastructure/i18n';
 import type { TranslatableTarget } from '@kernel/registry';
 import { fillOmittedWithNull } from '@infrastructure/object-guards';
-import type { TranslationWritePlan, TranslationWriteSlot } from '@kernel/translation';
+import type {
+    TranslationBatch,
+    TranslationWritePlan,
+    TranslationWriteSlot
+} from '@kernel/translation';
 import {
     fieldError,
     generateReject,
@@ -86,8 +85,12 @@ type PlannedWrite =
       }
     | { locale: string; kind: 'delete' };
 
-/** One locale's entry in either write body — a PUT's strings, or a PATCH's strings and `null`s. */
-type LocaleWrite = UpsertTranslationsRequest[string] | MergeTranslationsRequest[string];
+/**
+ * One locale's entry in either write body — a PUT's strings, or a PATCH's strings and `null`s.
+ * `origin` is optional here because internal callers (a product write) leave it out; the PATCH
+ * contract itself requires it, so only a PUT or an internal batch ever reaches `?? 'human'`.
+ */
+type LocaleWrite = TranslationBatch[string];
 
 /**
  * Validate one locale slot against the `locales` collection, the registry's declared fields, and
@@ -151,7 +154,7 @@ const isRejection = (value: unknown): value is ResponseReject =>
     typeof value === 'object' && value !== null && 'success' in value && !value.success;
 
 /**
- * Validate a whole batch — the same `UpsertTranslationsRequest` shape PUT and PATCH both send —
+ * Validate a whole batch — the same `ReplaceEntityTranslationsRequest` shape PUT and PATCH both send —
  * against the `locales` collection, the registry's declared fields, and the fallback-locale delete
  * guard: the pre-flight half of a write, with no entity id at all. Every check here is about the
  * LOCALE and the FIELD NAMES, never about a specific row, so this runs the same whether the entity
@@ -189,7 +192,7 @@ const planTranslationWrites = async (
  * Apply an ALREADY-VALIDATED plan — see {@link planTranslationWrites} — without touching the
  * entity's cache tag or its audit trail: a caller with its own document to write
  * (`productService.create`/`updateById`) owns both itself, in the same operation that calls this.
- * `upsertEntityTranslations` below is the generic door's own caller, and still owns that pair for
+ * `updateEntityTranslations` below is the generic door's own caller, and still owns that pair for
  * itself.
  *
  * The derived index column IS written here, not left to each caller: it is the one invariant that
@@ -299,7 +302,7 @@ export const writeForPort = (
     );
 
 /**
- * Validate and apply a batch — shared by `upsertEntityTranslations` (PATCH) and
+ * Validate and apply a batch — shared by `updateEntityTranslations` (PATCH) and
  * `replaceEntityTranslations` (PUT), which differ only in what `payload` already contains by the
  * time it gets here: PATCH's payload is the caller's body verbatim, PUT's has an explicit `null`
  * added for every stored locale the caller's body left out.
@@ -361,10 +364,10 @@ const applyTranslationBatch = async (
  * Merge a PATCH into an entity's translations (RFC 7396): a locale that is an object merges field
  * by field into its row, one that is `null` is deleted, one that is absent is left alone.
  */
-export const upsertEntityTranslations = (
+export const updateEntityTranslations = (
     entityType: string,
     entityId: string,
-    payload: MergeTranslationsRequest,
+    payload: TranslationBatch,
     context?: CallerContext
 ): Promise<ResponseSuccess<EntityTranslationsResult> | ResponseReject> =>
     applyTranslationBatch(entityType, entityId, payload, context);
@@ -380,7 +383,7 @@ export const upsertEntityTranslations = (
  * @returns the body with each non-empty locale carrying every declared field
  */
 const clearOmittedInPayload = (
-    payload: UpsertTranslationsRequest,
+    payload: ReplaceEntityTranslationsRequest,
     declared: readonly string[]
 ): Record<string, LocaleWrite> =>
     Object.fromEntries(
@@ -395,7 +398,7 @@ const clearOmittedInPayload = (
 /**
  * Replace the whole set for a PUT: every locale currently stored but absent from the body is
  * deleted, by turning "absent" into an explicit `null` before handing the batch to
- * {@link applyTranslationBatch} — the same validation `upsertEntityTranslations` already runs
+ * {@link applyTranslationBatch} — the same validation `updateEntityTranslations` already runs
  * (including the fallback-locale delete guard, so a body that omits it is refused the same way
  * an explicit `null` on it already is) then treats a planned `null` as a delete.
  *
@@ -408,7 +411,7 @@ const clearOmittedInPayload = (
 export const replaceEntityTranslations = async (
     entityType: string,
     entityId: string,
-    payload: UpsertTranslationsRequest,
+    payload: ReplaceEntityTranslationsRequest,
     context?: CallerContext
 ): Promise<ResponseSuccess<EntityTranslationsResult> | ResponseReject> => {
     const target = translatableTarget(entityType);

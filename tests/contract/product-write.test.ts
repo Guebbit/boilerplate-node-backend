@@ -450,7 +450,7 @@ describe('the generic translator door follows the product rules (bug W9)', () =>
         const response = await api()
             .patch(`/locales/translations/product/${String(product._id)}`)
             .set('Authorization', bearer)
-            .send({ en: { fields: { title: 'abc' } } });
+            .send({ en: { fields: { title: 'abc' }, origin: 'human' } });
 
         expect(response.status).toBe(422);
         expect(response.body.errors[0].details.field).toBe('en.title');
@@ -463,16 +463,18 @@ describe('the generic translator door follows the product rules (bug W9)', () =>
         await api()
             .put(url)
             .set('Authorization', bearer)
-            .send({ en: { fields: { title: 'Cozy Bed', description: 'Extra support' } } });
+            .send({
+                en: { fields: { title: 'Cozy Bed', description: 'Extra support' }, origin: 'human' }
+            });
 
         const merged = await api()
             .patch(url)
             .set('Authorization', bearer)
-            .send({ en: { fields: { title: 'Cozy Bed XL' } } });
+            .send({ en: { fields: { title: 'Cozy Bed XL' }, origin: 'human' } });
         const replaced = await api()
             .put(url)
             .set('Authorization', bearer)
-            .send({ en: { fields: { title: 'Cozy Bed XXL' } } });
+            .send({ en: { fields: { title: 'Cozy Bed XXL' }, origin: 'human' } });
 
         expect(merged.body.translations[0].fields).toEqual({
             title: 'Cozy Bed XL',

@@ -79,7 +79,7 @@ describe('a translation write invalidates the cached product it translated', () 
         await api()
             .patch(`/locales/translations/product/${id}`)
             .set('Authorization', bearer)
-            .send({ [FALLBACK]: { fields: { title: 'New title' } } });
+            .send({ [FALLBACK]: { fields: { title: 'New title' }, origin: 'human' } });
 
         const afterPatch = await api().get(`/products/${id}`);
         expect(afterPatch.headers['x-cache']).toBe('MISS');
@@ -98,7 +98,7 @@ describe('a translation write invalidates the cached product it translated', () 
         const refused = await api()
             .patch(`/locales/translations/product/${id}`)
             .set('Authorization', bearer)
-            .send({ xx: { fields: { title: 'Nope' } } });
+            .send({ xx: { fields: { title: 'Nope' }, origin: 'human' } });
         expect(refused.status).toBe(422);
 
         const stillCached = await api().get(`/products/${id}`);

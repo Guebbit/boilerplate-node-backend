@@ -21,6 +21,7 @@ const fakePort = (overrides: Partial<TranslationPort> = {}): TranslationPort => 
     write: jest.fn().mockResolvedValue(undefined),
     readAll: jest.fn().mockResolvedValue(new Map()),
     readServed: jest.fn().mockResolvedValue(new Map()),
+    canPreviewDrafts: () => false,
     ...overrides
 });
 
@@ -50,7 +51,12 @@ describe('resolveSnapshotProducts', () => {
 
         await resolveSnapshotProducts('it-CH', [{ _id: id, title: 'Dog Bed', price: 10 }]);
 
-        expect(resolve).toHaveBeenCalledWith('product', [String(id)], ['it-CH', 'it', 'en']);
+        expect(resolve).toHaveBeenCalledWith(
+            'product',
+            [String(id)],
+            ['it-CH', 'it', 'en'],
+            undefined
+        );
     });
 
     it('leaves a product unchanged (but still returned) when it has no translation row', async () => {
@@ -75,7 +81,7 @@ describe('resolveSnapshotProducts', () => {
         );
 
         // Candidates are built from the explicit 'it' argument, never from the ambient 'en'.
-        expect(resolve).toHaveBeenCalledWith('product', [String(id)], ['it', 'en']);
+        expect(resolve).toHaveBeenCalledWith('product', [String(id)], ['it', 'en'], undefined);
     });
 
     it("preserves the product's own ObjectId `_id` rather than minting a fresh one", async () => {

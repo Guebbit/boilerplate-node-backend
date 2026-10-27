@@ -440,7 +440,7 @@ const PRODUCT_COPY_BY_ID: ReadonlyMap<string, ProductCopy> = new Map([
 /**
  * One locale's copy as the write surface takes it.
  *
- * `description` appears only when that locale states one: `UpsertTranslationRequestFields` is a
+ * `description` appears only when that locale states one: `ReplaceEntityTranslationsEntryFields` is a
  * `Record<string, string>`, which an explicit `undefined` value would fail.
  */
 const localeFields = (entry: ProductTranslationFields): Record<string, string> =>
