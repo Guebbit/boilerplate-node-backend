@@ -36,7 +36,13 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
     [RETURN_REQUESTED]: {
         toPublicEvent: (payload: DomainEventMap[typeof RETURN_REQUESTED]) => ({
             eventType: 'return.requested',
-            data: { returnId: payload.returnId, orderId: payload.orderId, reason: payload.reason }
+            data: {
+                returnId: payload.returnId,
+                orderId: payload.orderId,
+                reason: payload.reason,
+                requestedAt: payload.requestedAt,
+                ...(payload.statedVia ? { statedVia: payload.statedVia } : {})
+            }
         })
     },
     [RETURN_RECEIVED]: {

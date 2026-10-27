@@ -181,6 +181,27 @@ describe('closing a received return by hand', () => {
         expect(asReject(result).errors[0].code).toBe('RETURN_NOT_CLOSABLE');
     });
 
+    it('refuses a canceled return: the goods never came, so there is nothing to close', async () => {
+        const fixture = await paidInCash();
+        await carryOrderTo(fixture.orderId, 'delivered');
+        const created = await returnService.createReturn(
+            { orderId: fixture.orderId, reason: 'withdrawal' },
+            asCustomer(fixture.user.id),
+            callerContextAs('customer', fixture.user.id)
+        );
+        if (!created.success) throw new Error('expected a return');
+        const returnId = String(created.data._id);
+        await returnService.cancelReturn(returnId, undefined, callerContextAs('admin'));
+
+        const result = await returnService.closeReturnByHand(
+            returnId,
+            undefined,
+            callerContextAs('admin')
+        );
+
+        expect(asReject(result).errors[0].code).toBe('RETURN_NOT_CLOSABLE');
+    });
+
     it('answers 404 for a return that does not exist', async () => {
         const result = await returnService.closeReturnByHand(
             '64b64b64b64b64b64b64b64b',

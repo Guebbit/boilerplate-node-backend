@@ -118,7 +118,7 @@ its own supercronic, so the backup secrets stay out of the `cron` container. See
 | `npm run job reap:orders`              | 02:10 nightly  | No     | Anonymizes an order's remaining PII once its retention window has passed, and unsets a timeline row's staff text once its own window has.                                      |
 | `npm run job reap:payments`            | 02:15 nightly  | No     | Deletes abandoned (never-settled) payment attempts past their retention window.                                                                                                |
 | `npm run job sweep:payment-effects`    | every 5 min    | Yes    | Retries refunds the provider has not answered, and settles unsettled payments whose webhook never arrived.                                                                     |
-| `npm run job reap:returns`             | 02:12 nightly  | No     | Unsets a return's free text (`note`, `declineReason`) once the return has not changed for its retention window.                                                                |
+| `npm run job reap:returns`             | 02:12 nightly  | No     | Unsets a return's free text (`note`, `declineMessage`) once the return has not changed for its retention window.                                                               |
 | `npm run job sweep:stock-alerts`       | `35 * * * *`   | Yes    | Answers waiting back-in-stock requests for a product that can be ordered again without any write announcing it, such as a preorder whose release date passed.                  |
 | `npm run job reap:purchase-holds`      | 02:12 nightly  | Yes    | Reduces every expired purchase hold to the date that restarts the count of cancellations, dropping its note and who set it.                                                    |
 | `npm run job sweep:webhook-retries`    | every minute   | No     | Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.                                                                          |
@@ -218,7 +218,7 @@ Why minimise rather than delete: [Data Retention](../theory/data-retention.md#in
 See the script's own header for the stages.
 
 `returns` has no TTL: the row is a legal record. `npm run job reap:returns` unsets only its free text
-(`note`, `declineReason`) once the return's `updatedAt` is older than `NODE_RETURN_TEXT_RETENTION_DAYS`
+(`note`, `declineMessage`) once the return's `updatedAt` is older than `NODE_RETURN_TEXT_RETENTION_DAYS`
 (default 1095). `updatedAt`, not the closing date, because an approved return whose goods never
 arrive never closes. Safe to repeat: the filter only matches returns still holding text, and the
 wipe does not move `updatedAt`. Why three years: [Data Retention](../theory/data-retention.md#free-text-on-returns).

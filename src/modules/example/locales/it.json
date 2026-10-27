@@ -6,7 +6,9 @@
         "not-found": "Esempio non trovato.",
         "owner-unknown": "Proprietario sconosciuto",
         "cover-missing": "Invia l'immagine nel campo imageUpload.",
-        "transition-not-allowed": "Un esempio non può passare da {{from}} a {{to}}.",
+        "not-publishable": "Un esempio non può essere pubblicato da {{status}}: solo una bozza può.",
+        "not-archivable": "Un esempio non può essere archiviato da {{status}}: solo una bozza o uno pubblicato può.",
+        "not-unarchivable": "Un esempio non può tornare in bozza da {{status}}: solo uno archiviato può.",
         "error-body-too-long": "Il testo può avere al massimo {{maximum}} caratteri.",
         "email-published": {
             "subject": "Il tuo esempio è pubblicato: {{title}}",

@@ -22,7 +22,14 @@ import {
 } from '@infrastructure/persistence/search';
 import { orderService } from '@modules/orders';
 import { paymentAttentionMinutes } from '../config';
-import { displayStatusFilter, parseReference, refundDueBy } from '../domain';
+import {
+    displayStatusFilter,
+    exceedsBy,
+    exceedsRemaining,
+    parseReference,
+    refundDueBy
+} from '../domain';
+import { toDecimalAmount } from '@domain-primitives/money';
 import type { PaymentDocument, RefundRecord } from '../model';
 import { paymentRepository, type RefundFilters, type RefundRow } from '../repository';
 import { callerScope } from './scope';
@@ -108,6 +115,7 @@ const refundRow = ({ paymentId, orderId, refund }: RefundRow): RefundListItem =>
     ...(refund.providerRefundRef ? { providerRefundRef: refund.providerRefundRef } : {}),
     ...(refund.failureReason ? { failureReason: refund.failureReason } : {}),
     ...(refund.settledAt ? { settledAt: refund.settledAt.toISOString() } : {}),
+    ...(refund.reversedAt ? { reversedAt: refund.reversedAt.toISOString() } : {}),
     createdAt: refund.createdAt.toISOString()
 });
 
@@ -130,7 +138,11 @@ export const listRefunds = (
  * @param refund - the open refund
  */
 const dueByOf = (kind: PaymentAttentionKind, refund: RefundRecord): { refundDueBy?: string } => {
-    const due = kind === PaymentAttentionKind.refused_refund ? refundDueBy(refund) : undefined;
+    const due =
+        kind === PaymentAttentionKind.refused_refund ||
+        kind === PaymentAttentionKind.reversed_refund
+            ? refundDueBy(refund)
+            : undefined;
     return due ? { refundDueBy: due.toISOString() } : {};
 };
 
@@ -147,9 +159,37 @@ const refundAttention = (row: RefundRow, kind: PaymentAttentionKind): PaymentAtt
     amount: row.refund.amount,
     currency: row.refund.currency,
     ...(row.refund.failureReason ? { failureReason: row.refund.failureReason } : {}),
-    since: row.refund.createdAt.toISOString(),
+    // A reversed refund is a problem from the day it bounced, not from the day it was opened.
+    since: (kind === PaymentAttentionKind.reversed_refund && row.refund.reversedAt
+        ? row.refund.reversedAt
+        : row.refund.createdAt
+    ).toISOString(),
     ...dueByOf(kind, row.refund)
 });
+
+/**
+ * The open refunds an outside refund left no room for, as attention rows (see
+ * `exceedsRemaining`): one per record, with by how much it overshoots.
+ *
+ * @param payments - payments whose running total is past what was paid
+ */
+const exceedingRows = (payments: PaymentDocument[]): PaymentAttentionItem[] =>
+    payments.flatMap((payment) =>
+        payment.refunds
+            .filter((refund) => exceedsRemaining(payment, refund))
+            .map(
+                (refund): PaymentAttentionItem => ({
+                    kind: PaymentAttentionKind.refund_exceeds_remaining,
+                    orderId: String(payment.orderId),
+                    paymentId: String(payment._id),
+                    refundId: String(refund._id),
+                    amount: refund.amount,
+                    currency: refund.currency,
+                    exceedsBy: toDecimalAmount(exceedsBy(payment, refund), payment.currency),
+                    since: refund.createdAt.toISOString()
+                })
+            )
+    );
 
 /**
  * Every problem still recorded on a payment, oldest first: refunds open past the threshold, refunds the
@@ -171,12 +211,34 @@ export const listAttention = (): Promise<{ items: PaymentAttentionItem[] }> => {
             refusal: 'final',
             limit: ATTENTION_LIMIT
         }),
-        paymentRepository.findOpenRefundRows({ manual: true, limit: ATTENTION_LIMIT })
-    ]).then(([stale, refused, manual]) => ({
-        items: [
-            ...stale.map((row) => refundAttention(row, PaymentAttentionKind.stale_refund)),
-            ...refused.map((row) => refundAttention(row, PaymentAttentionKind.refused_refund)),
-            ...manual.map((row) => refundAttention(row, PaymentAttentionKind.manual_refund_owed))
-        ].toSorted((a, b) => a.since.localeCompare(b.since))
-    }));
+        paymentRepository.findOpenRefundRows({ manual: true, limit: ATTENTION_LIMIT }),
+        // A refund the provider took back needs a person at once, whatever it says it failed for.
+        paymentRepository.findOpenRefundRows({
+            manual: false,
+            refusal: 'reversed',
+            limit: ATTENTION_LIMIT
+        }),
+        // An open refund an outside refund left no room for: shown once, as its own kind.
+        paymentRepository.findOverRefunded(ATTENTION_LIMIT).then(exceedingRows)
+    ]).then(([stale, refused, manual, reversed, exceeding]) => {
+        const held = new Set(exceeding.map((item) => item.refundId));
+        const others = (row: RefundRow): boolean => !held.has(String(row.refund._id));
+        return {
+            items: [
+                ...stale
+                    .filter((row) => others(row))
+                    .map((row) => refundAttention(row, PaymentAttentionKind.stale_refund)),
+                ...refused
+                    .filter((row) => others(row))
+                    .map((row) => refundAttention(row, PaymentAttentionKind.refused_refund)),
+                ...reversed.map((row) =>
+                    refundAttention(row, PaymentAttentionKind.reversed_refund)
+                ),
+                ...exceeding,
+                ...manual.map((row) =>
+                    refundAttention(row, PaymentAttentionKind.manual_refund_owed)
+                )
+            ].toSorted((a, b) => a.since.localeCompare(b.since))
+        };
+    });
 };

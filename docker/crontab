@@ -43,7 +43,7 @@
 15 2 * * * cd /app && npm run job reap:payments
 # Retries refunds the provider has not answered, and settles unsettled payments whose webhook never arrived.
 */5 * * * * cd /app && npm run job sweep:payment-effects
-# Unsets a return's free text (`note`, `declineReason`) once the return has not changed for its retention window.
+# Unsets a return's free text (`note`, `declineMessage`) once the return has not changed for its retention window.
 12 2 * * * cd /app && npm run job reap:returns
 # Answers waiting back-in-stock requests for a product that can be ordered again without any write announcing it, such as a preorder whose release date passed.
 35 * * * * cd /app && npm run job sweep:stock-alerts

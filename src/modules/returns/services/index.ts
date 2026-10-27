@@ -9,6 +9,7 @@ import { createReturn } from './create';
 import { approveReturn, declineReturn } from './decide';
 import { receiveReturn } from './receive';
 import { closeReturnByHand } from './close';
+import { cancelReturn } from './cancel';
 import { collectPersonalData } from './personal-data';
 import { listReturns, getReturn, withActions } from './read';
 import { getReturnOptions } from './options';
@@ -28,6 +29,7 @@ export const returnService = {
     declineReturn,
     receiveReturn,
     closeReturnByHand,
+    cancelReturn,
     listReturns,
     getReturn,
     getReturnOptions,

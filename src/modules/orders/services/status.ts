@@ -296,13 +296,14 @@ export const markFulfilmentComplete = (
  *
  * @param orderId - the order whose payment was refunded
  * @param paymentStatus - `partially_refunded` while some of the money is still with the shop,
- *   `refunded` once all of it went back
+ *   `refunded` once all of it went back; `undefined` clears the stamp, for a refund the provider
+ *   took back when no other refund succeeded (the order reads `paid` again)
  * @param session - the refund settlement's transaction, so the stamp and the settlement commit or
  *   roll back together
  */
 export const markPaymentStatus = (
     orderId: string,
-    paymentStatus: StampedPaymentStatus,
+    paymentStatus: StampedPaymentStatus | undefined,
     session?: ClientSession
 ): Promise<boolean> => orderRepository.setProjection(orderId, { paymentStatus }, session);
 

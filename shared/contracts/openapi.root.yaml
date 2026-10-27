@@ -1322,8 +1322,8 @@ paths:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1{id}~1confirm'
     /payments/{id}/sync:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1{id}~1sync'
-    /payments/webhook:
-        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1webhook'
+    /payments/webhook/{provider}:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1webhook~1{provider}'
 
     # ---------- delivery ----------
     /delivery/methods:

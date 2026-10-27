@@ -28,7 +28,9 @@ describe('example routes: what is mounted', () => {
             'POST /',
             'PUT /:id',
             'PATCH /:id',
-            'POST /:id/transitions',
+            'POST /:id/publish',
+            'POST /:id/archive',
+            'POST /:id/unarchive',
             'DELETE /:id',
             'PUT /:id/cover'
         ]);
@@ -50,7 +52,9 @@ describe('example routes: the positional guard', () => {
         'POST /',
         'PUT /:id',
         'PATCH /:id',
-        'POST /:id/transitions',
+        'POST /:id/publish',
+        'POST /:id/archive',
+        'POST /:id/unarchive',
         'DELETE /:id',
         'PUT /:id/cover'
     ])('%s sits below the gate and is keyed', (signature) => {

@@ -119,7 +119,7 @@ const providerRefOf = (paymentId: string) =>
 const deliver = (event: Record<string, unknown>) => {
     const body = JSON.stringify(event);
     return api()
-        .post('/payments/webhook')
+        .post('/payments/webhook/fake')
         .set('Content-Type', 'application/json')
         .set(WEBHOOK_SIGNATURE_HEADER, signWebhookPayload(body))
         .send(body);

@@ -42,12 +42,12 @@ const WEBHOOK_BUDGET: RateLimitBudget = {
     defaultMax: 60,
     windowMs: 'shared',
     keyedBy: KEYED_BY_ADDRESS,
-    bounds: 'Deliveries to `POST /payments/webhook`, spent by success — the traffic being bounded.',
+    bounds: 'Deliveries to `POST /payments/webhook/{provider}`, spent by success — the traffic being bounded.',
     audited: true
 };
 
 /**
- * The budget for `POST /payments/webhook` — the only unauthenticated WRITE surface this API has.
+ * The budget for `POST /payments/webhook/{provider}` — the only unauthenticated WRITE surface this API has.
  * See {@link WEBHOOK_BUDGET}.
  */
 export const webhookLimiter: RequestHandler = buildRateLimiter(WEBHOOK_BUDGET);

@@ -42,7 +42,8 @@ const returnAged = async (ageDays: number) => {
         status: 'declined',
         reason: 'defective',
         note: 'call me on 555-0100',
-        declineReason: 'Looks worn',
+        declineReason: 'no_defect_found',
+        declineMessage: 'Looks worn',
         decidedAt: new Date('2026-01-02T00:00:00.000Z'),
         lines: [{ productId: product._id, quantity: 1, title: 'Shirt', unitPrice: 30 }],
         returnPostage: 'consumer'
@@ -61,7 +62,7 @@ const returnAged = async (ageDays: number) => {
 const stored = (id: string) => returnModel.findById(id).lean().exec();
 
 describe('scrubReturnText', () => {
-    it('unsets both texts on a return past the window, and leaves everything else alone', async () => {
+    it('unsets both texts (the note and the decline message), and keeps the reason code on a return past the window, and leaves everything else alone', async () => {
         const { id, updatedAt } = await returnAged(WINDOW_DAYS + 1);
 
         const scrubbed = await scrubReturnText();
@@ -69,8 +70,10 @@ describe('scrubReturnText', () => {
         const row = await stored(id);
         expect(scrubbed).toBe(1);
         expect(row).not.toHaveProperty('note');
-        expect(row).not.toHaveProperty('declineReason');
+        expect(row).not.toHaveProperty('declineMessage');
+        // The code is not free text: it stays, so the record still says why.
         expect(row).toMatchObject({
+            declineReason: 'no_defect_found',
             status: 'declined',
             reason: 'defective',
             currency: 'EUR',
@@ -88,7 +91,7 @@ describe('scrubReturnText', () => {
         expect(scrubbed).toBe(0);
         expect(await stored(id)).toMatchObject({
             note: 'call me on 555-0100',
-            declineReason: 'Looks worn'
+            declineMessage: 'Looks worn'
         });
     });
 
@@ -97,14 +100,14 @@ describe('scrubReturnText', () => {
         await returnModel.updateOne({ _id: id }, { $unset: { note: 1 } }, { timestamps: false });
 
         expect(await scrubReturnText()).toBe(1);
-        expect(await stored(id)).not.toHaveProperty('declineReason');
+        expect(await stored(id)).not.toHaveProperty('declineMessage');
     });
 
     it('wipes a return holding only a note', async () => {
         const { id } = await returnAged(WINDOW_DAYS + 1);
         await returnModel.updateOne(
             { _id: id },
-            { $unset: { declineReason: 1 } },
+            { $unset: { declineMessage: 1 } },
             { timestamps: false }
         );
 

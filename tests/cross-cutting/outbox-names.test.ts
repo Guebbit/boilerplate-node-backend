@@ -202,6 +202,7 @@ it('publishes the set the pair agreed on', () => {
         'orders.order-confirm',
         'payments.payment-received',
         'payments.refund-issued',
+        'payments.refund-undeliverable',
         'payments.transfer-expired',
         'payments.transfer-instructions',
         'returns.notice',

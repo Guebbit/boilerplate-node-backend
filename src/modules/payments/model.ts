@@ -95,6 +95,12 @@ export interface RefundRecord {
     settledByHand?: true;
     /** When the money was confirmed back, or (for a hand-paid one) reported back. */
     settledAt?: Date;
+    /**
+     * When the provider took the refund back (a bank sent it back, or the provider reported it
+     * failed). Set once, never cleared: the record is owed another way from then on, the sweep
+     * never resends it, and a redelivered report finds nothing left to change.
+     */
+    reversedAt?: Date;
     createdAt: Date;
 }
 
@@ -207,7 +213,8 @@ const refundSchema = new Schema<RefundRecord>(
         attemptedAt: { type: Date },
         nextAttemptAt: { type: Date },
         settledByHand: { type: Boolean },
-        settledAt: { type: Date }
+        settledAt: { type: Date },
+        reversedAt: { type: Date }
     },
     { timestamps: { createdAt: true, updatedAt: false } }
 );

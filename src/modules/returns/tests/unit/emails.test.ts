@@ -57,11 +57,28 @@ describe('returnNoticeEmail — the other notices', () => {
     it('gives the decline reason and no postage sentence', () => {
         const { data } = returnNoticeEmail('return-declined', 'en', 'Ada', {
             ...INPUT,
-            declineReason: 'Worn beyond testing'
+            declineReason: 'other',
+            declineMessage: 'Worn beyond testing'
         });
 
         expect(data.postage).toBeUndefined();
         expect(data.body).toContain('Worn beyond testing');
+    });
+
+    it('writes the code’s sentence in the recipient’s language, then the message', () => {
+        const english = returnNoticeEmail('return-declined', 'en', 'Ada', {
+            ...INPUT,
+            declineReason: 'no_defect_found'
+        });
+        const italian = returnNoticeEmail('return-declined', 'it', 'Ada', {
+            ...INPUT,
+            declineReason: 'return_period_ended',
+            declineMessage: 'Grazie'
+        });
+
+        expect(english.data.body).toContain('We did not find the defect you described.');
+        expect(italian.data.body).toContain('Il periodo per rendere questo ordine è terminato.');
+        expect(italian.data.body).toContain('Grazie');
     });
 
     it.each(['return-requested', 'return-approved'] as const)(

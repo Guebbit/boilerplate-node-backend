@@ -207,7 +207,7 @@ describe('the other doors into the same settlement', () => {
         setFakeReceipt(providerRef, { amountReceived: 1 });
 
         await expect(
-            paymentService.applyWebhookDelivery({ id: 'evt_mismatch', providerRef })
+            paymentService.applyWebhookDelivery({ id: 'evt_mismatch', providerRef }, 'fake')
         ).resolves.toBeUndefined();
 
         expect((await orderService.getById(orderId))!.status).toBe('cancelled');

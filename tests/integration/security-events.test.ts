@@ -111,7 +111,7 @@ describe('a refused sk_ credential', () => {
 /** Posts `body` with the given signature header value. */
 const deliver = (body: string, signature: string) =>
     api()
-        .post('/payments/webhook')
+        .post('/payments/webhook/fake')
         .set('Content-Type', 'application/json')
         .set(WEBHOOK_SIGNATURE_HEADER, signature)
         .send(body);

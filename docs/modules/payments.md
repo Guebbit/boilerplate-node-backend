@@ -113,7 +113,7 @@ would let [`inventory`](./inventory-reservations.md)'s reservation sweep cancel 
 money is still on its way. `requires_action` gets no such grace: it means the browser has a
 challenge to answer, not the provider a payment to finish.
 
-**`POST /payments/webhook` is what makes the server look**, and the browser never is. It arrives whether or not
+**`POST /payments/webhook/{provider}` is what makes the server look**, and the browser never is. It arrives whether or not
 the customer kept the tab open, and it is the one route in the module mounted above the auth wall:
 its caller is a machine with no account, authenticating by signing the raw body — a stronger proof
 of origin than any cookie this API could ask it for. The delivery is a thin event: the server
@@ -426,6 +426,8 @@ sequenceDiagram
   transaction when goods are received) opens a refund with `reason: return` and the return's `returnId`, clamped to what the
   payment has left. The record commits with the return; `sendOpenedRefund` asks the provider after. `payment.refunded` carries the `returnId`, so `returns` closes the return when
   the refund lands — including later, when the sweep completes one the provider first refused.
+- **No sale, no document.** A late payment or an amount mismatch has no invoice, so its refund gets no
+  credit note ([`invoicing`](./invoicing.md#issuing-a-document)).
 - **A late payment is named.** Money that lands after the order could no longer be paid (its hold
   expired or it was cancelled) is refunded with `reason: late_payment`, not `cancellation`, so staff
   can tell a lost sale from a cancellation. The buyer is mailed it like any refund outside a return.
@@ -488,6 +490,7 @@ only offered when the refusal PROVES the money did not move.
 | ------------------------------------------------------------- | ------------ | ------------------ | ---------------------------------- | ----------------------------------- |
 | `declined`, `expired_or_canceled_card`, `lost_or_stolen_card` | no           | never (final)      | yes                                | `refused_refund`, at once           |
 | `provider_removed` (the adapter is no longer installed)       | no           | never (final)      | yes                                | `refused_refund`, at once           |
+| `disputed` (the buyer's bank took the money back)             | no (already) | never (final)      | no: the dispute decides            | `refused_refund`, at once           |
 | `insufficient_funds` (the shop's provider balance is short)   | no           | yes, growing delay | yes                                | `stale_refund`, after the threshold |
 | `provider_unavailable`, `unknown`                             | maybe        | yes, growing delay | no: 409 `PAYMENT_REFUND_IN_FLIGHT` | `stale_refund`, after the threshold |
 | a `pending` record (an attempt is running)                    | maybe        | claimed when stale | no: 409 `PAYMENT_REFUND_IN_FLIGHT` | `stale_refund`                      |
@@ -510,6 +513,103 @@ An unclear failure that never resolves (the provider gone dark) stays open with 
 and shows on the attention list after `NODE_PAYMENT_ATTENTION_MINUTES`. There is no override: a
 provider gone for good is a technician's edit of the record. Staff check the provider's dashboard or
 support first. Rule of thumb for adapter authors: [reading a refusal](./payments-provider-port.md#reading-a-refusal).
+
+### When the provider reports a refund's own status {#when-the-bank-sends-a-refund-back}
+
+A refund is an object of its own at the provider, with a status that can change after the first
+answer. The port reports it: `refund` answers `{refundRef, status}`, and `retrieveRefund` reads it back.
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: opened here
+    pending --> pending: provider says pending (refund id kept)
+    pending --> succeeded: provider says succeeded
+    pending --> failed: provider says failed (reversedAt set)
+    succeeded --> failed: a bank sends it back (reversedAt set)
+    failed --> succeeded: staff pay another way, Mark returned
+```
+
+| What happens                                        | Record                                             | Announced                                  |
+| --------------------------------------------------- | -------------------------------------------------- | ------------------------------------------ |
+| the provider answers `pending`                      | stays `pending`, holds the provider's refund id    | nothing yet: no credit note, no buyer mail |
+| the sweep (or a webhook) re-reads it: `succeeded`   | settles                                            | `payment.refunded`                         |
+| a re-read says `failed` on an open record           | `failed` + reason + `reversedAt`, never resent     | `payment.refund_failed` with `final: true` |
+| a webhook says `failed` on a settled record         | `failed` + reason + `reversedAt`, `settledAt` gone | `payment.refund_reversed`                  |
+| the same report again, or a success after a failure | unchanged: `reversedAt` is set once                | nothing                                    |
+
+- **Never resent.** A record holding a provider refund id is re-read by the sweep, never sent again:
+  a resend inside the key window replays the old success. A record with `reversedAt` is skipped.
+- **Owed, not undone.** The order is re-stamped (`partially_refunded` while another refund stands,
+  otherwise cleared so it reads `paid`), the timeline gains `refund_reversed`, and the payment reads
+  `refund_pending`. The credit note and a closed return stay: the sale was reduced, and a bounced
+  payout is a payable, not a tax event (an accountant should confirm before a real shop relies on it).
+- **Settled by hand.** Staff agree a method with the buyer, pay, and press Mark returned. That
+  fires `payment.refunded` again for the same `refundId`: the credit note (unique per refund) and the
+  return ignore it, the outbound webhook goes out again.
+- **A report that beats the answer.** A webhook can arrive before `refund()` returns. The provider
+  echoes our record id, so the delivery finds the open record, fails it for good, and the late
+  success answer then settles nothing (the settle refuses a record with `reversedAt`).
+- **Needs a person.** `reversed_refund` is on `GET /payments/attention` at once, with `since` = when
+  it bounced. A reversed refund cannot be cancelled (it settled once): only paid by hand.
+
+### Telling the buyer their refund cannot reach the card {#telling-the-buyer}
+
+EU law (Consumer Rights Directive Art. 13(1), Codice del Consumo Art. 56) returns the money by the
+means the buyer paid with, unless they expressly agree otherwise, and at no cost to them. So when a
+refund cannot reach the card the shop asks; it never picks a method for them.
+
+```mermaid
+flowchart LR
+    F[payment.refund_failed, final] --> L{record owed another way?}
+    R[payment.refund_reversed] --> L
+    L -->|yes| M[mail payments.refund-undeliverable: we owe you, tell us how]
+    L -->|no: unclear, shop balance, dispute, settled by hand| N[no mail]
+    M --> B[buyer replies to the shop]
+    B --> H[staff pay, press Mark returned: success mail, credit note, webhook]
+```
+
+- **One template, two triggers.** `payments.refund-undeliverable` is sent on a refusal that ended the
+  retrying and on a reversal. The listener reads the record, so a refund already paid by hand mails
+  nobody, and a transient refusal that later turns final mails once (the event fires only on a NEW
+  refusal).
+- **Never mailed:** `provider_unavailable` and `unknown` (the refund may have gone through),
+  `insufficient_funds` (the shop's own balance), `disputed` (the bank already returned it).
+- **No reason in the mail, nor on the buyer's page.** `Refund.owedAnotherWay` is the buyer-visible
+  half: true on an open refund that is owed another way. The order page says so instead of "retried
+  automatically". `failureReason` stays staff-only.
+- **No bank details are stored.** The buyer replies by email and the IBAN stays in the shop's mailbox
+  and bank, under the shop's own retention (GDPR Art. 5(1)(c): the app keeps nothing for a rare
+  event). The mail shows `NODE_SHOP_EMAIL` as text.
+
+### Refunds made outside the app {#refunds-made-outside-the-app}
+
+Staff can refund from the provider's own dashboard. The application finds those refunds and records
+them, so the credit note (a VAT duty), the buyer's mail and the order's state follow, and
+`remainingOf` stops offering money that already left.
+
+```mermaid
+flowchart TD
+    E[refund event: refund.created, refund.updated, refund.failed, charge.refunded] --> L[listRefunds for the intent]
+    L --> W{each provider refund}
+    W -->|ours: our record id echoed, or its stored id| A[apply its status to the record]
+    W -->|unknown, succeeded, same currency| I[import: settled record, reason external]
+    W -->|unknown, pending or failed| S[skip until a later event says succeeded]
+    W -->|unknown, other currency| X[log an error, skip]
+    I --> F[timeline rows, order stamp, payment.refunded: credit note, buyer mail, webhook]
+```
+
+- **Matched by our id, not a flag.** The adapter echoes `metadata.refund_record` as `refundId`, so a
+  refund of ours whose answer was lost (a timeout that ran) is settled from the provider, never
+  imported a second time.
+- **One write, once.** The import appends the record, raises the running total and carries the
+  provider's refund id in one conditional write: a redelivery imports nothing. It sets
+  `createdAt` and `settledAt` to the provider's own date.
+- **Always recorded.** The money moved, so the import never refuses, even when the total then passes
+  what was paid. An open refund of ours that no longer fits (`exceedsRemaining`: what the provider
+  holds, plus this one, is more than was paid) is held **unsent**: the provider would refuse it. It
+  shows as `refund_exceeds_remaining` with `exceedsBy`, and staff cancel it or mark it returned.
+  Nothing closes by itself.
+- **The order is not cancelled.** An outside refund moves `paymentStatus`; the order keeps its status.
 
 ### Cancelling a refund {#cancelling-a-refund}
 
@@ -795,19 +895,19 @@ The `actor` is the operator who asked or recorded the money; an automatic refund
 
 ## Configuration
 
-| Variable                                | Default | Meaning                                                                                                                                                                                                                                                                                                        |
-| --------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_PAYMENT_PROVIDER`                 | —       | Which registered implementation answers. Unset: no card payments (`card` is not listed). A name this process does not carry throws at boot rather than silently taking no payments                                                                                                                             |
-| `NODE_PAYMENT_WEBHOOK_SECRET`           | —       | What `POST /payments/webhook` verifies deliveries against. With a live provider this is THEIR signing secret, and it is the only thing between an attacker and marking any order paid. A comma-separated list is a ring for rotating it: the first entry signs, any entry verifies, every entry 16+ characters |
-| `NODE_DEFAULT_CURRENCY`                 | `EUR`   | ISO-4217. Stamped on every payment document at creation; also what `products`, `cart` and `orders` (frozen at checkout) read for their own `currency` field — one shop, one currency                                                                                                                           |
-| `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` | `30`    | Days an attempt that never settled may sit untouched before `npm run job reap:payments` deletes it. See Retention below.                                                                                                                                                                                       |
-| `NODE_BANK_TRANSFER_BENEFICIARY`        | —       | The account name a transfer is made out to. `bank_transfer` is offered only once this and `_IBAN` are both set                                                                                                                                                                                                 |
-| `NODE_BANK_TRANSFER_IBAN`               | —       | The account IBAN. Validated with `ibantools` at boot — a malformed value refuses to boot rather than silently advertising a dead account                                                                                                                                                                       |
-| `NODE_BANK_TRANSFER_BIC`                | —       | The account's BIC/SWIFT, optional even once transfer is offered. Validated at boot when set                                                                                                                                                                                                                    |
-| `NODE_BANK_TRANSFER_HOLD_HOURS`         | `168`   | How long checkout holds stock for a `bank_transfer` order — a week, not `NODE_RESERVATION_TTL_MINUTES`'s fifteen minutes                                                                                                                                                                                       |
-| `NODE_PAYMENT_REFUND_RETRY_MINUTES`     | `1`     | How long an open refund sits untouched before `sweep:payment-effects` retries it. See [One settlement transaction](#one-settlement-transaction)                                                                                                                                                                |
-| `NODE_PAYMENT_ATTENTION_MINUTES`        | `60`    | How long a refund may stay open before `GET /payments/attention` lists it. The retry window is a minute, so this is how long a person would wait. See [the staff Payments page](#the-staff-payments-page)                                                                                                      |
-| `NODE_PAYMENT_RECONCILE_MINUTES`        | `15`    | How long an unsettled payment sits untouched before `sweep:payment-effects` asks the provider what became of it. See [Lost webhooks](#lost-webhooks)                                                                                                                                                           |
+| Variable                                | Default | Meaning                                                                                                                                                                                                                                                                                                                   |
+| --------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_PAYMENT_PROVIDER`                 | —       | Which registered implementation answers. Unset: no card payments (`card` is not listed). A name this process does not carry throws at boot rather than silently taking no payments                                                                                                                                        |
+| `NODE_PAYMENT_WEBHOOK_SECRET`           | —       | What `POST /payments/webhook/{provider}` verifies deliveries against. With a live provider this is THEIR signing secret, and it is the only thing between an attacker and marking any order paid. A comma-separated list is a ring for rotating it: the first entry signs, any entry verifies, every entry 16+ characters |
+| `NODE_DEFAULT_CURRENCY`                 | `EUR`   | ISO-4217. Stamped on every payment document at creation; also what `products`, `cart` and `orders` (frozen at checkout) read for their own `currency` field — one shop, one currency                                                                                                                                      |
+| `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` | `30`    | Days an attempt that never settled may sit untouched before `npm run job reap:payments` deletes it. See Retention below.                                                                                                                                                                                                  |
+| `NODE_BANK_TRANSFER_BENEFICIARY`        | —       | The account name a transfer is made out to. `bank_transfer` is offered only once this and `_IBAN` are both set                                                                                                                                                                                                            |
+| `NODE_BANK_TRANSFER_IBAN`               | —       | The account IBAN. Validated with `ibantools` at boot — a malformed value refuses to boot rather than silently advertising a dead account                                                                                                                                                                                  |
+| `NODE_BANK_TRANSFER_BIC`                | —       | The account's BIC/SWIFT, optional even once transfer is offered. Validated at boot when set                                                                                                                                                                                                                               |
+| `NODE_BANK_TRANSFER_HOLD_HOURS`         | `168`   | How long checkout holds stock for a `bank_transfer` order — a week, not `NODE_RESERVATION_TTL_MINUTES`'s fifteen minutes                                                                                                                                                                                                  |
+| `NODE_PAYMENT_REFUND_RETRY_MINUTES`     | `1`     | How long an open refund sits untouched before `sweep:payment-effects` retries it. See [One settlement transaction](#one-settlement-transaction)                                                                                                                                                                           |
+| `NODE_PAYMENT_ATTENTION_MINUTES`        | `60`    | How long a refund may stay open before `GET /payments/attention` lists it. The retry window is a minute, so this is how long a person would wait. See [the staff Payments page](#the-staff-payments-page)                                                                                                                 |
+| `NODE_PAYMENT_RECONCILE_MINUTES`        | `15`    | How long an unsettled payment sits untouched before `sweep:payment-effects` asks the provider what became of it. See [Lost webhooks](#lost-webhooks)                                                                                                                                                                      |
 
 The currency is stamped rather than looked up, so changing it affects new payments and leaves
 existing ones reading in the currency they were actually taken in. There is no conversion
@@ -938,6 +1038,20 @@ contract's schema (`ReceivePaymentWebhookBody`) before any lookup, so an operato
 `{ "$ne": null }` where a `providerRef` string belongs is refused with the same 400, even from an
 adapter that validated nothing. Do not rely on that: refuse a body you cannot make sense of
 yourself, and keep the reason in the `WebhookRejected` message.
+
+### Refund status, and the refund webhooks
+
+`refund` answers `{refundRef, status}`: `pending` for a refund the provider accepted but has not
+settled (Stripe `pending`, `requires_action`), `succeeded` otherwise. An immediate refusal still
+throws. `retrieveRefund(refundRef)` returns the refund's own status: Stripe `canceled` maps to
+`failed`, `requires_action` to `pending`, and `metadata.refund_record` comes back as `refundId`.
+
+| Stripe event                                                           | Delivery                                       |
+| ---------------------------------------------------------------------- | ---------------------------------------------- |
+| `refund.created`, `refund.updated`, `refund.failed`, `charge.refunded` | `{id, providerRef: payment_intent, refundRef}` |
+
+`parseWebhook(rawBody, headers)` receives every header: Stripe signs in `Stripe-Signature`, PayPal
+in several. A charge under dispute (`charge_disputed`, `refund_disputed_payment`) is `disputed`.
 
 ### Refund errors
 

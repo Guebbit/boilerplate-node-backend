@@ -20,7 +20,6 @@
 
 import { t } from '@infrastructure/i18n';
 import { generateReject } from '@infrastructure/http/response';
-import { auditForbidden } from '@infrastructure/observability/forbidden';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { nudgeOutbox } from '@kernel/outbox';
 import { deliveryService, ActRefusal } from '@modules/delivery';
@@ -34,22 +33,25 @@ import type { AuthContext, CallerContext } from '@types';
 import { toObjectId } from '@infrastructure/persistence/create-repository';
 import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
-import type { ProductQuantity } from '../domain';
+import { checkStatement } from '../domain';
+import type { ProductQuantity, Statement } from '../domain';
 import { cancelRefusalOf } from './cancel-right';
 import { cancellationRefundOn } from './cancellation-refund';
 import { syncReturnStatus } from './projection';
 import {
     badCancellation,
     badLines,
+    badStatement,
     enqueueClosed,
+    forbidden,
     enqueueRequested,
     nothingToCancel,
     recordOpened,
     opened,
     windowClosed,
-    withdrawalIsTheBuyers,
     type CreateReturnInput,
-    type CreateReturnOutcome
+    type CreateReturnOutcome,
+    type Opener
 } from './outcome';
 import { returnPostagePayer } from '@modules/shop';
 
@@ -62,27 +64,10 @@ interface Cancelled {
 }
 
 /**
- * The 403 for a staff caller without the refund rule: a remainder cancel is a refund with
- * consequences, so it needs the rule that returns money (`create:Refund`, `stepUp: critical`).
- * Audited, since no route guard can see this refusal.
- *
- * @param order - the order the cancel was aimed at
- * @param context - the caller, for the audit entry
- */
-const forbidden = (order: OrderDocument, context: CallerContext): CreateReturnOutcome => {
-    auditForbidden(context, {
-        targetType: 'order',
-        targetId: String(order._id),
-        metadata: { reason: 'missing_permission', permission: 'create:Refund' }
-    });
-
-    return generateReject(403, [t('generic.error-forbidden')]);
-};
-
-/**
  * The Return row of a remainder cancel, closed when made.
  * @param order - the order
  * @param input - the request
+ * @param opening - what the buyer stated, and who recorded it when it was staff
  * @param fulfillmentOrderId - the fulfillment order whose remainder was cancelled
  * @param lines - what was cancelled
  * @param breakdown - what the cancel refunds
@@ -90,6 +75,7 @@ const forbidden = (order: OrderDocument, context: CallerContext): CreateReturnOu
 const rowFor = (
     order: OrderDocument,
     input: CreateReturnInput,
+    opening: Opener,
     fulfillmentOrderId: string,
     lines: readonly ProductQuantity[],
     breakdown: { total: number; shipping: number }
@@ -103,6 +89,9 @@ const rowFor = (
         status: 'closed',
         reason: input.reason,
         kind: 'cancellation',
+        requestedAt: opening.statement.requestedAt,
+        ...(opening.statement.statedVia ? { statedVia: opening.statement.statedVia } : {}),
+        openedBy: opening.staffId === undefined ? 'buyer' : 'staff',
         fulfillmentOrderId: toObjectId(fulfillmentOrderId),
         ...(input.note ? { note: input.note } : {}),
         lines: lines.map(({ productId, quantity }) => {
@@ -128,6 +117,7 @@ const rowFor = (
  * its refund record.
  * @param order - the order
  * @param input - the request
+ * @param opening - what the buyer stated, and who recorded it when it was staff
  * @param fulfillmentOrderId - the fulfillment order whose remainder is cancelled
  * @param reason - who cancelled it, stored on the fulfillment order
  * @param context - the account that cancelled (the buyer or a staff member), for the order's timeline and the refund
@@ -136,6 +126,7 @@ const rowFor = (
 const cancelUnderLock = (
     order: OrderDocument,
     input: CreateReturnInput,
+    opening: Opener,
     fulfillmentOrderId: string,
     reason: FulfillmentCancelReason,
     context: CallerContext
@@ -165,7 +156,7 @@ const cancelUnderLock = (
             session
         );
         const created = await returnRepository.create(
-            rowFor(order, input, fulfillmentOrderId, cancelled.lines, breakdown),
+            rowFor(order, input, opening, fulfillmentOrderId, cancelled.lines, breakdown),
             session
         );
         await enqueueRequested(created, session);
@@ -229,16 +220,17 @@ const announceCancelled = (
 
 /**
  * What the caller may do here, before anything is written. The rule itself is `cancelRefusalOf`;
- * this adds what only the request knows — the reason it names. The buyer names `withdrawal`, their
- * own right; staff name anything else, and are refused `withdrawal` (422, after the key check, so a
- * caller without the key still gets the 403).
+ * this adds what only the request knows — the reason it names and what the buyer stated. The buyer
+ * names `withdrawal`, their own right. Staff name any reason for their own cancel, or `withdrawal`
+ * with the day and channel the buyer stated it, to record theirs. The key is asked first (403), so
+ * a caller without it never learns what else is wrong.
  *
  * @param order - the order
  * @param input - the request
  * @param authContext - the caller
  * @param context - the caller, for the audit entry of a refusal
  * @param remainder - the lines of the fulfillment order being cancelled
- * @returns a refusal, or `undefined` when the caller may go on
+ * @returns a refusal, or the statement to write when the caller may go on
  */
 const refuseCaller = (
     order: OrderDocument,
@@ -246,16 +238,34 @@ const refuseCaller = (
     authContext: AuthContext,
     context: CallerContext,
     remainder: readonly ProductQuantity[]
-): CreateReturnOutcome | undefined => {
+): CreateReturnOutcome | Statement => {
     const buyer = isBuyer(order, authContext);
     if (buyer && input.reason !== 'withdrawal') return badCancellation();
 
-    const refusal = cancelRefusalOf(order, authContext, remainder);
-    if (refusal === 'no-key') return forbidden(order, context);
+    const keyRefusal = cancelRefusalOf(order, authContext, remainder);
+    if (keyRefusal === 'no-key') return forbidden(order, 'create:Refund', context);
+
+    const statement = checkStatement({
+        byBuyer: buyer,
+        reason: input.reason,
+        kind: 'cancellation',
+        requestedAt: input.requestedAt,
+        statedVia: input.statedVia,
+        orderCreatedAt: order.createdAt ?? new Date(0),
+        now: new Date()
+    });
+    if (!statement.ok) return badStatement(statement);
+
+    const refusal = cancelRefusalOf(
+        order,
+        authContext,
+        remainder,
+        input.reason === 'withdrawal' ? statement.requestedAt : undefined
+    );
     if (refusal === 'window-closed') return windowClosed();
     if (refusal === 'excluded') return badLines('excluded');
 
-    return !buyer && input.reason === 'withdrawal' ? withdrawalIsTheBuyers() : undefined;
+    return statement;
 };
 
 /**
@@ -285,13 +295,18 @@ export const createCancellation = (
                 // Nothing shipped yet, or nothing left on it: the whole order is cancelled instead.
                 if (!option) return nothingToCancel();
 
-                const refusal = refuseCaller(order, input, authContext, context, option.lines);
-                if (refusal) return refusal;
+                const checked = refuseCaller(order, input, authContext, context, option.lines);
+                if (!('requestedAt' in checked)) return checked;
 
                 const byBuyer = isBuyer(order, authContext);
+                const opening: Opener = {
+                    statement: checked,
+                    staffId: byBuyer ? undefined : authContext.id
+                };
                 return cancelUnderLock(
                     order,
                     input,
+                    opening,
                     fulfillmentOrderId,
                     byBuyer ? FulfillmentCancelReason.buyer : FulfillmentCancelReason.staff,
                     context

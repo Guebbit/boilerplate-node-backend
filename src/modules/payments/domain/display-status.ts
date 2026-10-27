@@ -43,7 +43,7 @@ export const displayStatusOf = ({
     if (status === 'succeeded') {
         if (refunds.every((refund) => refund.status !== RefundStatus.succeeded))
             return PaymentDisplayStatus.succeeded;
-        return toMinorUnits(amountRefunded, currency) === toMinorUnits(amount, currency)
+        return toMinorUnits(amountRefunded, currency) >= toMinorUnits(amount, currency)
             ? PaymentDisplayStatus.refunded
             : PaymentDisplayStatus.partially_refunded;
     }
@@ -75,7 +75,7 @@ const FILTERS: Record<PaymentDisplayStatus, Record<string, unknown>> = {
         $and: [
             { status: 'succeeded' },
             SETTLED_REFUND,
-            { $expr: { $eq: ['$amountRefunded', '$amount'] } },
+            { $expr: { $gte: ['$amountRefunded', '$amount'] } },
             NO_OPEN_REFUND
         ]
     },
@@ -83,7 +83,7 @@ const FILTERS: Record<PaymentDisplayStatus, Record<string, unknown>> = {
         $and: [
             { status: 'succeeded' },
             SETTLED_REFUND,
-            { $expr: { $ne: ['$amountRefunded', '$amount'] } },
+            { $expr: { $lt: ['$amountRefunded', '$amount'] } },
             NO_OPEN_REFUND
         ]
     },

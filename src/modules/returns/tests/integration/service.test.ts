@@ -221,7 +221,19 @@ describe('a withdrawal before dispatch', () => {
         expect(stored?.status).toBe(OrderStatus.paid);
     });
 
-    it('is not offered to an operator either — the right is the consumer’s', async () => {
+    it('is not offered to staff who cannot act for the buyer (no update:Return)', async () => {
+        const { orderId } = await orderIn(OrderStatus.paid);
+
+        const outcome = await returnService.createReturn(
+            { orderId, reason: 'withdrawal' },
+            asRole('warehouse'),
+            testCallerContext
+        );
+
+        expect(!outcome.success && outcome.status).toBe(404);
+    });
+
+    it('asks staff for the date and channel the buyer stated: without them, 422 on the field', async () => {
         const { orderId } = await orderIn(OrderStatus.paid);
 
         const outcome = await returnService.createReturn(
@@ -230,7 +242,13 @@ describe('a withdrawal before dispatch', () => {
             testCallerContext
         );
 
-        expect(!outcome.success && outcome.status).toBe(404);
+        expect(!outcome.success && outcome.status).toBe(422);
+        expect(!outcome.success && outcome.errors[0]).toMatchObject({
+            code: 'RETURN_STATEMENT_INVALID',
+            details: { field: 'requestedAt' }
+        });
+        const stored = await readOrder(orderId);
+        expect(stored?.status).toBe(OrderStatus.paid);
     });
 
     it('refuses any other reason before dispatch — nothing has left the shop to send back', async () => {
@@ -390,7 +408,13 @@ describe('a return on goods that have shipped', () => {
                 { productId: String(mug._id), quantity: 1, title: 'Mug', unitPrice: 10 }
             ]);
             expect(events).toEqual([
-                { returnId: String(outcome.data._id), orderId, reason: 'withdrawal' }
+                {
+                    returnId: String(outcome.data._id),
+                    orderId,
+                    reason: 'withdrawal',
+                    requestedAt: outcome.data.requestedAt.toISOString(),
+                    statedVia: 'online'
+                }
             ]);
             expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         }
@@ -550,7 +574,11 @@ describe('a return on goods that have shipped', () => {
             testCallerContext
         );
         if (!first.success) throw new Error('expected a return');
-        await returnService.declineReturn(String(first.data._id), 'Used', callerContextAs('admin'));
+        await returnService.declineReturn(
+            String(first.data._id),
+            { reason: 'return_period_ended' },
+            callerContextAs('admin')
+        );
 
         const again = await returnService.createReturn(
             { orderId, reason: 'defective', lines: twoShirts },
@@ -700,16 +728,51 @@ describe('deciding a request', () => {
 
         const result = await returnService.declineReturn(
             returnId,
-            'Worn',
+            { reason: 'return_period_ended' },
             callerContextAs('admin')
         );
         await settleOutboxNudges();
 
         expect(result.success && result.data).toMatchObject({
             status: 'declined',
-            declineReason: 'Worn'
+            declineReason: 'return_period_ended'
         });
-        expect(JSON.stringify(mockEnqueueEmail.mock.calls[0][2])).toContain('Worn');
+        expect(JSON.stringify(mockEnqueueEmail.mock.calls[0][2])).toContain(
+            'The period for returning this order has ended.'
+        );
+    });
+
+    it('refuses "other" without a message to the buyer, and writes nothing', async () => {
+        const { returnId } = await requestedReturn();
+
+        const result = await returnService.declineReturn(
+            returnId,
+            { reason: 'other' },
+            callerContextAs('admin')
+        );
+
+        expect(asReject(result).status).toBe(422);
+        expect(asReject(result).errors[0]).toMatchObject({ details: { field: 'message' } });
+        const stored = await returnRepository.findById(returnId);
+        expect(stored?.status).toBe('requested');
+    });
+
+    it('keeps the staff message beside the code, and mails both', async () => {
+        const { returnId } = await requestedReturn();
+        mockEnqueueEmail.mockClear();
+
+        const result = await returnService.declineReturn(
+            returnId,
+            { reason: 'other', message: 'Sold as a bundle' },
+            callerContextAs('admin')
+        );
+        await settleOutboxNudges();
+
+        expect(result.success && result.data).toMatchObject({
+            declineReason: 'other',
+            declineMessage: 'Sold as a bundle'
+        });
+        expect(JSON.stringify(mockEnqueueEmail.mock.calls[0][2])).toContain('Sold as a bundle');
     });
 
     it('lets exactly one of two racing decisions win', async () => {
@@ -717,7 +780,11 @@ describe('deciding a request', () => {
 
         const results = await Promise.all([
             returnService.approveReturn(returnId, callerContextAs('admin')),
-            returnService.declineReturn(returnId, 'No', callerContextAs('admin'))
+            returnService.declineReturn(
+                returnId,
+                { reason: 'return_period_ended' },
+                callerContextAs('admin')
+            )
         ]);
 
         expect(results.filter((result) => result.success)).toHaveLength(1);
@@ -737,7 +804,7 @@ describe('deciding a request', () => {
 
         const result = await returnService.declineReturn(
             String(outcome.data._id),
-            'No',
+            { reason: 'return_period_ended' },
             callerContextAs('admin')
         );
 
@@ -764,7 +831,7 @@ describe('deciding a request', () => {
 
         const declined = await returnService.declineReturn(
             returnId,
-            'Changed my mind',
+            { reason: 'return_period_ended' },
             callerContextAs('manager', user.id)
         );
 
@@ -855,7 +922,7 @@ describe('who sees which return', () => {
             Object.fromEntries(staff.items.map(({ id, actions }) => [id, actions.approve]))
         ).toEqual({ [open.returnId]: true, [decided.returnId]: false });
         expect(buyerPage.items.map(({ actions }) => actions)).toEqual([
-            { approve: false, decline: false, receive: false, close: false }
+            { approve: false, decline: false, receive: false, close: false, cancel: false }
         ]);
     });
 
@@ -867,13 +934,15 @@ describe('who sees which return', () => {
             approve: true,
             decline: true,
             receive: false,
-            close: false
+            close: false,
+            cancel: false
         });
         expect(actionsOf(stored!, buyer(user))).toEqual({
             approve: false,
             decline: false,
             receive: false,
-            close: false
+            close: false,
+            cancel: false
         });
     });
 
@@ -888,7 +957,8 @@ describe('who sees which return', () => {
             approve: true,
             decline: true,
             receive: false,
-            close: false
+            close: false,
+            cancel: false
         });
     });
 
@@ -901,7 +971,8 @@ describe('who sees which return', () => {
             approve: false,
             decline: false,
             receive: true,
-            close: false
+            close: false,
+            cancel: false
         });
     });
 });
@@ -925,14 +996,14 @@ describe('the account export', () => {
         const open = await requestedReturn();
         await returnService.declineReturn(
             declined.returnId,
-            'Worn beyond a trial',
+            { reason: 'return_period_ended' },
             callerContextAs('admin')
         );
 
         const [declinedSection] = await collectPersonalData(declined.user.id);
         const [openSection] = await collectPersonalData(open.user.id);
 
-        expect(declinedSection).toMatchObject({ declineReason: 'Worn beyond a trial' });
+        expect(declinedSection).toMatchObject({ declineReason: 'return_period_ended' });
         expect(openSection).not.toHaveProperty('declineReason');
     });
 });
@@ -1158,7 +1229,11 @@ describe('what a decision leaves behind', () => {
         const declined = await requestedReturn();
 
         await returnService.approveReturn(approved.returnId, callerContextAs('admin'));
-        await returnService.declineReturn(declined.returnId, 'Worn', callerContextAs('admin'));
+        await returnService.declineReturn(
+            declined.returnId,
+            { reason: 'return_period_ended' },
+            callerContextAs('admin')
+        );
 
         expect(auditedAs(returnsAuditActions.ADMIN_RETURN_APPROVED)).toEqual([
             expect.objectContaining({
@@ -1201,7 +1276,7 @@ describe('what a decision leaves behind', () => {
         );
         const decline = await returnService.declineReturn(
             declined.returnId,
-            'Worn',
+            { reason: 'return_period_ended' },
             callerContextAs('admin')
         );
         await settleOutboxNudges();
@@ -1266,12 +1341,50 @@ describe('the options read, by caller and deadline', () => {
         expect(options.success && options.data.returnable.length > 0).toBe(true);
     });
 
-    it('offers staff nothing to return: the right is the buyer’s own', async () => {
+    it('offers staff holding update:Return every reason, and the lines to return', async () => {
         const { orderId } = await deliveredOrder();
 
         const options = await returnService.getReturnOptions(orderId, asAdmin());
 
-        expect(options.success && options.data).toMatchObject({ reasons: [], returnable: [] });
+        expect(options.success && options.data.reasons).toEqual([
+            'withdrawal',
+            'defective',
+            'wrong_item',
+            'other'
+        ]);
+        expect(options.success && options.data.exceptions).toEqual([]);
+        expect(options.success && options.data.returnable.length > 0).toBe(true);
+    });
+
+    it('offers nothing to return to staff who cannot act for the buyer (read:Return only)', async () => {
+        const { orderId } = await deliveredOrder();
+
+        const options = await returnService.getReturnOptions(orderId, asRole('warehouse'));
+
+        expect(options.success && options.data).toMatchObject({
+            reasons: [],
+            exceptions: [],
+            returnable: []
+        });
+    });
+
+    it('lists for staff the reasons already past their deadline, so a client can label the waiver', async () => {
+        const { orderId } = await deliveredOrder();
+        await setWithdrawUntil(orderId, new Date(Date.now() - 86_400_000 - 2000));
+
+        const options = await returnService.getReturnOptions(orderId, asAdmin());
+
+        // The withdrawal is not a waiver: it keeps its legal window and is judged on the stated day.
+        expect(options.success && options.data.exceptions).toEqual(['other']);
+    });
+
+    it('keeps the buyer’s exceptions empty', async () => {
+        const { user, orderId } = await deliveredOrder();
+        await setWithdrawUntil(orderId, new Date(Date.now() - 86_400_000 - 2000));
+
+        const options = await returnService.getReturnOptions(orderId, buyer(user));
+
+        expect(options.success && options.data.exceptions).toEqual([]);
     });
 
     it('narrows to the guarantee after the withdrawal period, made-to-order goods marked', async () => {
