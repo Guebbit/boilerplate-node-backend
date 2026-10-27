@@ -1,7 +1,8 @@
 /**
  * @module
  * Who the seed accounts are: their ids, how to log in as them, and how they get their roles.
- * Every other scenario file that needs one of these accounts imports its id from here. The
+ * Logins, states and roles are `shared/scenarios/personas.yaml`; the ids stay here, because other
+ * scenario files seed rows that belong to these people and import the id from here. The
  * password stays PLAINTEXT — the schema's pre-save hook hashes it. The paired frontend's e2e reads
  * each login from the scenario description (`seedCredentials`), so it keeps no copy.
  *
@@ -9,7 +10,9 @@
  */
 
 import { accessService } from '@modules/access';
-import { seedPasswordsConfig } from './config';
+import { seedPasswords, seedPasswordsConfig } from './config';
+import { personas, PERSONA_NAMES } from './personas-schema';
+import type { PersonaName } from './personas-schema';
 import { seedMembership } from '@modules/access/tests/factories';
 
 /** The demo owner's id — 24-char hex, and a real ObjectId: its leading bytes date it to February 2024. */
@@ -57,70 +60,15 @@ export const SEED_SUPPORT_ID = '65df1a2b3c4d5e6f7a8b9c22';
 /** The platform-only operator's id — same format as {@link SEED_MANAGER_ID}. */
 export const SEED_OPERATOR_ID = '65df1a2b3c4d5e6f7a8b9c23';
 
-/** The demo owner's login email. */
-export const SEED_ADMIN_EMAIL = 'root@root.it';
-
 /**
- * The demo owner's login password — PLAINTEXT; see the file header for why.
- * `NODE_SEED_ADMIN_PASSWORD` overrides it — named for the `admin` role this account actually
- * holds (see {@link seedAccessModel} below), the same name the paired frontend's own `.env`
- * already used. The fallback is a real demo value, not a placeholder, since this repo commits its
- * `.env` in the clear and the demo profile is never a production deployment.
- * `scenario:apply` refuses to run outside development/test, which is what stops it reaching a
- * database anyone but a developer or CI can see.
+ * The base32 secret of the authenticator app every armed account is seeded with — PLAINTEXT, like
+ * the passwords; the row stores it encrypted. Published beside each armed login (`totpSecret`) so
+ * a journey can compute the code a login asks for.
  */
-export const SEED_ADMIN_PASSWORD = seedPasswordsConfig().NODE_SEED_ADMIN_PASSWORD;
-
-/** The demo user's login email. */
-export const SEED_USER_EMAIL = 'customer@example.com';
-
-/**
- * The demo user's login password — PLAINTEXT; see the file header for why. `NODE_SEED_USER_PASSWORD`
- * overrides it, same reasoning as {@link SEED_ADMIN_PASSWORD}.
- */
-export const SEED_USER_PASSWORD = seedPasswordsConfig().NODE_SEED_USER_PASSWORD;
-
-/** The demo editor's login email. */
-export const SEED_EDITOR_EMAIL = 'editor@example.com';
-
-/** The demo editor's login password — PLAINTEXT; same reasoning as {@link SEED_ADMIN_PASSWORD}. */
-export const SEED_EDITOR_PASSWORD = seedPasswordsConfig().NODE_SEED_EDITOR_PASSWORD;
-
-/** The demo moderator's login email. */
-export const SEED_MODERATOR_EMAIL = 'moderator@example.com';
-
-/** The demo moderator's login password — PLAINTEXT; same reasoning as {@link SEED_ADMIN_PASSWORD}. */
-export const SEED_MODERATOR_PASSWORD = seedPasswordsConfig().NODE_SEED_MODERATOR_PASSWORD;
-
-/** Login emails of the persona accounts — see {@link SEED_UNVERIFIED_ID}. */
-export const SEED_UNVERIFIED_EMAIL = 'unverified@example.com';
-
-/** Login email of the two-factor persona. */
-export const SEED_TWO_FACTOR_EMAIL = 'two-factor@example.com';
-
-/** Login email of the pending-email persona (its pending target is below). */
-export const SEED_PENDING_EMAIL_EMAIL = 'pending-email@example.com';
-
-/** Login email of the switched-off persona. */
-export const SEED_BANNED_EMAIL = 'banned@example.com';
-
-/** Login email of the second-shopper persona. */
-export const SEED_SECOND_SHOPPER_EMAIL = 'second-shopper@example.com';
-
-/** Login emails of the staff accounts — see {@link SEED_MANAGER_ID}. */
-export const SEED_MANAGER_EMAIL = 'manager@example.com';
-
-/** Login email of the warehouse staff account. */
-export const SEED_WAREHOUSE_EMAIL = 'warehouse@example.com';
-
-/** Login email of the support staff account. */
-export const SEED_SUPPORT_EMAIL = 'support@example.com';
-
-/** Login email of the platform-only operator. */
-export const SEED_OPERATOR_EMAIL = 'operator@example.com';
+export const SEED_STAFF_TOTP_SECRET = seedPasswordsConfig().NODE_SEED_STAFF_TOTP_SECRET;
 
 /** The address the pending-email persona asked to move to, and has not yet confirmed. */
-export const SEED_PENDING_EMAIL_TARGET = 'pending-new-address@example.com';
+export const SEED_PENDING_EMAIL_TARGET = personas.accounts.pendingEmail.state.pendingEmail;
 
 /**
  * The two-factor persona's backup codes, in the clear — the row stores only their digests.
@@ -135,110 +83,89 @@ export const SEED_TWO_FACTOR_BACKUP_CODES = [
     'e0f1a2b3c4'
 ] as const;
 
-/** The persona and staff accounts' passwords, read once — see {@link seedPasswordsConfig}. */
-const personaPasswords = seedPasswordsConfig();
+/** Every account's id, by the name a journey asks for. */
+export const SEED_IDS: Readonly<Record<PersonaName, string>> = {
+    admin: SEED_ADMIN_ID,
+    user: SEED_USER_ID,
+    editor: SEED_EDITOR_ID,
+    moderator: SEED_MODERATOR_ID,
+    unverified: SEED_UNVERIFIED_ID,
+    twoFactor: SEED_TWO_FACTOR_ID,
+    pendingEmail: SEED_PENDING_EMAIL_ID,
+    banned: SEED_BANNED_ID,
+    secondShopper: SEED_SECOND_SHOPPER_ID,
+    manager: SEED_MANAGER_ID,
+    warehouse: SEED_WAREHOUSE_ID,
+    support: SEED_SUPPORT_ID,
+    operator: SEED_OPERATOR_ID
+};
+
+/** What a login publishes: the address, the password, and what the account holds beyond them. */
+export interface SeedLogin {
+    email: string;
+    password: string;
+    /** Present when an authenticator app is armed: the secret a journey computes the code from. */
+    totpSecret?: string;
+    /** Present on the email-2FA persona: single-use codes that get in instead of the mailed one. */
+    backupCodes?: readonly string[];
+}
 
 /**
- * The base32 secret of the authenticator app every staff account is seeded with — PLAINTEXT, like
- * the passwords; the row stores it encrypted. Published beside each staff login (`totpSecret`) so
- * a journey can compute the code a login asks for.
+ * One account's login. The password is the env override or the committed default; the extras
+ * follow from the account's state in `personas.yaml`.
+ *
+ * @param name - the account
+ * @param passwords - every account's password, read once by the caller
  */
-export const SEED_STAFF_TOTP_SECRET = personaPasswords.NODE_SEED_STAFF_TOTP_SECRET;
+const loginOf = (name: PersonaName, passwords: Record<PersonaName, string>): SeedLogin => {
+    const { email, state } = personas.accounts[name];
+    return {
+        email,
+        password: passwords[name],
+        ...(state.authenticator ? { totpSecret: SEED_STAFF_TOTP_SECRET } : {}),
+        ...(state.twoFactor ? { backupCodes: SEED_TWO_FACTOR_BACKUP_CODES } : {})
+    };
+};
 
-/** The logins for the persona accounts, by the name a spec asks for. */
-export const seedPersonaCredentials = {
-    unverified: {
-        email: SEED_UNVERIFIED_EMAIL,
-        password: personaPasswords.NODE_SEED_UNVERIFIED_PASSWORD
-    },
-    twoFactor: {
-        email: SEED_TWO_FACTOR_EMAIL,
-        password: personaPasswords.NODE_SEED_TWO_FACTOR_PASSWORD,
-        // Published beside the login: a journey that gets in with a backup code must know one.
-        backupCodes: SEED_TWO_FACTOR_BACKUP_CODES
-    },
-    pendingEmail: {
-        email: SEED_PENDING_EMAIL_EMAIL,
-        password: personaPasswords.NODE_SEED_PENDING_EMAIL_PASSWORD
-    },
-    banned: { email: SEED_BANNED_EMAIL, password: personaPasswords.NODE_SEED_BANNED_PASSWORD },
-    secondShopper: {
-        email: SEED_SECOND_SHOPPER_EMAIL,
-        password: personaPasswords.NODE_SEED_SECOND_SHOPPER_PASSWORD
-    }
-} as const;
+/** The logins for the 13 demo accounts, by the name a spec asks for. */
+export const seedCredentials = ((): Record<PersonaName, SeedLogin> => {
+    const passwords = seedPasswords();
+    return Object.fromEntries(
+        PERSONA_NAMES.map((name) => [name, loginOf(name, passwords)])
+        // `Object.fromEntries` widens to `Record<string, SeedLogin>`; `PERSONA_NAMES` is every key once.
+    ) as Record<PersonaName, SeedLogin>;
+})();
 
-/** The logins for the staff accounts, by the name a spec asks for. */
-export const seedStaffCredentials = {
-    manager: {
-        email: SEED_MANAGER_EMAIL,
-        password: personaPasswords.NODE_SEED_MANAGER_PASSWORD,
-        totpSecret: SEED_STAFF_TOTP_SECRET
-    },
-    warehouse: {
-        email: SEED_WAREHOUSE_EMAIL,
-        password: personaPasswords.NODE_SEED_WAREHOUSE_PASSWORD,
-        totpSecret: SEED_STAFF_TOTP_SECRET
-    },
-    support: {
-        email: SEED_SUPPORT_EMAIL,
-        password: personaPasswords.NODE_SEED_SUPPORT_PASSWORD,
-        totpSecret: SEED_STAFF_TOTP_SECRET
-    },
-    operator: {
-        email: SEED_OPERATOR_EMAIL,
-        password: personaPasswords.NODE_SEED_OPERATOR_PASSWORD,
-        totpSecret: SEED_STAFF_TOTP_SECRET
-    }
-} as const;
+/** The demo owner's login password — PLAINTEXT; see the file header for why. */
+export const SEED_ADMIN_PASSWORD = seedCredentials.admin.password;
 
-/** The logins for the demo accounts. */
-export const seedCredentials = {
-    admin: {
-        email: SEED_ADMIN_EMAIL,
-        password: SEED_ADMIN_PASSWORD,
-        totpSecret: SEED_STAFF_TOTP_SECRET
-    },
-    user: { email: SEED_USER_EMAIL, password: SEED_USER_PASSWORD },
-    editor: {
-        email: SEED_EDITOR_EMAIL,
-        password: SEED_EDITOR_PASSWORD,
-        totpSecret: SEED_STAFF_TOTP_SECRET
-    },
-    moderator: {
-        email: SEED_MODERATOR_EMAIL,
-        password: SEED_MODERATOR_PASSWORD,
-        totpSecret: SEED_STAFF_TOTP_SECRET
-    },
-    ...seedPersonaCredentials,
-    ...seedStaffCredentials
-} as const;
+/** The demo user's login password — PLAINTEXT; see the file header for why. */
+export const SEED_USER_PASSWORD = seedCredentials.user.password;
 
 /**
  * The whole access model, seeded: one shop, the presets, and the seed accounts placed in it.
  * Called by both `seedShop` and `seedBlank` — the two scenarios agree on who these accounts are.
  *
- * `root` is the shop's owner AND the installation's operator — two memberships, because they are
- * two jobs. A request acts as one or the other depending on the key it is asking about, which is
- * exactly the behaviour the platform/tenant split exists to produce, demonstrated by the account
- * everybody logs in as. The staff accounts each hold exactly one tenant role, so each can be
- * logged into and tried on its own — the whole point of adding them to experiment. Every other
- * seeded account holds none: a customer is computed from `verifiedAt`, never granted.
+ * Each account's memberships are `personas.yaml`'s. `admin` is the shop's owner AND the
+ * installation's operator — two memberships, because they are two jobs; every other account
+ * holds at most one, so each can be logged into and tried on its own. A customer holds none: it
+ * is computed from `verifiedAt`, never granted.
  */
 export const seedAccessModel = (): Promise<void> =>
     accessService
         .bootstrapAccess('The Demo Shop')
         .then((tenant) =>
-            Promise.all([
-                seedMembership(SEED_ADMIN_ID, String(tenant._id), 'tenant', 'admin'),
-                seedMembership(SEED_ADMIN_ID, null, 'platform', 'operator'),
-                seedMembership(SEED_EDITOR_ID, String(tenant._id), 'tenant', 'editor'),
-                seedMembership(SEED_MODERATOR_ID, String(tenant._id), 'tenant', 'moderator'),
-                seedMembership(SEED_MANAGER_ID, String(tenant._id), 'tenant', 'manager'),
-                seedMembership(SEED_WAREHOUSE_ID, String(tenant._id), 'tenant', 'warehouse'),
-                seedMembership(SEED_SUPPORT_ID, String(tenant._id), 'tenant', 'support'),
-                // Platform role only: no shop membership, so it holds no shop's keys.
-                seedMembership(SEED_OPERATOR_ID, null, 'platform', 'operator')
-            ])
+            Promise.all(
+                PERSONA_NAMES.flatMap((name) =>
+                    personas.accounts[name].memberships.map(({ scope, role }) =>
+                        seedMembership(
+                            SEED_IDS[name],
+                            scope === 'tenant' ? String(tenant._id) : null,
+                            scope,
+                            role
+                        )
+                    )
+                )
+            )
         )
         .then(() => undefined);

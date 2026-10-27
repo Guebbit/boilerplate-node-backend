@@ -9,7 +9,7 @@
 
 import { defineConfig } from '@infrastructure/config/define';
 import { email, int, text } from '@infrastructure/config/fields';
-import { frontendLink } from '@infrastructure/http/frontend-link';
+import { frontendLink, FRONTEND_LINK_RULES } from '@infrastructure/http/frontend-link';
 import { DAY_MS, oneCalendarMonthLaterUtc } from '@domain-primitives/time';
 
 /** The five token-bearing account links — one per kind of proof a link can carry. */
@@ -27,12 +27,12 @@ export type AccountLinkKind = 'verify' | 'reset' | 'restore' | 'email-change' | 
 export const accountConfig = defineConfig({
     name: 'account',
     shape: {
-        NODE_FRONTEND_LINK_VERIFY: text({ default: 'verify-email/confirm#token={token}' }),
-        NODE_FRONTEND_LINK_RESET: text({ default: 'password-reset/confirm#token={token}' }),
-        NODE_FRONTEND_LINK_RESTORE: text({ default: 'account-restore#token={token}' }),
-        NODE_FRONTEND_LINK_EMAIL_CHANGE: text({ default: 'email-change/confirm#token={token}' }),
-        NODE_FRONTEND_LINK_EMAIL_UNDO: text({ default: 'email-change/undo#token={token}' }),
-        NODE_FRONTEND_LINK_EXPORT: text({ default: 'account-export' }),
+        NODE_FRONTEND_LINK_VERIFY: text({ default: FRONTEND_LINK_RULES.links.verify }),
+        NODE_FRONTEND_LINK_RESET: text({ default: FRONTEND_LINK_RULES.links.reset }),
+        NODE_FRONTEND_LINK_RESTORE: text({ default: FRONTEND_LINK_RULES.links.restore }),
+        NODE_FRONTEND_LINK_EMAIL_CHANGE: text({ default: FRONTEND_LINK_RULES.links.emailChange }),
+        NODE_FRONTEND_LINK_EMAIL_UNDO: text({ default: FRONTEND_LINK_RULES.links.emailUndo }),
+        NODE_FRONTEND_LINK_EXPORT: text({ default: FRONTEND_LINK_RULES.links.export }),
         NODE_PASSWORD_RESET_TTL_MS: int({ default: 3_600_000, min: 1 }),
         NODE_INACTIVE_ACCOUNT_DAYS: int({ default: 0, min: 0 }),
         NODE_INACTIVE_MINIMISE_DAYS: int({ default: 1095, min: 0 }),
