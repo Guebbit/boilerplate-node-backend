@@ -9,10 +9,13 @@ import { staffNoticeEmail } from '@modules/notifications/emails';
 import {
     STAFF_ROUTES,
     callerHoldsAnySet,
+    setsOfRoute,
     staffLinkOf,
     type StaffNoticeBody
 } from '@modules/notifications/staff-routing';
 import { callerAs } from '@tests/callers';
+import { translator } from '@infrastructure/i18n';
+import { TICKET_KINDS } from '@modules/tickets';
 
 /** One valid body per work notice code. */
 const BODIES: Record<(typeof STAFF_NOTIFICATION_CODES)[number], StaffNoticeBody> = {
@@ -23,6 +26,14 @@ const BODIES: Record<(typeof STAFF_NOTIFICATION_CODES)[number], StaffNoticeBody>
     'notifications.staff.webhook-disabled': {
         code: 'notifications.staff.webhook-disabled',
         params: { subscriptionId: 's1' }
+    },
+    'notifications.staff.ticket-opened': {
+        code: 'notifications.staff.ticket-opened',
+        params: { ticketId: 't1', kind: 'contact', category: 'cancellation' }
+    },
+    'notifications.staff.ticket-assigned': {
+        code: 'notifications.staff.ticket-assigned',
+        params: { ticketId: 't1', kind: 'dispute' }
     }
 };
 
@@ -36,7 +47,10 @@ describe('STAFF_ROUTES', () => {
     it.each(STAFF_NOTIFICATION_CODES)('%s names permission sets that exist', (code) => {
         const declared = new Set(PERMISSION_SETS.map(({ name }) => name));
 
-        for (const set of STAFF_ROUTES[code].sets) expect(declared).toContain(set);
+        const { sets } = STAFF_ROUTES[code];
+
+        // A `per-notice` route names no sets of its own: the producer's are checked where it emits.
+        if (sets !== 'per-notice') for (const set of sets) expect(declared).toContain(set);
     });
 
     it('mails only where someone must act soon: a paused checkout, not a disabled webhook', () => {
@@ -46,6 +60,16 @@ describe('STAFF_ROUTES', () => {
 });
 
 describe('staffLinkOf', () => {
+    it('points both ticket notices at the ticket page', () => {
+        expect(staffLinkOf(BODIES['notifications.staff.ticket-opened'])).toEqual({
+            template: 'tickets/{id}',
+            parameters: { id: 't1' }
+        });
+        expect(staffLinkOf(BODIES['notifications.staff.ticket-assigned']).template).toBe(
+            'tickets/{id}'
+        );
+    });
+
     it('points a hold at the buyer’s account and a disabled webhook at its subscription', () => {
         expect(staffLinkOf(BODIES['notifications.staff.purchase-hold-placed'])).toEqual({
             template: 'users/{id}',
@@ -67,7 +91,44 @@ describe('staffNoticeEmail', () => {
 
             expect(mail.subject).not.toContain('notifications.staff-mail');
             expect(mail.data.summary).not.toContain('notifications.staff-mail');
-            expect(mail.data.link).toContain(`/${locale}/users/u1`);
+            expect(mail.data.link).toMatch(new RegExp(`/${locale}/(users/u1|tickets/t1)$`));
+        }
+    });
+
+    it.each(['en', 'it'])(
+        'names a contact ticket by its category in %s, never by its text',
+        (locale) => {
+            const mail = staffNoticeEmail(locale, BODIES['notifications.staff.ticket-opened']);
+            const words = translator(locale);
+
+            expect(mail.subject).toContain(
+                words('notifications.staff-mail.ticket-category.cancellation')
+            );
+            expect(mail.data.link).toContain('/tickets/t1');
+        }
+    );
+
+    it.each(['en', 'it'])(
+        'labels a contact ticket with no category as uncategorised in %s',
+        (locale) => {
+            const mail = staffNoticeEmail(locale, {
+                code: 'notifications.staff.ticket-opened',
+                params: { ticketId: 't2', kind: 'contact' }
+            });
+
+            expect(mail.subject).toContain(
+                translator(locale)('notifications.staff-mail.ticket-category.none')
+            );
+        }
+    );
+
+    it('has a label in every language for every ticket kind and category', () => {
+        for (const locale of ['en', 'it']) {
+            const words = translator(locale);
+            for (const kind of TICKET_KINDS)
+                expect(words(`notifications.staff-mail.ticket-kind.${kind}`)).not.toContain(
+                    'notifications.staff-mail'
+                );
         }
     });
 
@@ -75,6 +136,21 @@ describe('staffNoticeEmail', () => {
         const mail = staffNoticeEmail('en', BODIES['notifications.staff.purchase-hold-placed']);
 
         expect(JSON.stringify(mail)).not.toMatch(/@/);
+    });
+});
+
+describe('setsOfRoute', () => {
+    it("reads a fixed route's own sets and a per-notice route's named ones", () => {
+        expect(setsOfRoute(STAFF_ROUTES['notifications.staff.webhook-disabled'])).toEqual([
+            'WebhookManagement'
+        ]);
+        expect(
+            setsOfRoute(STAFF_ROUTES['notifications.staff.ticket-opened'], ['PaymentRefunding'])
+        ).toEqual(['PaymentRefunding']);
+    });
+
+    it('keeps a per-notice route that was named nothing for administrators alone', () => {
+        expect(setsOfRoute(STAFF_ROUTES['notifications.staff.ticket-opened'])).toEqual([]);
     });
 });
 

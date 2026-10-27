@@ -2,7 +2,7 @@
  * @module
  * Contact requests: anyone may file one, admins read and triage them. A message sent while signed
  * in records the sender's account; an anonymous one only the address typed. The export and the
- * erasure take both (see `./domain/ownership`). A leaf in both directions.
+ * erasure take both (see `./domain/ownership`). Announces `ticket.opened` / `ticket.assigned`; `notifications` does the telling.
  *
  * See: docs/modules/tickets.md
  */

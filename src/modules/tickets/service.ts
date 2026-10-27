@@ -1,6 +1,6 @@
 /**
  * @module
- * Ticket service — the contact form's creation (with the operator notification), the staff reads
+ * Ticket service — the contact form's creation (announced on the bus), the staff reads
  * and delete, and the module's two `personalData` halves (export, erasure). The doors that move a
  * ticket (resolve, assign, note…) are in `./workflow`; the rules they apply are in `./domain`.
  *
@@ -29,6 +29,8 @@ import {
 } from '@infrastructure/http/response';
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { emitDomainEvent } from '@kernel/events';
 import { logger } from '@infrastructure/adapters/logger';
 import { checkEmailPolicy } from '@infrastructure/adapters/antibot';
 import { contactRequestEmail } from './emails';
@@ -42,44 +44,32 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 import { OPEN_STATUSES, initialTicketStatus, ownTicketsFilter, routeSetOf } from './domain';
 import { ticketsConfig } from './config';
-import { mailConfig } from '@infrastructure/adapters/config';
 import { ticketsAuditActions } from './audit';
+import { TICKET_OPENED } from './events';
 import { inJurisdiction, jurisdictionScope, mayDelete } from './access';
 import { presentTicket, withView } from './presenter';
 import { assigneeNamesOf, viewerOf } from './views';
 import { workflow } from './services/workflow';
 
-/**
- * Where the operator's notification goes: the dedicated contact mailbox, then the generic SMTP
- * sender, then nowhere.
- *
- * Read per call rather than captured at import, so a test can vary it — the pattern
- * `inventory/config.ts` sets for this repo. A deployment changes it with a restart.
- */
-const notifyMailbox = (): string =>
-    ticketsConfig().NODE_CONTACT_NOTIFY_EMAIL ?? mailConfig().NODE_SMTP_SENDER ?? '';
-
 /** How long a contact message may wait before it is overdue, in milliseconds. */
 const contactSlaMs = (): number => ticketsConfig().NODE_TICKETS_CONTACT_SLA_HOURS * 3_600_000;
 
 /**
- * Record a contact request and tell the support mailbox about it — unless the honeypot caught it.
+ * Record a contact request and announce it as `ticket.opened` — unless the honeypot caught it.
  *
  * Both halves live here because "a customer asked us something" is one event, not a write plus a
- * thing the HTTP layer remembers to do afterwards.
+ * thing the HTTP layer remembers to do afterwards. Who is told, and how, is `notifications`'
+ * business: it hears the event.
  *
- * Why here:   in a controller instead, a second caller of `create` would file a ticket nobody was
- *             told about — and this module would publish its queue job from a controller while
- *             its sibling `delivery` publishes from the service.
  * Honeypot:   `payload.website` is a field a real browser always submits empty and a bot reliably
  *             fills, declared in the contract but never persisted (see `TicketDocument`)
- *             or read back. A non-empty value writes the row as `spam` and skips the notification
+ *             or read back. A non-empty value writes the row as `spam` and announces nothing
  *             — the bot still gets its `201`, so it learns nothing, but nobody's inbox hears
  *             about it.
  * Account:    `subjectId` is the signed-in sender's account, so the export and the erasure follow the
  *             ticket to the person; absent for an anonymous sender.
  * Disposable: a disposable-inbox domain (`checkEmailPolicy`, off by default) is treated the same
- *             way — filed as `spam`, notification skipped, still a `201`. A visible refusal would
+ *             way — filed as `spam`, not announced, still a `201`. A visible refusal would
  *             tell a spam script exactly which signal caught it.
  */
 const create = (
@@ -111,45 +101,60 @@ const create = (
                     ? { closedAt: now, resolution: TicketResolution.spam }
                     : { dueAt: new Date(now.getTime() + contactSlaMs()) })
             })
-            .then((created) => {
-                if (suspectedSpam) return created;
+            .then((created) =>
+                suspectedSpam
+                    ? created
+                    : emitDomainEvent(TICKET_OPENED, {
+                          tenantId: DEPLOYMENT_TENANT_ID,
+                          ticketId: String(created._id),
+                          kind: created.kind,
+                          routeSet: created.routeSet,
+                          ...(created.category ? { category: created.category } : {})
+                      }).then(() => created)
+            );
+    });
+};
 
-                const notifyEmail = notifyMailbox();
-                if (!notifyEmail) return created;
+/**
+ * Mail the contact message to the fallback mailbox, `NODE_CONTACT_NOTIFY_EMAIL`, when nobody who
+ * could work it has an address to be told at. The one mail that carries the visitor's own words,
+ * because that mailbox is then the whole inbox, and it carries `Reply-To: <the visitor>` so
+ * answering it reaches them. A no-op without the mailbox, or for a ticket that is gone or not a
+ * contact message.
+ *
+ * It goes to the operator, not to the sender, so it renders in `NODE_DEFAULT_LOCALE` and takes no
+ * `CallerContext`. A failed queue is logged, never raised: the ticket is already stored.
+ *
+ * @param ticketId - the contact ticket that found nobody to tell
+ */
+const mailFallbackMailbox = (ticketId: string): Promise<void> => {
+    const mailbox = ticketsConfig().NODE_CONTACT_NOTIFY_EMAIL;
+    if (!mailbox) return Promise.resolve();
 
-                /*
-                 * The one email that must NOT follow the request's language.
-                 *
-                 * It goes to the support mailbox, not to the person who filled in the form, so it
-                 * is built in `NODE_DEFAULT_LOCALE` — the operator's language, passed explicitly
-                 * rather than inherited from whoever happened to submit the form. This is why it
-                 * takes no `CallerContext`: there is deliberately nothing about the caller in it.
-                 * The customer's own words (`subject`, `message`) pass through untouched, as they
-                 * must.
-                 */
-                const operatorMail = contactRequestEmail(getDefaultLocale(), {
-                    name: created.name,
-                    email: created.email ?? email,
-                    subject: created.subject,
-                    message: created.message,
-                    createdAt: created.createdAt?.toISOString()
-                });
+    return ticketRepository.findById(ticketId).then((ticket) => {
+        if (!ticket?.email || ticket.kind !== TicketKind.contact) return;
 
-                void enqueueEmail(
-                    { to: notifyEmail, subject: operatorMail.subject },
-                    operatorMail.template,
-                    operatorMail.data
-                ).catch(
-                    (error: unknown) =>
-                        // Stryker disable all
-                        logger.error({
-                            message: 'ticket contact notification email failed',
-                            error
-                        })
-                    // Stryker restore all
-                );
+        const mail = contactRequestEmail(getDefaultLocale(), {
+            name: ticket.name,
+            email: ticket.email,
+            subject: ticket.subject,
+            message: ticket.message,
+            category: ticket.category,
+            createdAt: ticket.createdAt?.toISOString()
+        });
 
-                return created;
+        return enqueueEmail(
+            // `replyTo`: the bare address only (already normalised on create), never a display
+            // name: the visitor's free-text name must not reach a header.
+            { to: mailbox, subject: mail.subject, replyTo: ticket.email },
+            mail.template,
+            mail.data
+        )
+            .then(() => undefined)
+            .catch((error: unknown) => {
+                // Stryker disable all
+                logger.error({ message: 'ticket fallback mailbox email failed', error });
+                // Stryker restore all
             });
     });
 };
@@ -441,6 +446,7 @@ const eraseOwnTickets = async (
 /** The module's barrel export — used by the controllers in `./controllers`. */
 export const ticketService = {
     create,
+    mailFallbackMailbox,
     search,
     getById,
     removeById,

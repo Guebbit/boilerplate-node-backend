@@ -17,7 +17,7 @@ import { accessService } from '@modules/access';
 import { userService, type StaffContact } from '@modules/users';
 import { notificationsConfig } from '../config';
 import { staffNoticeEmail } from '../emails';
-import { STAFF_ROUTES, type StaffNoticeBody } from '../staff-routing';
+import { setsOfRoute, STAFF_ROUTES, type StaffNoticeBody } from '../staff-routing';
 import { notificationsCreateStaffOnce } from './inbox';
 
 /** A situation staff must hear about, as a producer's event states it. */
@@ -28,6 +28,8 @@ export interface StaffNotice {
     body: StaffNoticeBody;
     /** `<kind>:<entity>`: one notice per situation per recipient, however often it is delivered. */
     dedupeKey: string;
+    /** The permission sets to tell, for a code whose route says `per-notice`. */
+    sets?: readonly string[];
 }
 
 /** Queue the "now" mail for one recipient; a failure is logged, the notice is already written. */
@@ -45,7 +47,7 @@ const tell = (contact: StaffContact, notice: StaffNotice): Promise<void> => {
         ...notice.body,
         severity: route.severity,
         tenantId: notice.tenantId,
-        sets: [...route.sets],
+        sets: [...setsOfRoute(route, notice.sets)],
         dedupeKey: notice.dedupeKey,
         expiresAt: new Date(
             Date.now() + notificationsConfig().NODE_NOTIFICATIONS_STAFF_TTL_DAYS * DAY_MS
@@ -62,11 +64,29 @@ const tell = (contact: StaffContact, notice: StaffNotice): Promise<void> => {
  * write must not hide the others' behind a parallel rejection.
  *
  * @param notice - what happened and where
+ * @returns how many people with an address could act, whether or not they had been told already:
+ *   zero is what lets a caller reach for a fallback mailbox
  */
-export const notifyStaff = async (notice: StaffNotice): Promise<void> => {
+export const notifyStaff = async (notice: StaffNotice): Promise<number> => {
     const route = STAFF_ROUTES[notice.body.code];
-    const members = await accessService.membersHolding(notice.tenantId, route.sets);
+    const members = await accessService.membersHolding(
+        notice.tenantId,
+        setsOfRoute(route, notice.sets)
+    );
     const contacts = await userService.staffContacts(members);
 
     for (const contact of contacts) await tell(contact, notice);
+    return contacts.length;
 };
+
+/**
+ * Tell one named member, if they can still act: the notice for the person a ticket was given to.
+ * Their jurisdiction is the notice's sets, read again at display time like any work notice.
+ *
+ * @param userId - who is told
+ * @param notice - what happened and where
+ */
+export const notifyStaffMember = (userId: string, notice: StaffNotice): Promise<void> =>
+    userService.staffContacts([userId]).then(async (contacts) => {
+        for (const contact of contacts) await tell(contact, notice);
+    });

@@ -1,6 +1,6 @@
 /**
  * @module
- * The contact form's configuration: where the operator is notified, how long a closed ticket is kept, and how soon a contact message is due.
+ * The contact form's configuration: the fallback mailbox for a contact message nobody could be told of, how long a closed ticket is kept, and how soon a contact message is due.
  *
  * See: docs/tools/configuration.md
  */

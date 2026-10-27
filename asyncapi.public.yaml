@@ -1520,6 +1520,112 @@ components:
                     type: string
                     format: date-time
             additionalProperties: false
+        TicketOpenedParamsPayload:
+            title: TicketOpenedParamsPayload
+            type: object
+            required:
+                - ticketId
+                - kind
+            properties:
+                ticketId:
+                    type: string
+                kind:
+                    type: string
+                category:
+                    type: string
+            additionalProperties: false
+        TicketAssignedParamsPayload:
+            title: TicketAssignedParamsPayload
+            type: object
+            required:
+                - ticketId
+                - kind
+            properties:
+                ticketId:
+                    type: string
+                kind:
+                    type: string
+            additionalProperties: false
+        NotificationStaffTicketOpenedPayload:
+            title: NotificationStaffTicketOpenedPayload
+            type: object
+            required:
+                - id
+                - audience
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
+                code:
+                    type: string
+                    enum:
+                        - notifications.staff.ticket-opened
+                params:
+                    $ref: '#/components/schemas/TicketOpenedParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationStaffTicketAssignedPayload:
+            title: NotificationStaffTicketAssignedPayload
+            type: object
+            required:
+                - id
+                - audience
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
+                code:
+                    type: string
+                    enum:
+                        - notifications.staff.ticket-assigned
+                params:
+                    $ref: '#/components/schemas/TicketAssignedParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
         NotificationFulfillmentHeldPayload:
             title: NotificationFulfillmentHeldPayload
             type: object
@@ -1812,6 +1918,8 @@ components:
                 - $ref: '#/components/schemas/NotificationStockAlertPayload'
                 - $ref: '#/components/schemas/NotificationStaffPurchaseHoldPlacedPayload'
                 - $ref: '#/components/schemas/NotificationStaffWebhookDisabledPayload'
+                - $ref: '#/components/schemas/NotificationStaffTicketOpenedPayload'
+                - $ref: '#/components/schemas/NotificationStaffTicketAssignedPayload'
             # A plain property name here, unlike OpenAPI's `{ propertyName }` object.
             discriminator: code
         NotificationCreatedPayload:

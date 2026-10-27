@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — situations someone must take and close: a contact message a visitor sent, or a ticket the system opened for staff. A signed-in sender's account is recorded, so erasure and export follow it.
-**Depends on** — [`users`](./users.md) (the assignee's name) and [`access`](./access.md) (the roles of a person a ticket may be given to). Nothing depends on it: the account erasure reaches it through the `personalData` manifest, never an import.
+**Depends on** — [`users`](./users.md) (the assignee's name) and [`access`](./access.md) (the roles of a person a ticket may be given to). [`notifications`](./notifications.md) depends on it (the two ticket events, and the fallback mailbox mail); the account erasure reaches it through the `personalData` manifest, never an import.
 **Breaks if you change** — the `status` doors and their stamps (`closedAt`, `resolution`, the dedup key): the retention clock and the one-open-ticket-per-situation rule both live there.
 :::
 
@@ -18,15 +18,20 @@ graph cannot see._
 flowchart LR
     tickets["tickets<br/><i>this module</i>"]
     access["access"]
+    notifications["notifications"]
     users["users"]
 
+    notifications --> tickets
     tickets --> access
     tickets --> users
+    tickets -. "ticket.assigned" .-> notifications
+    tickets -. "ticket.opened" .-> notifications
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
+    class notifications supporting;
     class access,users generic;
     class tickets centre;
 ```
@@ -124,6 +129,25 @@ Every answer is the ticket, with the caller's `actions` telling a screen which b
 on a closed ticket too. Write each note as if the customer will read it: the data subject's export
 carries the words and the time, never the author.
 
+### Who is told
+
+A ticket never mails anyone itself. A new one (spam excluded) is announced as `ticket.opened`
+`{ ticketId, kind, routeSet, category? }`, and handing one to a colleague as `ticket.assigned`
+(taking your own announces nothing). [`notifications`](./notifications.md#work-notices-for-staff)
+hears both and does the telling, so a situation is one ticket kind or one notice code, never both
+(`tests/cross-cutting/ticket-kinds-are-not-notification-kinds.test.ts`).
+
+| Event             | Told                                                                                            | Mail                                                                                                                                                         |
+| ----------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ticket.opened`   | everyone who works the kind (a contact message: `TicketManagement`, not the read-only managers) | a fixed phrase, the kind (a contact message also its category) and a link to the ticket. Never the visitor's name, address, subject, message or order number |
+| `ticket.assigned` | the assignee only                                                                               | none (the bell)                                                                                                                                              |
+
+**The fallback mailbox.** `NODE_CONTACT_NOTIFY_EMAIL` (optional) is mailed only when a contact
+message finds nobody to tell: no staff member holding the set has an address that can act. It then
+carries the full message, the category and `Reply-To: <the visitor's bare address>`, because that
+mailbox is the whole inbox. With even one permitted recipient it hears nothing. It sits outside
+the retention TTL and outside `DELETE /tickets/{id}`: erasing a message there is done by hand.
+
 ### The staff badge
 
 `GET /tickets/summary` answers `{ open, mine, overdue, unassigned }`, scoped to the caller's
@@ -134,7 +158,7 @@ A contact message is due `NODE_TICKETS_CONTACT_SLA_HOURS` (default 48) after it 
 fills — declared in the contract (so an undeclared field wouldn't 422 real browsers too) but never
 persisted or returned. A non-empty value — or an address the email policy `refused`
 (`checkEmailPolicy`, `service.ts`) — writes the row straight to `status: spam`, closed at birth, and
-skips the operator notification; the caller still gets the same `201` a real submission gets, so a
+announces nothing; the caller still gets the same `201` a real submission gets, so a
 bot learns nothing from the response. That trades an email amplifier for a storage amplifier,
 which `contactLimiters` bounds and the TTL index expires.
 

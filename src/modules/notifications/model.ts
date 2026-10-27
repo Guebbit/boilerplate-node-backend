@@ -18,6 +18,8 @@ import type {
     NotificationAudience,
     ShipmentLostParams,
     PurchaseHoldPlacedParams,
+    TicketAssignedParams,
+    TicketOpenedParams,
     WebhookDisabledParams
 } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
@@ -32,13 +34,17 @@ export const NOTIFICATION_CODES = [
     'notifications.shipment-lost',
     'notifications.stock-alert',
     'notifications.staff.purchase-hold-placed',
-    'notifications.staff.webhook-disabled'
+    'notifications.staff.webhook-disabled',
+    'notifications.staff.ticket-opened',
+    'notifications.staff.ticket-assigned'
 ] as const;
 
 /** The codes of work notices: the ones `./staff-routing` finds an audience for. */
 export const STAFF_NOTIFICATION_CODES = [
     'notifications.staff.purchase-hold-placed',
-    'notifications.staff.webhook-disabled'
+    'notifications.staff.webhook-disabled',
+    'notifications.staff.ticket-opened',
+    'notifications.staff.ticket-assigned'
 ] as const satisfies readonly (typeof NOTIFICATION_CODES)[number][];
 
 /** One of {@link STAFF_NOTIFICATION_CODES}. */
@@ -61,6 +67,8 @@ export interface NotificationParametersByCode {
     'notifications.stock-alert': CartLineRemovedParams;
     'notifications.staff.purchase-hold-placed': PurchaseHoldPlacedParams;
     'notifications.staff.webhook-disabled': WebhookDisabledParams;
+    'notifications.staff.ticket-opened': TicketOpenedParams;
+    'notifications.staff.ticket-assigned': TicketAssignedParams;
 }
 
 /**

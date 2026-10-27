@@ -21,6 +21,7 @@ import { t } from '@infrastructure/i18n';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { toObjectId } from '@infrastructure/persistence/create-repository';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { emitDomainEvent } from '@kernel/events';
 import { accessService } from '@modules/access';
 import { userService } from '@modules/users';
 import { ticketsAuditActions } from '../audit';
@@ -35,6 +36,7 @@ import {
     type TicketRefusal,
     type Transition
 } from '../domain';
+import { TICKET_ASSIGNED } from '../events';
 import type { TicketDocument } from '../model';
 import { presentTicket } from '../presenter';
 import { ticketRepository } from '../repository';
@@ -205,6 +207,30 @@ const mayBeAssigned = (userId: string, routeSet: string): Promise<boolean> =>
     });
 
 /**
+ * Tell the bus a colleague was given a ticket. Taking your own does not: you know. The emit never
+ * rejects (a failing subscriber is logged by the bus), so the assignment already made stands.
+ *
+ * @param ticket - the ticket as assigned
+ * @param assigneeId - who now holds it
+ * @param context - the caller who assigned it
+ */
+const announceAssigned = (
+    ticket: TicketDocument,
+    assigneeId: string,
+    context: CallerContext
+): Promise<void> =>
+    assigneeId === context.caller.id
+        ? Promise.resolve()
+        : emitDomainEvent(TICKET_ASSIGNED, {
+              tenantId: DEPLOYMENT_TENANT_ID,
+              ticketId: String(ticket._id),
+              kind: ticket.kind,
+              routeSet: ticket.routeSet,
+              assigneeId,
+              assignedAt: new Date().toISOString()
+          }).then(() => undefined);
+
+/**
  * Give an open ticket to one person — taking it is assigning yourself. A `new` ticket becomes
  * `in_progress`.
  *
@@ -241,7 +267,9 @@ const assign = (
                     targetId: id,
                     metadata: { assigneeId: userId }
                 });
-                return present(assigned, context).then((wire) => generateSuccess(wire));
+                return announceAssigned(assigned, userId, context).then(() =>
+                    present(assigned, context).then((wire) => generateSuccess(wire))
+                );
             });
         });
     });

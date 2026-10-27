@@ -2,7 +2,7 @@
  * @module
  * The copy of every email this module sends, resolved into finished strings — same rule as
  * `@modules/account/emails`: language is an argument, output is finished text. Goes to the
- * support mailbox, so it renders in `NODE_DEFAULT_LOCALE`; the customer's own words stay
+ * fallback mailbox, so it renders in `NODE_DEFAULT_LOCALE`; the customer's own words stay
  * untranslated, and it skips the shared `footer` partial.
  *
  * See: docs/tools/email-and-rendering.md
@@ -17,6 +17,7 @@ export interface ContactRequest {
     email: string;
     subject: string;
     message: string;
+    category?: string;
     createdAt?: string;
 }
 
@@ -35,6 +36,7 @@ export const contactRequestEmail = (locale: string, contact: ContactRequest): Em
             labelName: t('tickets.email-contact.label-name'),
             labelEmail: t('tickets.email-contact.label-email'),
             labelSubject: t('tickets.email-contact.label-subject'),
+            labelCategory: t('tickets.email-contact.label-category'),
             labelMessage: t('tickets.email-contact.label-message'),
             labelCreatedAt: t('tickets.email-contact.label-created-at'),
             // The fallback lives here rather than in the markup: a template that only
@@ -43,6 +45,7 @@ export const contactRequestEmail = (locale: string, contact: ContactRequest): Em
             email: contact.email,
             subject: contact.subject,
             message: contact.message,
+            category: contact.category ?? t('tickets.email-contact.not-available'),
             createdAt: contact.createdAt
         }
     };

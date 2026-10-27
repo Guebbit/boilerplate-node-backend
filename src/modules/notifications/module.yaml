@@ -7,6 +7,7 @@ dependsOn:
     - delivery # subscribes to its event, a late preorder's notice
     - orders # subscribes to its event, a purchase hold placed
     - stock-alerts # subscribes to its event, a back-in-stock request answered
+    - tickets # subscribes to its two events, and asks it to mail the fallback mailbox
     - users # which of those members can act today, and where to mail them
     - webhooks # subscribes to its event, a subscription auto-disabled
     - wishlist # subscribes to its event

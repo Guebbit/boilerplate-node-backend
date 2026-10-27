@@ -9,6 +9,33 @@
                 "meta-title": "Blocco acquisti applicato",
                 "title": "È stato applicato un blocco acquisti",
                 "summary": "Un acquirente ha annullato o lasciato scadere diversi ordini non pagati, quindi il suo checkout è sospeso fino a {{until}}. Ogni annullamento è stato elaborato normalmente; è bloccato solo l'inserimento di un nuovo ordine. La sospensione termina da sola; applica un blocco manuale all'account per prolungarla."
+            },
+            "ticket-opened": {
+                "subject": "Nuovo ticket: {{what}}",
+                "meta-title": "Nuovo ticket",
+                "title": "Un nuovo ticket richiede qualcuno",
+                "summary": "È stato aperto un ticket e il tuo ruolo se ne occupa: {{what}}. Aprilo per vedere i dettagli e prenderlo in carico."
+            },
+            "ticket-kind": {
+                "contact": "Messaggio di contatto",
+                "account_review": "Revisione account",
+                "manual_refund_owed": "Rimborso da fare a mano",
+                "amount_mismatch": "Importo del pagamento non corrispondente",
+                "paid_without_hold": "Ordine pagato senza riserva di stock",
+                "export_failed": "Esportazione dati non riuscita",
+                "consent_due": "Consenso dell'acquirente da ottenere",
+                "refund_refused": "Rimborso rifiutato",
+                "dispute": "Contestazione di pagamento"
+            },
+            "ticket-category": {
+                "order": "Ordine",
+                "cancellation": "Annullamento",
+                "return": "Reso",
+                "payment": "Pagamento",
+                "account": "Account",
+                "privacy": "Privacy",
+                "other": "Altro",
+                "none": "Senza categoria"
             }
         }
     }
