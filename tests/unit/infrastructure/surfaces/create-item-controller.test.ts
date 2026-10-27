@@ -1,8 +1,6 @@
 /**
  * `createItemController` — the read-one factory shared by `products` and `users`. Pins the
- * generated operation NAME: the default (`get<Entity>Item`) every existing caller relies on, and
- * the `handlerSuffix` override (`get<Entity><Suffix>`) `get-product-admin.ts` uses to avoid
- * colliding with `getProductItem` on the same entity. The name is observed through the log line
+ * generated operation NAME (`get<Entity>Item`), which every caller relies on. The name is observed through the log line
  * `rejectDatabaseError` writes. Also pins the found/not-found round trip, since a naming change
  * is only safe if the response behaviour it wraps is untouched.
  */
@@ -29,7 +27,7 @@ const makeResponse = () =>
     });
 
 describe('createItemController — operation naming', () => {
-    it('defaults the logged operation to get<Entity>Item when handlerSuffix is omitted', async () => {
+    it('logs the operation as get<Entity>Item', async () => {
         const response = makeResponse();
         const handler = createItemController({
             entity: 'widget',
@@ -44,33 +42,15 @@ describe('createItemController — operation naming', () => {
             expect.anything()
         );
     });
-
-    it('logs get<Entity><Suffix> when handlerSuffix is given', async () => {
-        const response = makeResponse();
-        const handler = createItemController({
-            entity: 'widget',
-            fetch: () => Promise.reject(new Error('db down')),
-            notFoundKey: 'widgets.not-found',
-            handlerSuffix: 'Admin'
-        });
-
-        await handler(makeRequest(OBJECT_ID), response);
-
-        expect(logger.error).toHaveBeenCalledWith(
-            expect.stringContaining('getWidgetAdmin'),
-            expect.anything()
-        );
-    });
 });
 
-describe('createItemController — found/not-found round trip, unaffected by handlerSuffix', () => {
+describe('createItemController — found/not-found round trip', () => {
     it('answers 200 with the fetched row on a hit', async () => {
         const response = makeResponse();
         const handler = createItemController({
             entity: 'widget',
             fetch: (id) => Promise.resolve({ id }),
-            notFoundKey: 'widgets.not-found',
-            handlerSuffix: 'Admin'
+            notFoundKey: 'widgets.not-found'
         });
 
         await handler(makeRequest(OBJECT_ID), response);

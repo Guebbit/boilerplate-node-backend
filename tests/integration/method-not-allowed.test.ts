@@ -22,8 +22,8 @@ describe('a wrong method on a known path', () => {
     });
 
     it('answers 405 on a literal path that a templated sibling would otherwise catch', async () => {
-        // `/products/{id}` also reads `categories` as an id: without the pre-router guard this is a 404.
-        const response = await api().delete('/products/categories');
+        // `/products/{id}` also reads `facets` as an id: without the pre-router guard this is a 404.
+        const response = await api().delete('/products/facets');
 
         expect(response.status).toBe(405);
         expect(response.headers.allow).toBe('GET, HEAD');

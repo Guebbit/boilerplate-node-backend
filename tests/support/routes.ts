@@ -366,7 +366,7 @@ const walk = (
  * Every endpoint mounted on a router, in mount order.
  *
  * Mount order is preserved rather than sorted because it is load-bearing: `/search` and
- * `/categories` are only reachable while they are declared BEFORE `/:id`, which would otherwise
+ * `/facets` are only reachable while they are declared BEFORE `/:id`, which would otherwise
  * match them as an id. A sorted table would pass with that ordering reversed.
  *
  * @param router - the module's exported Express router

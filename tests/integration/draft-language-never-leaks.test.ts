@@ -106,11 +106,11 @@ describe('a back-in-stock mail and its event', () => {
 });
 
 describe('the editor', () => {
-    it('still lists the draft row on the admin read', async () => {
+    it('still lists the draft row in translations', async () => {
         const id = await productWithDraftFrench();
         const { bearer } = await authenticateAs('admin');
 
-        const response = await api().get(`/products/${id}/admin`).set('Authorization', bearer);
+        const response = await api().get(`/products/${id}`).set('Authorization', bearer);
 
         expect(response.status).toBe(200);
         expect(response.body.translations.fr).toMatchObject({ title: DRAFT_TITLE });

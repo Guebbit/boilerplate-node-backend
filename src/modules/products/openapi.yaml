@@ -165,11 +165,12 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
-    /products/categories:
+    /products/facets:
         get:
             tags: [Products]
             summary: Catalogue facets
-            description: Every category and tag the PUBLIC catalogue carries, each with how many visible products hold it — what a storefront renders as filter chips. Sorted by count descending, then name. Counts follow the same visibility rule the listing does, so a chip can never lead to an empty page.
+            description: >-
+                Every category and tag the PUBLIC catalogue carries, each with how many visible products hold it — what a storefront renders as filter chips. Sorted by count descending, then name. Counts follow the same visibility rule the listing does, so one chip alone never leads to an empty page. Counts are catalogue-wide: they do not follow the filters already chosen.
             operationId: getCatalogueFacets
             security: []
             responses:
@@ -188,7 +189,14 @@ paths:
         get:
             tags: [Products]
             summary: Product details
-            description: Returns the full details of the product identified by `{id}`. Functionally equivalent to `GET /products?id={id}`. Staff holding `display:Locale` may preview a draft language here (see the API description's Language paragraph); that answer is never cached.
+            description: >-
+                Returns the full details of the product identified by `{id}`. Functionally equivalent
+                to `GET /products?id={id}`. `title` and `description` are always resolved to one
+                language. A caller holding `read:Translation` also gets `translations`, every language
+                the product has a row for (drafts included), for the editor's tabs: what the caller
+                may see shapes the body, there is no separate staff URL. Staff holding `display:Locale`
+                may preview a draft language here (see the API description's Language paragraph). A
+                body that differs by caller is never served from, or stored in, the shared cache.
             operationId: getProductById
             security:
                 - {}
@@ -320,36 +328,6 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-
-    # The editor's own read: every language a product has, not the caller's resolved one.
-    /products/{id}/admin:
-        # Bundler: adds the `If-Match` parameter and 412 to the writes listed, and `ETag` to the 200s.
-        x-versioned: [get]
-        get:
-            tags: [Products]
-            summary: Product, every language at once
-            description: >-
-                Every language this product has a row for, plus its price/stock/image — the shape
-                the editor's form reads to populate its tabs. Unlike `GET /products/{id}`, this
-                does not resolve to one language and is never cached: it's the screen someone is
-                actively editing, the same reasoning `GET /locales/{locale}/entries` already
-                applies.
-            operationId: getProductAdmin
-            security:
-                - bearerAuth: []
-                - apiKeyAuth: []
-            parameters:
-                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
-            responses:
-                '200':
-                    description: Product, every language
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/ProductAdmin'
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
 
     # Undoes a soft delete. A separate verb because DELETE must be safe to repeat (RFC 9110
     # §9.2.2): a retried DELETE never brings a record back.
@@ -526,138 +504,6 @@ components:
                 it:
                     title: Cuccia ortopedica in memory foam
                     description: Un supporto extra per le articolazioni durante il riposo.
-
-        # Flat rather than `allOf: [Product, {...}]`: two `additionalProperties: false` schemas
-        # composed with `allOf` each validate the WHOLE instance on their own, so the `Product`
-        # branch alone would reject `translations` regardless of what the second branch allows.
-        # `Product`'s own fields are restated here for that reason — the same trade-off
-        # `CreateProductRequestMultipart` already makes against `CreateProductRequest`.
-        ProductAdmin:
-            type: object
-            additionalProperties: false
-            required: [id, title, price, currency, inStock, lowStock, buyable, translations]
-            description: >-
-                A product with every language it has a row for, not just the caller's resolved
-                one — what the editor's form needs to populate its tabs. `title`/`description`
-                stay the resolved (fallback-locale-derived) values; `translations` is the
-                per-locale source.
-            properties:
-                id:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
-                title:
-                    type: string
-                price:
-                    type: number
-                    format: double
-                    minimum: 0
-                    description: Gross — VAT included. Same convention as `Product.price`.
-                currency:
-                    type: string
-                    readOnly: true
-                    description: ISO-4217 currency code (e.g. EUR) — see `Product.currency`.
-                taxClass:
-                    $ref: '#/components/schemas/TaxClass'
-                rateType:
-                    $ref: '#/components/schemas/RateType'
-                sku:
-                    $ref: '#/components/schemas/Sku'
-                inStock:
-                    type: boolean
-                    readOnly: true
-                    description: See `Product.inStock`.
-                lowStock:
-                    type: boolean
-                    readOnly: true
-                    description: See `Product.lowStock`.
-                # The three counters follow `Product`: present only for a caller holding
-                # `read:StockLevel`.
-                onHand:
-                    type: integer
-                    minimum: 0
-                    readOnly: true
-                reserved:
-                    type: integer
-                    minimum: 0
-                    readOnly: true
-                available:
-                    type: integer
-                    minimum: 0
-                    readOnly: true
-                description:
-                    type: string
-                active:
-                    type: boolean
-                # Visible but not for sale right now: listed, add-to-cart accepted like a sold-out
-                # product, checkout refused. Ignored while `active` is false (hidden wins).
-                purchasable:
-                    type: boolean
-                releaseDate:
-                    $ref: '#/components/schemas/ReleaseDate'
-                allowBackorder:
-                    type: boolean
-                restockDate:
-                    $ref: '#/components/schemas/RestockDate'
-                # Derived, never stored: `active && purchasable && releaseDate > now`. Turns false by
-                # itself when the date passes, so nothing has to run on the release day.
-                buyable:
-                    type: boolean
-                    readOnly: true
-                    description: >-
-                        A shopper can order it right now: visible, on sale, and something to order
-                        (shelf units, room in a preorder's allowance, or an open backorder). The one
-                        answer behind the add-to-cart button and "notify me", so a client never
-                        re-derives it from the other flags.
-                preorder:
-                    type: boolean
-                    readOnly: true
-                    description: >-
-                        The product is on sale before its release date: buyers can order it now and it
-                        ships from `releaseDate`.
-                # Derived, never stored: `allowBackorder` on a released, visible, buyable product whose
-                # restock date has not passed and whose cap has room.
-                backorder:
-                    type: boolean
-                    readOnly: true
-                    description: >-
-                        The product may be ordered while its shelf is empty: the units arrive by
-                        `restockDate`, or within 30 days when there is none. Always shown with that promise.
-                requiresShipping:
-                    type: boolean
-                    default: true
-                # Art. 16(c)-(d) CRD: goods made to order or clearly personalised, and perishable ones, carry no
-                # right of withdrawal. Frozen onto each order line; `returns` refuses those lines.
-                noWithdrawal:
-                    type: boolean
-                    default: false
-                weight:
-                    type: integer
-                    minimum: 0
-                    description: Grams. Absent counts as 0 for shipping-method filtering — the editor warns when it's missing.
-                imageUrl:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
-                thumbnailUrl:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ThumbnailUrl'
-                categories:
-                    type: array
-                    items:
-                        type: string
-                tags:
-                    type: array
-                    items:
-                        type: string
-                createdAt:
-                    type: string
-                    format: date-time
-                updatedAt:
-                    type: string
-                    format: date-time
-                deletedAt:
-                    type: string
-                    format: date-time
-                translations:
-                    type: object
-                    additionalProperties:
-                        $ref: '#/components/schemas/ProductTranslationFields'
 
         # One value of `categories`/`tags`, with how many PUBLIC products carry it. Counts
         # follow `publicScope` — a category held only by hidden products does not exist to the
@@ -1415,3 +1261,12 @@ components:
                 deletedAt:
                     type: string
                     format: date-time
+                translations:
+                    type: object
+                    additionalProperties:
+                        $ref: '#/components/schemas/ProductTranslationFields'
+                    description: >-
+                        Every language the product has a row for, drafts included, keyed by locale:
+                        the editor's form fills one tab per entry. Present only on `GET /products/{id}`
+                        and only for a caller holding `read:Translation`; every other read, and every
+                        other caller, gets the resolved `title`/`description` alone.
