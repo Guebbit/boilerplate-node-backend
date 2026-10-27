@@ -7,6 +7,7 @@
 
 import { deriveNames, type ModuleNames } from './names';
 import type { ScaffoldOptions } from './options';
+import { renderGenerated } from '../contracts/shared-rules-render';
 import * as code from './templates-code';
 import { openapiFragment } from './templates-contract';
 import * as documentation from './templates-documentation-tests';
@@ -73,6 +74,37 @@ const runtimeFiles = (names: ModuleNames, options: ScaffoldOptions): PlannedFile
 };
 
 /**
+ * The audit vocabulary: its data, the schema, the file regenerate would write from them (written
+ * now so the module compiles before the first regenerate) and the audit.ts that publishes it.
+ * @param names - the module's spellings
+ * @returns the planned files
+ */
+const auditFiles = (names: ModuleNames): PlannedFile[] => {
+    const root = `src/modules/${names.kebab}`;
+    const generated = renderGenerated(
+        `${root}/rules.yaml`,
+        {
+            out: `${root}/rules.generated.ts`,
+            exports: [
+                {
+                    exportName: `${names.pluralCamel}AuditActions`,
+                    shape: 'keyed-list',
+                    field: 'audit',
+                    description: 'The audit action vocabulary this module owns.'
+                }
+            ]
+        },
+        { audit: code.auditEntries(names) }
+    );
+    return [
+        { path: `${root}/rules.yaml`, content: code.rulesYaml(names) },
+        { path: `${root}/rules.schema.ts`, content: code.rulesSchemaFile(names) },
+        { path: `${root}/rules.generated.ts`, content: generated },
+        { path: `${root}/audit.ts`, content: code.auditFile(names) }
+    ];
+};
+
+/**
  * The contract, permission and (optionally) audit files: everything a leaf generator reads.
  * @param names - the module's spellings
  * @param options - the scaffold options
@@ -83,7 +115,7 @@ const declarationFiles = (names: ModuleNames, options: ScaffoldOptions): Planned
     return [
         { path: `${root}/openapi.yaml`, content: openapiFragment(names) },
         { path: `${root}/authorization.yaml`, content: code.authorizationYaml(names) },
-        ...(options.audit ? [{ path: `${root}/audit.ts`, content: code.auditFile(names) }] : [])
+        ...(options.audit ? auditFiles(names) : [])
     ];
 };
 

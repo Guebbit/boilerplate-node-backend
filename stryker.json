@@ -39,6 +39,7 @@
         "src/kernel/**/*.ts",
         "src/domain-primitives/**/*.ts",
         "src/modules/*/**/*.ts",
+        "!src/**/*.generated.ts",
         "!src/modules/*/index.ts",
         "!src/modules/*/tests/**"
     ],

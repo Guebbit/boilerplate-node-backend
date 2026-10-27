@@ -1,0 +1,24 @@
+# Account's two-factor numbers, as plain data the PHP twin copies.
+#
+# Not read at boot. `npm run regenerate` writes `rules.generated.ts` from it. Units are in the
+# key name; there are no expressions in a rules file, so a duration is written out in full.
+twoFactor:
+    # The per-account wrong-code policy. NIST SP 800-63B allows at most 100 misses; ten is what a
+    # person mistyping can plausibly reach.
+    lockout:
+        # Wrong codes an account may have reserved against its armed 2FA before it locks.
+        maxFailures: 10
+        # How long the lock lasts once `maxFailures` is reached: 15 minutes.
+        lockMs: 900000
+    # The short numeric codes a delivered method (email, SMS) sends.
+    deliveredCodes:
+        # Six, the length every authenticator app has taught people to expect.
+        digits: 6
+        # How long a delivered code is accepted: ten minutes covers an SMTP queue and a person
+        # switching apps.
+        ttlMs: 600000
+        # Seconds between two deliveries of the same method: what the client counts down.
+        resendSeconds: 30
+        # Wrong guesses one code tolerates before it is burned. This, not the hash, is what
+        # protects six digits: five tries out of a million per delivery.
+        maxAttempts: 5

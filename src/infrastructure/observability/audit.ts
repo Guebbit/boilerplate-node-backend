@@ -11,6 +11,7 @@
 import { auditLogger } from '@infrastructure/adapters/logger';
 import { getActiveSpanContext } from '@infrastructure/observability/tracer';
 import type { AuthorizationScope, CallerContext } from '@types';
+import { coreAuditActions } from './audit-actions.generated';
 
 /**
  * Action constants — domain.resource.verb dot-notation, so a log backend can filter by prefix
@@ -19,31 +20,9 @@ import type { AuthorizationScope, CallerContext } from '@types';
  * Only the app-level actions live here — every domain action belongs to its own module
  * (`modules/account/audit.ts`, etc.), because `infrastructure` must not know which domains exist.
  * These are the exception: the guards emit them for requests refused before any domain saw
- * them, so no module could own them.
+ * them, so no module could own them. The list is `shared/rules/audit-actions.yaml`.
  */
-export const coreAuditActions = {
-    SECURITY_UNAUTHORIZED: 'security.unauthorized',
-    SECURITY_FORBIDDEN: 'security.forbidden',
-    SECURITY_RATE_LIMIT_HIT: 'security.rate_limit_hit',
-    /*
-     * A step-up was DEMANDED — the caller held the key and had not proved themselves recently
-     * enough to use it. Recorded because "we asked" is the half of step-up nobody can reconstruct
-     * afterwards: the retry that follows looks like an ordinary success, and a challenge nobody
-     * logged is a control nobody can show was applied.
-     */
-    SECURITY_REAUTH_REQUIRED: 'security.reauth_required',
-    /*
-     * An attack on a credential with no customer behind it — the `security.*` prefix reaches the
-     * platform operator, so each of these is only ever a forged or guessed value. A customer
-     * holding an expired or revoked session is `auth.*` or a bare metric, never one of these.
-     */
-    /** A bearer JWT whose signature, or whose signing key, does not verify. */
-    SECURITY_TOKEN_INVALID_SIGNATURE: 'security.token.invalid_signature',
-    /** A bearer or cookie value that is not a well-formed token of the expected kind at all. */
-    SECURITY_TOKEN_MALFORMED: 'security.token.malformed',
-    /** An `sk_` key presented with its CORRECT secret after it was revoked. */
-    SECURITY_API_KEY_REVOKED: 'security.api_key.revoked'
-} as const;
+export { coreAuditActions } from './audit-actions.generated';
 
 /** The app-level action strings, derived from {@link coreAuditActions}'s values. */
 type CoreAuditAction = (typeof coreAuditActions)[keyof typeof coreAuditActions];

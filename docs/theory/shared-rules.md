@@ -53,6 +53,7 @@ Two things deliberately do **not** go to YAML:
 | Rule data       | `shared/rules/<name>.yaml`                                                          |
 | Its schema      | Zod, in `src/infrastructure/config/shared-rules/<name>.ts`, listed in `registry.ts` |
 | Its JSON Schema | `shared/rules/schemas/<name>.schema.json`, generated, committed                     |
+| Its TS (opt-in) | `<out>.generated.ts`, an `as const` file built from the YAML, committed             |
 | Cases           | `shared/cases/<name>.cases.yaml`                                                    |
 | Cases test      | `tests/cross-cutting/<name>-conformance.test.ts`, through `tests/support/cases.ts`  |
 | Moved verbatim  | `shared/rules/breached-passwords.txt`                                               |
@@ -74,6 +75,30 @@ flowchart LR
 `loadSharedRules` parses with `yaml`, validates with the schema and returns `z.infer` of it. It runs
 once at import, so a broken file fails the boot, never a request. The JSON Schema export lets the
 twin validate the same file without Zod; `npm run check` refuses a stale one.
+
+### Rule data the twin will need: YAML + generated TS
+
+Data that types a literal union (audit action names) or holds plain numbers (retry delays, 2FA
+limits) is not read at boot. `regenerate` turns the YAML into a committed `as const` file, so the
+type is a real union and the code imports a constant. The twin copies the YAML and never sees the TS.
+
+```mermaid
+flowchart LR
+  Y[rules.yaml] --> G["regenerate: shared rules step"]
+  Z[Zod schema + generate spec] --> G
+  G --> T[name.generated.ts, as const]
+  G --> J[schemas/name.schema.json]
+  T --> C[backend code imports it]
+  Y -.copied.-> P[twin]
+  J -.validates.-> P
+```
+
+- A shared file opts in with `generate: { out, exportName, shape }` in `registry.ts`.
+- A module-owned file is `src/modules/<m>/rules.yaml` + `rules.schema.ts` (exports `rulesSchema`,
+  `rulesGenerate`) and is found by the generator, not listed.
+- `shape` is `verbatim` (dump the parsed data) or `keyed-list` (`{ value, description }` rows become
+  `{ KEY: 'value' }` with a JSDoc per key).
+- The generated files are excluded from Stryker and staged by the pre-commit hook.
 
 ## 5 · Adding a rule
 
@@ -97,6 +122,10 @@ twin validate the same file without Zod; `npm run check` refuses a stale one.
 | `rules/frontend-links.yaml`                 | `http/frontend-link.ts`, read by account, users, orders, sitemap; handed to the frontend, whose router spec walks it |
 | `scenarios/personas.yaml`                   | `scenarios/accounts.ts`, `users.ts`, `config.ts`; the generated account tables in `docs/tools/demo-profile.md`       |
 | `rules/log-redaction.yaml`                  | `adapters/logger.ts`, `runtime/otel-sdk.ts`                                                                          |
+| `rules/audit-actions.yaml`                  | `observability/audit-actions.generated.ts`, imported by `observability/audit.ts`                                     |
+| `modules/account/rules.yaml`                | `account/rules.generated.ts`, read by `two-factor/lockout.ts`, `delivered-codes.ts`                                  |
+| `modules/webhooks/rules.yaml`               | `webhooks/domain/rules.generated.ts`, read by `domain/backoff.ts`                                                    |
+| `modules/example/rules.yaml`                | `example/rules.generated.ts`, read by `example/audit.ts`, `analytics.ts`                                             |
 | `rules/password-hash.yaml`                  | `security/password-hash.ts`                                                                                          |
 | `rules/breached-passwords.txt`              | `security/breached-passwords`                                                                                        |
 | `cases/log-redaction.cases.yaml`            | `tests/cross-cutting/log-redaction-conformance.test.ts`                                                              |

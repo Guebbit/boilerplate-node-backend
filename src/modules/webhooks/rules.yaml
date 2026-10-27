@@ -1,0 +1,17 @@
+# Webhook delivery's retry numbers, as plain data the PHP twin copies.
+#
+# Not read at boot. `npm run regenerate` writes `rules.generated.ts` from it. Units are in the key
+# name; there are no expressions in a rules file, so a duration is written out in full.
+retry:
+    # Delay before each retry, in milliseconds, indexed by the attempt that just failed (1-based:
+    # the first entry is the wait after attempt 1 fails). 5 s, 5 min, 30 min, 2 h, 10 h: from "the
+    # endpoint blipped" to "come back once whatever broke has had most of a day to get fixed".
+    delaysMs: [5000, 300000, 1800000, 7200000, 36000000]
+autoDisable:
+    # Consecutive EXHAUSTED events (a whole retry chain giving up, not one failed attempt) before a
+    # subscription auto-disables.
+    maxConsecutiveFailures: 5
+    # The floor on how long a streak must run before it can auto-disable: 3 days, matching
+    # Stripe's own threshold. Time-based so a platform-side outage cannot disable every busy
+    # subscriber at once.
+    minFailingMs: 259200000

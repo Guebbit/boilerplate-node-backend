@@ -7,21 +7,17 @@
  * precision.
  */
 
+import { autoDisableRules, retryRules } from './rules.generated';
+
 /**
  * Delay before each retry, in milliseconds, indexed by the attempt that just failed (1-based —
  * `WEBHOOK_RETRY_DELAYS_MS[0]` is the wait after attempt 1 fails). Reuses the exact tier values
  * the delayed-message-exchange ladder considered and rejected for it: 5s, 5m,
  * 30m, 2h, 10h — a reasonable spread from "the endpoint blipped" to "come back once whatever broke
  * has had most of a day to get fixed", even though this delivers it through `nextAttemptAt`
- * rather than five RabbitMQ queues.
+ * rather than five RabbitMQ queues. The numbers are `rules.yaml`.
  */
-export const WEBHOOK_RETRY_DELAYS_MS: readonly number[] = [
-    5000,
-    5 * 60_000,
-    30 * 60_000,
-    2 * 3_600_000,
-    10 * 3_600_000
-];
+export const WEBHOOK_RETRY_DELAYS_MS: readonly number[] = retryRules.delaysMs;
 
 /**
  * How many attempts a delivery gets in total — one initial try plus one per tier above.
@@ -55,7 +51,7 @@ export const nextAttemptAt = (failedAttempt: number, now: Date = new Date()): Da
  * a row is long enough that a blip is not what is happening, and short enough that a genuinely
  * dead endpoint stops burning the queue within days rather than indefinitely.
  */
-export const WEBHOOK_MAX_CONSECUTIVE_FAILURES = 5;
+export const WEBHOOK_MAX_CONSECUTIVE_FAILURES: number = autoDisableRules.maxConsecutiveFailures;
 
 /**
  * The floor on how long a streak must run before it can auto-disable — 3 days, matching Stripe's
@@ -64,7 +60,7 @@ export const WEBHOOK_MAX_CONSECUTIVE_FAILURES = 5;
  * (egress blocked, DNS broken) would otherwise exhaust every chain in flight and auto-disable
  * every busy subscriber at once, as if each of THEIR endpoints were at fault.
  */
-export const WEBHOOK_MIN_FAILING_MS = 3 * 24 * 3_600_000;
+export const WEBHOOK_MIN_FAILING_MS: number = autoDisableRules.minFailingMs;
 
 /**
  * Whether a subscription's failure streak has crossed the auto-disable line. Both conditions

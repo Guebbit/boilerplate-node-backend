@@ -1,0 +1,32 @@
+# The audit actions that belong to no module: the guards emit them for requests refused before any
+# domain saw them, so no module could own them.
+#
+# Not read at boot. `npm run regenerate` writes
+# `src/infrastructure/observability/audit-actions.generated.ts` from it, because the strings type
+# a union (`CoreAuditAction`) and a loaded list would widen to `string`.
+#
+# Each `value` is the wire string. The constant's key is derived: uppercase, `.` to `_`.
+actions:
+    - value: security.unauthorized
+      description: A request with no usable credential reached a guarded route.
+    - value: security.forbidden
+      description: A caller was identified but lacked the permission the route needs.
+    - value: security.rate_limit_hit
+      description: A rate-limit budget was spent.
+    - value: security.reauth_required
+      description: >-
+          A step-up was DEMANDED: the caller held the key and had not proved themselves recently
+          enough to use it. Recorded because "we asked" is the half of step-up nobody can
+          reconstruct afterwards: the retry that follows looks like an ordinary success, and a
+          challenge nobody logged is a control nobody can show was applied.
+    - value: security.token.invalid_signature
+      description: >-
+          A bearer JWT whose signature, or whose signing key, does not verify. An attack on a
+          credential with no customer behind it: only ever a forged or guessed value.
+    - value: security.token.malformed
+      description: >-
+          A bearer or cookie value that is not a well-formed token of the expected kind at all.
+          A customer holding an expired or revoked session is `auth.*` or a bare metric, never
+          one of these.
+    - value: security.api_key.revoked
+      description: An `sk_` key presented with its CORRECT secret after it was revoked.

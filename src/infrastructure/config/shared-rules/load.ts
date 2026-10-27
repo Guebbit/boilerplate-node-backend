@@ -29,7 +29,8 @@ export type SharedRulesFolder = 'rules' | 'scenarios';
 /**
  * Reads and validates one shared rules file.
  *
- * Types come from `z.infer` on `schema`, so there is no type codegen on the Node side.
+ * Types come from `z.infer` on `schema`. Data that types a literal union is not loaded at all:
+ * it is generated into a committed `as const` file (see `generate-spec.ts`).
  * https://zod.dev/api (`safeParse`, `prettifyError`)
  *
  * @param name - the file's name under `shared/<folder>/`, without `.yaml`

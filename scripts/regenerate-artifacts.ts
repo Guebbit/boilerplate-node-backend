@@ -71,6 +71,13 @@ const STEPS: readonly Step[] = [
             'api/permission-actions.ts, from shared/authorization-keys.yaml — kernel/permissions.ts imports it, and the bundler below loads the kernel, so it must exist before the first bundle on a clean checkout'
     },
     {
+        name: 'shared rules',
+        command: ['tsx', 'scripts/contracts/generate-shared-rule-schemas.ts'],
+        checks: true,
+        because:
+            'shared/rules/schemas/*.schema.json (the PHP twin validates with them) and every committed *.generated.ts built from a rules file — the kernel imports audit-actions.generated.ts, and the bundler below loads the kernel, so it must exist before the first bundle on a clean checkout'
+    },
+    {
         name: 'contracts:bundle',
         command: ['tsx', 'scripts/contracts/build-bundles.ts'],
         checks: true,
@@ -88,13 +95,6 @@ const STEPS: readonly Step[] = [
         command: ['npm', 'run', 'gen:asyncapi'],
         checks: false,
         because: 'src/types/asyncapi.generated.ts, from the full asyncapi.yaml'
-    },
-    {
-        name: 'shared rule schemas',
-        command: ['tsx', 'scripts/contracts/generate-shared-rule-schemas.ts'],
-        checks: true,
-        because:
-            'shared/rules/schemas/*.schema.json, the JSON Schema form of each shared rules file — the PHP twin validates with it, so it is committed beside the data'
     },
     {
         name: 'module graph',

@@ -70,24 +70,85 @@ export * from './domain';
 export type * from './model';
 `;
 
+/** The four actions a scaffolded module audits, as `rules.yaml` lists them. */
+export const auditEntries = (names: ModuleNames): { value: string; description: string }[] =>
+    [
+        ['viewed', 'was read'],
+        ['created', 'was created'],
+        ['updated', 'was edited'],
+        ['deleted', 'was deleted']
+    ].map(([verb, what]) => ({
+        value: `admin.${names.entitySnake}.${verb}`,
+        description: `A ${names.words.replace(/s$/, '')} ${what}.`
+    }));
+
+/** The audit names as data; present unless the module opted out. */
+export const rulesYaml = (names: ModuleNames): string =>
+    [
+        '# This module audit names, as data the PHP twin copies.',
+        '#',
+        '# Not read at boot. npm run regenerate writes rules.generated.ts from it, because the strings',
+        '# type the app-wide AuditActionMap union. The constant key is derived from value: uppercase,',
+        '# dot to underscore.',
+        'audit:',
+        ...auditEntries(names).flatMap((entry) => [
+            `    - value: ${entry.value}`,
+            `      description: ${entry.description}`
+        ]),
+        ''
+    ].join('\n');
+
+/** The schema of rules.yaml and what regenerate writes from it. */
+export const rulesSchemaFile = (names: ModuleNames): string => String.raw`/**
+ * @module
+ * In any module: the schema of rules.yaml (the audit and analytics names, as data the PHP twin
+ * copies) and what npm run regenerate writes from it.
+ * Here: the audit names of a ${names.entityCamel}.
+ *
+ * See: docs/theory/shared-rules.md
+ */
+
+import { z } from 'zod';
+import {
+    keyedListSchema,
+    type GenerateSpec
+} from '../../infrastructure/config/shared-rules/generate-spec';
+
+/** Shape of rules.yaml. */
+export const rulesSchema = z.strictObject({
+    /** Dotted noun.verb strings, unique across modules. */
+    audit: keyedListSchema(/^[a-z_]+(\.[a-z_]+)+$/)
+});
+
+/** What rules.yaml generates: rules.generated.ts. */
+export const rulesGenerate: GenerateSpec = {
+    out: 'src/modules/${names.kebab}/rules.generated.ts',
+    exports: [
+        {
+            exportName: '${names.pluralCamel}AuditActions',
+            shape: 'keyed-list',
+            field: 'audit',
+            description: 'The audit action vocabulary this module owns.'
+        }
+    ]
+};
+`;
+
 /** The audit vocabulary, present unless the module opted out. */
 export const auditFile = (names: ModuleNames): string => `/**
  * @module
  * In any module: the audit actions it emits, declared by augmentation so the app-wide union grows
  * with the modules that are enabled - see modules/account/audit.ts for why.
- * Here: view, create, update and delete of a ${names.entityCamel}. Reads are audited too: who looked
- * at the records is a question the log should answer.
+ * Here: view, create, update and delete of a ${names.entityCamel}, listed in rules.yaml. Reads are
+ * audited too: who looked at the records is a question the log should answer.
  *
  * See: docs/tools/winston.md, docs/modules/${names.kebab}.md
  */
 
-/** The audit action vocabulary this module owns. */
-export const ${names.pluralCamel}AuditActions = {
-    ADMIN_${names.entitySnake.toUpperCase()}_VIEWED: 'admin.${names.entitySnake}.viewed',
-    ADMIN_${names.entitySnake.toUpperCase()}_CREATED: 'admin.${names.entitySnake}.created',
-    ADMIN_${names.entitySnake.toUpperCase()}_UPDATED: 'admin.${names.entitySnake}.updated',
-    ADMIN_${names.entitySnake.toUpperCase()}_DELETED: 'admin.${names.entitySnake}.deleted'
-} as const;
+import { ${names.pluralCamel}AuditActions } from './rules.generated';
+
+/** The audit action vocabulary this module owns, generated from rules.yaml. */
+export { ${names.pluralCamel}AuditActions };
 
 /** Registers this module's actions into the app-wide AuditActionMap union. */
 declare module '@infrastructure/observability/audit' {
