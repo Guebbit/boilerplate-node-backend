@@ -67,6 +67,14 @@ paths:
             parameters:
                 - $ref: '${ROOT}#/components/parameters/PageParam'
                 - $ref: '${ROOT}#/components/parameters/PageSizeParam'
+                - name: sort
+                  in: query
+                  required: false
+                  # JSON:API grammar: ?sort=-createdAt,name - comma-separated, a leading minus for descending.
+                  style: form
+                  explode: false
+                  schema:
+                      $ref: '#/components/schemas/${names.entity}Sort'
             responses:
                 '200':
                     description: A page of ${names.words}
@@ -168,6 +176,16 @@ ${PATH_ONLY_ERRORS}
 
 components:
     schemas:
+        # The ONE sort grammar, shared with every list (docs/api/sorting.md). A leading minus sorts
+        # descending; earlier entries rank first.
+        ${names.entity}Sort:
+            type: array
+            minItems: 1
+            maxItems: 2
+            items:
+                type: string
+                enum: [createdAt, -createdAt, name, -name]
+
         ${names.plural}Response:
             type: object
             additionalProperties: false

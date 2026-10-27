@@ -36,6 +36,13 @@ TODO: why this domain exists, the decisions that are not obvious from the code, 
 Do not restate the routes or the fields; they live in \`src/modules/${names.kebab}/routes.ts\`,
 \`openapi.yaml\` and \`model.ts\`.
 
+## Who can do what
+
+Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
+
+<!-- permissions:start -->
+<!-- permissions:end -->
+
 ## The pipeline
 
 Scaffolded from the core of the \`example\` module ([the module template](../theory/modules.md#the-module-template)): every route sits behind one gate and one
@@ -158,10 +165,12 @@ export const serviceTest = (names: ModuleNames): string => `/**
 import { setupTestDb } from '@tests/setup-test-db';
 import { MISSING_ID } from '@tests/ids';
 import { asReject, asSuccess } from '@tests/response';
-import { create, search, updateById, remove } from '@modules/${names.kebab}/service';
+import { ${names.entityCamel}Service } from '@modules/${names.kebab}/service';
 import { make${names.entity} } from '@modules/${names.kebab}/factories';
 
 setupTestDb();
+
+const { create, search, updateById, removeById: remove } = ${names.entityCamel}Service;
 
 describe('${names.kebab} service', () => {
     it('trims the name on create', () =>

@@ -510,6 +510,8 @@ export const get${names.plural} = createListController({
         page: pageSchema,
         pageSize: pageSizeSchema
     }).partial(),
+    // sort is a comma-separated list in a query string; split it before the schema checks it.
+    input: { csvLists: ['sort'] },
     runList: (parsed${options.audit ? ', request' : ''}) => ${names.entityCamel}Service.search(parsed${contextArgument(options)})
 });
 `;
