@@ -57,6 +57,7 @@ import { PAYMENT_REFUND_CANCELED } from '../events';
 import type { PaymentDocument, RefundLine, RefundRecord } from '../model';
 import {
     exceedsRemaining,
+    hasOpenChargeback,
     isHandRecorded,
     isOpenRefund,
     mayBeCanceled,
@@ -381,6 +382,14 @@ const sendToProvider = (
         recordRefundFailure(payment, refund, reason).then(() => {
             throw new RefundLeftOpenError(error, String(refund._id));
         });
+
+    // An open chargeback: the bank has this money. Nothing is asked of the provider (it would
+    // refuse with `charge_disputed` anyway); the record fails final, as that refusal would.
+    if (hasOpenChargeback(payment))
+        return refuse(
+            new Error('A chargeback is open on this payment'),
+            RefundFailureReason.disputed
+        );
 
     // The adapter code may be gone (a provider retired from the deployment): nothing was asked,
     // so the money provably did not move, and asking again will not change that.
@@ -712,6 +721,10 @@ const notRefundable = (): ResponseReject =>
         { code: ERROR_CODES.PAYMENT_NOT_REFUNDABLE, message: t('payments.not-refundable') }
     ]);
 
+/** The 409 for a payment the buyer's bank disputed: the bank has the money, the answer is evidence. */
+const paymentDisputed = (): ResponseReject =>
+    generateReject(409, [{ code: ERROR_CODES.PAYMENT_DISPUTED, message: t('payments.disputed') }]);
+
 /** What a successful `POST /payments/:id/refunds` answers with: the payment, and the record the request wrote. */
 export interface RefundRequested {
     /** The payment as it now stands. */
@@ -761,6 +774,8 @@ const refundFoundPayment = (
 ): Promise<ResponseSuccess<RefundRequested> | ResponseReject> => {
     const invalid = refusalFor(payment, body);
     if (invalid) return Promise.resolve(invalid);
+    // An open chargeback: the bank took the money back already, and refunding too pays it twice.
+    if (hasOpenChargeback(payment)) return Promise.resolve(paymentDisputed());
     // The `PaymentActions.refund` rule. A refund still open counts against what is left, so only
     // an exhausted payment is refused; a second partial refund beside an open one is allowed.
     if (payment.status !== REFUNDABLE_PAYMENT_STATUS || remainingOf(payment) <= 0)

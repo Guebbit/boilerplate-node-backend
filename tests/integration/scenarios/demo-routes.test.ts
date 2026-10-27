@@ -227,6 +227,44 @@ describe('POST /__test/payments/refund-failure', () => {
     });
 });
 
+describe('POST /__test/payments/dispute', () => {
+    it('opens a chargeback for the whole payment, then moves the same dispute along', async () => {
+        const user = await createUser();
+        const order = await createOrder(user, [toOrderItem(await createProduct({ price: 25 }), 2)]);
+        await payByCard(order, user);
+
+        const opened = await request(testApp())
+            .post('/__test/payments/dispute')
+            .send({ orderId: String(order._id) });
+        const lost = await request(testApp())
+            .post('/__test/payments/dispute')
+            .send({ orderId: String(order._id), status: 'lost' });
+
+        expect([opened.status, lost.status]).toEqual([204, 204]);
+        const payment = await paymentModel.findOne({ orderId: order._id });
+        expect(payment?.disputes).toHaveLength(1);
+        expect(payment?.disputes[0]).toMatchObject({
+            disputeRef: 'dp_demo',
+            kind: 'chargeback',
+            status: 'lost',
+            amount: 50,
+            currency: payment?.currency
+        });
+    });
+
+    it('answers 404 for an order without a payment, and 400 for a status it does not know', async () => {
+        const unknown = await request(testApp())
+            .post('/__test/payments/dispute')
+            .send({ orderId: '64b64b64b64b64b64b64b64b' });
+        const bad = await request(testApp())
+            .post('/__test/payments/dispute')
+            .send({ orderId: '64b64b64b64b64b64b64b64b', status: 'because' });
+
+        expect(unknown.status).toBe(404);
+        expect(bad.status).toBe(400);
+    });
+});
+
 describe('GET /__test/emails', () => {
     it('answers the outbox as JSON, empty on a freshly reset one', async () => {
         const response = await request(testApp()).get('/__test/emails');

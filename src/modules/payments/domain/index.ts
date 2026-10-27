@@ -34,6 +34,19 @@ export {
     nextRefundAttemptAt
 } from './lifecycle';
 
+/** The dispute rules: what an open or lost chargeback allows. */
+export {
+    OPEN_DISPUTE_STATUSES,
+    openDisputeFilter,
+    isOpenDispute,
+    hasOpenDispute,
+    hasOpenChargeback,
+    lostToChargebacks,
+    lostChargebackCovers,
+    hasDecidedDispute
+} from './disputes';
+export type { DisputeFacts, DisputablePayment } from './disputes';
+
 /** The RF creditor reference a bank-transfer payment carries, and its admin-side parse. */
 export { buildReference, parseReference } from './transfer-reference';
 

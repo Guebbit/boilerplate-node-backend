@@ -17,6 +17,7 @@
  *                          the colon as a dash — `reap:orders` is `reap-orders`
  * `GET /__test/jobs`       the lever names of every declared job
  * `POST /__test/payments/refund-failure` make an order's refunds fail (or stop failing)
+ * `POST /__test/payments/dispute` the buyer's bank disputes an order's payment (or updates the dispute)
  *
  * A scenario is BUILT once per process and REPLAYED thereafter — see {@link buildOnce}.
  * Unauthenticated since the profile only ever binds beside a database `npm run demo` just created.
@@ -40,9 +41,10 @@ import { getDemoClock, type DemoClock } from './demo-clock';
 import { clearDemoOutbox, readDemoOutbox } from './doubles/mail-outbox';
 import { z } from 'zod';
 import { ObjectId } from 'mongodb';
-import { RefundFailureReason } from '@types';
+import { DisputeKind, DisputeReason, DisputeStatus, RefundFailureReason } from '@types';
+import { paymentService } from '@modules/payments';
 import { connection } from '@infrastructure/runtime/database';
-import { setFakeRefundFailure } from './doubles/payments/fake';
+import { setFakeDispute, setFakeRefundFailure } from './doubles/payments/fake';
 
 /**
  * Thrown for anything `scenarios/index.ts`'s `SCENARIOS` registry does not carry — by
@@ -206,14 +208,35 @@ const REFUND_FAILURE_BODY = z.object({
 });
 
 /**
- * The provider's id for an order's payment, read straight from the collection: the wire shape
- * hides it, and the lever is the one caller that needs it.
+ * The body of `POST /__test/payments/dispute`: the order, and the dispute's state as the provider
+ * would report it. Everything but the order has a default, so `{ orderId }` opens a chargeback for
+ * the whole payment with two weeks to answer. A repeated `disputeId` is the same dispute: send a
+ * new `status` to move it along.
  */
-const providerRefOf = (orderId: string): Promise<string | undefined> =>
+const DISPUTE_BODY = z.object({
+    orderId: z.string().refine((value) => ObjectId.isValid(value), 'not an order id'),
+    disputeId: z.string().min(1).max(200).default('dp_demo'),
+    kind: z.enum(DisputeKind).default('chargeback'),
+    status: z.enum(DisputeStatus).default('needs_response'),
+    reason: z.enum(DisputeReason).default('fraudulent'),
+    amount: z.number().positive().optional(),
+    evidenceInDays: z.number().positive().default(14)
+});
+
+/**
+ * An order's payment, read straight from the collection: the wire shape hides the provider's id,
+ * and the lever is the one caller that needs it.
+ */
+const paymentOf = (
+    orderId: string
+): Promise<{ providerRef?: string; amount?: unknown; currency?: string } | null> =>
     connection
-        .collection<{ providerRef?: string }>('payments')
-        .findOne({ orderId: new ObjectId(orderId) })
-        .then((payment) => payment?.providerRef);
+        .collection<{ providerRef?: string; amount?: unknown; currency?: string }>('payments')
+        .findOne({ orderId: new ObjectId(orderId) });
+
+/** The provider's id for an order's payment. */
+const providerRefOf = (orderId: string): Promise<string | undefined> =>
+    paymentOf(orderId).then((payment) => payment?.providerRef);
 
 /**
  * The job lever's lookup: each declared job under its URL segment (`reap:orders` → `reap-orders`).
@@ -329,6 +352,45 @@ export const installDemo = (app: Express, jobs: readonly JobDeclaration[]): void
             .catch((error: unknown) => {
                 // Stryker disable next-line all
                 logger.error({ message: 'refund-failure lever failed', error });
+                rejectResponse(response, 500);
+            });
+    });
+
+    app.post('/__test/payments/dispute', (request: Request, response: Response) => {
+        const body = DISPUTE_BODY.safeParse(request.body ?? {});
+        if (!body.success) {
+            rejectResponse(response, 400, [z.prettifyError(body.error)]);
+            return;
+        }
+        const wanted = body.data;
+
+        paymentOf(wanted.orderId)
+            .then((payment) => {
+                if (!payment?.providerRef || !payment.currency) {
+                    rejectResponse(response, 404, ['no payment with a provider reference']);
+                    return undefined;
+                }
+                const now = Date.now();
+                const delivery = setFakeDispute(payment.providerRef, {
+                    disputeRef: wanted.disputeId,
+                    kind: wanted.kind,
+                    status: wanted.status,
+                    reason: wanted.reason,
+                    // A Decimal128 stringifies to its decimal.
+                    amount: wanted.amount ?? Number(String(payment.amount)),
+                    currency: payment.currency,
+                    fundsWithdrawn: wanted.kind === 'chargeback' && wanted.status !== 'won',
+                    evidenceDueBy: new Date(now + wanted.evidenceInDays * 86_400_000).toISOString(),
+                    observedAt: new Date(now).toISOString(),
+                    dashboardUrl: `https://dashboard.fake-psp.example/disputes/${wanted.disputeId}`
+                });
+                return paymentService
+                    .applyWebhookDelivery(delivery, 'fake')
+                    .then(() => response.status(204).end());
+            })
+            .catch((error: unknown) => {
+                // Stryker disable next-line all
+                logger.error({ message: 'dispute lever failed', error });
                 rejectResponse(response, 500);
             });
     });

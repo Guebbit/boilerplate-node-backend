@@ -31,7 +31,9 @@ import {
     PAYMENT_FAILED,
     PAYMENT_REFUNDED,
     PAYMENT_REFUND_FAILED,
-    PAYMENT_REFUND_REVERSED
+    PAYMENT_REFUND_REVERSED,
+    PAYMENT_DISPUTE_OPENED,
+    PAYMENT_DISPUTE_UPDATED
 } from '@modules/payments';
 import ordersModule from '@modules/orders/module';
 import paymentsModule from '@modules/payments/module';
@@ -143,6 +145,19 @@ describe('every public webhook event has exactly one producer, and no producer n
             currency: 'EUR',
             failureReason: 'declined'
         });
+        const dispute = {
+            paymentId: PAYMENT_ID,
+            orderId: ORDER_ID,
+            disputeId: 'dp_1',
+            kind: 'chargeback',
+            status: 'needs_response',
+            reason: 'fraudulent',
+            amount: 20,
+            currency: 'EUR',
+            fundsWithdrawn: true
+        } as const;
+        await emitDomainEvent(PAYMENT_DISPUTE_OPENED, dispute);
+        await emitDomainEvent(PAYMENT_DISPUTE_UPDATED, { ...dispute, status: 'won' });
         await emitDomainEvent(RETURN_REQUESTED, {
             returnId: 'q'.repeat(24),
             orderId: ORDER_ID,

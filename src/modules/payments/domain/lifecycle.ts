@@ -18,6 +18,7 @@
 
 import { addMoney, subtractMoney, toMinorUnits, type Money } from '@domain-primitives/money';
 import { RefundFailureReason, RefundStatus, type PaymentStatus } from '@types';
+import { hasDecidedDispute, lostChargebackCovers, type DisputablePayment } from './disputes';
 
 /**
  * The statuses `confirmPayment` may run from — a fresh intent, or one the provider previously
@@ -200,7 +201,7 @@ export interface RefundFacts {
 }
 
 /** The slice of a payment the refund rules read. */
-export interface RefundablePayment {
+export interface RefundablePayment extends DisputablePayment {
     provider: string;
     amount: number;
     currency: string;
@@ -266,14 +267,18 @@ export const exceedsRemaining = (payment: RefundablePayment, refund: RefundFacts
  * refund: any `pending` one (nobody else can say the cash went back). A card refund: one the
  * provider refused in a way that proves the money did not move, one it took back after settling it
  * (the bank sent it back), or one held unsent because it no longer fits the payment. Never an
- * unclear failure, because a settle on it could pay the buyer twice.
+ * unclear failure, because a settle on it could pay the buyer twice. A refund refused as `disputed`
+ * only once a lost chargeback covers its amount (the bank paid the buyer).
  *
  * @param payment - the payment the refund sits on
  * @param refund - the refund record
  */
 export const mayBeSettledByHand = (payment: RefundablePayment, refund: RefundFacts): boolean => {
     if (isHandRecorded(payment)) return refund.status === RefundStatus.pending;
-    if (refund.failureReason === RefundFailureReason.disputed) return false;
+    // A refund refused as disputed is the bank's to settle: once a lost chargeback covers it, the
+    // bank paid the buyer, so it is reported returned. Until then (or if the shop won) it is not.
+    if (refund.failureReason === RefundFailureReason.disputed)
+        return lostChargebackCovers(payment, refund.amount, refund.currency);
     if (exceedsRemaining(payment, refund)) return true;
     // The provider itself reported the failure: a definite answer about this very refund.
     if (isReversed(refund)) return refund.status === RefundStatus.failed;
@@ -293,7 +298,11 @@ export const mayBeSettledByHand = (payment: RefundablePayment, refund: RefundFac
  * @param refund - the refund record
  */
 export const mayBeCanceled = (payment: RefundablePayment, refund: RefundFacts): boolean =>
-    !isReversed(refund) && mayBeSettledByHand(payment, refund);
+    !isReversed(refund) &&
+    (mayBeSettledByHand(payment, refund) ||
+        // A refund refused as `disputed` whose dispute is decided (the shop won) moved no money
+        // and is owed no more: staff void it. While a chargeback is open it is left alone.
+        (refund.failureReason === RefundFailureReason.disputed && hasDecidedDispute(payment)));
 
 /** Days the trader has to give the money back after a withdrawal (Directive 2011/83/EU, Art. 13). */
 const WITHDRAWAL_REFUND_DAYS = 14;
