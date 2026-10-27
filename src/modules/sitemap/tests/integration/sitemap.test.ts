@@ -16,6 +16,8 @@ import { createProduct, readProduct } from '@modules/products/tests/factories';
 import { localeService } from '@modules/locales';
 import { inventoryService } from '@modules/inventory';
 import { givenLocale } from '@modules/locales/tests/factories';
+import { refreshLocaleOverrides } from '@infrastructure/i18n';
+import { resetServedLanguages } from '@infrastructure/i18n/served';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
 import { enabledModules } from '../../../../modules';
@@ -24,9 +26,18 @@ import { testCallerContext } from '@tests/callers';
 setupTestDb();
 
 beforeEach(() => {
+    // The served-language list is process memory, so the previous case's languages would leak in.
+    resetServedLanguages();
     resetDomainEvents();
     registerModules(enabledModules);
 });
+
+/**
+ * `givenLocale` writes the row only; the served list follows the overlay refresh that a real
+ * language write triggers, so it is run here too.
+ */
+const givenServedLocale = (...args: Parameters<typeof givenLocale>) =>
+    givenLocale(...args).then(() => refreshLocaleOverrides());
 
 /** The frontend origin the test environment points links at. */
 const FRONTEND = 'http://localhost:8080';
@@ -96,7 +107,7 @@ describe('GET /sitemap/pages.xml', () => {
 
     it('points x-default at the first active language when the default one is deactivated', () =>
         withEnvironmentOverrides({ NODE_DEFAULT_LOCALE: 'de' }, async () => {
-            await givenLocale('de', { active: false });
+            await givenServedLocale('de', { active: false });
 
             const entries = await entriesOf('/sitemap/pages.xml');
 
@@ -109,7 +120,7 @@ describe('GET /sitemap/pages.xml', () => {
         }));
 
     it('leaves out a switched-off language that has a deployed file, from every address and alternate', async () => {
-        await givenLocale('it', { active: false });
+        await givenServedLocale('it', { active: false });
 
         const entries = await entriesOf('/sitemap/pages.xml');
 
@@ -170,7 +181,7 @@ describe('GET /sitemap/products-{page}.xml', () => {
         // `updatedAt` has millisecond resolution; this keeps the edit from landing in the same one.
         await new Promise((resolve) => setTimeout(resolve, 20));
 
-        await givenLocale('it');
+        await givenServedLocale('it');
         const edit = await localeService.upsertEntityTranslations('product', String(product._id), {
             it: { fields: { title: 'Un titolo nuovo' } }
         });

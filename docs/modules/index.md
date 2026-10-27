@@ -116,7 +116,6 @@ flowchart TD
     returns --> payments
     returns --> shop
     shop --> account
-    sitemap --> locales
     sitemap --> products
     stats --> invoicing
     stats --> orders
@@ -135,8 +134,8 @@ flowchart TD
     classDef isolated fill:#f4f4f5,stroke:#a1a1aa,color:#52525b,stroke-dasharray:4 3;
     class cart,orders,products core;
     class addresses,delivery,inventory,invoicing,notifications,payments,returns,shop,stats,stock_alerts,wishlist supporting;
-    class access,account,api_keys,audit_logs,example,locales,observability,sitemap,users,webhooks generic;
-    class analytics,antibot,feedback isolated;
+    class access,account,api_keys,audit_logs,example,observability,sitemap,users,webhooks generic;
+    class analytics,antibot,feedback,locales isolated;
 ```
 
 |                 | Reaches                                                                 | Reached by                                                                     |
@@ -159,15 +158,15 @@ flowchart TD
 | `stock-alerts`  | products, users                                                         | notifications                                                                  |
 | `wishlist`      | cart, products                                                          | notifications                                                                  |
 | `audit-logs`    | access                                                                  | observability                                                                  |
-| `sitemap`       | locales, products                                                       | —                                                                              |
 | `addresses`     | —                                                                       | cart                                                                           |
 | `example`       | users                                                                   | —                                                                              |
-| `locales`       | —                                                                       | sitemap                                                                        |
 | `observability` | audit-logs                                                              | —                                                                              |
+| `sitemap`       | products                                                                | —                                                                              |
 | `webhooks`      | —                                                                       | notifications                                                                  |
 | `analytics`     | —                                                                       | —                                                                              |
 | `antibot`       | —                                                                       | —                                                                              |
 | `feedback`      | —                                                                       | —                                                                              |
+| `locales`       | —                                                                       | —                                                                              |
 
 <!-- module-graph:end -->
 
