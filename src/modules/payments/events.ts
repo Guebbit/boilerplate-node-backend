@@ -162,6 +162,34 @@ declare module '@kernel/events' {
          * stored dispute: at-least-once, so a listener dedupes on `meta.eventId`.
          */
         'payment.dispute_updated': DisputeEventPayload;
+
+        /**
+         * A refund of a hand-recorded payment opened, so the money is owed outside the app (cash,
+         * a transfer): nothing here can send it, and a person has to. Written in the transaction
+         * that opens the record; the refund closes on `payment.refunded` or
+         * `payment.refund_canceled`. Internal only: no AsyncAPI channel carries it; `tickets`
+         * opens the work from it.
+         *
+         * Delivered through the transactional outbox: at-least-once, so a listener dedupes on
+         * `meta.eventId`.
+         */
+        'payment.refund_owed_by_hand': {
+            paymentId: string;
+            orderId: string;
+            refundId: string;
+            amount: number;
+            currency: string;
+        };
+
+        /**
+         * The provider reported a success that is not the payment frozen for the order (another
+         * amount, currency or payment id). The order was cancelled and the refund opened; a person
+         * has to look at why. Written in the settlement's transaction. Internal only.
+         *
+         * Delivered through the transactional outbox: at-least-once, so a listener dedupes on
+         * `meta.eventId`.
+         */
+        'payment.amount_mismatch': { paymentId: string; orderId: string };
     }
 }
 
@@ -188,3 +216,9 @@ export const PAYMENT_DISPUTE_OPENED = 'payment.dispute_opened';
 
 /** See `DomainEventMap['payment.dispute_updated']` above. */
 export const PAYMENT_DISPUTE_UPDATED = 'payment.dispute_updated';
+
+/** See `DomainEventMap['payment.refund_owed_by_hand']` above. */
+export const PAYMENT_REFUND_OWED_BY_HAND = 'payment.refund_owed_by_hand';
+
+/** See `DomainEventMap['payment.amount_mismatch']` above. */
+export const PAYMENT_AMOUNT_MISMATCH = 'payment.amount_mismatch';

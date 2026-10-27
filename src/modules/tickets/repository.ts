@@ -15,7 +15,7 @@ import {
     toObjectId,
     type Repository
 } from '@infrastructure/persistence/create-repository';
-import { TicketLinkType, TicketSource, TicketStatus } from '@types';
+import { TicketKind, TicketLinkType, TicketSource, TicketStatus } from '@types';
 import type { StoredTicket } from './presenter';
 import type { OwnTicketsFilter, TicketPatch } from './domain';
 
@@ -53,6 +53,14 @@ export interface TicketRepository extends Repository<TicketDocument, StoredTicke
     unassign: (id: string) => Promise<TicketDocument | null>;
     /** Append a note. `null`: no such ticket. */
     appendNote: (id: string, note: TicketNoteDocument) => Promise<TicketDocument | null>;
+    /** Whether a system event already opened or touched a ticket (a redelivery). */
+    sawEvent: (eventId: string) => Promise<boolean>;
+    /** Insert a system ticket. Rejects with a duplicate-key error when its dedup key is open. */
+    insertSystem: (opening: NewSystemTicket) => Promise<TicketDocument>;
+    /** A repeat of an open situation: stamp it seen once more. `null`: not open any more. */
+    touchOpen: (openKey: string, eventId: string | undefined, now: Date) => Promise<boolean>;
+    /** The open system tickets matching a filter, to be cleared one by one. */
+    findOpenSystem: (filter: Record<string, unknown>) => Promise<TicketDocument[]>;
     /** The open ticket currently holding a dedup key. */
     findOpenByKey: (openKey: string) => Promise<TicketDocument | null>;
     /** Delete a person's visitor tickets, inside the erasure's transaction. */
@@ -64,6 +72,23 @@ export interface TicketRepository extends Repository<TicketDocument, StoredTicke
     /** Remove an erased member of staff from every ticket they assigned or wrote on. */
     forgetStaff: (userId: string, session: ClientSession) => Promise<void>;
 }
+
+/** What a system ticket is born with. */
+export interface NewSystemTicket {
+    kind: TicketKind;
+    routeSet: string;
+    link: { type: TicketLinkType; id: string };
+    openKey: string;
+    subjectId?: string;
+    subject: string;
+    message: string;
+    dueAt: Date;
+    eventId?: string | undefined;
+    now: Date;
+}
+
+/** Most recent system events remembered per ticket. */
+const REMEMBERED_EVENTS = 20;
 
 /** Link types whose ticket goes with the person: the record IS the person's. */
 const LINKS_THAT_GO_WITH_THE_PERSON = [TicketLinkType.user, TicketLinkType.export];
@@ -128,6 +153,49 @@ export const ticketRepository: TicketRepository = {
     appendNote: (id, note) =>
         ticketModel
             .findOneAndUpdate({ _id: toObjectId(id) }, { $push: { notes: note } }, { new: true })
+            .exec(),
+
+    sawEvent: (eventId) =>
+        ticketModel
+            .exists({ eventIds: eventId })
+            .exec()
+            .then((found) => found !== null),
+
+    insertSystem: (opening) =>
+        base.create({
+            source: TicketSource.system,
+            kind: opening.kind,
+            routeSet: opening.routeSet,
+            link: opening.link,
+            openKey: opening.openKey,
+            ...(opening.subjectId ? { subjectId: toObjectId(opening.subjectId) } : {}),
+            subject: opening.subject,
+            message: opening.message,
+            dueAt: opening.dueAt,
+            lastSeenAt: opening.now,
+            ...(opening.eventId ? { eventIds: [opening.eventId] } : {})
+        }),
+
+    touchOpen: (openKey, eventId, now) =>
+        ticketModel
+            .updateOne(
+                { openKey, ...(eventId ? { eventIds: { $ne: eventId } } : {}) },
+                {
+                    $set: { lastSeenAt: now },
+                    $inc: { seenCount: 1 },
+                    // Mongo: `$push` with `$each` + `$slice: -N` keeps only the last N entries.
+                    // https://www.mongodb.com/docs/manual/reference/operator/update/slice/
+                    ...(eventId
+                        ? { $push: { eventIds: { $each: [eventId], $slice: -REMEMBERED_EVENTS } } }
+                        : {})
+                }
+            )
+            .exec()
+            .then(({ modifiedCount }) => modifiedCount > 0),
+
+    findOpenSystem: (filter) =>
+        ticketModel
+            .find({ source: TicketSource.system, openKey: { $exists: true }, ...filter })
             .exec(),
 
     findOpenByKey: (openKey) => ticketModel.findOne({ openKey }).exec(),

@@ -204,7 +204,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     touchApiKeyUse: (id: string, now: Date) => Promise<void>;
     markInactivityMinimised: (id: string, at: Date) => Promise<void>;
     claimPurchaseHold: (id: string, hold: PurchaseHoldRecord, now: Date) => Promise<boolean>;
-    claimPurchaseHoldReview: (id: string, now: Date) => Promise<boolean>;
+    claimPurchaseHoldReview: (id: string, now: Date, session?: ClientSession) => Promise<boolean>;
     reduceExpiredPurchaseHolds: (now: Date) => Promise<number>;
     findInactiveUnminimised: (cutoff: Date) => Promise<UserDocument[]>;
     findInactiveUnwarned: (cutoff: Date) => Promise<UserDocument[]>;
@@ -773,14 +773,15 @@ export const userRepository: Repository<UserDocument, UserWire> & {
      *
      * @param id - the account
      * @param now - the flag's instant
+     * @param session - joins the caller's transaction, so the flag and its announcement commit together
      * @returns whether this call set the flag
      */
-    claimPurchaseHoldReview: (id: string, now: Date) =>
+    claimPurchaseHoldReview: (id: string, now: Date, session?: ClientSession) =>
         userModel
             .updateOne(
                 { _id: toObjectId(id), purchaseHoldFlaggedAt: { $exists: false } },
                 { $set: { purchaseHoldFlaggedAt: now } },
-                { timestamps: false }
+                { timestamps: false, ...(session ? { session } : {}) }
             )
             .exec()
             .then(({ modifiedCount }) => modifiedCount > 0),

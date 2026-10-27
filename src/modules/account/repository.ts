@@ -59,19 +59,21 @@ const insert = (
  * @param id - the row's id
  * @param status - `ready` or `failed`
  * @param expiresAt - the new deletion time (a ready file's retention starts when it is ready)
+ * @param session - joins the caller's transaction, so the move and its announcement commit together
  * @returns the settled row, or `null` when it was no longer `building` (replaced, erased, or
  *   already settled by another run)
  */
 const settleBuilding = (
     id: string,
     status: Exclude<ExportStatus, 'building'>,
-    expiresAt: Date
+    expiresAt: Date,
+    session?: ClientSession
 ): Promise<AccountExportRow | null> =>
     accountExportModel
         .findOneAndUpdate(
             { _id: toObjectId(id), status: 'building' },
             { $set: { status, expiresAt } },
-            { new: true }
+            { new: true, ...(session ? { session } : {}) }
         )
         .lean<AccountExportRow | null>()
         .exec();

@@ -35,6 +35,19 @@ declare module '@kernel/events' {
          * Internal only: no AsyncAPI channel carries it.
          */
         'account.analytics_consent_withdrawn': { userId: string };
+
+        /**
+         * A data export could not be built (GDPR Art. 12(3): the person is owed their file within
+         * a month), committed with the move of its row to `failed`. `tickets` opens the work from
+         * it. Internal only: no AsyncAPI channel carries it.
+         */
+        'account.export_failed': { userId: string; exportId: string };
+
+        /**
+         * A data export is ready, committed with the move of its row to `ready`. A later ready
+         * export is what closes the work an earlier failure opened. Internal only.
+         */
+        'account.export_ready': { userId: string; exportId: string };
     }
 }
 
@@ -46,3 +59,9 @@ export const ACCOUNT_AUTHENTICATOR_REMOVED = 'account.authenticator-removed';
 
 /** See `DomainEventMap['account.analytics_consent_withdrawn']` above. */
 export const ACCOUNT_ANALYTICS_CONSENT_WITHDRAWN = 'account.analytics_consent_withdrawn';
+
+/** See `DomainEventMap['account.export_failed']` above. */
+export const ACCOUNT_EXPORT_FAILED = 'account.export_failed';
+
+/** See `DomainEventMap['account.export_ready']` above. */
+export const ACCOUNT_EXPORT_READY = 'account.export_ready';

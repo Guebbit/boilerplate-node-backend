@@ -25,17 +25,20 @@ flowchart LR
     orders["orders"]
     products["products"]
     returns["returns"]
+    tickets["tickets"]
 
     cart --> inventory
     delivery --> inventory
     notifications --> inventory
     orders --> inventory
     returns --> inventory
+    tickets --> inventory
     inventory --> products
     products -. "product.created" .-> inventory
     products -. "product.deleted" .-> inventory
     inventory -. "inventory.backorder_allocated" .-> delivery
     inventory -. "inventory.reservation_expired" .-> orders
+    inventory -. "inventory.hold_orphaned" .-> tickets
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -43,6 +46,7 @@ flowchart LR
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders,products core;
     class delivery,notifications,returns supporting;
+    class tickets generic;
     class inventory centre;
 ```
 

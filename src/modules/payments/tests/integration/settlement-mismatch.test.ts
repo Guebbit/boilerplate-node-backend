@@ -19,7 +19,7 @@ import invoicingModule from '@modules/invoicing/module';
 import { invoicingService } from '@modules/invoicing';
 import { paymentService } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
-import { PAYMENT_SUCCEEDED } from '@modules/payments/events';
+import { PAYMENT_AMOUNT_MISMATCH, PAYMENT_SUCCEEDED } from '@modules/payments/events';
 import { paymentsAuditActions } from '@modules/payments/audit';
 import { paymentAmountMismatchTotal } from '@modules/payments/metrics';
 import { setFakeReceipt, fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
@@ -99,6 +99,13 @@ describe.each(MISMATCHES)('a provider success whose %s is not the one frozen', (
         expect(payment!.refunds).toHaveLength(1);
         // Nothing was paid: no announcement, no invoice, and the units are back on the shelf.
         expect(await outboxEventModel.countDocuments({ name: PAYMENT_SUCCEEDED })).toBe(0);
+        // One fact for `tickets`: a person must look at why, announced once.
+        const [mismatch, ...more] = await outboxEventModel
+            .find({ name: PAYMENT_AMOUNT_MISMATCH })
+            .lean()
+            .exec();
+        expect(more).toEqual([]);
+        expect(mismatch.payload).toEqual({ paymentId: String(payment!._id), orderId });
         expect(await invoicingService.findInvoiceForOrder(orderId)).toBeNull();
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 0, available: 10 });
         // The field that differed is what the counter and the audit row name.

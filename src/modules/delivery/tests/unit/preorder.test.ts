@@ -5,7 +5,14 @@
  * cancels. Every row is a row of the table in `domain/preorder.ts`, against a fixed clock.
  */
 
-import { expectedDateOf, judgeMove, judgeSlip, needsDueNotice, slippedDays } from '../../domain';
+import {
+    expectedDateOf,
+    judgeMove,
+    judgeSlip,
+    needsDueNotice,
+    promisedAfterNotice,
+    slippedDays
+} from '../../domain';
 
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
@@ -133,5 +140,28 @@ describe('slippedDays', () => {
     it('counts whole days between the promise and the expectation, never below zero', () => {
         expect(slippedDays(AGREED, afterAgreed(12))).toBe(12);
         expect(slippedDays(AGREED, afterAgreed(-3))).toBe(0);
+    });
+});
+
+describe('promisedAfterNotice — the date the buyer holds after a notice', () => {
+    it('takes a later date', () => {
+        expect(promisedAfterNotice(AGREED, afterAgreed(5))).toEqual(afterAgreed(5));
+    });
+
+    it('takes a date after a "no date yet" notice left the buyer holding none', () => {
+        expect(promisedAfterNotice(undefined, afterAgreed(5))).toEqual(afterAgreed(5));
+    });
+
+    it.each([
+        ['an earlier date', afterAgreed(-3)],
+        ['the same date', AGREED],
+        ['no date named', undefined]
+    ])('leaves the held date alone for %s', (_name, expectedAt) => {
+        expect(promisedAfterNotice(AGREED, expectedAt)).toBeUndefined();
+    });
+
+    it('removes the held date when the notice clears it, and has nothing to remove otherwise', () => {
+        expect(promisedAfterNotice(AGREED, null)).toBeNull();
+        expect(promisedAfterNotice(undefined, null)).toBeUndefined();
     });
 });

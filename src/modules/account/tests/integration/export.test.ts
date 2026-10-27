@@ -24,6 +24,7 @@ import { userService } from '@modules/users';
 import { createNotification } from '@modules/notifications/tests/factories';
 import type { PersonalDataSection } from '@kernel/registry';
 import { logger } from '@infrastructure/adapters/logger';
+import { outboxEventModel } from '@kernel/outbox';
 import { accountExportRepository } from '@modules/account/repository';
 import { accountExportModel } from '@modules/account/model';
 import { accountExportFailedTotal } from '@modules/account/metrics';
@@ -293,6 +294,12 @@ describe('requestExport', () => {
         const row = await accountExportRepository.findByUserId(user.id);
         expect(row?.status).toBe('ready');
         expect(String(row?._id)).toBe(result.data.id);
+        // Announced with the move, for the work an earlier failure may have opened.
+        const [announced] = await outboxEventModel
+            .find({ name: 'account.export_ready' })
+            .lean()
+            .exec();
+        expect(announced.payload).toEqual({ userId: user.id, exportId: result.data.id });
     });
 
     it('writes one JSON object: every section that answered, then exportedAt', async () => {
@@ -527,6 +534,14 @@ describe('a build that fails', () => {
 
         const row = await accountExportRepository.findByUserId(user.id);
         expect(row?.status).toBe('failed');
+        // Announced with the move, so a person is asked to look: the file is still owed.
+        const failures = await outboxEventModel
+            .find({ name: 'account.export_failed' })
+            .lean()
+            .exec();
+        expect(failures.map(({ payload }) => payload)).toEqual([
+            { userId: user.id, exportId: result.data.id }
+        ]);
         expect(await readdir(root)).toEqual([]);
         expect(mockOutbox).toEqual([
             expect.objectContaining({ to: user.email, template: 'account.export-failed' })

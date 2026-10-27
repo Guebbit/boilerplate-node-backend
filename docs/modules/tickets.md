@@ -18,12 +18,38 @@ graph cannot see._
 flowchart LR
     tickets["tickets<br/><i>this module</i>"]
     access["access"]
+    account["account"]
+    delivery["delivery"]
+    inventory["inventory"]
     notifications["notifications"]
+    orders["orders"]
+    payments["payments"]
     users["users"]
 
     notifications --> tickets
     tickets --> access
+    tickets --> account
+    tickets --> delivery
+    tickets --> inventory
+    tickets --> orders
+    tickets --> payments
     tickets --> users
+    account -. "account.export_failed" .-> tickets
+    account -. "account.export_ready" .-> tickets
+    delivery -. "fulfillment_order.cancelled" .-> tickets
+    delivery -. "fulfillment_order.delayed" .-> tickets
+    delivery -. "shipment.shipped" .-> tickets
+    inventory -. "inventory.hold_orphaned" .-> tickets
+    orders -. "order.cancelled" .-> tickets
+    payments -. "payment.amount_mismatch" .-> tickets
+    payments -. "payment.dispute_opened" .-> tickets
+    payments -. "payment.dispute_updated" .-> tickets
+    payments -. "payment.refund_canceled" .-> tickets
+    payments -. "payment.refund_failed" .-> tickets
+    payments -. "payment.refund_owed_by_hand" .-> tickets
+    payments -. "payment.refunded" .-> tickets
+    users -. "user.review_cleared" .-> tickets
+    users -. "user.review_flagged" .-> tickets
     tickets -. "ticket.assigned" .-> notifications
     tickets -. "ticket.opened" .-> notifications
 
@@ -31,8 +57,9 @@ flowchart LR
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
-    class notifications supporting;
-    class access,users generic;
+    class orders core;
+    class delivery,inventory,notifications,payments supporting;
+    class access,account,users generic;
     class tickets centre;
 ```
 
@@ -42,10 +69,10 @@ flowchart LR
 
 A ticket is **one situation someone must take and close**. Two sources open one:
 
-| Source    | Opened by                                | Is about                                  | Worked by                                          |
-| --------- | ---------------------------------------- | ----------------------------------------- | -------------------------------------------------- |
-| `visitor` | the contact form, `POST /tickets`        | what the person wrote                     | whoever holds `TicketDisplay` / `TicketManagement` |
-| `system`  | a domain event (a later lane subscribes) | a record: an order, a refund, an account… | whoever holds the ticket's **route set**           |
+| Source    | Opened by                                             | Is about                                  | Worked by                                          |
+| --------- | ----------------------------------------------------- | ----------------------------------------- | -------------------------------------------------- |
+| `visitor` | the contact form, `POST /tickets`                     | what the person wrote                     | whoever holds `TicketDisplay` / `TicketManagement` |
+| `system`  | a domain event, see [System tickets](#system-tickets) | a record: an order, a refund, an account… | whoever holds the ticket's **route set**           |
 
 The form is open to anyone, a stranger's write alongside signup, login, password reset,
 second-factor login and analytics events. It always records the address typed; when the sender is
@@ -55,6 +82,50 @@ along — an absent or expired token files the message as anonymous).
 A visitor may add a **category** (`order`, `cancellation`, `return`, `payment`, `account`,
 `privacy`, `other`) and the order number they typed (`orderNumber`, free text, never checked
 against an order). Both are the filer's own words, so the export includes them.
+
+### System tickets
+
+A producer module announces a situation through the outbox; `tickets` subscribes (`module.ts`,
+`services/system.ts`) and opens **one ticket per situation**. The event that ends the situation
+closes it as `resolved` with `resolution: cleared`, so "the system closed it" shows, and its notes
+are kept. The producers never import `tickets`.
+
+| Kind                 | Opens on                                                      | Cleared by                                             | Due (`dueAt`)                                                                      |
+| -------------------- | ------------------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| `account_review`     | `user.review_flagged` (paid cancellations over the limit)     | `user.review_cleared` (a hold placed or lifted)        | +72 h                                                                              |
+| `manual_refund_owed` | `payment.refund_owed_by_hand`                                 | `payment.refunded`, `payment.refund_canceled`          | + `NODE_PAYMENT_ATTENTION_MINUTES`                                                 |
+| `refund_refused`     | `payment.refund_failed` with `final: true`                    | `payment.refunded`, `payment.refund_canceled`          | the legal 14 days for a return refund (`refundDueBy`), else + the attention window |
+| `amount_mismatch`    | `payment.amount_mismatch`                                     | **never**: staff close it once they know why           | + the attention window                                                             |
+| `dispute`            | `payment.dispute_opened` / `_updated` while it needs the shop | `payment.dispute_updated` with a decided or closed one | the provider's `evidenceDueBy`                                                     |
+| `paid_without_hold`  | `inventory.hold_orphaned` (the payment step only)             | `order.cancelled`, `shipment.shipped`                  | +4 h                                                                               |
+| `export_failed`      | `account.export_failed`                                       | a later `account.export_ready` for the same account    | +72 h                                                                              |
+| `consent_due`        | `fulfillment_order.delayed`, see below                        | `shipment.shipped`, `fulfillment_order.cancelled`      | `agreedAt` + 30 d, or the date the buyer holds                                     |
+
+**One situation is a ticket or a notice, never both.** `account_review` is opened only by the
+review flag that pauses nothing; the automatic hold already tells the staff who can ban it
+(`notifications.staff.purchase-hold-placed`). A `ticket.opened` is what `notifications` turns into
+a work notice.
+
+**Dedup and replays.** The dedup key is `<kind>:<link.type>:<link.id>`, unique while open. A repeat
+of an open situation only stamps `lastSeenAt` / `seenCount` and keeps the earlier `dueAt`; two racing
+events open one ticket (the loser of the unique key touches). Each ticket remembers its last 20
+event ids, and an id already seen is a no-op, so a redelivery after the ticket closed cannot open
+it again. The same situation returning after a close opens a **new** ticket. A clearing event on a
+ticket staff closed first does nothing.
+
+**The delay reminder (`consent_due`, 16 CFR 435.2).** The shop never asks the buyer and never
+cancels; the ticket is the reminder that a person must, and by when. `delivery` keeps
+`promisedAt` on the fulfillment order, the date the buyer holds now: it starts as `agreedAt`, a
+later date from a notice replaces it, a "no date yet" notice removes it. The `delayed` event
+carries the value before the notice and the ship-to country.
+
+| Before this notice                    | Opens when                             | Due               |
+| ------------------------------------- | -------------------------------------- | ----------------- |
+| the buyer holds the date they ordered | no new date, or past `agreedAt` + 30 d | `agreedAt` + 30 d |
+| the buyer holds a later date          | no new date, or past that date         | that date         |
+| the buyer was told "no date yet"      | never: the earlier ticket stands       | —                 |
+
+Only for ship-to countries in `NODE_TICKETS_FTC_COUNTRIES` (default `US,PR,GU,VI,AS,MP`).
 
 ### Jurisdiction
 

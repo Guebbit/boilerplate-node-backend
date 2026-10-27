@@ -77,6 +77,9 @@ const waitingOf = async (orderId: string) => {
 /** The status of the order's waiting fulfillment order. */
 const statusOf = (orderId: string) => waitingOf(orderId).then(({ status }) => status);
 
+/** The date the buyer holds on the order's waiting fulfillment order. */
+const promisedAtOf = (orderId: string) => waitingOf(orderId).then(({ promisedAt }) => promisedAt);
+
 /** The date the order's waiting fulfillment order is now expected. */
 const expectedAtOf = (orderId: string) => waitingOf(orderId).then(({ expectedAt }) => expectedAt);
 
@@ -122,12 +125,51 @@ describe('a release date that moves', () => {
                 'expectedAt',
                 'fulfillmentOrderId',
                 'orderId',
+                'promisedAt',
                 'reason',
                 'titles',
                 'userId'
             ].toSorted()
         );
         expect(await statusOf(orderId)).toBe('on_hold');
+    });
+
+    it('tells which date the buyer held before each notice, and which country the order ships to', async () => {
+        const placed = await paidPreorderOrder(
+            [{ quantity: 1, releaseDate: inDays(30) }],
+            'ship@example.com',
+            { fullName: 'Ada', street: '1 Main St', city: 'Austin', zip: '73301', country: 'US' }
+        );
+        await fulfillmentOrdersOf(placed.orderId);
+        const { agreedAt } = await waitingOf(placed.orderId);
+
+        await moveDate(placed.productIds[0], inDays(60));
+        await moveDate(placed.productIds[0], inDays(90));
+
+        const [first, second] = await delayedEvents();
+        expect(first).toMatchObject({ promisedAt: agreedAt!.toISOString(), shipCountry: 'US' });
+        // The second notice finds the date the first one gave the buyer.
+        expect(new Date(second.promisedAt as string).getTime()).toBeGreaterThan(
+            agreedAt!.getTime()
+        );
+        expect(second.promisedAt).toBe(first.expectedAt);
+        const waiting = await waitingOf(placed.orderId);
+        expect(waiting.promisedAt?.toISOString()).toBe(second.expectedAt);
+    });
+
+    it('forgets the held date when the buyer is told there is none yet', async () => {
+        const { orderId, productIds } = await preorder(30);
+        await waitingOf(orderId);
+
+        await moveDate(productIds[0], null);
+        expect(await promisedAtOf(orderId)).toBeUndefined();
+
+        // A date given after "no date yet" is silent (nothing to ask), and the buyer holds none.
+        await moveDate(productIds[0], inDays(50));
+        const events = await delayedEvents();
+        expect(events).toHaveLength(1);
+        expect(events[0].promisedAt).toBeDefined();
+        expect(await promisedAtOf(orderId)).toBeUndefined();
     });
 
     it('tells the buyer of every later date, however many', async () => {

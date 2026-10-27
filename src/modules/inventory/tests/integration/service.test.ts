@@ -21,6 +21,8 @@ import { inventoryService } from '../../services';
 import { reservationRepository, stockLevelRepository } from '../../repository';
 import { reservationModel, stockLevelModel } from '../../model';
 import { inventoryAuditActions } from '../../audit';
+import { HOLD_ORPHANED } from '../../events';
+import { outboxEventModel } from '@kernel/outbox';
 import { inventoryCommitOrphanedTotal } from '../../services/orphan-counter';
 import * as auditPort from '@infrastructure/observability/audit';
 import { withTransaction } from '@infrastructure/runtime/database';
@@ -449,6 +451,9 @@ describe('commitForOrder', () => {
 
         // The short safety net is a real orphan: counted once, at the commit stage.
         expect(await orphanedCount('commit')).toBe(before + 1);
+        // And announced once, so a person is asked to find stock or refund.
+        const announced = await outboxEventModel.find({ name: HOLD_ORPHANED }).lean().exec();
+        expect(announced.map(({ payload }) => payload)).toEqual([{ orderId }]);
         // Nothing is half-taken: the stranger's units stand, the late hold is released again.
         expect(await countersOf(String(product._id))).toEqual({
             onHand: 4,
@@ -751,6 +756,8 @@ describe('shipForOrder', () => {
         expect(await inventoryService.shipForOrder(orderId)).toBe(false);
 
         expect(await orphanedCount('ship')).toBe(before + 1);
+        // The goods already left: alarm and audit row are the record, there is no work to open.
+        expect(await outboxEventModel.countDocuments({ name: HOLD_ORPHANED })).toBe(0);
         expect(await countersOf(String(product._id))).toMatchObject({ onHand: 10, reserved: 0 });
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({

@@ -59,6 +59,7 @@ export {
     needsDueNotice,
     DUE_NOTICE_LEAD_MS,
     slippedDays,
+    promisedAfterNotice,
     boardStateOf,
     isLate
 } from './preorder';

@@ -12,9 +12,9 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { resetDomainEvents } from '@kernel/events';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
-import { paymentService } from '@modules/payments/services';
+import { paymentAttentionMinutes, paymentService } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
-import { PAYMENT_REFUNDED } from '@modules/payments/events';
+import { PAYMENT_REFUND_OWED_BY_HAND, PAYMENT_REFUNDED } from '@modules/payments/events';
 import paymentsModule from '@modules/payments/module';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import { registerCheckoutModules } from '@tests/checkout-modules';
@@ -89,6 +89,18 @@ describe('the operator refunding a cash payment', () => {
             targetId: orderId,
             metadata: { refundId: String(payment.refunds[0]._id), amount: 30, reason: 'goodwill' }
         });
+        // The same fact is announced for `tickets`, in the transaction that opened the record.
+        const [announced] = await outboxEventModel
+            .find({ name: PAYMENT_REFUND_OWED_BY_HAND })
+            .lean()
+            .exec();
+        expect(announced.payload).toEqual({
+            paymentId: String(payment._id),
+            orderId,
+            refundId: String(payment.refunds[0]._id),
+            amount: 30,
+            currency: payment.currency
+        });
     });
 });
 
@@ -103,6 +115,9 @@ describe('the cancel listener on a cash payment', () => {
         expect(payment.refunds).toHaveLength(1);
         expect(payment.refunds[0]).toMatchObject({ amount: 100, reason: 'cancellation' });
         expect(owedRows()).toHaveLength(1);
+        expect(await outboxEventModel.countDocuments({ name: PAYMENT_REFUND_OWED_BY_HAND })).toBe(
+            1
+        );
         // No caller behind the listener: the system is the actor.
         expect(owedRows()[0].metadata).toMatchObject({ refundId: String(payment.refunds[0]._id) });
     });
@@ -210,5 +225,43 @@ describe('settleRefundByHand', () => {
         expect(asOperator.data?.actions?.settleByHand).toHaveLength(1);
         // A moderator holds `create:Refund`; the flag follows the key, as `refund` does.
         expect(asMod.data?.actions?.settleByHand).toHaveLength(1);
+    });
+});
+
+describe('refundDueAt', () => {
+    it('is the record plus the attention window when the law sets no deadline', async () => {
+        const { orderId } = await cashOrder();
+        await refundForOrder(orderId);
+        const payment = await paymentOf(orderId);
+        const refund = payment.refunds[0];
+
+        const dueAt = await paymentService.refundDueAt(String(payment._id), String(refund._id));
+
+        expect(dueAt?.getTime()).toBe(
+            refund.createdAt.getTime() + paymentAttentionMinutes() * 60_000
+        );
+    });
+
+    it('is the legal 14 days for a refund that pays for a return', async () => {
+        const { orderId } = await cashOrder();
+        await refundForOrder(orderId);
+        const payment = await paymentOf(orderId);
+        const refund = payment.refunds[0];
+        refund.returnId = 'return-1';
+        await payment.save();
+
+        const dueAt = await paymentService.refundDueAt(String(payment._id), String(refund._id));
+
+        expect(dueAt?.getTime()).toBe(refund.createdAt.getTime() + 14 * 24 * 60 * 60_000);
+    });
+
+    it('is nothing for a refund that is not there', async () => {
+        const { orderId } = await cashOrder();
+        await refundForOrder(orderId);
+        const payment = await paymentOf(orderId);
+
+        await expect(
+            paymentService.refundDueAt(String(payment._id), '65dc8a99604c307b702b5ccc')
+        ).resolves.toBeUndefined();
     });
 });

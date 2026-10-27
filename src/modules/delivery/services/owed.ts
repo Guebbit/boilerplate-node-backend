@@ -87,6 +87,7 @@ export const createOwedFulfillmentOrder = async (
             cause: 'backorder',
             ...(promise.defaulted ? { defaulted: true } : {}),
             agreedAt: promise.at,
+            promisedAt: promise.at,
             expectedAt: promise.at,
             ...(origin.sourceShipmentId ? { sourceShipmentId: origin.sourceShipmentId } : {}),
             revision: 0

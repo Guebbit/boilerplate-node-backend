@@ -15,7 +15,9 @@ export const ticketsAuditActions = {
     ADMIN_TICKET_ASSIGNED: 'admin.ticket.assigned',
     ADMIN_TICKET_UNASSIGNED: 'admin.ticket.unassigned',
     ADMIN_TICKET_NOTED: 'admin.ticket.noted',
-    ADMIN_TICKET_DELETED: 'admin.ticket.deleted'
+    ADMIN_TICKET_DELETED: 'admin.ticket.deleted',
+    SYSTEM_TICKET_OPENED: 'system.ticket.opened',
+    SYSTEM_TICKET_CLEARED: 'system.ticket.cleared'
 } as const;
 
 /** Registers this module's actions into the app-wide `AuditActionMap` union. */

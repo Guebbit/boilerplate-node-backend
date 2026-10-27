@@ -152,6 +152,26 @@ export const needsDueNotice = (facts: SweepFacts, now: Date): boolean =>
 export const slippedDays = (agreedAt: Date, expectedAt: Date): number =>
     Math.max(0, Math.round((expectedAt.getTime() - agreedAt.getTime()) / DAY_MS));
 
+/**
+ * The date the buyer holds after a notice (`promisedAt`): a later date replaces it, a cleared date
+ * ("no date yet") removes it, and an earlier or unchanged date leaves it. It is what the next
+ * slip is measured against for the staff's consent reminder.
+ *
+ * @param promisedAt - the date the buyer held before this notice, if any
+ * @param expectedAt - the date the notice names; `null` clears it, absent leaves it alone
+ * @returns the date to store, `null` to remove the stored one, `undefined` to leave it
+ */
+export const promisedAfterNotice = (
+    promisedAt: Date | undefined,
+    expectedAt: Date | null | undefined
+): Date | null | undefined => {
+    if (expectedAt === null) return promisedAt === undefined ? undefined : null;
+    if (expectedAt === undefined) return undefined;
+    return promisedAt === undefined || expectedAt.getTime() > promisedAt.getTime()
+        ? expectedAt
+        : undefined;
+};
+
 /** What the board's state and lateness read off a fulfillment order. */
 export interface BoardFacts extends SweepFacts {
     status: FulfillmentOrderStatus;
