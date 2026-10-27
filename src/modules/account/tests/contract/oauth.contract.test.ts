@@ -9,15 +9,14 @@
 
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api, bearerForCookie } from '@tests/http';
+import { api, bearerForCookie, staleBearerFor } from '@tests/http';
 import { setCookie, cookieHeader } from '@tests/cookies';
 import { codeFor } from '@tests/totp';
-import { createUser, userRepository, PLAIN_PASSWORD } from '@modules/users/tests/factories';
+import { createUser, userRepository } from '@modules/users/tests/factories';
+import { mintSession } from '../factories';
 import { registerOAuthProvider } from '../../oauth/providers';
 import { fakeOAuthProvider } from '@scenarios/support/doubles/oauth-fake';
 import { claimedAmr } from './support';
-import { freezeDate, advanceDate } from '@tests/clock';
-import { reauthWindowSeconds } from '@kernel/config';
 
 setupTestDb();
 
@@ -447,18 +446,19 @@ describe('GET /account/oauth/:provider/callback — 2FA armed (1b)', () => {
 });
 
 /**
- * A password sign-in of `email`: the bearer a signed-in client sends, and the session cookie the
- * browser holds beside it (the connect callback is a browser navigation, so it carries the cookie
- * and no bearer).
+ * A session for the account of `email`, in whichever session mode the suite runs: the bearer a
+ * signed-in client sends, and the session cookie the browser holds beside it (the connect callback
+ * is a browser navigation, so it carries the cookie and no bearer). Minted rather than logged in,
+ * because the login body names its token differently in each mode.
  */
 const signInAs = (email: string) =>
-    api()
-        .post('/account/login')
-        .send({ email, password: PLAIN_PASSWORD })
-        .then((login) => ({
-            bearer: `Bearer ${login.body.token as string}`,
-            session: cookieHeader(login, '__Host-session')
-        }));
+    userRepository
+        .findForSignInByEmail(email, new Date())
+        .then((user) => {
+            if (!user) throw new Error(`signInAs: no account for ${email}`);
+            return mintSession(user.id);
+        })
+        .then(({ bearer, cookie }) => ({ bearer, session: cookie }));
 
 /** The provider names linked to an account, straight from the database. */
 const linksOf = (userId: string) =>
@@ -621,20 +621,11 @@ describe('POST /account/oauth/links/:provider', () => {
     });
 
     it('needs a fresh session: a stale one is asked to prove itself again', async () => {
-        freezeDate();
-        await createUser({ email: 'owner@example.com', verifiedAt: new Date() });
-        const login = await api()
-            .post('/account/login')
-            .send({ email: 'owner@example.com', password: PLAIN_PASSWORD });
-        advanceDate((reauthWindowSeconds('sensitive') + 1) * 1000);
-        // The access token expired along the way; the refresh cookie mints one whose `auth_time` is old.
-        const refreshed = await api()
-            .post('/account/refresh')
-            .set('Cookie', cookieHeader(login, '__Host-session'));
+        const owner = await createUser({ email: 'owner@example.com', verifiedAt: new Date() });
+        // A bearer whose `auth_time` is older than the sensitive window, in either session mode.
+        const stale = await staleBearerFor(owner, 'sensitive');
 
-        const response = await api()
-            .post('/account/oauth/links/fake')
-            .set('Authorization', `Bearer ${refreshed.body.token as string}`);
+        const response = await api().post('/account/oauth/links/fake').set('Authorization', stale);
 
         expect(response.status).toBe(401);
         expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
