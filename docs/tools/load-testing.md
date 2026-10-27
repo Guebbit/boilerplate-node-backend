@@ -72,7 +72,7 @@ npx autocannon -c 10 -d 20 -H 'Authorization: Bearer <token>' http://localhost:3
 
 `bench` hits `GET /products`, which goes through `cacheProductsSearch` (`searchCache('products', …)`
 in `src/modules/products/routes.ts`). After the first request nearly every response is a Redis hit, so it
-measures the cache and the HTTP stack. Watch `x-cache: HIT` and expect low, flat latency.
+measures the cache and the HTTP stack. Watch `Cache-Status: api-redis; hit` and expect low, flat latency.
 
 `bench:search` hits `POST /products/search`, the same handler behind the same cache middleware, but
 with a text query. Its body is fixed, so with Redis on it too becomes a hit after the first

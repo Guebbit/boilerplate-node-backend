@@ -249,7 +249,7 @@ describe('setCache', () => {
         expect(mockedCache.getCacheValue).toHaveBeenCalledWith(
             `GET:/products?${createHash('sha256').update('page="1"').digest('hex')}:guest:en`
         );
-        expect(headers['x-cache']).toBe('HIT');
+        expect(headers['cache-status']).toMatch(/; hit; ttl=\d+/);
         expect(response.status).toHaveBeenCalledWith(200);
         expect(response.json).toHaveBeenCalledWith({ success: true });
         expect(next).not.toHaveBeenCalled();
@@ -278,7 +278,7 @@ describe('setCache', () => {
             next
         );
 
-        expect(headers['x-cache']).toBe('MISS');
+        expect(headers['cache-status']).toContain('fwd=miss');
         expect(next).toHaveBeenCalledTimes(1);
     });
 
@@ -327,7 +327,7 @@ describe('setCache', () => {
 
         await middleware(request, response, next);
 
-        expect(headers['x-cache']).toBe('MISS');
+        expect(headers['cache-status']).toContain('fwd=miss');
         expect(next).toHaveBeenCalledTimes(1);
 
         response.statusCode = 201;
@@ -898,7 +898,7 @@ describe('refresh-ahead (stale-while-revalidate)', () => {
             jest.fn() as NextFunction
         );
 
-        expect(headers['x-cache']).toBe('HIT');
+        expect(headers['cache-status']).toMatch(/; hit; ttl=\d+/);
         expect(mockedCache.claimCacheRefresh).not.toHaveBeenCalled();
         expect(response.json).toHaveBeenCalledWith({ ok: true });
     });
@@ -917,7 +917,7 @@ describe('refresh-ahead (stale-while-revalidate)', () => {
 
         // The claim window is the grace window: min(60, 60) = 60.
         expect(mockedCache.claimCacheRefresh).toHaveBeenCalledWith(expect.any(String), 60);
-        expect(headers['x-cache']).toBe('REFRESH');
+        expect(headers['cache-status']).toContain('fwd=stale');
         expect(next).toHaveBeenCalledTimes(1);
 
         // The claimer answers with a FRESH body — nobody, including this caller, ever receives
@@ -945,7 +945,7 @@ describe('refresh-ahead (stale-while-revalidate)', () => {
             next
         );
 
-        expect(headers['x-cache']).toBe('STALE');
+        expect(headers['cache-status']).toMatch(/; hit; ttl=-\d+/);
         expect(next).not.toHaveBeenCalled();
         expect(response.json).toHaveBeenCalledWith({ old: true });
         expect(mockedCache.setCacheValue).not.toHaveBeenCalled();
@@ -964,7 +964,7 @@ describe('refresh-ahead (stale-while-revalidate)', () => {
             next
         );
 
-        expect(headers['x-cache']).toBe('MISS');
+        expect(headers['cache-status']).toContain('fwd=miss');
         expect(mockedCache.claimCacheRefresh).not.toHaveBeenCalled();
         expect(next).toHaveBeenCalledTimes(1);
     });

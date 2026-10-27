@@ -70,11 +70,11 @@ describe('a translation write invalidates the cached product it translated', () 
         const { bearer } = await authenticateAs('admin');
 
         const first = await api().get(`/products/${id}`);
-        expect(first.headers['x-cache']).toBe('MISS');
+        expect(first.headers['cache-status']).toContain('fwd=miss');
         expect(first.body.title).toBe('Old title');
 
         const cached = await api().get(`/products/${id}`);
-        expect(cached.headers['x-cache']).toBe('HIT');
+        expect(cached.headers['cache-status']).toMatch(/; hit; ttl=\d+/);
 
         await api()
             .patch(`/locales/translations/product/${id}`)
@@ -82,7 +82,7 @@ describe('a translation write invalidates the cached product it translated', () 
             .send({ [FALLBACK]: { fields: { title: 'New title' }, origin: 'human' } });
 
         const afterPatch = await api().get(`/products/${id}`);
-        expect(afterPatch.headers['x-cache']).toBe('MISS');
+        expect(afterPatch.headers['cache-status']).toContain('fwd=miss');
         expect(afterPatch.body.title).toBe('New title');
     });
 
@@ -102,7 +102,7 @@ describe('a translation write invalidates the cached product it translated', () 
         expect(refused.status).toBe(422);
 
         const stillCached = await api().get(`/products/${id}`);
-        expect(stillCached.headers['x-cache']).toBe('HIT');
+        expect(stillCached.headers['cache-status']).toMatch(/; hit; ttl=\d+/);
     });
 });
 
@@ -113,7 +113,8 @@ const readInItalian = (id: string) =>
         .set('Accept-Language', 'it')
         .then((response) => ({
             title: response.body.title,
-            cache: response.headers['x-cache']
+            // RFC 9211: `fwd=miss` is a miss, `hit; ttl=N` a hit.
+            cache: response.headers['cache-status'].includes('fwd=miss') ? 'MISS' : 'HIT'
         }));
 
 describe('switching a language off or on re-renders the cached products', () => {

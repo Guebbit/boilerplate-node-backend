@@ -246,13 +246,27 @@ replica — everyone else gets `null` back for the same window.
 ```mermaid
 flowchart TD
     R[read entry] --> E{entry present?}
-    E -->|no| M["x-cache: MISS → controller"]
+    E -->|no| M["Cache-Status: fwd=miss → controller"]
     E -->|yes| S{past staleAt?}
-    S -->|no| H["x-cache: HIT → serve"]
+    S -->|no| H["Cache-Status: hit → serve"]
     S -->|yes| C{won SET NX?}
-    C -->|yes| RF["x-cache: REFRESH → controller, rewrites entry"]
-    C -->|no| ST["x-cache: STALE → serve old body from OWN key"]
+    C -->|yes| RF["Cache-Status: fwd=stale → controller, rewrites entry"]
+    C -->|no| ST["Cache-Status: hit, negative ttl → serve old body from OWN key"]
 ```
+
+The outcome is sent as an [RFC 9211](https://www.rfc-editor.org/rfc/rfc9211) `Cache-Status`
+header named `api-redis`. It is a debug aid: not in the contract, not CORS-exposed (devtools and
+curl see it anyway).
+
+| Outcome | Header                                                                                     |
+| ------- | ------------------------------------------------------------------------------------------ |
+| MISS    | `Cache-Status: api-redis; fwd=miss`                                                        |
+| HIT     | `Cache-Status: api-redis; hit; ttl=N` (seconds to `staleAt`)                               |
+| STALE   | `Cache-Status: api-redis; hit; ttl=-N` (seconds past `staleAt`, RFC 9211's stale-hit form) |
+| REFRESH | `Cache-Status: api-redis; fwd=stale`                                                       |
+
+`fwd=miss` rather than `uri-miss`: the key also folds in locale and the cacheable gate, so a URI
+miss cannot be told from a vary miss.
 
 Nobody waits, and nobody but the claimer ever runs the controller — everyone else reads back
 their own key's stale body. That is also the trap to keep in mind if this is ever changed: the key

@@ -39,6 +39,21 @@ interface CachedResponse {
 }
 
 /**
+ * The cache's name in the RFC 9211 `Cache-Status` header (debug only, not in the contract).
+ * https://www.rfc-editor.org/rfc/rfc9211
+ */
+const CACHE_STATUS_NAME = 'api-redis';
+
+/**
+ * Whole seconds between two instants, at least 1 so a stale `ttl` is never `-0`.
+ * @param fromMs - The earlier instant, epoch ms.
+ * @param toMs - The later instant, epoch ms.
+ * @returns The rounded-up gap, minimum 1.
+ */
+const secondsBetween = (fromMs: number, toMs: number): number =>
+    Math.max(1, Math.ceil((toMs - fromMs) / 1000));
+
+/**
  * How long a shared cache (edge) or this server (origin) may keep serving a stale entry while one
  * rebuild is in flight — RFC 5861's `stale-while-revalidate`, and the same number both layers use
  * so they agree on what "stale" means. See docs/tools/redis-cache.md#refresh-ahead.
@@ -473,7 +488,7 @@ const serveOrArm = (
 
                 // Nothing cached — hard-expired, invalidated, or never written. Same as today.
                 if (!cachedResponse) {
-                    response.set('x-cache', 'MISS');
+                    response.set('Cache-Status', `${CACHE_STATUS_NAME}; fwd=miss`);
                     cacheRequestsTotal.inc({ result: 'miss' });
                     armCacheWrite(response, cacheKey, ttl, graceSeconds, options.tags);
                     next();
@@ -481,8 +496,12 @@ const serveOrArm = (
                 }
 
                 // Fast path: still within the soft TTL.
-                if (Date.now() < cachedResponse.staleAt) {
-                    response.set('x-cache', 'HIT');
+                const decidedAt = Date.now();
+                if (decidedAt < cachedResponse.staleAt) {
+                    response.set(
+                        'Cache-Status',
+                        `${CACHE_STATUS_NAME}; hit; ttl=${String(secondsBetween(decidedAt, cachedResponse.staleAt))}`
+                    );
                     cacheRequestsTotal.inc({ result: 'hit' });
                     response.status(cachedResponse.status).json(cachedResponse.body);
                     return;
@@ -495,13 +514,16 @@ const serveOrArm = (
                 // per `options.scopeKey`'s own docblock.
                 return claimCacheRefresh(cacheKey, graceSeconds).then((wonClaim) => {
                     if (!wonClaim) {
-                        response.set('x-cache', 'STALE');
+                        response.set(
+                            'Cache-Status',
+                            `${CACHE_STATUS_NAME}; hit; ttl=-${String(secondsBetween(cachedResponse.staleAt, decidedAt))}`
+                        );
                         cacheRequestsTotal.inc({ result: 'stale' });
                         response.status(cachedResponse.status).json(cachedResponse.body);
                         return;
                     }
 
-                    response.set('x-cache', 'REFRESH');
+                    response.set('Cache-Status', `${CACHE_STATUS_NAME}; fwd=stale`);
                     cacheRequestsTotal.inc({ result: 'refresh' });
                     armCacheWrite(response, cacheKey, ttl, graceSeconds, options.tags);
                     next();
