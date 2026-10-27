@@ -21,6 +21,7 @@ import { onDomainEvent, type DomainEventMap } from '@kernel/events';
 import {
     orderService,
     ORDER_CANCELLED,
+    ORDER_REDACTED,
     ORDER_STATUS_CHANGED,
     ORDER_STATUS_OVERRIDDEN
 } from '@modules/orders';
@@ -86,6 +87,8 @@ export default {
     jobs: deliveryJobs,
     config: [deliveryConfig.slice],
     publicEvents,
+    // The shipments' destination copies are PII-encrypted.
+    reencrypt: deliveryService.reencryptShipments,
     personalData: [
         {
             section: 'shipments',
@@ -120,6 +123,8 @@ export default {
             to === OrderStatus.paid ? deliveryService.ensureFulfillmentOrders(orderId) : undefined
         );
         onDomainEvent(ORDER_CANCELLED, ({ orderId }) => deliveryService.cancelAllForOrder(orderId));
+        // The order's address was scrubbed (retention): each shipment's copy of it goes too.
+        onDomainEvent(ORDER_REDACTED, ({ orderId }) => deliveryService.scrubDestinations(orderId));
         onDomainEvent(ORDER_STATUS_OVERRIDDEN, ({ orderId, to, at }) =>
             deliveryService.syncWithOverride(orderId, to, new Date(at))
         );

@@ -24,7 +24,6 @@ import { ordersAnalyticsEvents } from '../analytics';
 import { ordersAuditActions } from '../audit';
 import { orderRepository } from '../repository';
 import { placeOrder } from './place';
-import { isSellable } from '../domain/rules';
 import { maxAdminOrderLineQuantity, maxAdminOrderLines } from '../config';
 import { ERROR_CODES } from '@api/error-codes';
 
@@ -84,13 +83,16 @@ export const recordCreated = (order: OrderDocument, context: CallerContext): voi
  * @returns each item paired with its product, or `null` when the id no longer resolves
  */
 const resolveItemProducts = (
-    items: OrderLineInput[]
+    items: OrderLineInput[],
+    scope: Record<string, unknown>
 ): Promise<
     { item: OrderLineInput; product: Awaited<ReturnType<typeof productService.findByIdRaw>> }[]
 > =>
     Promise.all(
         items.map((item) =>
-            productService.findByIdRaw(item.productId).then((product) => ({ item, product }))
+            productService
+                .findByIdRawScoped(item.productId, scope)
+                .then((product) => ({ item, product }))
         )
     );
 
@@ -123,23 +125,28 @@ export const create = async (
     // admin's own UI language, not the recipient's. Same rule as `@modules/cart`'s checkout.
     const buyerLocale = buyer.locale ?? getDefaultLocale();
 
-    // `Promise.all([])` settles without a query, so an empty basket still costs no round trip.
-    const resolvedItems = await resolveItemProducts(items);
+    // `Promise.all([])` settles without a query, so an empty basket still costs no round trip. The
+    // read is scoped to what the caller may see (`display:Product` reads hidden products): a product
+    // outside it is a plain 404, and a snapshot never widens the caller's read.
+    const resolvedItems = await resolveItemProducts(
+        items,
+        productService.callerScope(context.caller)
+    );
 
-    // Hidden, off-sale and deleted products are refused as checkout refuses them, every one named.
-    const unsellable = resolvedItems.filter(({ product }) => product && !isSellable(product));
-    if (unsellable.length > 0)
+    // Staff may sell a hidden or off-sale product (Solidus, Shopify draft orders); a removed one is
+    // refused, every one named.
+    const removed = resolvedItems.filter(({ product }) => product?.deletedAt);
+    if (removed.length > 0)
         return generateReject(409, [
             {
                 code: ERROR_CODES.ORDER_PRODUCT_UNAVAILABLE,
                 message: t('orders.product-unavailable'),
-                details: { productIds: unsellable.map(({ item }) => item.productId) }
+                details: { productIds: removed.map(({ item }) => item.productId) }
             }
         ]);
 
-    // The admin path sells the same shelf the storefront does — the same write, freeze, invoice
-    // allocation and stock hold `placeOrder` runs for `@modules/cart`'s checkout, with no
-    // payment method or shipping: this endpoint offers neither.
+    // The same write, freeze, invoice allocation and stock hold `placeOrder` runs for
+    // `@modules/cart`'s checkout, with no payment method or shipping: this endpoint offers neither.
     const outcome = await placeOrder({
         userId,
         email,

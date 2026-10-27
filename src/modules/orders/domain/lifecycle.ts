@@ -118,7 +118,7 @@ const PROCESSABLE_FROM: readonly OrderStatus[] = ORDER_EVENTS.process.from;
  * own `from`, not on `canTransition`: that is exactly the set `markProcessing`'s conditional write
  * uses, so a pre-check and the write can never disagree.
  * @param status - current status
- * @returns whether `delivery`'s start door (or a forced first shipment) may move the order on
+ * @returns whether `delivery`'s start door (or a first shipment, which starts it) may move the order on
  */
 export const canProcessOrder = (status: OrderStatus): boolean => PROCESSABLE_FROM.includes(status);
 

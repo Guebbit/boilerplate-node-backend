@@ -22,6 +22,7 @@ import {
     FulfillmentOrderStatus,
     ShipmentStatus
 } from '@types';
+import type { OrderAddress } from '@types';
 import type { FulfillmentLine, WaitCause } from './domain';
 
 /** One product on a fulfillment order. */
@@ -85,10 +86,18 @@ export interface ShipmentDocument extends Document {
     fulfillmentOrderId: Types.ObjectId;
     /** 1-based position within the order, in the order shipments were cut; unique with `orderId`. */
     number: number;
-    /** The carrier's handle on the parcel. Absent for a method that carries no tracking. */
+    /** The kind of fulfillment order it left from, frozen at the cut: a digital one never had a carrier. */
+    kind: FulfillmentOrderKind;
+    /** The carrier's handle on the parcel. Absent for a method that carries no tracking, or not known yet. */
     trackingCode?: string;
     status: ShipmentStatus;
     lines: ShipmentLineDocument[];
+    /**
+     * Where this parcel went: a copy of the order's shipping address at the cut, stored encrypted
+     * under the shipment's `_id` (`./pii`). Absent for a method with no address (a pickup) and for a
+     * digital fulfilment. Wiped when the order's own address is (`order.redacted`).
+     */
+    destination?: OrderAddress;
     /** Staff skipped a step to record it, or an override recorded it. */
     forced: boolean;
     shippedAt: Date;
@@ -111,6 +120,19 @@ const fulfillmentLineSchema = new Schema<FulfillmentOrderLine>(
         quantity: { type: Number, required: true, min: 1 },
         shippedQuantity: { type: Number, required: true, min: 0, default: 0 },
         cancelledQuantity: { type: Number, required: true, min: 0, default: 0 }
+    },
+    { _id: false }
+);
+
+/** The embedded destination: the order's address fields, each an encrypted string. */
+const destinationSchema = new Schema<OrderAddress>(
+    {
+        fullName: { type: String },
+        street: { type: String },
+        city: { type: String },
+        zip: { type: String },
+        country: { type: String },
+        phone: { type: String }
     },
     { _id: false }
 );
@@ -199,6 +221,7 @@ export const shipmentSchema = new Schema<ShipmentDocument>(
             required: true
         },
         number: { type: Number, required: true, min: 1 },
+        kind: { type: String, enum: Object.values(FulfillmentOrderKind), required: true },
         trackingCode: { type: String },
         status: {
             type: String,
@@ -206,6 +229,7 @@ export const shipmentSchema = new Schema<ShipmentDocument>(
             default: ShipmentStatus.shipped
         },
         lines: { type: [shipmentLineSchema], required: true },
+        destination: { type: destinationSchema },
         forced: { type: Boolean, required: true, default: false },
         shippedAt: { type: Date, required: true },
         deliveredAt: { type: Date }

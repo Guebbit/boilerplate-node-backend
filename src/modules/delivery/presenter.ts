@@ -18,6 +18,7 @@ import type {
 import { boardStateOf, holdNoticeOf, isLate, remainingOfLine, slippedDays } from './domain';
 import type { ProductSummaryRow } from './repository';
 import type { OrderBrief } from '@modules/orders';
+import { decryptDestination } from './pii';
 import type { FulfillmentOrderDocument, ShipmentDocument } from './model';
 
 /**
@@ -39,13 +40,16 @@ const presentLines = (lines: FulfillmentOrderDocument['lines']): FulfillmentOrde
  * The shipment as `openapi.yaml` declares it, with the caller's `actions`.
  * @param shipment - the stored shipment
  * @param actions - what this caller may do to it
+ * @param awaitingTracking - whether it left on a tracked method and still has no code
  */
 export const presentShipment = (
     shipment: ShipmentDocument,
-    actions: ShipmentActions
+    actions: ShipmentActions,
+    awaitingTracking: boolean
 ): Shipment => ({
     ...presentExportShipment(shipment),
     forced: shipment.forced,
+    awaitingTracking,
     actions,
     ...(shipment.createdAt ? { createdAt: shipment.createdAt.toISOString() } : {}),
     ...(shipment.updatedAt ? { updatedAt: shipment.updatedAt.toISOString() } : {})
@@ -67,6 +71,9 @@ export const presentExportShipment = (shipment: ShipmentDocument): ExportShipmen
         quantity
     })),
     shippedAt: shipment.shippedAt.toISOString(),
+    ...(shipment.destination
+        ? { destination: decryptDestination(shipment.destination, String(shipment._id)) }
+        : {}),
     ...(shipment.trackingCode ? { trackingCode: shipment.trackingCode } : {}),
     ...(shipment.deliveredAt ? { deliveredAt: shipment.deliveredAt.toISOString() } : {})
 });

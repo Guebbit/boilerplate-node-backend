@@ -196,6 +196,17 @@ export const billingAddressOf = (order: OrderDocument): Order['billingAddress'] 
         : undefined;
 
 /**
+ * The order's shipping address in plaintext, for `delivery`'s copy onto a shipment: a hydrated
+ * {@link OrderDocument} holds the stored ciphertext, and only `toJSON` decrypts.
+ * @param order - the order as {@link getById} or `readOrder` hands it back
+ * @returns the address, or `undefined` on an order that ships nowhere (a pickup, a digital order)
+ */
+export const shippingAddressOf = (order: OrderDocument): Order['shippingAddress'] =>
+    order.shippingAddress
+        ? decryptOrderAddress(order.shippingAddress, 'shippingAddress', String(order._id))
+        : undefined;
+
+/**
  * The ids of the orders this account has open and unpaid right now, whatever the payment method —
  * what checkout's open-order cap counts, and what its refusal points the buyer at. Every one holds
  * stock (15 minutes by card, a week by bank transfer or a `processing` card), so a cap on them is

@@ -66,13 +66,14 @@ describe('fulfillmentOrderSchema', () => {
 
 describe('shipmentSchema', () => {
     it('requires the order and fulfillment order it belongs to, its number, lines and when it left', () => {
-        // `trackingCode` is optional: required by the shipping door only when the order's method
-        // is `tracked` (a service-level rule, not a schema one — an untracked parcel has none).
+        // `trackingCode` is optional: a tracked parcel may get its code after it left, and an
+        // untracked one has none. `destination` is optional too: a pickup has no address.
         // `deliveredAt` is absent until it arrives — its absence IS "in transit", which is why it
         // carries no default.
         expect(requiredPaths(shipmentSchema)).toEqual([
             'forced',
             'fulfillmentOrderId',
+            'kind',
             'lines',
             'number',
             'orderId',

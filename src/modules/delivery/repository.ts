@@ -6,6 +6,11 @@
  * `Repository` exists. See: docs/modules/delivery.md
  */
 
+import {
+    reencryptOf,
+    type ReencryptSpec,
+    type ReencryptReport
+} from '@infrastructure/security/reencrypt';
 import type { ClientSession, QueryFilter } from 'mongoose';
 import {
     fulfillmentOrderModel,
@@ -482,10 +487,17 @@ export const shipmentRepository: Repository<ShipmentDocument, Wire<ShipmentDocum
         session: ClientSession
     ) => Promise<ShipmentDocument | null>;
     setTrackingCode: (id: string, trackingCode: string) => Promise<ShipmentDocument | null>;
+    unsetDestinations: (orderId: string) => Promise<number>;
+    reencrypt: (
+        spec: ReencryptSpec<ShipmentDocument>,
+        dryRun?: boolean
+    ) => Promise<ReencryptReport>;
 } = {
     ...createRepository<ShipmentDocument, Wire<ShipmentDocument>>(shipmentModel, {
         transform: applyShipmentTransform
     }),
+
+    reencrypt: reencryptOf(shipmentModel),
 
     /**
      * Every shipment of one order, in the order they were cut.
@@ -565,17 +577,33 @@ export const shipmentRepository: Repository<ShipmentDocument, Wire<ShipmentDocum
             .exec(),
 
     /**
-     * Correct the tracking code of a shipment still `shipped` — once it has arrived the code is a
-     * record of what happened, not a typo to fix.
+     * Set or correct the tracking code of a shipment, whatever its status: the code is most
+     * valuable after arrival, as evidence in a dispute.
      * @param id - the shipment
-     * @param trackingCode - the corrected code
+     * @param trackingCode - the new code
      */
     setTrackingCode: (id, trackingCode) =>
         shipmentModel
             .findOneAndUpdate(
-                { _id: toObjectId(id), status: 'shipped' },
+                { _id: toObjectId(id) },
                 { $set: { trackingCode } },
                 { returnDocument: 'after' }
             )
+            .exec(),
+
+    /**
+     * Wipe the address copy of every shipment of one order — the order's own address was just
+     * scrubbed, and a copy must not outlive it. A rerun finds nothing to unset.
+     * @param orderId - the order whose address was redacted
+     * @returns how many shipments lost their destination
+     */
+    unsetDestinations: (orderId) =>
+        shipmentModel
+            .updateMany(
+                { orderId: toObjectId(orderId), destination: { $exists: true } },
+                { $unset: { destination: 1 } },
+                { timestamps: false }
+            )
             .exec()
+            .then((result) => result.modifiedCount)
 };

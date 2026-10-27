@@ -21,9 +21,8 @@ export type StaticShippingMethod = Omit<ShippingMethod, 'currency'>;
  *
  * Weight range:    the one dimension worth demonstrating — it keeps a carrier's limits honest.
  *                  `pickup` has no ceiling: a counter collection doesn't care how heavy the box is.
- * tracked:         whether `POST /delivery/fulfillment-orders/{id}/shipments` must carry a
- *                  tracking code — only
- *                  `express` is worth the carrier's own visibility.
+ * tracked:         whether the carrier gives a code the buyer can follow (it may be added
+ *                  after the shipment left) — only `express` is worth the carrier's own visibility.
  * requiresAddress: whether checkout demands an address — `pickup` ships nowhere, so it needs none.
  */
 export const SHIPPING_METHODS: readonly StaticShippingMethod[] = [

@@ -12,7 +12,6 @@
         "not-holdable": "Only an open fulfillment order can be put on hold",
         "not-releasable": "This fulfillment order is not on hold, or waits for stock and is released only by it arriving",
         "not-deliverable": "This shipment has already been delivered, or its order cannot take a delivery now",
-        "tracking-code-required": "A tracking code is required for this shipping method",
         "override-reason-required": "A reason is required to force this move",
         "email-line": "{{quantity}} × {{title}}",
         "email-shipped": {
@@ -20,6 +19,8 @@
             "meta-title": "Order shipped",
             "greeting": "Hello, {{name}}!",
             "body": "Good news — part of your order has left the warehouse.",
+            "added-subject": "The tracking code of your shipment is ready",
+            "added-body": "The tracking code for part of your order was not available when it left. Here it is.",
             "corrected-subject": "The tracking code of your shipment changed",
             "corrected-body": "We sent you a tracking code for part of your order that was wrong. This is the right one.",
             "tracking": "Track your parcel with code {{code}}.",

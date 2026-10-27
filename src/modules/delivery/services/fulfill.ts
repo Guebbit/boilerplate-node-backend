@@ -15,7 +15,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { canShip, orderService } from '@modules/orders';
+import { orderService } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import type { AuthContext, CallerContext, Shipment } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
@@ -26,7 +26,13 @@ import { readWithOrder, refuse, runAct } from './act';
 import { viewShipment } from './actions';
 import { announceDelivered, announceShipped } from './announce';
 import { cutShipment } from './cut';
-import { reportProgress, settleOrder } from './progress';
+import {
+    auditUnearnedStart,
+    isOpenForShipment,
+    mayStartFulfilment,
+    refuseUnearnedStart
+} from './ship-gate';
+import { reportProgress, settleOrder, startFulfilment } from './progress';
 
 /** What a committed fulfilment leaves for the steps that follow it. */
 interface Fulfilled {
@@ -37,17 +43,21 @@ interface Fulfilled {
 /**
  * The act itself, in its transaction.
  * @param fulfillmentOrderId - the digital fulfillment order
+ * @param context - the caller; their id lands on the order's timeline
+ * @param mayStart - whether the caller holds `start:Shipment`, decided before the transaction
  * @param session - the act's transaction
- * @param actor - the staff member fulfilling it, for the order's timeline
  */
 const fulfillAct = async (
     fulfillmentOrderId: string,
-    session: ClientSession,
-    actor: string | null | undefined
+    context: CallerContext,
+    mayStart: boolean,
+    session: ClientSession
 ): Promise<Fulfilled> => {
+    const actor = context.caller.id;
     const { fulfillmentOrder, order } = await readWithOrder(fulfillmentOrderId, session);
     const orderId = String(fulfillmentOrder.orderId);
-    if (!canShip(order.status))
+    refuseUnearnedStart(order.status, mayStart);
+    if (!isOpenForShipment(order.status, mayStart))
         refuse(409, ERROR_CODES.ORDER_NOT_PROCESSING, 'delivery.not-processing');
     if (fulfillmentOrder.kind !== 'digital')
         refuse(409, ERROR_CODES.DELIVERY_NOT_DIGITAL, 'delivery.not-digital');
@@ -66,6 +76,8 @@ const fulfillAct = async (
         },
         session
     );
+    // From `paid` the act makes the `start` move itself, before the summary and the settle read it.
+    await startFulfilment(order, session, actor);
     const progress = await reportProgress(orderId, session);
     await settleOrder(orderId, progress.order.status, progress.summary, at, session, actor);
     await announceShipped(shipment, session, actor);
@@ -86,10 +98,15 @@ export const fulfillFulfillmentOrder = (
     fulfillmentOrderId: string,
     authContext: AuthContext | undefined,
     context: CallerContext
-): Promise<ResponseSuccess<Shipment> | ResponseReject> =>
-    runAct((session) => fulfillAct(fulfillmentOrderId, session, context.caller.id)).then(
+): Promise<ResponseSuccess<Shipment> | ResponseReject> => {
+    // Decided before the transaction opens: a retried transaction must not change the verdict.
+    const mayStart = mayStartFulfilment(context);
+    return runAct((session) => fulfillAct(fulfillmentOrderId, context, mayStart, session)).then(
         (result) => {
-            if (result.refused) return result.reject;
+            if (result.refused) {
+                auditUnearnedStart(context, result.reject, fulfillmentOrderId);
+                return result.reject;
+            }
             const { shipment } = result.value;
             return orderService
                 .refreshShelf(shipment.lines.map(({ productId }) => productId))
@@ -107,3 +124,4 @@ export const fulfillFulfillmentOrder = (
                 );
         }
     );
+};
