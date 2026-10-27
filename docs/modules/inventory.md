@@ -185,11 +185,12 @@ Every rule this module declares and who holds it, role by role. The rule is what
 
 <!-- permissions:start -->
 
-| Rule                   | Set                   | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                 |
-| ---------------------- | --------------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | ---------------------------------------------------------------------------------------------------- |
-| `read:StockLevel`      | `InventoryDisplay`    | —       | —            | —          | ✅        | ✅          | —         | —        | —           | ✅      | —          | ✅         | Read stock levels and the movements behind them.                                                     |
-| `create:StockMovement` | `InventoryManagement` | —       | —            | —          | —         | ✅          | —         | —        | —           | ✅      | —          | ✅         | Record a receipt or an adjustment, or set a product's preorder limit. Stock never moves without one. |
-| `sweep:StockLevel`     | `InventorySweep`      | —       | —            | —          | —         | —           | —         | —        | —           | ✅      | —          | ✅         | Clear expired reservation holds. The expiry tick, not a role's own tool.                             |
+| Rule                   | Set                   | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                       |
+| ---------------------- | --------------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | ---------------------------------------------------------------------------------------------------------- |
+| `read:StockLevel`      | `InventoryDisplay`    | —       | —            | —          | ✅        | ✅          | —         | —        | —           | ✅      | —          | ✅         | Read stock levels and the movements behind them.                                                           |
+| `create:StockMovement` | `InventoryManagement` | —       | —            | —          | —         | ✅          | —         | —        | —           | ✅      | —          | ✅         | Record a receipt or an adjustment. Stock never moves without one.                                          |
+| `update:StockLevel`    | `InventoryManagement` | —       | —            | —          | —         | ✅          | —         | —        | —           | ✅      | —          | ✅         | Edit a product's stock level, i.e. set its preorder limit. The counters move only through stock movements. |
+| `sweep:StockLevel`     | `InventorySweep`      | —       | —            | —          | —         | —           | —         | —        | —           | ✅      | —          | ✅         | Clear expired reservation holds. The expiry tick, not a role's own tool.                                   |
 
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in

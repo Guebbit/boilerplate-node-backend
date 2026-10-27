@@ -1285,12 +1285,10 @@ paths:
     # ---------- products ----------
     /products:
         $ref: '../../src/modules/products/openapi.yaml#/paths/~1products'
-    /products/categories:
-        $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1categories'
+    /products/facets:
+        $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1facets'
     /products/{id}:
         $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1{id}'
-    /products/{id}/admin:
-        $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1{id}~1admin'
     /products/{id}/restore:
         $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1{id}~1restore'
     /products/{id}/hard:
@@ -1414,8 +1412,6 @@ paths:
     # ---------- inventory ----------
     /inventory/levels:
         $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1levels'
-    /inventory/levels/{productId}/backorder-limit:
-        $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1levels~1{productId}~1backorder-limit'
     /inventory/preorders:
         $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1preorders'
     /inventory/movements:

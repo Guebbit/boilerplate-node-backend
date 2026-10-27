@@ -66,7 +66,7 @@ export default function () {
     });
 
     group('facets', () => {
-        const facets = http.get(`${BASE_URL}/products/categories`);
+        const facets = http.get(`${BASE_URL}/products/facets`);
         check(facets, { 'facets answer 200': (response) => response.status === 200 });
     });
 }

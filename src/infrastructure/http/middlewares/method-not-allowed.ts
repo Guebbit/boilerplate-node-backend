@@ -4,7 +4,7 @@
  * 405 + `Allow` (RFC 9110 §15.5.6) instead of the catch-all's 404.
  *
  * Two mounts: before the routers for a path with no `{param}` (OAS matches a literal path before a
- * templated one, so `DELETE /products/categories` must not reach `/products/{id}`), and right
+ * templated one, so `DELETE /products/facets` must not reach `/products/{id}`), and right
  * before the 404 catch-all for everything else, where it only sees a request no route answered.
  * A path of a module this build does not serve stays a 404: the module is not there to be asked.
  *

@@ -39,11 +39,10 @@ describe('product routes — what is mounted', () => {
             'GET /',
             'POST /',
             'DELETE /',
-            'GET /categories',
+            'GET /facets',
             'GET /:id',
             'PUT /:id',
             'PATCH /:id',
-            'GET /:id/admin',
             'DELETE /:id',
             'POST /:id/restore',
             'DELETE /:id/hard'
@@ -55,7 +54,7 @@ describe('product routes — what is mounted', () => {
 
         // Express matches in mount order: the first `/:id` shadows every later literal segment.
         expect(paths.indexOf('/search')).toBeLessThan(paths.indexOf('/:id'));
-        expect(paths.indexOf('/categories')).toBeLessThan(paths.indexOf('/:id'));
+        expect(paths.indexOf('/facets')).toBeLessThan(paths.indexOf('/:id'));
     });
 
     it('runs getAuth for every route, so admins get the wider scope', () => {
@@ -77,13 +76,12 @@ describe('product routes — the product page and its stock count', () => {
 });
 
 describe('product routes — authorization', () => {
-    /** Everything that changes catalogue state, plus the admin-only all-languages read. */
+    /** Everything that changes catalogue state, */
     const GUARDED = [
         'POST /',
         'DELETE /',
         'PUT /:id',
         'PATCH /:id',
-        'GET /:id/admin',
         'DELETE /:id',
         'DELETE /:id/hard'
     ];
@@ -117,7 +115,7 @@ describe('product routes — authorization', () => {
         }
     );
 
-    it.each(['POST /search', 'GET /', 'GET /categories', 'GET /:id'])(
+    it.each(['POST /search', 'GET /', 'GET /facets', 'GET /:id'])(
         '%s stays public',
         (signature) => {
             const row = routeTable(router).find(
@@ -163,22 +161,13 @@ describe('product routes — caching', () => {
         }
     );
 
-    it.each(['GET /categories', 'GET /:id'])(
-        '%s is cached under the catalogue tag',
-        (signature) => {
-            const entry = chainOf(router, signature).find((each) => each.startsWith('setCache'));
+    it.each(['GET /facets', 'GET /:id'])('%s is cached under the catalogue tag', (signature) => {
+        const entry = chainOf(router, signature).find((each) => each.startsWith('setCache'));
 
-            expect(entry).toContain('setCache(3600');
-            expect(optionsOf(chainOf(router, signature), 'setCache')).toMatchObject({
-                tags: [TAG]
-            });
-        }
-    );
-
-    it('never caches the admin read of one product: someone is editing it right now', () => {
-        const chain = chainOf(router, 'GET /:id/admin');
-
-        expect(chain.some((entry) => entry.startsWith('setCache'))).toBe(false);
+        expect(entry).toContain('setCache(3600');
+        expect(optionsOf(chainOf(router, signature), 'setCache')).toMatchObject({
+            tags: [TAG]
+        });
     });
 
     it.each(['POST /', 'DELETE /', 'PUT /:id', 'PATCH /:id', 'DELETE /:id', 'DELETE /:id/hard'])(

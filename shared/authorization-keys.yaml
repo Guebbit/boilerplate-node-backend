@@ -311,7 +311,12 @@ rules:
       subject: StockMovement
       module: inventory
       scope: tenant
-      description: Record a receipt or an adjustment, or set a product's preorder limit. Stock never moves without one.
+      description: Record a receipt or an adjustment. Stock never moves without one.
+    - action: update
+      subject: StockLevel
+      module: inventory
+      scope: tenant
+      description: Edit a product's stock level, i.e. set its preorder limit. The counters move only through stock movements.
     # Not a CRUD verb — see `actions:` above. Guards the one route that clears expired reservation
     # holds on a schedule; granted to no preset role but `admin`, who holds it by name like every
     # other key. See `inventory/routes.ts`.
@@ -720,9 +725,10 @@ sets:
           - read:StockLevel
     - name: InventoryManagement
       module: inventory
-      description: Record a receipt or an adjustment.
+      description: Record a receipt or an adjustment, or set a product's preorder limit.
       rules:
           - create:StockMovement
+          - update:StockLevel
     - name: InventorySweep
       module: inventory
       description: Clear expired reservation holds.

@@ -1,16 +1,19 @@
 /**
  * @module
- * Single-product reads: the caller's scope, the resolved view, the editor's all-locales view.
+ * Single-product reads: the caller's scope, the resolved view, and every language for a caller
+ * who may read translations.
  */
 
 import { applyTranslations } from '@kernel/translation';
-import type { Product, ProductAdmin, CallerContext, Caller } from '@types';
+import type { Product, CallerContext, Caller } from '@types';
 import { carryVersion } from '@infrastructure/persistence/versioning';
 import { accessibleFilterFor } from '@kernel/access/query';
 import { presentProduct } from '../presenter';
 import { canSeeStock, redactStock } from './stock-view';
 import { productRepository } from '../repository';
 import { translationsWithFallback } from './lookups';
+import { canSeeTranslations } from './translation-view';
+import type { ProductDocument } from '../model';
 
 /**
  * Which products a caller is allowed to read.
@@ -23,6 +26,14 @@ import { translationsWithFallback } from './lookups';
  * @param caller - `request.caller`, or `undefined` for an anonymous request
  */
 export const callerScope = (caller?: Caller) => accessibleFilterFor(caller, 'Product');
+
+/**
+ * One stored product as the wire shape in the request's language.
+ *
+ * @param product - the document to present and resolve
+ */
+const resolveToLocale = (product: ProductDocument): Promise<Product> =>
+    applyTranslations('product', [presentProduct(product)]).then(([resolved]) => resolved);
 
 /**
  * Get a single product by ID, already resolved to the caller's locale.
@@ -43,18 +54,18 @@ export const getById = (
     // Return early without triggering a DB call when no id is provided
     if (!id) return Promise.resolve(undefined);
 
-    return productRepository.findByIdScoped(id, scope).then((product) => {
-        if (!product) return product;
-
-        return applyTranslations('product', [presentProduct(product)]).then(
-            ([resolved]) => resolved
-        );
-    });
+    return productRepository
+        .findByIdScoped(id, scope)
+        .then((product) => (product ? resolveToLocale(product) : product));
 };
 
 /**
  * `GET /products/:id` — get a product, as `context.caller` may see it: the exact stock counters
- * stay for a holder of `read:StockLevel` — see `./stock-view`.
+ * stay for a holder of `read:StockLevel` (see `./stock-view`), and `translations` (every language,
+ * drafts included) for a holder of `read:Translation` (see `./translation-view`).
+ *
+ * The top-level `title`/`description` are always the request's resolved language, even beside
+ * `translations`: staff browsing the shop in Italian must not see the fallback language there.
  *
  * Wraps rather than folds into `getById()`: most callers (unit tests, other services resolving a
  * product they already know about) have no `CallerContext`. A view is NOT reported from here: the
@@ -64,29 +75,34 @@ export const getByIdForCaller = (
     id: string | undefined,
     scope: Record<string, unknown> | undefined,
     context: CallerContext
-) =>
-    getById(id, scope).then((product) =>
-        product ? redactStock(product, canSeeStock(context.caller)) : product
-    );
+): Promise<Product | null | undefined> => {
+    if (!id) return Promise.resolve(undefined);
+
+    return productRepository.findByIdScoped(id, scope).then((product) => {
+        if (!product) return product;
+
+        return resolveToLocale(product)
+            .then((resolved) => withTranslations(product, resolved, context.caller))
+            .then((visible) => redactStock(visible, canSeeStock(context.caller)));
+    });
+};
 
 /**
- * `GET /products/{id}/admin` — a product with every language it has a row for, for the editor's
- * form to populate its tabs. Unscoped (the route is admin-only) and never resolved to one
- * language, unlike {@link getById}.
+ * The resolved product plus its `translations`, for a caller who may read them; untouched
+ * otherwise.
  *
- * Without a translation provider (`locales` uninstalled), or with one that simply has no row yet
- * for this product's fallback language, `readAllTranslations` answers no rows at all — the
- * fallback tab is built here from the product's own `title`/`description` columns instead, which
- * are the fallback language's real content either way (see `update`'s `derivedFields`).
+ * @param product - the stored document, whose rows are read
+ * @param resolved - the same product in the request's language
+ * @param caller - `request.caller`
  */
-export const getAdmin = (id: string, caller?: Caller): Promise<ProductAdmin | null> =>
-    productRepository.findById(id).then((product) => {
-        if (!product) return null;
+const withTranslations = (
+    product: ProductDocument,
+    resolved: Product,
+    caller?: Caller
+): Promise<Product> => {
+    if (!canSeeTranslations(caller)) return Promise.resolve(resolved);
 
-        return translationsWithFallback(product).then((translations) =>
-            redactStock(
-                carryVersion(product, { ...presentProduct(product), translations }),
-                canSeeStock(caller)
-            )
-        );
-    });
+    return translationsWithFallback(product).then((translations) =>
+        carryVersion(resolved, { ...resolved, translations })
+    );
+};

@@ -345,9 +345,12 @@ falls back to would leave the product with nothing. Every other locale is option
 existing one (never the fallback) deletes its row.
 `src/modules/products/services/translated-write.ts`'s `create`/`updateById` validate the whole batch
 (`planTranslations`, the `@kernel/translation` port) before writing anything, then write the
-product and its rows in the same operation; `getAdmin` backs `GET /products/{id}/admin`, the one
-read that returns every language at once rather than the caller's resolved one — what the editor's
-form populates its tabs from.
+product and its rows in the same operation. `GET /products/{id}` adds a `translations` map (every
+language, drafts included) for a caller holding `read:Translation` — what the editor's form
+populates its tabs from — while `title`/`description` stay the caller's resolved language. What the
+caller may see shapes the body; there is no separate staff URL. Such a caller never reads or fills
+the shared cache entry (`cacheScopeKey`), because a custom API key can hold `read:Translation`
+alone.
 
 This is a different door from the generic one — see
 [`locales`](./locales.md#the-generic-translations-door-and-why-it-s-not-the-only-one): only
