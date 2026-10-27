@@ -25,6 +25,7 @@ import {
     KEYED_BY_AUTHENTICATED_ACCOUNT
 } from '@infrastructure/http/middlewares/rate-limit';
 import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
+import { paymentsRateLimitData } from './rate-limits.generated';
 
 /**
  * Payment webhook deliveries allowed per window, per ADDRESS.
@@ -36,14 +37,8 @@ import { humanChallengeGate } from '@infrastructure/http/middlewares/human-chall
  * per order, a sale driving many orders at once), not the one-per-order steady state.
  */
 const WEBHOOK_BUDGET: RateLimitBudget = {
-    name: 'Payment webhook deliveries',
-    namespace: 'payment-webhook',
-    environmentVariable: 'NODE_PAYMENT_WEBHOOK_RATE_LIMIT_MAX',
-    defaultMax: 60,
-    windowMs: 'shared',
-    keyedBy: KEYED_BY_ADDRESS,
-    bounds: 'Deliveries to `POST /payments/webhook/{provider}`, spent by success — the traffic being bounded.',
-    audited: true
+    ...paymentsRateLimitData.paymentWebhook,
+    keyedBy: KEYED_BY_ADDRESS
 };
 
 /**
@@ -52,26 +47,14 @@ const WEBHOOK_BUDGET: RateLimitBudget = {
  */
 export const webhookLimiter: RequestHandler = buildRateLimiter(WEBHOOK_BUDGET);
 
-/** Window, in ms, for both payment-velocity budgets — fixed at one hour: the duration is part of what the budget means, not an artefact of the shared browsing window. */
-const PAYMENT_VELOCITY_WINDOW_MS = 60 * 60 * 1000;
-
 /**
  * Confirm attempts allowed per ACCOUNT per hour — the blunt cap on the whole intent→confirm loop:
  * a payment can be re-confirmed with a different `paymentMethodRef` after a decline, so this
  * bounds the loop itself regardless of outcome.
  */
 const CONFIRM_ATTEMPT_BUDGET: RateLimitBudget = {
-    name: 'Payment confirm attempts',
-    namespace: 'payments-confirm-attempts',
-    environmentVariable: 'NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX',
-    defaultMax: 5,
-    windowMs: PAYMENT_VELOCITY_WINDOW_MS,
+    ...paymentsRateLimitData.paymentsConfirmAttempts,
     keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT,
-    bounds:
-        'Attempts against `POST /payments/:id/confirm`, counted regardless of outcome — a ' +
-        'checkout that never fails a password check can still burn through many card numbers on ' +
-        'one intent.',
-    audited: true,
     keyGenerator: accountIdOf
 };
 
@@ -96,16 +79,8 @@ const PAYMENT_DECLINE_RATE_LIMIT_PROPERTY = 'paymentDeclineRateLimit';
  * `PAYMENT_ORDER_NOT_PAYABLE`, is a race, not a decline, and must not spend it.
  */
 const CONFIRM_DECLINE_BUDGET: RateLimitBudget = {
-    name: 'Payment confirm declines',
-    namespace: 'payments-confirm-declines',
-    environmentVariable: 'NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX',
-    defaultMax: 3,
-    windowMs: PAYMENT_VELOCITY_WINDOW_MS,
+    ...paymentsRateLimitData.paymentsConfirmDeclines,
     keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT,
-    bounds:
-        "A genuine DECLINE against `POST /payments/:id/confirm`, counted apart from the route's " +
-        'other 409 (a race, not a decline).',
-    audited: true,
     keyGenerator: accountIdOf,
     skipSuccessfulRequests: true,
     requestWasSuccessful: (request) => !request.paymentConfirmDeclined,
@@ -122,16 +97,8 @@ export const paymentConfirmDeclineLimiter: RequestHandler =
  * shopper retrying a checkout needs, so only a script loops through it. Every request counts.
  */
 const INTENT_SYNC_BUDGET: RateLimitBudget = {
-    name: 'Payment intents and syncs',
-    namespace: 'payments-intent-sync',
-    environmentVariable: 'NODE_PAYMENT_INTENT_RATE_LIMIT_MAX',
-    defaultMax: 30,
-    windowMs: PAYMENT_VELOCITY_WINDOW_MS,
+    ...paymentsRateLimitData.paymentsIntentSync,
     keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT,
-    bounds:
-        'Calls to `POST /payments` and `POST /payments/:id/sync`, pooled — each reaches ' +
-        'the payment provider.',
-    audited: true,
     keyGenerator: accountIdOf
 };
 
@@ -156,16 +123,8 @@ const PAYMENT_DECLINE_BLOCK_RATE_LIMIT_PROPERTY = 'paymentDeclineBlockRateLimit'
  * Card-number fingerprinting (what Stripe Radar does) waits for a real provider adapter.
  */
 const CONFIRM_DECLINE_BLOCK_BUDGET: RateLimitBudget = {
-    name: 'Payment confirm declines per address block',
-    namespace: 'payments-confirm-declines-block',
-    environmentVariable: 'NODE_PAYMENT_DECLINE_BLOCK_RATE_LIMIT_MAX',
-    defaultMax: 10,
-    windowMs: PAYMENT_VELOCITY_WINDOW_MS,
+    ...paymentsRateLimitData.paymentsConfirmDeclinesBlock,
     keyedBy: KEYED_BY_ADDRESS_BLOCK,
-    bounds:
-        'A genuine DECLINE against `POST /payments/:id/confirm` from one address block, whatever ' +
-        'the account — card testing spread over many accounts.',
-    audited: true,
     keyGenerator: addressBlockOf,
     skipSuccessfulRequests: true,
     requestWasSuccessful: (request) => !request.paymentConfirmDeclined,

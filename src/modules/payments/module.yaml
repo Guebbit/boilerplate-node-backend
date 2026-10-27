@@ -5,3 +5,57 @@ dependsOn:
     - access # ownOrderFlag: the audit flag of a money step on the caller's own order
     - orders # a payment freezes an order's total; a refunding cancel opens the refund
     - shop # the zone a transfer's pay-by deadline is printed in
+rateLimits:
+    paymentWebhook:
+        name: Payment webhook deliveries
+        namespace: payment-webhook
+        environmentVariable: NODE_PAYMENT_WEBHOOK_RATE_LIMIT_MAX
+        defaultMax: 60
+        windowMs: shared
+        bounds:
+            Deliveries to `POST /payments/webhook/{provider}`, spent by success — the traffic being
+            bounded.
+        audited: true
+    # Both payment-velocity budgets (and the intent one) are fixed at one hour: the duration is part
+    # of what the budget means, not an artefact of the shared browsing window.
+    paymentsConfirmAttempts:
+        name: Payment confirm attempts
+        namespace: payments-confirm-attempts
+        environmentVariable: NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX
+        defaultMax: 5
+        windowMs: 3600000
+        bounds:
+            Attempts against `POST /payments/:id/confirm`, counted regardless of outcome — a checkout
+            that never fails a password check can still burn through many card numbers on one
+            intent.
+        audited: true
+    paymentsConfirmDeclines:
+        name: Payment confirm declines
+        namespace: payments-confirm-declines
+        environmentVariable: NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX
+        defaultMax: 3
+        windowMs: 3600000
+        bounds:
+            A genuine DECLINE against `POST /payments/:id/confirm`, counted apart from the route's other
+            409 (a race, not a decline).
+        audited: true
+    paymentsConfirmDeclinesBlock:
+        name: Payment confirm declines per address block
+        namespace: payments-confirm-declines-block
+        environmentVariable: NODE_PAYMENT_DECLINE_BLOCK_RATE_LIMIT_MAX
+        defaultMax: 10
+        windowMs: 3600000
+        bounds:
+            A genuine DECLINE against `POST /payments/:id/confirm` from one address block, whatever the
+            account — card testing spread over many accounts.
+        audited: true
+    paymentsIntentSync:
+        name: Payment intents and syncs
+        namespace: payments-intent-sync
+        environmentVariable: NODE_PAYMENT_INTENT_RATE_LIMIT_MAX
+        defaultMax: 30
+        windowMs: 3600000
+        bounds:
+            Calls to `POST /payments` and `POST /payments/:id/sync`, pooled — each reaches the payment
+            provider.
+        audited: true

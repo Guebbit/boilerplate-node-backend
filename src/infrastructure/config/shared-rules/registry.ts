@@ -13,6 +13,7 @@ import { frontendLinksSchema } from './frontend-links';
 import type { GenerateSpec } from './generate-spec';
 import { logRedactionSchema } from './log-redaction';
 import { passwordHashSchema } from './password-hash';
+import { rateLimitsSchema } from './rate-limits';
 
 /** One rules file: its schema, and the TypeScript it generates when code needs it as types. */
 export interface SharedRuleEntry {
@@ -41,5 +42,20 @@ export const SHARED_RULES: Readonly<Record<string, SharedRuleEntry>> = {
     },
     'frontend-links': { schema: frontendLinksSchema },
     'log-redaction': { schema: logRedactionSchema },
-    'password-hash': { schema: passwordHashSchema }
+    'password-hash': { schema: passwordHashSchema },
+    'rate-limits': {
+        schema: rateLimitsSchema,
+        generate: {
+            out: 'src/infrastructure/http/middlewares/rate-limits.generated.ts',
+            exports: [
+                {
+                    exportName: 'infrastructureRateLimitData',
+                    shape: 'verbatim',
+                    field: 'rateLimits',
+                    description:
+                        'The kernel budgets (browsing, api-key, upload) as data; `rate-limit.ts` adds their key and skip logic.'
+                }
+            ]
+        }
+    }
 };

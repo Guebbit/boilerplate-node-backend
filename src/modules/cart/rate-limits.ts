@@ -14,6 +14,7 @@ import {
     accountIdOf,
     KEYED_BY_AUTHENTICATED_ACCOUNT
 } from '@infrastructure/http/middlewares/rate-limit';
+import { cartRateLimitData } from './rate-limits.generated';
 
 /**
  * Checkouts attempted per window, per ACCOUNT. Each one that gets through holds stock, writes an
@@ -23,17 +24,8 @@ import {
  * basket and the stock.
  */
 const CHECKOUT_BUDGET: RateLimitBudget = {
-    name: 'Checkouts attempted',
-    namespace: 'checkout',
-    environmentVariable: 'NODE_CHECKOUT_RATE_LIMIT_MAX',
-    defaultMax: 10,
-    windowMs: 'shared',
+    ...cartRateLimitData.checkout,
     keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT,
-    bounds:
-        'Requests to `POST /cart/checkout`, keyed on the ACCOUNT: each placed order holds stock and ' +
-        'writes an order, a mail and a cache wipe, and an address-keyed budget would let one signed-in ' +
-        'account behind a shared address starve every other caller on it.',
-    audited: true,
     keyGenerator: accountIdOf
 };
 
@@ -51,16 +43,8 @@ export const checkoutLimiter: RequestHandler = buildRateLimiter(CHECKOUT_BUDGET)
  * Every request spends it, a replay included — the abuse is the request, not its outcome.
  */
 const MERGE_BUDGET: RateLimitBudget = {
-    name: 'Cart merges',
-    namespace: 'cart-merge',
-    environmentVariable: 'NODE_CART_MERGE_RATE_LIMIT_MAX',
-    defaultMax: 10,
-    windowMs: 'shared',
+    ...cartRateLimitData.cartMerge,
     keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT,
-    bounds:
-        '`POST /cart/merge`: up to 100 lines per call, each a catalogue read and a cart write. ' +
-        'Every request counts.',
-    audited: true,
     keyGenerator: accountIdOf
 };
 

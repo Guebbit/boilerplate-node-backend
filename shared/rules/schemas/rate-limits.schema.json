@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "rateLimits": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "namespace": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          },
+          "environmentVariable": {
+            "type": "string",
+            "pattern": "^NODE_[A-Z0-9_]+$"
+          },
+          "defaultMax": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "windowMs": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "shared"
+              },
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              }
+            ]
+          },
+          "bounds": {
+            "type": "string",
+            "minLength": 1
+          },
+          "audited": {
+            "type": "boolean"
+          },
+          "onStoreError": {
+            "type": "string",
+            "enum": [
+              "memory",
+              "pass"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "namespace",
+          "environmentVariable",
+          "defaultMax",
+          "windowMs",
+          "bounds",
+          "audited"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "rateLimits"
+  ],
+  "additionalProperties": false
+}

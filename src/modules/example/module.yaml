@@ -3,3 +3,12 @@ subdomain: generic
 group: example
 dependsOn:
     - users # the owner's display name, and the address a publish mail goes to
+rateLimits:
+    exampleCreate:
+        name: Example creation
+        namespace: example-create
+        environmentVariable: NODE_EXAMPLE_RATE_LIMIT_MAX
+        defaultMax: 30
+        windowMs: shared
+        bounds: Examples created through `POST /examples`, spent by success.
+        audited: true

@@ -14,6 +14,7 @@ import {
     accountIdOf,
     KEYED_BY_AUTHENTICATED_ACCOUNT
 } from '@infrastructure/http/middlewares/rate-limit';
+import { returnsRateLimitData } from './rate-limits.generated';
 
 /**
  * Returns opened per window, per ACCOUNT. Each one is a row staff must read and a mail the shop
@@ -21,17 +22,8 @@ import {
  * the global brake.
  */
 const RETURNS_WRITE_BUDGET: RateLimitBudget = {
-    name: 'Returns and withdrawals opened',
-    namespace: 'returns-write',
-    environmentVariable: 'NODE_RETURNS_RATE_LIMIT_MAX',
-    defaultMax: 20,
-    windowMs: 'shared',
+    ...returnsRateLimitData.returnsWrite,
     keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT,
-    bounds:
-        'Requests to `POST /returns`, keyed on the ACCOUNT — each opens a row staff must read and ' +
-        'mails the shop pays for, and an address-keyed budget would let one signed-in account ' +
-        'behind a shared address starve every other caller on it.',
-    audited: true,
     keyGenerator: accountIdOf
 };
 

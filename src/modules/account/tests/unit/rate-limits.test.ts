@@ -12,6 +12,7 @@
 import { DEFAULT_RATE_LIMIT_MAX } from '@infrastructure/http/middlewares/rate-limit';
 import { accountRateLimits } from '@modules/account/rate-limits';
 import { budgetIn } from '@tests/rate-limit-budgets';
+import { MFA_CHALLENGE_DELIVERED_TTL_MS } from '@modules/account/services/two-factor-challenge';
 
 /** One of this module's own declared budgets, by its `namespace`. */
 const budget = (namespace: string) => budgetIn(accountRateLimits, namespace);
@@ -78,4 +79,15 @@ describe('the signed-in code-delivery budget', () => {
             budget('mfa-send').defaultMax
         );
     });
+});
+
+describe('the MFA budgets', () => {
+    it.each(['mfa-challenge', 'mfa-send'])(
+        "window %s to the challenge's own lifetime, which the YAML cannot import",
+        (namespace) => {
+            // `module.yaml` holds the number; the TTL is code. A window shorter than the challenge
+            // would refill while the challenge is still live.
+            expect(budget(namespace).windowMs).toBe(MFA_CHALLENGE_DELIVERED_TTL_MS);
+        }
+    );
 });

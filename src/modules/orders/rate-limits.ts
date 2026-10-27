@@ -15,6 +15,7 @@ import {
     accountIdOf,
     KEYED_BY_AUTHENTICATED_ACCOUNT
 } from '@infrastructure/http/middlewares/rate-limit';
+import { ordersRateLimitData } from './rate-limits.generated';
 
 /**
  * Exports allowed per window, per ACCOUNT. Each one scans up to `NODE_ORDER_EXPORT_MAX_ROWS`
@@ -22,17 +23,8 @@ import {
  * three filters, well below a script mining the shop's customers one filter at a time.
  */
 const ORDERS_EXPORT_BUDGET: RateLimitBudget = {
-    name: 'Order CSV exports',
-    namespace: 'orders-export',
-    environmentVariable: 'NODE_ORDER_EXPORT_RATE_LIMIT_MAX',
-    defaultMax: 10,
-    windowMs: 'shared',
+    ...ordersRateLimitData.ordersExport,
     keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT,
-    bounds:
-        'Exports against `GET /orders/export`, keyed on the ACCOUNT — the step-up already makes ' +
-        'the caller a person, and an address-keyed budget would let one signed-in manager behind ' +
-        'a shared address starve every other caller on it.',
-    audited: true,
     keyGenerator: accountIdOf
 };
 

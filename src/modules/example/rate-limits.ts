@@ -15,6 +15,7 @@ import {
     buildRateLimiter,
     KEYED_BY_AUTHENTICATED_ACCOUNT
 } from '@infrastructure/http/middlewares/rate-limit';
+import { exampleRateLimitData } from './rate-limits.generated';
 
 /**
  * Examples one account may create per window. Keyed on the account, not the address: the route is
@@ -22,14 +23,8 @@ import {
  * same address. A successful create spends it — the abuse is a well-formed write repeated.
  */
 const CREATE_EXAMPLE_BUDGET: RateLimitBudget = {
-    name: 'Example creation',
-    namespace: 'example-create',
-    environmentVariable: 'NODE_EXAMPLE_RATE_LIMIT_MAX',
-    defaultMax: 30,
-    windowMs: 'shared',
+    ...exampleRateLimitData.exampleCreate,
     keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT,
-    bounds: 'Examples created through `POST /examples`, spent by success.',
-    audited: true,
     keyGenerator: accountIdOf
 };
 

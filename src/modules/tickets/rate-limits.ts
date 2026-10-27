@@ -19,6 +19,7 @@ import {
     KEYED_BY_ADDRESS_BLOCK,
     KEYED_BY_SUBMITTED_EMAIL
 } from '@infrastructure/http/middlewares/rate-limit';
+import { ticketsRateLimitData } from './rate-limits.generated';
 
 /**
  * Contact-form submissions allowed per window, per ADDRESS.
@@ -30,16 +31,8 @@ import {
  * nothing about the amplifier this exists to bound.
  */
 const SUBMISSION_ADDRESS_BUDGET: RateLimitBudget = {
-    name: 'Contact submissions — per address',
-    namespace: 'submissions',
-    environmentVariable: 'NODE_SUBMISSION_RATE_LIMIT_MAX',
-    defaultMax: 5,
-    windowMs: 'shared',
-    keyedBy: KEYED_BY_ADDRESS,
-    bounds:
-        'Contact-form submissions from ONE address, spent by SUCCESS — a well-formed post is the ' +
-        'abuse being bounded, not a failed one.',
-    audited: true
+    ...ticketsRateLimitData.submissions,
+    keyedBy: KEYED_BY_ADDRESS
 };
 
 /** The budget for `POST /tickets` on its own — see {@link SUBMISSION_ADDRESS_BUDGET}. */
@@ -47,27 +40,15 @@ export const submissionLimiter: RequestHandler = buildRateLimiter(SUBMISSION_ADD
 
 /** Contact-form submissions allowed per window, per submitted EMAIL ADDRESS. */
 const SUBMISSION_IDENTITY_BUDGET: RateLimitBudget = {
-    name: 'Contact submissions — per email',
-    namespace: 'submission-identity',
-    environmentVariable: 'NODE_SUBMISSION_RATE_LIMIT_EMAIL_MAX',
-    defaultMax: 5,
-    windowMs: 'shared',
+    ...ticketsRateLimitData.submissionIdentity,
     keyedBy: KEYED_BY_SUBMITTED_EMAIL,
-    bounds: 'Contact-form submissions naming ONE sender email, spent by success.',
-    audited: true,
     keyGenerator: identityOf
 };
 
 /** Contact-form submissions allowed per window, per caller ADDRESS BLOCK. */
 const SUBMISSION_BLOCK_BUDGET: RateLimitBudget = {
-    name: 'Contact submissions — per address block',
-    namespace: 'submission-block',
-    environmentVariable: 'NODE_SUBMISSION_RATE_LIMIT_BLOCK_MAX',
-    defaultMax: 20,
-    windowMs: 'shared',
+    ...ticketsRateLimitData.submissionBlock,
     keyedBy: KEYED_BY_ADDRESS_BLOCK,
-    bounds: 'Contact-form submissions from ONE address block, spent by success.',
-    audited: true,
     keyGenerator: addressBlockOf
 };
 

@@ -4,3 +4,177 @@ group: foundation
 dependsOn:
     - access # rolesOf/assignRole/assignDefaultRole/promoteVerifiedCustomer
     - users # the User document — the repo's one shared kernel
+rateLimits:
+    # One day, the window of the recipient budget.
+    mailRecipient:
+        name: Mail to one mailbox
+        namespace: mail-recipient
+        environmentVariable: NODE_MAIL_RECIPIENT_RATE_LIMIT_MAX
+        defaultMax: 10
+        windowMs: 86400000
+        bounds:
+            Mails to ONE mailbox from signup, reset, email change, both resends, a data export and an
+            account deletion, over a day — bounds the VICTIM of a mail bomb, which a budget on the
+            caller cannot.
+        audited: true
+    # Every credential-guess budget is windowed to 15 minutes, its own rather than the shared browsing
+    # window (a minute by default): a guess budget that refills each minute bounds nothing. The
+    # per-account budget's lockouts also double on a repeat (see `escalation` in `rate-limits.ts`).
+    credentialsIdentity:
+        name: Credential guesses — per account
+        namespace: credentials-identity
+        environmentVariable: NODE_AUTH_RATE_LIMIT_MAX
+        defaultMax: 10
+        windowMs: 900000
+        bounds: "Failed attempts against ONE named account — defeats a botnet spreading guesses. The
+            smallest of the credential budgets, since guessing at one account is the attack and
+            someone signing in on several devices is not. A repeated lockout of the same account
+            lasts twice as long as the last (up to 8x), and a browser carrying the account's
+            familiar-device cookie skips this budget, so spending it cannot lock the owner out. A
+            request that names no account is not counted here: the address budgets bound it."
+        audited: true
+    credentialsDevice:
+        name: Credential guesses — failing device cookie
+        namespace: credentials-device
+        environmentVariable: NODE_AUTH_RATE_LIMIT_DEVICE_MAX
+        defaultMax: 10
+        windowMs: 900000
+        bounds:
+            Failed attempts from ONE address that presented a device cookie not valid for the account
+            they named — a forged token gets its own, small budget.
+        audited: true
+    credentialsAddress:
+        name: Credential guesses — per address
+        namespace: credentials-address
+        environmentVariable: NODE_AUTH_RATE_LIMIT_ADDRESS_MAX
+        defaultMax: 30
+        windowMs: 900000
+        bounds: Failed attempts from ONE address — defeats spraying a user list.
+        audited: true
+    credentialsBlock:
+        name: Credential guesses — per address block
+        namespace: credentials-block
+        environmentVariable: NODE_AUTH_RATE_LIMIT_BLOCK_MAX
+        defaultMax: 100
+        windowMs: 900000
+        bounds:
+            Failed attempts from ONE address block — the largest and coarsest of the three, sized above
+            the address budget because a block is shared by many honest callers (an office, a CGNAT
+            pool, one IPv6 customer's whole allocation), not by one.
+        audited: true
+    credentialsSession:
+        name: Credential guesses — per signed-in account
+        namespace: credentials-session
+        environmentVariable: NODE_AUTH_RATE_LIMIT_SESSION_MAX
+        defaultMax: 10
+        windowMs: 900000
+        bounds:
+            Failed attempts a signed-in caller makes to re-prove themselves — a stolen session guessing
+            the password, or spamming the verification mail. Keyed on the session, so changing
+            address does not refill it.
+        audited: true
+    passwordCheck:
+        name: Password-strength checks
+        namespace: password-check
+        environmentVariable: NODE_PASSWORD_CHECK_RATE_LIMIT_MAX
+        defaultMax: 20
+        windowMs: shared
+        bounds:
+            A live meter fires on every debounced keystroke pause, so this is sized for a real typing
+            session (a handful of edits) rather than a single submission.
+        audited: true
+    passwordCheckBlock:
+        name: Password-strength checks — per address block
+        namespace: password-check-block
+        environmentVariable: NODE_PASSWORD_CHECK_RATE_LIMIT_BLOCK_MAX
+        defaultMax: 60
+        windowMs: shared
+        bounds:
+            Checks from ONE address block, sized above the address budget because a block is shared by
+            many honest typists.
+        audited: true
+    signupIdentity:
+        name: Signups — per email
+        namespace: signup-identity
+        environmentVariable: NODE_SIGNUP_RATE_LIMIT_MAX
+        defaultMax: 5
+        windowMs: shared
+        bounds:
+            Signup has no account yet to key a failure budget on, so this — spent by SUCCESS — is the
+            whole of its identity budget.
+        audited: true
+    signupAddress:
+        name: Signups — per address
+        namespace: signup-address
+        environmentVariable: NODE_SIGNUP_RATE_LIMIT_ADDRESS_MAX
+        defaultMax: 15
+        windowMs: shared
+        bounds: Signups from ONE address, spent by success.
+        audited: true
+    signupBlock:
+        name: Signups — per address block
+        namespace: signup-block
+        environmentVariable: NODE_SIGNUP_RATE_LIMIT_BLOCK_MAX
+        defaultMax: 40
+        windowMs: shared
+        bounds: Signups from ONE address block, spent by success.
+        audited: true
+    resetIdentity:
+        name: Password resets — per email
+        namespace: reset-identity
+        environmentVariable: NODE_RESET_RATE_LIMIT_MAX
+        defaultMax: 5
+        windowMs: shared
+        bounds:
+            '`postResetRequest` always answers 200, to prevent account enumeration — so, like signup,
+            only a budget spent by SUCCESS bounds anything here.'
+        audited: true
+    resetAddress:
+        name: Password resets — per address
+        namespace: reset-address
+        environmentVariable: NODE_RESET_RATE_LIMIT_ADDRESS_MAX
+        defaultMax: 15
+        windowMs: shared
+        bounds: Password-reset requests from ONE address, spent by success.
+        audited: true
+    resetBlock:
+        name: Password resets — per address block
+        namespace: reset-block
+        environmentVariable: NODE_RESET_RATE_LIMIT_BLOCK_MAX
+        defaultMax: 40
+        windowMs: shared
+        bounds: Password-reset requests from ONE address block, spent by success.
+        audited: true
+    # Both challenge budgets bucket on the LONGER of the two challenge tiers,
+    # `MFA_CHALLENGE_DELIVERED_TTL_MS`: a window must never end before the challenge it bounds
+    # (pinned by `rate-limits.test.ts`).
+    mfaChallenge:
+        name: MFA challenge guesses
+        namespace: mfa-challenge
+        environmentVariable: NODE_MFA_CHALLENGE_MAX
+        defaultMax: 5
+        windowMs: 600000
+        bounds:
+            'Guesses against ONE live challenge (`POST /account/login/2fa`) — `credentialLimiters`
+            bounds guesses per account/address across every login attempt; this bounds guesses
+            against ONE still-live challenge, which an IP/account limit alone does not: a
+            distributed attacker rotating IPs is still capped per challenge.'
+        audited: true
+    mfaSend:
+        name: MFA code deliveries
+        namespace: mfa-send
+        environmentVariable: NODE_MFA_SEND_MAX
+        defaultMax: 3
+        windowMs: 600000
+        bounds: Deliveries against ONE login challenge (`POST /account/login/2fa/send`).
+        audited: true
+    # An hour, so a burst cannot be waited out in minutes.
+    mfaAccountSend:
+        name: MFA code deliveries — per account
+        namespace: mfa-account-send
+        environmentVariable: NODE_MFA_ACCOUNT_SEND_MAX
+        defaultMax: 5
+        windowMs: 3600000
+        bounds: Deliveries to a signed-in account (`POST /account/2fa/methods/{method}/send`, `POST
+            /account/reauth/methods/{method}/send`).
+        audited: true

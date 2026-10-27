@@ -25,6 +25,7 @@ import { renderGenerated } from './shared-rules-render';
 import type { GenerateSpec } from '../../src/infrastructure/config/shared-rules/generate-spec';
 import { SHARED_RULES } from '../../src/infrastructure/config/shared-rules/registry';
 import { personasSchema } from '../../scenarios/personas-schema';
+import { rateLimitsBlockSchema } from '../../src/infrastructure/config/shared-rules/rate-limits';
 
 /** The folder every exported schema is committed under, beside its data. */
 const SHARED_DIRECTORY = path.join(REPO_ROOT, 'shared');
@@ -76,7 +77,45 @@ const loadModuleSource = (moduleName: string): Promise<GeneratedSource> =>
         })
     );
 
-/** Every rules file that generates TypeScript: the registry's, then each module's. */
+/** The camelCase of a folder name (`some-module` becomes `someModule`). */
+const camelCaseOf = (name: string): string =>
+    name.replaceAll(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
+
+/** A `module.yaml` seen only for its `rateLimits:` block; the rest is the descriptor's business. */
+const moduleRateLimitsSchema = z.looseObject({ rateLimits: rateLimitsBlockSchema });
+
+/**
+ * The generated budgets file of every module whose `module.yaml` declares `rateLimits:`.
+ *
+ * @returns one source per such module
+ */
+const collectRateLimitSources = (): GeneratedSource[] =>
+    modulesWith(MODULES_ROOT, 'module.yaml').flatMap((moduleName) => {
+        const source = `src/modules/${moduleName}/module.yaml`;
+        const parsed = parse(readFileSync(path.join(REPO_ROOT, source), 'utf8')) as
+            | Record<string, unknown>
+            | undefined;
+        if (!parsed || !('rateLimits' in parsed)) return [];
+        return [
+            {
+                source,
+                schema: moduleRateLimitsSchema,
+                spec: {
+                    out: `src/modules/${moduleName}/rate-limits.generated.ts`,
+                    exports: [
+                        {
+                            exportName: `${camelCaseOf(moduleName)}RateLimitData`,
+                            shape: 'verbatim' as const,
+                            field: 'rateLimits',
+                            description: `${moduleName}'s rate-limit budgets as data; \`rate-limits.ts\` adds their key and skip logic.`
+                        }
+                    ]
+                }
+            }
+        ];
+    });
+
+/** Every rules file that generates TypeScript: the registry's, each module's, then the budgets. */
 const collectSources = (): Promise<GeneratedSource[]> =>
     Promise.all(
         modulesWith(MODULES_ROOT, 'rules.yaml').map((moduleName) => loadModuleSource(moduleName))
@@ -92,7 +131,8 @@ const collectSources = (): Promise<GeneratedSource[]> =>
                   ]
                 : []
         ),
-        ...moduleSources
+        ...moduleSources,
+        ...collectRateLimitSources()
     ]);
 
 /**

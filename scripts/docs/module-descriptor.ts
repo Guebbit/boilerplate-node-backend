@@ -11,6 +11,7 @@ import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 import { modulesWith } from '../modules-on-disk';
+import { rateLimitsBlockSchema } from '../../src/infrastructure/config/shared-rules/rate-limits';
 
 /**
  * How a module's screen pairs with the paired frontend, when it is not simply "a frontend module of
@@ -54,7 +55,12 @@ export const moduleDescriptorSchema = z
          */
         noAudit: z.string().min(1).optional(),
         /** Only where the frontend counterpart is not the module's own name. */
-        frontend: frontendPairingSchema.optional()
+        frontend: frontendPairingSchema.optional(),
+        /**
+         * The module's rate-limit budgets as data. `npm run regenerate` writes
+         * `<module>/rate-limits.generated.ts` from it; `rate-limits.ts` adds the key and skip logic.
+         */
+        rateLimits: rateLimitsBlockSchema.optional()
     })
     .strict();
 

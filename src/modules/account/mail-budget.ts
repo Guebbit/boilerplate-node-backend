@@ -28,27 +28,16 @@ import { pseudonymise } from '@infrastructure/security/pseudonymise';
 import { generateReject, type ResponseReject } from '@infrastructure/http/response';
 import { t } from '@infrastructure/i18n';
 import { ERROR_CODES } from '@api/error-codes';
-import { DAY_MS } from '@domain-primitives/time';
-
-/** One day, the window of the recipient budget. */
-const MAIL_RECIPIENT_WINDOW_MS = DAY_MS;
+import { accountRateLimitData } from './rate-limits.generated';
 
 /**
  * Mails per window to ONE canonical mailbox. Ten is a verification mail, a few resends and a reset
  * or two, with room to spare; it is far below what turns a victim's inbox into a weapon.
  */
 export const MAIL_RECIPIENT_BUDGET: RateLimitBudget = {
-    name: 'Mail to one mailbox',
-    namespace: 'mail-recipient',
-    environmentVariable: 'NODE_MAIL_RECIPIENT_RATE_LIMIT_MAX',
-    defaultMax: 10,
-    windowMs: MAIL_RECIPIENT_WINDOW_MS,
+    ...accountRateLimitData.mailRecipient,
     keyedBy:
-        'the recipient mailbox: lowercased, `+tag` dropped, dots dropped for Gmail, pseudonymised',
-    bounds:
-        'Mails to ONE mailbox from signup, reset, email change, both resends, a data export and an account deletion, over a day — ' +
-        'bounds the VICTIM of a mail bomb, which a budget on the caller cannot.',
-    audited: true
+        'the recipient mailbox: lowercased, `+tag` dropped, dots dropped for Gmail, pseudonymised'
 };
 
 /**

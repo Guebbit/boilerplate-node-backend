@@ -30,12 +30,13 @@ import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 import { pseudonymise } from '@infrastructure/security/pseudonymise';
 import type { CallerContext, RateLimitBudget } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
+import { infrastructureRateLimitData } from './rate-limits.generated';
 
 /**
  * Default per-address budget, used when `NODE_RATE_LIMIT_MAX` is unset: 100 requests per window,
  * sized for browsing rather than for guessing.
  */
-export const DEFAULT_RATE_LIMIT_MAX = 100;
+export const DEFAULT_RATE_LIMIT_MAX = infrastructureRateLimitData.global.defaultMax;
 
 /**
  * Image uploads allowed per window, per ADDRESS.
@@ -45,7 +46,7 @@ export const DEFAULT_RATE_LIMIT_MAX = 100;
  * email, so `skipSuccessfulRequests` stays off: a well-formed upload is the expensive case, not a
  * rejected one.
  */
-export const DEFAULT_UPLOAD_RATE_LIMIT_MAX = 20;
+export const DEFAULT_UPLOAD_RATE_LIMIT_MAX = infrastructureRateLimitData.uploads.defaultMax;
 
 /**
  * Requests allowed per window, per api-key CREDENTIAL.
@@ -54,7 +55,7 @@ export const DEFAULT_UPLOAD_RATE_LIMIT_MAX = 20;
  * state, well below the global brake, so it bounds a misbehaving or compromised credential
  * without a partner ever noticing it during normal use.
  */
-export const DEFAULT_API_KEY_RATE_LIMIT_MAX = 120;
+export const DEFAULT_API_KEY_RATE_LIMIT_MAX = infrastructureRateLimitData.apiKey.defaultMax;
 
 /**
  * Count a refused budget, and audit it when the budget is `audited` — the one record every refusal
@@ -427,27 +428,13 @@ export const addressBlockOf = (request: Request): string => {
 
 /** This file's own budget: the global browsing brake, mounted in `app/security.ts`. */
 const GLOBAL_RATE_LIMIT_BUDGET: RateLimitBudget = {
-    name: 'Browsing (global)',
-    namespace: 'global',
-    environmentVariable: 'NODE_RATE_LIMIT_MAX',
-    defaultMax: DEFAULT_RATE_LIMIT_MAX,
-    windowMs: 'shared',
+    ...infrastructureRateLimitData.global,
     keyedBy: KEYED_BY_ADDRESS,
-    bounds:
-        'Every request across the whole surface — a scanner sweeping for paths that do not exist ' +
-        'is the traffic most worth braking, same as a browsing session. A request that carried a ' +
-        'valid api-key is refunded once it ends and counts against that key instead, so partners ' +
-        "sharing one exit address do not spend each other's allowance; a fake key does not earn " +
-        'the refund.',
-    audited: false,
     // Refund, not skip: the key is only known after `getAuth`, which runs after this limiter, and a
     // `Bearer sk_` header alone must not buy an exemption. "Successful" here means "a key
     // resolved" — it says nothing about the status code.
     skipSuccessfulRequests: true,
     requestWasSuccessful: (request) => request.credentialId !== undefined,
-    // The one budget that lets a request through while the limits Redis is down: it guards
-    // browsing, not a credential, and counting it per worker would only brake honest traffic.
-    onStoreError: 'pass',
     // `GET /livez` and `GET /readyz` are an orchestrator's own probes, on a fixed interval — see
     // `RateLimitBudget.skip`.
     skip: (request) =>
@@ -464,17 +451,8 @@ export const rateLimiter: RequestHandler = buildRateLimiter(GLOBAL_RATE_LIMIT_BU
 
 /** This file's own budget: `apiKeyLimiter`, run from inside `getAuth`'s credential branch. */
 const API_KEY_RATE_LIMIT_BUDGET: RateLimitBudget = {
-    name: 'Api-key requests',
-    namespace: 'api-key',
-    environmentVariable: 'NODE_API_KEY_RATE_LIMIT_MAX',
-    defaultMax: DEFAULT_API_KEY_RATE_LIMIT_MAX,
-    windowMs: 'shared',
+    ...infrastructureRateLimitData.apiKey,
     keyedBy: 'the api-key credential',
-    bounds:
-        'A request authenticated via an api-key — keyed on the CREDENTIAL, not the address: a ' +
-        'partner behind one NAT is one caller, and ten partners behind one CDN are ten, which an ' +
-        'address-keyed budget cannot tell apart.',
-    audited: true,
     // `request.credentialId` is always present when this runs — `getAuth` only calls it after a
     // credential has resolved — so the `!` is safe, not a suppression.
     keyGenerator: (request) => request.credentialId!
@@ -511,18 +489,8 @@ const uploaderOf = (request: Request): string => {
 
 /** This file's own budget: `uploadLimiter`, shared by every module whose routes accept an image upload. */
 const UPLOAD_RATE_LIMIT_BUDGET: RateLimitBudget = {
-    name: 'Image uploads',
-    namespace: 'uploads',
-    environmentVariable: 'NODE_UPLOAD_RATE_LIMIT_MAX',
-    defaultMax: DEFAULT_UPLOAD_RATE_LIMIT_MAX,
-    windowMs: 'shared',
+    ...infrastructureRateLimitData.uploads,
     keyedBy: KEYED_BY_UPLOADER,
-    bounds:
-        'Routes that accept an image upload. Image processing (the `worker.image.digest` ' +
-        'pipeline) is CPU-bound, decoding and re-encoding real work whether it runs inline or in ' +
-        'a worker consuming one job at a time — a burst of well-formed upload requests is a cheap ' +
-        'way to saturate what the global brake alone was sized for ordinary browsing, not this.',
-    audited: true,
     keyGenerator: uploaderOf
 };
 
