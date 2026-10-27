@@ -86,7 +86,7 @@ reach, since every other test runs against a database that has never disagreed w
 
 ### TTL windows
 
-Several collections expire rows with a TTL index: `auditlogs`, `carts`, `feedbackrequests`, the
+Several collections expire rows with a TTL index: `auditlogs`, `carts`, `tickets`, the
 outbox, the idempotency ledger, and collections in `account`, `orders` and `webhooks`. The
 `expireAfterSeconds` of those is computed from an env var. Mongo will not modify an existing window in place: after changing one,
 `npm run db:sync` replaces the index: it drops it and rebuilds it. In development and test, where `autoIndex` is on,

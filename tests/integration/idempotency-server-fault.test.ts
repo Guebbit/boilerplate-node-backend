@@ -1,6 +1,6 @@
 /**
  * What an `Idempotency-Key` does after the handler FAULTS (a 500), driven through the simplest
- * opted-in route, `POST /feedback/contact`.
+ * opted-in route, `POST /tickets`.
  *
  * The middleware stores every finished attempt, a server fault included, and replays it for the
  * retention window. So a retry under the SAME key re-sends the failure without running the handler
@@ -11,7 +11,7 @@
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { api } from '@tests/http';
-import { feedbackRequestRepository } from '@modules/feedback/repository';
+import { ticketRepository } from '@modules/tickets/repository';
 import { idempotencyRecordModel } from '@infrastructure/http/middlewares/idempotency-model';
 
 setupTestDb();
@@ -25,8 +25,7 @@ const PAYLOAD = {
 };
 
 /** Sends the message under a key. */
-const send = (key: string) =>
-    api().post('/feedback/contact').set('Idempotency-Key', key).send(PAYLOAD);
+const send = (key: string) => api().post('/tickets').set('Idempotency-Key', key).send(PAYLOAD);
 
 afterEach(() => {
     jest.restoreAllMocks();
@@ -35,7 +34,7 @@ afterEach(() => {
 describe('Idempotency-Key — a handler that faulted', () => {
     it('stores the 500 and replays it for the same key, without running the handler again', async () => {
         const create = jest
-            .spyOn(feedbackRequestRepository, 'create')
+            .spyOn(ticketRepository, 'create')
             .mockRejectedValueOnce(new Error('the database went away'));
 
         const first = await send('fault-key-1');
@@ -51,7 +50,7 @@ describe('Idempotency-Key — a handler that faulted', () => {
     });
 
     it('runs the handler again under a NEW key, and the write lands once', async () => {
-        jest.spyOn(feedbackRequestRepository, 'create').mockRejectedValueOnce(
+        jest.spyOn(ticketRepository, 'create').mockRejectedValueOnce(
             new Error('the database went away')
         );
 
@@ -60,6 +59,6 @@ describe('Idempotency-Key — a handler that faulted', () => {
 
         const fresh = await send('fault-key-3');
         expect(fresh.status).toBe(201);
-        expect(await feedbackRequestRepository.count({})).toBe(1);
+        expect(await ticketRepository.count({})).toBe(1);
     });
 });

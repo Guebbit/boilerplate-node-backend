@@ -1,0 +1,6 @@
+summary: 'Situations someone must take and close: contact messages and system-opened tickets, routed to the staff who hold the matching permission set.'
+subdomain: generic
+group: foundation
+dependsOn:
+    - access # the roles of a person a ticket may be assigned to
+    - users # the assignee's name, and whether a person exists to be given a ticket

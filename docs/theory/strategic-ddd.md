@@ -159,7 +159,7 @@ differs, and use the simplest thing that works everywhere else.
   the build-vs-buy call, not a ban: how much logic a module has picks the pattern, the label only
   predicts it (Khononov, _Learning Domain-Driven Design_, ch. 10).
 - The **cheap** two this repo already uses, `Money` and a transition table, go wherever the rule lives:
-  `feedback` and `example` (`generic`) and `payments` and `returns` (`supporting`) all carry tables.
+  `tickets` and `example` (`generic`) and `payments` and `returns` (`supporting`) all carry tables.
   No `core` module has an aggregate today.
 
 | Subdomain    | Meaning                                                         | Here, for example                           |

@@ -391,7 +391,7 @@ export const routeSignatures = (router: Router): string[] =>
  * The router-level middleware that actually applies to each route, by POSITION.
  *
  * `router.use(...)` guards what is mounted BELOW it and nothing above. Two modules here rely on
- * that deliberately — `feedback` mounts its one public contact route above the admin gate, and
+ * that deliberately — `tickets` mounts its one public contact route above the admin gate, and
  * `locales` declares its public reads first — and both carry a comment saying so, because it is
  * also how a route appended into the wrong half becomes public without looking wrong.
  * {@link routerMiddleware} flattens that away: it reports the same list for every route, which is
@@ -430,7 +430,7 @@ export const identityGuardIndex = (guards: readonly string[]): number =>
  *
  * The spelling an authorization assertion wants: "is `requirePermission` on this route" is a question about
  * both halves at once, and asking only the per-route half reports `locales`' admin writes as
- * unguarded while reporting `feedback`'s as guarded, when the difference is only where the same
+ * unguarded while reporting `tickets`'s as guarded, when the difference is only where the same
  * guard is written.
  */
 export const guardsOn = (router: Router, signature: string): string[] => {

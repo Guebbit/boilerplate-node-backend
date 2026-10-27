@@ -58,7 +58,7 @@ export default {
             // declare on their own collection. Without this, an erased user's keys stayed live:
             // the credential resolver refuses them once the user is gone, but the rows themselves
             // outlived the account.
-            erase: apiKeysDeleteByUserId
+            erase: ({ userId }, session) => apiKeysDeleteByUserId(userId, session)
         }
     ]
 } satisfies AppModule;

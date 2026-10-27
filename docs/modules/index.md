@@ -50,7 +50,6 @@ flowchart TD
     cart
     delivery
     example
-    feedback
     inventory
     invoicing
     locales
@@ -64,6 +63,7 @@ flowchart TD
     sitemap
     stats
     stock_alerts["stock-alerts"]
+    tickets
     users
     webhooks
     wishlist
@@ -125,6 +125,8 @@ flowchart TD
     stats --> shop
     stock_alerts --> products
     stock_alerts --> users
+    tickets --> access
+    tickets --> users
     users --> access
     wishlist --> cart
     wishlist --> products
@@ -135,39 +137,39 @@ flowchart TD
     classDef isolated fill:#f4f4f5,stroke:#a1a1aa,color:#52525b,stroke-dasharray:4 3;
     class cart,orders,products core;
     class addresses,delivery,inventory,invoicing,notifications,payments,returns,shop,stats,stock_alerts,wishlist supporting;
-    class access,account,api_keys,audit_logs,example,locales,observability,sitemap,users,webhooks generic;
-    class analytics,antibot,feedback isolated;
+    class access,account,api_keys,audit_logs,example,locales,observability,sitemap,tickets,users,webhooks generic;
+    class analytics,antibot isolated;
 ```
 
-|                 | Reaches                                                                 | Reached by                                                                     |
-| --------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `orders`        | access, inventory, products, shop, users                                | cart, delivery, invoicing, notifications, payments, returns, stats             |
-| `cart`          | addresses, delivery, inventory, orders, payments, products, shop, users | notifications, wishlist                                                        |
-| `shop`          | account                                                                 | cart, delivery, invoicing, orders, payments, products, returns, stats          |
-| `access`        | —                                                                       | account, api-keys, audit-logs, notifications, orders, payments, returns, users |
-| `notifications` | access, cart, delivery, orders, stock-alerts, users, webhooks, wishlist | —                                                                              |
-| `products`      | shop                                                                    | cart, delivery, inventory, orders, sitemap, stock-alerts, wishlist             |
-| `users`         | access                                                                  | account, api-keys, cart, example, notifications, orders, stock-alerts          |
-| `delivery`      | inventory, orders, products, shop                                       | cart, notifications, returns                                                   |
-| `payments`      | access, orders, shop                                                    | cart, invoicing, returns, stats                                                |
-| `returns`       | access, delivery, inventory, orders, payments, shop                     | stats                                                                          |
-| `inventory`     | products                                                                | cart, delivery, orders, returns                                                |
-| `stats`         | invoicing, orders, payments, returns, shop                              | —                                                                              |
-| `account`       | access, users                                                           | api-keys, shop                                                                 |
-| `invoicing`     | orders, payments, shop                                                  | stats                                                                          |
-| `api-keys`      | access, account, users                                                  | —                                                                              |
-| `stock-alerts`  | products, users                                                         | notifications                                                                  |
-| `wishlist`      | cart, products                                                          | notifications                                                                  |
-| `audit-logs`    | access                                                                  | observability                                                                  |
-| `sitemap`       | locales, products                                                       | —                                                                              |
-| `addresses`     | —                                                                       | cart                                                                           |
-| `example`       | users                                                                   | —                                                                              |
-| `locales`       | —                                                                       | sitemap                                                                        |
-| `observability` | audit-logs                                                              | —                                                                              |
-| `webhooks`      | —                                                                       | notifications                                                                  |
-| `analytics`     | —                                                                       | —                                                                              |
-| `antibot`       | —                                                                       | —                                                                              |
-| `feedback`      | —                                                                       | —                                                                              |
+|                 | Reaches                                                                 | Reached by                                                                              |
+| --------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `orders`        | access, inventory, products, shop, users                                | cart, delivery, invoicing, notifications, payments, returns, stats                      |
+| `cart`          | addresses, delivery, inventory, orders, payments, products, shop, users | notifications, wishlist                                                                 |
+| `access`        | —                                                                       | account, api-keys, audit-logs, notifications, orders, payments, returns, tickets, users |
+| `shop`          | account                                                                 | cart, delivery, invoicing, orders, payments, products, returns, stats                   |
+| `users`         | access                                                                  | account, api-keys, cart, example, notifications, orders, stock-alerts, tickets          |
+| `notifications` | access, cart, delivery, orders, stock-alerts, users, webhooks, wishlist | —                                                                                       |
+| `products`      | shop                                                                    | cart, delivery, inventory, orders, sitemap, stock-alerts, wishlist                      |
+| `delivery`      | inventory, orders, products, shop                                       | cart, notifications, returns                                                            |
+| `payments`      | access, orders, shop                                                    | cart, invoicing, returns, stats                                                         |
+| `returns`       | access, delivery, inventory, orders, payments, shop                     | stats                                                                                   |
+| `inventory`     | products                                                                | cart, delivery, orders, returns                                                         |
+| `stats`         | invoicing, orders, payments, returns, shop                              | —                                                                                       |
+| `account`       | access, users                                                           | api-keys, shop                                                                          |
+| `invoicing`     | orders, payments, shop                                                  | stats                                                                                   |
+| `api-keys`      | access, account, users                                                  | —                                                                                       |
+| `stock-alerts`  | products, users                                                         | notifications                                                                           |
+| `wishlist`      | cart, products                                                          | notifications                                                                           |
+| `audit-logs`    | access                                                                  | observability                                                                           |
+| `sitemap`       | locales, products                                                       | —                                                                                       |
+| `tickets`       | access, users                                                           | —                                                                                       |
+| `addresses`     | —                                                                       | cart                                                                                    |
+| `example`       | users                                                                   | —                                                                                       |
+| `locales`       | —                                                                       | sitemap                                                                                 |
+| `observability` | audit-logs                                                              | —                                                                                       |
+| `webhooks`      | —                                                                       | notifications                                                                           |
+| `analytics`     | —                                                                       | —                                                                                       |
+| `antibot`       | —                                                                       | —                                                                                       |
 
 <!-- module-graph:end -->
 
@@ -229,9 +231,9 @@ Ships with every deployment, whatever the project becomes.
 - [`antibot`](./antibot.md) — The human-challenge port, and the endpoint that tells a frontend which provider is active.
 - [`api-keys`](./api-keys.md) — Long-lived programmatic credentials, scoped to the same permission model a session uses.
 - [`audit-logs`](./audit-logs.md) — Owns the audit trail; the read endpoint is its own, the platform operator's view lives in observability.
-- [`feedback`](./feedback.md) — Contact submissions and what an admin does with them.
 - [`locales`](./locales.md) — Language discovery and the API's own message dictionary.
 - [`observability`](./observability.md) — Health, metrics, the platform operator's audit read and the SSE stream.
+- [`tickets`](./tickets.md) — Situations someone must take and close: contact messages and system-opened tickets, routed to the staff who hold the matching permission set.
 - [`users`](./users.md) — Admin-side user management; the self-service half is account.
 - [`webhooks`](./webhooks.md) — Outbound event delivery to a subscriber's own URL.
 

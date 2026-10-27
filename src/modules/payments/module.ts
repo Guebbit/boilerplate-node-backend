@@ -118,7 +118,7 @@ export default {
             collect: (subject) => paymentService.findOwnPaymentsForExport(subject.userId),
             // Detach, never delete — the payment survives the account, inside the same
             // hard-delete transaction. See `detachUserId`.
-            erase: paymentService.detachUserId
+            erase: ({ userId }, session) => paymentService.detachUserId(userId, session)
         }
     ],
     subscribe: () => {

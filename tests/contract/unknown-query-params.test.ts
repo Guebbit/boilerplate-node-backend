@@ -19,7 +19,7 @@ const LIST_ROUTES = [
     '/users',
     '/audit',
     '/returns',
-    '/feedback',
+    '/tickets',
     '/webhooks/subscriptions',
     '/api-keys'
 ] as const;

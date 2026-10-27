@@ -54,7 +54,7 @@ interface WriteException {
 
 /** Write routes exempt from the app-wide default, keyed `${module} ${METHOD} ${path}`. */
 const WRITE_EXCEPTIONS: Record<string, WriteException> = {
-    'feedback POST /contact': {
+    'tickets POST /': {
         requiresAuth: false,
         reason: 'the visitor contact form, mounted above the keyed gate on purpose'
     },

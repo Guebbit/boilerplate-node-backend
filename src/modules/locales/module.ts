@@ -85,7 +85,7 @@ export default {
         {
             section: 'translationAttribution',
             collect: () => Promise.resolve(undefined),
-            erase: translationRepository.forgetTranslator
+            erase: ({ userId }, session) => translationRepository.forgetTranslator(userId, session)
         }
     ]
 } satisfies AppModule;

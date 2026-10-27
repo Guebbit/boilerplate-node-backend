@@ -130,8 +130,8 @@ describe('a resource with a lifecycle status publishes required actions', () => 
      * case below refuses an entry that has since published them.
      */
     const EXEMPT: Record<string, string> = {
-        'feedback.FeedbackRequest':
-            'replaced by `Ticket` (with its own required actions) in lane staff-tickets-core',
+        'tickets.TicketRef':
+            'a pointer to an earlier ticket on the same record; its moves are on `Ticket`',
         'delivery.PreorderFulfillmentOrder':
             'a read-only row of the preorder board; every move is on `FulfillmentOrder`, one id away',
         'payments.Refund':

@@ -90,12 +90,14 @@ language is kept per context rather than shared.
 | **Delivery proof**    | Staff recording that a shipment arrived — the deliver door's own act. The order moves to `delivered` on the last one, and the withdrawal window runs from THAT arrival. No document is captured; the record itself is the proof.                                                                             |
 | **Override**          | A staff correction outside the ordinary sequence, always with a reason: `forced` on a handover or delivery-proof recording (skips a step, still creates the real record), or the status-only override (delivery then brings its records in step, with no email). Never reaches `paid`, never moves backward. |
 
-## `feedback`
+## `tickets`
 
-| Term                | What it means here                                                                                                                                 |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Contact request** | A message from anyone, account or not. Identified by the email on the form, never by a user reference.                                             |
-| **Triage**          | The admin state of a request — `new`, `in_progress`, `resolved` or `spam`. The only thing about it that changes; staff may move it to any of them. |
+| Term                | What it means here                                                                                                                                                    |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Ticket**          | One situation someone must take and close, opened by a visitor or by the system. Its `status` is read-only and moves through the resolve, mark-spam and reopen doors. |
+| **Contact message** | What a visitor sends through the form; it becomes a `kind: contact` ticket. A signed-in sender's account is recorded, so erasure and export follow it.                |
+| **Route set**       | The permission set that works a ticket, frozen when it opens. A system ticket is visible only to callers who hold it; an administrator holds all.                     |
+| **Resolution**      | How a closed ticket was closed: `staff`, `cleared` (the situation ended by itself) or `spam`.                                                                         |
 
 ## `inventory`
 

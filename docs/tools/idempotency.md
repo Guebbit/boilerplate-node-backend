@@ -69,7 +69,7 @@ pressure Redis evicts **any** key, including one written seconds ago with hours 
 An evicted idempotency record does not fail loudly — it silently becomes a duplicate write, at
 exactly the moment the system is under load and least able to notice. An idempotency ledger is a
 source of truth, so — like every other durable, TTL-bound collection in this repo
-(`auditlogs`, `carts`, `feedbackrequests`) — it lives in Mongo.
+(`auditlogs`, `carts`, `tickets`) — it lives in Mongo.
 
 ## Where it is mounted
 
@@ -85,7 +85,7 @@ source of truth, so — like every other durable, TTL-bound collection in this r
 | `POST /inventory/levels/{productId}/receive`, `POST /inventory/levels/{productId}/adjust` | Stock never moves twice for one delivery or one correction.                                      |
 | `POST /account/signup`                                                                    | Sybil accounts aside, a retried signup must not create two.                                      |
 | `POST /examples`                                                                          | The template's idempotent create: a retried create replays the first answer, not a second draft. |
-| `POST /feedback/contact`                                                                  | The public contact form has no other identity to dedupe a retry on.                              |
+| `POST /tickets`                                                                           | The public contact form has no other identity to dedupe a retry on.                              |
 
 The refund uses `requireIdempotencyKey`: the IETF Idempotency-Key draft makes a missing key on a
 non-idempotent write a client error, and a refund repeated by a retry returns the money twice. Its

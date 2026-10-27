@@ -12,9 +12,9 @@ import { appAnswering, statusOf, withReloadedRateLimits } from '@tests/rate-limi
  * `signupLimiters` and `resetRequestLimiters` each add an identity (submitted email) and an
  * address-BLOCK (IPv4 /24, IPv6 /48) dimension on top of the per-address budget — three keys, not
  * one. Built against trivial handlers, like `submissionLimiter`'s own tests — the property under
- * test belongs to the limiter, not to `postSignup`/`postResetRequest`. `feedback`'s own identity
+ * test belongs to the limiter, not to `postSignup`/`postResetRequest`. `tickets`'s own identity
  * budget (`contactLimiters`) has the same shape and its own test —
- * `src/modules/feedback/tests/integration/contact-identity-rate-limit.test.ts`.
+ * `src/modules/tickets/tests/integration/contact-identity-rate-limit.test.ts`.
  */
 
 /** {@link withReloadedRateLimits} bound to this module's limiters, since every case below wants

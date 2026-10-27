@@ -364,22 +364,22 @@ rules:
       # proves nothing about how recently its holder typed their password.
       stepUp: critical
 
-    # -- feedback ------------------------------------------------------------------------------
+    # -- tickets ------------------------------------------------------------------------------
     - action: read
-      subject: Feedback
-      module: feedback
+      subject: Ticket
+      module: tickets
       scope: tenant
-      description: Read messages sent through the contact form.
+      description: Read tickets — contact messages, and the system tickets of a permission set the caller holds.
     - action: update
-      subject: Feedback
-      module: feedback
+      subject: Ticket
+      module: tickets
       scope: tenant
-      description: Change a message's handling status.
+      description: Work a ticket — resolve, mark as spam, reopen, assign, add a note. A system ticket also needs the ticket's own permission set.
     - action: delete
-      subject: Feedback
-      module: feedback
+      subject: Ticket
+      module: tickets
       scope: tenant
-      description: Remove a message.
+      description: Remove a ticket. A system ticket also needs the ticket's own permission set.
 
     # -- locales -------------------------------------------------------------------------------
     - action: read
@@ -756,17 +756,17 @@ sets:
       rules:
           - receive:Return
 
-    - name: FeedbackDisplay
-      module: feedback
-      description: Read contact-form messages.
+    - name: TicketDisplay
+      module: tickets
+      description: Read tickets.
       rules:
-          - read:Feedback
-    - name: FeedbackManagement
-      module: feedback
-      description: Change a message's handling status, or remove it.
+          - read:Ticket
+    - name: TicketManagement
+      module: tickets
+      description: Work a ticket, or remove it.
       rules:
-          - update:Feedback
-          - delete:Feedback
+          - update:Ticket
+          - delete:Ticket
 
     - name: LocaleStorefront
       module: locales

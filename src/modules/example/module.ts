@@ -74,7 +74,13 @@ export default {
         }
     },
     // An export lists the person's examples; an erasure deletes them, inside its transaction.
-    personalData: [{ section: 'examples', collect: collectPersonalData, erase: eraseForUser }],
+    personalData: [
+        {
+            section: 'examples',
+            collect: collectPersonalData,
+            erase: ({ userId }, session) => eraseForUser(userId, session)
+        }
+    ],
     locales: path.join(__dirname, 'locales'),
     templates: path.join(__dirname, 'templates')
 } satisfies AppModule;

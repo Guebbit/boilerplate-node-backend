@@ -32,7 +32,7 @@ it('calls subscribe on every module that declares one', () => {
 });
 
 it('skips a module with no subscribe, rather than treating it as a mistake', () => {
-    // `audit-logs` and `feedback` both declare none: a module with nothing to react to is
+    // `audit-logs` and `tickets` both declare none: a module with nothing to react to is
     // ordinary, and the optional call is what says so.
     const subscribe = jest.fn();
 

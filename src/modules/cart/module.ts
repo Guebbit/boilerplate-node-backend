@@ -40,7 +40,7 @@ export default {
                         lines.map(({ productId, quantity }) => ({ productId, quantity }))
                     ),
             // Joins the caller's own hard-delete transaction — see `deleteByUserId`.
-            erase: cartService.deleteByUserId
+            erase: ({ userId }, session) => cartService.deleteByUserId(userId, session)
         }
     ],
     subscribe: () => {

@@ -116,7 +116,7 @@ Every signed-in account holds `read:Order`, so a guard that accepted it for the 
 let every customer in. The staff door asks `display:Order`, which no customer holds. A holder of
 `display:Order` also passes a plain `read` check, because the ability emits the implied rule beside
 it (`implies:` in `shared/authorization-keys.yaml`): one query serves a customer's own rows and a
-staff member's every row. A subject with no own-rows rule keeps plain `read`, so `read:Feedback` is
+staff member's every row. A subject with no own-rows rule keeps plain `read`, so `read:Ticket` is
 the staff door of the inbox.
 
 **There is no wildcard of any kind.** No `manage`, no `all`. `admin` lists every declared tenant
@@ -304,7 +304,7 @@ freshly proved session is demanded, and whether an API key can be minted with it
 | ------------------------------------------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------- |
 | [products](../modules/products.md#who-can-do-what)           | [cart](../modules/cart.md#who-can-do-what)           | [orders](../modules/orders.md#who-can-do-what)                      |
 | [payments](../modules/payments.md#who-can-do-what)           | [inventory](../modules/inventory.md#who-can-do-what) | [delivery](../modules/delivery.md#who-can-do-what)                  |
-| [returns](../modules/returns.md#who-can-do-what)             | [feedback](../modules/feedback.md#who-can-do-what)   | [locales](../modules/locales.md#who-can-do-what) (and translations) |
+| [returns](../modules/returns.md#who-can-do-what)             | [tickets](../modules/tickets.md#who-can-do-what)     | [locales](../modules/locales.md#who-can-do-what) (and translations) |
 | [users](../modules/users.md#who-can-do-what)                 | [access](../modules/access.md#who-can-do-what)       | [audit-logs](../modules/audit-logs.md#who-can-do-what)              |
 | [webhooks](../modules/webhooks.md#who-can-do-what)           | [api-keys](../modules/api-keys.md#who-can-do-what)   | [observability](../modules/observability.md#who-can-do-what)        |
 | [notifications](../modules/notifications.md#who-can-do-what) | [stats](../modules/stats.md#who-can-do-what)         | [the role matrix](../demo-ecommerce/index.md)                       |

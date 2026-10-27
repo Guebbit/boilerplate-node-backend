@@ -26,6 +26,7 @@ import { personalDataErasers } from '../erasure-registry';
 import { usersAuditActions } from '../audit';
 import { USER_DELETION_CANCELLED, USER_ERASED } from '../events';
 import { markSessionsEnded } from './credentials';
+import { personalDataSubjectOf } from './personal-data-subject';
 
 /**
  * Runs every registered `personalData.erase` hook and then deletes the user document
@@ -43,8 +44,9 @@ const runErasureCascade = async (
     session: ClientSession
 ): Promise<AfterErase[]> => {
     const deferred: AfterErase[] = [];
+    const subject = personalDataSubjectOf(user);
     for (const erase of personalDataErasers()) {
-        const afterErase = await erase(user.id, session);
+        const afterErase = await erase(subject, session);
         if (afterErase) deferred.push(afterErase);
     }
     // A hold this account placed on someone else keeps its force but loses the name.

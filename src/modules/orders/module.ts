@@ -85,7 +85,7 @@ export default {
             // Detach, never delete — the order survives the account, inside the same
             // hard-delete transaction. A never-paid order is also cancelled, after the commit.
             // See `eraseUserOrders`.
-            erase: orderService.eraseUserOrders,
+            erase: ({ userId }, session) => orderService.eraseUserOrders(userId, session),
             // An inactive account keeps its orders and its link to them; only the PII clock starts.
             minimise: orderService.startOrderPiiClock
         },

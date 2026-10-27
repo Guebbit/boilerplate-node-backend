@@ -171,7 +171,7 @@ See `docs/tools/observability-layer.md`.
 
 Several collections delete their own rows on a timer, via a Mongo TTL index rather than a scheduled
 job — that is cleanup with no scheduler involved at all, the cheapest form there is, and it stays
-right for state with no retry story (a cart, an audit entry, or a feedback ticket never needs a second attempt at expiring). The jobs above are the other half: retention and
+right for state with no retry story (a cart, an audit entry, or a ticket never needs a second attempt at expiring). The jobs above are the other half: retention and
 periodic work that DOES need to run as a step, with a real success/failure outcome — see Scheduled
 jobs above.
 
@@ -185,9 +185,10 @@ refuses the conflicting options. `npm run db:sync` is what applies it: it replac
 rebuilds it), which is why `db:bootstrap` syncs before the server starts there. Production runs with
 `autoIndex` off for exactly this reason — a restart never asks Mongo to rebuild anything — and
 `docker-compose.production.yml`'s one-shot `setup` service is what runs `db:sync` on deploy instead,
-see [Data — TTL windows](./data.md#ttl-windows). `feedback`'s window
+see [Data — TTL windows](./data.md#ttl-windows). `tickets`'s window
 is the longest on purpose: a contact request can be evidence in a commercial dispute, and 24 months
-sits inside the common limitation periods. `carts` ties to `updatedAt`, so any edit (a cart line changed) restarts the clock; only a genuinely
+sits inside the common limitation periods. It runs on `closedAt`, so an open ticket never expires and a
+reopen stops the clock; changing it needs `npm run db:sync`. `carts` ties to `updatedAt`, so any edit (a cart line changed) restarts the clock; only a genuinely
 abandoned row is ever removed. `leases` has no TTL on purpose: a job that stopped running entirely must
 keep alerting (`ScheduledJobStale`), and an expired row would make that alert resolve on its own. Pushgateway
 and Healthchecks.io behave the same way: a silent job stays down until someone deletes it.
