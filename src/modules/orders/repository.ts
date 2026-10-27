@@ -53,6 +53,7 @@ import {
     type PaginatedMeta
 } from '@infrastructure/persistence/search';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
+import { updateStatusIfIn as sharedUpdateStatusIfIn } from '@infrastructure/persistence/conditional-status';
 import { setAndUnset } from '@infrastructure/persistence/changes';
 import { checkedDelete, type DeleteOutcome } from '@infrastructure/persistence/versioning';
 
@@ -273,25 +274,11 @@ const updateStatusIfIn = (
     to: string,
     { scope, session }: { scope?: Record<string, unknown>; session?: ClientSession } = {}
 ): Promise<OrderDocument | null> =>
-    orderModel
-        .findOneAndUpdate(
-            // `as QueryFilter`, the same cast `create-repository.ts` makes for the same reason:
-            // spreading a `Record<string, unknown>` scope widens the object past what the filter
-            // generic accepts, and the alternative is typing every caller's scope per collection.
-            {
-                _id: toObjectId(id),
-                ...scope,
-                status: { $in: [...from] }
-            } as QueryFilter<OrderDocument>,
-            { $set: { status: to } },
-            { returnDocument: 'after', session }
-        )
-        .exec();
+    sharedUpdateStatusIfIn(orderModel, { _id: toObjectId(id), ...scope }, from, to, { session });
 
 /**
- * Move an order from `from` to `paid`, stamping `paidAt` in the SAME write — its own function
- * rather than a call through {@link updateStatusIfIn}, since `paidAt` is a `paid`-only fact and
- * every other status move has nothing to add to `$set`. The conditional filter is what makes this
+ * Move an order from `from` to `paid`, stamping `paidAt` in the SAME write — `paidAt` is a
+ * `paid`-only fact, so it rides as the move's stamp. The conditional filter is what makes this
  * at-most-once, same reasoning as {@link updateStatusIfIn}'s own docblock: `paidAt` is stamped
  * exactly once, by whichever caller's write actually lands.
  * @param id - the order to move
@@ -308,25 +295,15 @@ const markPaid = (
     paymentMethod?: 'card',
     session?: ClientSession
 ): Promise<OrderDocument | null> =>
-    orderModel
-        .findOneAndUpdate(
-            { _id: toObjectId(id), status: from } as QueryFilter<OrderDocument>,
-            {
-                $set: {
-                    status: OrderStatus.paid,
-                    paidAt: new Date(),
-                    ...(paymentMethod ? { paymentMethod } : {})
-                }
-            },
-            { returnDocument: 'after', session }
-        )
-        .exec();
+    sharedUpdateStatusIfIn(orderModel, { _id: toObjectId(id) }, [from], OrderStatus.paid, {
+        set: { paidAt: new Date(), ...(paymentMethod ? { paymentMethod } : {}) },
+        session
+    });
 
 /**
  * Move an order to `delivered` and freeze its withdrawal deadline in the SAME write — the deadline
  * is a fact about the moment of delivery, so it lands with it or not at all, like `paidAt` does
- * with `paid`. Its own function rather than a call through {@link updateStatusIfIn}, whose `$set`
- * has no slot for a stamp.
+ * with `paid`.
  * @param id - the order that arrived
  * @param from - the status this move must currently be in
  * @param clock - the withdrawal and guarantee deadlines to freeze with the move
@@ -339,13 +316,10 @@ const markDelivered = (
     clock: DeliveryClock,
     session?: ClientSession
 ): Promise<OrderDocument | null> =>
-    orderModel
-        .findOneAndUpdate(
-            { _id: toObjectId(id), status: from } as QueryFilter<OrderDocument>,
-            { $set: { status: OrderStatus.delivered, ...clock } },
-            { returnDocument: 'after', session }
-        )
-        .exec();
+    sharedUpdateStatusIfIn(orderModel, { _id: toObjectId(id) }, [from], OrderStatus.delivered, {
+        set: { ...clock },
+        session
+    });
 
 /**
  * Replace where an order ships, encrypted under the order's own id like the address it replaces.
@@ -451,13 +425,10 @@ const applyStatusOverride = (
     clock?: DeliveryClock,
     session?: ClientSession
 ): Promise<OrderDocument | null> =>
-    orderModel
-        .findOneAndUpdate(
-            { _id: toObjectId(id), status: from } as QueryFilter<OrderDocument>,
-            { $set: { status: to, ...clock } },
-            { returnDocument: 'after', session }
-        )
-        .exec();
+    sharedUpdateStatusIfIn(orderModel, { _id: toObjectId(id) }, [from], to, {
+        set: { ...clock },
+        session
+    });
 
 /**
  * One order read inside the caller's transaction — the act that reads an order and then writes

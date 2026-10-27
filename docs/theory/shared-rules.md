@@ -31,6 +31,14 @@ Hard limits, enforced by each file's schema rather than by review:
 - Key generators, `run` functions and library calls stay code. Only their data fields move.
 - Prefer a cases file. It adds tests and changes no code.
 
+Two things deliberately do **not** go to YAML:
+
+- **Module lifecycles stay code.** A status machine is a typed TypeScript event table read by
+  `defineLifecycle` (`src/domain-primitives/lifecycle.ts`); the contract carries only the status enum
+  and the `actions` flags, and clients read `actions`. No mature API publishes its transition graph.
+- **Shop-only tables stay code until a second reader exists.** Order events, status traits, VAT and
+  shipping tables belong to the commerce modules; moving them early would build a reader for nobody.
+
 ## 2 · Is this standard?
 
 | Name                                     | Examples                                                                                                 |
