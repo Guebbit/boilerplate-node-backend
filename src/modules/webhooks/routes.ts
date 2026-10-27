@@ -14,7 +14,7 @@ import {
     replaceWebhookSubscription,
     updateWebhookSubscription
 } from './controllers/update-subscription';
-import { rotateWebhookSubscriptionSecret } from './controllers/rotate-subscription-secret';
+import { createWebhookSubscriptionSecret } from './controllers/create-subscription-secret';
 import { removeWebhookSubscriptionSecret } from './controllers/remove-subscription-secret';
 import { deleteWebhookSubscription } from './controllers/delete-subscription';
 import { getWebhookSubscription } from './controllers/get-subscription';
@@ -89,11 +89,11 @@ router.post(
     disableWebhookSubscription
 );
 
-// POST /webhooks/subscriptions/:id/rotate-secret — add a new ring secret; the old one stays active
+// POST /webhooks/subscriptions/:id/secrets — add a new ring secret; the old one stays active
 router.post(
-    '/subscriptions/:id/rotate-secret',
+    '/subscriptions/:id/secrets',
     requirePermission('update', 'WebhookSubscription'),
-    rotateWebhookSubscriptionSecret
+    createWebhookSubscriptionSecret
 );
 
 // DELETE /webhooks/subscriptions/:id/secrets/:secretId — drop one ring secret, the rotation's end

@@ -59,7 +59,7 @@ flowchart TD
 
 ### Action → 200
 
-- `POST /orders/{id}/cancel`, `/restore`, `/status-override`, `/rotate-secret`: a state change on a
+- `POST /orders/{id}/cancel`, `/restore`, `/status-override`: a state change on a
   thing that already exists. 200, with the thing as it now stands.
 - An action may create a record on the side (a shipment, a stock movement). It still answers the
   thing the caller acts on next.
