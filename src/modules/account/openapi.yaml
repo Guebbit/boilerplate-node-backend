@@ -1248,12 +1248,14 @@ paths:
             tags: [Auth]
             summary: Request an export of the caller's own data
             description: >-
-                Starts "give me my data" (Art. 15, 20) and answers at once with `202` and the export's
-                `id` and `status`. The file is built in the background from every collection that holds
+                Starts "give me my data" (Art. 15, 20) and answers at once with `202`, the export's status
+                (`AccountExport`) and `Location: /account/export`, the status monitor to poll
+                (RFC 9110 §15.3.3). The file is built in the background from every collection that holds
                 something of the caller's — profile, address book, orders, payments, shipments, cart,
                 wishlist, live sessions (metadata only, never a token value), and their own audit
                 trail — and a LINK to it is mailed to the account's address when it is ready, never
-                the data itself. Fetch it with `GET /account/export`.
+                the data itself. Check on it with `GET /account/export`, fetch it with
+                `GET /account/export/file`.
 
 
                 One live export per account. Asking while one is `building` returns that one; asking
@@ -1266,30 +1268,59 @@ paths:
                 Starting a NEW build costs one mail from the per-mailbox mail budget, since it ends in a
                 mailed link: a spent budget answers `429`, and the previous export is left in place.
                 Asking while one is `building` is not charged. Needs a fresh session (sensitive tier:
-                `401 REAUTH_REQUIRED`), as does downloading the file.
+                `401 REAUTH_REQUIRED`), as does downloading the file; reading the status does not.
             operationId: requestAccountExport
             security:
                 - bearerAuth: []
             responses:
                 '202':
                     description: The export is queued (or is the one already building)
+                    headers:
+                        Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AccountExportRequest'
+                                $ref: '#/components/schemas/AccountExport'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         get:
             tags: [Auth]
+            summary: Check on the caller's own data export
+            description: >-
+                The status of the caller's export: `building`, `ready` or `failed`, with `createdAt`,
+                and `expiresAt` once it is `ready`. Reading it is not a download, so it needs a
+                session but not a fresh one: it carries dates and a state, no personal data.
+
+                An account has one export, so there is no id to name. `404` only when there is none:
+                never asked for, already deleted, or past its retention and not yet swept (that last
+                one counts as none). A `building` export older than the build limit reads as `failed`.
+                The file itself is at `GET /account/export/file`.
+            operationId: getAccountExport
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: The caller's export, and where it stands
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AccountExport'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/export/file:
+        get:
+            tags: [Auth]
             summary: Download an export of the caller's own data
             description: >-
                 Streams the finished export — the JSON document `AccountExportResponse` describes — as
-                an attachment. This is the page the mailed link opens. An account has one live export, so
+                an attachment. This is the page the mailed link opens. An account has one export, so
                 there is no id to name: the caller's own is the one served. A FRESH session
-                (`requireFreshAuth`), same as the request. `404` when the caller has none, it is still
-                `building`, `failed`, or already gone (past its retention): the caller cannot tell
-                these apart, by design.
+                (`requireFreshAuth`), same as the request. `404` unless the export is `ready` and
+                within its retention. A `ready` export whose file is missing from the store answers
+                `404` too: the file honestly does not exist.
             operationId: downloadAccountExport
             security:
                 - bearerAuth: []
@@ -1311,7 +1342,7 @@ paths:
 components:
     schemas:
         # ---------- account — the schemas only this module's paths reference. ----------
-        # `POST /account/export`'s answer. Only the account's own half is written here: every other
+        # `AccountExportResponse` is the export file's document. Only the account's own half is written here: every other
         # module declares its section as `x-personal-data` in its own contract, and the bundler
         # adds it (`scripts/contracts/personal-data-assembly.ts`). A removed module takes its
         # section with it.
@@ -1326,19 +1357,47 @@ components:
                 profile:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Account'
 
-        AccountExportRequest:
+        AccountExport:
             type: object
             additionalProperties: false
-            required: [id, status]
+            required: [id, status, createdAt, actions]
+            description: >-
+                The caller's data export and where it stands. `POST /account/export` answers it
+                (always `building`) and `GET /account/export` reads it.
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 status:
                     type: string
-                    enum: [building]
+                    enum: [building, ready, failed]
                     description: >-
-                        `building` on a fresh request. A request never answers `ready` or `failed`:
-                        asking again after either REPLACES the export with a new `building` one.
+                        `building` until the background job settles, then `ready` or `failed`. A
+                        `building` export older than the build limit reads as `failed`. Asking again
+                        after `ready` or `failed` replaces the export with a new `building` one.
+                createdAt:
+                    type: string
+                    format: date-time
+                expiresAt:
+                    type: string
+                    format: date-time
+                    description: >-
+                        When the file is deleted: the retention (`NODE_ACCOUNT_EXPORT_TTL_DAYS`)
+                        counted from the moment the build finished. Present only when `status` is
+                        `ready`.
+                actions:
+                    type: object
+                    additionalProperties: false
+                    required: [download, request]
+                    description: What the caller may do with the export right now.
+                    properties:
+                        download:
+                            type: boolean
+                            description: '`GET /account/export/file` will answer the file: the export is `ready`.'
+                        request:
+                            type: boolean
+                            description: >-
+                                `POST /account/export` would start a new build. `false` while one is
+                                `building`: asking then only returns that one.
 
         OAuthProviders:
             type: object

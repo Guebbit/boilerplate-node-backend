@@ -1097,6 +1097,8 @@ paths:
         $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1apps'
     /locales/{locale}:
         $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}'
+    /locales/{locale}/dictionary:
+        $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}~1dictionary'
     /locales/{locale}/messages:
         $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}~1messages'
     /locales/{locale}/entries:
@@ -1185,6 +1187,8 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1refresh'
     /account/export:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1export'
+    /account/export/file:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1export~1file'
     /account/login/2fa:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1login~12fa'
     /account/login/2fa/send:

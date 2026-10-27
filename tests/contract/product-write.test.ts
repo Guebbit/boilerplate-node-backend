@@ -573,7 +573,7 @@ describe('VAT rate type', () => {
     });
 });
 
-describe('GET /products/{id}/admin', () => {
+describe('GET /products/{id}, the translations map', () => {
     it('matches the contract, returning every language the product has', async () => {
         const { bearer } = await authenticateAsRole('editor');
         const created = await api()

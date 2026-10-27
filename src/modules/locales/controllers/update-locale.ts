@@ -10,7 +10,6 @@ import { ReplaceLocaleBody, UpdateLocaleBody } from '@api/schemas.zod';
 import { createUpdateController } from '@infrastructure/surfaces/create-update-controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { localeService } from '../services';
-import { presentLocale } from '../presenters';
 
 /**
  * `PUT` and `PATCH /locales/:locale` — one handler pair over `updateLanguage`, which audits the
@@ -34,8 +33,5 @@ export const { replace: replaceLocale, update: updateLocale } = createUpdateCont
     update: (tag, changes, request) =>
         localeService.updateLanguage(tag, changes, callerContextOf(request)),
     present: (row, request) =>
-        presentLocale(
-            row,
-            localeService.languageActions(row, localeService.standingOn(request.caller))
-        )
+        localeService.describeStoredLanguage(row, localeService.standingOn(request.caller))
 });

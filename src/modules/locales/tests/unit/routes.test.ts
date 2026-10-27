@@ -22,8 +22,14 @@ jest.mock('@infrastructure/http/middlewares/cache', () =>
 
 import { router } from '@modules/locales/routes';
 
-/** The four reads any visitor may make. */
-const PUBLIC = ['GET /', 'GET /apps', 'GET /:locale/messages', 'GET /:locale'];
+/** The five reads any visitor may make. */
+const PUBLIC = [
+    'GET /',
+    'GET /apps',
+    'GET /:locale/messages',
+    'GET /:locale/dictionary',
+    'GET /:locale'
+];
 
 /** Everything that administers the dynamic tier, including the screen the writes are made from. */
 const ADMIN = [
@@ -94,6 +100,9 @@ describe('locale routes — authorization', () => {
         // view; adding an identity guard beside it would break the anonymous case.
         expect(guardsOn(router, 'GET /')).toContain('getAuth');
         expect(identityGuardIndex(guardsOn(router, 'GET /'))).toBe(-1);
+        // One language is the same read narrowed to a tag, so it reads the caller the same way.
+        expect(guardsOn(router, 'GET /:locale')).toContain('getAuth');
+        expect(identityGuardIndex(guardsOn(router, 'GET /:locale'))).toBe(-1);
     });
 
     it.each(ADMIN)('%s names all three guards itself', (signature) => {
