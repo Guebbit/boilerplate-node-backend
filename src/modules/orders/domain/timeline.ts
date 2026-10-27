@@ -52,6 +52,7 @@ export const TIMELINE_AUDIENCE: Readonly<Record<OrderTimelineType, TimelineAudie
     return_declined: 'buyer',
     return_received: 'buyer',
     return_closed: 'buyer',
+    return_canceled: 'buyer',
     invoice_issued: 'buyer',
     credit_note_issued: 'buyer',
     release_date_moved: 'buyer',

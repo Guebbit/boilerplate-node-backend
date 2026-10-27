@@ -8,20 +8,28 @@
 import type { ClientSession } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import {
+    fieldError,
     generateReject,
     generateSuccess,
     type ResponseReject,
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
+import { auditForbidden } from '@infrastructure/observability/forbidden';
 import { enqueueOutboxEvent, type OutboxAnnouncement } from '@kernel/outbox';
 import type { OrderDocument } from '@modules/orders';
 import type { CallerContext, ReturnKind } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import type { ReturnDocument } from '../model';
 import { returnsAuditActions } from '../audit';
-import { RETURN_CLOSED, RETURN_REQUESTED } from '../events';
-import type { ReturnReason, ProductQuantity } from '../domain';
+import { RETURN_CLOSED, RETURN_DECIDED, RETURN_REQUESTED } from '../events';
+import type {
+    ReturnReason,
+    ProductQuantity,
+    StaffStatementChannel,
+    Statement,
+    StatementVerdict
+} from '../domain';
 
 /** What a customer sends to open a return or withdraw. */
 export interface CreateReturnInput {
@@ -34,6 +42,18 @@ export interface CreateReturnInput {
     note?: string;
     /** Absent means everything that shipped and is still left to return. Never with a cancellation. */
     lines?: ProductQuantity[];
+    /** Staff only: when the buyer asked, or stated a withdrawal. See `checkStatement`. */
+    requestedAt?: Date;
+    /** Staff only, on a withdrawal: how the buyer stated it. */
+    statedVia?: StaffStatementChannel;
+}
+
+/** Who opens a return, and what the buyer stated: shared by the paths that write one. */
+export interface Opener {
+    /** The date, and for a withdrawal the channel, the return is written with. */
+    statement: Statement;
+    /** The staff member opening it on the buyer's behalf, absent when the buyer does. */
+    staffId: string | undefined;
 }
 
 /** What {@link createReturn} answers with: a refusal, or the return that was written (201). */
@@ -108,6 +128,46 @@ export const withdrawalIsTheBuyers = (): CreateReturnOutcome =>
         }
     ]);
 
+/**
+ * The 422 for a date or a channel that cannot stand: missing where staff must give it, given by the
+ * buyer or on a reason it does not belong to, in the future, or before the order existed. A field
+ * error, so a form puts it on the field.
+ * @param verdict - which field failed, and why
+ */
+export const badStatement = (
+    verdict: Extract<StatementVerdict, { ok: false }>
+): CreateReturnOutcome =>
+    generateReject(422, [
+        fieldError(
+            verdict.field,
+            t(`returns.statement-${verdict.reason}`),
+            ERROR_CODES.RETURN_STATEMENT_INVALID
+        )
+    ]);
+
+/**
+ * The 403 for a staff caller without a key a staff act needs (`create:Refund` for money out,
+ * `update:Order` for the cancel behind a withdrawal before dispatch). Audited, since no route guard
+ * can see this refusal: the keys depend on what the order turns out to be.
+ *
+ * @param order - the order the act was aimed at
+ * @param permission - the key that was missing, e.g. `create:Refund`
+ * @param context - the caller, for the audit entry
+ */
+export const forbidden = (
+    order: OrderDocument,
+    permission: string,
+    context: CallerContext
+): CreateReturnOutcome => {
+    auditForbidden(context, {
+        targetType: 'order',
+        targetId: String(order._id),
+        metadata: { reason: 'missing_permission', permission }
+    });
+
+    return generateReject(403, [t('generic.error-forbidden')]);
+};
+
 /** The 409 for a remainder with nothing left to cancel, or an order with nothing shipped yet. */
 export const nothingToCancel = (): CreateReturnOutcome =>
     generateReject(409, [
@@ -132,7 +192,30 @@ export const enqueueRequested = (
         {
             returnId: String(created._id),
             orderId: String(created.orderId),
-            reason: created.reason
+            reason: created.reason,
+            requestedAt: created.requestedAt.toISOString(),
+            ...(created.statedVia ? { statedVia: created.statedVia } : {})
+        },
+        String(created.orderId),
+        session
+    );
+
+/**
+ * Writes `return.decided{approved}` for a return opened already approved by staff — in the creating
+ * transaction, right after `return.requested`, so the buyer hears once, with the return address.
+ * @param created - the return just written
+ * @param session - the transaction that wrote it
+ */
+export const enqueueApproved = (
+    created: ReturnDocument,
+    session: ClientSession
+): Promise<unknown> =>
+    enqueueOutboxEvent(
+        RETURN_DECIDED,
+        {
+            returnId: String(created._id),
+            orderId: String(created.orderId),
+            decision: 'approved'
         },
         String(created.orderId),
         session
@@ -188,6 +271,11 @@ export const recordOpened = (
         outcome: 'success',
         targetType: 'return',
         targetId: String(created._id),
-        metadata: { orderId: String(order._id), reason: created.reason }
+        metadata: {
+            orderId: String(order._id),
+            reason: created.reason,
+            // Staff acting for the buyer: the row says so, next to the staff member it names.
+            ...(created.openedBy === 'staff' ? { onBehalfOfBuyer: true } : {})
+        }
     });
 };

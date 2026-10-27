@@ -14,7 +14,7 @@ import type { ReturnDocument } from '../model';
 
 /**
  * A return in export shape — what the customer wrote, what staff wrote back to them
- * (`declineReason`: it is mailed to the customer and is on their own `GET /returns`) and where it
+ * (`declineReason` and `declineMessage`: mailed to the customer and on their own `GET /returns`) and where it
  * stands. Never the deciding staff member's id.
  * @param returned - the return
  */
@@ -25,6 +25,7 @@ const toExportReturn = (returned: ReturnDocument): ExportReturn => ({
     reason: returned.reason,
     ...(returned.note ? { note: returned.note } : {}),
     ...(returned.declineReason ? { declineReason: returned.declineReason } : {}),
+    ...(returned.declineMessage ? { declineMessage: returned.declineMessage } : {}),
     lines: returned.lines.map(({ productId, quantity, title }) => ({
         productId: String(productId),
         quantity,

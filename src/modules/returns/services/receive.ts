@@ -36,7 +36,7 @@ import { paymentService } from '@modules/payments';
 import type { OpenedReturnRefund } from '@modules/payments';
 import type { CallerContext } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
-import { returnRepository } from '../repository';
+import { returnRepository, type ReturnStamp } from '../repository';
 import type { ReturnDocument } from '../model';
 import { returnsAuditActions } from '../audit';
 import { RETURN_RECEIVED } from '../events';
@@ -44,10 +44,13 @@ import {
     RECEIVABLE_RETURN_STATUSES,
     accountsOf,
     refundAmountFor,
+    resolveRestock,
     shippingStillOwed,
     takesLastUnit,
     wireLines,
-    type RefundBreakdown
+    type RefundBreakdown,
+    type RestockRequest,
+    type RestockVerdict
 } from '../domain';
 import { closeReturn } from './close';
 import { syncReturnStatus } from './projection';
@@ -56,12 +59,27 @@ import { syncReturnStatus } from './projection';
 export interface ReceiveReturnInput {
     /** Handling damage kept back from the refund (Art. 14(2)), a decimal in the return's currency. */
     handlingDeduction?: number;
+    /**
+     * How many units of each returned product go back on sale. A product not listed goes back in
+     * full; absent restocks everything. A broken unit is set to 0.
+     */
+    lines?: RestockRequest[];
 }
 
 /** The 409 for a return not waiting for its goods. */
 const notReceivable = (): ResponseReject =>
     generateReject(409, [
         { code: ERROR_CODES.RETURN_NOT_RECEIVABLE, message: t('returns.not-receivable') }
+    ]);
+
+/** The 422 for a restock count that cannot stand, on the entry that carries it. */
+const badRestock = (verdict: Extract<RestockVerdict, { ok: false }>): ResponseReject =>
+    generateReject(422, [
+        fieldError(
+            `lines.${verdict.index}.restock`,
+            t(`returns.restock-${verdict.reason}`),
+            ERROR_CODES.RETURN_RESTOCK_INVALID
+        )
     ]);
 
 /** What {@link claimAndRestock} decided. */
@@ -75,6 +93,27 @@ type Claimed =
           /** The refund record opened with the receipt, or `null` when nothing is owed. */
           opened: OpenedReturnRefund | null;
       };
+
+/**
+ * The dotted `lines.<i>.restocked` writes that record, on each line, how many units went back.
+ * @param restocked - per returned line, in the line's own order
+ */
+const stampRestocked = (restocked: readonly number[]): ReturnStamp =>
+    Object.fromEntries(restocked.map((count, index) => [`lines.${index}.restocked`, count]));
+
+/**
+ * The lines that actually go back on sale: each returned line at its restock count, the ones set
+ * to 0 left out.
+ * @param lines - the return's lines
+ * @param restocked - per returned line, in the line's own order
+ */
+const restockedLines = (
+    lines: ReturnDocument['lines'],
+    restocked: readonly number[]
+): { productId: string; quantity: number }[] =>
+    wireLines(lines)
+        .map(({ productId }, index) => ({ productId, quantity: restocked[index] ?? 0 }))
+        .filter(({ quantity }) => quantity > 0);
 
 /**
  * What this return is owed, from its frozen lines and the order's own money — given what the
@@ -125,6 +164,7 @@ const quote = (
  * @param returned - the return
  * @param order - the order it came from
  * @param handlingDeduction - what staff keep back
+ * @param restocked - per returned line, how many units go back on sale
  * @param context - the staff member receiving the goods, for the order's timeline and the refund
  * @returns what the transaction decided: a refusal of the deduction, a lost race, or the receipt
  */
@@ -132,6 +172,7 @@ const claimAndRestock = (
     returned: ReturnDocument,
     order: OrderDocument,
     handlingDeduction: number,
+    restocked: readonly number[],
     context: CallerContext
 ): Promise<Claimed> =>
     announceInTransaction(
@@ -152,17 +193,22 @@ const claimAndRestock = (
                     receivedAt: new Date(),
                     refundAmount: verdict.breakdown.total,
                     shippingRefund: verdict.breakdown.shipping,
-                    ...(handlingDeduction > 0 ? { handlingDeduction } : {})
+                    ...(handlingDeduction > 0 ? { handlingDeduction } : {}),
+                    ...stampRestocked(restocked)
                 },
                 session
             );
             if (!received) return { kind: 'lost' };
 
-            await inventoryService.restockReturnedLines(
-                wireLines(received.lines),
-                { reference: String(received.orderId), note: `return ${String(received._id)}` },
-                session
-            );
+            // Only the units staff put back reach the shelf — and, in the same transaction, a
+            // paid backorder. A line set to 0 writes no movement at all.
+            const sellable = restockedLines(received.lines, restocked);
+            if (sellable.length > 0)
+                await inventoryService.restockReturnedLines(
+                    sellable,
+                    { reference: String(received.orderId), note: `return ${String(received._id)}` },
+                    session
+                );
             await orderService.appendTimeline(
                 String(received.orderId),
                 {
@@ -245,8 +291,18 @@ const receiveFor = (
     order: OrderDocument,
     input: ReceiveReturnInput,
     context: CallerContext
-): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> =>
-    claimAndRestock(returned, order, input.handlingDeduction ?? 0, context).then((claimed) => {
+): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> => {
+    // Checked before anything is written: a count that cannot stand never half-receives a return.
+    const restock = resolveRestock(wireLines(returned.lines), input.lines);
+    if (!restock.ok) return Promise.resolve(badRestock(restock));
+
+    return claimAndRestock(
+        returned,
+        order,
+        input.handlingDeduction ?? 0,
+        restock.restocked,
+        context
+    ).then((claimed) => {
         if (claimed.kind === 'deduction-too-high')
             return generateReject(422, [
                 fieldError(
@@ -258,8 +314,16 @@ const receiveFor = (
         if (claimed.kind === 'lost') return notReceivable();
 
         const { received, breakdown, opened } = claimed;
+        const restockedTo = received.lines.map(({ productId, restocked }) => ({
+            productId: String(productId),
+            restocked: restocked ?? 0
+        }));
         return inventoryService
-            .refreshStockCacheForProducts(received.lines.map(({ productId }) => String(productId)))
+            .refreshStockCacheForProducts(
+                restockedTo
+                    .filter(({ restocked }) => restocked > 0)
+                    .map(({ productId }) => productId)
+            )
             .then(() => syncReturnStatus(String(received.orderId)))
             .then(() => {
                 recordAudit(context, {
@@ -270,6 +334,7 @@ const receiveFor = (
                     metadata: {
                         orderId: String(received.orderId),
                         refundAmount: breakdown.total,
+                        restocked: restockedTo,
                         ...ownOrderFlag(context, buyerIdOf(order))
                     }
                 });
@@ -277,6 +342,7 @@ const receiveFor = (
             })
             .then((after) => generateSuccess(after, 200));
     });
+};
 
 /**
  * Record that a return's goods arrived: restock them, pay the customer back, close the return.

@@ -30,6 +30,13 @@ describe('projectReturnStatus', () => {
         expect(projectReturnStatus([ret('declined', [['a', 2]])], ordered)).toBeUndefined();
     });
 
+    it('ignores a canceled return — the goods never came, so nothing is held or back', () => {
+        expect(projectReturnStatus([ret('canceled', [['a', 2]])], ordered)).toBeUndefined();
+        expect(
+            projectReturnStatus([ret('canceled', [['a', 2]]), ret('closed', [['b', 1]])], ordered)
+        ).toBe('partially_returned');
+    });
+
     it('ignores a return with no lines — nothing was expected back', () => {
         expect(projectReturnStatus([ret('closed', [])], ordered)).toBeUndefined();
     });

@@ -12,7 +12,15 @@ declare module '@kernel/events' {
          * A return was opened — a withdrawal (born approved, or born closed when it reached the
          * order before dispatch) or a request awaiting staff.
          */
-        'return.requested': { returnId: string; orderId: string; reason: string };
+        'return.requested': {
+            returnId: string;
+            orderId: string;
+            reason: string;
+            /** When the buyer asked or stated it (ISO), not when the shop recorded it. */
+            requestedAt: string;
+            /** How a withdrawal was stated; absent on any other reason. */
+            statedVia?: string;
+        };
 
         /**
          * Staff answered a request: approved it or declined it. Written with the decision, so the

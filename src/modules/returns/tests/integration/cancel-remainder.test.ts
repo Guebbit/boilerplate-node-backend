@@ -82,8 +82,15 @@ let customers = 0;
  * Two shirts (30.00) and a mug (10.00) with 5.00 of delivery on top — 75.00, paid by card, the
  * units held and sold for real — and only the shirts shipped. The mug is the remainder.
  */
-const partlyShipped = async (mugOverrides: Parameters<typeof createProduct>[0] = {}) => {
-    const { user, shirt, mug, orderId } = await paidMixed(mugOverrides);
+const partlyShipped = async (
+    mugOverrides: Parameters<typeof createProduct>[0] = {},
+    madeDaysAgo = 0
+) => {
+    const { user, shirt, mug, orderId } = await paidMixed(
+        mugOverrides,
+        OrderStatus.processing,
+        madeDaysAgo
+    );
     const [fulfillmentOrder] = await fulfillmentOrdersOf(orderId);
     const shipped = await deliveryService.shipFulfillmentOrder(
         String(fulfillmentOrder._id),
@@ -107,7 +114,8 @@ const partlyShipped = async (mugOverrides: Parameters<typeof createProduct>[0] =
  */
 const paidMixed = async (
     mugOverrides: Parameters<typeof createProduct>[0] = {},
-    status: OrderStatus = OrderStatus.processing
+    status: OrderStatus = OrderStatus.processing,
+    madeDaysAgo = 0
 ) => {
     customers += 1;
     const user = await createUser({ email: `cancel-${customers}@example.com` });
@@ -115,7 +123,8 @@ const paidMixed = async (
     const mug = await createProduct({ title: 'Mug', price: 10, onHand: 10, ...mugOverrides });
     const order = await createOrder(user, [toOrderItem(shirt, 2), toOrderItem(mug, 1)], {
         shippingMethod: 'standard',
-        shippingCost: 5
+        shippingCost: 5,
+        createdAt: new Date(Date.now() - madeDaysAgo * 86_400_000).toISOString()
     });
     const orderId = String(order._id);
     await inventoryService.reserveForOrder(orderId, [
@@ -688,9 +697,9 @@ describe('staff cancelling what has not shipped', () => {
         );
     });
 
-    // The reason is the buyer's own right: written by staff on someone else's order it would falsify
-    // a legal record, so the request is refused whatever the staff member could otherwise do.
-    it('refuses staff naming withdrawal on a stranger’s order, and writes nothing', async () => {
+    // The buyer's withdrawal can be recorded by staff, but only with the day the buyer stated it and
+    // the channel: without them the request is refused, so a legal record is never written blind.
+    it('refuses staff naming withdrawal without the stated date and channel, and writes nothing', async () => {
         const fixture = await partlyShipped();
 
         const outcome = await returnService.createReturn(
@@ -705,12 +714,82 @@ describe('staff cancelling what has not shipped', () => {
         );
 
         expect(asReject(outcome)).toMatchObject({ status: 422 });
-        expect(asReject(outcome).errors[0].code).toBe('RETURN_CANCELLATION_INVALID');
+        expect(asReject(outcome).errors[0]).toMatchObject({
+            code: 'RETURN_STATEMENT_INVALID',
+            details: { field: 'requestedAt' }
+        });
         expect(await fulfillmentOrdersOf(fixture.orderId).then(([first]) => first.status)).toBe(
             'in_progress'
         );
         expect(await returnRepository.findByOrderId(fixture.orderId)).toEqual([]);
         expect(await refundsOf(fixture.orderId)).toEqual([]);
+    });
+
+    it('records a withdrawal the buyer stated by phone, judged on the day it was stated', async () => {
+        const fixture = await partlyShipped({}, 30);
+        // Closed today, but open on the day the buyer phoned.
+        await setWithdrawUntil(fixture.orderId, new Date(Date.now() - 5 * 86_400_000));
+        const stated = new Date(Date.now() - 8 * 86_400_000);
+
+        const outcome = await returnService.createReturn(
+            {
+                orderId: fixture.orderId,
+                reason: 'withdrawal',
+                kind: 'cancellation',
+                fulfillmentOrderId: fixture.fulfillmentOrderId,
+                requestedAt: stated,
+                statedVia: 'phone'
+            },
+            asModerator(),
+            callerContextAs('moderator')
+        );
+
+        expect(created(outcome)).toMatchObject({
+            reason: 'withdrawal',
+            status: 'closed',
+            statedVia: 'phone',
+            openedBy: 'staff'
+        });
+        expect(created(outcome).requestedAt.getTime()).toBe(stated.getTime());
+    });
+
+    it('refuses a stated withdrawal that was already late on the day it was sent', async () => {
+        const fixture = await partlyShipped({}, 30);
+        await setWithdrawUntil(fixture.orderId, new Date(Date.now() - 10 * 86_400_000));
+
+        const outcome = await returnService.createReturn(
+            {
+                orderId: fixture.orderId,
+                reason: 'withdrawal',
+                kind: 'cancellation',
+                fulfillmentOrderId: fixture.fulfillmentOrderId,
+                requestedAt: new Date(Date.now() - 2 * 86_400_000),
+                statedVia: 'email'
+            },
+            asModerator(),
+            callerContextAs('moderator')
+        );
+
+        expect(asReject(outcome).errors[0].code).toBe('RETURN_WINDOW_CLOSED');
+        expect(await returnRepository.findByOrderId(fixture.orderId)).toEqual([]);
+    });
+
+    it('refuses a date on a staff cancel for their own reason', async () => {
+        const fixture = await partlyShipped();
+
+        const outcome = await returnService.createReturn(
+            {
+                orderId: fixture.orderId,
+                reason: 'other',
+                kind: 'cancellation',
+                fulfillmentOrderId: fixture.fulfillmentOrderId,
+                requestedAt: new Date()
+            },
+            asModerator(),
+            callerContextAs('moderator')
+        );
+
+        expect(asReject(outcome).errors[0].code).toBe('RETURN_STATEMENT_INVALID');
     });
 
     it('asks the key before the reason: a warehouse naming withdrawal is told 403, not 422', async () => {
