@@ -229,6 +229,14 @@ Set `NODE_SECURITY_CONTACT`, `NODE_SECURITY_EXPIRES` (and optionally `NODE_SECUR
 a researcher who finds a bug in your deployment knows where to send it. Left unset, nothing is
 published. See [Reporting a vulnerability](tools/security.md#reporting-a-vulnerability).
 
+## The first third-party integration
+
+The contracts ship at `0.1.0` (alpha: REST may break freely). Before the first partner script uses
+an `sk_` API key, or the first outside subscriber receives a webhook, bump `info.version` to
+`1.0.0` in `shared/contracts/openapi.root.yaml` and in the AsyncAPI roots and fragments. From then
+on a change that breaks a client goes through a deprecation window. See
+[Versioning and retiring an endpoint](api/versioning.md).
+
 ## What's different from dev
 
 | Dev (`docker-compose.yml`)                                  | Production (`docker-compose.production.yml`)                                                                                             |

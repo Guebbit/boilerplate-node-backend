@@ -66,16 +66,25 @@ const CLIENT_ERROR_COPY: Record<number, { code: ErrorCode; messageKey: string }>
 };
 
 /**
+ * The multer limits that are about BYTES: a file or a field value that is too big. They answer 413
+ * like an oversized JSON body; every other multer limit (counts, shapes) is a 400.
+ */
+const MULTER_SIZE_LIMIT_CODES: ReadonlySet<string> = new Set([
+    'LIMIT_FILE_SIZE',
+    'LIMIT_FIELD_VALUE'
+]);
+
+/**
  * What status this error should answer, decided once so the log line and the response cannot
  * disagree about it.
  *
- * Order is the argument. `MulterError` is this handler's own hand-translated shape and keeps its
- * 400. A declared client error is believed next, because a library that states its own status is
+ * Order is the argument. `MulterError` is this handler's own hand-translated shape: 413 for a byte
+ * limit, 400 for the rest. A declared client error is believed next, because a library that states its own status is
  * more specific than any interpretation below it. The database interpreter is last, and is a
  * safety net for a controller that forgot its `.catch()` rather than a substitute for one.
  */
 const resolveStatus = (error: Error): number => {
-    if (error instanceof MulterError) return 400;
+    if (error instanceof MulterError) return MULTER_SIZE_LIMIT_CODES.has(error.code) ? 413 : 400;
 
     const declared = clientErrorStatus(error);
     if (declared !== undefined) return declared;
@@ -159,8 +168,9 @@ export const handleUncaughtError = (
 
     // The one throw shape this handler translates by hand: multer's `code` names which limit was
     // hit and stays in the item, but its English `message` is replaced by one translated text.
+    // `status` is the 413-or-400 `resolveStatus` already chose.
     if (error instanceof MulterError)
-        return rejectResponse(response, 400, [
+        return rejectResponse(response, status, [
             {
                 code: error.code,
                 message: t('generic.error-upload-refused')

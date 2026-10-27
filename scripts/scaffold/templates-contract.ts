@@ -22,8 +22,7 @@ const errorResponse = (status: string, component: string): string =>
 const KEYED_ERRORS = [
     errorResponse('401', 'Unauthorized'),
     errorResponse('403', 'Forbidden'),
-    errorResponse('422', 'ValidationError'),
-    errorResponse('500', 'InternalError')
+    errorResponse('422', 'ValidationError')
 ].join('\n');
 
 /** The same, plus the 404 a route with an id can answer. */
@@ -31,16 +30,14 @@ const KEYED_ERRORS_WITH_NOT_FOUND = [
     errorResponse('401', 'Unauthorized'),
     errorResponse('403', 'Forbidden'),
     errorResponse('404', 'NotFound'),
-    errorResponse('422', 'ValidationError'),
-    errorResponse('500', 'InternalError')
+    errorResponse('422', 'ValidationError')
 ].join('\n');
 
 /** A route with only a path id: no body or query to fail, so no 422, and a malformed id is the 404. */
 const PATH_ONLY_ERRORS = [
     errorResponse('401', 'Unauthorized'),
     errorResponse('403', 'Forbidden'),
-    errorResponse('404', 'NotFound'),
-    errorResponse('500', 'InternalError')
+    errorResponse('404', 'NotFound')
 ].join('\n');
 
 /**

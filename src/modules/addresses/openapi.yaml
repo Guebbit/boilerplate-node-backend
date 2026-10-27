@@ -32,7 +32,6 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/AddressesResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         post:
             tags: [Account]
             summary: Add an address
@@ -59,7 +58,6 @@ paths:
                 # The book is full (`ADDRESS_BOOK_LIMIT_REACHED`): one document cannot grow without bound.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /account/addresses/{addressId}:
         get:
@@ -85,7 +83,6 @@ paths:
                                 $ref: '#/components/schemas/Address'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         put:
             tags: [Account]
             summary: Replace an address
@@ -118,7 +115,6 @@ paths:
                 # entry answers the same 404 as an invented one.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         patch:
             tags: [Account]
             summary: Update an address
@@ -154,7 +150,6 @@ paths:
                 # entry answers the same 404 as an invented one.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
             tags: [Account]
             summary: Remove an address
@@ -178,7 +173,6 @@ paths:
                                 $ref: '#/components/schemas/AddressesResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /account/addresses/{addressId}/default:
         put:
@@ -206,7 +200,6 @@ paths:
                 # Well-formed id that names none of the CALLER's addresses — someone else's
                 # entry answers the same 404 as an invented one.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
 components:
     schemas:

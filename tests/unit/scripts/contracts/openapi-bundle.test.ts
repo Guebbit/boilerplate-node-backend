@@ -23,7 +23,7 @@ const bundle = (extra: Record<string, unknown>) =>
         'x-app-level-responses': {
             '429': { response: 'TooManyRequests', appliesTo: 'all' },
             '400': { response: 'BadRequest', appliesTo: 'requestBody' },
-            '415': { response: 'UnsupportedMediaType', appliesTo: 'requestBodyOrDelete' }
+            '415': { response: 'UnsupportedMediaType', appliesTo: 'requestBodyOrBodyless' }
         },
         paths: extra
     });

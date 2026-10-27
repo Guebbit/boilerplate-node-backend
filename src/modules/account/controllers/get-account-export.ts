@@ -27,23 +27,25 @@ export const getAccountExport = (request: Request, response: Response) => {
     const { id: userId } = request.authContext!;
 
     return openOwnExport(userId, callerContextOf(request))
-        .then((stream) => {
-            if (!stream) {
+        .then((opened) => {
+            if (!opened) {
                 rejectResponse(response, 404, [t('account.export.not-found')]);
                 return undefined;
             }
 
+            // Express: `attachment(name)` sets `Content-Disposition: attachment; filename=…` (RFC 6266,
+            // encoded by the `content-disposition` package). The server owns the download's name.
+            response.attachment(`account-export-${opened.requestedDay}.json`);
             response
                 .status(200)
                 .setHeader('Content-Type', 'application/json; charset=utf-8')
-                .setHeader('Content-Disposition', 'attachment; filename="account-export.json"')
                 // A person's whole data — never a shared cache, never the browser's disk cache.
                 .setHeader('Cache-Control', 'private, no-store');
 
             // Node: pipes with backpressure and destroys both ends on error. Rejects if either
             // side closes early (a client that hangs up mid-download).
             // https://nodejs.org/api/stream.html#streampipelinesource-transforms-destination-options
-            return pipeline(stream, response);
+            return pipeline(opened.stream, response);
         })
         .catch((error: unknown) => {
             // Headers are out: there is no envelope left to send, only a connection to cut.

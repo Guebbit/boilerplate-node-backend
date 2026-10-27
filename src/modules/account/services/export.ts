@@ -223,12 +223,13 @@ export const requestExport = (
  *
  * @param userId - the authenticated caller
  * @param context - for the audit event: the moment the data actually leaves
- * @returns the file as a stream, or `undefined` when there is nothing to send
+ * @returns the file as a stream and the day it was requested (UTC), which names the download; or
+ *   `undefined` when there is nothing to send
  */
 export const openOwnExport = (
     userId: string,
     context: CallerContext
-): Promise<Readable | undefined> =>
+): Promise<{ stream: Readable; requestedDay: string } | undefined> =>
     accountExportRepository.findByUserId(userId).then((row) => {
         if (row?.status !== 'ready' || row.expiresAt.getTime() <= Date.now()) return undefined;
 
@@ -241,7 +242,7 @@ export const openOwnExport = (
                 targetType: 'account_export',
                 targetId: String(row._id)
             });
-            return stream;
+            return { stream, requestedDay: row.createdAt.toISOString().slice(0, 10) };
         });
     });
 

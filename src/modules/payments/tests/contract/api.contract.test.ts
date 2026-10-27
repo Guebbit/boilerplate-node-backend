@@ -387,13 +387,14 @@ const preparedPayment = async () => {
  */
 describe('the card steps — who may pay', () => {
     it.each([
-        ['POST /payments', '/payments'],
-        ['POST /payments/{id}/confirm', `/payments/${MISSING_ID}/confirm`],
-        ['POST /payments/{id}/sync', `/payments/${MISSING_ID}/sync`]
-    ])('%s refuses an unverified account with EMAIL_NOT_VERIFIED', async (_step, url) => {
+        ['POST /payments', '/payments', {}],
+        ['POST /payments/{id}/confirm', `/payments/${MISSING_ID}/confirm`, {}],
+        ['POST /payments/{id}/sync', `/payments/${MISSING_ID}/sync`, undefined]
+    ])('%s refuses an unverified account with EMAIL_NOT_VERIFIED', async (_step, url, body) => {
         const { bearer } = await authenticateAsRole('unverified');
 
-        const response = await api().post(url).set('Authorization', bearer).send({});
+        // `sync` takes no body at all, and a body-less action refuses one with 415.
+        const response = await api().post(url).set('Authorization', bearer).send(body);
 
         expect(response.status).toBe(403);
         expect(response.body.errors[0].code).toBe('EMAIL_NOT_VERIFIED');
@@ -404,17 +405,20 @@ describe('the card steps — who may pay', () => {
         afterEach(() => jest.useRealTimers());
 
         it.each([
-            ['POST /payments', '/payments'],
-            ['POST /payments/{id}/confirm', `/payments/${MISSING_ID}/confirm`],
-            ['POST /payments/{id}/sync', `/payments/${MISSING_ID}/sync`]
-        ])('%s still answers an unverified account 403 EMAIL_NOT_VERIFIED', async (_step, url) => {
-            const bearer = await staleBearerFor(await createUser(), 'critical');
+            ['POST /payments', '/payments', {}],
+            ['POST /payments/{id}/confirm', `/payments/${MISSING_ID}/confirm`, {}],
+            ['POST /payments/{id}/sync', `/payments/${MISSING_ID}/sync`, undefined]
+        ])(
+            '%s still answers an unverified account 403 EMAIL_NOT_VERIFIED',
+            async (_step, url, body) => {
+                const bearer = await staleBearerFor(await createUser(), 'critical');
 
-            const response = await api().post(url).set('Authorization', bearer).send({});
+                const response = await api().post(url).set('Authorization', bearer).send(body);
 
-            expect(response.status).toBe(403);
-            expect(response.body.errors[0].code).toBe('EMAIL_NOT_VERIFIED');
-        });
+                expect(response.status).toBe(403);
+                expect(response.body.errors[0].code).toBe('EMAIL_NOT_VERIFIED');
+            }
+        );
     });
 });
 

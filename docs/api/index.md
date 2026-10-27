@@ -37,6 +37,7 @@ flowchart LR
 | Know what to rerun after editing a fragment | [Regenerating After a Change](./regenerating.md) |
 | Know who owns which fragment | [Contract Ownership & Fragmentation](./contract-fragmentation.md) |
 | Change SSE/event/queue contracts | [AsyncAPI Workflow](./asyncapi-workflow.md) |
+| Know when a change may break clients, and how an endpoint is retired | [Versioning and retiring an endpoint](./versioning.md) |
 | Understand route style and response patterns | [REST patterns used here](#rest-patterns-used-here) |
 | Know what POST, PUT and PATCH must do, and the status each answers | [Write Methods](./write-methods.md) |
 | Read a success: the resource, a list, or 204 | [Success Responses](./responses.md) |
