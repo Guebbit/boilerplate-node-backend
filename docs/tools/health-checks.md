@@ -12,7 +12,7 @@ A health check tests **this container's own job**. Nothing else.
 - **A long-running worker** checks its own loop, not the web port. `cron` asks supercronic's
   `/health`. Mastodon's `sidekiq` and Sentry's workers do the same.
   That loop is alive even when every job would refuse a bad environment, so `cron` runs
-  `npm run config:check` before supercronic starts: a broken `.env` stops the container instead.
+  `config:check` (`scripts/ops/check-config.ts`) before supercronic starts: a broken `.env` stops the container instead.
 - **A one-shot job** has no check. Its exit code is the signal, and
   `depends_on: service_completed_successfully` already reads it. `setup` sets `disable: true`.
 - **A container never inherits a check for a job it does not do.** It could never pass. That is a

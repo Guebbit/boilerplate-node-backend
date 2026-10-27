@@ -7,8 +7,14 @@
 
 import type { JobDeclaration } from '@kernel/registry';
 
-/** How a job is started, by cron or by hand: the `job` script, then the job's name. */
+/** How a person starts a job by hand: the `job` script, then the job's name. */
 const RUNNER = 'npm run job';
+
+/**
+ * How cron starts a job. The production image has no npm, so this is the `job` script's own
+ * command (`package.json`), run from /app where `--import tsx` resolves.
+ */
+const CRON_RUNNER = 'node --import tsx scripts/ops/run-job.ts';
 
 /** The five fields of a cron expression. */
 const CRON_FIELDS = 5;
@@ -64,7 +70,7 @@ const CRONTAB_HEADER = [
  */
 export const renderCrontab = (jobs: readonly JobDeclaration[]): string =>
     `${CRONTAB_HEADER}${jobs
-        .map((job) => `# ${job.summary}\n${job.schedule} cd /app && ${RUNNER} ${job.name}`)
+        .map((job) => `# ${job.summary}\n${job.schedule} cd /app && ${CRON_RUNNER} ${job.name}`)
         .join('\n')}\n`;
 
 /**

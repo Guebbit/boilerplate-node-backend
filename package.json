@@ -8,7 +8,7 @@
         "dev": "tsx watch --import ./scenarios/support/development-doubles.ts src/cluster.ts",
         "dev:docker": "nodemon --legacy-watch --watch src --ext ts --exec 'tsx --import ./scenarios/support/development-doubles.ts src/serve.ts'",
         "dev:docker:cluster": "nodemon --legacy-watch --watch src --ext ts --exec 'tsx --import ./scenarios/support/development-doubles.ts src/cluster.ts'",
-        "start": "tsx src/cluster.ts",
+        "start": "node --import tsx src/cluster.ts",
         "e2e:serve": "cross-env NODE_E2E_RUN=1 tsx --import ./scenarios/support/development-doubles.ts src/cluster.ts",
         "demo": "tsx --import ./scenarios/support/development-doubles.ts scenarios/run-server.ts",
         "debug": "tsx --inspect-brk --import ./scenarios/support/development-doubles.ts src/cluster.ts",

@@ -104,7 +104,8 @@ assuming `ring[0]`.
 1. Prepend the new secret, keep the old one: `NODE_TOTP_ENCRYPTION_KEY=v2:<new>,v1:<old>`. Deploy —
    every new TOTP enrollment and every delivered-code HMAC now uses `v2`; every row still stamped
    `v1` keeps decrypting against the entry that wrote it.
-2. Re-encrypt existing rows onto the new key: `npm run reencrypt`. Nothing re-encrypts a row lazily:
+2. Re-encrypt existing rows onto the new key: `npm run reencrypt`. In a deployed container, which
+   has no npm, run it from `/app` as `node --import tsx scripts/ops/reencrypt.ts` (same flags). Nothing re-encrypts a row lazily:
    only a fresh write of that same field or this script moves it, so skipping it leaves `v1` rows
    that the next step would strand. `npm run reencrypt -- --dry-run` writes nothing and prints, per
    field, how many values sit on each key version. Batched, and safe to repeat: a value already on

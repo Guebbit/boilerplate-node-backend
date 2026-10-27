@@ -119,8 +119,7 @@ x-logging: &logging
 #   no-new-privileges  a setuid binary inside the image cannot raise privilege, which closes the
 #                    usual escape from the non-root user above.
 #   tmpfs /tmp       where an upload waits while the request is checked — `NODE_UPLOAD_STAGING_PATH`
-#                    defaults into the system temp directory, and `npm_config_cache` is pointed
-#                    here too. `noexec`/`nosuid`: a file the client chose the bytes of lands here,
+#                    defaults into the system temp directory. `noexec`/`nosuid`: a file the client chose the bytes of lands here,
 #                    and nothing should ever run it. Sized because a tmpfs charges real memory —
 #                    this bounds concurrent uploads, not one upload's size, which
 #                    `NODE_MAX_UPLOAD_BYTES` does.
@@ -212,12 +211,6 @@ x-backup-env: &backup-env
 
 x-app-env: &app-env
     NODE_ENV: 'production'
-    # Every service here starts through `npm`, and every one runs with a read-only root (see
-    # `x-hardening` above). npm's cache — and the `_logs/` it writes a failure report into —
-    # default under `$HOME`, which is inside the image and therefore immutable. Pointed at the
-    # tmpfs instead so the failure path has somewhere to write; verified that an exit code still
-    # propagates either way, this is what keeps the report itself.
-    npm_config_cache: '/tmp/.npm'
     # Service hostnames on the compose network, defaulted — not hardcoded — so a client env file
     # setting these to a managed instance wins outright. The URLs carry NO password: it arrives as
     # a secret file and the config loader merges it in (`NODE_DB_PASSWORD_FILE` below, and the
@@ -427,7 +420,7 @@ services:
             - mongo-ca-dir:/ca-dir:ro
         # `-prometheus-listen-address` makes supercronic serve `/health` (and `/metrics`), bound to
         # loopback so it stays private to the container. It answers `OK` while the scheduler runs.
-        # `npm run config:check` first: supercronic stays alive even when every job would refuse a bad
+        # `config:check` first: supercronic stays alive even when every job would refuse a bad
         # environment, so its health check alone would call that container healthy. `exec` makes
         # supercronic PID 1 again, so it receives the stop signal.
         # https://github.com/aptible/supercronic
@@ -435,7 +428,7 @@ services:
             [
                 'sh',
                 '-c',
-                'npm run config:check && exec supercronic -passthrough-logs -prometheus-listen-address 127.0.0.1:9746 /app/crontab'
+                'node --import tsx scripts/ops/check-config.ts && exec supercronic -passthrough-logs -prometheus-listen-address 127.0.0.1:9746 /app/crontab'
             ]
         # This container's own job is the scheduler, so it checks the scheduler — the image's web
         # check would never pass here (nothing listens on the app port). See docs/tools/health-checks.md.
@@ -501,7 +494,12 @@ services:
             # Same reasoning as `app`'s own mount — `db:sync`/`access:bootstrap` connect to Mongo too.
             - mongo-ca-dir:/ca-dir:ro
 
-        command: ['sh', '-c', 'npm run deploy:setup']
+        command:
+            [
+                'sh',
+                '-c',
+                'node --import tsx scripts/db/sync-indexes.ts && node --import tsx scripts/db/bootstrap-access.ts'
+            ]
         # A one-shot job: its exit code is the signal, which `depends_on: service_completed_successfully`
         # already reads. The image's web check would only mark it unhealthy while it runs.
         healthcheck:

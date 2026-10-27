@@ -8,7 +8,7 @@ not copy. A process that wants them loads one preload first.
 
 ```mermaid
 flowchart LR
-    subgraph image["Production: npm start / the image"]
+    subgraph image["Production: node --import tsx / the image"]
         cluster["src/cluster.ts"] --> registries["Registries: real adapters only"]
     end
     subgraph dev["dev / e2e:serve / demo / debug / scenario:apply / jest"]

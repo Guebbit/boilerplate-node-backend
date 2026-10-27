@@ -244,7 +244,37 @@ describe('cron refuses a bad environment before it schedules anything', () => {
     it('runs config:check, and only on success starts supercronic', () => {
         const command = [compose.services.cron?.command ?? []].flat().join(' ');
 
-        expect(command).toMatch(/npm run config:check && exec supercronic /);
+        expect(command).toMatch(
+            /node --import tsx scripts\/ops\/check-config\.ts && exec supercronic /
+        );
+    });
+});
+
+describe('the production image carries no package manager, so nothing starts through one', () => {
+    /*
+     * npm, corepack and yarn ship in the Node base image with their own CVEs, and a running
+     * container never needs them. The runtime stage removes them, so a command that still says
+     * `npm` would fail at boot instead of in review.
+     */
+    it('starts the web process with node, not npm', () => {
+        expect(dockerfile).toContain('CMD ["node", "--import", "tsx", "src/cluster.ts"]');
+    });
+
+    it('removes npm, npx, corepack and yarn from the runtime stage', () => {
+        const runtimeStage = dockerfile.slice(dockerfile.indexOf('AS runtime'));
+
+        for (const removed of [
+            '/usr/local/lib/node_modules/npm',
+            '/usr/local/bin/npx',
+            '/opt/yarn-v*'
+        ])
+            expect(runtimeStage).toContain(removed);
+    });
+
+    it.each(OWN_CODE_SERVICES)('has %s run no npm command', (service) => {
+        const command = [compose.services[service]?.command ?? []].flat().join(' ');
+
+        expect(command).not.toMatch(/\bnpm\b/);
     });
 });
 
