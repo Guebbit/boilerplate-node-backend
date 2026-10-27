@@ -13,9 +13,7 @@ import {
     readOrder,
     timelineOf
 } from '@modules/orders/tests/factories';
-import { withTransaction } from '@infrastructure/runtime/database';
 import { overrideStatus } from '../../services/override';
-import { recordForcedFulfilment } from '../../services/fulfillment';
 import { withActions } from '../../services/actions';
 import { orderModel } from '../../model';
 import { orderRepository } from '../../repository';
@@ -311,45 +309,5 @@ describe('the override event', () => {
         const { actions } = await withActions(awaiting!, asAdmin());
 
         expect(actions?.override).toEqual([OrderStatus.processing]);
-    });
-});
-
-describe('recordForcedFulfilment', () => {
-    it('leaves a history row for a forced act, with the status the act left the order in', async () => {
-        const order = await seedOrder(OrderStatus.processing);
-        const at = new Date('2026-05-01T09:00:00Z');
-
-        await withTransaction((session) =>
-            recordForcedFulfilment(
-                String(order._id),
-                { reason: 'carrier confirmed', actorUserId: 'admin-1', at, from: OrderStatus.paid },
-                session
-            )
-        );
-
-        const stored = await readOrder(String(order._id));
-        const timeline = await timelineOf(String(order._id));
-        expect(timeline).toHaveLength(1);
-        expect(timeline[0]).toMatchObject({
-            type: 'status_overridden',
-            text: 'carrier confirmed',
-            actor: 'admin-1',
-            at: at.toISOString(),
-            data: { from: OrderStatus.paid, to: OrderStatus.processing, mode: 'forced' }
-        });
-        // A history row is not a move: the order stays where the act left it.
-        expect(stored?.status).toBe(OrderStatus.processing);
-    });
-
-    it('answers null for an order that does not exist', async () => {
-        const result = await withTransaction((session) =>
-            recordForcedFulfilment(
-                '65dcdec2b18ad5e4bd597f01',
-                { reason: 'x', actorUserId: 'a', at: new Date(), from: OrderStatus.paid },
-                session
-            )
-        );
-
-        expect(result).toBeNull();
     });
 });

@@ -29,16 +29,7 @@ import type { ShipmentDocument } from '../model';
 import { refuse, refuseMissing, runAct } from './act';
 import { announceDelivered } from './announce';
 import { restoreLostShipment, viewShipmentOf } from './found';
-import { refuseUnearnedForce } from './force';
 import { reportProgress, settleOrder } from './progress';
-
-/** What staff sends to record an arrival. */
-export interface DeliverInput {
-    /** Record it without a carrier confirmation. Needs `override:Order` and a `reason`. */
-    forced?: boolean | undefined;
-    /** Why; recorded on the order's override history. */
-    reason?: string | undefined;
-}
 
 /** What a committed delivery leaves for the steps that follow it. */
 interface Delivered {
@@ -51,13 +42,11 @@ interface Delivered {
 /**
  * The act itself, in its transaction.
  * @param shipmentId - the shipment that arrived
- * @param input - the `forced` flag and its reason
  * @param context - the caller
  * @param session - the act's transaction
  */
 const deliverAct = async (
     shipmentId: string,
-    input: DeliverInput,
     context: CallerContext,
     session: ClientSession
 ): Promise<Delivered> => {
@@ -90,17 +79,6 @@ const deliverAct = async (
         session,
         context.caller.id
     );
-    if (input.forced)
-        await orderService.recordForcedFulfilment(
-            orderId,
-            {
-                reason: input.reason ?? '',
-                actorUserId: context.caller.id ?? '',
-                at,
-                from: order.status
-            },
-            session
-        );
     await announceDelivered(shipment, session, context.caller.id);
 
     return { shipment, order, wasLost };
@@ -110,21 +88,16 @@ const deliverAct = async (
  * Record a shipment's arrival.
  *
  * @param shipmentId - the shipment that arrived
- * @param input - the `forced` flag and its reason
  * @param authContext - the caller, for the response's own `actions`
  * @param context - the caller, for the audit entry
  * @returns the shipment as it now stands, or the refusal naming which case it was
  */
 export const deliverShipment = (
     shipmentId: string,
-    input: DeliverInput,
     authContext: AuthContext | undefined,
     context: CallerContext
 ): Promise<ResponseSuccess<Shipment> | ResponseReject> => {
-    const unearned = refuseUnearnedForce(context, input.forced, input.reason);
-    if (unearned) return Promise.resolve(unearned);
-
-    return runAct((session) => deliverAct(shipmentId, input, context, session)).then((result) => {
+    return runAct((session) => deliverAct(shipmentId, context, session)).then((result) => {
         if (result.refused) return result.reject;
         const { shipment } = result.value;
         const lostFlag = result.value.wasLost ? { wasLost: true } : {};
@@ -133,11 +106,7 @@ export const deliverShipment = (
             outcome: 'success',
             targetType: 'order',
             targetId: String(shipment.orderId),
-            // A forced arrival is a sanctioned bypass: its reason is the justification.
-            metadata:
-                input.forced === true
-                    ? { shipmentId, forced: true, reason: input.reason, ...lostFlag }
-                    : { shipmentId, forced: false, ...lostFlag }
+            metadata: { shipmentId, ...lostFlag }
         });
         // A restore moved the stock hold: the catalogue's copy follows the commit.
         const shelf = result.value.wasLost

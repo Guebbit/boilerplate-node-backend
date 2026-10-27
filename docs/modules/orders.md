@@ -395,14 +395,12 @@ summary), `shipped`, `fulfilled`. The edges between statuses are not traits; the
 
 A correction the ordinary table above cannot express — a mis-scanned parcel, a shipment recorded
 against the wrong order — needs `override:Order`, a step-up permission granted to `admin` by
-name. Two modes, both requiring a `reason`, both writing a `status_overridden` row on the
-[timeline](#the-timeline) (who, when, from → to, mode, reason):
+name. It needs a `reason` and writes a `status_overridden` row on the
+[timeline](#the-timeline) (who, when, from → to, reason). It never lands on `paid` (that stays
+`system`-only, absolute). Shipping from `paid` is no override: the ship act makes `paid → processing`
+itself, and recording an arrival has no forced variant either.
 
-- **Forced** — `delivery`'s deliver door accepts `forced: true`. The regular operation still runs; the
-  order skips the carrier confirmation and leaves a history row through `recordForcedFulfilment` — a
-  row **without** a move of its own. It never lands on `paid` (that stays `system`-only, absolute).
-  Shipping from `paid` is no override: the ship act makes `paid → processing` itself.
-- **Status-only** — `POST /orders/{id}/status-override` with `{ to, reason }` moves the status
+- `POST /orders/{id}/status-override` with `{ to, reason }` moves the status
   alone, forward to `processing`/`shipped`/`delivered` only. No shipped email — but webhooks still fire,
   since a subscriber's own view of the order genuinely changed.
 

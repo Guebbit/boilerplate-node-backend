@@ -6,14 +6,9 @@
  * docs/modules/delivery.md
  */
 
-import type { Request } from 'express';
 import { Router } from 'express';
-import {
-    getAuth,
-    isAuth,
-    requirePermission,
-    requireFreshAuthWhen
-} from '@kernel/middlewares/authorizations';
+import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
+import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 import { noStore } from '@infrastructure/http/middlewares/cache';
 import { getShippingMethods } from './controllers/get-shipping-methods';
 import { postShipFulfillmentOrder } from './controllers/post-ship-fulfillment-order';
@@ -32,14 +27,6 @@ import {
     getPreorderFulfillmentOrders,
     getPreorderSummary
 } from './controllers/get-preorder-fulfillment-orders';
-
-/**
- * Whether this request is asking to force an arrival — the same flag `refuseUnearnedForce` reads
- * for its own `override:Order` permission check, so a caller who reaches this far without
- * `forced: true` never pays for a step-up prompt a plain deliver never needed.
- */
-const isForcedRequest = (request: Request): boolean =>
-    (request.body as { forced?: boolean } | undefined)?.forced === true;
 
 /** Express router for delivery operations (methods, fulfilment reads, cutting and delivering shipments, holds). */
 export const router = Router();
@@ -103,22 +90,26 @@ router.get(
 // POST /delivery/fulfillment-orders/:id/shipments — cuts a shipment; the order moves processing ->
 // shipped only when nothing remains anywhere. From `paid` the act makes the start move itself, so
 // the service also asks for `start:Shipment` there. No step-up: shipping is an ordinary act.
+// `idempotencyKey` sits after the permission check so a 401/403 is never stored as the answer: a
+// partial ship creates a new shipment, so a retry without a key would cut a second parcel.
 router.post(
     '/fulfillment-orders/:id/shipments',
     getAuth,
     isAuth,
     requirePermission('update', 'Shipment'),
+    idempotencyKey,
     postShipFulfillmentOrder
 );
 
 // POST /delivery/fulfillment-orders/:id/fulfill — the digital door: a shipment with no parcel,
 // born delivered. Like shipping, it makes the start move itself from `paid`. A physical
-// fulfillment order cannot use this door at all.
+// fulfillment order cannot use this door at all. Keyed like the ship door, so both answer alike.
 router.post(
     '/fulfillment-orders/:id/fulfill',
     getAuth,
     isAuth,
     requirePermission('update', 'Shipment'),
+    idempotencyKey,
     postFulfillFulfillmentOrder
 );
 
@@ -153,13 +144,12 @@ router.patch(
 );
 
 // POST /delivery/shipments/:id/deliver — records an arrival; on the last one the order moves
-// shipped -> delivered. A `forced` arrival asks for a fresh login (`override:Order`'s tier).
+// shipped -> delivered. No step-up: recording a fact about a parcel.
 router.post(
     '/shipments/:id/deliver',
     getAuth,
     isAuth,
     requirePermission('update', 'Shipment'),
-    requireFreshAuthWhen(isForcedRequest, 'critical'),
     postDeliverShipment
 );
 // POST /delivery/shipments/:id/lost — a parcel that will not arrive: its units reopen on the same

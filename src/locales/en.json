@@ -98,7 +98,6 @@
             "expectedTotal": "Expected total",
             "expiresAt": "Expiry date",
             "fields": "Fields",
-            "forced": "Forced",
             "fulfillmentOrderId": "Fulfillment order",
             "fulfillmentStatus": "Fulfillment status",
             "fullName": "Full name",
