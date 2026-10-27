@@ -53,6 +53,15 @@
                 "subject": "Your return was refunded",
                 "body": "We received your return for order {{order}} and refunded {{amount}}."
             },
+            "return-replaced": {
+                "subject": "Your replacement is on its way",
+                "body": "We received your faulty item from order {{order}}. We are sending you a replacement; you will get another email when it leaves."
+            },
+            "return-repaired": {
+                "subject": "Your item was repaired",
+                "body": "We received your item from order {{order}} and are repairing it, at no cost to you. Because you chose a repair, your legal guarantee on it is extended by 12 months."
+            },
+            "remedy-notice": "For a faulty or wrong item you can choose a repair, a replacement or your money back. Choosing a repair extends your guarantee by 12 months.",
             "decline-reason": {
                 "return_period_ended": "The period for returning this order has ended.",
                 "not_returnable": "These goods cannot be returned.",
@@ -60,6 +69,8 @@
                 "other": "We could not accept it for another reason."
             }
         },
+        "deduction-on-guarantee": "A repair, a replacement or a refund for a faulty or wrong item is free of charge: no handling deduction applies.",
+        "remedy-invalid": "Only a defective or wrong item can be repaired or replaced, and only those returns have a preferred remedy.",
         "deduction-too-high": "The handling deduction is more than the refund is worth.",
         "restock-unknown-product": "A restock count names a product that is not on this return.",
         "restock-duplicate": "A restock count names the same product twice.",

@@ -7,6 +7,10 @@
  *   units are never on the shelf behind a return that reads `approved`, nor missing from it behind
  *   one that reads `received`. The move is conditional (`approved` only), which is what makes it —
  *   and so the restock — happen once however many staff click.
+ * - **Remedy** is staff's choice under the guarantee (Directive 2019/771 Art. 13): `refund` (the
+ *   rest of this page), `replace` (the returned units reopen on the SAME order and ship again)
+ *   or `repair` (the guarantee is extended 12 months). The last two move no money and close the
+ *   return at once, in the receipt's own transaction.
  * - **Closed** is a fact about money, and money cannot roll back. The refund RECORD is opened in
  *   that same transaction, carrying this return's id, so a received return always has its debt
  *   on file. Only the provider call follows the commit; if it is refused, the record stays open,
@@ -17,6 +21,7 @@
  * See: docs/modules/returns.md#what-the-customer-gets-back
  */
 
+import type { ClientSession } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import {
     fieldError,
@@ -28,12 +33,13 @@ import {
 import { recordAudit } from '@infrastructure/observability/audit';
 import { announceInTransaction } from '@kernel/outbox';
 import { inventoryService } from '@modules/inventory';
-import { cheapestStandardShipping } from '@modules/delivery';
+import { ActRefusal, cheapestStandardShipping, deliveryService } from '@modules/delivery';
 import { ownOrderFlag } from '@modules/access';
 import { buyerIdOf, orderService, sumLineItems } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { paymentService } from '@modules/payments';
 import type { OpenedReturnRefund } from '@modules/payments';
+import { ReturnRemedy } from '@types';
 import type { CallerContext } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { returnRepository, type ReturnStamp } from '../repository';
@@ -43,6 +49,7 @@ import { RETURN_RECEIVED } from '../events';
 import {
     RECEIVABLE_RETURN_STATUSES,
     accountsOf,
+    isGuaranteeReason,
     refundAmountFor,
     resolveRestock,
     shippingStillOwed,
@@ -64,6 +71,8 @@ export interface ReceiveReturnInput {
      * full; absent restocks everything. A broken unit is set to 0.
      */
     lines?: RestockRequest[];
+    /** What the buyer is given. Absent means a refund; the others are for a defect or a wrong item. */
+    remedy?: ReturnRemedy;
 }
 
 /** The 409 for a return not waiting for its goods. */
@@ -82,9 +91,29 @@ const badRestock = (verdict: Extract<RestockVerdict, { ok: false }>): ResponseRe
         )
     ]);
 
+/** The 422 for a remedy the return's reason has no guarantee for. */
+const badRemedyFor = (): ResponseReject =>
+    generateReject(422, [
+        fieldError('remedy', t('returns.remedy-invalid'), ERROR_CODES.RETURN_REMEDY_INVALID)
+    ]);
+
+/** The 422 for a handling deduction on a defect or a wrong item: a guarantee remedy is free of charge. */
+const deductionOnGuarantee = (): ResponseReject =>
+    generateReject(422, [
+        fieldError(
+            'handlingDeduction',
+            t('returns.deduction-on-guarantee'),
+            ERROR_CODES.RETURN_DEDUCTION_INVALID
+        )
+    ]);
+
+/** What a replacement or a repair refunds: nothing. */
+const NO_REFUND: RefundBreakdown = { goods: 0, shipping: 0, deduction: 0, total: 0 };
+
 /** What {@link claimAndRestock} decided. */
 type Claimed =
     | { kind: 'deduction-too-high' }
+    | { kind: 'refused'; reject: ResponseReject }
     | { kind: 'lost' }
     | {
           kind: 'received';
@@ -157,6 +186,35 @@ const quote = (
 };
 
 /**
+ * What a replacement or a repair does, in the receipt's transaction: a replacement reopens the
+ * returned units on the order so they ship again through the ordinary door (the shelf top-up and
+ * any owed part follow `delivery`'s lost-parcel rules); a repair pushes the guarantee out by 12
+ * months, once per order. A refund does neither.
+ * @param received - the return, just claimed
+ * @param remedy - what the buyer is given
+ * @param context - the staff member receiving the goods
+ * @param session - the receipt's transaction
+ * @throws {ActRefusal} when the order cannot send the units again
+ */
+const handOverRemedy = (
+    received: ReturnDocument,
+    remedy: ReturnRemedy,
+    context: CallerContext,
+    session: ClientSession
+): Promise<unknown> => {
+    if (remedy === ReturnRemedy.replace)
+        return deliveryService.reopenForReplacement(
+            String(received.orderId),
+            wireLines(received.lines),
+            session,
+            context.caller.id
+        );
+    if (remedy === ReturnRemedy.repair)
+        return orderService.extendGuarantee(String(received.orderId), session);
+    return Promise.resolve();
+};
+
+/**
  * The move that IS the receipt: under the order's lock row, quote what is owed — whether this is
  * the return that brings the order whole is decided here, so two receipts racing cannot both take
  * the delivery — then the conditional status claim, the restock, the refund record and
@@ -165,14 +223,17 @@ const quote = (
  * @param order - the order it came from
  * @param handlingDeduction - what staff keep back
  * @param restocked - per returned line, how many units go back on sale
+ * @param remedy - what the buyer is given; anything but a refund owes no money
  * @param context - the staff member receiving the goods, for the order's timeline and the refund
  * @returns what the transaction decided: a refusal of the deduction, a lost race, or the receipt
+ * @throws {ActRefusal} when a replacement cannot be sent again; the transaction aborts with it
  */
 const claimAndRestock = (
     returned: ReturnDocument,
     order: OrderDocument,
     handlingDeduction: number,
     restocked: readonly number[],
+    remedy: ReturnRemedy,
     context: CallerContext
 ): Promise<Claimed> =>
     announceInTransaction(
@@ -182,7 +243,10 @@ const claimAndRestock = (
             const everyReturn = await returnRepository.findByOrderId(orderId, session);
             const others = everyReturn.filter(({ _id }) => String(_id) !== String(returned._id));
 
-            const verdict = quote(returned, order, others, handlingDeduction);
+            const verdict =
+                remedy === ReturnRemedy.refund
+                    ? quote(returned, order, others, handlingDeduction)
+                    : { ok: true as const, breakdown: NO_REFUND };
             if (!verdict.ok) return { kind: 'deduction-too-high' };
 
             const received = await returnRepository.claimStatus(
@@ -191,6 +255,7 @@ const claimAndRestock = (
                 'received',
                 {
                     receivedAt: new Date(),
+                    remedy,
                     refundAmount: verdict.breakdown.total,
                     shippingRefund: verdict.breakdown.shipping,
                     ...(handlingDeduction > 0 ? { handlingDeduction } : {}),
@@ -209,6 +274,7 @@ const claimAndRestock = (
                     { reference: String(received.orderId), note: `return ${String(received._id)}` },
                     session
                 );
+            await handOverRemedy(received, remedy, context, session);
             await orderService.appendTimeline(
                 String(received.orderId),
                 {
@@ -292,56 +358,78 @@ const receiveFor = (
     input: ReceiveReturnInput,
     context: CallerContext
 ): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> => {
+    const remedy = input.remedy ?? ReturnRemedy.refund;
     // Checked before anything is written: a count that cannot stand never half-receives a return.
+    if (remedy !== ReturnRemedy.refund && !isGuaranteeReason(returned.reason))
+        return Promise.resolve(badRemedyFor());
+    if (isGuaranteeReason(returned.reason) && (input.handlingDeduction ?? 0) > 0)
+        return Promise.resolve(deductionOnGuarantee());
     const restock = resolveRestock(wireLines(returned.lines), input.lines);
     if (!restock.ok) return Promise.resolve(badRestock(restock));
 
-    return claimAndRestock(
-        returned,
-        order,
-        input.handlingDeduction ?? 0,
-        restock.restocked,
-        context
-    ).then((claimed) => {
-        if (claimed.kind === 'deduction-too-high')
-            return generateReject(422, [
-                fieldError(
-                    'handlingDeduction',
-                    t('returns.deduction-too-high'),
-                    ERROR_CODES.RETURN_DEDUCTION_INVALID
-                )
-            ]);
-        if (claimed.kind === 'lost') return notReceivable();
-
-        const { received, breakdown, opened } = claimed;
-        const restockedTo = received.lines.map(({ productId, restocked }) => ({
-            productId: String(productId),
-            restocked: restocked ?? 0
-        }));
-        return inventoryService
-            .refreshStockCacheForProducts(
-                restockedTo
-                    .filter(({ restocked }) => restocked > 0)
-                    .map(({ productId }) => productId)
-            )
-            .then(() => syncReturnStatus(String(received.orderId)))
-            .then(() => {
-                recordAudit(context, {
-                    action: returnsAuditActions.ADMIN_RETURN_RECEIVED,
-                    outcome: 'success',
-                    targetType: 'return',
-                    targetId: id,
-                    metadata: {
-                        orderId: String(received.orderId),
-                        refundAmount: breakdown.total,
-                        restocked: restockedTo,
-                        ...ownOrderFlag(context, buyerIdOf(order))
-                    }
-                });
-                return refundAndClose(received, opened, context);
+    return (
+        claimAndRestock(
+            returned,
+            order,
+            input.handlingDeduction ?? 0,
+            restock.restocked,
+            remedy,
+            context
+        )
+            // A replacement the order cannot send again aborted the receipt; the door answers it.
+            .catch((error: unknown): Claimed => {
+                if (error instanceof ActRefusal) return { kind: 'refused', reject: error.reject };
+                throw error instanceof Error ? error : new Error(String(error));
             })
-            .then((after) => generateSuccess(after, 200));
-    });
+            .then((claimed) => {
+                if (claimed.kind === 'refused') return claimed.reject;
+                if (claimed.kind === 'deduction-too-high')
+                    return generateReject(422, [
+                        fieldError(
+                            'handlingDeduction',
+                            t('returns.deduction-too-high'),
+                            ERROR_CODES.RETURN_DEDUCTION_INVALID
+                        )
+                    ]);
+                if (claimed.kind === 'lost') return notReceivable();
+
+                const { received, breakdown, opened } = claimed;
+                const restockedTo = received.lines.map(({ productId, restocked }) => ({
+                    productId: String(productId),
+                    restocked: restocked ?? 0
+                }));
+                // A replacement also sets units aside again, so every returned product's cache is stale.
+                return inventoryService
+                    .refreshStockCacheForProducts(
+                        restockedTo
+                            .filter(
+                                ({ restocked }) => restocked > 0 || remedy === ReturnRemedy.replace
+                            )
+                            .map(({ productId }) => productId)
+                    )
+                    .then(() => syncReturnStatus(String(received.orderId)))
+                    .then(() => {
+                        recordAudit(context, {
+                            action: returnsAuditActions.ADMIN_RETURN_RECEIVED,
+                            outcome: 'success',
+                            targetType: 'return',
+                            targetId: id,
+                            metadata: {
+                                orderId: String(received.orderId),
+                                refundAmount: breakdown.total,
+                                restocked: restockedTo,
+                                remedy,
+                                ...(received.preferredRemedy
+                                    ? { preferredRemedy: received.preferredRemedy }
+                                    : {}),
+                                ...ownOrderFlag(context, buyerIdOf(order))
+                            }
+                        });
+                        return refundAndClose(received, opened, context);
+                    })
+                    .then((after) => generateSuccess(after, 200));
+            })
+    );
 };
 
 /**

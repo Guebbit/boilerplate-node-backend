@@ -17,6 +17,7 @@ x-error-codes:
     DELIVERY_NOT_RELEASABLE: { status: 409, description: 'The fulfillment order is not on hold, or waits for stock and is released only by the stock arriving.' }
     DELIVERY_NOT_DELIVERABLE: { status: 409, description: 'The shipment has already been delivered, or its order is no longer in a state this can run from.' }
     DELIVERY_NOT_LOSABLE: { status: 409, description: 'Only a `shipped` parcel can be reported lost or damaged, and only while its order is `processing` or `shipped`. A parcel already `delivered` or `lost`, a digital fulfilment and a cancelled order are refused.' }
+    DELIVERY_NOT_REOPENABLE: { status: 409, description: 'The units of a replacement under the guarantee cannot be sent again: the order shipped fewer physical units than come back, or is cancelled or unpaid.' }
     DELIVERY_LOST_SUPERSEDED: { status: 409, description: 'A `lost` shipment cannot be recorded as arrived because its units were already shipped again or cancelled: taking them back would count the goods twice.' }
     ORDER_NOT_PAID: { status: 409, description: 'The order must be paid before this delivery action.' }
     ORDER_NOT_PROCESSING: { status: 409, description: 'The order is not in a state this delivery action can run from.' }

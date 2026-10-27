@@ -166,6 +166,8 @@
             "requiresShipping": "richiede spedizione",
             "restock": "quantità da rimettere in vendita",
             "restockDate": "data di rifornimento",
+            "remedy": "Rimedio",
+            "preferredRemedy": "Rimedio preferito",
             "resultCount": "numero di risultati",
             "returnStatus": "stato del reso",
             "role": "ruolo",

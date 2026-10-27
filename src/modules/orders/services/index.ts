@@ -42,6 +42,7 @@ import {
     markProcessing,
     markShipped,
     markReopened,
+    markReshipped,
     markDelivered,
     markFulfilmentComplete,
     markUndeliverable,
@@ -49,6 +50,7 @@ import {
     markReturnStatus,
     markMoneyReceived
 } from './status';
+import { extendGuarantee } from './guarantee';
 import {
     readOrder,
     recordFulfillmentProgress,
@@ -137,6 +139,8 @@ export const orderService = {
     markProcessing,
     markShipped,
     markReopened,
+    markReshipped,
+    extendGuarantee,
     markDelivered,
     markFulfilmentComplete,
     markUndeliverable,

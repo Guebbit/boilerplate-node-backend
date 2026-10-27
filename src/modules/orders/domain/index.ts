@@ -51,6 +51,7 @@ export {
     canWithdraw,
     isBeforeDispatch,
     conformityUntilFrom,
+    repairedConformityUntil,
     deliveryClockFor,
     isExcludedFromWithdrawal,
     withdrawUntilFrom,

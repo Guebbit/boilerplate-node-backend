@@ -9,7 +9,8 @@ tags:
       description: Sending goods back — including the EU withdrawal button, which is a return with `reason` `withdrawal`.
 
 x-error-codes:
-    RETURN_DEDUCTION_INVALID: { status: 422, description: 'The handling deduction is more than the refund is worth.' }
+    RETURN_DEDUCTION_INVALID: { status: 422, description: 'The handling deduction is more than the refund is worth, or is kept back on a defect or a wrong item (a guarantee remedy is free of charge, Directive 2019/771 Art. 14(1)).' }
+    RETURN_REMEDY_INVALID: { status: 422, description: 'A remedy other than a refund is named for a reason that has no guarantee behind it (only a `defective` or `wrong_item` return can be repaired or replaced), or a preferred remedy is named for such a reason.' }
     RETURN_LINES_INVALID: { status: 422, description: 'A line names a product that is not on the order, asks for more than is left of it, is excluded from the right of withdrawal (Art. 16), or nothing on the order is left to return.' }
     RETURN_NOT_RECEIVABLE: { status: 409, description: 'The return is not an approved one awaiting its goods.' }
     RETURN_NOT_CLOSABLE: { status: 409, description: 'The return is not one that was received and still awaits its money, so it cannot be closed by hand.' }
@@ -391,7 +392,15 @@ paths:
                 units go back on sale is staff's call, per line: `lines[].restock` (absent means all
                 of them). A broken unit set to 0 never reaches the shelf, so it is never handed to a
                 backorder buyer, and the refund does not change: restocking is about the goods, not the
-                money. A parcel lost on its way back is received with 0 on every line: the shop bears
+                money. A defect or a wrong item has a ladder of remedies (Directive 2019/771 Art. 13): `remedy`
+                says which one staff give — `refund` (the default, as above), `replace` (the same product is
+                sent again on the SAME order through the ordinary shipping door; the return closes with no
+                money moving) or `repair` (the goods are repaired and posted back by staff; the return closes
+                with no money moving and the guarantee is extended by 12 months, once per order, Directive
+                2024/1799). Staff may pick a remedy other than the buyer's `preferredRemedy`. A withdrawal and
+                a goodwill return always refund (`RETURN_REMEDY_INVALID` otherwise), and a defect or a wrong
+                item never takes a `handlingDeduction`. A replacement the order cannot send again answers
+                409 `DELIVERY_NOT_REOPENABLE`. A parcel lost on its way back is received with 0 on every line: the shop bears
                 that risk, so the refund is owed, and nothing goes on sale. The amount is fixed
                 when the goods are received and shown as `refundAmount`. If the payment provider
                 refuses, the return stays `received` and the refund is retried by the payment sweep;
@@ -422,9 +431,9 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # `RETURN_NOT_RECEIVABLE` — or `Idempotency-Key` names a request still in flight.
+                # `RETURN_NOT_RECEIVABLE`, `DELIVERY_NOT_REOPENABLE` — or `Idempotency-Key` names a request still in flight.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
-                # `RETURN_DEDUCTION_INVALID`, `RETURN_RESTOCK_INVALID`, or a malformed body.
+                # `RETURN_DEDUCTION_INVALID`, `RETURN_RESTOCK_INVALID`, `RETURN_REMEDY_INVALID`, or a malformed body.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
@@ -456,6 +465,15 @@ components:
             description: >-
                 Why the goods come back. `withdrawal` is the EU right of withdrawal — the same object
                 a faulty-goods return uses, with a legal deadline and an acknowledgement attached.
+
+        ReturnRemedy:
+            type: string
+            enum: [refund, replace, repair]
+            description: >-
+                What the buyer is given for a faulty or wrong item (Directive 2019/771 Art. 13):
+                `repair` and `replace` come first and the buyer chooses; `refund` is the money back.
+                Choosing `repair` extends the guarantee by 12 months (Directive 2024/1799). Only a
+                `defective` or `wrong_item` return has a choice; every other reason is refunded.
 
         ReturnDeclineReason:
             type: string
@@ -617,10 +635,21 @@ components:
                     type: string
                     format: date-time
                     description: When staff decided it — or, for a withdrawal, when it was opened already approved.
+                preferredRemedy:
+                    $ref: '#/components/schemas/ReturnRemedy'
+                    description: >-
+                        What the buyer asked for when they opened a `defective` or `wrong_item` return.
+                        A wish, not a promise: staff choose the `remedy` when the goods arrive.
                 receivedAt:
                     type: string
                     format: date-time
                     description: When the goods arrived and went back on sale.
+                remedy:
+                    $ref: '#/components/schemas/ReturnRemedy'
+                    description: >-
+                        What staff gave when the goods arrived. Absent until then, and on a return born
+                        closed. `replace` and `repair` close the return with no money moving and hand its
+                        units back to the buyer, so they are returnable again.
                 handlingDeduction:
                     type: number
                     format: double
@@ -679,6 +708,13 @@ components:
                         before the order was made. The buyer does not send it.
                 statedVia:
                     $ref: '#/components/schemas/StaffStatementChannel'
+                preferredRemedy:
+                    $ref: '#/components/schemas/ReturnRemedy'
+                    description: >-
+                        What the buyer would like for a faulty or wrong item: a repair, a replacement or
+                        the money back. Only for `defective` and `wrong_item` (422
+                        `RETURN_REMEDY_INVALID` otherwise). Staff decide at receipt; the buyer is told
+                        that choosing repair extends the guarantee by 12 months.
                 lines:
                     type: array
                     minItems: 1
@@ -701,13 +737,20 @@ components:
             type: object
             additionalProperties: false
             properties:
+                remedy:
+                    $ref: '#/components/schemas/ReturnRemedy'
+                    description: >-
+                        What the buyer is given. Absent means `refund`. `replace` and `repair` are for a
+                        `defective` or `wrong_item` return only (422 `RETURN_REMEDY_INVALID` otherwise).
                 handlingDeduction:
                     type: number
                     format: double
                     minimum: 0
                     description: >-
                         Handling damage to keep back from the refund (Art. 14(2)), a decimal in the
-                        return's currency. Absent means none. More than the refund is worth is refused.
+                        return's currency. Absent means none. More than the refund is worth is refused,
+                        and so is any amount on a `defective` or `wrong_item` return (a guarantee remedy
+                        is free of charge).
                 lines:
                     type: array
                     description: >-

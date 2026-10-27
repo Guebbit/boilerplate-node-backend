@@ -34,8 +34,16 @@ import {
 import { withdrawalPeriodDays } from '../config';
 import { CANCEL_CAUSES } from './cancel';
 
-/** The timeline row each system move leaves; `reopen` leaves none, the loss that caused it has its own. */
-const MOVE_ROW = { process: 'processing', ship: 'shipped', reopen: undefined } as const;
+/**
+ * The timeline row each system move leaves; `reopen` and `reship` leave none, the loss or the
+ * return that caused them has its own.
+ */
+const MOVE_ROW = {
+    process: 'processing',
+    ship: 'shipped',
+    reopen: undefined,
+    reship: undefined
+} as const;
 
 /**
  * Write a move and announce it: inside the caller's transaction when it has one (the caller wakes
@@ -69,7 +77,7 @@ const announceMove = (
  */
 const markSystemMove = (
     orderId: string,
-    event: 'process' | 'ship' | 'reopen',
+    event: 'process' | 'ship' | 'reopen' | 'reship',
     session?: ClientSession,
     actor?: string | null
 ): Promise<OrderDocument | null> => {
@@ -214,6 +222,22 @@ export const markReopened = (
 ): Promise<OrderDocument | null> => markSystemMove(orderId, 'reopen', session, actor);
 
 /**
+ * Report that a replacement under the legal guarantee is being sent: the returned units are open
+ * again on a `delivered` order, so it goes back to `processing` and ships through the ordinary
+ * door. `returns`' receive calls this inside its own transaction; from any other status it
+ * matches nothing.
+ * @param orderId - the order the replacement belongs to
+ * @param session - the receipt's transaction; this move commits with it or not at all
+ * @param actor - the staff member who received the goods, for the order's history
+ * @returns the order as it now stands, or `null` if it was not `delivered`
+ */
+export const markReshipped = (
+    orderId: string,
+    session?: ClientSession,
+    actor?: string | null
+): Promise<OrderDocument | null> => markSystemMove(orderId, 'reship', session, actor);
+
+/**
  * The timeline row a move into `delivered` leaves: when the withdrawal window closes rides on it,
  * since the buyer's own screen quotes that date.
  * @param withdrawUntil - the frozen deadline
@@ -235,7 +259,9 @@ const deliveredRow = (
  * The withdrawal period starts here, for goods (Consumer Rights Directive Art. 9(2)(b)(i), "the
  * last good"): `orders` cannot read `delivery`'s own timestamps, so the door hands over the
  * LATEST arrival, and the deadline is frozen with the status — the same "freeze the fact at the
- * moment it happens" rule `shippingCost` and `currency` follow.
+ * moment it happens" rule `shippingCost` and `currency` follow. An order that was delivered
+ * before (a replacement under the guarantee arriving) keeps its first withdrawal deadline and
+ * only ever pushes the guarantee out.
  * @param orderId - the order the shipments belong to
  * @param deliveredAt - when the last shipment arrived, as `delivery` recorded it
  * @param session - the act's transaction
@@ -257,7 +283,8 @@ export const markDelivered = (
         session,
         withTimeline(
             (active) => orderRepository.markDelivered(orderId, from[0], clock, active),
-            () => [deliveredRow(clock.withdrawUntil, actor)]
+            // The stored deadline, not `clock`'s: a replacement's arrival keeps the first one.
+            (order) => [deliveredRow(order.withdrawUntil ?? clock.withdrawUntil, actor)]
         ),
         () => statusChangedEvent(orderId, from[0], to)
     );
@@ -297,9 +324,9 @@ export const markFulfilmentComplete = (
             session,
             withTimeline(
                 (active) => orderRepository.markDelivered(orderId, order.status, clock, active),
-                () => [
+                (moved) => [
                     ...(events.includes('ship') ? [{ type: 'shipped' as const, actor }] : []),
-                    deliveredRow(clock.withdrawUntil, actor)
+                    deliveredRow(moved.withdrawUntil ?? clock.withdrawUntil, actor)
                 ]
             ),
             () =>

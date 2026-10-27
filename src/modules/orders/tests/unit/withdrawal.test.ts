@@ -8,6 +8,7 @@ import {
     canCorrectAddress,
     canWithdraw,
     conformityUntilFrom,
+    repairedConformityUntil,
     deliveryClockFor,
     isBeforeDispatch,
     isExcludedFromWithdrawal,
@@ -291,5 +292,13 @@ describe('withdrawalRefusalOf', () => {
                 order.status !== OrderStatus.cancelled &&
                     withdrawalRefusalOf(order, NOW) === undefined
             );
+    });
+});
+
+describe('repairedConformityUntil', () => {
+    it('moves the guarantee out by twelve months, keeping the day and the hour', () => {
+        expect(repairedConformityUntil(new Date('2028-03-08T23:59:59.999Z')).toISOString()).toBe(
+            '2029-03-08T23:59:59.999Z'
+        );
     });
 });

@@ -22,6 +22,7 @@ import {
     ReturnPolicyException,
     ReturnPostagePayer,
     ReturnReason,
+    ReturnRemedy,
     ReturnStatementChannel,
     ReturnStatus
 } from '@types';
@@ -75,8 +76,15 @@ export interface ReturnDocument extends Document {
     declineMessage?: string;
     /** When staff approved or declined it — or, for a withdrawal, when it was opened approved. */
     decidedAt?: Date;
+    /** What the buyer asked for on a `defective` or `wrong_item` return. A wish; staff decide at receipt. */
+    preferredRemedy?: ReturnRemedy;
     /** When the goods arrived and went back on sale. */
     receivedAt?: Date;
+    /**
+     * What staff gave when the goods arrived. A `replace` or a `repair` hands the units back to the
+     * buyer, so this return holds nothing from then on. Absent until receipt.
+     */
+    remedy?: ReturnRemedy;
     /**
      * An amount staff kept back for handling that lowered the goods' value (Art. 14(2)) — entered
      * when the goods were received. Decimal, in the return's currency.
@@ -154,7 +162,9 @@ export const returnSchema = new Schema<ReturnDocument>(
         declineReason: { type: String, enum: Object.values(ReturnDeclineReason) },
         declineMessage: { type: String, maxlength: 500 },
         decidedAt: { type: Date },
+        preferredRemedy: { type: String, enum: Object.values(ReturnRemedy) },
         receivedAt: { type: Date },
+        remedy: { type: String, enum: Object.values(ReturnRemedy) },
         handlingDeduction: moneyPath({ nonNegative: true }),
         refundAmount: moneyPath({ nonNegative: true }),
         shippingRefund: moneyPath({ nonNegative: true }),

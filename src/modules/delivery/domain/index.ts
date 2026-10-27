@@ -45,6 +45,9 @@ export type {
 export { withLoss, withRestoration, planRestoration, owedDateOf } from './lost';
 export type { LostShipmentFacts, OwedDate, Restoration, RestorableFulfillmentOrder } from './lost';
 
+export { planReopening, shareOwed } from './reship';
+export type { ReopenableFulfillmentOrder, Reopening } from './reship';
+
 export { isAwaitingTracking } from './tracking';
 export type { TrackingFacts } from './tracking';
 

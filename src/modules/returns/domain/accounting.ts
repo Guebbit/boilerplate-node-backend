@@ -6,8 +6,8 @@
  */
 
 import { addMoney, toDecimalAmount, toMinorUnits, NO_MONEY } from '@domain-primitives/money';
-import { BACK_RETURN_STATUSES } from './lifecycle';
-import type { ReturnKind, ReturnStatus } from './lifecycle';
+import { BACK_RETURN_STATUSES, handsUnitsBack } from './lifecycle';
+import type { ReturnKind, ReturnRemedy, ReturnStatus } from './lifecycle';
 import { wireLines } from './quantities';
 import type { ProductQuantity } from './quantities';
 
@@ -15,6 +15,8 @@ import type { ProductQuantity } from './quantities';
 export interface AccountedReturn {
     kind: ReturnKind;
     status: ReturnStatus;
+    /** What the buyer was given; a replacement or a repair settles no units. */
+    remedy?: ReturnRemedy | undefined;
     lines: readonly { productId: { toString(): string }; quantity: number }[];
     /** The delivery inside what it refunded; absent on one that refunded none. */
     shippingRefund?: number | undefined;
@@ -30,11 +32,13 @@ export interface OrderAccounts {
 
 /**
  * Whether a return's units are settled: a cancellation always is (born closed); a return only once
- * its goods are back — `received` or `closed`.
+ * its goods are back — `received` or `closed` — and the buyer did not get them back in a repair or
+ * a replacement (those units are in the buyer's hands, so they settle nothing and refund no delivery).
  * @param returned - the return
  */
 const isSettled = (returned: AccountedReturn): boolean =>
-    returned.kind === 'cancellation' || BACK_RETURN_STATUSES.includes(returned.status);
+    returned.kind === 'cancellation' ||
+    (BACK_RETURN_STATUSES.includes(returned.status) && !handsUnitsBack(returned));
 
 /**
  * Tally what the order's other returns and cancels have settled, so the one now being received or

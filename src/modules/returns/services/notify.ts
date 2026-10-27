@@ -13,6 +13,7 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import type { DomainEventMap } from '@kernel/events';
 import { orderService } from '@modules/orders';
 import { returnAddress } from '@modules/shop';
+import { isGuaranteeReason } from '../domain';
 import { returnNoticeEmail, type ReturnNoticeInput, type ReturnNoticeKind } from '../emails';
 import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
@@ -91,6 +92,7 @@ export const mailReturnRequested = ({
         return sendNotice(withdrawal ? kind : 'return-requested', found, {
             returnPostage: found.returnPostage,
             at,
+            remedyChoice: isGuaranteeReason(found.reason),
             ...(kind === 'withdrawal-recorded' && withdrawal ? recorded : {}),
             // A withdrawal is approved from the start, so the customer is told where to send the
             // goods in the same mail; any other reason hears it once staff approve.
@@ -127,24 +129,37 @@ export const mailReturnDecided = ({
             at: found.openedBy === 'staff' ? found.requestedAt : (found.decidedAt ?? new Date()),
             declineReason: found.declineReason,
             declineMessage: found.declineMessage,
+            remedyChoice: decision === 'approved' && isGuaranteeReason(found.reason),
             // Told where to send the goods only when they are being asked for.
             ...(decision === 'approved' ? { returnAddress: returnAddress() } : {})
         })
     );
 
 /**
- * Tell the customer their money went back. Only a return whose goods were received is mailed: one
- * born closed was acknowledged when it opened, and its refund has its own notice from `payments`.
+ * Which notice a close sends: the money went back, a replacement is on its way, or the item is
+ * being repaired.
+ * @param remedy - what the buyer was given
+ */
+const closedNoticeOf = (remedy: DomainEventMap['return.closed']['remedy']): ReturnNoticeKind => {
+    if (remedy === 'replace') return 'return-replaced';
+    return remedy === 'repair' ? 'return-repaired' : 'return-closed';
+};
+
+/**
+ * Tell the customer their money went back — or, for a replacement or a repair, that one is
+ * coming. Only a return whose goods were received is mailed: one born closed was acknowledged
+ * when it opened, and its refund has its own notice from `payments`.
  * @param payload - the `return.closed` fact
  */
 export const mailReturnClosed = ({
     returnId,
     refundAmount,
-    currency
+    currency,
+    remedy
 }: DomainEventMap['return.closed']): Promise<void> =>
     withReturn(returnId, (found) =>
         found.receivedAt
-            ? sendNotice('return-closed', found, {
+            ? sendNotice(closedNoticeOf(remedy), found, {
                   returnPostage: found.returnPostage,
                   at: found.closedAt ?? new Date(),
                   refund: { amount: refundAmount, currency }

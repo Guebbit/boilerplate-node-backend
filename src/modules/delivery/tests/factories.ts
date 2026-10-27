@@ -53,6 +53,23 @@ export const setFulfillmentOrderState = (
     fulfillmentOrderModel.updateOne({ _id: fulfillmentOrderId }, { $set: fields }).exec();
 
 /**
+ * Set how many units of a fulfillment order's first line are recorded as shipped — a state the
+ * doors only reach through a shipment, for a test about what a re-send refuses.
+ * @param fulfillmentOrderId - the fulfillment order
+ * @param shippedQuantity - the count to record
+ */
+export const setFirstLineShipped = (
+    fulfillmentOrderId: string,
+    shippedQuantity: number
+): Promise<unknown> =>
+    fulfillmentOrderModel
+        .updateOne(
+            { _id: fulfillmentOrderId },
+            { $set: { 'lines.0.shippedQuantity': shippedQuantity } }
+        )
+        .exec();
+
+/**
  * The order's shipments, in the order they were cut.
  * @param orderId - the order
  */

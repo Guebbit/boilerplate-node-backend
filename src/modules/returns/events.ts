@@ -46,6 +46,8 @@ declare module '@kernel/events' {
             orderId: string;
             refundAmount: number;
             currency: string;
+            /** What the buyer was given; absent on a return born closed. */
+            remedy?: 'refund' | 'replace' | 'repair';
         };
     }
 }

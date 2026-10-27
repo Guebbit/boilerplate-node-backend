@@ -63,6 +63,7 @@
             "cancel-any-time": "You can cancel it from your order page at any time before it ships, and you will be refunded in full. If you are happy to wait, you do not need to do anything.",
             "link-label": "See your order"
         },
+        "not-reopenable": "These units cannot be sent again: the order did not ship that many, or is no longer in a state a replacement can leave from",
         "not-losable": "Only a parcel that has left and not arrived can be reported lost or damaged",
         "lost-superseded": "This parcel cannot be recorded as arrived: its items were already sent again or cancelled",
         "email-lost": {

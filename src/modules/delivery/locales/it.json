@@ -63,6 +63,7 @@
             "cancel-any-time": "Puoi annullarlo dalla pagina del tuo ordine in qualsiasi momento prima della spedizione e sarai rimborsato per intero. Se ti va bene aspettare, non devi fare nulla.",
             "link-label": "Vedi il tuo ordine"
         },
+        "not-reopenable": "Queste unità non possono essere rispedite: l'ordine non ne ha spedite tante, oppure non è più in uno stato da cui può partire una sostituzione",
         "not-losable": "Solo un pacco partito e non ancora arrivato può essere segnalato come smarrito o danneggiato",
         "lost-superseded": "Questo pacco non può essere registrato come arrivato: i suoi articoli sono già stati rispediti o annullati",
         "email-lost": {

@@ -57,6 +57,12 @@ export const ORDER_EVENTS = {
      * `canOverrideTo` stays forward-only, so an admin never makes it by hand.
      */
     reopen: { from: [OrderStatus.shipped], to: OrderStatus.processing, actors: ['system'] },
+    /**
+     * A replacement under the legal guarantee: the returned units are open again on a `delivered`
+     * order, so it is being fulfilled once more. `system`-only, like `reopen`, and for the same
+     * reason: nobody makes a backward move by hand.
+     */
+    reship: { from: [OrderStatus.delivered], to: OrderStatus.processing, actors: ['system'] },
     /** The last shipment arrived, as `delivery` records it. */
     deliver: { from: [OrderStatus.shipped], to: OrderStatus.delivered, actors: ['system'] },
     /**

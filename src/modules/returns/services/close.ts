@@ -57,7 +57,8 @@ const claimClosed = (
                               data: {
                                   returnId: id,
                                   refundAmount: closed.refundAmount ?? 0,
-                                  currency: closed.currency
+                                  currency: closed.currency,
+                                  ...(closed.remedy ? { remedy: closed.remedy } : {})
                               }
                           },
                           session

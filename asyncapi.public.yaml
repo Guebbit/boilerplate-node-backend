@@ -1286,6 +1286,13 @@ components:
                 currency:
                     type: string
                     description: ISO-4217, e.g. `EUR`.
+                remedy:
+                    type: string
+                    enum:
+                        - refund
+                        - replace
+                        - repair
+                    description: What the buyer was given. Absent on a return born closed (a withdrawal before dispatch). `replace` and `repair` carry a `refundAmount` of 0.
             additionalProperties: false
         ReturnRequestedEnvelope:
             type: object
