@@ -196,6 +196,7 @@ describe('mergeCapabilities', () => {
         expect(rows).toEqual([
             {
                 tag: 'pt',
+                baseLanguage: 'pt',
                 name: 'Portuguese',
                 nativeName: 'Português',
                 direction: LocaleDirection.ltr,
