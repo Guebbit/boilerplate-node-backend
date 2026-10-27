@@ -1312,13 +1312,13 @@ describe('applyWebhookDelivery', () => {
             .spyOn(paymentRepository, 'updateStatusIfIn')
             .mockRejectedValueOnce(new Error('transient failure'));
 
-        await expect(paymentService.applyWebhookDelivery(event)).rejects.toThrow(
+        await expect(paymentService.applyWebhookDelivery(event, 'fake')).rejects.toThrow(
             'transient failure'
         );
         updateSpy.mockRestore();
 
         // The provider's redelivery of the SAME event id is what settles it for real.
-        await paymentService.applyWebhookDelivery(event);
+        await paymentService.applyWebhookDelivery(event, 'fake');
 
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('succeeded');
@@ -1335,10 +1335,10 @@ describe('applyWebhookDelivery', () => {
         const event = { id: 'evt_twice', providerRef };
 
         await Promise.all([
-            paymentService.applyWebhookDelivery(event),
-            paymentService.applyWebhookDelivery(event)
+            paymentService.applyWebhookDelivery(event, 'fake'),
+            paymentService.applyWebhookDelivery(event, 'fake')
         ]);
-        await paymentService.applyWebhookDelivery(event);
+        await paymentService.applyWebhookDelivery(event, 'fake');
 
         expect((await orderService.getById(String(order._id)))!.status).toBe('paid');
         expect(await outboxEventModel.countDocuments({ name: 'payment.succeeded' })).toBe(1);
@@ -1348,7 +1348,7 @@ describe('applyWebhookDelivery', () => {
         const retrieveSpy = jest.spyOn(fakePaymentProvider, 'retrieve');
 
         await expect(
-            paymentService.applyWebhookDelivery({ id: 'evt_no_intent' })
+            paymentService.applyWebhookDelivery({ id: 'evt_no_intent' }, 'fake')
         ).resolves.toBeUndefined();
 
         expect(retrieveSpy).not.toHaveBeenCalled();
@@ -1369,7 +1369,7 @@ describe('applyWebhookDelivery', () => {
         const lookupSpy = jest.spyOn(paymentRepository, 'findByProviderRef');
 
         await expect(
-            paymentService.applyWebhookDelivery(asStub<ProviderWebhookEvent>(event))
+            paymentService.applyWebhookDelivery(asStub<ProviderWebhookEvent>(event), 'fake')
         ).rejects.toBeInstanceOf(WebhookRejected);
 
         expect(lookupSpy).not.toHaveBeenCalled();

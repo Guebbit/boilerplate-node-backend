@@ -1,6 +1,6 @@
 /**
  * @module
- * POST /payments/webhook
+ * POST /payments/webhook/:provider
  * Where the provider reports what actually happened to a payment — and the authority for it; the
  * browser's word never is. Four rules, all of them load-bearing:
  *
@@ -15,8 +15,10 @@
  *    because that is not a delivery — and a genuine fault is left to become a 500, since that IS
  *    a retry worth having.
  *
- * No provider configured (`NODE_PAYMENT_PROVIDER` unset) answers 404: nobody here can sign a
- * delivery, so the route does not exist for this deployment.
+ * One endpoint per provider, resolved from the registry of installed adapters by the name in the
+ * path, never from `NODE_PAYMENT_PROVIDER`: a provider that is no longer the one new checkouts use
+ * still delivers its in-flight payments' events, each adapter verifying its own signature. A name
+ * with no adapter answers 404: nobody here can sign a delivery for it.
  */
 
 import type { Request, Response } from 'express';
@@ -27,10 +29,11 @@ import { catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { recordSecurityEvent } from '@infrastructure/observability/security-events';
 import { paymentsAuditActions } from '../audit';
-import { resolvePaymentProvider, WebhookRejected, WEBHOOK_SIGNATURE_HEADER } from '../providers';
+import { WebhookRejected } from '../providers';
+import { paymentProviderRegistry } from '../providers/registry';
 import { paymentService } from '../services';
 
-/** Handles `POST /payments/webhook`. */
+/** Handles `POST /payments/webhook/:provider`. */
 export const postPaymentWebhook = (request: Request, response: Response) => {
     // `express.json`'s `verify` hook keeps the buffer for this route alone (see `app/security.ts`);
     // an absent one means that ordering changed and every signature would now fail to verify.
@@ -47,15 +50,15 @@ export const postPaymentWebhook = (request: Request, response: Response) => {
     }
 
     return Promise.resolve()
-        .then(resolvePaymentProvider)
+        .then(() => paymentProviderRegistry.resolve(String(request.params.provider)))
         .then((provider) => {
             if (!provider) {
                 rejectResponse(response, 404, [t('payments.webhook-not-configured')]);
                 return;
             }
             return provider
-                .parseWebhook(rawBody, String(headers[WEBHOOK_SIGNATURE_HEADER] ?? ''))
-                .then((event) => paymentService.applyWebhookDelivery(event))
+                .parseWebhook(rawBody, headers)
+                .then((event) => paymentService.applyWebhookDelivery(event, provider.name))
                 .then(() => {
                     noContentResponse(response);
                 });

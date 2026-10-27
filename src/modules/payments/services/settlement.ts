@@ -38,6 +38,7 @@ import { paymentRepository } from '../repository';
 import {
     CONFIRMABLE_PAYMENT_STATUSES,
     isHandRecorded,
+    REFUNDABLE_PAYMENT_STATUS,
     SETTLEABLE_PAYMENT_STATUSES,
     SUCCESS_SETTLEABLE_PAYMENT_STATUSES
 } from '../domain';
@@ -50,6 +51,7 @@ import {
     performRefund,
     recordOwedByHand
 } from './refunds';
+import { syncProviderRefunds } from './external-refunds';
 import { recordDecline } from './announce';
 import { PAYMENT_SUCCEEDED } from '../events';
 import { notPayable, paymentNotFound } from './errors';
@@ -688,10 +690,15 @@ export const syncPayment = (
  * belongs, because nothing reaches `findByProviderRef` unparsed.
  *
  * @param delivery - the delivery, already verified and normalised by the provider
+ * @param providerName - the provider whose endpoint received it: a delivery naming an intent that
+ *   another provider took is authentic but not this one's to settle, so it is logged and dropped
  * @throws {WebhookRejected} when the delivery does not match the event schema; the controller
  *   answers 400, the same as a body the adapter itself refused
  */
-export const applyWebhookDelivery = (delivery: ProviderWebhookEvent): Promise<void> => {
+export const applyWebhookDelivery = (
+    delivery: ProviderWebhookEvent,
+    providerName: string
+): Promise<void> => {
     // Zod: `safeParse` answers `{ success, data | error }` instead of throwing.
     // https://zod.dev/api#safeparse
     const parsed = ReceivePaymentWebhookBody.safeParse(delivery);
@@ -713,11 +720,62 @@ export const applyWebhookDelivery = (delivery: ProviderWebhookEvent): Promise<vo
     logger.info({
         message: 'Payment webhook received.',
         eventId: event.id,
-        providerRef: event.providerRef
+        providerRef: event.providerRef,
+        refundRef: event.refundRef
     });
     // Stryker restore all
-    return applyWebhookSettlement(event.providerRef);
+    return event.refundRef
+        ? applyRefundDelivery(event.providerRef, event.refundRef, providerName)
+        : applyWebhookSettlement(event.providerRef, providerName);
 };
+
+/**
+ * Whether a payment belongs to the provider whose endpoint received a delivery about it. A delivery
+ * for another provider's payment is authentic, so it is answered 200 and logged, not settled.
+ *
+ * @param payment - the payment the delivery's intent names
+ * @param providerName - the endpoint's provider
+ */
+const isForeignDelivery = (payment: PaymentDocument, providerName: string | undefined): boolean => {
+    if (providerName === undefined || payment.provider === providerName) return false;
+    // Stryker disable all
+    logger.warn({
+        message: 'Payment webhook named a payment that another provider took; left alone.',
+        deliveredTo: providerName,
+        provider: payment.provider
+    });
+    // Stryker restore all
+    return true;
+};
+
+/**
+ * Apply a delivery that names a refund: the payment it belongs to is found by its intent, and the
+ * refund's own status is re-read from the provider. A payment that has not succeeded has no refund
+ * a provider could be reporting on, so the delivery is dropped.
+ *
+ * @param providerRef - the intent the delivery names
+ * @param refundRef - the refund the delivery names
+ * @param providerName - the endpoint's provider
+ */
+const applyRefundDelivery = (
+    providerRef: string,
+    refundRef: string,
+    providerName: string
+): Promise<void> =>
+    paymentRepository.findByProviderRef(providerRef).then((payment) => {
+        if (payment && isForeignDelivery(payment, providerName)) return undefined;
+        if (payment?.status !== REFUNDABLE_PAYMENT_STATUS) {
+            // Stryker disable all
+            logger.warn({
+                message: 'Payment webhook named a refund on a payment that cannot have one.',
+                providerRef,
+                refundRef
+            });
+            // Stryker restore all
+            return undefined;
+        }
+        return syncProviderRefunds(payment);
+    });
 
 /**
  * Ask the provider what became of a payment and settle the answer — the step the webhook, the
@@ -754,8 +812,10 @@ export const settleFromProvider = (payment: PaymentDocument): Promise<Settlement
  * the sweeps follow.
  *
  * @param providerRef - the intent the event named
+ * @param providerName - the provider whose endpoint received the event, when there was one; a
+ *   payment another provider took is left alone
  */
-export const applyWebhookSettlement = (providerRef: string): Promise<void> =>
+export const applyWebhookSettlement = (providerRef: string, providerName?: string): Promise<void> =>
     paymentRepository.findByProviderRef(providerRef).then((payment) => {
         if (!payment) {
             // Stryker disable all
@@ -766,6 +826,7 @@ export const applyWebhookSettlement = (providerRef: string): Promise<void> =>
             // Stryker restore all
             return;
         }
+        if (isForeignDelivery(payment, providerName)) return;
 
         return settleFromProvider(payment).then((settlement) => {
             if (!settlement) return;

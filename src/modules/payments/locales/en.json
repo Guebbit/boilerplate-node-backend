@@ -12,7 +12,7 @@
         "refund-in-flight": "The card provider has not given a final answer on this refund, so it cannot be marked returned or canceled yet. It is retried automatically.",
         "in-flight": "A card payment is already in progress for this order — wait for it to resolve before recording money by hand.",
         "received-at-future": "The date the money arrived cannot be in the future.",
-        "webhook-not-configured": "This shop takes no card payments.",
+        "webhook-not-configured": "No payment provider is installed under that name.",
         "webhook-unverified": "That delivery could not be verified.",
         "refund-exceeds-remaining": "That is more than is left to refund on this payment.",
         "refund-currency-mismatch": "The refund's currency is not the payment's currency.",
@@ -58,6 +58,15 @@
             "body": "We have refunded {{amount}} for your order {{order}}.",
             "detail-full": "That is everything you paid for this order.",
             "detail-partial": "That is part of what you paid; the rest of the payment stays with the order. How long it takes to show up depends on your bank or card issuer."
+        },
+        "email-undeliverable": {
+            "subject": "We still owe you a refund",
+            "meta-title": "Your refund needs a different route",
+            "greeting": "Hello, {{name}}!",
+            "body": "We could not return {{amount}} for your order {{order}} to the card you paid with.",
+            "ask": "We still owe you this money. Reply to this email, or write to {{email}}, and tell us how you would like to receive it, for example by bank transfer to an account in your name (IBAN and account holder). It costs you nothing.",
+            "consent": "We will not use another method until you agree.",
+            "link-label": "View your order"
         }
     }
 }

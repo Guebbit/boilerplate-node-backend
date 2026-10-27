@@ -190,6 +190,9 @@ db.outboxevents.find({ status: 'dead' });
 ```
 
 Fix the consumer, then set the row back with `status: 'pending', attempts: 0, nextAttemptAt: new Date()`.
+Reviving a dead invoice event (`order.status_changed` to `paid`) also issues the credit notes of the
+refunds that settled meanwhile and found no invoice: see
+[`invoicing`](../modules/invoicing.md#issuing-a-document).
 There is deliberately no admin API: dead events are a defect to fix, not a queue to manage.
 
 ## Operating it

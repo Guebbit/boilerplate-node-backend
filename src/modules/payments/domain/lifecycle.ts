@@ -16,6 +16,7 @@
  * See: docs/theory/tactical-ddd.md
  */
 
+import { addMoney, subtractMoney, toMinorUnits, type Money } from '@domain-primitives/money';
 import { RefundFailureReason, RefundStatus, type PaymentStatus } from '@types';
 
 /**
@@ -133,8 +134,26 @@ export const FINAL_REFUND_FAILURES: readonly RefundFailureReason[] = [
     RefundFailureReason.declined,
     RefundFailureReason.expired_or_canceled_card,
     RefundFailureReason.lost_or_stolen_card,
-    RefundFailureReason.provider_removed
+    RefundFailureReason.provider_removed,
+    // A chargeback: the bank already took the money back. Final, but never settled by hand.
+    RefundFailureReason.disputed
 ];
+
+/**
+ * Refusals that say nothing about THIS refund: the provider did not answer, or the adapter could
+ * not classify the answer. The refund may have gone through, so the money is never assumed unmoved.
+ */
+export const UNCLEAR_REFUND_FAILURES: readonly RefundFailureReason[] = [
+    RefundFailureReason.provider_unavailable,
+    RefundFailureReason.unknown
+];
+
+/**
+ * Whether a refusal ends the retrying (see {@link FINAL_REFUND_FAILURES}).
+ * @param reason - the closed code for the refusal
+ */
+export const isFinalFailure = (reason: RefundFailureReason): boolean =>
+    FINAL_REFUND_FAILURES.includes(reason);
 
 /**
  * Refusals after which the money provably did not move, so an operator may report it returned by
@@ -143,41 +162,138 @@ export const FINAL_REFUND_FAILURES: readonly RefundFailureReason[] = [
  * and `unknown` are absent on purpose: the refund may have gone through.
  */
 export const MONEY_DID_NOT_MOVE_FAILURES: readonly RefundFailureReason[] = [
-    ...FINAL_REFUND_FAILURES,
+    ...FINAL_REFUND_FAILURES.filter((reason) => reason !== RefundFailureReason.disputed),
     RefundFailureReason.insufficient_funds
 ];
 
 /**
- * Whether an operator may report this refund's money returned outside the application. A hand-paid
- * refund: any `pending` one (nobody else can say the cash went back). A card refund: only one the
- * provider refused in a way that proves the money did not move, because a settle on an unclear
- * failure could pay the buyer twice.
+ * Whether the buyer is owed this money another way and has to be asked how: the record is still
+ * open and either the provider took it back, or it was refused for good. A refusal that says
+ * nothing about the buyer's card (the shop's own balance, no answer yet) and a chargeback (the bank
+ * already returned the money) do not count.
  *
- * @param payment - the payment the refund sits on
  * @param refund - the refund record
  */
-export const mayBeSettledByHand = (
-    payment: { provider: string },
-    refund: { status: RefundStatus; failureReason?: RefundFailureReason }
-): boolean =>
-    isHandRecorded(payment)
-        ? refund.status === RefundStatus.pending
-        : refund.status === RefundStatus.failed &&
-          refund.failureReason !== undefined &&
-          MONEY_DID_NOT_MOVE_FAILURES.includes(refund.failureReason);
+export const owesBuyerAnotherWay = (refund: {
+    status: RefundStatus;
+    failureReason?: RefundFailureReason | undefined;
+    reversedAt?: Date | undefined;
+}): boolean =>
+    isOpenRefund(refund) &&
+    refund.failureReason !== RefundFailureReason.disputed &&
+    (isReversed(refund) ||
+        (refund.failureReason !== undefined &&
+            FINAL_REFUND_FAILURES.includes(refund.failureReason)));
+
+/** The slice of a refund record the rules below read. */
+export interface RefundFacts {
+    /** The record's id, to tell it from its siblings. */
+    _id?: { toString: () => string };
+    status: RefundStatus;
+    amount: number;
+    currency: string;
+    failureReason?: RefundFailureReason | undefined;
+    /** Set once when the provider took back a refund it had settled; never cleared. */
+    reversedAt?: Date | undefined;
+    /** The provider's id for the refund: present once the provider has accepted it. */
+    providerRefundRef?: string | undefined;
+}
+
+/** The slice of a payment the refund rules read. */
+export interface RefundablePayment {
+    provider: string;
+    amount: number;
+    currency: string;
+    refunds: readonly RefundFacts[];
+}
 
 /**
- * Whether staff may void this refund: the same refunds an operator may report returned by hand,
- * because both rest on one fact, that the money provably did not move. A `succeeded` refund
- * moved it; a `pending` card refund or an unclear failure may have.
+ * Whether the provider took this refund back after settling it (the bank sent it back): the money
+ * is with the shop again and is owed another way.
+ * @param refund - the refund record
+ */
+export const isReversed = (refund: { reversedAt?: Date | undefined }): boolean =>
+    refund.reversedAt !== undefined;
+
+/**
+ * Whether two facts name the same record: the same object, or the same id.
+ * @param a - one record
+ * @param b - the other
+ */
+const sameRecord = (a: RefundFacts, b: RefundFacts): boolean =>
+    a === b || (a._id !== undefined && b._id !== undefined && String(a._id) === String(b._id));
+
+/**
+ * Whether the provider holds this record's money: it settled, or it holds a provider refund id. A
+ * record whose last refusal was unclear is NOT counted: if it had gone through, the provider's list
+ * would carry it under our record id and it would have settled. A reversed record is the opposite:
+ * the money came back.
+ * @param refund - the refund record
+ */
+const mayHaveMoved = (refund: RefundFacts): boolean =>
+    !isReversed(refund) &&
+    (refund.status === RefundStatus.succeeded || refund.providerRefundRef !== undefined);
+
+/**
+ * By how much (minor units) an unsent open refund overshoots what the provider can still give back.
+ * @param payment - the payment the refund sits on
+ * @param refund - the refund record
+ */
+export const exceedsBy = (payment: RefundablePayment, refund: RefundFacts): Money =>
+    subtractMoney(
+        addMoney(
+            ...payment.refunds
+                .filter((other) => !sameRecord(other, refund) && mayHaveMoved(other))
+                .map((other) => toMinorUnits(other.amount, other.currency)),
+            toMinorUnits(refund.amount, refund.currency)
+        ),
+        toMinorUnits(payment.amount, payment.currency)
+    );
+
+/**
+ * Whether an open refund the application never sent no longer fits: what the provider already holds
+ * (settled or in flight, an outside refund imported included) plus this record is more than was
+ * paid. Such a record is held unsent: the provider would refuse it, and staff decide.
+ *
+ * @param payment - the payment the refund sits on
+ * @param refund - the refund record, by identity within `payment.refunds`
+ */
+export const exceedsRemaining = (payment: RefundablePayment, refund: RefundFacts): boolean =>
+    isOpenRefund(refund) && !mayHaveMoved(refund) && exceedsBy(payment, refund) > 0;
+
+/**
+ * Whether an operator may report this refund's money returned outside the application. A hand-paid
+ * refund: any `pending` one (nobody else can say the cash went back). A card refund: one the
+ * provider refused in a way that proves the money did not move, one it took back after settling it
+ * (the bank sent it back), or one held unsent because it no longer fits the payment. Never an
+ * unclear failure, because a settle on it could pay the buyer twice.
  *
  * @param payment - the payment the refund sits on
  * @param refund - the refund record
  */
-export const mayBeCanceled = (
-    payment: { provider: string },
-    refund: { status: RefundStatus; failureReason?: RefundFailureReason }
-): boolean => mayBeSettledByHand(payment, refund);
+export const mayBeSettledByHand = (payment: RefundablePayment, refund: RefundFacts): boolean => {
+    if (isHandRecorded(payment)) return refund.status === RefundStatus.pending;
+    if (refund.failureReason === RefundFailureReason.disputed) return false;
+    if (exceedsRemaining(payment, refund)) return true;
+    // The provider itself reported the failure: a definite answer about this very refund.
+    if (isReversed(refund)) return refund.status === RefundStatus.failed;
+    return (
+        refund.status === RefundStatus.failed &&
+        refund.failureReason !== undefined &&
+        MONEY_DID_NOT_MOVE_FAILURES.includes(refund.failureReason)
+    );
+};
+
+/**
+ * Whether staff may void this refund: the refunds an operator may report returned by hand, because
+ * both rest on one fact, that the money provably did not move. A reversed refund is the exception:
+ * it settled once and has its credit note, so voiding it would unbalance the books.
+ *
+ * @param payment - the payment the refund sits on
+ * @param refund - the refund record
+ */
+export const mayBeCanceled = (payment: RefundablePayment, refund: RefundFacts): boolean =>
+    !isReversed(refund) && mayBeSettledByHand(payment, refund);
 
 /** Days the trader has to give the money back after a withdrawal (Directive 2011/83/EU, Art. 13). */
 const WITHDRAWAL_REFUND_DAYS = 14;

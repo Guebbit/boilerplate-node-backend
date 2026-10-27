@@ -12,16 +12,19 @@ import { logger } from '@infrastructure/adapters/logger';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import type { DomainEventMap } from '@kernel/events';
 import { RefundStatus } from '@types';
+import { shopIdentity } from '@modules/shop';
 import { toMinorUnits } from '@domain-primitives/money';
 import { orderService } from '@modules/orders';
 import {
     paymentReceivedEmail,
     refundIssuedEmail,
+    refundUndeliverableEmail,
     transferExpiredEmail,
     transferInstructionsEmail
 } from '../emails';
 import { bankTransferBeneficiary, bankTransferBic, bankTransferIbanFriendly } from '../config';
 import { paymentRepository } from '../repository';
+import { owesBuyerAnotherWay } from '../domain';
 import type { PaymentDocument, RefundRecord } from '../model';
 
 /**
@@ -104,6 +107,51 @@ export const mailRefundIssued = ({
             // Stryker disable all
             logger.error({
                 message: `Payments: could not mail the refund notice for order ${orderId}`,
+                error
+            });
+            // Stryker restore all
+        });
+
+/**
+ * Tell the buyer their refund could not reach their card and ask how they want the money. One
+ * template for both triggers: a refusal that ended the retrying (`payment.refund_failed` with
+ * `final`) and a settled refund the bank sent back (`payment.refund_reversed`). The record is read
+ * fresh, so a refund already paid by hand, or one whose reason says nothing about the buyer's card,
+ * mails nobody.
+ *
+ * @param payload - either fact; both name the order and the refund
+ */
+export const mailRefundUndeliverable = ({
+    orderId,
+    refundId
+}:
+    | DomainEventMap['payment.refund_failed']
+    | DomainEventMap['payment.refund_reversed']): Promise<void> =>
+    Promise.all([paymentRepository.findByOrderId(orderId), orderService.getById(orderId)])
+        .then(([payment, order]) => {
+            const refund = payment?.refunds.find((record) => String(record._id) === refundId);
+            if (!payment || !order || !refund || !owesBuyerAnotherWay(refund)) return undefined;
+            return orderService.mailBuyer(order, (locale, name) => {
+                const mail = refundUndeliverableEmail(
+                    locale,
+                    name,
+                    order.orderNumber,
+                    { amount: refund.amount, currency: refund.currency },
+                    shopIdentity().email,
+                    orderId
+                );
+                // eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects (it logs its own failure)
+                void enqueueEmail(
+                    { to: order.email, subject: mail.subject },
+                    mail.template,
+                    mail.data
+                );
+            });
+        })
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: `Payments: could not mail the undeliverable-refund notice for order ${orderId}`,
                 error
             });
             // Stryker restore all

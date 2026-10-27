@@ -11,6 +11,8 @@
  * webhook. See `docs/modules/payments.md` for why that is not negotiable.
  */
 
+import type { IncomingHttpHeaders } from 'node:http';
+import type { RefundFailureReason } from '@types';
 import { requireProvider } from '@infrastructure/runtime/provider-registry';
 import { defineProbe } from '@infrastructure/config/define';
 import { paymentsConfig } from '../config';
@@ -75,10 +77,47 @@ export interface PreparedPayment {
     clientSecret?: string;
 }
 
-/** What a provider answers once it has returned money: its own id for the refund. */
+/**
+ * What a provider answers once it accepted a refund: its own id for it, and how far it got. An
+ * immediate refusal still throws ({@link PaymentProviderError}); this is only for a refund that
+ * exists at the provider.
+ */
 export interface RefundedByProvider {
     /** The provider's refund id (`re_…`), kept on the refund record for reconciliation. */
     refundRef: string;
+    /**
+     * `succeeded` when the money is on its way back. `pending` when the provider has not decided
+     * (Stripe's `pending` / `requires_action`): the record stays open and the sweep asks again.
+     */
+    status: 'pending' | 'succeeded';
+}
+
+/**
+ * A refund's OWN status at the provider, which can differ from what the first answer said: a
+ * `pending` one settles, a settled one can fail days later (the bank sends it back).
+ */
+export interface ProviderRefundState {
+    /** The adapter maps Stripe `canceled` to `failed` and `requires_action` to `pending`. */
+    status: 'pending' | 'succeeded' | 'failed';
+    /** Why it failed, as a closed code; absent unless `status` is `failed`. */
+    failureReason?: RefundFailureReason;
+    /** Our record id, echoed from the provider's metadata (`metadata.refund_record`), when we made it. */
+    refundId?: string;
+}
+
+/**
+ * One refund of an intent as the provider lists it: its own status plus what it needs to be
+ * recorded when the application did not make it (a refund made in the provider's dashboard).
+ */
+export interface ProviderRefund extends ProviderRefundState {
+    /** The provider's refund id (`re_…`). */
+    refundRef: string;
+    /** A decimal in {@link ProviderRefund.currency}; the adapter converts its minor units. */
+    amount: number;
+    /** ISO-4217, upper case, as the payment stores it. */
+    currency: string;
+    /** When the provider created it. */
+    createdAt: Date;
 }
 
 /**
@@ -95,6 +134,11 @@ export interface ProviderWebhookEvent {
     id: string;
     /** Which intent it is about; `undefined` for an event this application does not act on. */
     providerRef?: string;
+    /**
+     * Which refund it is about, when it is about one (Stripe `refund.updated`, `refund.failed`,
+     * `charge.refunded`). Still thin: the refund's status is re-read with `retrieveRefund`.
+     */
+    refundRef?: string;
 }
 
 /**
@@ -174,13 +218,35 @@ export interface PaymentProvider {
      * provider answered about THIS refund (a 4xx on the create, or a refund object that is
      * `failed`/`canceled`). A network error, a timeout, a 5xx or a 429 is `provider_unavailable`;
      * anything unclassified is `unknown`. The two unclear classes are never offered for hand
-     * settlement, because the refund may have gone through.
+     * settlement, because the refund may have gone through. A charge under dispute (Stripe
+     * `charge_disputed`, `refund_disputed_payment`) is `disputed`: final, and never settled by hand.
+     *
+     * A refund the provider accepted but has not settled answers `status: 'pending'`; it is
+     * finished later with {@link retrieveRefund}, never sent again.
      */
     refund(
         providerRef: string,
         charge: { amount: number; currency: string },
         idempotency: { idempotencyKey: string; refundId: string; createdAt: Date }
     ): Promise<RefundedByProvider>;
+
+    /**
+     * Read one refund's own status back: the sweep's way of finishing a `pending` refund, and the
+     * webhook's way of learning a settled one failed. Never trust the webhook body for the outcome.
+     *
+     * @param refundRef - what {@link refund} returned
+     */
+    retrieveRefund(refundRef: string): Promise<ProviderRefundState>;
+
+    /**
+     * Every refund of one intent, ours and any made in the provider's own dashboard, with several
+     * partial ones and ones whose webhook never arrived. A refund this application made carries our
+     * record id as `refundId` (`metadata.refund_record`); one without it is imported as an outside
+     * refund once it has succeeded.
+     *
+     * @param providerRef - what {@link prepare} returned
+     */
+    listRefunds(providerRef: string): Promise<ProviderRefund[]>;
 
     /**
      * Close an intent that has not succeeded yet — the customer abandoned it, or this application
@@ -215,13 +281,14 @@ export interface PaymentProvider {
      * make sense of with {@link WebhookRejected}.
      *
      * @param rawBody - the request body as received
-     * @param signature - the provider's signature header, verbatim
+     * @param headers - every request header: Stripe signs in `Stripe-Signature`, PayPal in several
+     *   headers at once, so the adapter picks what it needs
      * @throws {WebhookRejected} when the signature does not verify, the body is not valid JSON, or
      *   the body or the event it yields does not match the event schema (no id, a wrong type, an
      *   unknown or oversized field) — the caller answers 400 in every case, because a delivery this
      *   application cannot authenticate or make sense of is not an event
      */
-    parseWebhook(rawBody: Buffer, signature: string): Promise<ProviderWebhookEvent>;
+    parseWebhook(rawBody: Buffer, headers: IncomingHttpHeaders): Promise<ProviderWebhookEvent>;
 }
 
 /**

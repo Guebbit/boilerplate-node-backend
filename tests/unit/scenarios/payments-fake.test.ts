@@ -18,6 +18,7 @@ import {
 import {
     PaymentInFlightError,
     signWebhookPayload,
+    WEBHOOK_SIGNATURE_HEADER,
     WebhookRejected
 } from '@modules/payments/providers';
 
@@ -132,7 +133,7 @@ describe('fakePaymentProvider.refund', () => {
     it('always succeeds — there is no outside ledger to disagree', async () => {
         await expect(
             fakePaymentProvider.refund('fake_pi_h', charge, keyed('refund:payment-1'))
-        ).resolves.toEqual({ refundRef: 're_fake_refund:payment-1' });
+        ).resolves.toEqual({ refundRef: 're_fake_refund:payment-1', status: 'succeeded' });
     });
 
     it('answers the same refund id for the same idempotency key', async () => {
@@ -166,7 +167,7 @@ describe('fakePaymentProvider.refund and the settled outcome', () => {
 
         await expect(
             fakePaymentProvider.refund('fake_pi_retry', charge, keyed('again'))
-        ).resolves.toEqual({ refundRef: 're_fake_again' });
+        ).resolves.toEqual({ refundRef: 're_fake_again', status: 'succeeded' });
     });
 });
 
@@ -215,7 +216,7 @@ describe('fakePaymentProvider.refund idempotency, as Stripe has it', () => {
         // The same key now replays the refund that did run.
         await expect(
             fakePaymentProvider.refund('fake_pi_timeout', charge, keyed('timeout-key'))
-        ).resolves.toEqual({ refundRef: 're_fake_timeout-key' });
+        ).resolves.toEqual({ refundRef: 're_fake_timeout-key', status: 'succeeded' });
     });
 });
 
@@ -251,6 +252,9 @@ describe('fakePaymentProvider.cancel', () => {
     });
 });
 
+/** The headers a signed delivery carries. */
+const signed = (body: Buffer) => ({ [WEBHOOK_SIGNATURE_HEADER]: signWebhookPayload(body) });
+
 describe('fakePaymentProvider.parseWebhook', () => {
     it('reads a signed delivery', async () => {
         const body = Buffer.from(
@@ -261,9 +265,10 @@ describe('fakePaymentProvider.parseWebhook', () => {
         );
 
         // Thin: which event and which intent, and no state. That is `retrieve`'s answer.
-        await expect(
-            fakePaymentProvider.parseWebhook(body, signWebhookPayload(body))
-        ).resolves.toEqual({ id: 'evt_3', providerRef: 'fake_pi_i' });
+        await expect(fakePaymentProvider.parseWebhook(body, signed(body))).resolves.toEqual({
+            id: 'evt_3',
+            providerRef: 'fake_pi_i'
+        });
     });
 
     it('refuses a delivery nobody signed', async () => {
@@ -272,24 +277,27 @@ describe('fakePaymentProvider.parseWebhook', () => {
         const now = Math.floor(Date.now() / 1000);
 
         await expect(
-            fakePaymentProvider.parseWebhook(body, `t=${now},v1=${'0'.repeat(64)}`)
+            fakePaymentProvider.parseWebhook(body, {
+                [WEBHOOK_SIGNATURE_HEADER]: `t=${now},v1=${'0'.repeat(64)}`
+            })
         ).rejects.toThrow(WebhookRejected);
     });
 
     it('accepts an event with no providerRef, which the service acknowledges and ignores', async () => {
         const body = Buffer.from(JSON.stringify({ id: 'evt_6' }));
 
-        await expect(
-            fakePaymentProvider.parseWebhook(body, signWebhookPayload(body))
-        ).resolves.toEqual({ id: 'evt_6', providerRef: undefined });
+        await expect(fakePaymentProvider.parseWebhook(body, signed(body))).resolves.toEqual({
+            id: 'evt_6',
+            providerRef: undefined
+        });
     });
 
     it('refuses a signed body that is not JSON', async () => {
         const body = Buffer.from('not json at all');
 
-        await expect(
-            fakePaymentProvider.parseWebhook(body, signWebhookPayload(body))
-        ).rejects.toThrow('Body is not valid JSON');
+        await expect(fakePaymentProvider.parseWebhook(body, signed(body))).rejects.toThrow(
+            'Body is not valid JSON'
+        );
     });
 });
 

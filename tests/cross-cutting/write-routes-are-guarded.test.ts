@@ -248,7 +248,7 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: "cancelling the caller's own back-in-stock request"
     },
-    'payments POST /webhook': {
+    'payments POST /webhook/:provider': {
         requiresAuth: false,
         reason: 'the payment provider reporting an outcome — a machine with no account, which authenticates by signing the raw body instead'
     }

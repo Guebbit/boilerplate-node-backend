@@ -125,3 +125,16 @@ export const refundOrderPayment = (
                 body
             )
         );
+
+/**
+ * The provider's own id for an order's payment intent, which the wire never publishes: what a test
+ * needs to steer the fake provider's behaviour for that order.
+ *
+ * @param orderId - the order
+ * @throws {Error} when the order has no payment with an intent
+ */
+export const providerRefOf = (orderId: string): Promise<string> =>
+    paymentRepository.findByOrderId(orderId).then((payment) => {
+        if (!payment?.providerRef) throw new Error('the order has no provider intent');
+        return payment.providerRef;
+    });
