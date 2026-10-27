@@ -79,6 +79,73 @@ export const recordBudgetRefusal = (
 };
 
 /**
+ * The window a budget counts in: its own milliseconds, or the shared `NODE_RATE_LIMIT_WINDOW_MS`
+ * for a budget that says `'shared'`.
+ *
+ * @param budget - the budget to read
+ */
+const budgetWindowMs = (budget: Pick<RateLimitBudget, 'windowMs'>): number =>
+    budget.windowMs === 'shared' ? rateLimitConfig().NODE_RATE_LIMIT_WINDOW_MS : budget.windowMs;
+
+/**
+ * Whole seconds from now until a window resets, at least 1 — the one rounding every rate-limit
+ * answer uses (`Retry-After`, and `t` in the `RateLimit` header).
+ *
+ * @param resetTime - when the window resets; absent means "now", so the answer is the minimum
+ */
+const secondsUntil = (resetTime: Date | undefined): number =>
+    Math.max(1, Math.ceil(((resetTime?.getTime() ?? Date.now()) - Date.now()) / 1000));
+
+/**
+ * The request property a budget's limiter records its {@link RateLimitInfo} under. One slot per
+ * budget by default, so a limiter that skips a request leaves nothing behind for a later one to
+ * mistake for its own numbers.
+ *
+ * @param budget - the budget to name a slot for
+ */
+const infoSlotOf = (budget: BudgetFacts): string =>
+    budget.requestPropertyName ?? `rateLimit:${budget.namespace}`;
+
+/**
+ * What a refusal needs to know of a budget. The window is optional because a budget a service
+ * charges by hand may answer without ever having run a limiter.
+ */
+type BudgetFacts = Pick<RateLimitBudget, 'namespace' | 'requestPropertyName'> &
+    Partial<Pick<RateLimitBudget, 'windowMs'>>;
+
+/**
+ * Appends this budget's entry to the `RateLimit-Policy` and `RateLimit` response headers, in the
+ * current IETF draft's syntax: one named item per budget the request passed, so stacked limiters
+ * all show instead of the last one overwriting the rest.
+ * https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/
+ *
+ * Written by us, not by express-rate-limit: its `draft-8` writer always adds `pk`, a truncated
+ * unsalted hash of the caller's key (an IPv4 address for the global budget) that a shared cache
+ * would replay to other visitors. Nothing here names the caller.
+ *
+ * @param budget - the budget whose limiter ran
+ * @param request - carries the limiter's {@link RateLimitInfo}; absent when it skipped or passed on a store error
+ * @param response - receives the headers
+ */
+const announceBudget = (budget: BudgetFacts, request: Request, response: Response): void => {
+    const info = rateLimitInfoOf(request, infoSlotOf(budget));
+    if (!info) return;
+
+    const name = JSON.stringify(budget.namespace);
+    const windowSeconds = Math.ceil(
+        budgetWindowMs({ windowMs: budget.windowMs ?? 'shared' }) / 1000
+    );
+    response.append(
+        'RateLimit-Policy',
+        `${name};q=${String(info.limit)};w=${String(windowSeconds)}`
+    );
+    response.append(
+        'RateLimit',
+        `${name};r=${String(Math.max(0, info.remaining))};t=${String(secondsUntil(info.resetTime))}`
+    );
+};
+
+/**
  * What a caller sees when a budget is spent: the shared error envelope, never express-rate-limit's
  * own plain-text body.
  *
@@ -87,8 +154,15 @@ export const recordBudgetRefusal = (
  * The global brake does not: a port scan would just bury the trail in noise.
  */
 export const refuseRateLimited =
-    (budget: Pick<RateLimitBudget, 'namespace' | 'audited'>) =>
+    (budget: Pick<RateLimitBudget, 'namespace' | 'audited'> & BudgetFacts) =>
     (request: Request, response: Response): Response => {
+        // With the library's own headers off it sets no `Retry-After` either, so it is written here
+        // (RFC 9110 §10.2.3) beside the budget's `RateLimit` entry. A budget charged by hand has no
+        // info to read and has already set its own.
+        announceBudget(budget, request, response);
+        const info = rateLimitInfoOf(request, infoSlotOf(budget));
+        if (info) response.setHeader('Retry-After', String(secondsUntil(info.resetTime)));
+
         recordBudgetRefusal(budget, callerContextOf(request), {
             route: request.path,
             method: request.method
@@ -139,28 +213,19 @@ const budgetLimit = (budget: RateLimitBudget): number => {
 };
 
 /**
- * The window a budget counts in: its own milliseconds, or the shared `NODE_RATE_LIMIT_WINDOW_MS`
- * for a budget that says `'shared'`.
- *
- * @param budget - the budget to read
- */
-const budgetWindowMs = (budget: RateLimitBudget): number =>
-    budget.windowMs === 'shared' ? rateLimitConfig().NODE_RATE_LIMIT_WINDOW_MS : budget.windowMs;
-
-/**
  * A {@link RateLimitBudget}'s data, turned into the actual Express middleware — the single place
  * every module-owned and infrastructure-owned limiter alike is built from.
  */
-export const buildRateLimiter = (budget: RateLimitBudget): RequestHandler =>
-    rateLimit({
+export const buildRateLimiter = (budget: RateLimitBudget): RequestHandler => {
+    const limiter = rateLimit({
         store: rateLimitStore(
             budget.namespace,
             budget.onStoreError ?? 'memory',
             budget.escalation && { limit: budgetLimit(budget), ...budget.escalation }
         ),
         windowMs: budgetWindowMs(budget),
-        // draft-7 rate-limit headers (RateLimit-*), not the deprecated X-RateLimit-* set.
-        standardHeaders: 'draft-7',
+        // Off: `announceBudget` writes the headers (see there for why not the library).
+        standardHeaders: false,
         legacyHeaders: false,
         /*
          * Only a `pass` budget lets a request through when its store cannot answer. Every other
@@ -177,9 +242,19 @@ export const buildRateLimiter = (budget: RateLimitBudget): RequestHandler =>
         ...(budget.requestWasSuccessful
             ? { requestWasSuccessful: budget.requestWasSuccessful }
             : {}),
-        ...(budget.requestPropertyName ? { requestPropertyName: budget.requestPropertyName } : {}),
+        requestPropertyName: infoSlotOf(budget),
         ...(budget.skip ? { skip: budget.skip } : {})
     });
+
+    // The limiter records its info on the request and calls `next` when the request fits; the
+    // headers follow on that same pass. A refusal never reaches `next`: `refuseRateLimited` writes
+    // them there.
+    return (request, response, next) =>
+        limiter(request, response, (error?: unknown) => {
+            if (error === undefined) announceBudget(budget, request, response);
+            next(error);
+        });
+};
 
 /**
  * One store per budget charged by hand, built on first use. A budget charged through
@@ -229,10 +304,7 @@ export const chargeBudget = async (budget: RateLimitBudget, key: string): Promis
 
     return {
         allowed: totalHits <= budgetLimit(budget),
-        retryAfterSeconds: Math.max(
-            1,
-            Math.ceil(((resetTime?.getTime() ?? Date.now()) - Date.now()) / 1000)
-        )
+        retryAfterSeconds: secondsUntil(resetTime)
     };
 };
 

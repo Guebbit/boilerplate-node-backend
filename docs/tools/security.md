@@ -501,6 +501,27 @@ Every budget above, as declared data (`RateLimitBudget` on the owning module's m
 
 <!-- rate-limit-budgets:end -->
 
+### Response headers
+
+Every response that passed a budget carries it in the current IETF draft's syntax
+([`draft-ietf-httpapi-ratelimit-headers`](https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/)).
+One named item per budget the request went through, so a login (global brake plus the credential
+budget) shows both:
+
+```
+RateLimit-Policy: "global";q=100;w=60, "login";q=5;w=900
+RateLimit: "global";r=97;t=41, "login";r=4;t=880
+```
+
+- The name is the budget's `namespace` in the table above; `q` is the limit, `w` the window in
+  seconds, `r` what is left, `t` seconds to the reset.
+- A refusal (`429`) carries the same two headers plus `Retry-After` (at least one second).
+- We write them ourselves instead of using express-rate-limit's `draft-8` writer: that one always
+  adds `pk`, a truncated unsalted hash of the caller's key (an IPv4 address for the global brake),
+  which a shared cache would replay to other visitors. No identifier of the caller is sent.
+- The `RateLimit` / `RateLimit-Policy` fields are declared in the contract under
+  `components/headers` and exposed to browsers through CORS.
+
 ### When the limits Redis is down
 
 Counters live on the `limits` Redis ([two instances](redis-cache.md#two-redis-instances)). A security
