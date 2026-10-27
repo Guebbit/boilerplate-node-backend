@@ -13,8 +13,8 @@ import { catchAs, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
- * POST /account/export — ask for the caller's own data. Answers `202` with the export's `id` and
- * `status`; the file is built in the background and a link to it is mailed when it is ready.
+ * POST /account/export — ask for the caller's own data. Answers `202` with the export, its status
+ * and `Location: /account/export`; the file is built in the background and a link to it is mailed when it is ready.
  */
 export const postAccountExport = (request: Request, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
@@ -23,6 +23,8 @@ export const postAccountExport = (request: Request, response: Response) => {
     return requestExport(id, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
+            // Express: sets `Location` without following it. The status monitor to poll (RFC 9110 §15.3.3).
+            response.location('/account/export');
             successResponse(response, result.data, result.status);
         })
         .catch(catchAs(response, 'postAccountExport'));

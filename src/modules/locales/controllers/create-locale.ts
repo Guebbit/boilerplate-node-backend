@@ -15,7 +15,6 @@ import type { CreateLocaleRequest, Language } from '@types';
 import { createdResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { localeService } from '../services';
-import { presentLocale } from '../presenters';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
@@ -41,11 +40,11 @@ export const createLocale = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            const language = presentLocale(
-                result.data,
-                localeService.languageActions(result.data, localeService.standingOn(request.caller))
-            );
-            return createdResponse<Language>(response, language, `/locales/${language.tag}`);
+            return localeService
+                .describeStoredLanguage(result.data, localeService.standingOn(request.caller))
+                .then((language) =>
+                    createdResponse<Language>(response, language, `/locales/${language.tag}`)
+                );
         })
         .catch(catchAs(response, 'createLocale'));
 };

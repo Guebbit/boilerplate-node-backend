@@ -59,7 +59,7 @@ captures a response through its JSON door, so a body-less answer would stay in f
 
 ## Per-user parents
 
-A route that changes one row of a per-user collection (a cart line, a wishlist item, an address)
+A route that changes one row of a per-user collection (a cart line, a wishlist item)
 answers the whole parent with `200`, not `204`, so the client redraws from one answer.
 
 ## A renewed session

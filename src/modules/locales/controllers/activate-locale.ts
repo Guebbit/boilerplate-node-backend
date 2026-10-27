@@ -10,7 +10,6 @@ import type { Language } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { localeService } from '../services';
-import { presentLocale } from '../presenters';
 import { catchAs, refused } from '@infrastructure/http/controller';
 
 /**
@@ -28,16 +27,9 @@ const switchLanguage =
             .then((result) => {
                 if (refused(response, result)) return;
 
-                return successResponse<Language>(
-                    response,
-                    presentLocale(
-                        result.data,
-                        localeService.languageActions(
-                            result.data,
-                            localeService.standingOn(request.caller)
-                        )
-                    )
-                );
+                return localeService
+                    .describeStoredLanguage(result.data, localeService.standingOn(request.caller))
+                    .then((language) => successResponse<Language>(response, language));
             })
             .catch(catchAs(response, operation));
 

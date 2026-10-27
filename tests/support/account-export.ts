@@ -10,7 +10,7 @@ import { settleInlineExports } from '@modules/account/services/export';
 /** What a finished request-and-download resolves to. */
 export interface DownloadedExport {
     /** The `POST` answer. */
-    request: { status: number; id: string };
+    request: { status: number; id: string; location: string | undefined };
     /** The `GET` answer's status. */
     status: number;
     /** The downloaded document: the sections of the export. */
@@ -27,10 +27,14 @@ export const requestAndDownloadExport = async (bearer: string): Promise<Download
     const { id } = requested.body as { id: string };
 
     await settleInlineExports();
-    const downloaded = await api().get('/account/export').set('Authorization', bearer);
+    const downloaded = await api().get('/account/export/file').set('Authorization', bearer);
 
     return {
-        request: { status: requested.status, id },
+        request: {
+            status: requested.status,
+            id,
+            location: requested.headers.location
+        },
         status: downloaded.status,
         data: downloaded.body as Record<string, unknown>
     };

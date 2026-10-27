@@ -94,14 +94,17 @@ const setDefault = (
         return generateSuccess(address, 200);
     });
 
-/** Remove one entry; the repository keeps the one-default invariant. */
+/**
+ * Remove one entry; the repository keeps the one-default invariant. Answers nothing but the
+ * outcome: a client showing the book refetches it, as after every write that moves the default.
+ */
 const remove = (
     userId: string,
     addressId: string
-): Promise<ResponseSuccess<AddressesView> | ResponseReject> =>
+): Promise<ResponseSuccess<undefined> | ResponseReject> =>
     addressBookRepository.removeEntry(userId, addressId).then((book) => {
         if (!book) return generateReject(404, [t('addresses.not-found')]);
-        return generateSuccess(presentAddresses(book), 200);
+        return generateSuccess(undefined, 204);
     });
 
 /**

@@ -1,11 +1,10 @@
 /**
  * @module
- * `DELETE /account/addresses/:addressId` controller — thin HTTP adapter over `addressRemove`.
+ * `DELETE /account/addresses/:addressId` controller — thin HTTP adapter over `addressService.remove`.
  */
 
 import type { Request, Response } from 'express';
-import { successResponse } from '@infrastructure/http/response';
-import type { AddressesResponse } from '@types';
+import { noContentResponse } from '@infrastructure/http/response';
 import { requireId } from '@infrastructure/http/ids';
 import { addressService } from '../service';
 import { catchAs, refused } from '@infrastructure/http/controller';
@@ -13,7 +12,7 @@ import { catchAs, refused } from '@infrastructure/http/controller';
 /**
  * DELETE /account/addresses/:addressId — remove one entry, never the whole book.
  * Removing the default promotes the oldest remaining entry (`repository.ts` owns that); the
- * response returns the full list so the caller sees where the flag landed.
+ * answer carries no body, so a client showing the book refetches it to see where the flag landed.
  */
 export const deleteAddress = (request: Request<{ addressId: string }>, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
@@ -29,8 +28,7 @@ export const deleteAddress = (request: Request<{ addressId: string }>, response:
         .then((result) => {
             if (refused(response, result)) return;
 
-            const { data } = result;
-            successResponse<AddressesResponse>(response, data, 200);
+            noContentResponse(response);
         })
         .catch(catchAs(response, 'deleteAddress'));
 };

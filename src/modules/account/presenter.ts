@@ -1,13 +1,14 @@
 /**
  * @module
- * The one place a stored session row, or an export request, becomes the wire shape. Pure: it
+ * The one place a stored session row, or an export, becomes the wire shape. Pure: it
  * takes already-decided values (which sessions are the caller's own, when the staff cap ends one)
  * and only maps, so the rules stay in `session/` and `services/`.
  *
  * A session's credential never reaches the wire: the family id is the handle a client revokes by.
  */
 
-import type { AccountExportRequest, ExportSession, OAuthLinks, Session } from '@types';
+import type { AccountExport, ExportSession, OAuthLinks, Session } from '@types';
+import type { ExportStatus } from './model';
 import type { AccountExportRow, SessionRow } from './repository';
 
 /**
@@ -47,15 +48,21 @@ export const presentExportSession = (row: SessionRow): ExportSession =>
     sessionFields(row, row.expiresAt);
 
 /**
- * The answer to `POST /account/export`: which export. A request only ever resolves to a build in
- * flight (asking after `ready` or `failed` replaces the row with a new one), so the status the
- * contract allows is `building`.
+ * The caller's export as `POST` and `GET /account/export` answer it. `expiresAt` rides only a
+ * `ready` export: on any other status it is a bookkeeping date, not a promise about a file.
  *
- * @param row - the export request, new or reused
+ * @param row - the account's export row
+ * @param status - the status to show, which is not always the stored one (see `readOwnExport`)
  */
-export const presentExportRequest = (row: Pick<AccountExportRow, '_id'>): AccountExportRequest => ({
+export const presentExport = (
+    row: Pick<AccountExportRow, '_id' | 'createdAt' | 'expiresAt'>,
+    status: ExportStatus
+): AccountExport => ({
     id: String(row._id),
-    status: 'building'
+    status,
+    createdAt: row.createdAt.toISOString(),
+    actions: { download: status === 'ready', request: status !== 'building' },
+    ...(status === 'ready' ? { expiresAt: row.expiresAt.toISOString() } : {})
 });
 
 /**
