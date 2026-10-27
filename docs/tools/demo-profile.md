@@ -253,13 +253,14 @@ Nothing central lists the shop. Each file declares what it is, and `npm run rege
 | `scenarios/<module>.ts`                          | `shopModule`       | `shopModuleFixtures` in `shop-modules.generated.ts` |
 | `scenarios/<name>.scenario.ts`                   | `scenario`         | `scenarioFixtures` in `scenarios.generated.ts`      |
 | `scenarios/support/doubles/<module>/register.ts` | `registerDouble`   | `registerModuleDoubles` in `modules.generated.ts`   |
+| `scenarios/support/doubles/<module>/levers.ts`   | `installLever`     | `installModuleLevers` in `levers.generated.ts`      |
 | `scenarios/values/<module>.ts`                   | `collectionValues` | scanned by the client-collections bundler           |
 
 ```mermaid
 flowchart LR
     Strip["demo:remove<br/>deletes files only"] --> Gone["scenarios/shop.scenario.ts<br/>scenarios/products.ts<br/>scenarios/values/products.ts ..."]
     Gone --> Gen["npm run regenerate"]
-    Gen --> Reg["shop-modules.generated.ts<br/>scenarios.generated.ts<br/>modules.generated.ts"]
+    Gen --> Reg["shop-modules.generated.ts<br/>scenarios.generated.ts<br/>modules.generated.ts<br/>levers.generated.ts"]
     Reg --> Index["scenarios/index.ts<br/>SCENARIOS = shop? + blank"]
     Index --> Default["DEFAULT_SCENARIO<br/>shop if registered, else blank"]
 ```

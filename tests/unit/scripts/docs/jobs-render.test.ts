@@ -51,10 +51,10 @@ describe('renderCrontab', () => {
         const text = renderCrontab([job('reap:a', '0 2 * * *'), job('sweep:b', '* * * * *')]);
 
         expect(text).toContain(
-            '# Does the reap:a work.\n0 2 * * * cd /app && npm run job reap:a\n'
+            '# Does the reap:a work.\n0 2 * * * cd /app && node --import tsx scripts/ops/run-job.ts reap:a\n'
         );
         expect(text.indexOf('reap:a')).toBeLessThan(text.indexOf('sweep:b'));
-        expect(text.endsWith('npm run job sweep:b\n')).toBe(true);
+        expect(text.endsWith('scripts/ops/run-job.ts sweep:b\n')).toBe(true);
     });
 
     it('says it is generated, so nobody edits it by hand', () => {

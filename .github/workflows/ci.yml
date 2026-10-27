@@ -270,6 +270,11 @@ jobs:
                     prom/alertmanager:v0.34.1@sha256:84967b9b7ba45e38a9278d3e594305f43d4993c310df3905b51138b816c365f3 \
                     /obs/alertmanager-routes-test.sh
 
+            - name: Validate the collector, Loki, Alloy, Promtail and Caddy configs
+              # Each config is checked with the image of the compose file that mounts it (Loki with
+              # both), so an image bump and a config the new version refuses cannot land apart.
+              run: bash docker/observability/validate-configs.sh
+
     lint-openapi-modules:
         # The per-module REST fragments, against the narrower ruleset they are bundled from.
         # `lint-openapi` above only sees the bundle, so a fragment can be invalid and still bundle.
