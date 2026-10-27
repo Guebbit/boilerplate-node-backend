@@ -22,6 +22,10 @@ inputs:
         description: Install mongod and export MONGOMS_SYSTEM_BINARY.
         required: false
         default: 'false'
+    ignore-scripts:
+        description: Install with --ignore-scripts, for a job that runs no tool needing a built binary.
+        required: false
+        default: 'false'
 
 runs:
     using: composite
@@ -35,7 +39,10 @@ runs:
 
         - name: Install dependencies
           shell: bash
-          run: npm ci
+          env:
+              IGNORE_SCRIPTS: ${{ inputs.ignore-scripts }}
+          run: |
+              if [ "$IGNORE_SCRIPTS" = 'true' ]; then npm ci --ignore-scripts; else npm ci; fi
 
         - name: Install mongod
           if: ${{ inputs.setup-mongod == 'true' }}

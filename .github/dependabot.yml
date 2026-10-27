@@ -14,6 +14,11 @@ updates:
       # https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference#cooldown-
       cooldown:
           default-days: 7
+      # mermaid 12 breaks `vitepress-plugin-mermaid` and re-lays-out every diagram; the `katex`
+      # override in package.json stands in for the one fix mermaid 11 will never get.
+      ignore:
+          - dependency-name: mermaid
+            update-types: ['version-update:semver-major']
       # One weekly PR for every minor/patch bump together. A major stays OUT of the group on purpose:
       # a breaking bump gets its own PR, reviewed on its own.
       # https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/grouping-pull-requests
@@ -73,6 +78,11 @@ updates:
           include: scope
       cooldown:
           default-days: 7
+      # dependabot-core#15718: it reads this image's `-386` tag suffix as a version segment and
+      # proposes the i386-only build. Bump it by hand; `docker/observability/validate-configs.sh`
+      # checks the collector config against whatever the compose file names.
+      ignore:
+          - dependency-name: otel/opentelemetry-collector-contrib
       groups:
           dev-images:
               applies-to: version-updates

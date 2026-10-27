@@ -55,7 +55,7 @@ It currently:
 - Receives OTLP/HTTP on `:4318` and OTLP/gRPC on `:4317`
 - Batches spans via the `batch` processor
 - Exports traces to Tempo via OTLP/gRPC
-- Feeds the same spans to the `servicegraph` connector, which derives the `traces_service_graph_request_*` metrics (exposed on `:8889` for Prometheus) behind Grafana's Service Graph tab
+- Feeds the same spans to the `service_graph` connector, which derives the `traces_service_graph_request_*` metrics (exposed on `:8889` for Prometheus) behind Grafana's Service Graph tab
 
 ## How logs and traces correlate
 

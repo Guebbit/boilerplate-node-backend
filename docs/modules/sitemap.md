@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — `sitemap.xml`: the shop pages and every public product, once per language, built on request.
-**Depends on** — [`products`](./products.md), [`locales`](./locales.md).
+**Depends on** — [`products`](./products.md). The languages come from the API's own served list (`@infrastructure/i18n`), so it works with no `locales` module (one language).
 **Breaks if you change** — the three file addresses: the frontend's `robots.txt` names `/sitemap/index.xml`.
 :::
 
@@ -17,10 +17,8 @@ graph cannot see._
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
 flowchart LR
     sitemap["sitemap<br/><i>this module</i>"]
-    locales["locales"]
     products["products"]
 
-    sitemap --> locales
     sitemap --> products
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -28,7 +26,6 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class products core;
-    class locales generic;
     class sitemap centre;
 ```
 
@@ -67,8 +64,8 @@ submits"). The line is written by the frontend only when indexing is switched on
 - **Always an index.** The address `robots.txt` names never changes as the catalogue grows
   (Shopify and Yoast do the same).
 - **One `<url>` per language,** each with `xhtml:link rel="alternate"` for every active language and
-  an `x-default` pointing at the default language while it is active, otherwise at the first active
-  one (a hreflang target must be a page the same sitemap lists). Only active languages are listed.
+  an `x-default` pointing at the default language while it is served, otherwise at the first served
+  one (a hreflang target must be a page the same sitemap lists). The list is the one language negotiation uses, in tag order: the deployed dictionaries and the registered languages that are switched on, never a switched-off one.
 - **A file never passes 50,000 `<url>`** (the sitemaps.org limit). Each product counts once per
   language, so a run holds `⌊limit ÷ languages⌋` products.
 - **`lastmod` is `updatedAt`** because it is accurate: a translation edit writes the product with
@@ -108,5 +105,5 @@ submits"). The line is written by the frontend only when indexing is switched on
 ## Related pages
 
 - [`products`](./products.md) — owns the catalogue the product files read
-- [`locales`](./locales.md) — says which languages are active
+- [`locales`](./locales.md) — switching a language on or off changes which languages are served
 - [Adding & Removing a Module](../theory/module-lifecycle.md) — the deletability procedure

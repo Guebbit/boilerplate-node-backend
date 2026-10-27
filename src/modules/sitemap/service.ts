@@ -11,31 +11,30 @@
 
 import type { SitemapItemLoose } from 'sitemap';
 import { siteConfig } from '@infrastructure/http/config';
-import { localeService } from '@modules/locales';
+import { getDefaultLocale } from '@infrastructure/i18n/catalog';
+import { listServedLocales } from '@infrastructure/i18n/served';
 import { productService } from '@modules/products';
 import { STATIC_PAGES, sitemapConfig } from './config';
 
 /** The languages a page is offered in, and the one `x-default` points at. */
 interface Languages {
-    /** Every active language tag. */
+    /** Every served language tag, in alphabetical order. */
     tags: string[];
-    /** The tag `x-default` points at: the default language when it is active, else the first active one. */
+    /** The tag `x-default` points at: the default language when it is served, else the first served one. */
     fallback: string;
 }
 
 /**
- * The active languages, never fewer than the default: a deployment with no language row still
- * serves its default. `x-default` is the default language while it is active, otherwise the first
- * active one: a hreflang target must be a page the same sitemap lists.
+ * The languages the API answers in right now: the same list language negotiation uses, so the
+ * sitemap needs no `locales` module and a deployment without one is monolingual. `x-default` is the
+ * default language while it is served, otherwise the first served one: a hreflang target must be a
+ * page the same sitemap lists.
  */
-const activeLanguages = (): Promise<Languages> =>
-    localeService
-        .listCapabilities(localeService.callerScope())
-        .then(({ locales, default: fallback }) => {
-            const active = locales.filter(({ active: isActive }) => isActive).map(({ tag }) => tag);
-            const tags = active.length > 0 ? active : [fallback];
-            return { tags, fallback: tags.includes(fallback) ? fallback : tags[0] };
-        });
+const servedLanguages = (): Languages => {
+    const tags = listServedLocales().toSorted();
+    const fallback = getDefaultLocale();
+    return { tags, fallback: tags.includes(fallback) ? fallback : tags[0] };
+};
 
 /**
  * A page of the paired frontend: its origin, the language segment and the path. Not
@@ -83,10 +82,8 @@ export const sitemapService = {
      * Absolute, on this API's own origin.
      */
     listFiles: async (): Promise<string[]> => {
-        const [languages, total] = await Promise.all([
-            activeLanguages(),
-            productService.countListed()
-        ]);
+        const languages = servedLanguages();
+        const total = await productService.countListed();
         const files = Math.ceil(total / productsPerFile(languages.tags.length));
         const origin = siteConfig().NODE_URL.replace(/\/+$/, '');
         return [
@@ -99,10 +96,10 @@ export const sitemapService = {
     },
 
     /** The shop's static pages, once per language. They carry no `lastmod`: nothing dates them. */
-    listPages: (): Promise<SitemapItemLoose[]> =>
-        activeLanguages().then((languages) =>
-            STATIC_PAGES.flatMap((path) => entriesFor(languages, path))
-        ),
+    listPages: (): Promise<SitemapItemLoose[]> => {
+        const languages = servedLanguages();
+        return Promise.resolve(STATIC_PAGES.flatMap((path) => entriesFor(languages, path)));
+    },
 
     /**
      * One run of public products, once per language, dated by the product's `updatedAt` — which a
@@ -112,7 +109,7 @@ export const sitemapService = {
      * @returns the entries, or `null` when the catalogue has no such file
      */
     listProducts: async (page: number): Promise<SitemapItemLoose[] | null> => {
-        const languages = await activeLanguages();
+        const languages = servedLanguages();
         const size = productsPerFile(languages.tags.length);
         const products = await productService.listPublicPage(page, size);
         if (products.length === 0) return null;
