@@ -27,6 +27,7 @@ sensitiveFields:
     - __Host-oauth_verifier
     - __Host-oauth_link
     - __Host-oauth_mfa_challenge
+    - __Host-oauth_deletion_challenge
     - secret
     - new_secret
     - api_key
