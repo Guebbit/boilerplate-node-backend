@@ -187,13 +187,16 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
     const exporterBearer = await bearerForCookie(exporter.cookie);
     await api().post('/account/export').set('Authorization', exporterBearer).send().expect(202);
     await settleInlineExports();
-    const exportPath = '/account/export';
+    const exportPath = '/account/export/file';
     expect(mailsTo(ACCOUNT.movedTo, 'account.export-ready')).toHaveLength(1);
     await api().get(exportPath).set('Authorization', exporterBearer).expect(200);
+    await api().get('/account/export').set('Authorization', exporterBearer).expect(200);
     advanceDate(8 * DAY_MS + 60_000);
     const later = await signIn(ACCOUNT.movedTo, ACCOUNT.replacement, await codeFor(secret, 0));
     const laterBearer = await bearerForCookie(later.cookie);
     await api().get(exportPath).set('Authorization', laterBearer).expect(404);
+    // Past its retention and not yet swept, the export counts as none.
+    await api().get('/account/export').set('Authorization', laterBearer).expect(404);
     expect(await runJob('reap:account-exports')).toMatchObject({ rows: 1 });
 
     // The trail and the mail tell the same story.

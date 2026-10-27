@@ -119,13 +119,14 @@ describe('SHARED_FILES', () => {
         expect(backendPaths).toContain(OPENAPI);
         expect(backendPaths).toContain(ASYNCAPI);
         expect(backendPaths).toContain('shared/authorization-keys.yaml');
+        expect(backendPaths).toContain('shared/rules/frontend-links.yaml');
         expect(backendPaths).toContain('scenarios/support/tls/webhook-sink-ca.pem');
         expect(backendPaths).toContain('scenarios/support/tls/webhook-sink-cert.pem');
         expect(backendPaths).toContain('scenarios/support/tls/webhook-sink-key.pem');
-        // And nothing else. Six files, all produced here, which is what makes a fork answerable
+        // And nothing else. Seven files, all produced here, which is what makes a fork answerable
         // at all. (The demo dataset left the list with the frontend's MSW mocks: the demo profile
         // seeds from this repo's own fixtures, so there is no second copy left to compare.)
-        expect(backendPaths.size).toBe(6);
+        expect(backendPaths.size).toBe(7);
     });
 
     it('excludes anything either repo regenerates from a file already in the list', () => {

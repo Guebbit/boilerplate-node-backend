@@ -60,4 +60,15 @@ describe('every scheduled job ships in the production image', () => {
     it('starts every job through the runner under scripts/ops/', () => {
         expect(scripts.job).toBe('tsx scripts/ops/run-job.ts');
     });
+
+    it('has cron start the same runner without npm, which the image does not carry', () => {
+        const entries = readFileSync(path.join(REPO_ROOT, 'docker', 'crontab'), 'utf8')
+            .split('\n')
+            .filter((line) => line !== '' && !line.startsWith('#'));
+
+        expect(entries.length).toBeGreaterThan(0);
+        for (const entry of entries) expect(entry).not.toMatch(/\bnpm\b/);
+        const crontab = entries.join('\n');
+        expect(crontab).toContain('node --import tsx scripts/ops/run-job.ts');
+    });
 });

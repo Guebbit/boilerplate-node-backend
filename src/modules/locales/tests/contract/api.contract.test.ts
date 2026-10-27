@@ -127,15 +127,15 @@ describe('GET /locales', () => {
     });
 });
 
-describe('GET /locales/:locale', () => {
+describe('GET /locales/:locale/dictionary', () => {
     it('matches the contract', async () => {
-        const response = await api().get('/locales/en');
+        const response = await api().get('/locales/en/dictionary');
 
         expect(response.status).toBe(200);
     });
 
     it('serves the API’s own dictionary, shared keys and module keys together', async () => {
-        const response = await api().get('/locales/it');
+        const response = await api().get('/locales/it/dictionary');
 
         expect(response.body.locale).toBe('it');
         // The shared half — `generic.*` in particular, which the paired frontend reads by name.
@@ -152,7 +152,7 @@ describe('GET /locales/:locale', () => {
     });
 
     it('404s for a locale this deployment does not have', async () => {
-        const response = await api().get('/locales/kl');
+        const response = await api().get('/locales/kl/dictionary');
 
         expect(response.status).toBe(404);
         expect(response.type).toBe('application/problem+json');
@@ -168,7 +168,7 @@ describe('GET /locales/:locale', () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
 
-        const response = await api().get('/locales/pt');
+        const response = await api().get('/locales/pt/dictionary');
 
         expect(response.status).toBe(404);
     });
@@ -181,11 +181,75 @@ describe('GET /locales/:locale', () => {
     it.each(['..%2F..%2Fpackage', '%2Fetc%2Fpasswd', 'en.json'])(
         'refuses %s rather than reading a file',
         async (attempt) => {
-            const response = await api().get(`/locales/${attempt}`);
+            const response = await api().get(`/locales/${attempt}/dictionary`);
 
             expect(response.status).toBe(404);
         }
     );
+});
+
+describe('GET /locales/:locale', () => {
+    it('reads a registered language in the shape the list and the writes use', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+
+        const response = await api().get('/locales/pt').set('Authorization', bearer);
+        const list = await api().get('/locales').set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual(
+            (list.body.locales as { tag: string }[]).find(({ tag }) => tag === 'pt')
+        );
+        expect(response.body).toMatchObject({
+            tag: 'pt',
+            baseLanguage: 'pt',
+            source: 'dynamic',
+            entryCount: 0
+        });
+        expect(response.body.id).toEqual(expect.any(String));
+    });
+
+    it('answers what POST /locales just created at the Location it returned', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const created = await api().post('/locales').set('Authorization', bearer).send(PORTUGUESE);
+
+        const followed = await api().get(created.headers.location).set('Authorization', bearer);
+
+        expect(followed.status).toBe(200);
+        expect(followed.body).toEqual(created.body);
+    });
+
+    it('answers a language that is only a deployed file, with no row and no actions', async () => {
+        const response = await api().get('/locales/en');
+
+        expect(response.status).toBe(200);
+        expect(response.body).toMatchObject({
+            tag: 'en',
+            source: 'static',
+            actions: { update: false, activate: false, deactivate: false, delete: false }
+        });
+        expect(response.body).not.toHaveProperty('id');
+        expect(response.body).not.toHaveProperty('createdAt');
+    });
+
+    it('404s for a language that is neither deployed nor registered', async () => {
+        const response = await api().get('/locales/kl');
+
+        expect(response.status).toBe(404);
+        expect(response.type).toBe('application/problem+json');
+    });
+
+    it('hides a switched-off registered language from a visitor and shows it to staff', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer, { ...PORTUGUESE, active: false });
+
+        const asVisitor = await api().get('/locales/pt');
+        const asStaff = await api().get('/locales/pt').set('Authorization', bearer);
+
+        expect(asVisitor.status).toBe(404);
+        expect(asStaff.status).toBe(200);
+        expect(asStaff.body.active).toBe(false);
+    });
 });
 
 describe('GET /locales/:locale/messages', () => {
@@ -1174,7 +1238,7 @@ describe('a locale only the API has', () => {
 
         expect(response.status).toBe(404);
         expect(response.body.errors[0].message).toBe(
-            translator(getFallbackLocale())('generic.error-invalid-data')
+            translator(getFallbackLocale())('locales.error-language-not-found')
         );
     });
 

@@ -45,6 +45,7 @@ import {
     markReshipped,
     markDelivered,
     markFulfilmentComplete,
+    markUndeliverable,
     markPaymentStatus,
     markReturnStatus,
     markMoneyReceived
@@ -144,6 +145,7 @@ export const orderService = {
     extendGuarantee,
     markDelivered,
     markFulfilmentComplete,
+    markUndeliverable,
     markPaymentStatus,
     markReturnStatus,
     markMoneyReceived,

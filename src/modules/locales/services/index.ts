@@ -28,7 +28,9 @@ import {
     readDynamicTier,
     callerScope,
     readStanding,
-    listCapabilities
+    listCapabilities,
+    readLanguage,
+    describeStoredLanguage
 } from './capabilities';
 import { standingOn, languageActions } from './actions';
 import { listApps } from '../apps';
@@ -67,6 +69,8 @@ export const localeService = {
     callerScope,
     readStanding,
     listCapabilities,
+    readLanguage,
+    describeStoredLanguage,
     standingOn,
     languageActions,
     listApps,

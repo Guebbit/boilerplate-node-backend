@@ -113,7 +113,8 @@ export type CancelCause =
     | 'withdrawal'
     | 'reservation_expired'
     | 'erasure'
-    | 'payment_mismatch';
+    | 'payment_mismatch'
+    | 'lost';
 
 /** What one {@link CancelCause} decides. */
 interface CauseRules {
@@ -132,7 +133,8 @@ interface CauseRules {
     /**
      * Whether the caller decides if the money goes back. Only an operator does: a customer is
      * always refunded, because that is the promise `paid` is cancellable on, and it is not theirs
-     * to waive; the system's causes refund whatever was paid.
+     * to waive; the system's causes refund whatever was paid. Read by `cancel()` only, so `lost`
+     * (which never goes through it and refunds nothing) leaves it `false`.
      */
     refundIsChoice: boolean;
 }
@@ -170,6 +172,14 @@ export const CANCEL_CAUSES = {
         refundIsChoice: false
     },
     payment_mismatch: {
+        by: 'system',
+        mail: 'none',
+        analytics: ordersAnalyticsEvents.ORDER_CANCELLED,
+        refundIsChoice: false
+    },
+    // Written by `markUndeliverable`, not by `cancel()`: the remainder cancel already refunded, so
+    // this cause carries `refund: false` and `refundIsChoice` does not apply.
+    lost: {
         by: 'system',
         mail: 'none',
         analytics: ordersAnalyticsEvents.ORDER_CANCELLED,

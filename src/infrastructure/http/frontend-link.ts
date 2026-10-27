@@ -10,6 +10,15 @@
 
 import { getDefaultLocale, isServedLocale } from '@infrastructure/i18n';
 import { siteConfig } from '@infrastructure/http/config';
+import { loadSharedRules } from '../config/shared-rules/load';
+import { frontendLinksSchema } from '../config/shared-rules/frontend-links';
+
+/**
+ * Every default link template and the sitemap's static pages, from
+ * `shared/rules/frontend-links.yaml`. The paired frontend reads the same file, so a path its
+ * router lacks fails there, not in a reader's inbox.
+ */
+export const FRONTEND_LINK_RULES = loadSharedRules('frontend-links', frontendLinksSchema);
 
 /**
  * The paired frontend's own origin. Same fallback as `account/oauth/config.ts`'s

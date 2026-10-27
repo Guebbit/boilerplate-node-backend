@@ -27,7 +27,7 @@ export const webhooksService = {
     updateSubscription: subscriptions.update,
     enableSubscription: subscriptions.enable,
     disableSubscription: subscriptions.disable,
-    rotateSubscriptionSecret: subscriptions.rotateSecret,
+    createSubscriptionSecret: subscriptions.createSecret,
     removeSubscriptionSecret: subscriptions.removeSecret,
     removeSubscription: subscriptions.remove,
     forgetOwner: subscriptions.forgetOwner,

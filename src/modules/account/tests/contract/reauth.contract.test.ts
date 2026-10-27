@@ -266,9 +266,23 @@ describe('POST /account/reauth with a mailed code', () => {
         advanceDate((reauthWindowSeconds('sensitive') + 1) * 1000);
         const staleBearer = await bearerForCookie(jwtCookie);
 
-        const response = await api().get('/account/export').set('Authorization', staleBearer);
+        const response = await api().get('/account/export/file').set('Authorization', staleBearer);
 
         expect(response.status).toBe(401);
+    });
+
+    it('lets a stale session read the export status: it holds no personal data', async () => {
+        freezeDate();
+        const { bearer: freshBearer, jwtCookie } = await sessionFor(['pwd'], true);
+        await api().post('/account/export').set('Authorization', freshBearer).send();
+        await settleInlineExports();
+        advanceDate((reauthWindowSeconds('sensitive') + 1) * 1000);
+        const staleBearer = await bearerForCookie(jwtCookie);
+
+        const response = await api().get('/account/export').set('Authorization', staleBearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.status).toBe('ready');
     });
 });
 

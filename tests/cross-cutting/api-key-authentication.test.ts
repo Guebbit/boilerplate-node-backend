@@ -89,10 +89,10 @@ describe('an api key over the real chain', () => {
         expect(response.status).toBe(401);
     });
 
-    /** A public route refuses a bad `sk_` key too, instead of serving it as anonymous (RFC 6750 §3.1). */
+    /** A public route (a foundation one, so the case holds with the shop removed) refuses a bad `sk_` key too, instead of serving it as anonymous (RFC 6750 §3.1). */
     it('refuses an unknown credential on a public route, naming the failure', async () => {
         const response = await api()
-            .get('/products')
+            .get('/account/session-config')
             .set('Authorization', 'Bearer sk_not_a_real_credential_at_all');
 
         expect(response.status).toBe(401);
@@ -101,7 +101,9 @@ describe('an api key over the real chain', () => {
 
     /** Only an `sk_` key is refused: a stale session bearer still browses as anonymous. */
     it('still serves a public route to an expired session bearer', async () => {
-        const response = await api().get('/products').set('Authorization', 'Bearer not.a.session');
+        const response = await api()
+            .get('/account/session-config')
+            .set('Authorization', 'Bearer not.a.session');
 
         expect(response.status).toBe(200);
     });

@@ -1,23 +1,13 @@
 /**
  * @module
- * The two places this module's documents become wire shapes — one per resource, since locales
- * serves both a language and its entries. `services/entries.ts`'s `search()` already answers with
- * `LocaleEntry` straight off the repository's own lean transform; only a single-document write
- * needs the cast these presenters replace.
+ * Where an entry document becomes its wire shape. A language needs no presenter: its wire shape
+ * merges both tiers, so `localeService.describeStoredLanguage` builds it. `services/entries.ts`'s
+ * `search()` already answers with `LocaleEntry` straight off the repository's own lean transform;
+ * only a single-document write needs the cast this presenter replaces.
  */
 
-import type { Language, LanguageActions, LocaleEntry } from '@types';
-import type { LocaleDocument, LocaleEntryDocument } from './model';
-
-/**
- * `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform: the document is
- * typed as stored, not as the wire shape `Language` promises. `actions` is the caller's finished
- * block (`services/actions.ts`), only mapped on here.
- */
-export const presentLocale = (document: LocaleDocument, actions: LanguageActions): Language => ({
-    ...(document.toJSON() as Omit<Language, 'actions'>),
-    actions
-});
+import type { LocaleEntry } from '@types';
+import type { LocaleEntryDocument } from './model';
 
 /**
  * `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform: the document is

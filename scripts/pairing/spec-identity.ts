@@ -71,6 +71,11 @@ export const SHARED_FILES: readonly SharedFile[] = [
      */
     { backend: 'shared/authorization-keys.yaml', frontend: 'contracts/authorization-keys.yaml' },
     /*
+     * The frontend paths the backend links to in mail and sitemaps. The frontend's tests walk its
+     * router against this file, so a renamed route fails there instead of in a reader's inbox.
+     */
+    { backend: 'shared/rules/frontend-links.yaml', frontend: 'contracts/frontend-links.yaml' },
+    /*
      * The demo webhook sink's TLS pair. The backend trusts the CA (the dev preload), the
      * frontend's Cypress sink serves the leaf and its key: a fork between them fails every demo
      * delivery at the handshake, and nothing in either suite would say why.

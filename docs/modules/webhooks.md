@@ -205,12 +205,12 @@ silently acknowledged without ever being sent. So:
 `webhook-id`/`webhook-timestamp`/`webhook-signature` headers a growing set of the ecosystem already
 verifies with no custom code — the format is the interoperable part; the ~30 lines of `node:crypto`
 around it are not worth a dependency. A subscription's secret ring is a list, not one value, so
-`POST .../subscriptions/:id/rotate-secret` can rotate without downtime: two active secrets sign
+`POST .../subscriptions/:id/secrets` can rotate without downtime: two active secrets sign
 two space-separated `v1,...` values in one header during the overlap, until
 `DELETE .../secrets/:secretId` drops the old one or `NODE_WEBHOOK_SECRET_OVERLAP_HOURS` (default 24)
 has passed — the Standard Webhooks bounded overlap. A ring holds at most two, and an expired entry
-stops signing and is pruned on the next rotate or remove. Split from `PUT`/`PATCH .../subscriptions/:id`
-on purpose — a command, not state, gets its own route rather than a flag on the update body.
+stops signing and is pruned on the next add or remove. A secret is a line of the subscription, so it is added with a
+`POST` on its `/secrets` collection, not a flag on the update body.
 
 **The body is the Standard Webhooks envelope too.** `{ type, timestamp, data }` — `type` is the
 event name (`order.created`, `payment.failed`, …), `timestamp` is when the event occurred (fixed
@@ -287,7 +287,7 @@ stay unmerged. Nothing is left to prune by hand.
 Subscriptions, the secret ring and the delivery log all have an admin screen in the paired
 `boilerplate-vue-frontend` — `webhooks` there, its own five routes over this module's thirteen
 endpoints. "Usable via any HTTP client" is true too (nothing here requires the UI). See that repo's `docs/modules/webhooks.md` for the client side, including why
-`rotateSecret`'s response never gets cached client-side.
+`createSecret`'s response never gets cached client-side.
 
 Delivery payloads carry ids, amounts and the return `reason` code, never a return's free text
 (`note`, `declineMessage`). Delivery rows are kept `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS` (30) days.

@@ -139,6 +139,7 @@ flowchart LR
 | `expireReservationById`        | `reservation_expired` | system     | the expiry notice      | whatever was paid                     |
 | `cancelForErasureById`         | `erasure`             | system     | nobody                 | whatever was paid                     |
 | `cancelForPaymentMismatchById` | `payment_mismatch`    | system     | nobody                 | whatever was paid                     |
+| `markUndeliverable`            | `lost`                | system     | nobody                 | none: the remainder cancel refunded   |
 
 The one door that serves two actors, `cancelOnRequestById`, resolves which inside the service: a
 caller holding `update:Order` is the operator. The controller never makes that decision. A new
@@ -287,6 +288,7 @@ flowchart LR
     SH -->|"system: the last shipment arrives"| DE["delivered"]
     SH -->|"system, a backward move:<br/>a shipment is reported lost"| PR
     DE -->|"system, a backward move:<br/>a replacement under the guarantee"| PR
+    PR -->|"system: every parcel lost, remainder<br/>cancelled and refunded (cause lost)"| CA
     PR -->|"system: a digital fulfilment, or a<br/>remainder cancelled after every<br/>shipment arrived — both moves at once"| DE
     P -.->|"admin · or an expired hold"| CA["cancelled<br/><i>units released</i>"]
     PA -.->|"admin · refund due"| CA
@@ -318,6 +320,7 @@ override all ASK for a move, never assign the field themselves. See
 | `shipped` → `processing`                    | `system`                                                                         | `POST /delivery/shipments/{id}/lost` — the `reopen` event, the one backward move; `canOverrideTo` stays forward-only, so no override makes it. `order.status_changed` carries it                                                               |
 | `delivered` → `processing`                  | `system`                                                                         | A return received with `remedy: replace` — the `reship` event, the second backward move; the replacement leaves through the ordinary shipping door, and its arrival keeps the first `withdrawUntil` and only ever pushes `conformityUntil` out |
 | `processing` → `delivered`                  | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/fulfill` (digital), or a remainder cancel after every shipment arrived — `markFulfilmentComplete`, the one named double move                                                                           |
+| `processing` → `cancelled`                  | `system`                                                                         | `markUndeliverable`: a lost parcel's remainder was cancelled and refunded and nothing ever arrived — cause `lost`, `refund: false`, no clock. Outside the actor table, so the system cancels stay on `pending`                                 |
 | `pending`/`paid`/`processing` → `cancelled` | `customer` (own order, `pending`/`paid` only) or an operator (also `processing`) | `POST /orders/{id}/cancel` — **only while nothing has shipped**, conditional on `fulfillment.shipped` in the write's own filter                                                                                                                |
 
 ### The fulfilment summary

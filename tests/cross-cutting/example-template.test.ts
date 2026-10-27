@@ -1,3 +1,4 @@
+// requires-module: example
 /**
  * The `example` module is the module to copy, so each of its files has to say the same three
  * things in the same shape: what the pattern is in ANY module (`In any module:`), what it does

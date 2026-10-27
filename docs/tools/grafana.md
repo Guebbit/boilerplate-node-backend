@@ -41,16 +41,16 @@ flowchart TD
 
 ## Stack overview
 
-| Service        | Role                               | Local URL                        | Image version                                  |
-| -------------- | ---------------------------------- | -------------------------------- | ---------------------------------------------- |
-| OTel Collector | Telemetry fan-out hub              | —                                | `otel/opentelemetry-collector-contrib:0.114.0` |
-| Tempo          | Trace store                        | internal only                    | `grafana/tempo:2.6.1`                          |
-| Prometheus     | Metrics store / alert evaluation   | `http://localhost:9090`          | `prom/prometheus:v2.55.1`                      |
-| Alertmanager   | Alert routing                      | `http://localhost:9093`          | `prom/alertmanager:v0.34.1`                    |
-| Loki           | Log store                          | `http://localhost:3100`          | `grafana/loki:3.3.2`                           |
-| Promtail       | Log shipper (Docker/Podman → Loki) | —                                | `grafana/promtail:3.3.2`                       |
-| Alloy          | Browser-facing Faro collector      | `http://localhost:12347/collect` | `grafana/alloy:v1.5.1`                         |
-| Grafana        | Unified UI                         | `http://localhost:3001`          | `grafana/grafana:11.4.0`                       |
+| Service        | Role                               | Local URL                        | Image (version: `docker-compose.yml`)  |
+| -------------- | ---------------------------------- | -------------------------------- | -------------------------------------- |
+| OTel Collector | Telemetry fan-out hub              | —                                | `otel/opentelemetry-collector-contrib` |
+| Tempo          | Trace store                        | internal only                    | `grafana/tempo:2.6.1`                  |
+| Prometheus     | Metrics store / alert evaluation   | `http://localhost:9090`          | `prom/prometheus:v2.55.1`              |
+| Alertmanager   | Alert routing                      | `http://localhost:9093`          | `prom/alertmanager:v0.34.1`            |
+| Loki           | Log store                          | `http://localhost:3100`          | `grafana/loki`                         |
+| Promtail       | Log shipper (Docker/Podman → Loki) | —                                | `grafana/promtail`                     |
+| Alloy          | Browser-facing Faro collector      | `http://localhost:12347/collect` | `grafana/alloy`                        |
+| Grafana        | Unified UI                         | `http://localhost:3001`          | `grafana/grafana:11.4.0`               |
 
 ## Admin API vs Grafana
 

@@ -33,6 +33,7 @@ import {
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 // Relative: this file loads first, before anything that resolves path aliases is wired.
 import { loggingConfig, tracingConfig } from './config';
+import packageJson from '../../../package.json';
 // Auto-instrumentations: each one monkey-patches its target library so spans are created
 // without touching business code. Only the four libraries this app actually uses are loaded,
 // which keeps startup cost lower than the `@opentelemetry/auto-instrumentations-node` bundle.
@@ -192,6 +193,12 @@ export const buildProcessors = (): SpanProcessor[] => {
     return [new BatchSpanProcessor({ exporter: new OTLPTraceExporter() })];
 };
 
+/**
+ * The version stamped on every span as `service.version`, read from `package.json`.
+ * Not `npm_package_version`: the production image has no npm, so the process is not started by one.
+ */
+export const SERVICE_VERSION: string = packageJson.version;
+
 /** Start the OpenTelemetry SDK. Safe to call multiple times. */
 export const startTracing = (): void => {
     if (started) return;
@@ -202,9 +209,8 @@ export const startTracing = (): void => {
     const resource = resourceFromAttributes({
         // `service.name` — primary grouping key in every tracing UI.
         [ATTR_SERVICE_NAME]: loggingConfig().NODE_SERVICE_NAME,
-        // `service.version` — npm injects `npm_package_version` when started via an npm script,
-        // which lets you correlate a latency/error regression with a specific release.
-        [ATTR_SERVICE_VERSION]: tracingConfig().npm_package_version
+        // `service.version` — lets you correlate a latency/error regression with a release.
+        [ATTR_SERVICE_VERSION]: SERVICE_VERSION
     });
 
     // Instantiate the SDK. Nothing is patched or exported yet — that happens in `start()` below.

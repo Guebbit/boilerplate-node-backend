@@ -12,7 +12,6 @@ import { setEnvironment } from '@tests/environment';
 import { api, loginBearer } from '@tests/http';
 import { mintSession } from '../factories';
 import { codeFor } from '@tests/totp';
-import { forgetSessionEpoch } from '@tests/session-epoch';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 
 /** Every queued two-factor mail's code, newest last — what the recipient would type. */
@@ -82,7 +81,6 @@ const armTotp = async (session: Session) => {
         .set('Authorization', bearer)
         .send({ code: await codeFor(secret, 0) });
     backupCodesOf.set(secret, confirm.body.backupCodes as string[]);
-    await forgetSessionEpoch(bearer);
     await carryOn(session);
     return secret;
 };
@@ -107,7 +105,6 @@ const armEmail = async (session: Session, proof?: string) => {
         .post('/account/2fa/methods/email/confirm')
         .set('Authorization', bearer)
         .send({ code: String(mail?.data.code) });
-    await forgetSessionEpoch(bearer);
     await carryOn(session);
 };
 
@@ -188,7 +185,6 @@ describe('POST /account/2fa/disable', () => {
             .send({ code: await codeFor(secret, 1) });
 
         expect(response.status).toBe(200);
-        await forgetSessionEpoch(session.bearer);
         await carryOn(session);
         const status = await api().get('/account/2fa').set('Authorization', session.bearer);
         expect(status.body.methods).toEqual([]);

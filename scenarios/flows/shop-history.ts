@@ -13,13 +13,7 @@
  * restore. See: docs/tools/demo-profile.md
  */
 
-import {
-    SEED_ADMIN_EMAIL,
-    SEED_ADMIN_PASSWORD,
-    SEED_STAFF_TOTP_SECRET,
-    SEED_USER_EMAIL,
-    SEED_USER_PASSWORD
-} from '@scenarios/accounts';
+import { seedCredentials } from '@scenarios/accounts';
 import { SEED_PRODUCT_IDS } from '../product-ids';
 import { fillerProductId, openingStockFor, productFixtures } from '../products';
 import { SEED_CUSTOMER_EMAILS, SEED_CUSTOMER_IDS } from '../users';
@@ -359,13 +353,9 @@ const requireBankTransfer = (owner: Caller): Promise<void> =>
 export const driveShopHistory = async (
     baseUrl: string
 ): Promise<Readonly<Record<string, string>>> => {
-    const owner = await signIn(
-        baseUrl,
-        SEED_ADMIN_EMAIL,
-        SEED_ADMIN_PASSWORD,
-        SEED_STAFF_TOTP_SECRET
-    );
-    const customer = await signIn(baseUrl, SEED_USER_EMAIL, SEED_USER_PASSWORD);
+    const { admin, user } = seedCredentials;
+    const owner = await signIn(baseUrl, admin.email, admin.password, admin.totpSecret);
+    const customer = await signIn(baseUrl, user.email, user.password);
 
     await requireBankTransfer(owner);
     await openEveryShelf(owner);
