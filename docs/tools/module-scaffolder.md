@@ -23,10 +23,13 @@ npm run scaffold:module -- audits-lite --no-audit
 ## What it generates
 
 The template is the core of `example`, cut to an admin collection: a required `name` and optional
-`notes`, listed, created, replaced (PUT), merged (PATCH) and deleted behind one gate and four
-permission rules. It is deliberately not a shop module, so it depends on nothing. Every file opens
+`notes`, listed, read by id, created, replaced (PUT), merged (PATCH) and deleted behind one gate and
+four permission rules. Every record carries `actions` (`update`, `delete`), decided per caller in
+`services/actions.ts` from the kernel's answer and shaped by a pure rule in `domain/`, so the
+frontend never re-derives a permission; a lifecycle added later gains one flag per event there. It is deliberately not a shop module, so it depends on nothing. Every file opens
 with the header `example` gives its twin: the file's role in any module, then what it does here,
-then the docs to read. The optional capabilities `example` shows (events, mail, a webhook, a cover
+then the docs to read. `tests/unit/scripts/scaffold/twin-headers.test.ts` holds the role sentence
+of each generated file equal to its twin's, so the two cannot drift. The optional capabilities `example` shows (events, mail, a webhook, a cover
 image, translations) are left out, and
 [the capability table](../theory/modules.md#optional-capabilities-and-the-files-that-carry-them)
 says which files to add for each.
@@ -37,7 +40,7 @@ flowchart LR
     C["scaffold:module -- name"] --> P["plan<br/><i>pure: names + templates</i>"]
     P --> R{"refuse?<br/><i>folder, docs page, registry line,<br/>or a schema name already taken</i>"}
     R -->|yes| X["exit 1, nothing written"]
-    R -->|no| M["src/modules/&lt;name&gt;/<br/><i>module.yaml · module.ts · index.ts<br/>model · repository · service · presenter<br/>routes · controllers/ · factories<br/>openapi.yaml · authorization.yaml · audit.ts<br/>tests/unit · tests/integration</i>"]
+    R -->|no| M["src/modules/&lt;name&gt;/<br/><i>module.yaml · module.ts · index.ts<br/>model · repository · presenter<br/>services/ · domain/ · routes · controllers/ · factories<br/>openapi.yaml · authorization.yaml · audit.ts<br/>tests/unit · tests/integration · tests/contract</i>"]
     R -->|no| D["docs/modules/&lt;name&gt;.md<br/><i>graph markers included</i>"]
     R -->|no| E["central edits"]
     E --> E1["src/modules.ts"]

@@ -6,7 +6,9 @@
         "not-found": "The example was not found.",
         "owner-unknown": "Unknown owner",
         "cover-missing": "Send the image as the imageUpload field.",
-        "transition-not-allowed": "An example cannot go from {{from}} to {{to}}.",
+        "not-publishable": "An example cannot be published from {{status}}: only a draft can.",
+        "not-archivable": "An example cannot be archived from {{status}}: only a draft or a published one can.",
+        "not-unarchivable": "An example cannot go back to draft from {{status}}: only an archived one can.",
         "error-body-too-long": "The body may have at most {{maximum}} characters.",
         "email-published": {
             "subject": "Your example is published: {{title}}",

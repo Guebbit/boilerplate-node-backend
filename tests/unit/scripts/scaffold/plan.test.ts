@@ -41,11 +41,16 @@ describe('planModule', () => {
             'src/modules/field-notes/index.ts',
             'src/modules/field-notes/model.ts',
             'src/modules/field-notes/repository.ts',
-            'src/modules/field-notes/service.ts',
             'src/modules/field-notes/presenter.ts',
+            'src/modules/field-notes/services/index.ts',
+            'src/modules/field-notes/services/crud.ts',
+            'src/modules/field-notes/services/actions.ts',
+            'src/modules/field-notes/domain/index.ts',
+            'src/modules/field-notes/domain/rules.ts',
             'src/modules/field-notes/routes.ts',
             'src/modules/field-notes/factories.ts',
             'src/modules/field-notes/controllers/get-field-notes.ts',
+            'src/modules/field-notes/controllers/get-field-notes-item.ts',
             'src/modules/field-notes/controllers/post-field-notes.ts',
             'src/modules/field-notes/controllers/update-field-notes.ts',
             'src/modules/field-notes/controllers/delete-field-notes.ts',
@@ -54,7 +59,9 @@ describe('planModule', () => {
             'src/modules/field-notes/audit.ts',
             'src/modules/field-notes/tests/unit/routes.test.ts',
             'src/modules/field-notes/tests/unit/factories.test.ts',
+            'src/modules/field-notes/tests/unit/domain.test.ts',
             'src/modules/field-notes/tests/integration/service.test.ts',
+            'src/modules/field-notes/tests/contract/api.contract.test.ts',
             'docs/modules/field-notes.md'
         ]);
     });
@@ -71,12 +78,9 @@ describe('planModule', () => {
         const files = planModule(quiet).files.map((file) => file.path);
 
         expect(files).not.toContain('src/modules/field-notes/audit.ts');
-        expect(contentOf(quiet, 'service.ts')).not.toMatch(
-            /recordAudit|CallerContext|@param context/
-        );
-        expect(contentOf(quiet, 'controllers/post-field-notes.ts')).not.toContain(
-            'callerContextOf'
-        );
+        expect(contentOf(quiet, 'services/crud.ts')).not.toMatch(/recordAudit|AuditActions/);
+        // The context still arrives: `actions` are decided per caller, audit or not.
+        expect(contentOf(quiet, 'services/crud.ts')).toContain('context: CallerContext');
         expect(contentOf(quiet, 'module.yaml')).toContain('noAudit:');
         expect(contentOf(OPTIONS, 'module.yaml')).not.toContain('noAudit');
     });
@@ -138,13 +142,23 @@ describe('the generated declarations', () => {
         expect(operations).toEqual([
             'listFieldNotes',
             'createFieldNote',
-            'replaceFieldNote',
-            'updateFieldNote',
-            'deleteFieldNote'
+            'getFieldNoteById',
+            'replaceFieldNoteById',
+            'updateFieldNoteById',
+            'deleteFieldNoteById'
         ]);
         expect(Object.keys(fragment.components.schemas)).toEqual(
             expect.arrayContaining(['ReplaceFieldNoteRequest', 'UpdateFieldNoteRequest'])
         );
+    });
+
+    it('requires actions on the record, and declares the flags the domain answers', () => {
+        const { components } = parseYaml(contentOf(OPTIONS, 'openapi.yaml')) as {
+            components: { schemas: Record<string, { required: string[] }> };
+        };
+
+        expect(components.schemas.FieldNote.required).toContain('actions');
+        expect(components.schemas.FieldNoteActions.required).toEqual(['update', 'delete']);
     });
 
     it('keeps the docs page graph markers `regenerate` fills', () => {
@@ -159,7 +173,10 @@ describe('collidingSchemas', () => {
     it('names the schemas another module already declares', () => {
         const { names } = planModule({ ...OPTIONS, name: 'users' });
 
-        expect(collidingSchemas(names, new Set(['User', 'Unrelated']))).toEqual(['User']);
+        expect(collidingSchemas(names, new Set(['User', 'UserActions', 'Unrelated']))).toEqual([
+            'User',
+            'UserActions'
+        ]);
         expect(collidingSchemas(names, new Set())).toEqual([]);
     });
 });

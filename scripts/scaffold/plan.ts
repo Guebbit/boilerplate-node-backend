@@ -41,25 +41,33 @@ const runtimeFiles = (names: ModuleNames, options: ScaffoldOptions): PlannedFile
         { path: `${root}/index.ts`, content: code.barrel(names) },
         { path: `${root}/model.ts`, content: code.modelFile(names) },
         { path: `${root}/repository.ts`, content: code.repositoryFile(names) },
-        { path: `${root}/service.ts`, content: code.serviceFile(names, options) },
         { path: `${root}/presenter.ts`, content: code.presenterFile(names) },
+        { path: `${root}/services/index.ts`, content: code.servicesIndexFile(names) },
+        { path: `${root}/services/crud.ts`, content: code.crudFile(names, options) },
+        { path: `${root}/services/actions.ts`, content: code.actionsFile(names) },
+        { path: `${root}/domain/index.ts`, content: code.domainIndexFile(names) },
+        { path: `${root}/domain/rules.ts`, content: code.domainRulesFile(names) },
         { path: `${root}/routes.ts`, content: code.routesFile(names) },
         { path: `${root}/factories.ts`, content: code.factoriesFile(names) },
         {
             path: `${root}/controllers/get-${names.kebab}.ts`,
-            content: code.getController(names, options)
+            content: code.getController(names)
+        },
+        {
+            path: `${root}/controllers/get-${names.kebab}-item.ts`,
+            content: code.getItemController(names)
         },
         {
             path: `${root}/controllers/post-${names.kebab}.ts`,
-            content: code.postController(names, options)
+            content: code.postController(names)
         },
         {
             path: `${root}/controllers/update-${names.kebab}.ts`,
-            content: code.updateController(names, options)
+            content: code.updateController(names)
         },
         {
             path: `${root}/controllers/delete-${names.kebab}.ts`,
-            content: code.deleteController(names, options)
+            content: code.deleteController(names)
         }
     ];
 };
@@ -90,7 +98,12 @@ const testAndDocumentFiles = (names: ModuleNames, options: ScaffoldOptions): Pla
     return [
         { path: `${tests}/unit/routes.test.ts`, content: documentation.routesTest(names) },
         { path: `${tests}/unit/factories.test.ts`, content: documentation.factoriesTest(names) },
+        { path: `${tests}/unit/domain.test.ts`, content: documentation.domainTest(names) },
         { path: `${tests}/integration/service.test.ts`, content: documentation.serviceTest(names) },
+        {
+            path: `${tests}/contract/api.contract.test.ts`,
+            content: documentation.contractTest(names)
+        },
         {
             path: `docs/modules/${names.kebab}.md`,
             content: documentation.documentationPage(names, options)
@@ -126,6 +139,8 @@ export const planModule = (options: ScaffoldOptions): ScaffoldPlan => {
 export const collidingSchemas = (names: ModuleNames, taken: ReadonlySet<string>): string[] =>
     [
         names.entity,
+        `${names.entity}Actions`,
+        `${names.entity}Sort`,
         `${names.plural}Response`,
         `Create${names.entity}Request`,
         `Replace${names.entity}Request`,

@@ -310,8 +310,8 @@ list rows included; a read-only projection or a line of its parent is the except
 presenter honest: it maps what a service decided and imports no ability, caller or service.
 
 So the server sends the answer. `Order.actions` and `PaymentActions` are computed per REQUEST, not
-stored. `example` is the minimal worked case: `Example.actions` is `{ transitions, update, delete }` (a target-taking endpoint, so an array is right),
-the moves from the domain's table and the two keys asked of the kernel per row (`permitsOnRows`), so
+stored. `example` is the minimal worked case: `Example.actions` is flags `{ publish, archive, unarchive, update, delete }` (one door per lifecycle event, like `User.actions`),
+the events from the domain's table and the two keys asked of the kernel per row (`permitsOnRows`), so
 the own-rows condition in `authorization.yaml` stays its only encoding. `User.actions` is the
 account-side case: one flag per endpoint (`activate`, `restore`, `setPurchaseHold`…), assembled in
 `users/services/actions.ts` from the caller's keys, `access`'s pure `mayChangeAccount` and the row's
@@ -324,8 +324,11 @@ flowchart LR
     L --> C["services/actions.ts<br/>the caller half: keys, buyer"]
     C --> A["actions: { cancel, pay, delete, hardDelete, restore, … }"]
     REQ2["GET /orders/{id}/payments"] --> PA["actions: { pay, refund }"]
+    REQ3["GET /examples/{id}, a scaffolded module's GET /x/{id}"] --> E["domain/ rule + services/actions.ts"]
+    E --> EA["actions: { publish, archive, unarchive, update, delete }<br/><i>scaffolded: { update, delete }</i>"]
     A --> UI["client renders controls"]
     PA --> UI
+    EA --> UI
 
     classDef pure fill:#dcfce7,stroke:#16a34a,color:#111827;
     class L pure;
