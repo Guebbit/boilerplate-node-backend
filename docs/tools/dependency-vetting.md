@@ -63,19 +63,43 @@ run one is committed, not remembered. Both repos carry it:
 | ------------------------------- | --------------------------------------------------------------------------------- |
 | `.npmrc` `strict-allow-scripts` | a script runs only if `package.json` `allowScripts` names the package             |
 | `.npmrc` `engine-strict`        | refuses to install on an npm older than `engines.npm` (`>=11.16.0`)               |
-| `package.json` `allowScripts`   | `name@version: true` allows one version; `name: false` denies every version of it |
+| `.npmrc` `allow-scripts-pin`    | `false`: an approval is written by package name, not `name@version`               |
+| `package.json` `allowScripts`   | `name: true` allows every version of it; `name: false` denies every version of it |
 
 `engine-strict` is what makes the first row true: an older npm does not know
 `strict-allow-scripts`, ignores it without a word, and runs every script.
 
-`@scarf/scarf` is a name-only `false`, so a version bump stays denied. A pinned `true` goes stale on
-the next bump and then silently stops allowing anything.
+### Why by name, not by version
+
+A `name@version: true` entry fails the install loudly (`ESTRICTALLOWSCRIPTS`) on the next bump,
+and dependabot cannot re-approve it. Every grouped bump then died in `npm ci`, and the fix was a
+blind approve of the new version. A name-only entry keeps the review where it pays: on a package's
+first script.
+
+What still guards a version change:
+
+- the lockfile integrity hash, and the human merge of the bump PR;
+- the 7-day dependabot `cooldown` (dependabot PRs only: a developer's `npm install` gets none);
+- production installs with `--ignore-scripts` (`docker/Dockerfile.production`), so no script runs
+  in the shipped image whatever `allowScripts` says.
+
+The counter-view: npm's own default and LavaMoat's allow-scripts pin the version, so that a hijacked
+release of an approved package cannot run its script. pnpm (`allowBuilds`), Bun
+(`trustedDependencies`) and Yarn Berry (`dependenciesMeta.built`) trust by name. The merge reviews
+the diff of the lockfile, not of a script, so a per-version pin turned into a click, not a check.
+
+A script that is a no-op without an env flag is denied, not allowed: `@parcel/watcher`'s `install`
+only builds when `npm_config_build_from_source` is set, and its binaries arrive as optional
+dependencies.
+
+`@scarf/scarf` and `@parcel/watcher` are name-only `false`, so a version bump stays denied.
 
 ### When an install reports a blocked script
 
 1. Read what the script does (`npm view <pkg>@<version> scripts`, then the file in the tarball).
    Telemetry or a download of an unpinned binary is a no (rule 3 above).
-2. `npm approve-scripts <pkg>` writes `<pkg>@<version>: true` into `allowScripts`. Never `--all`.
+2. `npm install-scripts approve <pkg>` (alias `approve-scripts`) writes `<pkg>: true` into
+   `allowScripts`. Never `--all`. `npm install-scripts prune` drops entries nothing installs any more.
 3. Commit the `package.json` change with the lockfile it came from.
 
 ### The sibling checkout token
@@ -92,7 +116,8 @@ own range bumped instead, so nothing in `dependencies` or `devDependencies` appe
 
 | Override                                 | Pins      | Closes                                                                                                                                                           |
 | ---------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ip-address`                             | `^10.7.2` | SSRF/trust-boundary advisories under `express-rate-limit`                                                                                                        |
+| `ip-address`                             | `^10.7.4` | SSRF/trust-boundary advisories under `express-rate-limit`                                                                                                        |
+| `katex`                                  | `^0.18.2` | GHSA-238p-pmpm-9mq7 (low), under `mermaid` 11, which never ships the fixed release. Drop it when `vitepress-plugin-mermaid` supports mermaid 12                  |
 | `jsonpath-plus`                          | `^10.4.0` | two CVSS 9.8 RCEs, reaching us through `@asyncapi/modelina` → `@asyncapi/multi-parser`, which aliases two old `@asyncapi/parser` builds that still ask for `7.x` |
 | `lodash`                                 | `^4.18.1` | prototype pollution and `_.template` code injection, via `postman-collection`'s hard pin at `4.17.21`                                                            |
 | `@faker-js/faker`                        | `^10.6.0` | `helpers.fake` arbitrary code execution, for `@stoplight/prism-http`, which asks for `^10.4.0` anyway                                                            |

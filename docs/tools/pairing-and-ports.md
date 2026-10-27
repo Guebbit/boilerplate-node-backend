@@ -171,7 +171,7 @@ favicons to `.prettierrc` — but **"does a fork cause a silent bug?"** Everythi
 quietly: both sides keep building, keep passing their own suites, and disagree only in production
 or in a live-API run.
 
-Six files are on it, and the rule is one line: **produced here, copied there.** Each one is an
+Seven files are on it, and the rule is one line: **produced here, copied there.** Each one is an
 _output_ on the frontend's side, which is what makes a fork answerable — there is one correct
 resolution, and `npm run sync:frontend` applies it without asking. Editing the copy is the failure
 this list is worst at describing and best at catching: the next regeneration reverts it, and the
@@ -182,6 +182,7 @@ diff looks like the backend broke something.
 | `openapi.yaml`                                         | `openapi.yaml`                                                                                                                                                                                                    |
 | `asyncapi.public.yaml`                                 | `asyncapi.yaml` — the shared subset is the whole of the async contract as far as that repo is concerned                                                                                                           |
 | `shared/authorization-keys.yaml`                       | `<frontend>/contracts/authorization-keys.yaml` — read there only for `actions:`, see [Permission Actions](./permission-actions.md)                                                                                |
+| `shared/rules/frontend-links.yaml`                     | `<frontend>/contracts/frontend-links.yaml` — the paths mail and sitemap links point at; the frontend's router spec walks every one, so a renamed route fails there instead of as a 404 in an inbox                |
 | `scenarios/support/tls/webhook-sink-{ca,cert,key}.pem` | `<frontend>/scripts/e2e/tls/` — the demo webhook sink's test CA and leaf: this side trusts the CA, the frontend's Cypress sink serves the leaf. See [HTTPS in the demo](../modules/webhooks.md#https-in-the-demo) |
 
 There is no analytics event catalogue on the list: pageviews are automatic and everything with a

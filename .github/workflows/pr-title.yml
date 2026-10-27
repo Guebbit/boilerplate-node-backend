@@ -28,6 +28,8 @@ jobs:
 
             - name: Setup
               uses: ./.github/actions/setup
+              with:
+                  ignore-scripts: 'true' # commitlint needs no built binary, so no install script runs here
 
             - name: Lint the PR title
               env:

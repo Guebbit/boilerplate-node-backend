@@ -184,7 +184,7 @@ Two named scenarios, registered in `scenarios/index.ts`:
   (`scenarios/shop-modules.ts`), then a history DRIVEN through the real endpoints: orders, payments,
   shipments, refunds. See [Demo profile](./demo-profile.md#how-a-scenario-is-built) and
   [The flow runner](./flow-runner.md).
-- **`blank`** — the roles, the four named accounts and the locales only.
+- **`blank`** — the roles, the 13 named accounts and the locales only.
 
 The accounts each scenario creates are listed in [Demo profile](./demo-profile.md#the-named-accounts).
 

@@ -52,16 +52,19 @@ describe('ShipmentActions.update and forceDeliver', () => {
         expect(await shipmentActionsFor(orderId, admin.bearer)).toEqual({
             deliver: true,
             forceDeliver: true,
+            markLost: true,
             update: true
         });
         expect(await shipmentActionsFor(orderId, warehouse.bearer)).toEqual({
             deliver: true,
             forceDeliver: false,
+            markLost: true,
             update: true
         });
         expect(await shipmentActionsFor(orderId, owner.bearer)).toEqual({
             deliver: false,
             forceDeliver: false,
+            markLost: false,
             update: false
         });
 
@@ -76,6 +79,7 @@ describe('ShipmentActions.update and forceDeliver', () => {
         expect(await shipmentActionsFor(orderId, admin.bearer)).toEqual({
             deliver: false,
             forceDeliver: false,
+            markLost: false,
             update: true
         });
     });

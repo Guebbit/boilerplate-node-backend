@@ -8,6 +8,7 @@
  */
 
 import { Types } from 'mongoose';
+import { updateStatusIfIn as conditionalStatus } from '@infrastructure/persistence/conditional-status';
 import type { ClientSession, QueryFilter } from 'mongoose';
 import {
     stockLevelModel,
@@ -601,17 +602,11 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
         to: ReservationStatus,
         session?: ClientSession
     ) =>
-        reservationModel
-            .findOneAndUpdate(
-                { orderId: toObjectId(orderId), status: from },
-                // The payment's instant is the preorder queue key, stamped in the claim itself.
-                {
-                    $set: { status: to, ...(to === 'committed' ? { committedAt: new Date() } : {}) }
-                },
-                // Return the post-update doc — caller needs the items it just claimed.
-                { returnDocument: 'after', session }
-            )
-            .exec(),
+        conditionalStatus(reservationModel, { orderId: toObjectId(orderId) }, [from], to, {
+            // The payment's instant is the preorder queue key, stamped in the claim itself.
+            set: to === 'committed' ? { committedAt: new Date() } : {},
+            session
+        }),
 
     /**
      * The hold, but only while it still sets units aside (`held` or `committed`) — the read a

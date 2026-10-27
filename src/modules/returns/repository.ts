@@ -5,6 +5,7 @@
  * and the per-order reads the quantity check needs.
  */
 
+import { updateStatusIfIn as conditionalStatus } from '@infrastructure/persistence/conditional-status';
 import type { ClientSession, PipelineStage, Types } from 'mongoose';
 import { returnModel, returnOrderLockModel, applyReturnTransform } from './model';
 import type { ReturnDocument } from './model';
@@ -79,13 +80,7 @@ export const returnRepository: Repository<ReturnDocument, StoredReturn> & {
      * @returns the return as it now stands, or `null` if it was not in `from`
      */
     claimStatus: (id, from, to, stamp = {}, session) =>
-        returnModel
-            .findOneAndUpdate(
-                { _id: toObjectId(id), status: { $in: [...from] } },
-                { $set: { status: to, ...stamp } },
-                { returnDocument: 'after', session }
-            )
-            .exec(),
+        conditionalStatus(returnModel, { _id: toObjectId(id) }, from, to, { set: stamp, session }),
 
     /**
      * Every return on one order, oldest first.

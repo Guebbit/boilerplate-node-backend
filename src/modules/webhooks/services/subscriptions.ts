@@ -2,7 +2,7 @@
  * @module
  * Subscription CRUD: list, get, create (mints the ring's first secret), update (url, description
  * and event filter only), the two on/off actions (`enable`/`disable`), the two secret-ring
- * actions (`rotateSecret`/`removeSecret`), remove. Tenant-scoped throughout —
+ * actions (`createSecret`/`removeSecret`), remove. Tenant-scoped throughout —
  * every read and write narrows to `context.caller.tenantId`, which any `webhooks.*` caller always
  * carries (every key in the family is `scope: tenant` in `shared/authorization-keys.yaml`, and
  * `Caller.tenantId` is null only in platform scope — see its own doc comment).
@@ -43,7 +43,7 @@ export interface SubscriptionWithMintedSecrets {
     subscription: WebhookSubscriptionDocument;
     /** Set only by `create` — the ring's first secret. */
     secret?: string;
-    /** Set only by `rotateSecret` — a newly added secret. */
+    /** Set only by `createSecret` — a newly added secret. */
     newSecret?: string;
 }
 
@@ -263,7 +263,7 @@ const AUDITED_FIELDS = {
 
 /**
  * Update a subscription: any of url/description/eventTypes. The secret ring is never touched here
- * (see {@link rotateSecret}/{@link removeSecret}), and neither is whether the subscription is on
+ * (see {@link createSecret}/{@link removeSecret}), and neither is whether the subscription is on
  * (see {@link enable}/{@link disable}).
  *
  * @returns a 404 outside this tenant's subscriptions
@@ -393,11 +393,11 @@ export const disable = (
 /**
  * Add a new secret to the ring, alongside the newest existing one — the ring then carries both
  * until {@link removeSecret} drops the old one, or the overlap window ends. A ring holds at most
- * two: rotating again drops the oldest.
+ * two: adding a third drops the oldest.
  *
  * @returns a 404 outside this tenant's subscriptions
  */
-export const rotateSecret = (
+export const createSecret = (
     id: string,
     context: TenantCallerContext
 ): Promise<ResponseSuccess<SubscriptionWithMintedSecrets> | ResponseReject> =>

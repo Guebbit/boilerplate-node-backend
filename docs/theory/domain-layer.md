@@ -216,6 +216,12 @@ not its business — `OrderStatus` is generated from `openapi.yaml`, so the valu
 moves (`orders/services/status.ts`, `delivery`) and the admin override all read the table, which is
 the whole point of a domain folder: the rule exists once and the callers ask it.
 
+That table is built with `domain-primitives/lifecycle.ts`'s `defineLifecycle`, the same helper
+`example/domain/lifecycle.ts` uses: the module writes the events as an `as const` object and gets
+`allows`, `fromOf`, `toOf`, `eventsFrom`, `reachableFrom` and `canTransition` back, with the
+construction-time checks (known statuses, no self-move) done once. The module keeps its own guards
+in code (`orders`' `canOverrideTo`, the digital-only rule).
+
 **`domain-primitives/money.ts` is the case for a value type in a codebase that is not otherwise doing
 tactical DDD.** A `Money` is a branded integer count of minor units, so every total is computed in
 whole cents and converted back to a decimal exactly once, at the boundary. `openapi.yaml` still

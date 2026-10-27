@@ -118,6 +118,13 @@ const STEPS: readonly Step[] = [
             "docs/tools/package-dependencies.md's tables, read off package.json and who actually imports each package"
     },
     {
+        name: 'persona tables',
+        command: ['tsx', 'scripts/docs/generate-persona-tables.ts'],
+        checks: true,
+        because:
+            "docs/tools/demo-profile.md's three account tables, read off shared/scenarios/personas.yaml"
+    },
+    {
         name: 'rate-limit budgets',
         command: ['tsx', 'scripts/docs/generate-rate-limit-budgets.ts'],
         checks: true,

@@ -23,7 +23,7 @@ paths:
             description: |
                 Newest first unless `sort` says otherwise. Never returns a secret — the ring's
                 plaintext exists only in the response of the call that minted it (`POST` here, or
-                `POST .../{id}/rotate-secret`).
+                `POST .../{id}/secrets`).
             operationId: listWebhookSubscriptions
             security:
                 - bearerAuth: []
@@ -264,10 +264,10 @@ paths:
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /webhooks/subscriptions/{id}/rotate-secret:
+    /webhooks/subscriptions/{id}/secrets:
         post:
             tags: [Webhooks]
-            summary: Rotate a webhook subscription's secret
+            summary: Add a secret to a webhook subscription's ring (rotate)
             description: |
                 Adds a new secret to the ring and returns its plaintext once, in `newSecret` — the
                 ring then carries two active secrets, and deliveries sign with both (two
@@ -275,10 +275,10 @@ paths:
                 through `DELETE .../secrets/{secretId}` or its overlap window ends (24 hours by
                 default, `NODE_WEBHOOK_SECRET_OVERLAP_HOURS`; `retiringSecrets` names the exact
                 instant), after which it stops signing and disappears from `secretIds`. A ring holds at
-                most two: rotating again drops the oldest. Its own route rather than a flag on
-                `PATCH`'s body: a command, not state, so it does not share a route with
-                url/description/eventTypes.
-            operationId: rotateWebhookSubscriptionSecret
+                most two: adding a third drops the oldest, which is already superseded. A secret is a
+                line of the subscription, so adding one is a `POST` on the line collection and answers
+                200 with the whole subscription (docs/api/write-methods.md).
+            operationId: createWebhookSubscriptionSecret
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -303,7 +303,7 @@ paths:
             description: |
                 The other half of a rotation, once every consumer has switched. Refuses to empty
                 the ring — a subscription with no secret can never sign a delivery. The remove twin
-                of `POST .../rotate-secret`, split out for the same reason.
+                of `POST .../secrets`.
             operationId: removeWebhookSubscriptionSecret
             security:
                 - bearerAuth: []
@@ -517,7 +517,7 @@ components:
         WebhookSubscriptionActions:
             type: object
             additionalProperties: false
-            required: [update, delete, enable, disable, rotateSecret, removeSecret]
+            required: [update, delete, enable, disable, createSecret, removeSecret]
             properties:
                 update:
                     type: boolean
@@ -531,9 +531,9 @@ components:
                 disable:
                     type: boolean
                     description: Whether `POST /webhooks/subscriptions/{id}/disable` would be accepted — false while it is already disabled.
-                rotateSecret:
+                createSecret:
                     type: boolean
-                    description: Whether `POST /webhooks/subscriptions/{id}/rotate-secret` would be accepted.
+                    description: Whether `POST /webhooks/subscriptions/{id}/secrets` would be accepted.
                 removeSecret:
                     type: boolean
                     description: Whether `DELETE /webhooks/subscriptions/{id}/secrets/{secretId}` would be accepted — false while the ring holds a single secret.
@@ -589,7 +589,7 @@ components:
                     description: The newly minted secret, in plaintext. Shown here once, on creation, and never again.
                 newSecret:
                     type: string
-                    description: A rotated-in secret's plaintext, present only in the response of `POST .../rotate-secret`.
+                    description: A rotated-in secret's plaintext, present only in the response of `POST .../secrets`.
 
         # The ONE sort grammar, shared with every list (docs/api/sorting.md). `-` sorts
         # descending; earlier entries rank first; ties end on the id.

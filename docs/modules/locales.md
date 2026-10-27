@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — which languages this deployment speaks, and the runtime overrides layered over the bundled copy.
-**Depends on** — nothing. Only [`sitemap`](./sitemap.md) imports it (its `localeService`, for the languages a sitemap lists); no other sibling needs a translated dictionary directly.
+**Depends on** — nothing. No sibling imports it: [`sitemap`](./sitemap.md) reads the served-language list in `@infrastructure/i18n`, which this module's writes refresh.
 **Breaks if you change** — the `app` field. It decides which of two dictionaries a row patches.
 :::
 
@@ -10,24 +10,7 @@
 
 <!-- module-graph:locales:start -->
 
-_Solid arrows are imports. Dotted arrows are domain events — the return path an import
-graph cannot see._
-
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
-flowchart LR
-    locales["locales<br/><i>this module</i>"]
-    sitemap["sitemap"]
-
-    sitemap --> locales
-
-    classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
-    classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
-    classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
-    classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
-    class sitemap generic;
-    class locales centre;
-```
+_Nothing reaches `locales` and it reaches nothing — no imports either way, no events either way. Deleting it takes one folder and this page, and no other page changes._
 
 <!-- module-graph:locales:end -->
 

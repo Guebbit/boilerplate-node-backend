@@ -28,24 +28,36 @@ export const removeModuleFolders = (repoRoot: string, names: readonly string[]):
         return { file: `src/modules/${name}/`, detail: 'deleted' };
     });
 
+/** The identifier an import line binds (`import stockAlerts from ...` is `stockAlerts`). */
+const importIdentifier = (line: string): string => /^import (\w+) from/.exec(line)?.[1] ?? '';
+
 /**
  * Drop every line of `src/modules.ts` that registers one of `names`: its import, its array entry
  * and its `ModuleName` union member. The line matchers are the scaffolder's own
  * (`./registry`), so the file's shape is described once, by the tool that writes it.
+ *
+ * The array entry is matched by the identifier the import binds, not by the folder name: a
+ * hyphenated module (`stock-alerts`) is registered as `stockAlerts`.
  * @param content - the file's current text
  * @param names - module names to strip
  */
-const stripModuleLines = (content: string, names: readonly string[]): string =>
-    content
-        .split('\n')
+const stripModuleLines = (content: string, names: readonly string[]): string => {
+    const lines = content.split('\n');
+    const identifiers = new Set(
+        lines
+            .filter((line) => names.includes(importKey(line)))
+            .map((line) => importIdentifier(line))
+    );
+    return lines
         .filter(
             (line) =>
                 !names.includes(importKey(line)) &&
-                !names.includes(entryKey(line)) &&
+                !identifiers.has(entryKey(line)) &&
                 // A union member leads with `|`; a quoted word elsewhere is not one.
                 !(line.trimStart().startsWith('|') && names.includes(memberKey(line)))
         )
         .join('\n');
+};
 
 /**
  * Edit `src/modules.ts`: remove each shop module's import, its `enabledModules` array entry and

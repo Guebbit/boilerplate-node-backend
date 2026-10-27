@@ -1,0 +1,29 @@
+# The paths the backend puts in mail and sitemap links, under the paired frontend's `/<locale>/`.
+# Each is the frontend's own route; a path the router does not have is a 404 in the reader's inbox,
+# which is why the frontend gets this file too (`sync:frontend`) and its tests walk the router
+# against it. `{token}` and `{id}` are filled in by the backend. A token rides in the URL FRAGMENT
+# (`#token=`), which a browser never sends to a server (RFC 3986 section 3.5).
+# An env var still overrides each one; the env var names stay per backend.
+links:
+    verify: verify-email/confirm#token={token}
+    reset: password-reset/confirm#token={token}
+    restore: account-restore#token={token}
+    emailChange: email-change/confirm#token={token}
+    emailUndo: email-change/undo#token={token}
+    export: account-export
+    order: orders/{id}
+    product: products/{id}
+    # Pre-filled for an account question: the way to ask a person about a purchase hold (GDPR Art. 22(3)).
+    contact: contact?category=account
+    privacy: privacy
+
+# Public pages that take no id, as paths under `/<locale>/`. '' is the home page.
+staticPages:
+    - ''
+    - about
+    - faq
+    - terms
+    - privacy
+    - legal
+    - contact
+    - products
