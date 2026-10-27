@@ -139,4 +139,5 @@ flowchart LR
 | `cases/permission-model-version.cases.yaml` | `tests/cross-cutting/permission-model-version-conformance.test.ts`                                                                   |
 | `cases/rate-limit-keys.cases.yaml`          | `tests/cross-cutting/rate-limit-keys-conformance.test.ts`                                                                            |
 | `cases/request-headers.cases.yaml`          | `tests/cross-cutting/request-headers-conformance.test.ts`                                                                            |
+| `cases/security-headers.cases.yaml`         | `tests/cross-cutting/security-headers-conformance.test.ts`                                                                           |
 | `cases/ssrf.cases.yaml`                     | `tests/cross-cutting/ssrf-conformance.test.ts`                                                                                       |
