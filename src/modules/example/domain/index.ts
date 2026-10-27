@@ -9,11 +9,13 @@
  */
 
 export {
-    canTransition,
+    canApply,
+    EXAMPLE_EVENTS,
     exampleActionsFor,
     fitsBodyLength,
     initialExampleStatus,
     isPublished,
     shouldStampPublishedAt,
-    statusesReachableFrom
+    statusAfter
 } from './lifecycle';
+export type { ExampleEvent } from './lifecycle';

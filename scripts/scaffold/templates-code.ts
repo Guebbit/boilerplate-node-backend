@@ -30,12 +30,11 @@ export const moduleYaml = (options: ScaffoldOptions): string =>
 /** The manifest the registry imports. */
 export const moduleManifest = (names: ModuleNames): string => `/**
  * @module
- * ${names.words}: a keyed collection an admin lists, creates, edits and deletes. Scaffolded from the
- * example module's core; replace this paragraph with what the domain is and what it deliberately
- * does not reach.
- *
  * In any module: the manifest below is everything this module asks the application to do for it.
  * Each optional capability is one entry here plus its own files, and each can be deleted alone.
+ * Here: ${names.words}, a keyed collection an admin lists, reads, creates, edits and deletes.
+ * Scaffolded from the example module's core; replace this paragraph with what the domain is and
+ * what it deliberately does not reach.
  *
  * See: docs/theory/modules.md#the-module-template, docs/modules/${names.kebab}.md
  */
@@ -56,15 +55,17 @@ export default {
 /** The convenience barrel. */
 export const barrel = (names: ModuleNames): string => `/**
  * @module
- * ${names.words} - public barrel; the only surface a sibling may import.
+ * In any module: the public barrel, the only surface a sibling may import. It exports services,
+ * domain rules, events and emails, and the model's TYPES. Never a repository, the model's runtime
+ * value, a wiring file or factories.ts.
+ * Here: the ${names.entityCamel} service and its domain rules.
  *
- * In any module: the barrel exports services, domain rules, events and emails, and the model's
- * TYPES. Never a repository, the model's runtime value, a wiring file or factories.ts.
- *
- * See: docs/theory/strategic-ddd.md section 5, docs/modules/${names.kebab}.md
+ * See: docs/theory/strategic-ddd.md, docs/modules/${names.kebab}.md
  */
 
-export * from './service';
+export * from './services';
+
+export * from './domain';
 
 export type * from './model';
 `;
@@ -73,8 +74,9 @@ export type * from './model';
 export const auditFile = (names: ModuleNames): string => `/**
  * @module
  * In any module: the audit actions it emits, declared by augmentation so the app-wide union grows
- * with the modules that are enabled - see modules/account/audit.ts for why. Here, reads are
- * audited too: who looked at the records is a question the log should answer.
+ * with the modules that are enabled - see modules/account/audit.ts for why.
+ * Here: view, create, update and delete of a ${names.entityCamel}. Reads are audited too: who looked
+ * at the records is a question the log should answer.
  *
  * See: docs/tools/winston.md, docs/modules/${names.kebab}.md
  */
@@ -131,7 +133,8 @@ export const modelFile = (names: ModuleNames): string => `/**
  * In any module: the Mongoose schema, one collection, and the wire-shape transform the repository
  * and presenter share. Here: ${names.entity} schema, a leaf in both directions (see ./module).
  *
- * createdAt and updatedAt are overridden from the generated ${names.entity} type (string to Date):
+ * ${names.entity}Row is the wire type without actions: actions are decided per caller, so a stored
+ * row never carries them. createdAt and updatedAt are overridden from the generated ${names.entity} type (string to Date):
  * Mongoose holds native dates, and serialization narrows them back to the wire's ISO strings.
  *
  * See: docs/modules/${names.kebab}.md
@@ -142,9 +145,12 @@ import type { Document, Model } from 'mongoose';
 import type { ${names.entity} } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 
+/** A ${names.entityCamel} as stored and as a repository read returns it: the wire shape minus actions. */
+export type ${names.entity}Row = Omit<${names.entity}, 'actions'>;
+
 /** Mongoose document type for a ${names.entityCamel}. */
 export interface ${names.entity}Document
-    extends Omit<${names.entity}, 'id' | 'createdAt' | 'updatedAt'>, Document {
+    extends Omit<${names.entity}Row, 'id' | 'createdAt' | 'updatedAt'>, Document {
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -187,19 +193,19 @@ export const ${names.entityCamel}Model = model<${names.entity}Document, ${names.
 /** The repository, built on the shared factory. */
 export const repositoryFile = (names: ModuleNames): string => `/**
  * @module
- * In any module: the only door to the collection. Nothing outside the module imports it - the
- * service is the door. Here: ${names.entity} repository, standard CRUD via the shared factory.
+ * In any module: the only door to the collection. CRUD and search come from the shared factory;
+ * what is added here is what this collection alone needs. Nothing outside the module imports it -
+ * the service is the door. Here: nothing added, the plain CRUD and a search over name and notes.
  *
  * See: docs/theory/layers.md, docs/modules/${names.kebab}.md
  */
 
 import { ${names.entityCamel}Model, apply${names.entity}Transform } from './model';
-import type { ${names.entity}Document } from './model';
+import type { ${names.entity}Document, ${names.entity}Row } from './model';
 import { createRepository } from '@infrastructure/persistence/create-repository';
-import type { ${names.entity} } from '@types';
 
 /** Search over name, sortable by creation time or name. */
-export const ${names.entityCamel}Repository = createRepository<${names.entity}Document, ${names.entity}>(
+export const ${names.entityCamel}Repository = createRepository<${names.entity}Document, ${names.entity}Row>(
     ${names.entityCamel}Model,
     {
         transform: apply${names.entity}Transform,
@@ -233,65 +239,114 @@ const auditCall = (
             });`
         : '';
 
-/**
- * The trailing context parameter of a service function, or nothing when the module opted out of
- * audit (an unused parameter would fail the type check).
- * @param options - the scaffold options
- * @returns the parameter text, leading comma included
+/** The service folder's door: the one object controllers call and the barrel publishes. */
+export const servicesIndexFile = (names: ModuleNames): string => `/**
+ * @module
+ * In any module: the service layer, the one door. A folder rather than one file because each
+ * optional capability keeps its own file; the service object is what controllers call and what the
+ * barrel publishes: every operation once, on the object, and nowhere by name.
+ * Here: CRUD, and the actions a caller is told they have.
+ *
+ * See: docs/theory/layers.md, docs/modules/${names.kebab}.md
  */
-const contextParameter = (options: ScaffoldOptions): string =>
-    options.audit ? ',\n    context?: CallerContext' : '';
+
+import { create, getById, removeById, search, updateById } from './crud';
+
+/** The service's public surface - controllers call through this, never the bare functions. */
+export const ${names.entityCamel}Service = { create, getById, search, updateById, removeById };
+`;
+
+/** What the caller may do to a record: the kernel's answer, handed to the domain. */
+export const actionsFile = (names: ModuleNames): string => `/**
+ * @module
+ * In any module: what the caller may do to a record is decided here, once, so no client re-derives
+ * it. Here: the keys authorization.yaml states (update, delete) are asked of the kernel for the
+ * caller, and the domain turns the answer into the ${names.entity}Actions the contract declares.
+ *
+ * Delete it if: the module has nothing a client must grey out per row.
+ *
+ * See: docs/theory/tactical-ddd.md#2-capabilities-the-server-answers-what-a-client-may-do
+ */
+
+import type { CallerContext, ${names.entity}Actions } from '@types';
+import { permitsOnRows } from '@kernel/ability';
+import { ${names.entityCamel}ActionsFor } from '../domain';
 
 /**
- * A .then that audits and passes the value through, or nothing when the module opted out.
- * @param names - the module's spellings
- * @param options - the scaffold options
- * @param variable - the name the resolved value is bound to
- * @param action - the action key suffix, e.g. CREATED
- * @param extra - extra audit fields
- * @returns the chained call, or an empty string
+ * The actions this caller has on a ${names.entityCamel}. The records belong to the tenant, not to
+ * a person, so one answer holds for every row and is asked once per request.
+ * @param context - the caller
+ * @returns what they may do
  */
-const thenAudit = (
-    names: ModuleNames,
-    options: ScaffoldOptions,
-    variable: string,
-    action: string,
-    extra: string
-): string =>
-    options.audit
-        ? `.then((${variable}) => {
-            ${auditCall(names, options, action, extra)}
-            return ${variable};
-        })`
-        : '';
+export const actionsFor = (context: CallerContext): ${names.entity}Actions =>
+    // permitsOnRows takes a row to test own-row conditions against; this subject has none, so an
+    // empty row asks the tenant-wide question. Nothing to repeat per row.
+    ${names.entityCamel}ActionsFor(permitsOnRows(context.caller, '${names.entity}', ['update', 'delete'])({}));
+`;
+
+/** The domain folder's door. */
+export const domainIndexFile = (names: ModuleNames): string => `/**
+ * @module
+ * In any module: the domain layer - pure rules only, lint-guaranteed free of Express, Mongoose
+ * and every tier. A module gets a domain/ folder once it has a closed vocabulary with rules of its
+ * own.
+ * Here: the actions a caller has on a ${names.entityCamel}. The first status, limit or state machine
+ * this module grows is written beside it.
+ *
+ * See: docs/theory/domain-layer.md, docs/modules/${names.kebab}.md
+ */
+
+export { ${names.entityCamel}ActionsFor } from './rules';
+`;
+
+/** The module's first domain rule. */
+export const domainRulesFile = (names: ModuleNames): string => `/**
+ * @module
+ * In any module: the rules that decide, with no I/O.
+ * Here: what a caller may do to a ${names.entityCamel}. Today that is just their keys; a lifecycle
+ * (see the example module) would add one flag per event here, so the client never re-derives it.
+ *
+ * See: docs/theory/domain-layer.md, docs/modules/${names.kebab}.md
+ */
+
+import type { ${names.entity}Actions } from '@types';
 
 /**
- * The @param line for the context parameter, or nothing when the module opted out of audit.
- * @param options - the scaffold options
- * @param description - what the context is for in this function
- * @returns the JSDoc line with its newline, or an empty string
+ * What a caller may do to a ${names.entityCamel}, given what their keys allow.
+ * @param permits - the caller's keys on this record, answered by the kernel
  */
-const contextDocument = (options: ScaffoldOptions, description: string): string =>
-    options.audit ? ` * @param context - ${description}\n` : '';
+export const ${names.entityCamel}ActionsFor = (permits: {
+    update: boolean;
+    delete: boolean;
+}): ${names.entity}Actions => ({
+    update: permits.update,
+    delete: permits.delete
+});
+`;
 
 /** The service: the write path around the repository. */
-export const serviceFile = (names: ModuleNames, options: ScaffoldOptions): string => `/**
+export const crudFile = (names: ModuleNames, options: ScaffoldOptions): string => `/**
  * @module
- * In any module: the service is the one door. Controllers and sibling modules call it; it applies
- * the domain rules, talks to the repository and announces what happened. Here: ${names.entity}
- * list, create, replace/patch and delete. Every write records an audit row (when the module
- * audits) so the controllers stay thin.
+ * In any module: the service is the one door (./index.ts composes it). Controllers and sibling
+ * modules call it; it applies the domain rules, talks to the repository and to other modules'
+ * barrels, and announces what happened (audit, metric, event).
+ * Here: ${names.entity} read, list, create, replace/patch and delete.${
+     options.audit ? ' Every operation records an audit row, so the controllers stay thin.' : ''
+ }
  *
  * See: docs/theory/layers.md, docs/modules/${names.kebab}.md
  */
 
 import type {
+    CallerContext,
     ${names.entity},
     Create${names.entity}Request,
-    Update${names.entity}Request${options.audit ? ',\n    CallerContext' : ''}
+    Update${names.entity}Request
 } from '@types';
-import type { ${names.entity}Document } from './model';
-import { ${names.entityCamel}Repository } from './repository';
+import type { ${names.entity}Document } from '../model';
+import { ${names.entityCamel}Repository } from '../repository';
+import { present${names.entity}, present${names.entity}Row } from '../presenter';
+import { actionsFor } from './actions';
 import {
     generateReject,
     generateSuccess,
@@ -304,35 +359,61 @@ import { clearedOrValue } from '@infrastructure/persistence/changes';${
     options.audit
         ? `
 import { recordAudit } from '@infrastructure/observability/audit';
-import { ${names.pluralCamel}AuditActions } from './audit';`
+import { ${names.pluralCamel}AuditActions } from '../audit';`
         : ''
 }
 
 /**
  * Create a ${names.entityCamel}.
  * @param payload - the validated body
-${contextDocument(options, 'who acted; omitted by a caller that is not a request')} * @returns the saved document
+ * @param context - who acted
+ * @returns the saved ${names.entityCamel}, as the contract shapes it
  */
-const create = (
-    payload: Create${names.entity}Request${contextParameter(options)}
-): Promise<${names.entity}Document> =>
+export const create = (
+    payload: Create${names.entity}Request,
+    context: CallerContext
+): Promise<${names.entity}> =>
     ${names.entityCamel}Repository
-        .create({ name: payload.name.trim(), notes: payload.notes?.trim() })${thenAudit(
-            names,
-            options,
-            'created',
-            'CREATED',
-            `,
+        .create({ name: payload.name.trim(), notes: payload.notes?.trim() })
+        .then((created) => {
+            ${auditCall(
+                names,
+                options,
+                'CREATED',
+                `,
                 targetType: '${names.entitySnake}',
                 targetId: String(created._id)`
-        )};
+            )}
+            return present${names.entity}(created, actionsFor(context));
+        });
+
+/**
+ * One ${names.entityCamel} by id.
+ * @param id - the record id
+ * @param context - who asked
+ * @returns the ${names.entityCamel}, or null when the id names nothing
+ */
+export const getById = (id: string, context: CallerContext): Promise<${names.entity} | null> =>
+    ${names.entityCamel}Repository.findById(id).then((found) => {
+        if (!found) return null;
+        ${auditCall(
+            names,
+            options,
+            'VIEWED',
+            `,
+                targetType: '${names.entitySnake}',
+                targetId: id`
+        )}
+        return present${names.entity}(found, actionsFor(context));
+    });
 
 /**
  * A page of ${names.words}, newest first unless a sort is given.
  * @param filters - page, pageSize and sort as they arrive from a query string
-${contextDocument(options, 'who asked; omitted by a caller that is not a request')} * @returns the page and its pagination meta
+ * @param context - who asked
+ * @returns the page and its pagination meta
  */
-const search = (
+export const search = (
     // page and pageSize accept strings: they arrive as query text, and normalizePagination
     // coerces and bounds them.
     filters: Omit<Record<string, unknown>, 'page' | 'pageSize'> & {
@@ -340,9 +421,14 @@ const search = (
         pageSize?: string | number;
         sort?: string[];
         text?: string;
-    } = {}${contextParameter(options)}
+    },
+    context: CallerContext
 ): Promise<{ items: ${names.entity}[]; meta: PaginatedMeta }> =>
-    ${names.entityCamel}Repository.search(filters)${thenAudit(names, options, 'result', 'VIEWED', '')};
+    ${names.entityCamel}Repository.search(filters).then(({ items, meta }) => {
+        ${auditCall(names, options, 'VIEWED', '')}
+        const actions = actionsFor(context);
+        return { items: items.map((row) => present${names.entity}Row(row, actions)), meta };
+    });
 
 /**
  * Apply a replace or patch to a loaded ${names.entityCamel} and persist it. A null in the payload
@@ -354,43 +440,49 @@ const search = (
 const applyUpdate = (
     ${names.entityCamel}: ${names.entity}Document,
     payload: Update${names.entity}Request
-): Promise<ResponseSuccess<${names.entity}Document>> => {
+): Promise<${names.entity}Document> => {
     if (payload.name !== undefined) ${names.entityCamel}.name = payload.name.trim();
     // null clears the notes: an undefined value is unset on save, via clearedOrValue.
     if (payload.notes !== undefined) ${names.entityCamel}.notes = clearedOrValue(payload.notes);
-    return ${names.entityCamel}Repository.save(${names.entityCamel}).then((saved) => generateSuccess(saved));
+    return ${names.entityCamel}Repository.save(${names.entityCamel});
 };
 
 /**
  * Load by id, apply {@link applyUpdate}, audit on success.
  * @param id - the record id
  * @param payload - the changes
-${contextDocument(options, 'who acted')} * @returns a 404 reject when the id names nothing, otherwise the saved document
+ * @param context - who acted
+ * @returns a 404 reject when the id names nothing, otherwise the saved ${names.entityCamel}
  */
-const updateById = (
+export const updateById = (
     id: string,
-    payload: Update${names.entity}Request${contextParameter(options)}
-): Promise<ResponseSuccess<${names.entity}Document> | ResponseReject> =>
-    ${names.entityCamel}Repository.findById(id).then<ResponseSuccess<${names.entity}Document> | ResponseReject>((found) => {
+    payload: Update${names.entity}Request,
+    context: CallerContext
+): Promise<ResponseSuccess<${names.entity}> | ResponseReject> =>
+    ${names.entityCamel}Repository.findById(id).then<ResponseSuccess<${names.entity}> | ResponseReject>((found) => {
         if (!found) return generateReject(404, [t('generic.error-not-found')]);
-        return applyUpdate(found, payload)${thenAudit(
-            names,
-            options,
-            'result',
-            'UPDATED',
-            `,
+        return applyUpdate(found, payload).then((saved) => {
+            ${auditCall(
+                names,
+                options,
+                'UPDATED',
+                `,
                 targetType: '${names.entitySnake}',
                 targetId: id`
-        )};
+            )}
+            return generateSuccess(present${names.entity}(saved, actionsFor(context)));
+        });
     });
 
 /**
  * Load by id and remove it permanently, audit on success.
  * @param id - the record id
-${contextDocument(options, 'who acted')} * @returns a 404 reject when the id names nothing, otherwise success
+ * @param ${options.audit ? 'context' : '_context'} - who acted${options.audit ? '' : ' (unused: this module records no audit row)'}
+ * @returns a 404 reject when the id names nothing, otherwise success
  */
-const removeById = (
-    id: string${contextParameter(options)}
+export const removeById = (
+    id: string,
+    ${options.audit ? 'context' : '_context'}: CallerContext
 ): Promise<ResponseSuccess<undefined> | ResponseReject> =>
     ${names.entityCamel}Repository.findById(id).then((found) => {
         if (!found) return generateReject(404, [t('generic.error-not-found')]);
@@ -406,38 +498,56 @@ const removeById = (
             return generateSuccess(undefined);
         });
     });
-
-/** The module's one door: every operation once, here, and nowhere by name. */
-export const ${names.entityCamel}Service = { create, search, updateById, removeById };
 `;
 
 /** The one place a document becomes the wire shape. */
 export const presenterFile = (names: ModuleNames): string => `/**
  * @module
- * In any module: the one place a stored row becomes the wire shape openapi.yaml declares, so every
- * read and write answers with the same thing. Here: a ${names.entityCamel} document.
+ * In any module: the one place a stored row becomes the wire shape openapi.yaml declares, so
+ * every read and write answers with the same thing.
+ * Here: a ${names.entityCamel} gains one field, actions, which is decided per caller by the service
+ * and handed in, never asked for here.
+ *
+ * See: docs/theory/layers.md, docs/modules/${names.kebab}.md
  */
 
-import type { ${names.entity} } from '@types';
-import type { ${names.entity}Document } from './model';
+import type { ${names.entity}, ${names.entity}Actions } from '@types';
+import type { ${names.entity}Document, ${names.entity}Row } from './model';
 
 /**
- * toJSON applies the model's _id to id and date-to-ISO-string transform; Mongoose types its result
- * any, and this cast is what makes it a ${names.entity}.
- * @param document - the stored document
- * @returns the wire representation
+ * A document as the contract's ${names.entity}.
+ *
+ * toJSON applies the model's transform (_id to id); Mongoose types its result any, and the single
+ * cast below is what makes it a ${names.entity}Row. Dates stay Date until the response is
+ * serialized, which is what turns them into ISO strings.
+ *
+ * @param document - the stored ${names.entityCamel}
+ * @param actions - what the caller may do to it
  */
-export const present${names.entity} = (document: ${names.entity}Document): ${names.entity} =>
-    document.toJSON() as ${names.entity};
+export const present${names.entity} = (
+    document: ${names.entity}Document,
+    actions: ${names.entity}Actions
+): ${names.entity} => ({ ...(document.toJSON() as ${names.entity}Row), actions });
+
+/**
+ * A search row (already in wire shape) as the contract's ${names.entity}.
+ *
+ * @param row - one row of a repository search
+ * @param actions - what the caller may do to it
+ */
+export const present${names.entity}Row = (
+    row: ${names.entity}Row,
+    actions: ${names.entity}Actions
+): ${names.entity} => ({ ...row, actions });
 `;
 
 /** The route table. */
 export const routesFile = (names: ModuleNames): string => `/**
  * @module
- * In any module: the route table. Public routes sit above one router.use(getAuth, ...) gate and
+ * In any module: the route table. Public routes sit ABOVE one router.use(getAuth, isAuth) and
  * everything below it is signed-in, so which half a route is in is decided by where it is typed.
- * Here: everything sits below one router.use(getAuth, isAuthOrCredential) gate, each mount stating
- * the one key its own action needs.
+ * Each mount states the one key its own action needs.
+ * Here: nothing is public; everything sits below one router.use(getAuth, isAuthOrCredential) gate.
  *
  * See: docs/theory/request-flow.md, docs/modules/${names.kebab}.md
  */
@@ -446,6 +556,7 @@ import { Router } from 'express';
 import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
 import { privateNoCache } from '@infrastructure/http/middlewares/cache';
 import { get${names.plural} } from './controllers/get-${names.kebab}';
+import { get${names.entity} } from './controllers/get-${names.kebab}-item';
 import { post${names.entity} } from './controllers/post-${names.kebab}';
 import { replace${names.entity}, update${names.entity} } from './controllers/update-${names.kebab}';
 import { delete${names.entity} } from './controllers/delete-${names.kebab}';
@@ -460,6 +571,9 @@ router.use(getAuth, isAuthOrCredential);
 // because this is one admin's view, not a shared answer.
 router.get('/', requirePermission('read', '${names.entity}'), privateNoCache, get${names.plural});
 
+// GET /${names.kebab}/:id - one record. Declared after the list so the two never shadow each other.
+router.get('/:id', requirePermission('read', '${names.entity}'), privateNoCache, get${names.entity});
+
 router.post('/', requirePermission('create', '${names.entity}'), post${names.entity});
 
 // PUT replaces, PATCH merges.
@@ -469,36 +583,22 @@ router.patch('/:id', requirePermission('update', '${names.entity}'), update${nam
 router.delete('/:id', requirePermission('delete', '${names.entity}'), delete${names.entity});
 `;
 
-/**
- * The import line for callerContextOf, or nothing when the module does not audit.
- * @param options - the scaffold options
- * @returns the import statement with its newline, or an empty string
- */
-const callerImport = (options: ScaffoldOptions): string =>
-    options.audit ? "import { callerContextOf } from '@infrastructure/http/request';\n" : '';
-
-/**
- * The trailing context argument of a service call, or nothing when the module does not audit.
- * @param options - the scaffold options
- * @returns the argument text, leading comma included
- */
-const contextArgument = (options: ScaffoldOptions): string =>
-    options.audit ? ', callerContextOf(request)' : '';
-
 /** The list controller. */
-export const getController = (names: ModuleNames, options: ScaffoldOptions): string => `/**
+export const getController = (names: ModuleNames): string => `/**
  * @module
  * In any module: a controller is thin wiring - decode the request, call the service, shape the
- * answer. Here: GET ${names.basePath}, one page of ${names.words}, built on the shared
- * list-controller factory.
+ * answer.
+ * Here: GET ${names.basePath}, one page of ${names.words}, built on the shared list-controller
+ * factory.
  *
  * See: docs/theory/request-flow.md, docs/modules/${names.kebab}.md
  */
 
 import { List${names.plural}QueryParams } from '@api/schemas.zod';
 import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
-${callerImport(options)}import { createListController } from '@infrastructure/surfaces/create-list-controller';
-import { ${names.entityCamel}Service } from '../service';
+import { callerContextOf } from '@infrastructure/http/request';
+import { createListController } from '@infrastructure/surfaces/create-list-controller';
+import { ${names.entityCamel}Service } from '../services';
 
 /**
  * GET ${names.basePath} (admin). page and pageSize are coerced from query text; partial() keeps an
@@ -510,15 +610,38 @@ export const get${names.plural} = createListController({
         page: pageSchema,
         pageSize: pageSizeSchema
     }).partial(),
-    runList: (parsed${options.audit ? ', request' : ''}) => ${names.entityCamel}Service.search(parsed${contextArgument(options)})
+    runList: (parsed, request) => ${names.entityCamel}Service.search(parsed, callerContextOf(request))
+});
+`;
+
+/** The read-one controller. */
+export const getItemController = (names: ModuleNames): string => `/**
+ * @module
+ * In any module: a read-one controller is one call to the shared item factory, which owns the
+ * 404 (an unknown id and a malformed one answer the same).
+ * Here: GET ${names.basePath}/:id, behind the same gate and the read key as the list.
+ *
+ * See: docs/theory/request-flow.md, docs/modules/${names.kebab}.md
+ */
+
+import { callerContextOf } from '@infrastructure/http/request';
+import { createItemController } from '@infrastructure/surfaces/create-item-controller';
+import { ${names.entityCamel}Service } from '../services';
+
+/** GET ${names.basePath}/:id (admin). */
+export const get${names.entity} = createItemController({
+    entity: '${names.entityCamel}',
+    notFoundKey: 'generic.error-not-found',
+    fetch: (id, request) => ${names.entityCamel}Service.getById(id, callerContextOf(request))
 });
 `;
 
 /** The create controller. */
-export const postController = (names: ModuleNames, options: ScaffoldOptions): string => `/**
+export const postController = (names: ModuleNames): string => `/**
  * @module
  * In any module: a create controller validates the body against the generated schema, calls the
- * service and answers 201. Here: POST ${names.basePath}, create one ${names.entityCamel}.
+ * service, and answers 201 with a Location.
+ * Here: POST ${names.basePath}, create one ${names.entityCamel}.
  *
  * See: docs/theory/request-flow.md, docs/modules/${names.kebab}.md
  */
@@ -526,10 +649,10 @@ export const postController = (names: ModuleNames, options: ScaffoldOptions): st
 import type { Request, Response } from 'express';
 import { Create${names.entity}Body } from '@api/schemas.zod';
 import { createdResponse } from '@infrastructure/http/response';
-${callerImport(options)}import { catchAs, parseBody } from '@infrastructure/http/controller';
+import { callerContextOf } from '@infrastructure/http/request';
+import { catchAs, parseBody } from '@infrastructure/http/controller';
 import type { ${names.entity} } from '@types';
-import { ${names.entityCamel}Service } from '../service';
-import { present${names.entity} } from '../presenter';
+import { ${names.entityCamel}Service } from '../services';
 
 /**
  * POST ${names.basePath} (admin)
@@ -540,28 +663,29 @@ export const post${names.entity} = (request: Request, response: Response) => {
     if (!body) return;
 
     return ${names.entityCamel}Service
-        .create(body${contextArgument(options)})
+        .create(body, callerContextOf(request))
         .then((created) => {
-            const presented = present${names.entity}(created);
-            createdResponse<${names.entity}>(response, presented, \`${names.basePath}/\${presented.id}\`);
+            createdResponse<${names.entity}>(response, created, \`${names.basePath}/\${created.id}\`);
         })
         .catch(catchAs(response, 'post${names.entity}'));
 };
 `;
 
 /** The PUT/PATCH controller pair. */
-export const updateController = (names: ModuleNames, options: ScaffoldOptions): string => `/**
+export const updateController = (names: ModuleNames): string => `/**
  * @module
  * In any module: PUT (replace) and PATCH (merge) share one pipeline, built by the shared update
- * factory, which also owns the id check, If-Match and the ETag. Here: ${names.basePath}/:id.
+ * factory, which also owns the id check, If-Match and the ETag. What differs per module is the
+ * two schemas and the service call.
+ * Here: PUT and PATCH ${names.basePath}/:id.
  *
  * See: docs/api/write-methods.md, docs/modules/${names.kebab}.md
  */
 
 import { createUpdateController } from '@infrastructure/surfaces/create-update-controller';
-import { Replace${names.entity}Body, Update${names.entity}Body } from '@api/schemas.zod';
-${callerImport(options)}import { ${names.entityCamel}Service } from '../service';
-import { present${names.entity} } from '../presenter';
+import { Replace${names.entity}ByIdBody, Update${names.entity}ByIdBody } from '@api/schemas.zod';
+import { callerContextOf } from '@infrastructure/http/request';
+import { ${names.entityCamel}Service } from '../services';
 
 /** PUT and PATCH ${names.basePath}/:id - one handler pair over updateById, which audits itself. */
 export const { replace: replace${names.entity}, update: update${names.entity} } =
@@ -570,29 +694,31 @@ export const { replace: replace${names.entity}, update: update${names.entity} } 
         versioned: false,
         entity: '${names.entityCamel}',
         notFoundKey: 'generic.error-not-found',
-        replaceSchema: Replace${names.entity}Body,
-        patchSchema: Update${names.entity}Body,
-        update: (id, changes${options.audit ? ', request' : ''}) =>
-            ${names.entityCamel}Service.updateById(id, changes${contextArgument(options)}),
-        present: (row) => present${names.entity}(row)
+        replaceSchema: Replace${names.entity}ByIdBody,
+        patchSchema: Update${names.entity}ByIdBody,
+        update: (id, changes, request) =>
+            ${names.entityCamel}Service.updateById(id, changes, callerContextOf(request)),
+        // The service already answers in the contract's shape.
+        present: (row) => row
     });
 `;
 
 /** The delete controller. */
-export const deleteController = (names: ModuleNames, options: ScaffoldOptions): string => `/**
+export const deleteController = (names: ModuleNames): string => `/**
  * @module
- * In any module: a delete controller. Here: DELETE ${names.basePath}/:id - permanent. Hand-written
- * rather than built on createDeleteController: that factory serves the soft/hard delete triplet,
- * and this module has no soft-delete tier.
+ * In any module: a delete controller. Hand-written here because the shared delete factory serves
+ * the soft/hard delete triplet, and this module has no soft-delete tier to flag.
+ * Here: DELETE ${names.basePath}/:id - permanent.
  *
  * See: docs/theory/request-flow.md, docs/modules/${names.kebab}.md
  */
 
 import type { Request, Response } from 'express';
 import { noContentResponse } from '@infrastructure/http/response';
-${callerImport(options)}import { catchAs, refused } from '@infrastructure/http/controller';
+import { callerContextOf } from '@infrastructure/http/request';
+import { catchAs, refused } from '@infrastructure/http/controller';
 import { requireId } from '@infrastructure/http/ids';
-import { ${names.entityCamel}Service } from '../service';
+import { ${names.entityCamel}Service } from '../services';
 
 /**
  * DELETE ${names.basePath}/:id (admin)
@@ -603,7 +729,7 @@ export const delete${names.entity} = (request: Request<{ id: string }>, response
     if (!id) return Promise.resolve();
 
     return ${names.entityCamel}Service
-        .removeById(id${contextArgument(options)})
+        .removeById(id, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
             noContentResponse(response);
@@ -616,9 +742,9 @@ export const delete${names.entity} = (request: Request<{ id: string }>, response
 export const factoriesFile = (names: ModuleNames): string => `/**
  * @module
  * In any module: how a row is built for a test or a seed. Reachable at @modules/<name>/factories
- * and never from the barrel - it writes past the rules a service enforces. Here: a
- * ${names.entityCamel} row, through the model's own shape, so a fixture cannot carry a field the
- * schema would drop.
+ * and never from the barrel - it writes past the rules a service enforces.
+ * Here: a ${names.entityCamel} row, through the model's own shape, so a fixture cannot carry a
+ * field the schema would drop.
  */
 
 import type { ${names.entity}Document } from './model';

@@ -16,7 +16,7 @@
  * typed setting    ./config.ts                                  config
  * demo seed        ../../../scenarios/example.ts               (the scenario table)
  * metrics, probes, analytics   ./metrics.ts, ./probes.ts, ./analytics.ts   (found by name)
- * action endpoint   ./services/transition.ts, ./controllers/post-example-transition.ts   (the route)
+ * action endpoint   ./services/transition.ts, ./controllers/post-example-event.ts   (the route)
  * capabilities     ./services/actions.ts, ./domain/lifecycle.ts  (`actions` on the wire)
  * idempotent create  `idempotencyKey` in ./routes.ts             (the route)
  *

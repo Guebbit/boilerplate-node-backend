@@ -44,7 +44,7 @@ const PATH_ONLY_ERRORS = [
 ].join('\n');
 
 /**
- * The module's `openapi.yaml`: list, create, replace, patch and delete, plus the schemas only
+ * The module's `openapi.yaml`: list, create, read, replace, patch and delete, plus the schemas only
  * these paths reference.
  * @param names - the module's spellings
  * @returns the YAML text
@@ -67,6 +67,14 @@ paths:
             parameters:
                 - $ref: '${ROOT}#/components/parameters/PageParam'
                 - $ref: '${ROOT}#/components/parameters/PageSizeParam'
+                - name: sort
+                  in: query
+                  required: false
+                  # JSON:API grammar: ?sort=-createdAt,name - comma-separated, a minus for descending.
+                  style: form
+                  explode: false
+                  schema:
+                      $ref: '#/components/schemas/${names.entity}Sort'
             responses:
                 '200':
                     description: A page of ${names.words}
@@ -101,11 +109,29 @@ ${KEYED_ERRORS}
 ${KEYED_ERRORS}
 
     ${names.basePath}/{id}:
+        get:
+            tags: [${names.entity}]
+            summary: Get ${names.entityCamel}
+            description: Returns the ${names.entityCamel} identified by {id}, with the actions the caller may take on it.
+            operationId: get${names.entity}ById
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '${ROOT}#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The ${names.entityCamel}
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/${names.entity}'
+${PATH_ONLY_ERRORS}
         put:
             tags: [${names.entity}]
             summary: Replace ${names.entityCamel}
             description: Replaces the ${names.entityCamel} (RFC 9110 9.3.4, an omitted optional field is cleared). name is required, since a PUT names the whole representation.
-            operationId: replace${names.entity}
+            operationId: replace${names.entity}ById
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -129,7 +155,7 @@ ${KEYED_ERRORS_WITH_NOT_FOUND}
             tags: [${names.entity}]
             summary: Update ${names.entityCamel}
             description: Merges a change into the ${names.entityCamel} (RFC 7396, an omitted field is left unchanged, null clears notes).
-            operationId: update${names.entity}
+            operationId: update${names.entity}ById
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -156,7 +182,7 @@ ${KEYED_ERRORS_WITH_NOT_FOUND}
             tags: [${names.entity}]
             summary: Delete ${names.entityCamel}
             description: Permanently removes the ${names.entityCamel} identified by {id}.
-            operationId: delete${names.entity}
+            operationId: delete${names.entity}ById
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -180,10 +206,20 @@ components:
                 meta:
                     $ref: '${ROOT}#/components/schemas/PaginationMeta'
 
+        # The ONE sort grammar, shared with every list (docs/api/sorting.md). A minus sorts
+        # descending; earlier entries rank first.
+        ${names.entity}Sort:
+            type: array
+            minItems: 1
+            maxItems: 3
+            items:
+                type: string
+                enum: [createdAt, -createdAt, name, -name]
+
         ${names.entity}:
             type: object
             additionalProperties: false
-            required: [id, name, createdAt]
+            required: [id, name, createdAt, actions]
             properties:
                 id:
                     $ref: '${ROOT}#/components/schemas/Id'
@@ -197,6 +233,23 @@ components:
                 updatedAt:
                     type: string
                     format: date-time
+                actions:
+                    $ref: '#/components/schemas/${names.entity}Actions'
+
+        ${names.entity}Actions:
+            type: object
+            additionalProperties: false
+            required: [update, delete]
+            description: >-
+                What the requesting caller may do to this ${names.entityCamel}, decided by the server. A client
+                renders its controls from this instead of re-implementing the permission rule.
+            properties:
+                update:
+                    type: boolean
+                    description: Whether PATCH and PUT on this ${names.entityCamel} would be accepted for this caller.
+                delete:
+                    type: boolean
+                    description: Whether DELETE on this ${names.entityCamel} would be accepted for this caller.
 
         Create${names.entity}Request:
             type: object
