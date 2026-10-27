@@ -5,15 +5,17 @@
  */
 
 import type { OrderReturnStatus } from '@types';
-import { QUANTITY_HOLDING_RETURN_STATUSES } from './lifecycle';
+import { QUANTITY_HOLDING_RETURN_STATUSES, handsUnitsBack } from './lifecycle';
 import { quantitiesByProduct } from './quantities';
-import type { ReturnKind, ReturnStatus } from './lifecycle';
+import type { ReturnKind, ReturnRemedy, ReturnStatus } from './lifecycle';
 
 /** A return as the projection sees it. */
 export interface ProjectedReturn {
     status: ReturnStatus;
     /** A `cancellation` holds no goods that come back, so it never counts toward the answer. */
     kind: ReturnKind;
+    /** A replacement or a repair hands the units back to the buyer, so they are not "back". */
+    remedy?: ReturnRemedy | undefined;
     lines: readonly { productId: string; quantity: number }[];
 }
 
@@ -41,10 +43,11 @@ export const projectReturnStatus = (
     // A return with no lines (a withdrawal before dispatch: the order was cancelled, nothing comes
     // back) holds no goods, so it says nothing about how much of the order is back.
     const holding = returns.filter(
-        ({ status, kind, lines }) =>
+        ({ status, kind, lines, remedy }) =>
             kind === 'return' &&
             lines.length > 0 &&
-            QUANTITY_HOLDING_RETURN_STATUSES.includes(status)
+            QUANTITY_HOLDING_RETURN_STATUSES.includes(status) &&
+            !handsUnitsBack({ remedy })
     );
     if (holding.length === 0) return undefined;
     if (holding.some(({ status }) => status === 'requested')) return 'requested';

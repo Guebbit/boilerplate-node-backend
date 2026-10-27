@@ -53,6 +53,15 @@
                 "subject": "Il tuo reso è stato rimborsato",
                 "body": "Abbiamo ricevuto il tuo reso per l'ordine {{order}} e rimborsato {{amount}}."
             },
+            "return-replaced": {
+                "subject": "La tua sostituzione è in arrivo",
+                "body": "Abbiamo ricevuto l'articolo difettoso dell'ordine {{order}}. Ti stiamo spedendo un sostituto: riceverai un'altra email quando partirà."
+            },
+            "return-repaired": {
+                "subject": "Il tuo articolo è stato riparato",
+                "body": "Abbiamo ricevuto il tuo articolo dell'ordine {{order}} e lo stiamo riparando, senza costi per te. Poiché hai scelto la riparazione, la garanzia legale su di esso è prorogata di 12 mesi."
+            },
+            "remedy-notice": "Per un articolo difettoso o sbagliato puoi scegliere tra riparazione, sostituzione o rimborso. Scegliendo la riparazione la garanzia è prorogata di 12 mesi.",
             "decline-reason": {
                 "return_period_ended": "Il periodo per rendere questo ordine è terminato.",
                 "not_returnable": "Questi articoli non possono essere resi.",
@@ -60,6 +69,8 @@
                 "other": "Non abbiamo potuto accettarlo per un altro motivo."
             }
         },
+        "deduction-on-guarantee": "La riparazione, la sostituzione o il rimborso di un articolo difettoso o sbagliato sono gratuiti: nessuna trattenuta per la gestione.",
+        "remedy-invalid": "Solo un articolo difettoso o sbagliato può essere riparato o sostituito, e solo quei resi hanno un rimedio preferito.",
         "deduction-too-high": "La trattenuta per la gestione supera il valore del rimborso.",
         "restock-unknown-product": "Un conteggio da rimettere a magazzino indica un prodotto che non è in questo reso.",
         "restock-duplicate": "Un conteggio da rimettere a magazzino indica due volte lo stesso prodotto.",

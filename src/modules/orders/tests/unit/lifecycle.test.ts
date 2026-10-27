@@ -67,8 +67,11 @@ describe("the table names only the contract's statuses", () => {
     });
 
     it('leaves a terminal status through no event', () => {
-        for (const status of [OrderStatus.delivered, OrderStatus.cancelled])
-            expect(events.filter((event) => event.from.includes(status))).toEqual([]);
+        expect(events.filter((event) => event.from.includes(OrderStatus.cancelled))).toEqual([]);
+        // `delivered` is left only by a replacement's `reship`, which the system alone makes.
+        expect(events.filter((event) => event.from.includes(OrderStatus.delivered))).toEqual([
+            ORDER_EVENTS.reship
+        ]);
     });
 });
 
@@ -116,7 +119,9 @@ describe('who may write `processing`', () => {
         // `src/modules/orders/services/status.ts`'s `markProcessing`.
         for (const actor of EVERY_ACTOR)
             expect(statusesLeadingTo(OrderStatus.processing, actor)).toEqual(
-                actor === 'system' ? [OrderStatus.paid, OrderStatus.shipped] : []
+                actor === 'system'
+                    ? [OrderStatus.paid, OrderStatus.shipped, OrderStatus.delivered]
+                    : []
             );
     });
 
@@ -191,8 +196,16 @@ describe('who may cancel', () => {
 });
 
 describe('terminal states', () => {
-    it.each([OrderStatus.delivered, OrderStatus.cancelled])('lets nobody leave %s', (status) => {
-        for (const actor of EVERY_ACTOR) expect(statusesReachableFrom(status, actor)).toEqual([]);
+    it('lets nobody leave cancelled', () => {
+        for (const actor of EVERY_ACTOR)
+            expect(statusesReachableFrom(OrderStatus.cancelled, actor)).toEqual([]);
+    });
+
+    it('lets only the system leave delivered, for a replacement under the guarantee', () => {
+        for (const actor of EVERY_ACTOR)
+            expect(statusesReachableFrom(OrderStatus.delivered, actor)).toEqual(
+                actor === 'system' ? [OrderStatus.processing] : []
+            );
     });
 
     it('refuses the move that reopens a cancelled order', () => {
@@ -200,9 +213,10 @@ describe('terminal states', () => {
         expect(canTransition(OrderStatus.cancelled, OrderStatus.pending, 'admin')).toBe(false);
     });
 
-    it('refuses the move that reopens a delivered order', () => {
+    it('refuses the move that reopens a delivered order, to every actor but the system', () => {
         for (const target of [OrderStatus.pending, OrderStatus.paid, OrderStatus.processing])
             expect(canTransition(OrderStatus.delivered, target, 'admin')).toBe(false);
+        expect(canTransition(OrderStatus.delivered, OrderStatus.processing, 'system')).toBe(true);
     });
 });
 
@@ -218,8 +232,21 @@ describe('direction', () => {
             )
         );
 
-        // The one backward edge is the lost parcel's `reopen`, and only the system makes it.
-        expect(backwards).toEqual(['system: shipped → processing']);
+        // The backward edges are the lost parcel's `reopen` and a replacement's `reship`, and
+        // only the system makes either.
+        expect(backwards).toEqual([
+            'system: shipped → processing',
+            'system: delivered → processing'
+        ]);
+    });
+
+    it('lets a replacement step a delivered order back to processing, as the system only', () => {
+        expect(ORDER_EVENTS.reship).toEqual({
+            from: [OrderStatus.delivered],
+            to: OrderStatus.processing,
+            actors: ['system']
+        });
+        expect(canOverrideTo(OrderStatus.delivered, OrderStatus.processing)).toBe(false);
     });
 
     it('makes the backward edge from shipped only, and never lets an override take it', () => {
@@ -296,11 +323,12 @@ describe('canProcessOrder', () => {
     });
 
     it('agrees with the statuses that lead to processing as the system', () => {
-        // `reopen` (from `shipped`) also leads to `processing`, but it is a step back, not the start
-        // of fulfilment.
+        // `reopen` (from `shipped`) and `reship` (from `delivered`) also lead to `processing`, but
+        // they are steps back, not the start of fulfilment.
+        const stepsBack = new Set<OrderStatus>([OrderStatus.shipped, OrderStatus.delivered]);
         const leadingTo: ReadonlySet<OrderStatus> = new Set(
             statusesLeadingTo(OrderStatus.processing, 'system').filter(
-                (status) => status !== OrderStatus.shipped
+                (status) => !stepsBack.has(status)
             )
         );
 

@@ -115,6 +115,26 @@ export const conformityUntilFrom = (deliveredAt: Date): Date =>
         ) - 1
     );
 
+/** Months a repair adds to the guarantee (Directive 2024/1799 amending 2019/771 Art. 13). */
+const REPAIR_EXTENSION_MONTHS = 12;
+
+/**
+ * Where the guarantee ends once a repair extended it: twelve months on from the current end.
+ * @param current - the order's `conformityUntil` now
+ */
+export const repairedConformityUntil = (current: Date): Date =>
+    new Date(
+        Date.UTC(
+            current.getUTCFullYear(),
+            current.getUTCMonth() + REPAIR_EXTENSION_MONTHS,
+            current.getUTCDate(),
+            current.getUTCHours(),
+            current.getUTCMinutes(),
+            current.getUTCSeconds(),
+            current.getUTCMilliseconds()
+        )
+    );
+
 /** What {@link withdrawalStartFor} reads off an order. */
 export interface WithdrawalClockCandidate {
     items: readonly ShippableLineCandidate[];

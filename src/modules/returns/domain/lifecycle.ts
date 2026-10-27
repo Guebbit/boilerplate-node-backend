@@ -7,14 +7,14 @@
  * See: docs/modules/returns.md#the-lifecycle
  */
 
-import { ReturnKind, ReturnStatus, ReturnReason } from '@types';
+import { ReturnKind, ReturnStatus, ReturnReason, ReturnRemedy } from '@types';
 
 /**
  * Where a return stands (`ReturnStatus`) and why the goods come back (`ReturnReason`: `withdrawal`
  * is the EU right, the rest are the shop's own reasons). Both sets are closed and come from the
  * contract; which move may follow which is this file's table.
  */
-export type { ReturnStatus, ReturnReason, ReturnKind } from '@types';
+export type { ReturnStatus, ReturnReason, ReturnKind, ReturnRemedy } from '@types';
 
 /** What staff may decide: only a request nobody has answered yet. */
 export const DECIDABLE_RETURN_STATUSES: readonly ReturnStatus[] = [ReturnStatus.requested];
@@ -65,11 +65,24 @@ export const BACK_RETURN_STATUSES: readonly ReturnStatus[] = [
 ];
 
 /**
- * Whether a return record counts toward the quantities a NEW return may still take: a `return` that
- * holds goods ({@link QUANTITY_HOLDING_RETURN_STATUSES}). A cancellation never does — its units
- * never shipped — which is why it has its own accounting.
- * @param returned - a return's kind and status
+ * Whether a return gave the buyer a unit back: a replacement or a repair closes it with the goods
+ * in the buyer's hands again, so the unit is not "back" and stays returnable under the guarantee.
+ * @param returned - a return's remedy, once the goods were received
  */
-export const holdsReturnedGoods = (returned: { kind: ReturnKind; status: ReturnStatus }): boolean =>
+export const handsUnitsBack = (returned: { remedy?: ReturnRemedy | undefined }): boolean =>
+    returned.remedy === ReturnRemedy.replace || returned.remedy === ReturnRemedy.repair;
+
+/**
+ * Whether a return record counts toward the quantities a NEW return may still take: a `return` that
+ * holds goods ({@link QUANTITY_HOLDING_RETURN_STATUSES}) and did not hand them back to the buyer.
+ * A cancellation never does — its units never shipped — which is why it has its own accounting.
+ * @param returned - a return's kind, status and remedy
+ */
+export const holdsReturnedGoods = (returned: {
+    kind: ReturnKind;
+    status: ReturnStatus;
+    remedy?: ReturnRemedy | undefined;
+}): boolean =>
     returned.kind === ReturnKind.return &&
-    QUANTITY_HOLDING_RETURN_STATUSES.includes(returned.status);
+    QUANTITY_HOLDING_RETURN_STATUSES.includes(returned.status) &&
+    !handsUnitsBack(returned);

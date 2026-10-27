@@ -160,6 +160,8 @@
             "requiresShipping": "Requires shipping",
             "restock": "Restock count",
             "restockDate": "Restock date",
+            "remedy": "Remedy",
+            "preferredRemedy": "Preferred remedy",
             "resultCount": "Result count",
             "returnStatus": "Return status",
             "role": "Role",

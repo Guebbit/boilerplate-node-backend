@@ -287,6 +287,30 @@ turns up later and the goods are sellable, use **Receive stock** with a note tha
 **Whose job.** Whoever receives returns: the [warehouse](./warehouse.md) or the manager.
 → [`returns`](../modules/returns.md#what-the-customer-gets-back)
 
+## A faulty item: repair, replace, refund or reduce {#faulty-item}
+
+**What you see.** A return for a `defective` or `wrong_item` reason. The buyer may have said what
+they would like (repair, replacement or money back).
+
+**What to do.** Press **Goods received** and pick the remedy; the buyer's wish is preselected.
+
+- **Replace**: the same product goes out again on the same order. After you press, the order is back
+  in processing: ship it from its fulfillment order like any other. If the shelf is short it waits on
+  hold for stock.
+- **Repair**: you repair it and post it back with a tracking note. The return closes with no money
+  moving, and the guarantee is extended by 12 months, once.
+- **Refund**: the money goes back, with the delivery. You cannot hold anything back for handling on a
+  faulty item.
+- **Keep it, partial refund** (price reduction): do not receive it. Use the Refund button on the
+  payment for the part you agree.
+
+The law lets the buyer choose between repair and replacement first; you may give another remedy only
+when theirs is impossible or disproportionate. A defect that appeared within two years but was
+reported later is a legal claim, not goodwill. Return postage for a defect is on the shop.
+
+**Whose job.** Whoever receives returns: the [warehouse](./warehouse.md) or the manager.
+→ [`returns`](../modules/returns.md#the-remedy-ladder)
+
 ## A transfer for a cancelled order {#late-transfer}
 
 **What you see.** The buyer's bank transfer arrives after their order was cancelled (they waited

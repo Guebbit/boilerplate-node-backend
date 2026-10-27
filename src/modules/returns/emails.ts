@@ -23,7 +23,9 @@ export type ReturnNoticeKind =
     | 'return-opened'
     | 'return-approved'
     | 'return-declined'
-    | 'return-closed';
+    | 'return-closed'
+    | 'return-replaced'
+    | 'return-repaired';
 
 /** What a notice needs to fill its copy. */
 export interface ReturnNoticeInput {
@@ -46,6 +48,8 @@ export interface ReturnNoticeInput {
     refund?: { amount: number; currency: string };
     /** Where to send the goods, on an approval. */
     returnAddress?: ShopAddress;
+    /** A faulty or wrong item: tell the buyer they choose the remedy, and what a repair adds (2024/1799). */
+    remedyChoice?: boolean;
 }
 
 /**
@@ -103,7 +107,11 @@ export const returnNoticeEmail = (
     };
     // Neither a decline nor a closing says anything about postage — there is nothing left to post.
     const postage =
-        kind === 'return-declined' || kind === 'return-closed' || !input.returnPostage
+        kind === 'return-declined' ||
+        kind === 'return-closed' ||
+        kind === 'return-replaced' ||
+        kind === 'return-repaired' ||
+        !input.returnPostage
             ? undefined
             : t(`returns.email.postage-${input.returnPostage}`);
     const { returnAddress } = input;
@@ -121,6 +129,7 @@ export const returnNoticeEmail = (
             body: t(`returns.email.${kind}.body`, parameters),
             postage,
             address,
+            remedyNotice: input.remedyChoice ? t('returns.email.remedy-notice') : undefined,
             footer: t('email.footer')
         }
     };

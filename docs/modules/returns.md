@@ -436,6 +436,43 @@ sequenceDiagram
   refund: with `consumer` the customer posts at their own cost (Art. 14(1), told beforehand), with
   `shop` the shop covers it.
 
+## The remedy ladder {#the-remedy-ladder}
+
+A faulty or wrong item (`defective`, `wrong_item`) is the legal guarantee, and the law gives the
+buyer a ladder (Directive 2019/771 Art. 13): first a **repair or a replacement**, the buyer's
+choice; then a price reduction or the money back. The buyer states a wish when they open the
+return (`preferredRemedy`, 422 `RETURN_REMEDY_INVALID` for any other reason); staff choose the
+`remedy` at receipt (`refund` by default). A withdrawal and a goodwill return always refund.
+
+```mermaid
+flowchart TD
+    R["receive: remedy"] --> RF["refund<br/><i>today's flow: restock, refund, close</i>"]
+    R --> RP["replace<br/><i>units reopen on the SAME order<br/>and ship again; close at 0</i>"]
+    R --> RE["repair<br/><i>guarantee +12 months, once;<br/>close at 0</i>"]
+    RP --> D["delivery: reopen, top up the hold,<br/>owe what the shelf cannot cover"]
+    RE --> O["orders: conformityUntil +12 months,<br/>conformityExtendedAt marks it"]
+    RF --> M["payments: the refund record"]
+```
+
+- **Money and units.** `replace` and `repair` move no money and write no credit note. They close the
+  return in the receipt's transaction and **stop holding its quantities**: the buyer has a unit
+  again, so it stays returnable under the guarantee, and it never takes the delivery refund
+  (`holdsReturnedGoods`, `accountsOf`).
+- **`replace`** is the same product, same order ([delivery](./delivery.md#replacement-after-a-return)).
+  Restock is still per line (a defect is usually 0, a wrong item usually all).
+- **`repair`** extends `conformityUntil` by 12 months (Directive 2024/1799), once per order; the
+  unit is posted back by staff.
+- **No deduction.** A guarantee remedy is free of charge (2019/771 Art. 14(1)), so a
+  `handlingDeduction` on a `defective` or `wrong_item` return is a 422 `RETURN_DEDUCTION_INVALID`.
+- **Staff may differ from the wish** (Art. 13(3): impossible or disproportionate). Nothing is
+  refused; the audit row of `admin.return.received` carries both `remedy` and `preferredRemedy`.
+- **Records.** `Return.remedy`, the order timeline's `return_closed` row, and the `return.closed`
+  webhook carry the remedy. Two mails: `return-replaced` and `return-repaired`; the request and
+  approval mails for a defect or a wrong item tell the buyer they choose, and that a repair extends
+  the guarantee by 12 months.
+- **Price reduction** (Art. 15) needs no door: the Refund button, with the guide entry
+  [A faulty item](../demo-ecommerce/when-something-goes-wrong.md#faulty-item).
+
 ## Reads for the stats
 
 `returnService.returnedBuckets`, `returnedByProduct` and `returnedSeries` count units whose goods

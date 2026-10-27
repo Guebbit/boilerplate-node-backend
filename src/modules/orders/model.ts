@@ -196,6 +196,12 @@ export interface OrderDocument
      */
     conformityUntil?: Date;
     /**
+     * When a repair under the guarantee pushed {@link conformityUntil} out by 12 months
+     * (Directive 2024/1799). Present once, and the extension happens once. Internal: the wire never
+     * carries it.
+     */
+    conformityExtendedAt?: Date;
+    /**
      * The refund state of the money, stamped by `payments` through `services/status.ts`'s
      * `markPaymentStatus`. Absent until a refund exists — `paid`/`unpaid` are derived from `paidAt`
      * on read, so nothing here can disagree with it. The wire's `paymentStatus` is derived from this.
@@ -415,6 +421,10 @@ export const orderSchema = new Schema<OrderDocument>(
         conformityUntil: {
             type: Date
         },
+        // Stamped by `returns` when a repair extends the guarantee — see the interface field.
+        conformityExtendedAt: {
+            type: Date
+        },
         // Reported by `delivery`, never written by `orders` on its own — see the interface field.
         fulfillment: {
             type: new Schema<FulfillmentSummary>(
@@ -614,7 +624,7 @@ const applyOrderProjections = (serialized: Record<string, unknown>) => {
 export const applyOrderTransform = applySerialization(orderSchema, {
     // `piiClockStartedAt` is the reaper's own bookkeeping, not part of the `Order` contract — same
     // reasoning as `users`' `pendingImageKey`/`inactivityWarnedAt`.
-    omit: ['piiClockStartedAt', 'conformityUntil', 'moneyReceivedAt'],
+    omit: ['piiClockStartedAt', 'conformityUntil', 'conformityExtendedAt', 'moneyReceivedAt'],
     after: (serialized) => {
         applyOrderItems(serialized);
         // `currency` is required on the schema, so a serialized order always carries it; the

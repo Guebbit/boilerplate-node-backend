@@ -329,7 +329,9 @@ const markPaid = (
  * has no slot for a stamp.
  * @param id - the order that arrived
  * @param from - the status this move must currently be in
- * @param clock - the withdrawal and guarantee deadlines to freeze with the move
+ * @param clock - the withdrawal and guarantee deadlines to freeze with the move. `$min` / `$max`
+ *   keep the earlier withdrawal deadline and the later guarantee one: a first delivery sets both,
+ *   a replacement's arrival never restarts the withdrawal clock nor shortens the guarantee
  * @param session - joins the write to the caller's transaction, so its outbox row rides with it
  * @returns the order as it now stands, or `null` if it was not in `from`
  */
@@ -342,10 +344,43 @@ const markDelivered = (
     orderModel
         .findOneAndUpdate(
             { _id: toObjectId(id), status: from } as QueryFilter<OrderDocument>,
-            { $set: { status: OrderStatus.delivered, ...clock } },
+            {
+                $set: { status: OrderStatus.delivered },
+                // On a field that does not exist yet both operators simply set it.
+                $min: { withdrawUntil: clock.withdrawUntil },
+                $max: { conformityUntil: clock.conformityUntil }
+            },
             { returnDocument: 'after', session }
         )
         .exec();
+
+/**
+ * Push an order's guarantee out and mark that it was, in one conditional write: it lands only
+ * while the order has not been extended yet and its deadline is still the one the caller read.
+ * @param id - the order
+ * @param observed - the `conformityUntil` the caller read
+ * @param extended - the new deadline
+ * @param session - joins the write to the caller's transaction
+ * @returns whether this call extended it
+ */
+const extendConformity = (
+    id: string,
+    observed: Date,
+    extended: Date,
+    session: ClientSession
+): Promise<boolean> =>
+    orderModel
+        .updateOne(
+            {
+                _id: toObjectId(id),
+                conformityUntil: observed,
+                conformityExtendedAt: { $exists: false }
+            } as QueryFilter<OrderDocument>,
+            { $set: { conformityUntil: extended, conformityExtendedAt: new Date() } },
+            { session }
+        )
+        .exec()
+        .then(({ modifiedCount }) => modifiedCount === 1);
 
 /**
  * Replace where an order ships, encrypted under the order's own id like the address it replaces.
@@ -859,6 +894,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         clock: DeliveryClock,
         session?: ClientSession
     ) => Promise<OrderDocument | null>;
+    extendConformity: typeof extendConformity;
     replaceShippingAddress: typeof replaceShippingAddress;
     applyStatusOverride: (
         id: string,
@@ -895,6 +931,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     updateStatusIfIn,
     markPaid,
     markDelivered,
+    extendConformity,
     replaceShippingAddress,
     setProjection,
     applyStatusOverride,

@@ -18,22 +18,16 @@ import {
 import { recordAudit } from '@infrastructure/observability/audit';
 import { orderService } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
-import { productService } from '@modules/products';
-import { BACKORDER_PROMISE_DAYS } from '@modules/shop';
-import {
-    FulfillmentHoldReason,
-    FulfillmentOrderKind,
-    FulfillmentOrderStatus,
-    ShipmentStatus
-} from '@types';
+import { FulfillmentOrderKind, FulfillmentOrderStatus, ShipmentStatus } from '@types';
 import type { AuthContext, CallerContext, Shipment, ShipmentLostReason } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { canRecordArrival } from '@modules/orders';
-import { owedDateOf, statusOfLines, withLoss } from '../domain';
+import { statusOfLines, withLoss } from '../domain';
 import type { ProductQuantity } from '../domain';
 import { deliveryAuditActions } from '../audit';
 import { fulfillmentOrderRepository, shipmentRepository } from '../repository';
-import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
+import { createOwedFulfillmentOrder, promiseFor } from './owed';
+import type { ShipmentDocument } from '../model';
 import { refuse, refuseMissing, runAct } from './act';
 import { announceLost } from './announce';
 import { reportProgress } from './progress';
@@ -54,76 +48,6 @@ interface Lost {
     shipment: ShipmentDocument;
     order: OrderDocument;
 }
-
-/** What the stock hold came to for one lost line. */
-interface Owed {
-    productId: string;
-    quantity: number;
-}
-
-/**
- * The product titles and restock dates the owed units are promised against.
- * @param owed - the owed units, per product
- * @param now - the instant of the loss
- */
-const promiseFor = (owed: readonly Owed[], now: Date): Promise<{ at: Date; defaulted: boolean }> =>
-    productService.findManyByIds(owed.map(({ productId }) => productId)).then((products) =>
-        owedDateOf(
-            owed.map(
-                ({ productId }) =>
-                    products.find((one) => String(one._id) === productId)?.restockDate
-            ),
-            now,
-            BACKORDER_PROMISE_DAYS
-        )
-    );
-
-/**
- * Make the fulfillment order that waits for the owed units: on hold for stock, `cause: backorder`,
- * promised for the restock date, and linked to the loss so the parcel turning up can close it.
- *
- * @param origin - the fulfillment order the lost shipment left from
- * @param shipment - the lost shipment
- * @param owed - the owed units, per product
- * @param promise - when they are expected
- * @param session - the act's transaction
- */
-const createOwedFulfillmentOrder = async (
-    origin: FulfillmentOrderDocument,
-    shipment: ShipmentDocument,
-    owed: readonly Owed[],
-    promise: { at: Date; defaulted: boolean },
-    session: ClientSession
-): Promise<FulfillmentOrderDocument> => {
-    const siblings = await fulfillmentOrderRepository.findByOrderId(
-        String(origin.orderId),
-        session
-    );
-    const lines = owed.map(({ productId, quantity }) => ({
-        productId,
-        title: shipment.lines.find((line) => line.productId === productId)?.title ?? '',
-        quantity,
-        shippedQuantity: 0,
-        cancelledQuantity: 0
-    }));
-    return fulfillmentOrderRepository.create(
-        {
-            orderId: origin.orderId,
-            number: Math.max(...siblings.map(({ number }) => number)) + 1,
-            kind: FulfillmentOrderKind.physical,
-            status: statusOfLines(lines, true),
-            lines,
-            holdReason: FulfillmentHoldReason.awaiting_stock,
-            cause: 'backorder',
-            ...(promise.defaulted ? { defaulted: true } : {}),
-            agreedAt: promise.at,
-            expectedAt: promise.at,
-            sourceShipmentId: shipment._id,
-            revision: 0
-        },
-        session
-    );
-};
 
 /**
  * The refusal every way a parcel can fail to be reportable shares.
@@ -197,7 +121,18 @@ const lostAct = async (
     if (!claimed) return refuse(409, ERROR_CODES.DELIVERY_NOT_LOSABLE, 'delivery.not-losable');
 
     const promise = owed.length > 0 ? await promiseFor(owed, now) : undefined;
-    if (promise) await createOwedFulfillmentOrder(origin, shipment, owed, promise, session);
+    if (promise)
+        await createOwedFulfillmentOrder(
+            {
+                orderId: origin.orderId,
+                titleOf: (productId) =>
+                    shipment.lines.find((line) => line.productId === productId)?.title ?? '',
+                sourceShipmentId: shipment._id
+            },
+            owed,
+            promise,
+            session
+        );
 
     // Units are open again, so a `shipped` order is being fulfilled once more.
     await reportProgress(orderId, session);

@@ -12,9 +12,10 @@ export {
     QUANTITY_HOLDING_RETURN_STATUSES,
     BACK_RETURN_STATUSES,
     holdsReturnedGoods,
+    handsUnitsBack,
     initialStatusFor
 } from './lifecycle';
-export type { ReturnStatus, ReturnReason, ReturnKind } from './lifecycle';
+export type { ReturnStatus, ReturnReason, ReturnKind, ReturnRemedy } from './lifecycle';
 
 export {
     returnableQuantities,

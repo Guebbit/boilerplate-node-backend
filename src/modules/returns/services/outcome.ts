@@ -18,7 +18,7 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { auditForbidden } from '@infrastructure/observability/forbidden';
 import { enqueueOutboxEvent, type OutboxAnnouncement } from '@kernel/outbox';
 import type { OrderDocument } from '@modules/orders';
-import type { CallerContext, ReturnKind } from '@types';
+import type { CallerContext, ReturnKind, ReturnRemedy } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import type { ReturnDocument } from '../model';
 import { returnsAuditActions } from '../audit';
@@ -40,6 +40,8 @@ export interface CreateReturnInput {
     /** The fulfillment order whose remainder is cancelled — exactly when `kind` is `cancellation`. */
     fulfillmentOrderId?: string;
     note?: string;
+    /** What the buyer would like for a defect or a wrong item; refused for any other reason. */
+    preferredRemedy?: ReturnRemedy;
     /** Absent means everything that shipped and is still left to return. Never with a cancellation. */
     lines?: ProductQuantity[];
     /** Staff only: when the buyer asked, or stated a withdrawal. See `checkStatement`. */
@@ -67,6 +69,15 @@ export type CreateReturnOutcome = ResponseSuccess<ReturnDocument> | ResponseReje
  */
 export const opened = (created: ReturnDocument): CreateReturnOutcome =>
     generateSuccess(created, 201);
+
+/**
+ * The 422 for a remedy that has no guarantee behind it, on the field that carries it.
+ * @param field - the request field that named the remedy
+ */
+export const badRemedy = (field: string): ResponseReject =>
+    generateReject(422, [
+        fieldError(field, t('returns.remedy-invalid'), ERROR_CODES.RETURN_REMEDY_INVALID)
+    ]);
 
 /** The 409 for an order a return cannot be opened on, with a stable code the client can act on. */
 export const notReturnable = (): CreateReturnOutcome =>
@@ -235,7 +246,8 @@ export const returnClosedEvent = (
         returnId: String(closed._id),
         orderId: String(closed.orderId),
         refundAmount: closed.refundAmount ?? 0,
-        currency: closed.currency
+        currency: closed.currency,
+        ...(closed.remedy ? { remedy: closed.remedy } : {})
     },
     aggregateId: String(closed.orderId)
 });

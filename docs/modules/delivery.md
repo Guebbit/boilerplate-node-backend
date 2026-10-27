@@ -584,6 +584,23 @@ A parcel returned to sender needs no door of its own: receive the units
 For the accountant, the shipment with its tracking code and note is the loss documentation: Italy
 presumes goods that went missing were sold unless the loss is documented (DPR 441/1997).
 
+## Replacement after a return {#replacement-after-a-return}
+
+A return received with `remedy: replace` ([returns](./returns.md#the-remedy-ladder)) sends the same
+product again on the **same order**: no new order, invoice or revenue. It reuses a lost parcel's
+machinery, in the receipt's own transaction:
+
+- the returned units come off `shippedQuantity` of the fulfillment orders they shipped from (the
+  latest first), so they are open again; the order steps back `delivered → processing`;
+- the stock hold is topped up from the free shelf (`reserveMoreForOrder`); what the shelf cannot
+  cover is owed on a new fulfillment order on hold (`cause: backorder`), outside the backorder cap;
+- staff ship it through the ordinary shipping door. The arrival keeps the order's first
+  `withdrawUntil` (a replacement does not restart the withdrawal clock) and only ever pushes
+  `conformityUntil` out.
+
+If the order never shipped that many physical units the receipt answers `409 DELIVERY_NOT_REOPENABLE`
+and writes nothing.
+
 ## Digital fulfilment
 
 `POST /delivery/fulfillment-orders/{id}/fulfill` is the digital door: a shipment with no tracking, born

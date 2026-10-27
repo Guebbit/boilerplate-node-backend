@@ -28,6 +28,7 @@ export type ReturnStamp = Partial<
         | 'declineMessage'
         | 'decidedAt'
         | 'receivedAt'
+        | 'remedy'
         | 'handlingDeduction'
         | 'refundAmount'
         | 'shippingRefund'

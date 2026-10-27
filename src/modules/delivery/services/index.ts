@@ -4,7 +4,7 @@
  * sibling may use. One file per flow, not one big file; see
  * `docs/theory/layers.md`.
  *
- * Every act (`ship`, `deliver`, `lost`, `fulfill`, `holds`, `cancel-remainder`) is one transaction —
+ * Every act (`ship`, `deliver`, `lost`, `reship`, `fulfill`, `holds`, `cancel-remainder`) is one transaction —
  * `act.ts` — that writes the fulfilment records, the order's summary, any status move and the
  * events together. `read.ts` answers the reads, `ensure.ts` makes the fulfillment orders,
  * `override-sync.ts` keeps them in step with an admin override.
@@ -25,6 +25,7 @@ import { ensureFulfillmentOrders } from './ensure';
 import { shipFulfillmentOrder } from './ship';
 import { deliverShipment } from './deliver';
 import { markShipmentLost } from './lost';
+import { reopenForReplacement } from './reship';
 import { fulfillFulfillmentOrder } from './fulfill';
 import { holdFulfillmentOrder, releaseFulfillmentOrder } from './holds';
 import { editShipmentTracking } from './tracking';
@@ -62,6 +63,7 @@ export const deliveryService = {
     shipFulfillmentOrder,
     deliverShipment,
     markShipmentLost,
+    reopenForReplacement,
     fulfillFulfillmentOrder,
     holdFulfillmentOrder,
     releaseFulfillmentOrder,

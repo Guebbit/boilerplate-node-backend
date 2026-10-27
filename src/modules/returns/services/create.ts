@@ -57,6 +57,7 @@ import { withdrawBeforeDispatch } from './withdraw';
 import {
     badCancellation,
     badLines,
+    badRemedy,
     badStatement,
     notReturnable,
     recordOpened,
@@ -149,6 +150,7 @@ const writeReturn = (
                 status,
                 reason: input.reason,
                 ...(input.note ? { note: input.note } : {}),
+                ...(input.preferredRemedy ? { preferredRemedy: input.preferredRemedy } : {}),
                 lines: lines.map(({ productId, quantity }) => {
                     // `checkRequestedLines` only accepts products the order holds, so this is present.
                     const item = byProduct.get(productId)!;
@@ -381,6 +383,10 @@ export const createReturn = (
     authContext: AuthContext,
     context: CallerContext
 ): Promise<CreateReturnOutcome> => {
+    // A choice between remedies exists only under the guarantee: a withdrawal and a goodwill
+    // return are refunded, so naming one there is a mistake the buyer should hear about.
+    if (input.preferredRemedy !== undefined && !isGuaranteeReason(input.reason))
+        return Promise.resolve(badRemedy('preferredRemedy'));
     if (input.kind === 'cancellation') return createCancellation(input, authContext, context);
     if (input.fulfillmentOrderId !== undefined) return Promise.resolve(badCancellation());
     return openReturn(input, authContext, context);

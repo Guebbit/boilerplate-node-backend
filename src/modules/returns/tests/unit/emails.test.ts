@@ -148,3 +148,36 @@ describe('returnNoticeEmail — closing and the return address', () => {
         expect(data.address).toBeUndefined();
     });
 });
+
+describe('returnNoticeEmail — the remedy ladder', () => {
+    it('tells the buyer a replacement is coming, with no refund line and no postage', () => {
+        const { data } = returnNoticeEmail('return-replaced', 'en', 'Ada', {
+            ...INPUT,
+            returnPostage: 'consumer'
+        });
+
+        expect(data.body).toContain('replacement');
+        expect(data.postage).toBeUndefined();
+    });
+
+    it('tells the buyer a repair extends the guarantee by 12 months, in their language', () => {
+        expect(returnNoticeEmail('return-repaired', 'en', 'Ada', INPUT).data.body).toContain(
+            '12 months'
+        );
+        expect(returnNoticeEmail('return-repaired', 'it', 'Ada', INPUT).data.body).toContain(
+            '12 mesi'
+        );
+    });
+
+    it('adds the remedy notice on request only', () => {
+        const withNotice = returnNoticeEmail('return-approved', 'en', 'Ada', {
+            ...INPUT,
+            remedyChoice: true
+        });
+
+        expect(withNotice.data.remedyNotice).toContain('12 months');
+        expect(returnNoticeEmail('return-approved', 'en', 'Ada', INPUT).data.remedyNotice).toBe(
+            undefined
+        );
+    });
+});

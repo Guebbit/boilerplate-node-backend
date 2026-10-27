@@ -210,6 +210,40 @@ describe('checkRequestedLines', () => {
 /** A product id as the rules see one: anything that stringifies to it. */
 const id = (value: string) => ({ toString: () => value });
 
+describe('a replacement or a repair', () => {
+    it('stops holding its units: the buyer has them again, so they stay returnable', () => {
+        for (const remedy of ['replace', 'repair'] as const)
+            expect(holdsReturnedGoods({ kind: 'return', status: 'closed', remedy })).toBe(false);
+        expect(holdsReturnedGoods({ kind: 'return', status: 'closed', remedy: 'refund' })).toBe(
+            true
+        );
+    });
+
+    it('settles no units and refunds no delivery', () => {
+        const accounts = accountsOf(
+            [
+                {
+                    kind: 'return',
+                    status: 'closed',
+                    remedy: 'replace',
+                    lines: [{ productId: id('a'), quantity: 2 }],
+                    shippingRefund: 4
+                },
+                {
+                    kind: 'return',
+                    status: 'closed',
+                    remedy: 'refund',
+                    lines: [{ productId: id('b'), quantity: 1 }]
+                }
+            ],
+            'EUR'
+        );
+
+        expect(accounts.accountedFor).toEqual([{ productId: 'b', quantity: 1 }]);
+        expect(accounts.shippingRefunded).toBe(0);
+    });
+});
+
 describe('holdsReturnedGoods', () => {
     it('counts a return that holds goods, whichever stage it is at', () => {
         for (const status of QUANTITY_HOLDING_RETURN_STATUSES)

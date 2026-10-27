@@ -21,6 +21,15 @@ const ret = (
     lines: lines.map(([productId, quantity]) => ({ productId, quantity }))
 });
 
+describe('projectReturnStatus with a remedy', () => {
+    it('ignores a return closed with a replacement or a repair: the buyer holds the goods again', () => {
+        for (const remedy of ['replace', 'repair'] as const)
+            expect(
+                projectReturnStatus([{ ...ret('closed', [['a', 2]]), remedy }], ordered)
+            ).toBeUndefined();
+    });
+});
+
 describe('projectReturnStatus', () => {
     it('is nothing when there are no returns', () => {
         expect(projectReturnStatus([], ordered)).toBeUndefined();

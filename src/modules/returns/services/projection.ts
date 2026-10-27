@@ -28,9 +28,10 @@ export const syncReturnStatus = (orderId: string): Promise<void> =>
                 .filter(({ kind }) => kind === 'cancellation')
                 .flatMap(({ lines }) => wireLines(lines));
             const status = projectReturnStatus(
-                returns.map(({ status: returnStatus, kind, lines }) => ({
+                returns.map(({ status: returnStatus, kind, remedy, lines }) => ({
                     status: returnStatus,
                     kind,
+                    remedy,
                     lines: wireLines(lines)
                 })),
                 returnableQuantities(
