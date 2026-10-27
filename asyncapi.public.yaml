@@ -2048,6 +2048,520 @@ components:
                     type: string
                     format: date-time
             additionalProperties: false
+        ReturnRequestedParamsPayload:
+            title: ReturnRequestedParamsPayload
+            type: object
+            required:
+                - returnId
+                - orderId
+            properties:
+                returnId:
+                    type: string
+                orderId:
+                    type: string
+            additionalProperties: false
+        OutboxDeadParamsPayload:
+            title: OutboxDeadParamsPayload
+            type: object
+            required:
+                - eventName
+                - aggregateId
+            properties:
+                eventName:
+                    type: string
+                aggregateId:
+                    type: string
+            additionalProperties: false
+        NotificationStaffReturnRequestedPayload:
+            title: NotificationStaffReturnRequestedPayload
+            type: object
+            required:
+                - id
+                - audience
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
+                code:
+                    type: string
+                    enum:
+                        - notifications.staff.return-requested
+                params:
+                    $ref: '#/components/schemas/ReturnRequestedParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationStaffOutboxDeadPayload:
+            title: NotificationStaffOutboxDeadPayload
+            type: object
+            required:
+                - id
+                - audience
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
+                code:
+                    type: string
+                    enum:
+                        - notifications.staff.outbox-dead
+                params:
+                    $ref: '#/components/schemas/OutboxDeadParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        WorkCountParamsPayload:
+            title: WorkCountParamsPayload
+            type: object
+            required:
+                - count
+            properties:
+                count:
+                    type: integer
+                    minimum: 1
+            additionalProperties: false
+        NotificationStaffTransfersDuePayload:
+            title: NotificationStaffTransfersDuePayload
+            type: object
+            required:
+                - id
+                - audience
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
+                code:
+                    type: string
+                    enum:
+                        - notifications.staff.transfers-due
+                params:
+                    $ref: '#/components/schemas/WorkCountParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationStaffPreordersLatePayload:
+            title: NotificationStaffPreordersLatePayload
+            type: object
+            required:
+                - id
+                - audience
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
+                code:
+                    type: string
+                    enum:
+                        - notifications.staff.preorders-late
+                params:
+                    $ref: '#/components/schemas/WorkCountParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationStaffDeliveryHoldsOpenPayload:
+            title: NotificationStaffDeliveryHoldsOpenPayload
+            type: object
+            required:
+                - id
+                - audience
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
+                code:
+                    type: string
+                    enum:
+                        - notifications.staff.delivery-holds-open
+                params:
+                    $ref: '#/components/schemas/WorkCountParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationStaffWithdrawalsAwaitingGoodsPayload:
+            title: NotificationStaffWithdrawalsAwaitingGoodsPayload
+            type: object
+            required:
+                - id
+                - audience
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
+                code:
+                    type: string
+                    enum:
+                        - notifications.staff.withdrawals-awaiting-goods
+                params:
+                    $ref: '#/components/schemas/WorkCountParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationStaffReturnsUndecidedPayload:
+            title: NotificationStaffReturnsUndecidedPayload
+            type: object
+            required:
+                - id
+                - audience
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
+                code:
+                    type: string
+                    enum:
+                        - notifications.staff.returns-undecided
+                params:
+                    $ref: '#/components/schemas/WorkCountParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationStaffLowStockPayload:
+            title: NotificationStaffLowStockPayload
+            type: object
+            required:
+                - id
+                - audience
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
+                code:
+                    type: string
+                    enum:
+                        - notifications.staff.low-stock
+                params:
+                    $ref: '#/components/schemas/WorkCountParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationStaffUnshippedPayload:
+            title: NotificationStaffUnshippedPayload
+            type: object
+            required:
+                - id
+                - audience
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
+                code:
+                    type: string
+                    enum:
+                        - notifications.staff.unshipped
+                params:
+                    $ref: '#/components/schemas/WorkCountParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationStaffAwaitingTrackingPayload:
+            title: NotificationStaffAwaitingTrackingPayload
+            type: object
+            required:
+                - id
+                - audience
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
+                code:
+                    type: string
+                    enum:
+                        - notifications.staff.awaiting-tracking
+                params:
+                    $ref: '#/components/schemas/WorkCountParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationStaffUndeliveredPayload:
+            title: NotificationStaffUndeliveredPayload
+            type: object
+            required:
+                - id
+                - audience
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
+                code:
+                    type: string
+                    enum:
+                        - notifications.staff.undelivered
+                params:
+                    $ref: '#/components/schemas/WorkCountParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationStaffStaleRefundsPayload:
+            title: NotificationStaffStaleRefundsPayload
+            type: object
+            required:
+                - id
+                - audience
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
+                code:
+                    type: string
+                    enum:
+                        - notifications.staff.stale-refunds
+                params:
+                    $ref: '#/components/schemas/WorkCountParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
         NotificationPayload:
             title: NotificationPayload
             oneOf:
@@ -2062,6 +2576,18 @@ components:
                 - $ref: '#/components/schemas/NotificationStaffWebhookDisabledPayload'
                 - $ref: '#/components/schemas/NotificationStaffTicketOpenedPayload'
                 - $ref: '#/components/schemas/NotificationStaffTicketAssignedPayload'
+                - $ref: '#/components/schemas/NotificationStaffReturnRequestedPayload'
+                - $ref: '#/components/schemas/NotificationStaffOutboxDeadPayload'
+                - $ref: '#/components/schemas/NotificationStaffTransfersDuePayload'
+                - $ref: '#/components/schemas/NotificationStaffPreordersLatePayload'
+                - $ref: '#/components/schemas/NotificationStaffDeliveryHoldsOpenPayload'
+                - $ref: '#/components/schemas/NotificationStaffWithdrawalsAwaitingGoodsPayload'
+                - $ref: '#/components/schemas/NotificationStaffReturnsUndecidedPayload'
+                - $ref: '#/components/schemas/NotificationStaffLowStockPayload'
+                - $ref: '#/components/schemas/NotificationStaffUnshippedPayload'
+                - $ref: '#/components/schemas/NotificationStaffAwaitingTrackingPayload'
+                - $ref: '#/components/schemas/NotificationStaffUndeliveredPayload'
+                - $ref: '#/components/schemas/NotificationStaffStaleRefundsPayload'
             # A plain property name here, unlike OpenAPI's `{ propertyName }` object.
             discriminator: code
         NotificationCreatedPayload:

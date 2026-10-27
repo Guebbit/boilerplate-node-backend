@@ -36,6 +36,21 @@
                 "privacy": "Privacy",
                 "other": "Altro",
                 "none": "Senza categoria"
+            },
+            "digest": {
+                "subject": "Lavoro in attesa",
+                "meta-title": "Riepilogo giornaliero",
+                "title": "Cosa ti aspetta",
+                "transfers-due": "{{n}} bonifici in scadenza",
+                "preorders-late": "{{n}} preordini oltre la data prevista",
+                "delivery-holds-open": "{{n}} ordini trattenuti da troppo tempo",
+                "withdrawals-awaiting-goods": "{{n}} recessi in attesa della merce",
+                "returns-undecided": "{{n}} richieste di reso senza decisione",
+                "low-stock": "{{n}} prodotti con scorte basse",
+                "unshipped": "{{n}} ordini pagati non ancora spediti",
+                "awaiting-tracking": "{{n}} pacchi spediti ancora senza tracking",
+                "undelivered": "{{n}} pacchi spediti e mai segnati come arrivati",
+                "stale-refunds": "{{n}} rimborsi aperti da troppo tempo"
             }
         }
     }

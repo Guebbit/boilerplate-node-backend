@@ -44,6 +44,12 @@ export const notificationRepository: Repository<
     listStaff: (userId: string, tenantId?: string) => Promise<NotificationDocument[]>;
     insertMany: (rows: NewNotification[]) => Promise<NotificationDocument[]>;
     insertStaffOnce: (row: NewStaffNotification) => Promise<NotificationDocument | null>;
+    findSummary: (userId: string, dedupeKey: string) => Promise<NotificationDocument | null>;
+    writeSummary: (
+        row: NewStaffNotification,
+        reappear: boolean
+    ) => Promise<NotificationDocument | null>;
+    deleteSummaries: (dedupeKey: string) => Promise<{ id: string; userId: string }[]>;
     findOwned: (userId: string, id: string) => Promise<NotificationDocument | null>;
     deleteOwned: (userId: string, id: string) => Promise<boolean>;
     deleteByUserId: (userId: string, session?: ClientSession) => Promise<void>;
@@ -102,6 +108,39 @@ export const notificationRepository: Repository<
                 if (isDuplicateKey(error)) return null;
                 throw error;
             }),
+
+    /** A recipient's summary row for one code, if they have one. */
+    findSummary: async (userId: string, dedupeKey: string) =>
+        notificationModel.findOne({ userId: toObjectId(userId), dedupeKey }).exec(),
+
+    /**
+     * Write a summary row over the recipient's last one, or create it. `reappear` makes it unread
+     * again (`readAt` removed): the caller says so when the count grew, so an unchanged count does
+     * not nag a person who already read it. Upsert on the unique `{ userId, dedupeKey }` key.
+     * https://mongoosejs.com/docs/api/model.html#Model.findOneAndUpdate()
+     */
+    writeSummary: async (row: NewStaffNotification, reappear: boolean) =>
+        notificationModel
+            .findOneAndUpdate(
+                { userId: row.userId, dedupeKey: row.dedupeKey },
+                {
+                    $set: { ...row, audience: 'staff' },
+                    ...(reappear ? { $unset: { readAt: 1 } } : {})
+                },
+                { upsert: true, returnDocument: 'after' }
+            )
+            .exec(),
+
+    /** Remove every recipient's summary row for a code (its count fell to zero). */
+    deleteSummaries: async (dedupeKey: string) => {
+        const rows = await notificationModel
+            .find({ audience: 'staff', dedupeKey })
+            .select('_id userId')
+            .lean()
+            .exec();
+        await notificationModel.deleteMany({ audience: 'staff', dedupeKey }).exec();
+        return rows.map((row) => ({ id: String(row._id), userId: String(row.userId) }));
+    },
 
     /** One row, but only if it is the caller's: `null` covers "no such row" and "someone else's". */
     findOwned: async (userId: string, id: string) =>

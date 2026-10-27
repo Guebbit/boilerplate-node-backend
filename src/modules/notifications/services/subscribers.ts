@@ -13,6 +13,7 @@ import type { DomainEventMap } from '@kernel/events';
 import type { NewNotification } from '../repository';
 import { notificationsCreate } from './inbox';
 import { ticketService } from '@modules/tickets';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { notifyStaff, notifyStaffMember } from './staff';
 
 /** One row per owner of a removed product, all the same message. */
@@ -162,6 +163,36 @@ export const onWebhookSubscriptionAutoDisabled = ({
         tenantId,
         body: { code: 'notifications.staff.webhook-disabled', params: { subscriptionId } },
         dedupeKey: `webhook-disabled:${subscriptionId}:${disabledAt}`
+    }).then(() => undefined);
+
+/**
+ * A buyer asked to return goods: the staff who decide returns hear of it, once per request. A
+ * withdrawal is a right, not a request awaiting a decision (it is born approved), so it is not
+ * announced here: the digest counts it while its goods are expected.
+ */
+export const onReturnRequested = ({
+    returnId,
+    orderId,
+    reason
+}: DomainEventMap['return.requested']): Promise<void> =>
+    reason === 'withdrawal'
+        ? Promise.resolve()
+        : notifyStaff({
+              tenantId: DEPLOYMENT_TENANT_ID,
+              body: { code: 'notifications.staff.return-requested', params: { returnId, orderId } },
+              dedupeKey: `return-requested:${returnId}`
+          }).then(() => undefined);
+
+/** An outbox event was parked after its last retry: the administrators hear of it, once per event. */
+export const onOutboxEventDead = ({
+    eventId,
+    eventName,
+    aggregateId
+}: DomainEventMap['outbox.event_dead']): Promise<void> =>
+    notifyStaff({
+        tenantId: DEPLOYMENT_TENANT_ID,
+        body: { code: 'notifications.staff.outbox-dead', params: { eventName, aggregateId } },
+        dedupeKey: `outbox-dead:${eventId}`
     }).then(() => undefined);
 
 /**

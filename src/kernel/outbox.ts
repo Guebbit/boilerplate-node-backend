@@ -35,6 +35,20 @@ import {
 import { outboxConfig } from '@kernel/config';
 import { withTransaction } from '@infrastructure/runtime/database';
 
+declare module './events' {
+    interface DomainEventMap {
+        /**
+         * An outbox row ran out of attempts and was parked as `dead`. A plain in-process emit, not an
+         * outbox row: an outbox row about the outbox could itself die and loop. Internal — no channel
+         * carries it; `notifications` tells the administrators.
+         */
+        'outbox.event_dead': { eventId: string; eventName: string; aggregateId: string };
+    }
+}
+
+/** See `DomainEventMap['outbox.event_dead']` above. */
+export const OUTBOX_EVENT_DEAD = 'outbox.event_dead';
+
 /** Every state an outbox row can be in — the schema's `enum`, and the source of {@link OutboxStatus}. */
 const OUTBOX_STATUSES = ['pending', 'published', 'dead'] as const;
 
@@ -157,6 +171,8 @@ interface OutboxRow {
     _id: mongoose.Types.ObjectId;
     name: string;
     payload: unknown;
+    /** What the event is about; the aggregation returns the whole row, so it is always there. */
+    aggregateId: string;
     attempts: number;
 }
 
@@ -269,7 +285,13 @@ const markFailed = (row: OutboxRow, reason: string): Promise<'retried' | 'dead'>
                     eventId: String(row._id),
                     attempts
                 });
-            return isDead ? 'dead' : 'retried';
+            if (!isDead) return 'retried' as const;
+            // Told after the park is recorded; a handler's failure is the bus's to log, never ours.
+            return emitDomainEvent(OUTBOX_EVENT_DEAD, {
+                eventId: String(row._id),
+                eventName: row.name,
+                aggregateId: row.aggregateId
+            }).then(() => 'dead' as const);
         });
 };
 

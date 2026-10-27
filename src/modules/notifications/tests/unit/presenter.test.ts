@@ -114,7 +114,25 @@ describe('presentNotification, per code', () => {
         {
             code: 'notifications.staff.ticket-assigned',
             params: { ticketId: 't1', kind: 'dispute' }
-        }
+        },
+        {
+            code: 'notifications.staff.return-requested',
+            params: { returnId: 'r1', orderId: 'o1' }
+        },
+        {
+            code: 'notifications.staff.outbox-dead',
+            params: { eventName: 'order.paid', aggregateId: 'o1' }
+        },
+        { code: 'notifications.staff.transfers-due', params: { count: 3 } },
+        { code: 'notifications.staff.preorders-late', params: { count: 3 } },
+        { code: 'notifications.staff.delivery-holds-open', params: { count: 3 } },
+        { code: 'notifications.staff.withdrawals-awaiting-goods', params: { count: 3 } },
+        { code: 'notifications.staff.returns-undecided', params: { count: 3 } },
+        { code: 'notifications.staff.low-stock', params: { count: 3 } },
+        { code: 'notifications.staff.unshipped', params: { count: 3 } },
+        { code: 'notifications.staff.awaiting-tracking', params: { count: 3 } },
+        { code: 'notifications.staff.undelivered', params: { count: 3 } },
+        { code: 'notifications.staff.stale-refunds', params: { count: 3 } }
     ];
 
     it.each(bodies)('answers $code with its own params, untouched', (body) => {

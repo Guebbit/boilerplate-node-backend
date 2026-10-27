@@ -60,7 +60,7 @@ import {
 } from '@modules/delivery/emails';
 import { returnNoticeEmail } from '@modules/returns';
 import { backInStockEmail } from '@modules/stock-alerts';
-import { staffNoticeEmail } from '@modules/notifications/emails';
+import { staffDigestEmail, staffNoticeEmail } from '@modules/notifications/emails';
 import { apiKeyMintedEmail, apiKeysRevokedEmail } from '@modules/api-keys/emails';
 
 // Every case in this file renders against the real collection, the same one `app.ts` builds at
@@ -247,6 +247,10 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         code: 'notifications.staff.purchase-hold-placed',
         params: { userId: '6ad69a48f753b902e5b98dfe', until: '2026-10-26T22:00:00.000Z' }
     }),
+    'notifications.staff-digest': staffDigestEmail(locale, [
+        { code: 'notifications.staff.unshipped', count: 3 },
+        { code: 'notifications.staff.stale-refunds', count: 1 }
+    ]),
     'example.published': examplePublishedEmail(locale, 'Ada', 'A title'),
     'tickets.contact': contactRequestEmail(locale, {
         name: 'Ada',

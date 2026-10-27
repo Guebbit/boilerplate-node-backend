@@ -39,6 +39,7 @@ import { listPreorderFulfillmentOrders, summarizePreorders } from './board';
 import { previewDateImpact } from './release-date-impact';
 import { scrubHoldNotes, scrubLostNotes, scrubDestinations } from './retention';
 import { reencryptShipments } from './reencrypt';
+import { deliveryDigest } from './digest';
 import { mailShipped, mailDelivered, mailLost, mailDelayed, mailHoldNoticed } from './notify';
 
 export type { RemainderOption } from './read';
@@ -53,6 +54,7 @@ export { ActRefusal } from './act';
 
 /** The module's one door — every operation on fulfillment orders and shipments. */
 export const deliveryService = {
+    deliveryDigest,
     listMethods,
     listFulfillmentOrdersForOrder,
     listShipmentsForOrder,

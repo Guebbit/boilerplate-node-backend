@@ -1,0 +1,19 @@
+<!doctype html>
+<%#
+    Staff-facing, so it skips the buyer's footer. One line per summary, each with its link; the
+    words come from `modules/notifications/emails.ts` in the recipient's locale.
+%>
+<html lang="<%= locale %>">
+    <head>
+        <meta charset="UTF-8" />
+        <title><%= pageMetaTitle %></title>
+    </head>
+    <body>
+        <h2><%= title %></h2>
+        <ul>
+            <% for (const line of lines) { %>
+            <li><a href="<%= line.link %>"><%= line.text %></a></li>
+            <% } %>
+        </ul>
+    </body>
+</html>

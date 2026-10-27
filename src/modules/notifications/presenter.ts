@@ -48,6 +48,24 @@ const bodyOf = (notification: NotificationDocument): NotificationBody => {
         case 'notifications.staff.ticket-assigned': {
             return { code: notification.code, params: notification.params };
         }
+        case 'notifications.staff.return-requested': {
+            return { code: notification.code, params: notification.params };
+        }
+        case 'notifications.staff.outbox-dead': {
+            return { code: notification.code, params: notification.params };
+        }
+        case 'notifications.staff.transfers-due':
+        case 'notifications.staff.preorders-late':
+        case 'notifications.staff.delivery-holds-open':
+        case 'notifications.staff.withdrawals-awaiting-goods':
+        case 'notifications.staff.returns-undecided':
+        case 'notifications.staff.low-stock':
+        case 'notifications.staff.unshipped':
+        case 'notifications.staff.awaiting-tracking':
+        case 'notifications.staff.undelivered':
+        case 'notifications.staff.stale-refunds': {
+            return { code: notification.code, params: notification.params };
+        }
     }
 };
 

@@ -21,12 +21,14 @@ flowchart LR
     inventory["inventory<br/><i>this module</i>"]
     cart["cart"]
     delivery["delivery"]
+    notifications["notifications"]
     orders["orders"]
     products["products"]
     returns["returns"]
 
     cart --> inventory
     delivery --> inventory
+    notifications --> inventory
     orders --> inventory
     returns --> inventory
     inventory --> products
@@ -40,7 +42,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders,products core;
-    class delivery,returns supporting;
+    class delivery,notifications,returns supporting;
     class inventory centre;
 ```
 

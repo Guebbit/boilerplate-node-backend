@@ -19,6 +19,7 @@ import {
     findOwnOrders,
     orderBriefsByIds
 } from './read';
+import { ordersDigest, shippingMethodsOf } from './digest';
 import { create, recordCreated, updateById } from './crud';
 import { removeById, restoreById } from './remove';
 import { placeOrder } from './place';
@@ -100,6 +101,8 @@ export { orderFrontendLink, withdrawalPeriodDays } from '../config';
 
 /** The service's public surface — every controller and cross-module caller goes through this. */
 export const orderService = {
+    ordersDigest,
+    shippingMethodsOf,
     search,
     getById,
     getForCaller,

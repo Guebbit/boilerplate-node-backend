@@ -20,7 +20,10 @@ flowchart LR
     access["access"]
     cart["cart"]
     delivery["delivery"]
+    inventory["inventory"]
     orders["orders"]
+    payments["payments"]
+    returns["returns"]
     stock_alerts["stock-alerts"]
     tickets["tickets"]
     users["users"]
@@ -30,7 +33,10 @@ flowchart LR
     notifications --> access
     notifications --> cart
     notifications --> delivery
+    notifications --> inventory
     notifications --> orders
+    notifications --> payments
+    notifications --> returns
     notifications --> stock_alerts
     notifications --> tickets
     notifications --> users
@@ -42,6 +48,7 @@ flowchart LR
     delivery -. "fulfillment_order.hold_noticed" .-> notifications
     delivery -. "shipment.lost" .-> notifications
     orders -. "order.purchase_hold_placed" .-> notifications
+    returns -. "return.requested" .-> notifications
     stock_alerts -. "stock_alert.sent" .-> notifications
     tickets -. "ticket.assigned" .-> notifications
     tickets -. "ticket.opened" .-> notifications
@@ -53,7 +60,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class delivery,stock_alerts,wishlist supporting;
+    class delivery,inventory,payments,returns,stock_alerts,wishlist supporting;
     class access,tickets,users,webhooks generic;
     class notifications centre;
 ```
@@ -170,11 +177,53 @@ flowchart LR
 - **Today's codes.** `notifications.staff.purchase-hold-placed` (mail `now`: abuse defence),
   `notifications.staff.webhook-disabled` (bell only), `notifications.staff.ticket-opened` (mail
   `now`: a person waits) and `notifications.staff.ticket-assigned` (bell only, the assignee alone).
+  `notifications.staff.return-requested` (bell only, the people who decide returns; a withdrawal is
+  a right and is not announced) and `notifications.staff.outbox-dead` (bell only, administrators:
+  the kernel's `outbox.event_dead` fact, a plain emit because an outbox row about the outbox could
+  itself die).
 - **Ticket notices.** The two ticket codes name their sets per notice (`per-notice` in the route
   table): the set of the opened ticket's kind. Params are the ticket id, its kind and a contact
   message's category, nothing the visitor typed. A contact message that finds no recipient with
   an address is handed to the tickets module's fallback mailbox
   ([`tickets`](./tickets.md#who-is-told)).
+
+## The daily digest
+
+Some work is not an event but a count of what waits. `sweep:staff-digest` (06:30 UTC daily) and
+`sweep:staff-weekly` (06:30 UTC Mondays, the late preorders only) read each count from the module
+that owns it, through its barrel, and rewrite one **summary row** per person whose role does that
+work. The row's `dedupeKey` is its code, so a re-run replaces it instead of piling copies.
+
+```mermaid
+flowchart LR
+    J["sweep:staff-digest / -weekly"] --> F["counts via barrels:<br/>orders · returns · delivery · payments · inventory"]
+    F --> R["staffRecipients(sets)"]
+    R --> W["write summary row<br/>(one per person per code)"]
+    W -->|appeared or grew| P["unread again · pushed · digest mail"]
+    W -->|fell| Q["updated quietly"]
+    F -->|zero| C["row removed"]
+```
+
+- **Appeared or grew** -> unread again, pushed to open tabs, and (for the codes below marked
+  `digest`) listed in that person's one digest mail. **Fell or the same** -> quiet. **Zero** ->
+  the row is removed. An unchanged re-run mails nothing.
+- **Mail is for what is overdue**, not for work in the normal course (B14).
+
+| Code                         | Who (set)             | Counts                                                                                                                                                                         | Mail   |
+| ---------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
+| `transfers-due`              | `PaymentRecording`    | unpaid bank transfers with `payBy` within `NODE_STAFF_TRANSFER_DUE_HOURS`                                                                                                      | bell   |
+| `unshipped`                  | `DeliveryStart`       | paid orders unshipped for `NODE_STAFF_UNSHIPPED_DAYS`                                                                                                                          | digest |
+| `returns-undecided`          | `ReturnManagement`    | requests undecided for `NODE_STAFF_RETURN_DECISION_DAYS`                                                                                                                       | digest |
+| `withdrawals-awaiting-goods` | `ReturnReceiving`     | approved withdrawals whose goods are not back                                                                                                                                  | bell   |
+| `delivery-holds-open`        | `DeliveryManagement`  | staff holds older than `NODE_STAFF_HOLD_OPEN_DAYS` (`heldAt`)                                                                                                                  | digest |
+| `awaiting-tracking`          | `DeliveryManagement`  | shipped, tracked-method parcels with no code for `NODE_STAFF_TRACKING_MISSING_HOURS`                                                                                           | bell   |
+| `undelivered`                | `DeliveryManagement`  | physical parcels shipped and never marked arrived for `NODE_DELIVERY_UNDELIVERED_REMINDER_DAYS` (the withdrawal window, the guarantee and the PII clock start only on arrival) | digest |
+| `stale-refunds`              | `PaymentRefunding`    | provider refunds open past the payment attention threshold                                                                                                                     | digest |
+| `low-stock`                  | `InventoryManagement` | products at or under `NODE_LOW_STOCK_THRESHOLD`                                                                                                                                | bell   |
+| `preorders-late`             | `OrderEditing`        | waiting preorders and backorders past their date (weekly)                                                                                                                      | digest |
+
+A situation that is a ticket (`manual_refund_owed`, `amount_mismatch`, `refund_refused`, ...) has no
+notice code here: `ticket-opened` alerts it. That is why a refused refund has none.
 
 ## What decides what
 

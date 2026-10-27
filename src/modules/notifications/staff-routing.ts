@@ -12,7 +12,7 @@
 import { NotificationSeverity } from '@types';
 import type { Caller } from '@types';
 import { holdsSet } from '@kernel/ability';
-import type { NotificationBody, StaffNotificationCode } from './model';
+import type { NotificationBody, StaffNotificationCode, StaffSummaryCode } from './model';
 
 /** One work notice's routing: its audience, its mail class and how loud it is. */
 export interface StaffRoute {
@@ -22,8 +22,11 @@ export interface StaffRoute {
      * kind), see {@link setsOfRoute}.
      */
     sets: readonly string[] | 'per-notice';
-    /** `now`: one mail per recipient when the notice is first written. `none`: the bell only. */
-    email: 'now' | 'none';
+    /**
+     * `now`: one mail per recipient when the notice is first written. `digest`: a summary row,
+     * mailed in the daily digest when it appears or grows. `none`: the bell only.
+     */
+    email: 'now' | 'digest' | 'none';
     severity: NotificationSeverity;
 }
 
@@ -53,6 +56,74 @@ export const STAFF_ROUTES: Readonly<Record<StaffNotificationCode, StaffRoute>> =
         sets: 'per-notice',
         email: 'none',
         severity: NotificationSeverity.info
+    },
+    // The buyer waits for an answer and the shop owes one: the people who decide returns take it.
+    'notifications.staff.return-requested': {
+        sets: ['ReturnManagement'],
+        email: 'none',
+        severity: NotificationSeverity.info
+    },
+    // No set does this work: an empty list is administrators only. Prometheus pages the operator
+    // too, so the bell is enough here.
+    'notifications.staff.outbox-dead': {
+        sets: [],
+        email: 'none',
+        severity: NotificationSeverity.error
+    },
+    // The summary rows below are counts the daily digest rewrites. The ones that mail are the
+    // overdue ones (something is late and nobody has acted); a count of work in the normal course
+    // is the bell's alone.
+    'notifications.staff.transfers-due': {
+        sets: ['PaymentRecording'],
+        email: 'none',
+        severity: NotificationSeverity.info
+    },
+    'notifications.staff.preorders-late': {
+        sets: ['OrderEditing'],
+        email: 'digest',
+        severity: NotificationSeverity.warning
+    },
+    'notifications.staff.delivery-holds-open': {
+        sets: ['DeliveryManagement'],
+        email: 'digest',
+        severity: NotificationSeverity.warning
+    },
+    'notifications.staff.withdrawals-awaiting-goods': {
+        sets: ['ReturnReceiving'],
+        email: 'none',
+        severity: NotificationSeverity.info
+    },
+    'notifications.staff.returns-undecided': {
+        sets: ['ReturnManagement'],
+        email: 'digest',
+        severity: NotificationSeverity.warning
+    },
+    'notifications.staff.low-stock': {
+        sets: ['InventoryManagement'],
+        email: 'none',
+        severity: NotificationSeverity.info
+    },
+    'notifications.staff.unshipped': {
+        sets: ['DeliveryStart'],
+        email: 'digest',
+        severity: NotificationSeverity.warning
+    },
+    'notifications.staff.awaiting-tracking': {
+        sets: ['DeliveryManagement'],
+        email: 'none',
+        severity: NotificationSeverity.info
+    },
+    // Until a parcel is marked arrived, the buyer's withdrawal window and guarantee have not started.
+    'notifications.staff.undelivered': {
+        sets: ['DeliveryManagement'],
+        email: 'digest',
+        severity: NotificationSeverity.warning
+    },
+    // A refund open past the attention threshold runs against the 14-day refund clock.
+    'notifications.staff.stale-refunds': {
+        sets: ['PaymentRefunding'],
+        email: 'digest',
+        severity: NotificationSeverity.warning
     }
 };
 
@@ -75,6 +146,35 @@ export interface StaffLink {
     parameters: Record<string, string>;
 }
 
+/** The admin page that lists what each summary row counts. */
+const SUMMARY_PAGES: Readonly<Record<StaffSummaryCode, string>> = {
+    'notifications.staff.transfers-due': 'sales/orders',
+    'notifications.staff.preorders-late': 'sales/preorders',
+    'notifications.staff.delivery-holds-open': 'sales/orders',
+    'notifications.staff.withdrawals-awaiting-goods': 'returns',
+    'notifications.staff.returns-undecided': 'returns',
+    'notifications.staff.low-stock': 'inventory',
+    'notifications.staff.unshipped': 'sales/orders',
+    'notifications.staff.awaiting-tracking': 'sales/orders',
+    'notifications.staff.undelivered': 'sales/orders',
+    'notifications.staff.stale-refunds': 'sales/payments'
+};
+
+/**
+ * The screen of the record a dead outbox event was about, read off the event name's first segment
+ * (`order.paid` is about an order). An event of any other kind has no screen: the link is the
+ * admin's home, never a guess.
+ *
+ * @param eventName - the parked event
+ * @param aggregateId - what it was about
+ */
+const outboxAggregateLink = (eventName: string, aggregateId: string): StaffLink => {
+    const template = { order: 'orders/{id}', user: 'users/{id}' }[eventName.split('.', 1).join('')];
+    return template === undefined
+        ? { template: '', parameters: {} }
+        : { template, parameters: { id: aggregateId } };
+};
+
 /**
  * The frontend screen a notice points at: the account for a hold, the subscription for a disabled
  * webhook. Ids only, as the params carry; the screen has the rest.
@@ -95,6 +195,15 @@ export const staffLinkOf = (body: StaffNoticeBody): StaffLink => {
         case 'notifications.staff.ticket-opened':
         case 'notifications.staff.ticket-assigned': {
             return { template: 'tickets/{id}', parameters: { id: body.params.ticketId } };
+        }
+        case 'notifications.staff.return-requested': {
+            return { template: 'returns/{id}', parameters: { id: body.params.returnId } };
+        }
+        case 'notifications.staff.outbox-dead': {
+            return outboxAggregateLink(body.params.eventName, body.params.aggregateId);
+        }
+        default: {
+            return { template: SUMMARY_PAGES[body.code], parameters: {} };
         }
     }
 };

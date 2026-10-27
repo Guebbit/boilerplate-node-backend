@@ -16,6 +16,9 @@ import type {
     FulfillmentHeldParams,
     FulfillmentDelayedParams,
     NotificationAudience,
+    WorkCountParams,
+    OutboxDeadParams,
+    ReturnRequestedParams,
     ShipmentLostParams,
     PurchaseHoldPlacedParams,
     TicketAssignedParams,
@@ -36,7 +39,19 @@ export const NOTIFICATION_CODES = [
     'notifications.staff.purchase-hold-placed',
     'notifications.staff.webhook-disabled',
     'notifications.staff.ticket-opened',
-    'notifications.staff.ticket-assigned'
+    'notifications.staff.ticket-assigned',
+    'notifications.staff.return-requested',
+    'notifications.staff.outbox-dead',
+    'notifications.staff.transfers-due',
+    'notifications.staff.preorders-late',
+    'notifications.staff.delivery-holds-open',
+    'notifications.staff.withdrawals-awaiting-goods',
+    'notifications.staff.returns-undecided',
+    'notifications.staff.low-stock',
+    'notifications.staff.unshipped',
+    'notifications.staff.awaiting-tracking',
+    'notifications.staff.undelivered',
+    'notifications.staff.stale-refunds'
 ] as const;
 
 /** The codes of work notices: the ones `./staff-routing` finds an audience for. */
@@ -44,8 +59,40 @@ export const STAFF_NOTIFICATION_CODES = [
     'notifications.staff.purchase-hold-placed',
     'notifications.staff.webhook-disabled',
     'notifications.staff.ticket-opened',
-    'notifications.staff.ticket-assigned'
+    'notifications.staff.ticket-assigned',
+    'notifications.staff.return-requested',
+    'notifications.staff.outbox-dead',
+    'notifications.staff.transfers-due',
+    'notifications.staff.preorders-late',
+    'notifications.staff.delivery-holds-open',
+    'notifications.staff.withdrawals-awaiting-goods',
+    'notifications.staff.returns-undecided',
+    'notifications.staff.low-stock',
+    'notifications.staff.unshipped',
+    'notifications.staff.awaiting-tracking',
+    'notifications.staff.undelivered',
+    'notifications.staff.stale-refunds'
 ] as const satisfies readonly (typeof NOTIFICATION_CODES)[number][];
+
+/**
+ * The work notices that are a count of what waits, rewritten by the daily digest instead of
+ * announced once: one row per recipient whose `dedupeKey` is the code itself.
+ */
+export const STAFF_SUMMARY_CODES = [
+    'notifications.staff.transfers-due',
+    'notifications.staff.preorders-late',
+    'notifications.staff.delivery-holds-open',
+    'notifications.staff.withdrawals-awaiting-goods',
+    'notifications.staff.returns-undecided',
+    'notifications.staff.low-stock',
+    'notifications.staff.unshipped',
+    'notifications.staff.awaiting-tracking',
+    'notifications.staff.undelivered',
+    'notifications.staff.stale-refunds'
+] as const satisfies readonly StaffNotificationCode[];
+
+/** One of {@link STAFF_SUMMARY_CODES}. */
+export type StaffSummaryCode = (typeof STAFF_SUMMARY_CODES)[number];
 
 /** One of {@link STAFF_NOTIFICATION_CODES}. */
 export type StaffNotificationCode = (typeof STAFF_NOTIFICATION_CODES)[number];
@@ -69,6 +116,18 @@ export interface NotificationParametersByCode {
     'notifications.staff.webhook-disabled': WebhookDisabledParams;
     'notifications.staff.ticket-opened': TicketOpenedParams;
     'notifications.staff.ticket-assigned': TicketAssignedParams;
+    'notifications.staff.return-requested': ReturnRequestedParams;
+    'notifications.staff.outbox-dead': OutboxDeadParams;
+    'notifications.staff.transfers-due': WorkCountParams;
+    'notifications.staff.preorders-late': WorkCountParams;
+    'notifications.staff.delivery-holds-open': WorkCountParams;
+    'notifications.staff.withdrawals-awaiting-goods': WorkCountParams;
+    'notifications.staff.returns-undecided': WorkCountParams;
+    'notifications.staff.low-stock': WorkCountParams;
+    'notifications.staff.unshipped': WorkCountParams;
+    'notifications.staff.awaiting-tracking': WorkCountParams;
+    'notifications.staff.undelivered': WorkCountParams;
+    'notifications.staff.stale-refunds': WorkCountParams;
 }
 
 /**
@@ -112,8 +171,11 @@ export type NotificationModel = Model<NotificationDocument>;
  *
  * `updatedAt` is switched off: a row is written once and its only later change is `readAt`, which
  * says so itself. `params` is `Mixed` because its shape depends on `code`.
+ *
+ * The type is written out because the code union grew past what TypeScript can serialize for an
+ * inferred one (TS7056).
  */
-export const notificationSchema = new Schema<NotificationDocument>(
+export const notificationSchema: Schema<NotificationDocument> = new Schema<NotificationDocument>(
     {
         userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
         code: { type: String, enum: NOTIFICATION_CODES, required: true },

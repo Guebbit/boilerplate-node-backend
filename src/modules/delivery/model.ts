@@ -48,6 +48,11 @@ export interface FulfillmentOrderDocument extends Document {
     lines: FulfillmentOrderLine[];
     /** Present exactly while `status` is `on_hold`. */
     holdReason?: FulfillmentHoldReason;
+    /**
+     * When staff put it on hold; set with `holdReason` by a hold and removed by the release. What
+     * the staff digest measures "held for too long" from. Never set for `awaiting_stock`.
+     */
+    heldAt?: Date;
     /** Staff's free text about a hold. Reaped like the other free text. */
     holdNote?: string;
     /**
@@ -175,6 +180,7 @@ export const fulfillmentOrderSchema = new Schema<FulfillmentOrderDocument>(
         },
         lines: { type: [fulfillmentLineSchema], required: true },
         holdReason: { type: String, enum: Object.values(FulfillmentHoldReason) },
+        heldAt: { type: Date },
         holdNote: { type: String, maxlength: 1000 },
         holdMessage: { type: String, maxlength: 500 },
         cause: { type: String, enum: ['preorder', 'backorder'] },

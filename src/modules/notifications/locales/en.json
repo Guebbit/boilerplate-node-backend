@@ -36,6 +36,21 @@
                 "privacy": "Privacy",
                 "other": "Other",
                 "none": "Uncategorised"
+            },
+            "digest": {
+                "subject": "Work waiting for you",
+                "meta-title": "Daily summary",
+                "title": "What is waiting for you",
+                "transfers-due": "{{n}} bank transfers are due soon",
+                "preorders-late": "{{n}} preorders are past their date",
+                "delivery-holds-open": "{{n}} held orders have waited too long",
+                "withdrawals-awaiting-goods": "{{n}} withdrawals are waiting for their goods",
+                "returns-undecided": "{{n}} return requests still need a decision",
+                "low-stock": "{{n}} products are low on stock",
+                "unshipped": "{{n}} paid orders have not shipped",
+                "awaiting-tracking": "{{n}} shipped parcels still have no tracking code",
+                "undelivered": "{{n}} parcels were shipped and never marked arrived",
+                "stale-refunds": "{{n}} refunds have been open too long"
             }
         }
     }

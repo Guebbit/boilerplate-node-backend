@@ -17,6 +17,7 @@
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
+import { OUTBOX_EVENT_DEAD } from '@kernel/outbox';
 import { CART_LINES_REMOVED, CART_MERGE_REFUSED } from '@modules/cart';
 import {
     FULFILLMENT_ORDER_DELAYED,
@@ -24,11 +25,13 @@ import {
     SHIPMENT_LOST
 } from '@modules/delivery';
 import { ORDER_PURCHASE_HOLD_PLACED } from '@modules/orders';
+import { RETURN_REQUESTED } from '@modules/returns';
 import { TICKET_ASSIGNED, TICKET_OPENED } from '@modules/tickets';
 import { WEBHOOK_SUBSCRIPTION_AUTO_DISABLED } from '@modules/webhooks';
 import { WISHLIST_ITEMS_REMOVED } from '@modules/wishlist';
 import { STOCK_ALERT_SENT } from '@modules/stock-alerts';
 import { notificationsConfig } from './config';
+import { notificationsJobs } from './jobs';
 import { router } from './routes';
 import { notificationsService } from './services';
 
@@ -37,6 +40,7 @@ export default {
     name: 'notifications',
     mounts: [{ basePath: '/notifications', routes: router }],
     config: [notificationsConfig.slice],
+    jobs: notificationsJobs,
     personalData: [
         {
             section: 'notifications',
@@ -67,6 +71,8 @@ export default {
             WEBHOOK_SUBSCRIPTION_AUTO_DISABLED,
             notificationsService.onWebhookSubscriptionAutoDisabled
         );
+        onDomainEvent(RETURN_REQUESTED, notificationsService.onReturnRequested);
+        onDomainEvent(OUTBOX_EVENT_DEAD, notificationsService.onOutboxEventDead);
         onDomainEvent(TICKET_OPENED, notificationsService.onTicketOpened);
         onDomainEvent(TICKET_ASSIGNED, notificationsService.onTicketAssigned);
     },
