@@ -6,6 +6,8 @@
  * (`./services/settlement`); `payment.refunded` comes from `./services/refunds.ts`.
  */
 
+import type { RefundFailureReason } from '@types';
+
 /** Registers this module's event payloads into the kernel's app-wide `DomainEventMap`. */
 declare module '@kernel/events' {
     interface DomainEventMap {
@@ -83,6 +85,45 @@ declare module '@kernel/events' {
             amount: number;
             currency: string;
         };
+
+        /**
+         * The provider refused a refund, or reported one failed. `final` says whether the refusal
+         * ends the retrying (`FINAL_REFUND_FAILURES`): the money has to go back another way, and the
+         * buyer is told so. A transient refusal (`final: false`) is retried by the sweep and only
+         * worth a digest line. Emitted once per NEW refusal (the first, or a changed reason), so a
+         * retry that fails the same way is silent.
+         *
+         * `failureReason` is the closed code, never the provider's wording.
+         *
+         * Delivered through the transactional outbox, written in the transaction that records the
+         * refusal: at-least-once, so a listener dedupes on `meta.eventId`.
+         */
+        'payment.refund_failed': {
+            paymentId: string;
+            orderId: string;
+            refundId: string;
+            amount: number;
+            currency: string;
+            failureReason: RefundFailureReason;
+            final: boolean;
+        };
+
+        /**
+         * The provider took back a refund it had settled (a bank sent the money back). The credit
+         * note and a closed return stay; the record is open again and owed another way until staff
+         * mark it returned, which fires `payment.refunded` once more for the same `refundId`.
+         *
+         * Delivered through the transactional outbox, written in the transaction that reverses the
+         * record: at-least-once, so a listener dedupes on `meta.eventId`.
+         */
+        'payment.refund_reversed': {
+            paymentId: string;
+            orderId: string;
+            refundId: string;
+            amount: number;
+            currency: string;
+            failureReason: RefundFailureReason;
+        };
     }
 }
 
@@ -97,3 +138,9 @@ export const PAYMENT_REFUNDED = 'payment.refunded';
 
 /** See `DomainEventMap['payment.refund_canceled']` above. */
 export const PAYMENT_REFUND_CANCELED = 'payment.refund_canceled';
+
+/** See `DomainEventMap['payment.refund_failed']` above. */
+export const PAYMENT_REFUND_FAILED = 'payment.refund_failed';
+
+/** See `DomainEventMap['payment.refund_reversed']` above. */
+export const PAYMENT_REFUND_REVERSED = 'payment.refund_reversed';

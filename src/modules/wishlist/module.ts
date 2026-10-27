@@ -26,7 +26,7 @@ export default {
             section: 'wishlist',
             collect: (subject) => wishlistService.exportLines(subject.userId),
             // Joins the caller's own hard-delete transaction — see `wishlistService.removeByUserId`.
-            erase: wishlistService.removeByUserId
+            erase: ({ userId }, session) => wishlistService.removeByUserId(userId, session)
         }
     ],
     subscribe: () => {

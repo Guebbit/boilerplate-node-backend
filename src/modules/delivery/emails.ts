@@ -4,7 +4,8 @@
  * `@modules/account/emails`: the language is an argument, the output is finished text, and
  * whatever renders it later resolves nothing. See that file for why.
  *
- * Two emails, one per shipment: "on its way" when it leaves, "arrived" when it is delivered.
+ * Two emails, one per shipment: "on its way" when it leaves, "arrived" when it is delivered; and
+ * the one a parcel reported lost earns.
  */
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';
@@ -41,6 +42,22 @@ export interface DeliveredEmailInput {
     lines: readonly EmailLine[];
     /** The last day a withdrawal is valid — present only on the delivery that completes the order. */
     withdrawUntil?: Date | undefined;
+}
+
+/** What the lost-parcel email says. */
+export interface LostEmailInput {
+    /** Lost by the carrier, or damaged in transit. */
+    reason: 'lost' | 'damaged';
+    /** What the parcel carried. */
+    lines: readonly EmailLine[];
+    /** The units the shelf could not cover again; empty when everything ships again from the shelf. */
+    owed: readonly EmailLine[];
+    /** When the owed units are expected; present exactly when `owed` is not empty. */
+    expectedAt?: Date | undefined;
+    /** What staff wrote for the buyer, if anything. */
+    message?: string | undefined;
+    /** The order page, where the buyer reads the same and can cancel the rest. */
+    orderUrl: string;
 }
 
 /** What the fulfillment-delayed email says about one waiting fulfillment order. */
@@ -152,6 +169,46 @@ export const shipmentDeliveredEmail = (
                       }).format(input.withdrawUntil)
                   })
                 : undefined,
+            footer: t('email.footer')
+        }
+    };
+};
+
+/**
+ * "Part of your order did not reach you" — sent when staff report a parcel lost or damaged in
+ * transit. A fixed text per reason, the units still owed with the date they are expected (when the
+ * shelf could not cover them), and staff's sentence in a blockquote when they wrote one. Never says
+ * what staff noted for colleagues.
+ *
+ * @param locale - the buyer's language
+ * @param name - the buyer's name, for the greeting
+ * @param input - the reason, the parcel's lines, what is owed and staff's message
+ */
+export const shipmentLostEmail = (
+    locale: string,
+    name: string,
+    input: LostEmailInput
+): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'delivery.shipment-lost',
+        subject: t(`delivery.email-lost.${input.reason}.subject`),
+        data: {
+            locale,
+            pageMetaTitle: t('delivery.email-lost.meta-title'),
+            greeting: t('delivery.email-lost.greeting', { name }),
+            body: t(`delivery.email-lost.${input.reason}.body`),
+            lines: lineTexts(t, input.lines),
+            promise: t('delivery.email-lost.promise'),
+            owedIntro:
+                input.owed.length > 0 && input.expectedAt
+                    ? t('delivery.email-lost.owed', { date: longDate(locale, input.expectedAt) })
+                    : '',
+            owedLines: lineTexts(t, input.owed),
+            // Always a string: the job crosses the queue as JSON, which drops an `undefined` key.
+            message: input.message ?? '',
+            linkLabel: t('delivery.email-lost.link-label'),
+            linkUrl: input.orderUrl,
             footer: t('email.footer')
         }
     };

@@ -11,6 +11,7 @@
         "nothing-returnable": "Nulla di questo ordine resta da rendere.",
         "not-decidable": "Questo reso è già stato deciso.",
         "not-closable": "Questo reso non è stato ricevuto oppure è già chiuso.",
+        "not-cancelable": "Questo reso non è approvato e in attesa della merce, quindi non può essere annullato.",
         "not-receivable": "Questo reso non sta aspettando la merce.",
         "cancellation-invalid": "Un annullamento deve indicare l'ordine di evasione da annullare e non inviare righe: si annulla tutto il resto.",
         "cancellation-withdrawal-buyer-only": "Solo l'acquirente dell'ordine può annullare come recesso: il personale annulla con un altro motivo.",
@@ -33,14 +34,40 @@
             },
             "return-declined": {
                 "subject": "Il tuo reso è stato rifiutato",
-                "body": "Non abbiamo potuto accettare il tuo reso per l'ordine {{order}}. Motivo: {{reason}}"
+                "body": "Non abbiamo potuto accettare il tuo reso per l'ordine {{order}}. {{reason}}"
+            },
+            "via-phone": "telefono",
+            "via-email": "email",
+            "via-letter": "lettera",
+            "via-other": "un altro canale",
+            "withdrawal-recorded": {
+                "subject": "Abbiamo registrato il tuo recesso",
+                "body": "Abbiamo registrato il tuo recesso dall'ordine {{order}}. Ce l'hai comunicato il {{date}} (UTC), tramite {{via}}. Il nostro team l'ha annotato il {{recorded}} (UTC)."
+            },
+            "return-opened": {
+                "subject": "Abbiamo aperto il tuo reso",
+                "body": "Dopo la tua richiesta del {{date}} (UTC), abbiamo aperto un reso per l'ordine {{order}}. Puoi spedire la merce ora."
             },
             "return-address": "Spedisci la merce a: {{address}}",
             "return-closed": {
                 "subject": "Il tuo reso è stato rimborsato",
                 "body": "Abbiamo ricevuto il tuo reso per l'ordine {{order}} e rimborsato {{amount}}."
+            },
+            "decline-reason": {
+                "return_period_ended": "Il periodo per rendere questo ordine è terminato.",
+                "not_returnable": "Questi articoli non possono essere resi.",
+                "no_defect_found": "Non abbiamo riscontrato il difetto che hai descritto.",
+                "other": "Non abbiamo potuto accettarlo per un altro motivo."
             }
         },
-        "deduction-too-high": "La trattenuta per la gestione supera il valore del rimborso."
+        "deduction-too-high": "La trattenuta per la gestione supera il valore del rimborso.",
+        "restock-unknown-product": "Un conteggio da rimettere a magazzino indica un prodotto che non è in questo reso.",
+        "restock-duplicate": "Un conteggio da rimettere a magazzino indica due volte lo stesso prodotto.",
+        "restock-too-many": "Un conteggio da rimettere a magazzino supera quanto contiene la riga.",
+        "statement-forbidden": "Questa data o questo canale non possono essere indicati qui: il sistema imposta quelli dell'acquirente, e il canale appartiene a un recesso registrato dal personale.",
+        "statement-required": "Un recesso registrato per l'acquirente richiede la data in cui l'ha dichiarato e il canale usato.",
+        "statement-future": "La data in cui l'acquirente l'ha dichiarato non può essere nel futuro.",
+        "statement-before-order": "La data in cui l'acquirente l'ha dichiarato non può precedere l'ordine.",
+        "decline-message-required": "Scrivi un messaggio all'acquirente: «altro» da solo non dice il perché."
     }
 }

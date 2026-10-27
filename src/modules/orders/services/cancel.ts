@@ -236,20 +236,23 @@ const afterCancel = (
  * @param refundChoice - an operator's choice to cancel without returning the money; ignored by
  *   every cause that always refunds
  * @param context - omitted by every system-initiated caller, which is not a request
+ * @param onBuyersBehalf - staff recording a withdrawal the buyer stated outside the shop: the write
+ *   then runs on the operator's scope instead of the buyer's own orders
  */
 const cancel = (
     id: string,
     cause: CancelCause,
     authContext: AuthContext,
     refundChoice?: boolean,
-    context?: CallerContext
+    context?: CallerContext,
+    onBuyersBehalf = false
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
     const rules: CauseRules = CANCEL_CAUSES[cause];
     const refund = rules.refundIsChoice ? (refundChoice ?? true) : true;
 
     // The write's OWN scope: an operator's update scope, or the caller's own live orders — never
     // the read scope, which a warehouse or support account holds over every order.
-    const scope = cancelScope(authContext, cause === 'withdrawal');
+    const scope = cancelScope(authContext, cause === 'withdrawal' && !onBuyersBehalf);
 
     /*
      * The statuses a cancel may move from are read off the lifecycle table, not declared, and the
@@ -327,6 +330,23 @@ export const withdrawById = (
     context?: CallerContext
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
     cancel(id, 'withdrawal', authContext, undefined, context);
+
+/**
+ * Staff recording the withdrawal a buyer stated by phone, email or letter, before anything shipped:
+ * the same cancel as the buyer's own (cause `withdrawal`, refunded in full), run on the operator's
+ * scope because the order is not the caller's. `returns` has checked the keys and writes the
+ * dated record; the timeline row names the staff member.
+ *
+ * @param id - the order being withdrawn from
+ * @param authContext - the staff member
+ * @param context - the staff member's context, audited
+ */
+export const withdrawOnBuyersBehalfById = (
+    id: string,
+    authContext: AuthContext,
+    context?: CallerContext
+): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
+    cancel(id, 'withdrawal', authContext, undefined, context, true);
 
 /**
  * A checkout hold that timed out: the units are already released, so the shop cancels the order

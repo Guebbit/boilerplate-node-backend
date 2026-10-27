@@ -12,12 +12,18 @@ info:
 
         Language: every endpoint honours `Accept-Language` (q-weights and region tags
         included). One language is picked per request, from the languages switched on in
-        `GET /locales`, and it selects the language of user-facing copy and of translated entity
+        `GET /locales` (and, for that staff preview, the draft asked for), and it selects the language of user-facing copy and of translated entity
         fields (a product's `title`, `description`) — `errors[].message` — never the response shape, the status code, or a machine-readable field such
         as `errors[].code`. A message the API has no wording for in that language falls back to
         the default language, one message at a time. An unknown or switched-off language falls
         back instead of erroring; `Content-Language` states the language picked, the audience the
         answer is written for (RFC 9110 section 8.5), and `Vary: Accept-Language` is always set.
+        One exception, for staff: a caller allowed to read draft languages (`display:Locale`) whose
+        FIRST `Accept-Language` choice is a switched-off language is answered in it by the product
+        reads (`GET /products`, `POST /products/search`, `GET /products/{id}`) and the example
+        read: draft text where it exists, the live chain field by field where it does not. That
+        answer says `Content-Language: <draft tag>` and `Cache-Control: private, no-store`, and the
+        server never stores it. Anyone else asking for a draft gets the normal pick.
         `GET /locales` lists what a deployment offers.
 
         Successes: a 2xx answers the resource itself, with no wrapper. A list is an object, never a
@@ -1220,15 +1226,25 @@ paths:
     /users/search:
         $ref: '../../src/modules/users/openapi.yaml#/paths/~1users~1search'
 
-    # ---------- feedback ----------
-    /feedback/contact:
-        $ref: '../../src/modules/feedback/openapi.yaml#/paths/~1feedback~1contact'
-    /feedback:
-        $ref: '../../src/modules/feedback/openapi.yaml#/paths/~1feedback'
-    /feedback/search:
-        $ref: '../../src/modules/feedback/openapi.yaml#/paths/~1feedback~1search'
-    /feedback/{id}:
-        $ref: '../../src/modules/feedback/openapi.yaml#/paths/~1feedback~1{id}'
+    # ---------- tickets ----------
+    /tickets:
+        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets'
+    /tickets/search:
+        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1search'
+    /tickets/summary:
+        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1summary'
+    /tickets/{id}:
+        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1{id}'
+    /tickets/{id}/resolve:
+        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1{id}~1resolve'
+    /tickets/{id}/mark-spam:
+        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1{id}~1mark-spam'
+    /tickets/{id}/reopen:
+        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1{id}~1reopen'
+    /tickets/{id}/assignee:
+        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1{id}~1assignee'
+    /tickets/{id}/notes:
+        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1{id}~1notes'
 
     # ---------- products ----------
     /products:
@@ -1322,8 +1338,8 @@ paths:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1{id}~1confirm'
     /payments/{id}/sync:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1{id}~1sync'
-    /payments/webhook:
-        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1webhook'
+    /payments/webhook/{provider}:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1webhook~1{provider}'
 
     # ---------- delivery ----------
     /delivery/methods:

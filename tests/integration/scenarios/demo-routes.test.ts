@@ -219,7 +219,8 @@ describe('POST /__test/payments/refund-failure', () => {
 
         expect([set.status, lifted.status]).toEqual([204, 204]);
         await expect(attemptRefund(providerRef)).resolves.toEqual({
-            refundRef: 're_fake_lever-test'
+            refundRef: 're_fake_lever-test',
+            status: 'succeeded'
         });
     });
 

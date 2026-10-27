@@ -1,7 +1,7 @@
 /**
  * @module
- * Setting or correcting a shipment's tracking code — at any time after it left, delivered ones
- * included: the code matters most later, as evidence in a "never arrived" dispute. A digital
+ * Setting or correcting a shipment's tracking code — at any time after it left, delivered and
+ * lost ones included: the code matters most later, as evidence in a "never arrived" dispute. A digital
  * fulfilment never had a carrier, so it has no code to set. The first code of a parcel that left
  * without one mails the buyer an "added" notice; a replacement mails the "corrected" one.
  */
@@ -21,7 +21,7 @@ import { ERROR_CODES } from '@api/error-codes';
 import { deliveryAuditActions } from '../audit';
 import { shipmentRepository } from '../repository';
 import type { ShipmentDocument } from '../model';
-import { viewShipment } from './actions';
+import { viewShipmentOf } from './found';
 import { mailTrackingChanged } from './notify';
 
 /**
@@ -89,13 +89,15 @@ export const editShipmentTracking = (
             if (!order) return generateReject(404, [t('delivery.order-not-found')]);
 
             if (trackingCode === undefined)
-                return generateSuccess(viewShipment(found, order, authContext));
+                return viewShipmentOf(found, order, authContext).then((view) =>
+                    generateSuccess(view)
+                );
 
             return shipmentRepository.setTrackingCode(shipmentId, trackingCode).then((edited) => {
                 if (!edited) return generateReject(404, [t('delivery.shipment-not-found')]);
-                return afterEdited(found, edited, context).then(() =>
-                    generateSuccess(viewShipment(edited, order, authContext))
-                );
+                return afterEdited(found, edited, context)
+                    .then(() => viewShipmentOf(edited, order, authContext))
+                    .then((view) => generateSuccess(view));
             });
         });
     });

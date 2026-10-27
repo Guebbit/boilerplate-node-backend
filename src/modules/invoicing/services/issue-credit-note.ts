@@ -11,6 +11,7 @@
 import { Types } from 'mongoose';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { orderService, orderTotal } from '@modules/orders';
+import { paymentService } from '@modules/payments';
 import { translator } from '@infrastructure/i18n';
 import { invoicingRepository } from '../repository';
 import { decryptInvoiceParty, encryptInvoiceParty } from '../pii';
@@ -106,11 +107,12 @@ const reversedFigures = (
 
 /**
  * Freezes and numbers a credit note for one refund of the invoice already issued on the order. A
- * no-op — `undefined`, never a throw — when no invoice exists to correct: every `succeeded`
- * payment belongs to a `paid` order this module has already invoiced, so the gap only opens on a
- * genuine race (an invoice not yet frozen when the refund lands) or on data older than this
- * module. Either way there is nothing a credit note could reference, so none is issued rather than
- * one pointing at nothing. The number is allocated and the note inserted in one transaction, so a
+ * no-op — `undefined`, never a throw — when no invoice exists to correct. That is right when the
+ * money never paid for a sale (a late payment on a cancelled order, an amount mismatch): no
+ * supply, so no document (VAT Directive Art. 2(1)(a), 65). The other case is an invoice event that
+ * died; reviving it issues the invoice and then {@link creditSettledRefunds} catches up, so the
+ * skip loses nothing. Either way there is nothing a credit note could reference, so none is issued
+ * rather than one pointing at nothing. The number is allocated and the note inserted in one transaction, so a
  * lost race (the same refund credited twice) aborts it and gives the number back.
  *
  * @param input - the refund that was just settled
@@ -203,3 +205,17 @@ export const findCreditNoteForOrderById = (
     creditNoteId: string
 ): Promise<CreditNoteDocument | null> =>
     invoicingRepository.findCreditNoteById(orderId, creditNoteId);
+
+/**
+ * Issue the credit notes for every refund that settled before the invoice existed: the catch-up
+ * after a revived invoice event. One note per refund, oldest first; a refund that already has its
+ * note is returned as is (`refundId` is unique), so a repeat issues nothing new.
+ *
+ * @param orderId - the order whose invoice was just issued
+ */
+export const creditSettledRefunds = (orderId: string): Promise<void> =>
+    paymentService.settledRefundPayloads(orderId).then(async (payloads) => {
+        // Sequential on purpose: credit note numbers are allocated in order, oldest refund first.
+        for (const { refundId, amount, full, goods } of payloads)
+            await issueCreditNote({ orderId, refundId, amount, full, ...(goods ? { goods } : {}) });
+    });

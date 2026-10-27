@@ -8,6 +8,7 @@
 import type { Request } from 'express';
 import { Router } from 'express';
 import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
+import { previewDraftLanguage } from '@kernel/middlewares/locale-preview';
 import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { upload } from '@infrastructure/http/middlewares/upload';
 import {
@@ -52,6 +53,11 @@ const cacheScopeKey = (request: Request): boolean =>
     hasAnonymousReadScope(productService.callerScope, request.caller) &&
     !canSeeStock(request.caller);
 
+/*
+ * `previewDraftLanguage` leads each of the three catalogue reads: it must run before `setCache`,
+ * whose key is built from `request.locale`, or a draft answer could be stored under a live key.
+ */
+
 /**
  * Shared cache middleware for both search entry points, keyed on the query parameters that
  * change the answer.
@@ -68,10 +74,10 @@ const cacheProductsSearch = searchCache(
 );
 
 // POST /products/search — must come before /:id to avoid matching "search" as an id
-router.post('/search', cacheProductsSearch, getProducts);
+router.post('/search', previewDraftLanguage, cacheProductsSearch, getProducts);
 
 // GET /products — public
-router.get('/', cacheProductsSearch, getProducts);
+router.get('/', previewDraftLanguage, cacheProductsSearch, getProducts);
 
 // POST /products — admin only (create). Two keys: `create:Product` for the record itself,
 // `update:Translation` since the same write always carries every language's copy alongside it.
@@ -111,6 +117,7 @@ router.get(
 // GET /products/:id — public
 router.get(
     '/:id',
+    previewDraftLanguage,
     // `browserRevalidate`: the server keeps serving from Redis, but a browser must check first (a
     // 304 when nothing changed), because the page shows `available`, which a stock write changes
     // and no server-side clear can reach in someone's browser.

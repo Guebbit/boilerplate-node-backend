@@ -11,6 +11,7 @@ import { testCallerContext, callerContextAs } from '@tests/callers';
 import { systemCallerContext } from '@kernel/permissions';
 import type { ClientSession } from 'mongoose';
 import { personalDataErasers, setPersonalDataErasers } from '../../erasure-registry';
+import type { PersonalDataSubject } from '@kernel/registry';
 import { createUser } from '@modules/users/tests/factories';
 import { userService } from '@modules/users/services';
 import { remove } from '../../services/remove';
@@ -889,7 +890,9 @@ describe('userService.removeById', () => {
             await seedMembership(id, null, 'platform', 'operator');
             // This suite builds no app, so the erase hooks a deployment registers are not there:
             // install `access`'s own, the one under test.
-            setPersonalDataErasers([accessService.eraseMemberships]);
+            setPersonalDataErasers([
+                ({ userId }, session) => accessService.eraseMemberships(userId, session)
+            ]);
 
             await userService.removeById(id, true, callerContextAs('admin'));
 
@@ -1015,7 +1018,8 @@ describe('userService.remove', () => {
             const user = await createUser();
             const id = user._id.toString();
             const firstEraser = jest.fn(
-                (userId: string, session: ClientSession) => userRepository.deleteOne(user, session) // stands in for a real eraser's write
+                (_subject: PersonalDataSubject, session: ClientSession) =>
+                    userRepository.deleteOne(user, session) // stands in for a real eraser's write
             );
             const failingEraser = jest.fn(() => {
                 throw new Error('simulated failure partway through the cascade');

@@ -237,6 +237,35 @@ components:
                     type: string
                     format: date-time
 
+        ShipmentLostParams:
+            type: object
+            additionalProperties: false
+            required: [orderId, shipmentId, reason]
+            description: >-
+                What the buyer needs to read a lost-parcel notice: which order and shipment, whether it
+                was lost or damaged in transit, the sentence staff wrote for them if any, and the
+                units the shelf could not cover again with the date they are now expected (absent
+                when everything is being sent again from the shelf).
+            properties:
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                shipmentId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                reason:
+                    type: string
+                    enum: [lost, damaged]
+                message:
+                    type: string
+                    maxLength: 500
+                owed:
+                    type: array
+                    description: The titles of the products still to be restocked, as the order froze them.
+                    items:
+                        type: string
+                expectedAt:
+                    type: string
+                    format: date-time
+
         FulfillmentHeldParams:
             type: object
             additionalProperties: false
@@ -272,6 +301,31 @@ components:
                     enum: [notifications.fulfillment-held]
                 params:
                     $ref: '#/components/schemas/FulfillmentHeldParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationShipmentLost:
+            type: object
+            additionalProperties: false
+            description: A parcel the caller was waiting for was reported lost or damaged in transit; the shop sends it again or refunds.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [notifications.shipment-lost]
+                params:
+                    $ref: '#/components/schemas/ShipmentLostParams'
                 severity:
                     $ref: '#/components/schemas/NotificationSeverity'
                 readAt:
@@ -510,6 +564,7 @@ components:
                 - $ref: '#/components/schemas/NotificationCartMergeRefused'
                 - $ref: '#/components/schemas/NotificationFulfillmentDelayed'
                 - $ref: '#/components/schemas/NotificationFulfillmentHeld'
+                - $ref: '#/components/schemas/NotificationShipmentLost'
                 - $ref: '#/components/schemas/NotificationStockAlert'
                 - $ref: '#/components/schemas/NotificationStaffPurchaseHoldPlaced'
                 - $ref: '#/components/schemas/NotificationStaffWebhookDisabled'
@@ -521,6 +576,7 @@ components:
                     notifications.cart-merge-refused: '#/components/schemas/NotificationCartMergeRefused'
                     notifications.fulfillment-delayed: '#/components/schemas/NotificationFulfillmentDelayed'
                     notifications.fulfillment-held: '#/components/schemas/NotificationFulfillmentHeld'
+                    notifications.shipment-lost: '#/components/schemas/NotificationShipmentLost'
                     notifications.stock-alert: '#/components/schemas/NotificationStockAlert'
                     notifications.staff.purchase-hold-placed: '#/components/schemas/NotificationStaffPurchaseHoldPlaced'
                     notifications.staff.webhook-disabled: '#/components/schemas/NotificationStaffWebhookDisabled'

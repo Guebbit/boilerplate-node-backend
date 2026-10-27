@@ -35,7 +35,7 @@ import {
     exportFailedEmail,
     exportReadyEmail
 } from '@modules/account/emails';
-import { contactRequestEmail } from '@modules/feedback/emails';
+import { contactRequestEmail } from '@modules/tickets/emails';
 import { examplePublishedEmail } from '@modules/example';
 import {
     orderConfirmEmail,
@@ -45,6 +45,7 @@ import {
 import {
     paymentReceivedEmail,
     refundIssuedEmail,
+    refundUndeliverableEmail,
     transferExpiredEmail,
     transferInstructionsEmail
 } from '@modules/payments/emails';
@@ -52,6 +53,7 @@ import { purchaseHoldPlacedEmail } from '@modules/users/emails';
 import { buildDocumentView } from '@modules/invoicing/emails';
 import {
     holdNoticeEmail,
+    shipmentLostEmail,
     fulfillmentDelayedEmail,
     shipmentDeliveredEmail,
     shipmentShippedEmail
@@ -75,7 +77,7 @@ describe('the template collection', () => {
         'account.deleted',
         'account.deletion-scheduled',
         'account.restored',
-        'feedback.contact'
+        'tickets.contact'
     ])('resolves %s to a real file', (name) => {
         expect(() => templateFile(name)).not.toThrow();
     });
@@ -195,6 +197,14 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         { amount: 7, currency: 'EUR' },
         true
     ),
+    'payments.refund-undeliverable': refundUndeliverableEmail(
+        locale,
+        'Ada',
+        '2026-000041',
+        { amount: 7, currency: 'EUR' },
+        'shop@example.com',
+        'an-order-id'
+    ),
     'delivery.shipment-shipped': shipmentShippedEmail(locale, 'Ada', {
         lines: [{ title: 'Widget', quantity: 1 }],
         trackingCode: 'TRK-0000TEST',
@@ -203,6 +213,14 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
     'delivery.shipment-delivered': shipmentDeliveredEmail(locale, 'Ada', {
         lines: [{ title: 'Widget', quantity: 1 }],
         withdrawUntil: new Date(Date.UTC(2026, 10, 14))
+    }),
+    'delivery.shipment-lost': shipmentLostEmail(locale, 'Ada', {
+        reason: 'lost',
+        lines: [{ title: 'Widget', quantity: 2 }],
+        owed: [{ title: 'Widget', quantity: 1 }],
+        expectedAt: new Date(Date.UTC(2026, 11, 20)),
+        message: 'We will ship it again this week.',
+        orderUrl: 'https://shop.example/orders/an-order-id'
     }),
     'delivery.hold-notice': holdNoticeEmail(locale, 'Ada', {
         notice: 'check_address',
@@ -230,7 +248,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         params: { userId: '6ad69a48f753b902e5b98dfe', until: '2026-10-26T22:00:00.000Z' }
     }),
     'example.published': examplePublishedEmail(locale, 'Ada', 'A title'),
-    'feedback.contact': contactRequestEmail(locale, {
+    'tickets.contact': contactRequestEmail(locale, {
         name: 'Ada',
         email: 'ada@example.com',
         subject: 'A subject',
@@ -267,6 +285,12 @@ const minimalContentFor = (locale: string): Record<string, EmailContent> => ({
     }),
     'delivery.shipment-delivered': shipmentDeliveredEmail(locale, 'Ada', {
         lines: [{ title: 'Widget', quantity: 1 }]
+    }),
+    'delivery.shipment-lost': shipmentLostEmail(locale, 'Ada', {
+        reason: 'damaged',
+        lines: [{ title: 'Widget', quantity: 1 }],
+        owed: [],
+        orderUrl: 'https://shop.example/orders/an-order-id'
     }),
     'delivery.hold-notice': holdNoticeEmail(locale, 'Ada', {
         notice: 'delayed',

@@ -13,9 +13,12 @@ x-error-codes:
     RETURN_LINES_INVALID: { status: 422, description: 'A line names a product that is not on the order, asks for more than is left of it, is excluded from the right of withdrawal (Art. 16), or nothing on the order is left to return.' }
     RETURN_NOT_RECEIVABLE: { status: 409, description: 'The return is not an approved one awaiting its goods.' }
     RETURN_NOT_CLOSABLE: { status: 409, description: 'The return is not one that was received and still awaits its money, so it cannot be closed by hand.' }
+    RETURN_NOT_CANCELABLE: { status: 409, description: 'The return is not an approved one awaiting goods that never came, so it cannot be canceled.' }
+    RETURN_RESTOCK_INVALID: { status: 422, description: 'A restock count names a product that is not on the return, names one twice, or is more than the line holds.' }
     RETURN_NOT_DECIDABLE: { status: 409, description: 'The return has already been decided.' }
     RETURN_ORDER_NOT_RETURNABLE: { status: 409, description: 'The order is not in a state a return can be opened on — cancelled, or (for a reason other than withdrawal) still in the shop''s hands.' }
-    RETURN_CANCELLATION_INVALID: { status: 422, description: 'A cancellation names no fulfillment order of this order, or sends `lines` (the remainder is its lines), or a return names a fulfillment order. Also the reason does not fit the caller: the order''s buyer cancels only as a `withdrawal`; anyone else (staff) may name any reason but `withdrawal`, which is the buyer''s own right.' }
+    RETURN_CANCELLATION_INVALID: { status: 422, description: 'A cancellation names no fulfillment order of this order, or sends `lines` (the remainder is its lines), or a return names a fulfillment order. Also the reason does not fit the caller: the order''s buyer cancels only as a `withdrawal`.' }
+    RETURN_STATEMENT_INVALID: { status: 422, description: 'The date or the channel of what the buyer stated is missing where staff must give it (a withdrawal recorded for the buyer), given where it does not belong (by the buyer, or on a reason that is not a withdrawal), in the future, or before the order was made.' }
     RETURN_NOTHING_TO_CANCEL: { status: 409, description: 'The fulfillment order has nothing left to cancel, or nothing has shipped from the order yet (cancel the whole order instead).' }
     RETURN_WINDOW_CLOSED: { status: 409, description: 'The period for the reason named has ended: the withdrawal period for a withdrawal or other, two years from delivery for a defect or a wrong item.' }
 
@@ -100,14 +103,30 @@ paths:
                 the delivery when it takes the last unit of the order). The buyer uses it as part of
                 their withdrawal, and names `reason: withdrawal`; staff may use it too (out of stock
                 for good), name any other reason, and need `create:Refund` — the refund key,
-                `stepUp: critical`. Staff naming `withdrawal` on someone else's order are refused
-                (`RETURN_CANCELLATION_INVALID`): that reason is the buyer's right, and writing it for
-                them would falsify a legal record. A staff cancellation asks a fresh session; the
-                buyer's own withdrawal never does. `GET /returns/options` says what each door would
-                take and refund, and whether this caller may use it (`cancel`).
+                `stepUp: critical`. A staff cancellation asks a fresh session; the buyer's own
+                withdrawal never does. `GET /returns/options` says what each door would take and
+                refund, and whether this caller may use it (`cancel`).
 
-                A return answers for goods that left (`kind: return`, the default); only the order's
-                own buyer opens one, an operator included. Sending `Idempotency-Key` makes a retry safe.
+                A return answers for goods that left (`kind: return`, the default). The order's buyer
+                opens one for any reason whose deadline is open. Staff holding `update:Return` open
+                one on a buyer's behalf, the way a phone call or an email asks for it: it is born
+                `approved`, opening it IS the decision, and the buyer is told where to send the goods.
+                Staff are not stopped by the deadline or by goods Art. 16 excludes for the shop's own
+                reasons (`defective`, `wrong_item`, `other`): what they waived is recorded on the
+                return, in `policyExceptions`. `requestedAt` says when the buyer asked (default now,
+                never in the future, never before the order existed); the deadline is judged on it.
+
+                Staff can also record a withdrawal the buyer stated outside the shop: `reason:
+                withdrawal` with `requestedAt` (when the buyer sent it, Art. 11(2)) and `statedVia`
+                (`phone`, `email`, `letter`, `other`), both required. The withdrawal keeps its legal
+                window, judged on `requestedAt`, and its Art. 16 exclusion. It does everything the
+                buyer's own withdrawal does, and the customer is told when they stated it and when the
+                shop recorded it. Shipped goods need `update:Return`; before dispatch the order is
+                cancelled and refunded, which needs `create:Refund` (money out) and `update:Order` (the
+                cancel); a remainder cancel needs `create:Refund`. Any request carrying `statedVia`
+                asks a fresh session: the record is a legal act, and the check fails closed. The
+                buyer sends neither `requestedAt` nor `statedVia` (422): the server sets them. Sending
+                `Idempotency-Key` makes a retry safe.
             operationId: createReturn
             security:
                 - bearerAuth: []
@@ -128,16 +147,16 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Return'
-                # Also `REAUTH_REQUIRED`: a staff `cancellation` from a session past the critical window.
+                # Also `REAUTH_REQUIRED`: a staff `cancellation`, or any request carrying `statedVia`, from a session past the critical window.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                # A staff `cancellation` by a caller without the refund key (`create:Refund`).
+                # A staff `cancellation`, or a staff withdrawal before dispatch, by a caller without the keys it needs (`create:Refund`, `update:Order`).
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                # Not the caller's order, or no such order.
+                # Not the caller's order and no `update:Return` to act for the buyer, or no such order.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # `RETURN_ORDER_NOT_RETURNABLE`, `RETURN_WINDOW_CLOSED`, `RETURN_NOTHING_TO_CANCEL` — or
                 # `Idempotency-Key` names a request still in flight.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
-                # `RETURN_LINES_INVALID`, `RETURN_CANCELLATION_INVALID`, or a malformed body.
+                # `RETURN_LINES_INVALID`, `RETURN_CANCELLATION_INVALID`, `RETURN_STATEMENT_INVALID`, or a malformed body.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -149,9 +168,12 @@ paths:
             description: >-
                 The server's answer to "what can I still return, and what can I still cancel?" for one
                 order, so no client counts. `returnable` is the quantity per product that has SHIPPED
-                and has not already been returned, offered to the buyer only and only while a
-                deadline in `reasons` is open: staff get an empty list (cancelling is theirs, returning
-                is the buyer's right), and so does a buyer past every deadline. `cancellable` lists each fulfillment order that
+                and has not already been returned, offered while a reason in `reasons` is open: the
+                buyer's `reasons` are the ones whose deadline is open (none past every deadline), and
+                staff holding `update:Return` get every reason, since they may open a return or record
+                a withdrawal on a buyer's behalf. `exceptions` lists, for staff, the reasons that are
+                past their deadline now, so a client can label what opening one would waive.
+                `cancellable` lists each fulfillment order that
                 still has a remainder, with the exact refund cancelling it would owe (the delivery
                 included when it takes the last unit of the order). `cancellable` is empty while
                 nothing has shipped — the whole order is cancelled instead (`Order.actions.cancel`).
@@ -232,8 +254,12 @@ paths:
             tags: [Returns]
             summary: Decline a return request
             description: >-
-                Staff refuse a `requested` return, saying why — the customer is mailed the reason.
-                Same conditional write as `approve`.
+                Staff refuse a `requested` return with a reason code, and a message to the buyer that
+                `other` requires — the customer is mailed the code's sentence, in their own language,
+                and the message. Same conditional write as `approve`. A decline is final: a mistaken one
+                is fixed by opening a new return for the same lines. A decline is a complaint the shop
+                does not settle, so the mail does not carry the ADR information Directive 2013/11
+                Art. 13(3) asks for; that is the shop's to add.
             operationId: declineReturn
             security:
                 - bearerAuth: []
@@ -270,7 +296,8 @@ paths:
                 note in the audit row only. No money moves, no stock moves (the units went back on
                 sale when the goods were received), no credit note is issued and the customer is not
                 mailed that their money went back: closing is bookkeeping, not a refund. A return that
-                is not `received` (a `requested` one is declined, not closed) answers 409
+                is not `received` (a `requested` one is declined, an `approved` one whose goods never came is
+                canceled, not closed) answers 409
                 `RETURN_NOT_CLOSABLE`. Needs `receive:Return`, the key that receives the goods, which
                 carries a fresh-session requirement.
             operationId: closeReturn
@@ -299,6 +326,53 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /returns/{id}/cancel:
+        post:
+            tags: [Returns]
+            summary: Cancel an approved return whose goods never came
+            description: >-
+                Staff end an `approved` return whose goods will never arrive: the buyer never sent
+                them, or changed their mind. The return becomes `canceled`, a final state that is
+                not `closed`: it holds no units (the same lines can be returned again) and counts
+                as no goods back, so the order's return status leaves `in_progress` and the
+                delivery refund is not taken by it. A withdrawal, born `approved`, can be canceled
+                too.
+
+                Bookkeeping only. No money moves, no stock moves, no event is published and the
+                customer is not mailed. The order's timeline and the audit row
+                `admin.return.canceled` say so, with the note in the audit row only. A return that
+                is not `approved` answers 409 `RETURN_NOT_CANCELABLE`: a `requested` one is
+                declined, a `received` one is closed.
+
+                A parcel lost on its way back is NOT canceled: the shop bears that risk, so the
+                refund may be owed. Receive it with a restock count of 0 instead. Needs
+                `update:Return`; no fresh session, since nothing moves.
+            operationId: cancelReturn
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CancelReturnRequest'
+            responses:
+                '200':
+                    description: The return, `canceled`
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Return'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # `RETURN_NOT_CANCELABLE`
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /returns/{id}/receive:
         post:
             tags: [Returns]
@@ -313,7 +387,12 @@ paths:
                 What is refunded: the returned lines, plus the delivery paid when the return
                 carries every unit on the order (a withdrawal gets back up to the cheapest standard
                 delivery on offer; faulty or wrong goods get all of it), less an optional
-                `handlingDeduction` for damage the customer caused (Art. 14(2)). The amount is fixed
+                `handlingDeduction` for damage the customer caused (Art. 14(2)). Which of the returned
+                units go back on sale is staff's call, per line: `lines[].restock` (absent means all
+                of them). A broken unit set to 0 never reaches the shelf, so it is never handed to a
+                backorder buyer, and the refund does not change: restocking is about the goods, not the
+                money. A parcel lost on its way back is received with 0 on every line: the shop bears
+                that risk, so the refund is owed, and nothing goes on sale. The amount is fixed
                 when the goods are received and shown as `refundAmount`. If the payment provider
                 refuses, the return stays `received` and the refund is retried by the payment sweep;
                 the return closes when it lands. The answer is 200 either way: `received` means the
@@ -345,7 +424,7 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # `RETURN_NOT_RECEIVABLE` — or `Idempotency-Key` names a request still in flight.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
-                # `RETURN_DEDUCTION_INVALID`, or a malformed body.
+                # `RETURN_DEDUCTION_INVALID`, `RETURN_RESTOCK_INVALID`, or a malformed body.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
@@ -353,10 +432,11 @@ components:
     schemas:
         ReturnStatus:
             type: string
-            enum: [requested, approved, declined, received, closed]
+            enum: [requested, approved, declined, received, closed, canceled]
             description: >-
                 Where a return stands: `requested → approved → received → closed`, or `requested →
-                declined`. A withdrawal is born `approved` — or `closed`, when it reached the order
+                declined`, or `approved → canceled` (the goods never came). `canceled` is final and
+                is not `closed`: it holds no units and counts as no goods back. A withdrawal is born `approved` — or `closed`, when it reached the order
                 before dispatch. Which move may follow which is the
                 server's rule, answered per caller by `Return.actions`.
 
@@ -376,6 +456,40 @@ components:
             description: >-
                 Why the goods come back. `withdrawal` is the EU right of withdrawal — the same object
                 a faulty-goods return uses, with a legal deadline and an acknowledgement attached.
+
+        ReturnDeclineReason:
+            type: string
+            enum: [return_period_ended, not_returnable, no_defect_found, other]
+            description: >-
+                Why staff declined, as a code the buyer reads in their own language and a shop can count:
+                `return_period_ended` — past the window; `not_returnable` — exempt from returns (an Art. 16
+                exception) or sold as final sale; `no_defect_found` — a guarantee claim where the goods
+                conform; `other` — see the message.
+
+        ReturnOpenedBy:
+            type: string
+            enum: [buyer, staff]
+            description: Who opened the return — the order's buyer, or staff on the buyer's behalf.
+
+        ReturnPolicyException:
+            type: string
+            enum: [window_closed, excluded_goods]
+            description: >-
+                A rule staff waived when they opened the return for a buyer: `window_closed` — the
+                reason's deadline had passed when the buyer asked; `excluded_goods` — a line is goods
+                Art. 16 takes the right of withdrawal away from.
+
+        ReturnStatementChannel:
+            type: string
+            enum: [online, phone, email, letter, other]
+            description: >-
+                How the buyer stated a withdrawal. `online` is the shop's own button; the rest are
+                what staff record.
+
+        StaffStatementChannel:
+            type: string
+            enum: [phone, email, letter, other]
+            description: How the buyer stated a withdrawal outside the shop, as staff record it.
 
         ReturnKind:
             type: string
@@ -404,11 +518,17 @@ components:
                     format: double
                     minimum: 0
                     description: The gross unit price the order froze.
+                restocked:
+                    type: integer
+                    minimum: 0
+                    description: >-
+                        How many of the `quantity` went back on sale when the goods were received. Set
+                        at receipt, never more than `quantity`; absent before then.
 
         ReturnActions:
             type: object
             additionalProperties: false
-            required: [approve, decline, receive, close]
+            required: [approve, decline, receive, close, cancel]
             description: >-
                 What the requesting caller may do to this return, decided by the server, so a client
                 renders its controls from this rather than re-implementing the lifecycle. Each needs
@@ -426,11 +546,14 @@ components:
                 close:
                     type: boolean
                     description: Whether `POST /returns/{id}/close` would be accepted.
+                cancel:
+                    type: boolean
+                    description: Whether `POST /returns/{id}/cancel` would be accepted.
 
         Return:
             type: object
             additionalProperties: false
-            required: [id, orderId, orderNumber, currency, status, reason, kind, lines, returnPostage, createdAt, actions]
+            required: [id, orderId, orderNumber, currency, status, reason, kind, lines, returnPostage, requestedAt, openedBy, policyExceptions, createdAt, actions]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -465,9 +588,31 @@ components:
                         shop's configuration, so it is what the customer was told beforehand (Art.
                         14(1)).
                     $ref: '../shop/openapi.yaml#/components/schemas/ReturnPostagePayer'
-                declineReason:
+                requestedAt:
                     type: string
-                    description: Why staff declined. Present only on a `declined` return.
+                    format: date-time
+                    description: >-
+                        When the buyer asked (or, for a withdrawal, stated it). The server sets it for
+                        the buyer; staff may backdate it to the day the buyer actually phoned or wrote.
+                        The deadline is judged on it.
+                statedVia:
+                    $ref: '#/components/schemas/ReturnStatementChannel'
+                openedBy:
+                    $ref: '#/components/schemas/ReturnOpenedBy'
+                policyExceptions:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ReturnPolicyException'
+                    description: What staff waived when they opened it. Empty when the buyer opened it, or nothing was waived.
+                declineReason:
+                    $ref: '#/components/schemas/ReturnDeclineReason'
+                declineMessage:
+                    type: string
+                    maxLength: 500
+                    description: >-
+                        What staff wrote to the buyer beside the reason code; required when the code is
+                        `other`. Free text, so `reap:returns` unsets it after the retention window; the
+                        code stays.
                 decidedAt:
                     type: string
                     format: date-time
@@ -492,6 +637,10 @@ components:
                     type: string
                     format: date-time
                     description: When the money went back and the return finished.
+                canceledAt:
+                    type: string
+                    format: date-time
+                    description: When staff canceled the return. Present only on a `canceled` return.
                 # Computed per CALLER, not stored — present on every response carrying a return, list rows included.
                 actions:
                     $ref: '#/components/schemas/ReturnActions'
@@ -520,6 +669,16 @@ components:
                 fulfillmentOrderId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                     description: Required exactly when `kind` is `cancellation` — the fulfillment order whose remainder is cancelled.
+                requestedAt:
+                    type: string
+                    format: date-time
+                    description: >-
+                        Staff only: when the buyer asked, or for a withdrawal when they stated it
+                        (Art. 11(2) judges timing on the day it was sent). Required for a staff
+                        withdrawal, optional otherwise (default now). Never in the future, never
+                        before the order was made. The buyer does not send it.
+                statedVia:
+                    $ref: '#/components/schemas/StaffStatementChannel'
                 lines:
                     type: array
                     minItems: 1
@@ -549,6 +708,23 @@ components:
                     description: >-
                         Handling damage to keep back from the refund (Art. 14(2)), a decimal in the
                         return's currency. Absent means none. More than the refund is worth is refused.
+                lines:
+                    type: array
+                    description: >-
+                        How many units of each returned product go back on sale. A product not listed
+                        goes back in full, and absent `lines` puts everything back. A unit that is
+                        broken is set to 0. An unknown or repeated product, or a count over the line's
+                        quantity, is refused.
+                    items:
+                        type: object
+                        additionalProperties: false
+                        required: [productId, restock]
+                        properties:
+                            productId:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                            restock:
+                                type: integer
+                                minimum: 0
 
         CloseReturnRequest:
             type: object
@@ -562,16 +738,32 @@ components:
                         Why the return is closed by hand. Optional, staff-only free text, kept in the
                         audit row and nowhere the customer reads.
 
+        CancelReturnRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                note:
+                    type: string
+                    minLength: 1
+                    maxLength: 500
+                    description: >-
+                        Why the return is canceled. Optional, staff-only free text, kept in the audit
+                        row and nowhere the customer reads.
+
         DeclineReturnRequest:
             type: object
             additionalProperties: false
             required: [reason]
             properties:
                 reason:
+                    $ref: '#/components/schemas/ReturnDeclineReason'
+                message:
                     type: string
                     minLength: 1
                     maxLength: 500
-                    description: What the customer is told. Required — a refusal nobody explains is not one.
+                    description: >-
+                        Text for the buyer, mailed beside the reason. Required when `reason` is `other`
+                        ("other" alone tells the buyer nothing); optional otherwise.
 
         ReturnOptionLine:
             type: object
@@ -641,7 +833,7 @@ components:
         ReturnOptions:
             type: object
             additionalProperties: false
-            required: [orderId, currency, returnable, cancellable]
+            required: [orderId, currency, exceptions, returnable, cancellable]
             properties:
                 orderId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -654,18 +846,28 @@ components:
                         $ref: '#/components/schemas/ReturnReason'
                     description: >-
                         The reasons THIS caller can still name, so a client offers no door that is shut.
-                        Empty for staff (the right is the buyer's own) and once every deadline has
-                        passed. `withdrawal` and `other` last for the withdrawal period; `defective`
-                        and `wrong_item` for two years from delivery (the legal guarantee of
-                        conformity), made-to-order goods included.
+                        The buyer's are the ones whose deadline is open: empty once every deadline
+                        has passed. `withdrawal` and `other` last for the withdrawal period;
+                        `defective` and `wrong_item` for two years from delivery (the legal guarantee
+                        of conformity), made-to-order goods included. Staff holding `update:Return`
+                        get every reason: they open a return, or record a withdrawal, for the buyer.
+                exceptions:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ReturnReason'
+                    description: >-
+                        For staff, the non-withdrawal reasons that are past their deadline now: opening
+                        a return for one is recorded as an exception (`window_closed`). Empty for the
+                        buyer. A preview: the server judges the deadline on `requestedAt` when it opens.
                 returnable:
                     type: array
                     items:
                         $ref: '#/components/schemas/ReturnOptionLine'
                     description: >-
                         Per product, what has shipped and not yet been returned. Empty unless `reasons`
-                        is not. Goods excluded from withdrawal (Art. 16) are listed only while a
-                        `defective` or `wrong_item` reason is open, and carry `withdrawable: false`.
+                        is not. Goods excluded from withdrawal (Art. 16) are listed to the buyer only
+                        while a `defective` or `wrong_item` reason is open, and to staff always; they
+                        carry `withdrawable: false`.
                 cancellable:
                     type: array
                     items:
@@ -684,7 +886,7 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
 
         # Used by `POST /account/export` (`shared/contracts/openapi.root.yaml`) — what the customer
-        # wrote, what staff wrote back (`declineReason`, the customer's own data under Art. 15) and
+        # wrote, what staff wrote back (`declineReason` and `declineMessage`, the customer's own data under Art. 15) and
         # where it stands. The deciding staff member and the frozen unit prices are left out: an
         # export answers "what did I ask for and what was I told", not the shop's working records.
         ExportReturn:
@@ -703,6 +905,8 @@ components:
                 note:
                     type: string
                 declineReason:
+                    $ref: '#/components/schemas/ReturnDeclineReason'
+                declineMessage:
                     type: string
                 lines:
                     type: array

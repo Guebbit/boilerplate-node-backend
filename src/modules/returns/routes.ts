@@ -33,20 +33,30 @@ import { getReturnOptions } from './controllers/get-return-options';
 import { postReturnApprove, postReturnDecline } from './controllers/post-return-decision';
 import { postReturnReceive } from './controllers/post-return-receive';
 import { postReturnClose } from './controllers/post-return-close';
+import { postReturnCancel } from './controllers/post-return-cancel';
 
 /**
- * Whether this request is a staff remainder cancel — `kind: cancellation`, any reason but the one
- * exempt value `withdrawal`, by a caller holding the refund key. That is the money-out door, so it
- * needs a fresh session. The buyer's own withdrawal is never prompted.
+ * Whether this request needs a fresh session. Two things do:
  *
- * Written as a deny on the one exempt value: a missing reason, an array or a wrong case is
- * prompted (fails closed), then refused by the body schema. Safe on the raw body — only
- * `express.json` parses it, nothing rewrites it before the controller, and `CreateReturnBody` is an
- * exact-enum `strictObject` with no coercion. A staff member naming `withdrawal` on someone else's
- * order is refused by the service (422), so the exemption buys them nothing.
+ * - a staff remainder cancel — `kind: cancellation`, any reason but `withdrawal`, by a caller
+ *   holding the refund key: the money-out door;
+ * - any request carrying `statedVia`: a staff member recording a withdrawal the buyer stated
+ *   outside the shop. That is a legal record, and before dispatch it cancels the order and refunds
+ *   it, so the check does not look at who is asking — it fails closed. The buyer never sends the
+ *   field (the service refuses it with a 422), so a buyer is only prompted for sending what they
+ *   must not.
+ *
+ * The buyer's own withdrawal is never prompted. Written as a deny on the one exempt reason: a
+ * missing reason, an array or a wrong case is prompted (fails closed), then refused by the body
+ * schema. Safe on the raw body — only `express.json` parses it, nothing rewrites it before the
+ * controller, and `CreateReturnBody` is an exact-enum `strictObject` with no coercion.
  */
-const isStaffCancellation = (request: Request): boolean => {
-    const body = request.body as { kind?: unknown; reason?: unknown } | undefined;
+const needsFreshLogin = (request: Request): boolean => {
+    const body = request.body as
+        | { kind?: unknown; reason?: unknown; statedVia?: unknown }
+        | undefined;
+    if (body?.statedVia !== undefined) return true;
+
     return (
         body?.kind === 'cancellation' &&
         body.reason !== 'withdrawal' &&
@@ -65,13 +75,13 @@ router.use(getAuth, isAuth);
 router.get('/', privateNoCache, getReturns);
 
 // POST /returns — open a return, or withdraw. The budget comes first: a spent one should not cost a write.
-// A staff `cancellation` is a refund: it needs a fresh session, at that key's own tier. The step-up
+// A staff `cancellation` is a refund, and a recorded withdrawal (`statedVia`) a legal act: both need a fresh session, at the critical tier. The step-up
 // sits BEFORE `idempotencyKey`: the ledger records any JSON answer, so a 401 challenge placed behind
 // it would be replayed as the answer to the same key after the staff member re-authenticated.
 router.post(
     '/',
     returnsWriteLimiter,
-    requireFreshAuthWhen(isStaffCancellation, 'critical'),
+    requireFreshAuthWhen(needsFreshLogin, 'critical'),
     idempotencyKey,
     postReturn
 );
@@ -103,3 +113,8 @@ router.post(
 // way. The same `receive:Return` key (and so the same `stepUp`) as receiving: closing is the end
 // of the same act. No `Idempotency-Key`: a second close finds the return closed and answers 409.
 router.post('/:id/close', requirePermission('receive', 'Return'), postReturnClose);
+
+// POST /returns/:id/cancel — staff ending an approved return whose goods never came. `update:Return`,
+// the decision key: nothing moves (no money, no stock), so no step-up. No `Idempotency-Key`: a
+// second cancel finds the return canceled and answers 409.
+router.post('/:id/cancel', requirePermission('update', 'Return'), postReturnCancel);

@@ -54,7 +54,7 @@ interface WriteException {
 
 /** Write routes exempt from the app-wide default, keyed `${module} ${METHOD} ${path}`. */
 const WRITE_EXCEPTIONS: Record<string, WriteException> = {
-    'feedback POST /contact': {
+    'tickets POST /': {
         requiresAuth: false,
         reason: 'the visitor contact form, mounted above the keyed gate on purpose'
     },
@@ -248,7 +248,7 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: "cancelling the caller's own back-in-stock request"
     },
-    'payments POST /webhook': {
+    'payments POST /webhook/:provider': {
         requiresAuth: false,
         reason: 'the payment provider reporting an outcome — a machine with no account, which authenticates by signing the raw body instead'
     }

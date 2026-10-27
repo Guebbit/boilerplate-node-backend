@@ -180,12 +180,39 @@ one thing "in progress" changes is that the customer can no longer cancel the or
 parcel, the same way recording the handover is — not a button standing in for a delivery company's
 own report. → [`delivery`](../modules/delivery.md)
 
+::: tip A parcel that will not arrive
+If the carrier loses a parcel, or it is damaged on the way, press **Report lost / damaged** on the
+shipment instead of creating a new order: the units open again on the same order and you ship them with
+the normal button. → [A parcel lost or damaged](./when-something-goes-wrong.md#lost-parcel)
+:::
+
 ::: tip When the ordinary sequence does not fit
 A parcel scanned against the wrong order, or a correction needed outside the normal pack → ship →
 deliver order, goes through an admin's forced correction instead — see
 [Correcting a mistake](./manager.md#correcting-a-mistake). It still creates the same record; it
 just carries a reason and skips the ordinary gate.
 :::
+
+## A returned parcel arrives {#a-returned-parcel-arrives}
+
+When a buyer's parcel comes back, press **Goods received** on the return. By default every unit goes
+back on the shelf and the buyer is refunded.
+
+**A returned item is damaged.** Set the **restock** count of its line to **0** (or to how many of
+the units are sellable) before you press the button. The units you do not restock never reach the
+shelf, so a broken lamp is never handed to a buyer who is waiting for one. The refund does not
+change: restocking is about the goods, not the money.
+
+Dispose of the broken item or repair it. If it becomes sellable, record it with **Receive stock**
+(a delivery) and write in the note that it is a repaired return.
+
+::: warning The shop pays for a lost parcel
+A buyer who posted the goods and shows proof of posting is owed the refund even if the parcel never
+arrives. Receive the return with a restock count of 0 on every line (see
+[The return parcel was lost](./when-something-goes-wrong.md#return-parcel-lost)).
+:::
+
+→ [`returns`](../modules/returns.md#what-the-customer-gets-back)
 
 ## The words we used
 

@@ -31,8 +31,7 @@ flowchart LR
 
 **A feature with no real adapter simply does not work** in production. Today there is no real
 payment adapter, so production offers no card payment: `GET /payments/methods` lists no `card`,
-checkout refuses it with `409 CART_PAYMENT_METHOD_NOT_AVAILABLE`, and `POST /payments/webhook`
-answers 404. A deployment with a bank transfer configured still checks out, by transfer.
+checkout refuses it with `409 CART_PAYMENT_METHOD_NOT_AVAILABLE`. A deployment with a bank transfer configured still checks out, by transfer.
 
 ## The door: one preload
 

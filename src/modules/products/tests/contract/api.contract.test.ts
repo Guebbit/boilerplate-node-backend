@@ -11,6 +11,13 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { createProduct } from '@modules/products/tests/factories';
+import { givenLocale } from '@modules/locales/tests/factories';
+import { localeService } from '@modules/locales';
+import {
+    refreshLocaleOverrides,
+    registerLocaleOverrideProvider,
+    resetLocaleOverrides
+} from '@infrastructure/i18n';
 import { productRepository } from '../../repository';
 
 setupTestDb();
@@ -594,4 +601,42 @@ describe('DELETE /products — the id in the body', () => {
 
         expect(response.status).toBe(404);
     });
+});
+
+describe('a staff preview of a draft language', () => {
+    beforeAll(() => {
+        registerLocaleOverrideProvider(() => localeService.readLocaleOverlay());
+    });
+
+    afterEach(() => {
+        resetLocaleOverrides();
+    });
+
+    afterAll(() => {
+        registerLocaleOverrideProvider(undefined);
+    });
+
+    it.each(['GET /products/{id}', 'GET /products'])(
+        '%s keeps the documented shape, and says which language it is written in',
+        async (read) => {
+            await givenLocale('en');
+            await givenLocale('de', { active: false });
+            const product = await createProduct({ title: 'Dog basket' });
+            const id = String(product._id);
+            await localeService.updateEntityTranslations('product', id, {
+                de: { fields: { title: 'Hundekorb' } }
+            });
+            await refreshLocaleOverrides();
+            const { bearer } = await authenticateAs('admin');
+
+            const response = await api()
+                .get(read === 'GET /products' ? '/products' : `/products/${id}`)
+                .set('Authorization', bearer)
+                .set('Accept-Language', 'de');
+
+            expect(response.status).toBe(200);
+            expect(response.headers['content-language']).toBe('de');
+            expect(response.headers['cache-control']).toBe('private, no-store');
+        }
+    );
 });

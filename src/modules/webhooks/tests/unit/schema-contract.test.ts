@@ -138,7 +138,7 @@ describe('webhookDeliverySchema', () => {
 
     it('expires a delivery row at the configured retention window, and only that index', () => {
         // Asserted against the configured window rather than a literal, same reasoning as
-        // `feedback`'s own schema-contract test — so changing
+        // `tickets`'s own schema-contract test — so changing
         // `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS` moves the policy and the test together.
         expect(indexOptionSpecs(webhookDeliverySchema)).toEqual([
             `createdAt_1: expireAfterSeconds=${DELIVERY_RETENTION_SECONDS}`,

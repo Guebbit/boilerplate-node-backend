@@ -10,13 +10,21 @@ note field, and leaves the decision to a person. Each entry below has the same t
 | ---------------------------------------------------------------------- | -------------------------------------------------------------- |
 | A refund is owed and the money must be paid back by hand               | [A refund owed by hand](#refund-owed-by-hand)                  |
 | The card refused to take a refund back                                 | [A card refund the card refused](#card-refund-refused)         |
+| The bank sent a refund back after the shop had marked it paid          | [A refund the bank sent back](#refund-bounced)                 |
+| The buyer was asked how they want their money and has not answered     | [The buyer does not answer](#buyer-silent)                     |
 | A refund was also made in the provider's own dashboard                 | [Refunded in the dashboard as well](#refund-covered-elsewhere) |
 | Two refunds were opened by mistake                                     | [Two refunds by mistake](#two-refunds)                         |
 | A return was received but its refund will never come the usual way     | [A return that cannot finish](#return-cannot-finish)           |
+| A return was approved but the buyer never sent the goods               | [The buyer never sent it back](#buyer-never-sent-it)           |
+| A return parcel was lost on its way back to the shop                   | [The return parcel was lost](#return-parcel-lost)              |
 | Money arrived by bank transfer for an order that was already cancelled | [A transfer for a cancelled order](#late-transfer)             |
 | The shelf holds fewer units than the orders promised                   | [Fewer on the shelf than promised](#fewer-on-shelf)            |
 | An order stays in "being prepared" and nothing moves                   | [An order stuck in processing](#stuck-in-processing)           |
 | A parcel left a long time ago and nobody recorded its arrival          | [Shipped but not arrived](#shipped-not-arrived)                |
+| A parcel was lost, or damaged on the way, and the buyer never got it   | [A parcel lost or damaged](#lost-parcel)                       |
+| A parcel was lost and the shelf has none left to send again            | [Lost, and none left](#lost-none-left)                         |
+| A parcel marked lost has arrived after all                             | [The lost parcel arrived](#lost-parcel-arrived)                |
+| A parcel came back to the shop (returned to sender)                    | [It came back to us](#parcel-came-back)                        |
 
 ::: tip More entries come with their features
 Each entry here describes something the shop does today. When a new tool lands (disputes, a buyer
@@ -103,22 +111,77 @@ believe they were paid back and nobody is left to notice.
 **Whose job.** Whoever holds the refund permission: the [moderator](./moderator.md) or the admin.
 → [`payments`](../modules/payments.md#when-a-card-refund-cannot-go-back)
 
+## A refund the bank sent back {#refund-bounced}
+
+**What you see.** A refund read **succeeded** (the buyer was told, the credit note was issued), and
+days later the order is on the "needs attention" list as **Refund sent back by the bank**. On the
+payment the refund reads **Failed** again, with a "Reversed on" date. The buyer was emailed
+automatically: their bank returned the money, we still owe it, and they are asked how they would
+like to receive it.
+
+**What to do.**
+
+1. Wait for the buyer's answer by email, and agree a method with them, for example a bank transfer
+   to an account in their name. The shop does not store bank details: keep them in your mailbox and
+   your bank, under your usual retention.
+2. Pay the money back from your bank, for the amount shown.
+3. Only then press **Mark returned** on that refund.
+
+The credit note stays as it was: the sale was reduced, and a returned payout is money you owe, not
+a new sale. The legal clock (EU Consumer Rights Directive, Art. 13) is 14 days; the list shows how
+many are left when the refund paid a return or a withdrawal.
+
+::: warning Never pick a method for the buyer
+EU law lets you change the way the money goes back only when the buyer expressly agrees. Mark the
+refund returned after you paid them, never before.
+:::
+
+**Whose job.** Whoever holds the refund permission: the [moderator](./moderator.md) or the admin.
+→ [`payments`](../modules/payments.md#when-the-bank-sends-a-refund-back)
+
+## The buyer does not answer {#buyer-silent}
+
+**What you see.** A refund the card could not take back (refused for good, or sent back by the
+bank) is open, and the buyer was emailed asking how they would like the money. Days pass with no
+reply. The order stays on the "needs attention" list.
+
+**What to do.**
+
+1. Write to the buyer again around day 7, from your own mailbox.
+2. Note each try on the order or in the ticket, so the next person sees it.
+3. Keep the refund open. If the refund pays a return or a withdrawal, the list shows how many days
+   are left of the 14 the law gives you.
+
+::: warning Never mark it returned, or pick a method, for the buyer
+EU law lets you change the way the money goes back only when the buyer expressly agrees. Press
+**Mark returned** after you have actually paid them, never to make the row disappear.
+:::
+
+**Whose job.** The [moderator](./moderator.md) or the admin.
+→ [`payments`](../modules/payments.md#telling-the-buyer)
+
 ## Refunded in the dashboard as well {#refund-covered-elsewhere}
 
-**What you see.** Somebody refunded the buyer straight from the card provider's dashboard, and the
-shop also holds its own refund for the same money. On the payment, that refund reads **open**
-(waiting for you, or **Failed** with a clear reason such as "declined"), and the payment's
+**What you see.** Somebody refunded the buyer straight from the card provider's dashboard. The shop
+notices by itself: the refund appears on the payment as **Refunded in the provider's dashboard**,
+with the credit note and the buyer's email like any other refund. Nothing to do for that one.
+
+If the shop also held its own refund for the same money, the payment may now be refunded for more
+than was paid. The shop records the dashboard refund anyway (the money really left), keeps its own
+refund **unsent**, and puts the order on the "needs attention" list as **A refund made elsewhere left
+no room**, with by how much. On the payment, the shop's refund reads **open**, and the payment's
 **Cancel refund** button is offered.
 
 **What to do.**
 
 1. Open the provider's dashboard and confirm the money really went back to the buyer.
-2. Press **Cancel refund** on the shop's refund and write who refunded it, and where, in the note.
+2. Press **Cancel refund** on the shop's own refund and write who refunded it, and where, in the
+   note. (If you paid the buyer a third way instead, press **Mark returned**.)
 
 Cancelling is a void inside the shop only. Nothing is sent to the provider, no credit note is issued
 and the buyer is not emailed: the money never moved from here. The amount becomes refundable again.
-If the refund still reads **provider unavailable** or **no usable reason**, there is no Cancel
-button on purpose: the shop may still be sending it, so wait for its answer first.
+If the refund still reads **provider unavailable** or **no usable reason** and it fits, there is no
+Cancel button on purpose: the shop may still be sending it, so wait for its answer first.
 
 ::: warning Never cancel a refund the shop already paid
 A refund that reads **succeeded** cannot be cancelled: the money left, and voiding it would make
@@ -182,6 +245,47 @@ A request is approved or declined. Close is for a return whose goods have arrive
 
 **Whose job.** Whoever receives returns: the [warehouse](./warehouse.md) or the manager.
 → [`returns`](../modules/returns.md#closing-a-return-by-hand)
+
+## The buyer never sent it back {#buyer-never-sent-it}
+
+**What you see.** A return is **approved**, the order reads "return in progress", and weeks later no
+parcel has come.
+
+**What to do.** Press **Cancel return** on the return and, if you like, write why. The return becomes
+canceled: its units can be returned again and the order stops reading "return in progress".
+
+Canceling is bookkeeping only: no money, no stock, no email. It is not a close, because the goods did
+not come back.
+
+::: warning If the buyer has proof of posting, do not cancel
+A buyer who shows a posting receipt sent the goods; the shop bears the risk of the parcel on its way
+back and the refund is owed. See [The return parcel was lost](#return-parcel-lost).
+:::
+
+::: warning A withdrawal has 14 days to send the goods
+Do not cancel a withdrawal before the buyer's 14 days to send the goods have passed (CRD Art.
+14(1)). If the goods turn up after a cancel, record the withdrawal again as a new return with the
+original date as `requestedAt` (the same fix as
+[Declined by mistake](./support.md#declined-by-mistake)).
+:::
+
+**Whose job.** The [manager](./manager.md), the moderator or support: whoever holds `update:Return`.
+→ [`returns`](../modules/returns.md#canceling-a-return)
+
+## The return parcel was lost {#return-parcel-lost}
+
+**What you see.** The buyer says they posted the goods back, and shows it. The carrier lost the
+parcel. A return is **approved** and nothing arrives.
+
+**What to do.** Do not cancel. Press **Goods received** and set the restock count of every line to **0**.
+The buyer is refunded, and the units count as back, but nothing goes on sale: there is nothing on
+the shelf.
+
+The shop carries the risk of the parcel until it holds it, so the money is owed. If the parcel
+turns up later and the goods are sellable, use **Receive stock** with a note that it is a repaired or found return.
+
+**Whose job.** Whoever receives returns: the [warehouse](./warehouse.md) or the manager.
+→ [`returns`](../modules/returns.md#what-the-customer-gets-back)
 
 ## A transfer for a cancelled order {#late-transfer}
 
@@ -266,3 +370,81 @@ recorded, the clock has not started and the buyer's return window is still close
 **Whose job.** The warehouse records; the [support desk](./support.md#where-is-my-order) is who
 hears about it first, from a buyer asking where the parcel is.
 → [`delivery`](../modules/delivery.md#delivering)
+
+## A parcel lost or damaged {#lost-parcel}
+
+**What you see.** The carrier says the parcel is lost, or the buyer says it never came, or it was
+damaged **on the way** and never handed over. The order says **shipped** and the parcel will not
+arrive.
+
+**What to do.**
+
+1. Check the tracking code on the shipment first: the carrier's page is the proof.
+2. On the shipment, press **Report lost / damaged**. Choose _lost_ or _damaged_. _Damaged_ means damaged
+   in transit and never handed over; damage the buyer found after they had the goods is a
+   [return](./support.md), not this.
+3. Write the **message**: this is what the buyer reads, in the mail and on their order. Say what you will
+   do and when ("we are sending a new one on Monday"). The **note** is for your colleagues and the
+   buyer never sees it.
+4. The units are open again on the **same order**. Either **ship them again** with the normal Ship button
+   (the order goes back to _being prepared_ and forward again), or **cancel the rest** and refund the
+   buyer if they would rather have the money.
+5. Claim the loss with the carrier in the carrier's own portal. The shipment, its tracking code and your
+   note are the paper trail.
+
+**Never.** Create a new order for the replacement, or mark the lost parcel as delivered. The shop already
+has the order, the invoice and the payment; a second order would count the sale twice.
+
+::: tip For the accountant
+The shipment with its tracking code and note documents the loss. In Italy goods that went missing are
+presumed sold unless the loss is documented (DPR 441/1997), so keep that record.
+:::
+
+**Whose job.** The warehouse reports and ships again; the manager decides on a refund.
+→ [`delivery`](../modules/delivery.md#lost-in-transit)
+
+## Lost, and none left {#lost-none-left}
+
+**What you see.** After you report a parcel lost, the order shows a second part **waiting for stock**,
+with a date. The shelf had fewer units than the parcel carried.
+
+**What to do.** Nothing is lost by waiting: the units the shelf had are ready to ship now, and the rest
+are owed to this buyer **before** any new customer, in the order of the original payment. The date is the
+product's restock date or, when it has none, thirty days. The buyer is told both in the mail.
+
+1. Ship what the shelf covers (the normal Ship button).
+2. When stock arrives, the rest is released by itself, as for any waiting order.
+3. If the buyer would rather have a refund, cancel the waiting part.
+4. **Check the preorder board** after a loss on a popular product: the owed units count there with the
+   other promises, and they are not limited by the product's backorder limit.
+
+**Whose job.** The warehouse ships; the manager handles a refund.
+→ [`inventory`](../modules/inventory-reservations.md#owed-after-a-loss)
+
+## The lost parcel arrived {#lost-parcel-arrived}
+
+**What you see.** A parcel you reported lost shows up at the buyer's after all (the carrier updates, or
+the buyer writes).
+
+**What to do.** Open the shipment and press **Record arrival**, like any arrival. It works when every unit
+on it is still open: the replacement was not sent and the rest was not cancelled. The shop then counts
+the original parcel as the delivery and gives back the stock it had set aside again.
+
+If the button is gone, the replacement already went (or the rest was cancelled) and the shop refuses to
+count the goods twice. **Ask the buyer to send one back, or let them keep it: that is your call.** If
+units come back to you, [record them as received](./warehouse.md#the-two-things-you-do-by-hand) with a
+note.
+
+**Whose job.** The warehouse records the arrival; the manager decides about the second parcel.
+→ [`delivery`](../modules/delivery.md#the-lost-parcel-turns-up)
+
+## It came back to us {#parcel-came-back}
+
+**What you see.** The carrier returned the parcel to the shop (returned to sender, wrong address, refused).
+
+**What to do.** Record the units as **received** with a note ("returned to sender, parcel 12"), so the
+shelf is true again. Then ship them again with the normal Ship button, or cancel and refund. If the
+parcel was reported lost earlier, ship again from the same order: you do not need to report anything
+else.
+
+**Whose job.** The warehouse.

@@ -5,7 +5,7 @@
  * fully mounted app (routing, auth and serialization the property under test has nothing to do
  * with) fits: a limiter's behaviour is a property of `express-rate-limit`'s own middleware, which
  * `no-restricted-imports` treats as an integration concern — see e.g.
- * `src/modules/account/tests/integration/identity-rate-limit.test.ts` and its feedback-module
+ * `src/modules/account/tests/integration/identity-rate-limit.test.ts` and its tickets-module
  * twin.
  */
 

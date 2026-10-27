@@ -15,6 +15,7 @@ import path from 'node:path';
 import { type AppModule, resolveTranslatables } from '@kernel/registry';
 import { registerLocaleOverrideProvider } from '@infrastructure/i18n';
 import { registerTranslationPort } from '@kernel/translation';
+import { hasAnonymousReadScope } from '@kernel/access/query';
 import { router } from './routes';
 import { localeService } from './services';
 import { translationRepository } from './repository';
@@ -55,6 +56,8 @@ const onRegistered = (modules: readonly AppModule[]): void => {
             translationRepository
                 .findEntityTranslations(entityType, entityId)
                 .then((rows) => new Map(rows.map((row) => [row.locale, row.fields]))),
+        // The draft dictionary's own predicate: who sees a draft's strings sees its product text.
+        canPreviewDrafts: (caller) => !hasAnonymousReadScope(localeService.callerScope, caller),
         readServed: (entityType, entityId) =>
             translationRepository
                 .findServedEntityTranslations(entityType, entityId)
@@ -85,7 +88,7 @@ export default {
         {
             section: 'translationAttribution',
             collect: () => Promise.resolve(undefined),
-            erase: translationRepository.forgetTranslator
+            erase: ({ userId }, session) => translationRepository.forgetTranslator(userId, session)
         }
     ]
 } satisfies AppModule;

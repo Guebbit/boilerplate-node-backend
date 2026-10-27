@@ -38,6 +38,7 @@ flowchart LR
     cart -. "cart.merge_refused" .-> notifications
     delivery -. "fulfillment_order.delayed" .-> notifications
     delivery -. "fulfillment_order.hold_noticed" .-> notifications
+    delivery -. "shipment.lost" .-> notifications
     orders -. "order.purchase_hold_placed" .-> notifications
     stock_alerts -. "stock_alert.sent" .-> notifications
     webhooks -. "webhook.subscription_auto_disabled" .-> notifications
@@ -74,7 +75,7 @@ The backend stores a **code and its params, never the sentence**. The frontend t
 from its own locale files, like every other API code, so a row survives a language change and this
 backend keeps no copy in step with the UI.
 
-`Notification` is a discriminated union on `code` (six variants), and each variant types its own `params`:
+`Notification` is a discriminated union on `code`, and each variant types its own `params`:
 
 | `code`                                | `params`                                                         |
 | ------------------------------------- | ---------------------------------------------------------------- |
@@ -83,6 +84,7 @@ backend keeps no copy in step with the UI.
 | `notifications.cart-merge-refused`    | `{ lines: [{ productId, requested, titles }] }`                  |
 | `notifications.fulfillment-delayed`   | `{ orderId, fulfillmentOrderId, titles, agreedAt, expectedAt? }` |
 | `notifications.fulfillment-held`      | `{ orderId, fulfillmentOrderId, notice, message? }`              |
+| `notifications.shipment-lost`         | `{ orderId, shipmentId, reason, message?, owed?, expectedAt? }`  |
 | `notifications.stock-alert`           | `{ productId, titles }`                                          |
 
 `fulfillment-delayed` is a late preorder's notice ([delivery](./delivery.md#preorders-and-a-moved-date)): it
@@ -95,6 +97,11 @@ written from `stock_alert.sent`.
 `notifications.fulfillment-held` is a hold the buyer can act on or should read about, written from
 `fulfillment_order.hold_noticed` ([delivery](./delivery.md#holds)): `notice` is `check_address` or `delayed`,
 `message` is what staff wrote for them. It never carries staff's reason.
+
+`notifications.shipment-lost` is a parcel reported lost or damaged in transit, written from `shipment.lost`
+([delivery](./delivery.md#lost-in-transit)): `reason` is `lost` or `damaged`, `message` is what staff wrote for
+the buyer, `owed` the titles the shelf could not cover again and `expectedAt` when they are expected. It
+never carries staff's note.
 
 The stored `params` is `Mixed` in Mongo, but the document type is the same union
 (`NotificationBody` in `model.ts`), so a writer cannot pair a code with another code's params and

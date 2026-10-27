@@ -4,7 +4,8 @@
  * `@modules/account/emails`: the language is an argument, the output is finished text, and the
  * template queued behind it only interpolates. See that file for why.
  *
- * Four mails: "payment received" when a payment settles, "refund issued" when a refund does, and
+ * Five mails: "payment received" when a payment settles, "refund issued" when a refund does, "refund
+ * undeliverable" when it cannot reach the card, and
  * the bank transfer's two — its instructions when the transfer payment opens, and "no transfer
  * received" when the deadline passes.
  */
@@ -87,6 +88,48 @@ export const refundIssuedEmail = (
                 amount: formatMoney(locale, refund.amount, refund.currency)
             }),
             detail: t(`payments.email-refunded.${full ? 'detail-full' : 'detail-partial'}`),
+            footer: t('email.footer')
+        }
+    };
+};
+
+/**
+ * The buyer's refund could not reach their card (the provider refused it for good, or the bank sent
+ * it back): we still owe the money, and they are asked how they would like it, at no cost to them.
+ * Never names a reason (the provider's wording is not for a shopper), and asks, never decides: the
+ * law lets the shop change the means only when the buyer expressly agrees.
+ *
+ * @param locale - the recipient's language
+ * @param name - the greeting's name
+ * @param orderRef - the order's human number, or its id when it has none
+ * @param refund - what is owed, a decimal in `currency`
+ * @param shopEmail - where the buyer can write, shown as text (a reply may not reach the shop)
+ * @param orderId - the order's id, for the link to its page
+ */
+export const refundUndeliverableEmail = (
+    locale: string,
+    name: string,
+    orderRef: string,
+    refund: { amount: number; currency: string },
+    shopEmail: string,
+    orderId: string
+): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'payments.refund-undeliverable',
+        subject: t('payments.email-undeliverable.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('payments.email-undeliverable.meta-title'),
+            greeting: t('payments.email-undeliverable.greeting', { name }),
+            body: t('payments.email-undeliverable.body', {
+                order: orderRef,
+                amount: formatMoney(locale, refund.amount, refund.currency)
+            }),
+            ask: t('payments.email-undeliverable.ask', { email: shopEmail }),
+            consent: t('payments.email-undeliverable.consent'),
+            linkLabel: t('payments.email-undeliverable.link-label'),
+            linkUrl: orderFrontendLink({ locale, id: orderId }),
             footer: t('email.footer')
         }
     };

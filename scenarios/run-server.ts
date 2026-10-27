@@ -80,7 +80,7 @@ const REQUIRED_DEFAULTS: Record<string, string> = {
     NODE_TOTP_ENCRYPTION_KEY: '371235f9725b90a6a87b6b9877e29313e804682717b699e1264bd816973f5769',
     NODE_WEBHOOK_SECRET_ENCRYPTION_KEY:
         'f0affe382aa45708b641b8274977884f2b6e0041de1f7c639cdfcd8ab77a1444',
-    // Known, so the paired e2e suite can sign a payment-provider delivery (`POST /payments/webhook`)
+    // Known, so the paired e2e suite can sign a payment-provider delivery (`POST /payments/webhook/fake`)
     // itself; the frontend's `paymentWebhookSecret` carries the same value.
     NODE_PAYMENT_WEBHOOK_SECRET: 'demo-payment-webhook-secret',
     // The mailbox a contact request is notified to falls back to the sender; with none, the

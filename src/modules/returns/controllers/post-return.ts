@@ -16,8 +16,14 @@ import { returnService } from '../services';
 
 /** Handles `POST /returns`. */
 export const postReturn = (request: Request, response: Response) => {
-    const body = parseBody(CreateReturnBody, request.body, response);
-    if (!body) return;
+    const parsed = parseBody(CreateReturnBody, request.body, response);
+    if (!parsed) return;
+    // The body carries the stated date as an ISO string; the service works in dates.
+    const { requestedAt, ...rest } = parsed;
+    const body = {
+        ...rest,
+        ...(requestedAt === undefined ? {} : { requestedAt: new Date(requestedAt) })
+    };
 
     /* Auth context is guaranteed by isAuth middleware */
     const authContext = request.authContext!;

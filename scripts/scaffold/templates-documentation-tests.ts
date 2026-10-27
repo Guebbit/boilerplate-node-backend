@@ -30,18 +30,19 @@ export const documentationPage = (
 
 <!-- module-graph:${names.kebab}:end -->
 
+## Who can do what
+
+Every rule this module declares and who holds it, role by role.
+
+<!-- permissions:start -->
+
+<!-- permissions:end -->
+
 ## The story
 
 TODO: why this domain exists, the decisions that are not obvious from the code, and the traps.
 Do not restate the routes or the fields; they live in \`src/modules/${names.kebab}/routes.ts\`,
 \`openapi.yaml\` and \`model.ts\`.
-
-## Who can do what
-
-Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
-
-<!-- permissions:start -->
-<!-- permissions:end -->
 
 ## The pipeline
 
@@ -98,6 +99,7 @@ describe('${names.kebab} routes', () => {
     it('mounts exactly the documented endpoints, in the documented order', () => {
         expect(routeSignatures(router)).toEqual([
             'GET /',
+            'GET /:id',
             'POST /',
             'PUT /:id',
             'PATCH /:id',
@@ -152,6 +154,31 @@ describe('make${names.entity}', () => {
 `;
 
 /**
+ * The domain unit test.
+ * @param names - the module's spellings
+ * @returns the TypeScript text
+ */
+export const domainTest = (names: ModuleNames): string => `/**
+ * @module
+ * The ${names.kebab} domain rules, with no database: the actions a caller is told they have are
+ * exactly the keys they hold.
+ */
+
+import { ${names.entityCamel}ActionsFor } from '@modules/${names.kebab}/domain';
+
+describe('${names.entityCamel}ActionsFor', () => {
+    it.each([
+        [{ update: true, delete: true }],
+        [{ update: true, delete: false }],
+        [{ update: false, delete: true }],
+        [{ update: false, delete: false }]
+    ])('echoes the keys %j', (permits) => {
+        expect(${names.entityCamel}ActionsFor(permits)).toEqual(permits);
+    });
+});
+`;
+
+/**
  * The service integration test, against a real database.
  * @param names - the module's spellings
  * @returns the TypeScript text
@@ -159,62 +186,189 @@ describe('make${names.entity}', () => {
 export const serviceTest = (names: ModuleNames): string => `/**
  * @module
  * The ${names.kebab} service against a real database: create trims, a merge leaves omitted fields
- * alone, a null clears one, and a missing id answers 404 for both update and remove.
+ * alone, a null clears one, a missing id answers 404 for read, update and remove, and every answer
+ * carries the actions the caller holds.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
+import { callerContextAs } from '@tests/callers';
 import { MISSING_ID } from '@tests/ids';
 import { asReject, asSuccess } from '@tests/response';
-import { ${names.entityCamel}Service } from '@modules/${names.kebab}/service';
+import { ${names.entityCamel}Service } from '@modules/${names.kebab}/services';
 import { make${names.entity} } from '@modules/${names.kebab}/factories';
 
 setupTestDb();
 
-const { create, search, updateById, removeById: remove } = ${names.entityCamel}Service;
+/** An administrator, who holds every key by name. */
+const admin = callerContextAs('admin');
+
+/** Anonymous: holds no key, so every action is false. */
+const guest = callerContextAs('guest');
 
 describe('${names.kebab} service', () => {
-    it('trims the name on create', () =>
-        create({ ...make${names.entity}(), name: '  Padded  ' }).then((created) => {
-            expect(created.name).toBe('Padded');
-        }));
+    it('trims the name on create, and tells the caller what they may do next', () =>
+        ${names.entityCamel}Service
+            .create({ ...make${names.entity}(), name: '  Padded  ' }, admin)
+            .then((created) => {
+                expect(created.name).toBe('Padded');
+                expect(created.actions).toEqual({ update: true, delete: true });
+            }));
 
-    it('lists what was created', () =>
-        create(make${names.entity}())
-            .then(() => search())
+    it('lists what was created, each row with its actions', () =>
+        ${names.entityCamel}Service
+            .create(make${names.entity}(), admin)
+            .then(() => ${names.entityCamel}Service.search({}, admin))
             .then((page) => {
                 expect(page.items).toHaveLength(1);
+                expect(page.items[0].actions).toEqual({ update: true, delete: true });
                 expect(page.meta.totalItems).toBe(1);
             }));
 
+    it('reads one by id, and tells a caller without keys they may do nothing', () =>
+        ${names.entityCamel}Service
+            .create(make${names.entity}({ name: 'Findable' }), admin)
+            .then((created) => ${names.entityCamel}Service.getById(created.id, guest))
+            .then((found) => {
+                expect(found?.name).toBe('Findable');
+                expect(found?.actions).toEqual({ update: false, delete: false });
+            }));
+
     it('merges: an omitted field stays, a null clears', () =>
-        create(make${names.entity}({ notes: 'keep me' }))
-            .then((created) => updateById(String(created._id), { name: 'Renamed' }))
+        ${names.entityCamel}Service
+            .create(make${names.entity}({ notes: 'keep me' }), admin)
+            .then((created) => ${names.entityCamel}Service.updateById(created.id, { name: 'Renamed' }, admin))
             .then((renamed) => {
                 expect(asSuccess(renamed).data.name).toBe('Renamed');
                 expect(asSuccess(renamed).data.notes).toBe('keep me');
-                return updateById(String(asSuccess(renamed).data._id), { notes: null });
+                return ${names.entityCamel}Service.updateById(asSuccess(renamed).data.id, { notes: null }, admin);
             })
             .then((cleared) => {
                 expect(asSuccess(cleared).data.notes).toBeUndefined();
             }));
 
-    it('answers 404 for an id nothing owns', () =>
-        Promise.all([updateById(MISSING_ID, { name: 'x' }), remove(MISSING_ID)]).then(
-            ([updated, removed]) => {
-                expect(asReject(updated).status).toBe(404);
-                expect(asReject(removed).status).toBe(404);
-            }
-        ));
+    it('answers 404 for an id nothing owns, or null for a read', () =>
+        Promise.all([
+            ${names.entityCamel}Service.updateById(MISSING_ID, { name: 'x' }, admin),
+            ${names.entityCamel}Service.removeById(MISSING_ID, admin),
+            ${names.entityCamel}Service.getById(MISSING_ID, admin)
+        ]).then(([updated, removed, read]) => {
+            expect(asReject(updated).status).toBe(404);
+            expect(asReject(removed).status).toBe(404);
+            expect(read).toBeNull();
+        }));
 
     it('removes for good', () =>
-        create(make${names.entity}())
-            .then((created) => remove(String(created._id)))
+        ${names.entityCamel}Service
+            .create(make${names.entity}(), admin)
+            .then((created) => ${names.entityCamel}Service.removeById(created.id, admin))
             .then((removed) => {
                 expect(asSuccess(removed).status).toBe(200);
-                return search();
+                return ${names.entityCamel}Service.search({}, admin);
             })
             .then((page) => {
                 expect(page.items).toHaveLength(0);
             }));
+});
+`;
+
+/**
+ * The HTTP contract test.
+ * @param names - the module's spellings
+ * @returns the TypeScript text
+ */
+export const contractTest = (names: ModuleNames): string => `/**
+ * @module
+ * Contract tests for ${names.basePath}: each route over HTTP, judged against openapi.yaml. Behavioural
+ * rules live in the integration suite; these make sure each declared response is actually reached.
+ *
+ * No bare 401 or 403 case here: the authorization sweep (tests/contract/authorization-contract.test.ts)
+ * asks every guarded route for both, as every role.
+ */
+
+import '@tests/contract';
+import { setupTestDb } from '@tests/setup-test-db';
+import { api, authenticateAs } from '@tests/http';
+import { MISSING_ID } from '@tests/ids';
+
+setupTestDb();
+
+/** What an administrator is told they may do to a record. */
+const ALL_ACTIONS = { update: true, delete: true };
+
+/**
+ * A record created through the API, so the payload under test is what the app produces.
+ * @param bearer - the Authorization header value
+ * @returns the new record's id
+ */
+const createViaApi = (bearer: string): Promise<string> =>
+    Promise.resolve(api().post('${names.basePath}').set('Authorization', bearer).send({ name: 'A name' })).then(
+        (response) => {
+            if (response.status !== 201)
+                throw new Error(
+                    \`setup failed: POST ${names.basePath} returned \${response.status}: \${JSON.stringify(response.body)}\`
+                );
+            return (response.body as { id: string }).id;
+        }
+    );
+
+describe('POST ${names.basePath}', () => {
+    it('answers 201 with a Location and the record, actions included', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .post('${names.basePath}')
+            .set('Authorization', bearer)
+            .send({ name: 'A name' });
+
+        expect(response.status).toBe(201);
+        expect(response.headers.location).toBe(\`${names.basePath}/\${response.body.id}\`);
+        expect(response.body.actions).toEqual(ALL_ACTIONS);
+    });
+});
+
+describe('GET ${names.basePath}/{id}', () => {
+    it('answers the record with its actions, and 404 for an unknown or malformed id', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const id = await createViaApi(bearer);
+
+        const found = await api().get(\`${names.basePath}/\${id}\`).set('Authorization', bearer);
+        const missing = await api().get(\`${names.basePath}/\${MISSING_ID}\`).set('Authorization', bearer);
+        const malformed = await api().get('${names.basePath}/not-an-object-id').set('Authorization', bearer);
+
+        expect(found.status).toBe(200);
+        expect(found.body).toMatchObject({ id, name: 'A name', actions: ALL_ACTIONS });
+        expect(missing.status).toBe(404);
+        expect(malformed.status).toBe(404);
+    });
+});
+
+describe('GET ${names.basePath}', () => {
+    it('lists the records, each with its actions', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createViaApi(bearer);
+
+        const response = await api().get('${names.basePath}').set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.items[0].actions).toEqual(ALL_ACTIONS);
+    });
+});
+
+describe('PUT, PATCH and DELETE ${names.basePath}/{id}', () => {
+    it('replaces, merges and removes one record', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const id = await createViaApi(bearer);
+        const path = \`${names.basePath}/\${id}\`;
+
+        const replaced = await api().put(path).set('Authorization', bearer).send({ name: 'Whole' });
+        const merged = await api().patch(path).set('Authorization', bearer).send({ notes: 'Added' });
+        const removed = await api().delete(path).set('Authorization', bearer);
+
+        expect(replaced.body).toMatchObject({ name: 'Whole', actions: ALL_ACTIONS });
+        expect(merged.body).toMatchObject({ name: 'Whole', notes: 'Added' });
+        expect(removed.status).toBe(204);
+        const gone = await api().get(path).set('Authorization', bearer);
+        expect(gone.status).toBe(404);
+    });
 });
 `;

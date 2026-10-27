@@ -28,23 +28,28 @@ export type CancelRefusal = 'window-closed' | 'excluded' | 'no-key';
  * The order's buyer exercises their withdrawal within its window, even when they are staff. A group
  * holding goods Art. 16 excludes (made to order) may only go while the shop has not started on the
  * order — `paid`; once it is `processing` that group is the shop's work and stays. Anyone else
- * needs the refund key (`create:Refund`).
+ * needs the refund key (`create:Refund`). Staff recording a withdrawal the buyer stated outside the
+ * shop are held to the same two limits as the buyer, judged on the day it was stated.
  *
  * @param order - the order
  * @param authContext - the caller
  * @param remainder - the lines of the fulfillment order being cancelled
+ * @param statedAt - when the buyer stated the withdrawal: set by staff recording one, absent for
+ *   the buyer (now) and for staff cancelling for their own reasons (no withdrawal to judge)
  */
 export const cancelRefusalOf = (
     order: OrderDocument,
     authContext: AuthContext,
-    remainder: readonly ProductQuantity[]
+    remainder: readonly ProductQuantity[],
+    statedAt?: Date
 ): CancelRefusal | undefined => {
-    if (!isBuyer(order, authContext))
-        return holds(callerForSubject(authContext, 'Return'), 'create', 'Refund')
-            ? undefined
-            : 'no-key';
+    const buyer = isBuyer(order, authContext);
+    if (!buyer && !holds(callerForSubject(authContext, 'Refund'), 'create', 'Refund'))
+        return 'no-key';
+    if (!buyer && statedAt === undefined) return undefined;
 
-    if (order.withdrawUntil && Date.now() > withdrawalClosesAt(order.withdrawUntil).getTime())
+    const at = statedAt ?? new Date();
+    if (order.withdrawUntil && at.getTime() > withdrawalClosesAt(order.withdrawUntil).getTime())
         return 'window-closed';
 
     if (!hasShopStarted(order.status)) return undefined;

@@ -14,7 +14,7 @@ export const returnsJobs: readonly JobDeclaration[] = [
         name: 'reap:returns',
         schedule: '12 2 * * *',
         summary:
-            "Unsets a return's free text (`note`, `declineReason`) once the return has not changed for its retention window.",
+            "Unsets a return's free text (`note`, `declineMessage`) once the return has not changed for its retention window.",
         run: () => scrubReturnText()
     }
 ];

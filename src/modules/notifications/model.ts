@@ -16,6 +16,7 @@ import type {
     FulfillmentHeldParams,
     FulfillmentDelayedParams,
     NotificationAudience,
+    ShipmentLostParams,
     PurchaseHoldPlacedParams,
     WebhookDisabledParams
 } from '@types';
@@ -28,6 +29,7 @@ export const NOTIFICATION_CODES = [
     'notifications.cart-merge-refused',
     'notifications.fulfillment-delayed',
     'notifications.fulfillment-held',
+    'notifications.shipment-lost',
     'notifications.stock-alert',
     'notifications.staff.purchase-hold-placed',
     'notifications.staff.webhook-disabled'
@@ -55,6 +57,7 @@ export interface NotificationParametersByCode {
     'notifications.cart-merge-refused': CartMergeRefusedParams;
     'notifications.fulfillment-delayed': FulfillmentDelayedParams;
     'notifications.fulfillment-held': FulfillmentHeldParams;
+    'notifications.shipment-lost': ShipmentLostParams;
     'notifications.stock-alert': CartLineRemovedParams;
     'notifications.staff.purchase-hold-placed': PurchaseHoldPlacedParams;
     'notifications.staff.webhook-disabled': WebhookDisabledParams;

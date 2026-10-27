@@ -5,8 +5,8 @@
  * `POST /products/search {text}` reach one controller, run one query and now share one cache
  * entry. `x-alias-of` says they are the same operation and
  * `tests/cross-cutting/contract-aliases.test.ts` checks they ANSWER alike. Nothing checked they
- * ASK alike, and they had already drifted: `GET /feedback` declared `status` as a bare
- * `type: string` while `POST /feedback/search` declared it as a four-value enum, so the same
+ * ASK alike, and they had already drifted: `GET /tickets` declared `status` as a bare
+ * `type: string` while `POST /tickets/search` declared it as a four-value enum, so the same
  * filter was documented as open on one route and closed on the other.
  *
  * That drift is structural rather than careless. A query parameter and a body property are
@@ -97,10 +97,10 @@ describe('a search accepts the same filters in both spellings', () => {
         // collection path is the plural `/examples`, like `/products`.
         const owners: [module: string, prefix: string][] = [
             ['example', 'examples'],
-            ['feedback', 'feedback'],
             ['orders', 'orders'],
             ['payments', 'payments'],
             ['products', 'products'],
+            ['tickets', 'tickets'],
             ['users', 'users']
         ];
         const expected = owners

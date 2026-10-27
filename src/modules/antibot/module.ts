@@ -2,7 +2,7 @@
  * @module
  * Anti-automation: publishes which human-challenge provider is active, so a frontend knows
  * whether to render a widget before it submits a guarded form. The gate itself is a cross-cutting
- * middleware (`humanChallengeGate`), so `account` and `feedback` depend on
+ * middleware (`humanChallengeGate`), so `account` and `tickets` depend on
  * `infrastructure/adapters/antibot-providers` directly rather than on this module — which is why
  * this manifest carries no boot-time checks of its own: `app/config.ts` validates the
  * provider selection and its secrets, since that gate keeps running whether or not this module's

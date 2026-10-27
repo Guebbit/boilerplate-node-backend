@@ -11,6 +11,7 @@
         "nothing-returnable": "Nothing on this order is left to return.",
         "not-decidable": "This return has already been decided.",
         "not-closable": "This return has not been received, or it is already closed.",
+        "not-cancelable": "This return is not an approved one awaiting its goods, so it cannot be canceled.",
         "not-receivable": "This return is not awaiting its goods.",
         "cancellation-invalid": "A cancellation must name the fulfillment order to cancel, and send no lines — the whole remainder is cancelled.",
         "cancellation-withdrawal-buyer-only": "Only the order's own buyer can cancel as a withdrawal; staff cancel with another reason.",
@@ -33,14 +34,40 @@
             },
             "return-declined": {
                 "subject": "Your return was declined",
-                "body": "We could not accept your return for order {{order}}. Reason: {{reason}}"
+                "body": "We could not accept your return for order {{order}}. {{reason}}"
+            },
+            "via-phone": "phone",
+            "via-email": "email",
+            "via-letter": "letter",
+            "via-other": "another channel",
+            "withdrawal-recorded": {
+                "subject": "We recorded your withdrawal",
+                "body": "We recorded your withdrawal from order {{order}}. You told us on {{date}} (UTC), by {{via}}. Our team wrote it down on {{recorded}} (UTC)."
+            },
+            "return-opened": {
+                "subject": "We opened your return",
+                "body": "Following your request of {{date}} (UTC), we opened a return for order {{order}}. You can send the goods back now."
             },
             "return-address": "Send the goods to: {{address}}",
             "return-closed": {
                 "subject": "Your return was refunded",
                 "body": "We received your return for order {{order}} and refunded {{amount}}."
+            },
+            "decline-reason": {
+                "return_period_ended": "The period for returning this order has ended.",
+                "not_returnable": "These goods cannot be returned.",
+                "no_defect_found": "We did not find the defect you described.",
+                "other": "We could not accept it for another reason."
             }
         },
-        "deduction-too-high": "The handling deduction is more than the refund is worth."
+        "deduction-too-high": "The handling deduction is more than the refund is worth.",
+        "restock-unknown-product": "A restock count names a product that is not on this return.",
+        "restock-duplicate": "A restock count names the same product twice.",
+        "restock-too-many": "A restock count is more than the line holds.",
+        "statement-forbidden": "This date or channel cannot be given here: the server sets the buyer's own, and a channel belongs to a withdrawal recorded by staff.",
+        "statement-required": "A withdrawal recorded for the buyer needs the date they stated it and the channel they used.",
+        "statement-future": "The date the buyer stated it cannot be in the future.",
+        "statement-before-order": "The date the buyer stated it cannot be before the order was made.",
+        "decline-message-required": "Write a message to the buyer: \"other\" alone does not say why."
     }
 }

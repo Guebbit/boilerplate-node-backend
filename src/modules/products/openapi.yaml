@@ -16,7 +16,7 @@ paths:
         get:
             tags: [Products]
             summary: List products (paginated)
-            description: Returns a paginated list of products.
+            description: Returns a paginated list of products. Staff holding `display:Locale` may preview a draft language here (see the API description's Language paragraph); that answer is never cached.
             operationId: listProducts
             security:
                 - {}
@@ -192,7 +192,7 @@ paths:
         get:
             tags: [Products]
             summary: Product details
-            description: Returns the full details of the product identified by `{id}`. Functionally equivalent to `GET /products?id={id}`.
+            description: Returns the full details of the product identified by `{id}`. Functionally equivalent to `GET /products?id={id}`. Staff holding `display:Locale` may preview a draft language here (see the API description's Language paragraph); that answer is never cached.
             operationId: getProductById
             security:
                 - {}
@@ -416,7 +416,7 @@ paths:
         post:
             tags: [Products]
             summary: Search products (DTO-friendly)
-            description: Searches and filters products via a JSON request body. Functionally equivalent to `GET /products` with query parameters.
+            description: Searches and filters products via a JSON request body. Functionally equivalent to `GET /products` with query parameters. Staff holding `display:Locale` may preview a draft language here (see the API description's Language paragraph); that answer is never cached.
             operationId: searchProducts
             security:
                 - {}

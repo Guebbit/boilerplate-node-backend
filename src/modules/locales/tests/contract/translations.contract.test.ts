@@ -35,7 +35,7 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
         const response = await api()
             .patch(`/locales/translations/product/${String(product._id)}`)
             .set('Authorization', bearer)
-            .send({ pt: { fields: { title: 'Cama boa' } } });
+            .send({ pt: { fields: { title: 'Cama boa' }, origin: 'human' } });
 
         expect(response.status).toBe(200);
         expect(response.body.translations).toHaveLength(1);
@@ -44,6 +44,19 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
             fields: { title: 'Cama boa' },
             origin: 'human'
         });
+    });
+
+    it('422s a locale entry that leaves out origin: a merge patch has no default to apply', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+        const product = await createProduct();
+
+        const response = await api()
+            .patch(`/locales/translations/product/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ pt: { fields: { title: 'Cama boa' } } });
+
+        expect(response.status).toBe(422);
     });
 
     it('404s an unregistered entityType, like any path that names nothing', async () => {
@@ -64,7 +77,7 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
             const response = await api()
                 .patch(`/locales/translations/${entityType}/000000000000000000000000`)
                 .set('Authorization', bearer)
-                .send({ en: { fields: { title: 'x' } } });
+                .send({ en: { fields: { title: 'x' }, origin: 'human' } });
 
             expect(response.status).toBe(404);
         }
@@ -99,8 +112,8 @@ describe('PUT /locales/translations/:entityType/:id', () => {
             .patch(`/locales/translations/product/${String(product._id)}`)
             .set('Authorization', bearer)
             .send({
-                en: { fields: { title: 'Cozy Bed' } },
-                pt: { fields: { title: 'Cama boa' } }
+                en: { fields: { title: 'Cozy Bed' }, origin: 'human' },
+                pt: { fields: { title: 'Cama boa' }, origin: 'human' }
             });
 
         const response = await api()
@@ -114,6 +127,20 @@ describe('PUT /locales/translations/:entityType/:id', () => {
             locale: 'en',
             fields: { title: 'Bed, replaced' }
         });
+    });
+
+    it('stores origin human when a replace leaves it out', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer, FALLBACK);
+        const product = await createProduct();
+
+        const response = await api()
+            .put(`/locales/translations/product/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ en: { fields: { title: 'Cozy Bed' } } });
+
+        expect(response.status).toBe(200);
+        expect(response.body.translations[0]).toMatchObject({ locale: 'en', origin: 'human' });
     });
 
     it('refuses a replace that omits the fallback locale', async () => {

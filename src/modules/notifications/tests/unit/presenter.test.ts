@@ -92,6 +92,17 @@ describe('presentNotification, per code', () => {
             }
         },
         {
+            code: 'notifications.shipment-lost',
+            params: {
+                orderId: 'o4',
+                shipmentId: 's4',
+                reason: 'lost',
+                message: 'A new one is on its way.',
+                owed: ['Vinyl'],
+                expectedAt: '2026-12-20T00:00:00.000Z'
+            }
+        },
+        {
             code: 'notifications.staff.purchase-hold-placed',
             params: { userId: 'u1', until: '2026-10-30T09:00:00.000Z' }
         },

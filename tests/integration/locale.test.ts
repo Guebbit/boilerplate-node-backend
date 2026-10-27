@@ -132,7 +132,7 @@ describe('Accept-Language negotiation', () => {
 /**
  * The controller-parsed path, in the same language.
  *
- * `POST /feedback/contact` validates in the controller against the orval-generated schema, which
+ * `POST /tickets` validates in the controller against the orval-generated schema, which
  * declares no messages at all. `@infrastructure/http/validation-messages` translates Zod's refusals
  * globally, without touching the codegen, so it answers in the negotiated language like signup.
  * Public and rejected before any repository call, so these need no database.
@@ -140,7 +140,7 @@ describe('Accept-Language negotiation', () => {
 const INVALID_CONTACT = { email: 'not-an-email', subject: '', message: '' };
 
 const contactWith = (acceptLanguage?: string) => {
-    const pending = api().post('/feedback/contact');
+    const pending = api().post('/tickets');
     return acceptLanguage ? pending.set('Accept-Language', acceptLanguage) : pending;
 };
 

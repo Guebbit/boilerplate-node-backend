@@ -712,7 +712,7 @@ paths:
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /payments/webhook:
+    /payments/webhook/{provider}:
         post:
             tags: [Payments]
             summary: Provider webhook
@@ -726,20 +726,36 @@ paths:
                 days settles once: the delivery is a pointer, the provider is re-read, and every
                 write of the settlement is conditional.
 
-                Answers 200 to anything it has authenticated, including events it does not act on:
-                a provider reads a non-2xx as a failure and retries harder. Answers 404 when no
-                card payment provider is configured: nobody can sign a delivery, so the route
-                does not exist for that deployment.
+                One endpoint per provider, named in the path and resolved from the registry of
+                installed adapters, not from `NODE_PAYMENT_PROVIDER`: a provider that is no longer
+                the one new checkouts use still delivers its in-flight payments' events, and each
+                adapter verifies its own signature with its own secret.
+
+                Answers 204 to anything it has authenticated, including events it does not act on
+                and a delivery naming a payment another provider took (logged, left alone): a
+                provider reads a non-2xx as a failure and retries harder. Answers 404 when no
+                adapter is installed under that name, and 400 for a signature that does not verify
+                or a body that is not an event. An unverifiable delivery is never acknowledged.
             operationId: receivePaymentWebhook
             security: []
             parameters:
+                - name: provider
+                  in: path
+                  required: true
+                  schema:
+                      type: string
+                      maxLength: 100
+                  description: The name the payment provider adapter is registered under (for example `stripe`).
                 - name: Payment-Signature
                   in: header
-                  required: true
+                  required: false
                   schema:
                       type: string
                       maxLength: 200
                   description: >-
+                      The reference HMAC scheme (the fake provider's); a real adapter reads its own
+                      provider's header instead (Stripe: `Stripe-Signature`), so this one is
+                      documented as the reference and not required by the contract.
                       `t=<unix seconds>,v1=<hex hmac-sha256 of "<t>.<raw body>">`. `t` must be
                       within 300 seconds of the server's clock or the delivery is rejected as
                       stale, replay protection against a captured signature being resent later.
@@ -754,7 +770,7 @@ paths:
                     description: Accepted — acted on, or knowingly ignored. No body.
                 # The signature did not verify, is stale, or the body is not an event.
                 '400': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/BadRequest' }
-                # No card payment provider is configured (`NODE_PAYMENT_PROVIDER` unset).
+                # No adapter is installed under that provider name.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # Keyed on the caller's address, not a signed identity — see
                 # docs/tools/security.md#the-rate-limit-budgets.
@@ -993,6 +1009,23 @@ components:
                     description: The provider's id for the refund (Stripe's `re_…`). Staff only.
                 failureReason:
                     $ref: '#/components/schemas/RefundFailureReason'
+                owedAnotherWay:
+                    type: boolean
+                    description: >-
+                        `true` while this refund is open and the money cannot go back to the card: the
+                        provider refused it for good, or took it back after settling it. The buyer is
+                        emailed to agree how they would like to receive it, at no cost to them (Consumer
+                        Rights Directive Art. 13(1)), and the order page says so instead of "retried
+                        automatically". Carries no reason: that stays staff-only. Absent otherwise.
+                reversedAt:
+                    type: string
+                    format: date-time
+                    description: >-
+                        When the provider took this refund back (a bank sent the money back, or the
+                        provider reported the refund failed). Set once; a reversed refund is `failed`
+                        again, counts against what is left, and is owed another way: an operator
+                        pays it and presses mark-returned (`actions.settleByHand`). The credit note
+                        issued when it first settled stays. Absent otherwise.
                 createdAt:
                     type: string
                     format: date-time
@@ -1000,7 +1033,7 @@ components:
         # Stripe's `failure_reason` shape: a closed list, so the page can translate it.
         RefundFailureReason:
             type: string
-            enum: [declined, insufficient_funds, expired_or_canceled_card, lost_or_stolen_card, provider_removed, provider_unavailable, unknown, canceled]
+            enum: [declined, insufficient_funds, expired_or_canceled_card, lost_or_stolen_card, provider_removed, provider_unavailable, unknown, canceled, disputed]
             description: >-
                 Why the provider last refused a refund, as a closed code. Staff only
                 (`display:Payment`). `unknown` is anything the provider's adapter did not
@@ -1015,6 +1048,10 @@ components:
                 short) and the unclear `provider_unavailable` and `unknown` are retried with a
                 growing delay. An unclear refusal may have gone through, so it is never offered for
                 hand settlement.
+
+                `disputed`: the buyer's bank took the money back in a dispute (chargeback). It is
+                final like the refusals above, and it is never offered for hand settlement: the
+                bank already returned the money.
 
                 `canceled` is not a refusal: staff voided the refund
                 (`POST /payments/{id}/refunds/{refundId}/cancel`). Nothing was sent, it is never
@@ -1134,6 +1171,7 @@ components:
                 failureReason:
                     $ref: '#/components/schemas/RefundFailureReason'
                 settledAt: { type: string, format: date-time }
+                reversedAt: { type: string, format: date-time }
                 createdAt: { type: string, format: date-time }
 
         RefundsResponse:
@@ -1150,12 +1188,18 @@ components:
 
         PaymentAttentionKind:
             type: string
-            enum: [stale_refund, refused_refund, manual_refund_owed]
+            enum: [stale_refund, refused_refund, reversed_refund, refund_exceeds_remaining, manual_refund_owed]
             description: >-
                 `stale_refund` — a provider refund open past the threshold, still waiting for the
                 provider's answer or its next retry;
                 `refused_refund` — a card refund the provider refused for good (a final
                 `RefundFailureReason`), shown at once: the money has to go back another way;
+                `reversed_refund` — a refund the provider took back after settling it (a bank sent
+                it back), shown at once with `since` = when it was reversed: the money is owed
+                another way, agreed with the buyer;
+                `refund_exceeds_remaining` — a refund made in the provider's dashboard took the room an
+                open refund here counted on: the open one is held unsent (the provider would refuse it)
+                and `exceedsBy` says by how much. Staff cancel it or mark it returned;
                 `manual_refund_owed` — money to hand back outside the system on a `manual` payment.
                 Both are an open refund record on a payment: a cancel or a refund opens it before
                 anything is asked of a provider, so no refund is owed without one.
@@ -1181,6 +1225,13 @@ components:
                     type: string
                     format: date-time
                     description: When the problem was recorded, so the page can sort by age.
+                exceedsBy:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: >-
+                        On a `refund_exceeds_remaining` row, by how much this open refund overshoots
+                        what the provider can still give back, in the payment's currency.
                 refundDueBy:
                     type: string
                     format: date-time
@@ -1202,14 +1253,17 @@ components:
 
         RefundReason:
             type: string
-            enum: [cancellation, goodwill, return, late_payment]
+            enum: [cancellation, goodwill, return, late_payment, external]
             description: >-
                 Why the money went back. `cancellation` — the order was cancelled after payment, or the
                 unshipped remainder of one fulfillment order was (then `returnId` names that cancellation);
                 `return` — goods came back and were received; `goodwill` — an operator chose to;
                 `late_payment` — the money arrived after the order could no longer be paid (its stock
                 reservation had expired or it was cancelled), so the sale was lost and the money went back.
-                The buyer is mailed it like a cancellation's refund.
+                The buyer is mailed it like a cancellation's refund. `external` — the refund was made in
+                the payment provider's own dashboard, not here: the application found it and recorded
+                it so the credit note, the buyer's mail and the order's state follow; it is `succeeded`
+                from the start and carries the provider's own amount and date.
 
         RefundPaymentRequest:
             type: object
@@ -1298,8 +1352,10 @@ components:
             additionalProperties: false
             required: [id]
             description: >-
-                One delivery, in this module's normalised shape: which event it is and which intent
-                it names, and nothing about what happened. A real provider sends its OWN event
+                One delivery, in this module's normalised shape: which event it is, which intent
+                it names and, for a refund event (`refund.created`, `refund.updated`, `refund.failed`,
+                `charge.refunded`), which refund, and nothing about what happened. A refund made in the
+                provider's own dashboard arrives the same way and is imported. A real provider sends its OWN event
                 shape and its implementation of the provider port translates it into this. The
                 outcome is never read from the body: once the delivery is authenticated, the
                 server asks the provider for the payment's state, because providers do not
@@ -1313,6 +1369,14 @@ components:
                     type: string
                     maxLength: 200
                     description: Which intent the event is about. Absent for an event this API ignores.
+                refundRef:
+                    type: string
+                    maxLength: 200
+                    description: >-
+                        Which refund the event is about, when it is about one (Stripe's
+                        `refund.updated`, `refund.failed`, `charge.refunded`). Still only a pointer:
+                        the server re-reads that refund's own status from the provider, so a refund
+                        that settled and then bounced is noticed even days later.
 
         CreatePaymentRequest:
             type: object

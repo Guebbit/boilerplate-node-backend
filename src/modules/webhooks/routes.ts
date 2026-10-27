@@ -3,7 +3,7 @@
  * The `/webhooks` router — subscriptions, the delivery log, replay, and the public event
  * catalogue. Every route sits behind a `webhooks.*` key — read to list, create to add, update
  * to change a subscription or replay a delivery, delete to remove one; there is no public
- * route here, unlike `feedback`'s `/contact`.
+ * route here, unlike `tickets`'s `/contact`.
  */
 
 import { Router } from 'express';

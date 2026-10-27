@@ -15,7 +15,9 @@ import { asStub } from '@tests/stub';
 import type { NextFunction, Request, Response } from 'express';
 import {
     invalidateCache,
+    markDraftPreview,
     noStore,
+    privateNoCache,
     resolveCacheTtl,
     setCache
 } from '@infrastructure/http/middlewares/cache';
@@ -1043,6 +1045,94 @@ describe('refresh-ahead (stale-while-revalidate)', () => {
             jest.fn() as NextFunction
         );
         expect(incSpy).toHaveBeenCalledWith({ result: 'stale' });
+    });
+});
+
+/** A GET for the products list, in the draft language a preview asks for. */
+const getRequest = (headers: Record<string, string> = {}) =>
+    asStub<Request>({
+        method: 'GET',
+        originalUrl: '/products',
+        query: {},
+        locale: 'de',
+        headers
+    });
+
+describe('a draft preview', () => {
+    it('wins over a scopeKey that says the caller shares the visitors entry: no read, private, no-store', async () => {
+        const { response, headers } = createResponse();
+        const request = getRequest();
+        markDraftPreview(request, response);
+        const next = jest.fn() as NextFunction;
+
+        await setCache(60, { tags: ['products'], keyParameters: [], scopeKey: GUEST_SCOPE })(
+            request,
+            response,
+            next
+        );
+
+        expect(mockedCache.getCacheValue).not.toHaveBeenCalled();
+        expect(headers['cache-control']).toBe('private, no-store');
+        expect(next).toHaveBeenCalledTimes(1);
+    });
+
+    it('says no-store on a POST too, and never writes what it answers', async () => {
+        const { response, headers } = createResponse();
+        const request = asStub<Request>({
+            method: 'POST',
+            originalUrl: '/products/search',
+            query: {},
+            locale: 'de',
+            headers: {}
+        });
+        markDraftPreview(request, response);
+
+        await setCache(60, {
+            tags: ['products'],
+            keyParameters: [],
+            keyAs: 'products:search',
+            scopeKey: GUEST_SCOPE
+        })(request, response, jest.fn() as NextFunction);
+        response.statusCode = 200;
+        response.json({ title: 'Hundekorb' });
+
+        expect(headers['cache-control']).toBe('private, no-store');
+        expect(mockedCache.getCacheValue).not.toHaveBeenCalled();
+        expect(mockedCache.setCacheValue).not.toHaveBeenCalled();
+    });
+
+    it('refuses to write when the flag is set after the cache armed itself', async () => {
+        const { response } = createResponse();
+        mockedCache.getCacheValue.mockResolvedValue(undefined);
+
+        await setCache(60, { tags: ['products'], keyParameters: [], scopeKey: GUEST_SCOPE })(
+            getRequest(),
+            response,
+            jest.fn() as NextFunction
+        );
+        response.locals.draftPreview = true;
+        response.statusCode = 200;
+        response.json({ title: 'Hundekorb' });
+
+        expect(mockedCache.setCacheValue).not.toHaveBeenCalled();
+    });
+
+    it('drops conditional request headers, so no 304 can answer without a body', () => {
+        const { response } = createResponse();
+        const headers = { 'if-none-match': '"abc"', 'if-modified-since': 'Wed, 21 Oct 2015' };
+
+        markDraftPreview(asStub<Request>({ headers }), response);
+
+        expect(headers).toEqual({});
+    });
+
+    it('leaves privateNoCache from downgrading it to no-cache', () => {
+        const { response, headers } = createResponse();
+        markDraftPreview(asStub<Request>({ headers: {} }), response);
+
+        privateNoCache(asStub<Request>({ headers: {} }), response, jest.fn() as NextFunction);
+
+        expect(headers['cache-control']).toBe('private, no-store');
     });
 });
 

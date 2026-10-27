@@ -19,7 +19,13 @@
 
 import { AbilityBuilder, createMongoAbility, subject, type MongoAbility } from '@casl/ability';
 import type { Caller } from '@types';
-import { findRule, IMPLIED_ACTIONS, ruleId, type DeclaredRule } from '@kernel/permissions';
+import {
+    findRule,
+    IMPLIED_ACTIONS,
+    PERMISSION_SETS,
+    ruleId,
+    type DeclaredRule
+} from '@kernel/permissions';
 
 /** A caller's rules, in the form every authorization question is asked of. */
 export type Ability = MongoAbility;
@@ -155,6 +161,26 @@ export const holds = (caller: Caller, action: string, subject: string): boolean 
     return (
         held.has(ruleId(action, subject)) ||
         (IMPLIED_BY.get(action) ?? []).some((staff) => held.has(ruleId(staff, subject)))
+    );
+};
+
+/**
+ * Does this caller hold a whole permission set — every rule the set bundles? An unrestricted
+ * caller (an administrator) holds every set. An unknown set name is held by nobody.
+ *
+ * @param caller - the caller, in tenant scope
+ * @param setName - a set declared in `shared/authorization-keys.yaml`, e.g. `PaymentRefunding`
+ */
+export const holdsSet = (caller: Caller, setName: string): boolean => {
+    const set = PERMISSION_SETS.find((candidate) => candidate.name === setName);
+    if (!set) return false;
+
+    return (
+        caller.unrestricted ||
+        set.rules.every((id) => {
+            const rule = findRule(id);
+            return rule !== undefined && holds(caller, rule.action, rule.subject);
+        })
     );
 };
 

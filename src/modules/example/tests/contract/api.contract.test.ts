@@ -65,6 +65,15 @@ const statusOf = (request: PromiseLike<{ status: number }>): Promise<number> =>
 const etagOf = (request: PromiseLike<{ headers: Record<string, string> }>): Promise<string> =>
     Promise.resolve(request).then((response) => response.headers.etag);
 
+/** What a caller who may do nothing to an example is told. */
+const NO_ACTIONS = {
+    publish: false,
+    archive: false,
+    unarchive: false,
+    update: false,
+    delete: false
+};
+
 describe('POST /examples', () => {
     it('creates a draft owned by the caller, and points at it', async () => {
         const { user, bearer } = await authenticateAsRole('editor');
@@ -245,11 +254,7 @@ describe('GET /examples/{id}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.actions).toEqual({
-            transitions: [],
-            update: false,
-            delete: false
-        });
+        expect(response.body.actions).toEqual(NO_ACTIONS);
     });
 
     it.each([ExampleStatus.draft, ExampleStatus.archived])(
@@ -500,75 +505,93 @@ describe('POST /account/export', () => {
     });
 });
 
-describe('POST /examples/{id}/transitions', () => {
-    it('moves the example, answers with its actions, and stamps publishedAt', async () => {
+describe('POST /examples/{id}/publish', () => {
+    it('publishes the draft, answers with its actions, and stamps publishedAt', async () => {
         const { bearer } = await authenticateAsRole('editor');
         const { id } = await createViaApi(bearer, A_NOTE);
 
-        const response = await api()
-            .post(`/examples/${id}/transitions`)
-            .set('Authorization', bearer)
-            .send({ to: 'published' });
+        const response = await api().post(`/examples/${id}/publish`).set('Authorization', bearer);
 
         expect(response.status).toBe(200);
         expect(response.body).toMatchObject({
             status: 'published',
-            actions: { transitions: ['archived'], update: true, delete: true }
+            actions: {
+                publish: false,
+                archive: true,
+                unarchive: false,
+                update: true,
+                delete: true
+            }
         });
         expect(response.body.publishedAt).toBeDefined();
     });
 
-    it('answers 409 with the code and details for a move not on the table', async () => {
+    it('answers 409 with the code and details for an event not on the table', async () => {
         const { user, bearer } = await authenticateAsRole('editor');
         const archived = await createExample({ userId: user.id, status: ExampleStatus.archived });
 
         const response = await api()
-            .post(`/examples/${String(archived._id)}/transitions`)
-            .set('Authorization', bearer)
-            .send({ to: 'published' });
+            .post(`/examples/${String(archived._id)}/publish`)
+            .set('Authorization', bearer);
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0]).toMatchObject({
-            code: 'EXAMPLE_TRANSITION_NOT_ALLOWED',
-            details: { from: 'archived', to: 'published' }
+            code: 'EXAMPLE_NOT_PUBLISHABLE',
+            details: { status: 'archived' }
         });
     });
 
-    it('answers 404 for someone else’s example and for a malformed id', async () => {
-        const { bearer } = await authenticateAsRole('editor');
-        const other = await createUser({ email: 'other@example.com' });
-        const theirs = await createExample({ userId: other.id });
+    it.each(['publish', 'archive', 'unarchive'])(
+        'answers 404 on %s for someone else’s example and for a malformed id',
+        async (door) => {
+            const { bearer } = await authenticateAsRole('editor');
+            const other = await createUser({ email: 'other@example.com' });
+            const theirs = await createExample({ userId: other.id });
 
-        expect(
-            await statusOf(
-                api()
-                    .post(`/examples/${String(theirs._id)}/transitions`)
-                    .set('Authorization', bearer)
-                    .send({ to: 'published' })
-            )
-        ).toBe(404);
-        expect(
-            await statusOf(
-                api()
-                    .post(`/examples/${MALFORMED_ID}/transitions`)
-                    .set('Authorization', bearer)
-                    .send({ to: 'published' })
-            )
-        ).toBe(404);
-    });
+            expect(
+                await statusOf(
+                    api()
+                        .post(`/examples/${String(theirs._id)}/${door}`)
+                        .set('Authorization', bearer)
+                )
+            ).toBe(404);
+            expect(
+                await statusOf(
+                    api().post(`/examples/${MALFORMED_ID}/${door}`).set('Authorization', bearer)
+                )
+            ).toBe(404);
+        }
+    );
+});
 
-    it('answers 422 for a status outside the closed set', async () => {
+describe('POST /examples/{id}/archive and /unarchive', () => {
+    it('archives a draft and brings it back to draft', async () => {
         const { bearer } = await authenticateAsRole('editor');
         const { id } = await createViaApi(bearer, A_NOTE);
 
-        expect(
-            await statusOf(
-                api()
-                    .post(`/examples/${id}/transitions`)
-                    .set('Authorization', bearer)
-                    .send({ to: 'deleted' })
-            )
-        ).toBe(422);
+        const archived = await api().post(`/examples/${id}/archive`).set('Authorization', bearer);
+        const restored = await api().post(`/examples/${id}/unarchive`).set('Authorization', bearer);
+
+        expect(archived.body).toMatchObject({
+            status: 'archived',
+            actions: { publish: false, archive: false, unarchive: true }
+        });
+        expect(restored.body).toMatchObject({ status: 'draft', actions: { publish: true } });
+    });
+
+    it.each([
+        ['archive', ExampleStatus.archived, 'EXAMPLE_NOT_ARCHIVABLE'],
+        ['unarchive', ExampleStatus.draft, 'EXAMPLE_NOT_UNARCHIVABLE']
+    ])('answers 409 on %s from %s, with the per-verb code', async (door, status, code) => {
+        const { user, bearer } = await authenticateAsRole('editor');
+        const example = await createExample({ userId: user.id, status });
+
+        const response = await api()
+            .post(`/examples/${String(example._id)}/${door}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0]).toMatchObject({ code, details: { status } });
     });
 
     it('makes the ETag a read gave answer 412 on the next edit', async () => {
@@ -576,10 +599,7 @@ describe('POST /examples/{id}/transitions', () => {
         const { id } = await createViaApi(bearer, A_NOTE);
         const stale = await etagOf(api().get(`/examples/${id}`).set('Authorization', bearer));
 
-        await api()
-            .post(`/examples/${id}/transitions`)
-            .set('Authorization', bearer)
-            .send({ to: 'archived' });
+        await api().post(`/examples/${id}/archive`).set('Authorization', bearer);
         const response = await api()
             .patch(`/examples/${id}`)
             .set('Authorization', bearer)
@@ -601,7 +621,9 @@ describe('Example.actions', () => {
             .set('Authorization', bearer);
 
         expect(response.body.actions).toEqual({
-            transitions: ['published', 'archived'],
+            publish: true,
+            archive: true,
+            unarchive: false,
             update: true,
             delete: true
         });
@@ -617,11 +639,7 @@ describe('Example.actions', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.actions).toEqual({
-            transitions: [],
-            update: false,
-            delete: false
-        });
+        expect(response.body.actions).toEqual(NO_ACTIONS);
     });
 
     it('is all false on the public read: a stranger may do nothing', async () => {
@@ -630,11 +648,7 @@ describe('Example.actions', () => {
 
         const response = await api().get(`/examples/${String(published._id)}`);
 
-        expect(response.body.actions).toEqual({
-            transitions: [],
-            update: false,
-            delete: false
-        });
+        expect(response.body.actions).toEqual(NO_ACTIONS);
     });
 });
 

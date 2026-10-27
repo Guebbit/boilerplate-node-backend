@@ -10,6 +10,7 @@
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import {
+    fieldError,
     generateReject,
     generateSuccess,
     type ResponseReject,
@@ -20,7 +21,7 @@ import { withTransaction } from '@infrastructure/runtime/database';
 import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
 import { ownOrderFlag } from '@modules/access';
 import { buyerIdOf, orderService } from '@modules/orders';
-import type { CallerContext } from '@types';
+import type { CallerContext, ReturnDeclineReason } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { returnRepository, type ReturnStamp } from '../repository';
 import type { ReturnDocument } from '../model';
@@ -160,14 +161,32 @@ export const approveReturn = (
 ): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> => decide(id, 'approved', {}, context);
 
 /**
- * Decline a return request, saying why.
+ * The 422 for `other` with nothing written: "other" alone tells the buyer nothing.
+ */
+const messageRequired = (): ResponseReject =>
+    generateReject(422, [fieldError('message', t('returns.decline-message-required'))]);
+
+/**
+ * Decline a return request, saying why: a code the buyer reads in their own language, and a message
+ * when the code is `other`. Checked before anything is written.
  * @param id - the return
- * @param reason - what the customer is told — required, since a refusal nobody explains is not one
+ * @param decline - the code and the optional message to the buyer
  * @param context - the staff member
  */
 export const declineReturn = (
     id: string,
-    reason: string,
+    decline: { reason: ReturnDeclineReason; message?: string | undefined },
     context: CallerContext
-): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> =>
-    decide(id, 'declined', { declineReason: reason }, context);
+): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> => {
+    if (decline.reason === 'other' && !decline.message) return Promise.resolve(messageRequired());
+
+    return decide(
+        id,
+        'declined',
+        {
+            declineReason: decline.reason,
+            ...(decline.message ? { declineMessage: decline.message } : {})
+        },
+        context
+    );
+};

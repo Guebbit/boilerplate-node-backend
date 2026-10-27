@@ -110,7 +110,7 @@ its own supercronic, so the backup secrets stay out of the `cron` container. See
 | `npm run job reap:previous-emails`     | 02:07 nightly  | Yes    | Forgets the previous email of an account whose undo link has lapsed (sessions and one-time tokens delete themselves at their own expiry date).                                 |
 | `npm run job reap:account-exports`     | 02:09 nightly  | No     | Deletes built data exports (file and row) past NODE_ACCOUNT_EXPORT_TTL_DAYS; the account can ask again.                                                                        |
 | `npm run job reap:scheduled-deletions` | `13 * * * *`   | Yes    | Erases, cascade included, every account whose owner asked to delete it and whose grace (NODE_ACCOUNT_DELETION_GRACE_DAYS) has run out, then mails the goodbye.                 |
-| `npm run job reap:delivery`            | 02:11 nightly  | No     | Unsets a fulfillment order's hold note once it has not changed for its retention window.                                                                                       |
+| `npm run job reap:delivery`            | 02:11 nightly  | No     | Unsets a fulfillment order's hold note and a shipment's loss note once they have not changed for their retention window.                                                       |
 | `npm run job sweep:preorders`          | 02:20 nightly  | Yes    | Tells the buyer of a preorder whose expected date is a day away or gone, with the goods still not here, that it will miss the date, once. It asks nothing and cancels nothing. |
 | `npm run job sweep:reservations`       | every 5 min    | Yes    | Drains every stale checkout hold (batches of 200) and cancels the order behind each.                                                                                           |
 | `npm run job reap:invoice-pdfs`        | 02:08 nightly  | No     | Deletes stored invoice and credit-note PDFs past their retention window; the next download renders again.                                                                      |
@@ -118,7 +118,7 @@ its own supercronic, so the backup secrets stay out of the `cron` container. See
 | `npm run job reap:orders`              | 02:10 nightly  | No     | Anonymizes an order's remaining PII once its retention window has passed, and unsets a timeline row's staff text once its own window has.                                      |
 | `npm run job reap:payments`            | 02:15 nightly  | No     | Deletes abandoned (never-settled) payment attempts past their retention window.                                                                                                |
 | `npm run job sweep:payment-effects`    | every 5 min    | Yes    | Retries refunds the provider has not answered, and settles unsettled payments whose webhook never arrived.                                                                     |
-| `npm run job reap:returns`             | 02:12 nightly  | No     | Unsets a return's free text (`note`, `declineReason`) once the return has not changed for its retention window.                                                                |
+| `npm run job reap:returns`             | 02:12 nightly  | No     | Unsets a return's free text (`note`, `declineMessage`) once the return has not changed for its retention window.                                                               |
 | `npm run job sweep:stock-alerts`       | `35 * * * *`   | Yes    | Answers waiting back-in-stock requests for a product that can be ordered again without any write announcing it, such as a preorder whose release date passed.                  |
 | `npm run job reap:purchase-holds`      | 02:12 nightly  | Yes    | Reduces every expired purchase hold to the date that restarts the count of cancellations, dropping its note and who set it.                                                    |
 | `npm run job sweep:webhook-retries`    | every minute   | No     | Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.                                                                          |
@@ -171,7 +171,7 @@ See `docs/tools/observability-layer.md`.
 
 Several collections delete their own rows on a timer, via a Mongo TTL index rather than a scheduled
 job — that is cleanup with no scheduler involved at all, the cheapest form there is, and it stays
-right for state with no retry story (a cart, an audit entry, or a feedback ticket never needs a second attempt at expiring). The jobs above are the other half: retention and
+right for state with no retry story (a cart, an audit entry, or a ticket never needs a second attempt at expiring). The jobs above are the other half: retention and
 periodic work that DOES need to run as a step, with a real success/failure outcome — see Scheduled
 jobs above.
 
@@ -185,9 +185,10 @@ refuses the conflicting options. `npm run db:sync` is what applies it: it replac
 rebuilds it), which is why `db:bootstrap` syncs before the server starts there. Production runs with
 `autoIndex` off for exactly this reason — a restart never asks Mongo to rebuild anything — and
 `docker-compose.production.yml`'s one-shot `setup` service is what runs `db:sync` on deploy instead,
-see [Data — TTL windows](./data.md#ttl-windows). `feedback`'s window
+see [Data — TTL windows](./data.md#ttl-windows). `tickets`'s window
 is the longest on purpose: a contact request can be evidence in a commercial dispute, and 24 months
-sits inside the common limitation periods. `carts` ties to `updatedAt`, so any edit (a cart line changed) restarts the clock; only a genuinely
+sits inside the common limitation periods. It runs on `closedAt`, so an open ticket never expires and a
+reopen stops the clock; changing it needs `npm run db:sync`. `carts` ties to `updatedAt`, so any edit (a cart line changed) restarts the clock; only a genuinely
 abandoned row is ever removed. `leases` has no TTL on purpose: a job that stopped running entirely must
 keep alerting (`ScheduledJobStale`), and an expired row would make that alert resolve on its own. Pushgateway
 and Healthchecks.io behave the same way: a silent job stays down until someone deletes it.
@@ -218,7 +219,7 @@ Why minimise rather than delete: [Data Retention](../theory/data-retention.md#in
 See the script's own header for the stages.
 
 `returns` has no TTL: the row is a legal record. `npm run job reap:returns` unsets only its free text
-(`note`, `declineReason`) once the return's `updatedAt` is older than `NODE_RETURN_TEXT_RETENTION_DAYS`
+(`note`, `declineMessage`) once the return's `updatedAt` is older than `NODE_RETURN_TEXT_RETENTION_DAYS`
 (default 1095). `updatedAt`, not the closing date, because an approved return whose goods never
 arrive never closes. Safe to repeat: the filter only matches returns still holding text, and the
 wipe does not move `updatedAt`. Why three years: [Data Retention](../theory/data-retention.md#free-text-on-returns).

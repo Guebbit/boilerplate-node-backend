@@ -34,13 +34,25 @@ flowchart LR
 Four states, and that is the entire workflow. Private notes can be attached to a message; the person
 who sent it never sees them.
 
-::: tip It records an email address, not a customer
+::: tip The form works without an account, and remembers one if there is one
 The form asks for an email rather than requiring a login, because the people most likely to need
-help are the ones who cannot get in. A consequence worth knowing: **deleting someone's account does
-not delete their messages** — they were never attached to the account in the first place.
+help are the ones who cannot get in. A message sent while signed in is attached to that account, so
+**when the account is finally erased its messages go with it**, and so do the messages sent under its
+confirmed email address. Messages typed under an old or different address are not matched: find
+those in the inbox by hand.
 :::
 
-→ [`feedback`](../modules/feedback.md)
+### Working a ticket
+
+Open a ticket to see its notes, who has it and what else was asked about the same order. **Take** it
+to put your name on it (it becomes _in progress_); **Resolve** it when it is done; **Mark as spam**
+when it is not a real message. Both can be undone with **Reopen**, which puts it back where it was
+(with you, if you had it). If **Reopen** says a newer ticket already covers the situation, that
+ticket is the one to work: the message names it. Every note is kept with the time it was written;
+write each as if the customer will read it, because their data export includes them (without your
+name). A ticket stays in the inbox for 24 months after it was closed, then goes.
+
+→ [`tickets`](../modules/tickets.md)
 
 ## "I can't get in"
 
@@ -78,6 +90,53 @@ Signing up sends a verification email. An unverified customer can browse, fill a
 wishlist and read their own orders, but cannot check out until the address is proven. If someone
 says "I never got the email and I cannot order" — that is correct, not a bug: resend the email.
 :::
+
+## A buyer phones in a return {#phones-in-a-return}
+
+The buyer cannot log in, or would rather ask. Open the order, then **Open return**: pick the lines,
+the reason, and — if they asked a few days ago — the day they asked. The return is born
+**approved** (you are the answer), and the buyer gets one email with the address to send the goods
+to. No fresh login: nothing is paid until the goods arrive.
+→ [`returns`](../modules/returns.md#staff-open-a-return-for-the-buyer)
+
+## A buyer withdraws by phone, email or letter {#withdraws-by-phone}
+
+The law accepts any clear statement, and counts it from the day it was **sent**, not the day you read
+it. On the order press **Record withdrawal**, give the day the buyer sent it and how (phone, email,
+letter, other). The shop then does everything their own button does, and emails them the day they
+stated it and the day you recorded it: their proof.
+
+The shop asks you to confirm your password first: it is a legal record, and before dispatch it
+cancels the order and sends the money back (that needs the refund and order keys, which the
+[moderator](./moderator.md) holds). A withdrawal sent after the window really closed is refused:
+that one is not yours to waive.
+→ [`returns`](../modules/returns.md#staff-open-a-return-for-the-buyer)
+
+## A goodwill return after the deadline {#goodwill-after-deadline}
+
+Day 40, the buyer is a regular, you say yes: open the return with reason **Other**. The deadline
+does not stop you, and the return shows, for the next person, that it was an exception. Made-to-order
+goods can be taken back this way too. Write nothing you do not want: the note is optional.
+
+A defect that appeared within the two years but was reported later is **not** goodwill, it is the
+legal guarantee: open it as **Defective goods** with the day the buyer reported it. Some countries
+give more than two years; the same door covers it.
+
+## Declining a return {#declining-a-return}
+
+Pick the reason from the list: the period ended, not returnable, no defect found, or other. The
+buyer reads one sentence in their own language. Write to the buyer only when you pick **Other**; the
+shop then needs your message, because "other" alone tells them nothing.
+→ [`returns`](../modules/returns.md#declining-a-request)
+
+## Declined by mistake? {#declined-by-mistake}
+
+A decline is final, on purpose: a decision stays a record. To fix a wrong one, open a **new return
+for the same lines** from the order ([a buyer phones in a return](#phones-in-a-return)). The old
+decline holds no units, so nothing is blocked. Set the day they asked to the day of the first
+request, and put the declined return's number in the note (the buyer reads the note). The buyer
+will have two emails: the decline, then the approval.
+→ [`returns`](../modules/returns.md#staff-open-a-return-for-the-buyer)
 
 ## "Where is my order?"
 
@@ -205,7 +264,7 @@ Worth knowing before promising anything to a customer:
 
 | Word             | In plain terms                                                                                                        |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------- |
-| **Triage**       | Deciding what a new message is and who deals with it. → [`feedback`](../modules/feedback.md)                          |
+| **Triage**       | Deciding what a new message is and who deals with it. → [`tickets`](../modules/tickets.md)                            |
 | **Verified**     | Confirmed their email. Until then an account can shop but not check out.                                              |
 | **Session**      | One signed-in device. → [`account`](../modules/account.md)                                                            |
 | **Audit log**    | The 90-day record of staff actions, read by the moderator and the manager. → [`audit-logs`](../modules/audit-logs.md) |

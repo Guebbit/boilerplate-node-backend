@@ -16,7 +16,7 @@
  * each `recordAudit`/`emitAuditEvent`/`buildAuditEvent` call site — so it is read off the call
  * site's own text instead, the same trade-off `generate-module-graph.ts`'s `readEventEdges` makes
  * for event subscriptions: `—` where no call site names a literal one (the three `security.*`
- * actions have no object to attach to; a generic helper like `upsertEntityTranslations` takes the
+ * actions have no object to attach to; a generic helper like `updateEntityTranslations` takes the
  * target as a runtime parameter instead of a literal), `(varies)` where the same action is fired
  * against more than one distinct literal target.
  */

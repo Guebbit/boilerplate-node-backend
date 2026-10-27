@@ -19,12 +19,11 @@ export const probes: Probe[] = [
         path: '/examples/000000000000000000000000'
     },
     {
-        name: 'Probe: move an example that does not exist',
+        name: 'Probe: publish an example that does not exist',
         why: `404, not 409: the door checks that the caller may edit the example before it asks whether the move is legal, so a stranger learns nothing about an id. The contract can describe the 404 but not a request that earns one.`,
         method: 'POST',
-        path: '/examples/000000000000000000000000/transitions',
-        auth: 'bearer',
-        body: { to: 'published' }
+        path: '/examples/000000000000000000000000/publish',
+        auth: 'bearer'
     },
     {
         name: 'Probe: edit an example with an id no ObjectId can be built from',

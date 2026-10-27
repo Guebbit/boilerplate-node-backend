@@ -92,7 +92,7 @@ interface QueryFixture {
 const QUERY_FIXTURES: Partial<Record<string, QueryFixture>> = {
     'GET /audit': { request: adminQuery('/audit') },
     'GET /observability/audit': { request: adminQuery('/observability/audit') },
-    'GET /feedback': { request: adminQuery('/feedback') },
+    'GET /tickets': { request: adminQuery('/tickets') },
     'GET /examples': { request: adminQuery('/examples') },
     'GET /orders': { request: adminQuery('/orders') },
     'GET /users': { request: adminQuery('/users') },
@@ -216,7 +216,7 @@ const STRICT_2XX = new Set([
     'createProduct',
     'createOrder',
     'addCartItem',
-    'createFeedbackRequest',
+    'createContactTicket',
     'signup'
 ]);
 
@@ -245,7 +245,7 @@ const labelOf = (operation: Operation): string =>
  * Bodies whose Zod schema is a `record`, which `contract-data.ts` does not generate: a hand-written
  * legal body stands in, and there is no per-field violation to derive.
  */
-const RECORD_BODIES = new Set(['replaceEntityTranslations', 'upsertEntityTranslations']);
+const RECORD_BODIES = new Set(['replaceEntityTranslations', 'updateEntityTranslations']);
 
 /**
  * Operations whose legal body is still refused by something the body cannot carry, and why. They
@@ -348,7 +348,9 @@ const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
 };
 
 /** A legal translations body: the fallback locale, with one field, which is what a write must carry. */
-const FALLBACK_TRANSLATIONS = { en: { fields: { title: 'Generated Product Title' } } };
+const FALLBACK_TRANSLATIONS = {
+    en: { fields: { title: 'Generated Product Title' }, origin: 'human' }
+};
 
 /**
  * A legal body for the operation: Zod-generated for an object, hand-written for a map.

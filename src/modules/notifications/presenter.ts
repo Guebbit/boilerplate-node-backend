@@ -33,6 +33,9 @@ const bodyOf = (notification: NotificationDocument): NotificationBody => {
         case 'notifications.fulfillment-held': {
             return { code: notification.code, params: notification.params };
         }
+        case 'notifications.shipment-lost': {
+            return { code: notification.code, params: notification.params };
+        }
         case 'notifications.staff.purchase-hold-placed': {
             return { code: notification.code, params: notification.params };
         }

@@ -26,6 +26,7 @@ export type TimelineAudience = 'buyer' | 'staff';
  *     new address on the order itself.
  *   refund_failed: the provider's refusal; the buyer's answer is the refund that settles.
  *   refund_canceled: staff voided a refund that never moved money; nothing for the buyer to act on.
+ *   refund_reversed: the provider took a refund back; the buyer is mailed, the row is staff's.
  */
 export const TIMELINE_AUDIENCE: Readonly<Record<OrderTimelineType, TimelineAudience>> = {
     created: 'buyer',
@@ -40,8 +41,10 @@ export const TIMELINE_AUDIENCE: Readonly<Record<OrderTimelineType, TimelineAudie
     refund_settled: 'buyer',
     refund_failed: 'staff',
     refund_canceled: 'staff',
+    refund_reversed: 'staff',
     shipment_shipped: 'buyer',
     shipment_delivered: 'buyer',
+    shipment_lost: 'buyer',
     fulfillment_held: 'staff',
     fulfillment_released: 'staff',
     remainder_cancelled: 'buyer',
@@ -50,6 +53,7 @@ export const TIMELINE_AUDIENCE: Readonly<Record<OrderTimelineType, TimelineAudie
     return_declined: 'buyer',
     return_received: 'buyer',
     return_closed: 'buyer',
+    return_canceled: 'buyer',
     invoice_issued: 'buyer',
     credit_note_issued: 'buyer',
     release_date_moved: 'buyer',

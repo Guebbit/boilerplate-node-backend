@@ -89,6 +89,32 @@ export const onFulfillmentOrderHoldNoticed = (
           ]);
 
 /**
+ * A parcel of the buyer's was reported lost or damaged: the same message in their inbox, so it is
+ * still there when the email is not. Carries the sentence staff wrote for them and what is still
+ * owed, never staff's note. An erased account has no inbox to write to.
+ */
+export const onShipmentLost = (lost: DomainEventMap['shipment.lost']): Promise<void> =>
+    lost.userId === undefined
+        ? Promise.resolve()
+        : notificationsCreate([
+              {
+                  userId: new Types.ObjectId(lost.userId),
+                  code: 'notifications.shipment-lost',
+                  severity: 'warning',
+                  params: {
+                      orderId: lost.orderId,
+                      shipmentId: lost.shipmentId,
+                      reason: lost.reason,
+                      ...(lost.message ? { message: lost.message } : {}),
+                      ...(lost.owed.length > 0
+                          ? { owed: lost.owed.map(({ title }) => title) }
+                          : {}),
+                      ...(lost.expectedAt ? { expectedAt: lost.expectedAt } : {})
+                  }
+              }
+          ]);
+
+/**
  * A waiting preorder's buyer was told its date moved or will be missed: the same message in their inbox, so
  * it is still there when the email is not. It only informs: the buyer is asked nothing. An erased
  * account has no inbox to write to, and nothing here invents one.

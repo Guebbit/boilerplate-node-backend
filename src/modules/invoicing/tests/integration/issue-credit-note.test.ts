@@ -257,9 +257,10 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         expect(await creditNoteNumberCounterModel.findById(year).lean().exec()).toBeNull();
     });
 
-    // A paid order whose invoice was never frozen (a race with the refund, or data older than the
-    // module): a note would reference nothing, and would burn a number in a gap-free series.
-    it('issues nothing, and burns no number, when a paid order has no invoice to reverse', async () => {
+    // Money that never paid for a sale has no invoice, so no document (VAT Directive Art. 2(1)(a), 65):
+    // a note would reference nothing, and would burn a number in a gap-free series. A dead invoice
+    // event is the other case, covered by `credit-note-catch-up.test.ts`.
+    it('issues nothing, and burns no number, when an order has no invoice to reverse', async () => {
         const user = await createUser();
         const product = await createProduct({ price: 25 });
         const order = await createOrder(user, [toOrderItem(product, 1)], {

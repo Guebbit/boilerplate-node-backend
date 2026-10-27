@@ -85,3 +85,22 @@ export const takeFromHold = (items: readonly HoldLine[], lines: readonly HoldLin
 
     return { remaining: toLines(held), taken: toLines(taken) };
 };
+
+/**
+ * A hold's items with more lines added, per product and kind: the arithmetic of topping a hold up
+ * for a parcel that was lost. A product already on the hold under the same kind grows; a new one
+ * becomes a line of its own.
+ *
+ * @param items - what the hold sets aside now (empty for a hold that ended)
+ * @param added - what is being set aside on top
+ * @returns the lines the hold names afterwards, in first-seen order
+ */
+export const withAdded = (items: readonly HoldLine[], added: readonly HoldLine[]): HoldLine[] => {
+    const counts = new Map<string, HoldLine>();
+    for (const line of [...items, ...added]) {
+        const key = keyOf(line);
+        const known = counts.get(key);
+        counts.set(key, known ? { ...known, quantity: known.quantity + line.quantity } : line);
+    }
+    return [...counts.values()].filter((line) => line.quantity > 0);
+};

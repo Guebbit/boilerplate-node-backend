@@ -6,7 +6,12 @@
  */
 
 import { dayInZone } from '@domain-primitives/time';
-import { FulfillmentHoldReason, FulfillmentOrderKind, FulfillmentOrderStatus } from '@types';
+import {
+    FulfillmentHoldReason,
+    FulfillmentOrderKind,
+    FulfillmentOrderStatus,
+    ShipmentStatus
+} from '@types';
 
 /** Why a fulfillment order waits for stock: its units are not released yet, or ran out. */
 export type WaitCause = 'preorder' | 'backorder';
@@ -229,6 +234,9 @@ export const statusOfLines = (
     lines: readonly FulfillmentLine[],
     held: boolean
 ): FulfillmentOrderStatus => {
+    // No lines at all: everything it held moved to another fulfillment order (a lost parcel's
+    // owed units), so nothing was cancelled and nothing is left to do here.
+    if (lines.length === 0) return FulfillmentOrderStatus.closed;
     if (remainingOf(lines) === 0)
         return lines.some(({ shippedQuantity }) => shippedQuantity > 0)
             ? FulfillmentOrderStatus.closed
@@ -345,7 +353,7 @@ export interface SummaryInputs {
         lines: readonly FulfillmentLine[];
     }[];
     shipments: readonly {
-        status: 'shipped' | 'delivered';
+        status: ShipmentStatus;
         deliveredAt?: Date | undefined;
     }[];
 }
@@ -386,7 +394,9 @@ export const summarize = ({ fulfillmentOrders, shipments }: SummaryInputs): Fulf
         awaitingStock: units(
             held.filter(({ holdReason }) => holdReason === FulfillmentHoldReason.awaiting_stock)
         ),
-        undelivered: shipments.filter(({ status }) => status === 'shipped').length,
+        // A `lost` shipment is neither out nor arrived: it waits on nothing, but still counts in
+        // `shipped` above, which is what keeps the whole-order cancel closed after a loss.
+        undelivered: shipments.filter(({ status }) => status === ShipmentStatus.shipped).length,
         ...(last ? { lastDeliveredAt: last } : {})
     };
 };

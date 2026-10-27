@@ -70,21 +70,47 @@ export const mailReturnRequested = ({
     returnId
 }: DomainEventMap['return.requested']): Promise<void> =>
     withReturn(returnId, (found) => {
-        const at = found.createdAt ?? new Date();
+        // The day the buyer acted, not the day the shop recorded it.
+        const at = found.requestedAt;
         const withdrawal = found.reason === 'withdrawal';
+        // Staff opened it for the buyer: `return.decided` tells them once, with the address.
+        if (found.openedBy === 'staff' && !withdrawal) return Promise.resolve();
+
+        const kind = found.openedBy === 'staff' ? 'withdrawal-recorded' : 'withdrawal-acknowledged';
+        const recorded = {
+            recorded: { via: found.statedVia ?? 'other', at: found.createdAt ?? new Date() }
+        };
         if (found.closedAt && !found.receivedAt)
             return withdrawal
-                ? sendNotice('withdrawal-acknowledged', found, { at })
+                ? sendNotice(kind, found, {
+                      at,
+                      ...(kind === 'withdrawal-recorded' ? recorded : {})
+                  })
                 : Promise.resolve();
 
-        return sendNotice(withdrawal ? 'withdrawal-acknowledged' : 'return-requested', found, {
+        return sendNotice(withdrawal ? kind : 'return-requested', found, {
             returnPostage: found.returnPostage,
             at,
+            ...(kind === 'withdrawal-recorded' && withdrawal ? recorded : {}),
             // A withdrawal is approved from the start, so the customer is told where to send the
             // goods in the same mail; any other reason hears it once staff approve.
             ...(withdrawal ? { returnAddress: returnAddress() } : {})
         });
     });
+
+/**
+ * Which notice answers a decision: a decline, an approval, or — when staff opened the return after
+ * the buyer's request — the one that says so.
+ * @param found - the return
+ * @param decision - what staff decided
+ */
+const decidedNoticeOf = (
+    found: ReturnDocument,
+    decision: 'approved' | 'declined'
+): ReturnNoticeKind => {
+    if (decision === 'declined') return 'return-declined';
+    return found.openedBy === 'staff' ? 'return-opened' : 'return-approved';
+};
 
 /**
  * Tell the customer what staff decided.
@@ -95,10 +121,12 @@ export const mailReturnDecided = ({
     decision
 }: DomainEventMap['return.decided']): Promise<void> =>
     withReturn(returnId, (found) =>
-        sendNotice(decision === 'approved' ? 'return-approved' : 'return-declined', found, {
+        sendNotice(decidedNoticeOf(found, decision), found, {
             returnPostage: found.returnPostage,
-            at: found.decidedAt ?? new Date(),
+            // A return staff opened for the buyer is dated by the buyer's own request.
+            at: found.openedBy === 'staff' ? found.requestedAt : (found.decidedAt ?? new Date()),
             declineReason: found.declineReason,
+            declineMessage: found.declineMessage,
             // Told where to send the goods only when they are being asked for.
             ...(decision === 'approved' ? { returnAddress: returnAddress() } : {})
         })

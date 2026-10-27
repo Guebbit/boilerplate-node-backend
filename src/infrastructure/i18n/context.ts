@@ -24,6 +24,11 @@ export interface LocaleContext {
     locale: string;
     /** `t` already bound to `locale`. */
     t: TFunction;
+    /**
+     * Set only by a staff draft preview: `locale` is a switched-off language the product text may
+     * be read in. Nothing else sets it, so a worker or a snapshot can never preview.
+     */
+    preview?: true;
 }
 
 /** The ambient store: whichever {@link LocaleContext} is bound to the current async call chain. */
@@ -56,6 +61,19 @@ export const createLocaleContext = (locale: string): LocaleContext => {
     const served = servedLocaleFor(locale);
     return { locale: served, t: translator(served) };
 };
+
+/**
+ * The context of a draft preview: unlike {@link createLocaleContext} it keeps the draft tag as
+ * `locale` instead of folding it to the fallback. Its `t` still falls back, since the API has no
+ * wording for a switched-off language (see {@link translator}).
+ *
+ * @param draftTag - a tag {@link isDraftLocale} accepted
+ */
+export const createPreviewContext = (draftTag: string): LocaleContext => ({
+    locale: draftTag,
+    t: translator(draftTag),
+    preview: true
+});
 
 /**
  * Runs `callback` — and everything it awaits, however deep — with `context` as the ambient locale.

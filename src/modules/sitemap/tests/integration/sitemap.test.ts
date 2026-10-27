@@ -182,7 +182,7 @@ describe('GET /sitemap/products-{page}.xml', () => {
         await new Promise((resolve) => setTimeout(resolve, 20));
 
         await givenServedLocale('it');
-        const edit = await localeService.upsertEntityTranslations('product', String(product._id), {
+        const edit = await localeService.updateEntityTranslations('product', String(product._id), {
             it: { fields: { title: 'Un titolo nuovo' } }
         });
 

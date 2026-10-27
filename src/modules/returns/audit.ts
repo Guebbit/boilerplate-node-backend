@@ -13,7 +13,9 @@ export const returnsAuditActions = {
     ADMIN_RETURN_DECLINED: 'admin.return.declined',
     ADMIN_RETURN_RECEIVED: 'admin.return.received',
     /** Staff closed a received return by hand, with the optional note saying why. */
-    ADMIN_RETURN_CLOSED: 'admin.return.closed'
+    ADMIN_RETURN_CLOSED: 'admin.return.closed',
+    /** Staff canceled an approved return whose goods never came, with the optional note saying why. */
+    ADMIN_RETURN_CANCELED: 'admin.return.canceled'
 } as const;
 
 /** Augments infrastructure's audit action map with this module's own action strings. */

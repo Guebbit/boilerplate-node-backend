@@ -36,6 +36,10 @@ declare module '@kernel/events' {
          * door, only that it moved. Webhooks fire either way — a subscriber cares that the status
          * changed, not by which door.
          *
+         * Moves forward, with one exception: a shipment reported lost steps a `shipped` order back
+         * to `processing` (the `reopen` event of the lifecycle), the only backward move. A listener
+         * that assumes statuses only advance must allow for it.
+         *
          * Written to the transactional outbox in the transaction of the status write itself
          * (`./services/announce.ts`): at-least-once, so a listener dedupes on `meta.eventId`.
          */

@@ -51,6 +51,18 @@ export type ReserveOutcome =
     | { held: false; shortfalls: StockShortfall[] };
 
 /**
+ * How a hold was topped up for one product after a parcel was lost: the units set aside from the
+ * shelf, and the units owed (claimed against the restock, outside the backorder cap).
+ */
+export interface TopUp {
+    productId: string;
+    /** Units reserved from the free shelf. */
+    shelf: number;
+    /** Units claimed as a backorder because the shelf could not cover them. */
+    owed: number;
+}
+
+/**
  * What can be sold of one product right now. `available` is everything a line may ask for (the
  * shelf, the room under the cap, or both, by what the product is); `shelf` is only the units on
  * the shelf, which tells a line the shelf covers from one that spills into the cap.

@@ -318,7 +318,7 @@ caller's negotiated language chain — exact tag, base language, then the deploy
 an already-serialized page in one batched query. The language is the one the API negotiated from
 `Accept-Language` among the languages that are switched on, a deployed file or a registered row
 ([one language per request](../tools/i18n.md#one-language-per-request)), not the raw header; text in
-a language that is switched off is never part of the chain
+a language that is switched off is never part of the chain, except a staff preview
 ([a draft language](./locales.md#a-draft-language)). See
 [Internationalisation](../tools/i18n.md#tier-3-user-authored-content) for the resolve/fallback path.
 

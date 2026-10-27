@@ -33,6 +33,7 @@ import { reencryptOrders } from './reencrypt';
 import {
     cancelOnRequestById,
     withdrawById,
+    withdrawOnBuyersBehalfById,
     expireReservationById,
     cancelForPaymentMismatchById
 } from './cancel';
@@ -40,6 +41,7 @@ import {
     markPaid,
     markProcessing,
     markShipped,
+    markReopened,
     markDelivered,
     markFulfilmentComplete,
     markPaymentStatus,
@@ -51,7 +53,9 @@ import {
     recordFulfillmentProgress,
     recordForcedFulfilment,
     shipStock,
+    topUpStock,
     releaseStock,
+    releaseTopUp,
     extendHold,
     isPayableNow,
     refreshShelf
@@ -133,6 +137,7 @@ export const orderService = {
     markPaid,
     markProcessing,
     markShipped,
+    markReopened,
     markDelivered,
     markFulfilmentComplete,
     markPaymentStatus,
@@ -142,7 +147,9 @@ export const orderService = {
     recordFulfillmentProgress,
     recordForcedFulfilment,
     shipStock,
+    topUpStock,
     releaseStock,
+    releaseTopUp,
     extendHold,
     isPayableNow,
     refreshShelf,
@@ -160,6 +167,7 @@ export const orderService = {
     anonymizeDueOrders,
     cancelOnRequestById,
     withdrawById,
+    withdrawOnBuyersBehalfById,
     expireReservationById,
     cancelForPaymentMismatchById,
     withActions,

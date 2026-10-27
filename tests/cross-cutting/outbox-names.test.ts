@@ -193,19 +193,21 @@ it('publishes the set the pair agreed on', () => {
         'delivery.fulfillment-delayed',
         'delivery.hold-notice',
         'delivery.shipment-delivered',
+        'delivery.shipment-lost',
         'delivery.shipment-shipped',
         'example.published',
-        'feedback.contact',
         'notifications.staff-notice',
         'orders.order-cancelled',
         'orders.order-card-expired',
         'orders.order-confirm',
         'payments.payment-received',
         'payments.refund-issued',
+        'payments.refund-undeliverable',
         'payments.transfer-expired',
         'payments.transfer-instructions',
         'returns.notice',
         'stock-alerts.back-in-stock',
+        'tickets.contact',
         'users.purchase-hold-placed'
     ];
     // A name's first segment is the module that publishes it, so deleting a module (`demo:remove`)

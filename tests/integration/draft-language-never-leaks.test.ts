@@ -58,7 +58,7 @@ const productWithDraftFrench = async (overrides: { onHand?: number } = {}) => {
     await givenLocale('fr', { active: false });
     const product = await createProduct({ title: 'Blue mug', ...overrides });
     const id = String(product._id);
-    await localeService.upsertEntityTranslations('product', id, {
+    await localeService.updateEntityTranslations('product', id, {
         it: { fields: { title: 'Tazza blu' } },
         fr: { fields: { title: DRAFT_TITLE } }
     });
@@ -114,5 +114,24 @@ describe('the editor', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.translations.fr).toMatchObject({ title: DRAFT_TITLE });
+    });
+});
+
+describe('a staff preview just before a back-in-stock mail', () => {
+    it('does not change the names the message copies in', async () => {
+        const id = await productWithDraftFrench();
+        const { bearer } = await authenticateAs('admin');
+        const before = await productService.titlesById(id);
+
+        const preview = await api()
+            .get(`/products/${id}`)
+            .set('Authorization', bearer)
+            .set('Accept-Language', 'fr');
+        const after = await productService.titlesById(id);
+
+        // The preview itself works for staff, and leaves the served names alone.
+        expect(preview.status).toBe(200);
+        expect(after).toEqual(before);
+        expect(JSON.stringify(after)).not.toContain(DRAFT_TITLE);
     });
 });

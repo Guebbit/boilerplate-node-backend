@@ -25,6 +25,7 @@ flowchart LR
     notifications["notifications"]
     orders["orders"]
     stock_alerts["stock-alerts"]
+    tickets["tickets"]
 
     account --> users
     api_keys --> users
@@ -33,6 +34,7 @@ flowchart LR
     notifications --> users
     orders --> users
     stock_alerts --> users
+    tickets --> users
     users --> access
     users -. "user.deactivated" .-> account
     users -. "user.deletion-cancelled" .-> account
@@ -44,7 +46,7 @@ flowchart LR
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
     class notifications,stock_alerts supporting;
-    class access,account,api_keys,example generic;
+    class access,account,api_keys,example,tickets generic;
     class users centre;
 ```
 
@@ -288,6 +290,11 @@ answerable from the log alone, not from remembering which flag an admin clicked.
 
 [`access`](./access.md#when-the-account-is-erased) is one of the modules in that cascade: the account's roles, tenant and platform, leave in the same
 transaction as the row, so a failed erasure takes no role from an account that stays.
+
+Every erase hook receives the **subject** (`userId`, `email`, `emailVerified`, built once by
+`personalDataSubjectOf` from the stored account), not just the id: a module that also matches rows
+by address, as [`tickets`](./tickets.md) does, needs the address and whether it was proven. The
+cascade still writes exactly one `user.erased` outbox row per erasure, inside the same transaction.
 
 A module's erase hook may hand back work to run once the transaction has committed (`AfterErase`):
 anything that is not a database write, so a rollback could not undo it. `orders` uses it to cancel

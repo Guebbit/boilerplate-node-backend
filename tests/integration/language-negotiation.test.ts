@@ -214,3 +214,25 @@ describe('a language with a deployed file that an admin switches off', () => {
         expect(response.status).toBe(404);
     });
 });
+
+describe('an admin and a language that is switched off', () => {
+    it('is answered in it when it comes first, and in the live pick when it does not', async () => {
+        const id = await givenSpanishProduct('Lamp', 'Lámpara');
+        const { bearer } = await authenticateAs('admin');
+        await api().post('/locales/es/deactivate').set('Authorization', bearer);
+
+        const first = await api()
+            .get(`/products/${id}`)
+            .set('Authorization', bearer)
+            .set('Accept-Language', 'es');
+        const behind = await api()
+            .get(`/products/${id}`)
+            .set('Authorization', bearer)
+            .set('Accept-Language', 'en, es;q=0.5');
+
+        expect(first.headers['content-language']).toBe('es');
+        expect(first.body.title).toBe('Lámpara');
+        expect(behind.headers['content-language']).toBe('en');
+        expect(behind.body.title).toBe('Lamp');
+    });
+});

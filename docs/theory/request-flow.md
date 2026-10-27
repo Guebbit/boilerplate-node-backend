@@ -271,7 +271,7 @@ repository's `save`/`deleteOne` are where it is met, so no module writes precond
 
 The update factory takes a required `versioned: boolean`. `true` is a resource whose contract
 declares `If-Match` and `412`; `false` ignores the header entirely, so a route never answers a
-`412` its contract does not declare (addresses, feedback, locales and webhooks).
+`412` its contract does not declare (addresses, tickets, locales and webhooks).
 
 ```mermaid
 flowchart LR

@@ -38,7 +38,7 @@ flowchart LR
 
 RFC 9111 §3.5: a shared cache must not store a response to an authenticated request unless the
 response says it may be shared. `orders`, and `users`' own directory search and item read, and
-`feedback` never belong here at all — each answer is specific to the caller (their own orders, an
+`tickets` never belong here at all — each answer is specific to the caller (their own orders, an
 admin's filtered queue), so a shared Redis entry is not an optimisation for them, only a store that
 keeps growing for no caller but the one who filled it. Those routes mount `privateNoCache`
 instead: `Cache-Control: private, no-cache` — the BROWSER may keep its own copy, but must always
@@ -61,6 +61,24 @@ predicate, checked per request:
 caller's compiled CASL read filter to an anonymous caller's, byte for byte, rather than branching
 on a role name — safe BY CONSTRUCTION, since a role change that widens visibility makes the two
 filters unequal on its own, with nobody needing to remember to touch the cache key too.
+
+## Draft previews
+
+A third case beside `scopeKey`'s `true` and `false`: the draft-preview flag. A staff caller whose
+first `Accept-Language` choice is a switched-off language is answered in it ([previewing a draft](../modules/locales.md#previewing-a-draft)), and that answer must never meet a
+visitor.
+
+|          | Behaviour                                                                                   |
+| -------- | ------------------------------------------------------------------------------------------- |
+| Flag     | `markDraftPreview` sets `response.locals.draftPreview`; `isDraftPreview` reads it           |
+| Decision | `cacheable = !draftPreview && scopeKey(request)`. The flag wins over `scopeKey`             |
+| Redis    | No key is built, nothing is read, nothing is written. `armCacheWrite` refuses a second time |
+| Headers  | `private, no-store` on GET and POST. `privateNoCache` keeps it. `Vary` is unchanged         |
+| 304      | `If-None-Match` / `If-Modified-Since` are dropped, as `noStore` does                        |
+| Order    | Mount before `setCache`: its key is built from `request.locale`                             |
+
+Why not trust `scopeKey`: a custom role or an API key can hold `display:Locale` without
+`display:Product`, which reads the anonymous catalogue scope and so shares the visitors' entry.
 
 ## Response headers
 

@@ -29,7 +29,7 @@ import {
 } from '../domain';
 import { resolvePaymentProvider } from '../providers';
 import { presentPayment } from '../presenter';
-import { remainingOf } from './refunds';
+import { remainingOf } from './refund-settlement';
 import { callerScope, readsAllPayments } from './scope';
 import { paymentNotFound } from './errors';
 

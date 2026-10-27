@@ -327,7 +327,7 @@ Decisions rather than mechanics:
   by cursor on the `{ actorUserId, timestamp }` index: no count and no skip per page, which would make
   reading a long trail cost work quadratic in its length.
 - **The job carries the subject the request saw**, including whether the address had been proven. A
-  section that matches by address (`feedback`) answers only for a proven one, so the file says what
+  section that matches by address (`tickets`) answers only for a proven one, so the file says what
   the caller was entitled to when they asked, not what became true later.
 - **A failed build is a state.** The worker logs the error, marks the row `failed`, counts it in
   `account_export_failed_total` and mails the requester a short notice (`account.export-failed`: no

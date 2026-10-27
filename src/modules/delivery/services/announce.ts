@@ -19,7 +19,9 @@ import {
     FULFILLMENT_ORDER_RELEASED,
     type FulfillmentOrderDelayed,
     SHIPMENT_DELIVERED,
-    SHIPMENT_SHIPPED
+    SHIPMENT_LOST,
+    SHIPMENT_SHIPPED,
+    type ShipmentLostOwedLine
 } from '../events';
 
 /**
@@ -110,6 +112,67 @@ export const announceDelivered = (
                 session
             )
         );
+
+/** What the buyer is told about a loss, beyond the shipment itself. */
+export interface LossNotice {
+    /** The buyer's account; absent for a guest or an erased account. */
+    userId?: string | undefined;
+    /** The sentence staff wrote for the buyer, if any. */
+    message?: string | undefined;
+    /** What the shelf could not cover again. */
+    owed: ShipmentLostOwedLine[];
+    /** When the owed units are expected. */
+    expectedAt?: Date | undefined;
+}
+
+/**
+ * Write `shipment.lost` and the timeline's `shipment_lost`, in the act's transaction. The row
+ * carries ids and the reason code, never staff's note or the sentence for the buyer: the event
+ * does carry that sentence, for the mail and the inbox row, and the webhook leaves it out.
+ * @param shipment - the shipment now `lost`
+ * @param notice - what the buyer is told
+ * @param session - the act's transaction
+ * @param actor - the staff member who reported it
+ */
+export const announceLost = (
+    shipment: ShipmentDocument,
+    notice: LossNotice,
+    session: ClientSession,
+    actor?: string | null
+): Promise<void> => {
+    const reason = shipment.lostReason ?? 'lost';
+    return orderService
+        .appendTimeline(
+            String(shipment.orderId),
+            {
+                type: 'shipment_lost',
+                actor,
+                at: shipment.lostAt,
+                data: {
+                    shipmentId: String(shipment._id),
+                    fulfillmentOrderId: String(shipment.fulfillmentOrderId),
+                    number: shipment.number,
+                    reason
+                }
+            },
+            session
+        )
+        .then(() =>
+            enqueueOutboxEvent(
+                SHIPMENT_LOST,
+                {
+                    ...shipmentPayload(shipment),
+                    reason,
+                    ...(notice.userId ? { userId: notice.userId } : {}),
+                    ...(notice.message ? { message: notice.message } : {}),
+                    owed: notice.owed,
+                    ...(notice.expectedAt ? { expectedAt: notice.expectedAt.toISOString() } : {})
+                },
+                String(shipment.orderId),
+                session
+            )
+        );
+};
 
 /**
  * Write `fulfillment_order.hold_noticed` when the hold gives the buyer something to do or read: an

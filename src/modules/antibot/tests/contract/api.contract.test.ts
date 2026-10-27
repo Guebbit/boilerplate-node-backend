@@ -1,7 +1,7 @@
 /**
  * @module
  * Contract tests for /antibot, plus the end-to-end proof that a selected provider actually gates
- * a guarded route. That second half belongs here rather than in `feedback`'s own suite: `antibot`
+ * a guarded route. That second half belongs here rather than in `tickets`'s own suite: `antibot`
  * is the one module that knows both halves of the handshake — what the client is told to render
  * and what counts as a token — without importing the routes it guards.
  */
@@ -108,7 +108,7 @@ describe('the gate it guards, end to end on one guarded route', () => {
     it('lets the guarded route through untouched while the provider is `none`', async () => {
         setEnvironment({ NODE_ANTIBOT_PROVIDER: undefined });
 
-        const response = await api().post('/feedback/contact').send(CONTACT_PAYLOAD);
+        const response = await api().post('/tickets').send(CONTACT_PAYLOAD);
 
         expect(response.status).toBe(201);
     });
@@ -116,7 +116,7 @@ describe('the gate it guards, end to end on one guarded route', () => {
     it('refuses the guarded route with no token once a provider is selected', async () => {
         setEnvironment({ NODE_ANTIBOT_PROVIDER: 'turnstile' });
 
-        const response = await api().post('/feedback/contact').send(CONTACT_PAYLOAD);
+        const response = await api().post('/tickets').send(CONTACT_PAYLOAD);
 
         expect(response.status).toBe(403);
     });

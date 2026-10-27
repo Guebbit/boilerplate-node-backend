@@ -21,7 +21,13 @@ import { paymentsRateLimits } from './rate-limits';
 // Also installs this module's event declarations (PAYMENT_SUCCEEDED, PAYMENT_FAILED,
 // PAYMENT_REFUNDED). Reached directly, never through this module's own barrel — see CLAUDE.md's
 // module-barrel rule.
-import { PAYMENT_SUCCEEDED, PAYMENT_FAILED, PAYMENT_REFUNDED } from './events';
+import {
+    PAYMENT_SUCCEEDED,
+    PAYMENT_FAILED,
+    PAYMENT_REFUNDED,
+    PAYMENT_REFUND_FAILED,
+    PAYMENT_REFUND_REVERSED
+} from './events';
 import { paymentsConfig } from './config';
 import { paymentProviderProbe } from './providers';
 import { paymentsJobs } from './jobs';
@@ -58,6 +64,33 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
                 currency: payload.currency
             }
         })
+    },
+    [PAYMENT_REFUND_FAILED]: {
+        toPublicEvent: (payload: DomainEventMap[typeof PAYMENT_REFUND_FAILED]) => ({
+            eventType: 'payment.refund_failed',
+            data: {
+                paymentId: payload.paymentId,
+                orderId: payload.orderId,
+                refundId: payload.refundId,
+                amount: payload.amount,
+                currency: payload.currency,
+                failureReason: payload.failureReason,
+                final: payload.final
+            }
+        })
+    },
+    [PAYMENT_REFUND_REVERSED]: {
+        toPublicEvent: (payload: DomainEventMap[typeof PAYMENT_REFUND_REVERSED]) => ({
+            eventType: 'payment.refund_reversed',
+            data: {
+                paymentId: payload.paymentId,
+                orderId: payload.orderId,
+                refundId: payload.refundId,
+                amount: payload.amount,
+                currency: payload.currency,
+                failureReason: payload.failureReason
+            }
+        })
     }
 };
 
@@ -85,7 +118,7 @@ export default {
             collect: (subject) => paymentService.findOwnPaymentsForExport(subject.userId),
             // Detach, never delete — the payment survives the account, inside the same
             // hard-delete transaction. See `detachUserId`.
-            erase: paymentService.detachUserId
+            erase: ({ userId }, session) => paymentService.detachUserId(userId, session)
         }
     ],
     subscribe: () => {
@@ -104,6 +137,10 @@ export default {
         // This module's own two mails, from its own facts — see `./services/notify.ts`.
         onDomainEvent(PAYMENT_SUCCEEDED, paymentService.mailPaymentReceived);
         onDomainEvent(PAYMENT_REFUNDED, paymentService.mailRefundIssued);
+        // One mail, two triggers: a refusal that ended the retrying, and a settled refund the bank
+        // sent back. The listener reads the record, so a refusal that is not the card's mails nobody.
+        onDomainEvent(PAYMENT_REFUND_FAILED, paymentService.mailRefundUndeliverable);
+        onDomainEvent(PAYMENT_REFUND_REVERSED, paymentService.mailRefundUndeliverable);
     },
     locales: path.join(__dirname, 'locales'),
     templates: path.join(__dirname, 'templates'),

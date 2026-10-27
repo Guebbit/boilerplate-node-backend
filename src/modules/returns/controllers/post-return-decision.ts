@@ -43,7 +43,7 @@ export const postReturnDecline = (request: Request<{ id?: string }>, response: R
     const authContext = request.authContext!;
 
     return returnService
-        .declineReturn(id, body.reason, callerContextOf(request))
+        .declineReturn(id, body, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
             successResponse<Return>(

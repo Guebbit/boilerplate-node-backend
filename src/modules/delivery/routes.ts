@@ -18,6 +18,7 @@ import { noStore } from '@infrastructure/http/middlewares/cache';
 import { getShippingMethods } from './controllers/get-shipping-methods';
 import { postShipFulfillmentOrder } from './controllers/post-ship-fulfillment-order';
 import { postDeliverShipment } from './controllers/post-deliver-shipment';
+import { postMarkShipmentLost } from './controllers/post-mark-shipment-lost';
 import { postFulfillFulfillmentOrder } from './controllers/post-fulfill-fulfillment-order';
 import {
     postHoldFulfillmentOrder,
@@ -160,4 +161,14 @@ router.post(
     requirePermission('update', 'Shipment'),
     requireFreshAuthWhen(isForcedRequest, 'critical'),
     postDeliverShipment
+);
+// POST /delivery/shipments/:id/lost — a parcel that will not arrive: its units reopen on the same
+// fulfillment order, the stock hold is topped up and the buyer is told. No step-up: it records a
+// fact about a parcel, the same weight as recording its arrival.
+router.post(
+    '/shipments/:id/lost',
+    getAuth,
+    isAuth,
+    requirePermission('update', 'Shipment'),
+    postMarkShipmentLost
 );

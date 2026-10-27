@@ -3,7 +3,7 @@
  * Contract scalars, as they arrive over HTTP. `readInput` decodes a transport but deliberately
  * does not validate, so these are the schemas for the handful of scalars more than one endpoint
  * accepts — written once rather than re-derived per controller, which is how `GET /products` and
- * `GET /feedback` once disagreed on what a legal page size is. Bounds and defaults come from the
+ * `GET /tickets` once disagreed on what a legal page size is. Bounds and defaults come from the
  * orval-generated constants, so they track `openapi.yaml` rather than drifting from it.
  */
 
