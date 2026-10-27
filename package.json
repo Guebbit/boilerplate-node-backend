@@ -216,18 +216,17 @@
         "npm": ">=11.16.0"
     },
     "allowScripts": {
-        "mongodb-memory-server@11.0.1": true,
-        "protobufjs@7.6.6": true,
-        "fsevents@2.3.3": true,
-        "unrs-resolver@1.11.1": true,
-        "@hyperjump/json-pointer@0.9.8": true,
-        "@hyperjump/json-schema@0.23.5": true,
-        "@hyperjump/json-schema-core@0.28.5": true,
-        "@hyperjump/pact@0.2.5": true,
+        "mongodb-memory-server": true,
+        "protobufjs": true,
+        "fsevents": true,
+        "unrs-resolver": true,
+        "@hyperjump/json-pointer": true,
+        "@hyperjump/json-schema": true,
+        "@hyperjump/json-schema-core": true,
+        "@hyperjump/pact": true,
         "@scarf/scarf": false,
-        "@swc/core@1.15.47": true,
-        "esbuild@0.27.7": true,
-        "esbuild@0.21.5": true,
-        "esbuild@0.28.2": true
+        "@parcel/watcher": false,
+        "@swc/core": true,
+        "esbuild": true
     }
 }
