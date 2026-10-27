@@ -4,6 +4,7 @@
  * checked out into an order, and a card payment opened and confirmed in two calls so a journey
  * can reach in between them.
  */
+// requires-module: orders, payments, inventory, products
 import {
     Checkout201Response,
     ConfirmPayment200Response,
