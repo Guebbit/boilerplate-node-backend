@@ -874,7 +874,7 @@ services:
     # Prometheus: scrapes the API with the shared metrics token and evaluates the alert rules.
     prometheus:
         logging: *logging
-        image: docker.io/prom/prometheus:v2.55.1
+        image: docker.io/prom/prometheus:v2.55.1@sha256:2659f4c2ebb718e7695cb9b25ffa7d6be64db013daba13e05c875451cf51b0d3
         restart: unless-stopped
         profiles: [monitoring]
         <<: *monitoring-hardening
@@ -894,7 +894,7 @@ services:
     # Alertmanager: groups and routes what Prometheus fires, by the `ALERT_*` knobs (empty = `null`).
     alertmanager:
         logging: *logging
-        image: docker.io/prom/alertmanager:v0.34.1
+        image: docker.io/prom/alertmanager:v0.34.1@sha256:e9733bafb1bdef9b00e25a21f8f99dc26a22224bf16641ad754d1649f4c3357a
         restart: unless-stopped
         profiles: [monitoring]
         <<: *monitoring-hardening
@@ -933,7 +933,7 @@ services:
     # Loki: stores the container logs Alloy ships. Its config is the local stack's.
     loki:
         logging: *logging
-        image: docker.io/grafana/loki:3.3.2
+        image: docker.io/grafana/loki:3.7.8@sha256:1107dd5274e0ada47e42472b7a7e71f3b2a2fe878878108f3e2f9e51528f0193
         restart: unless-stopped
         profiles: [monitoring]
         <<: *monitoring-hardening
@@ -950,7 +950,7 @@ services:
     # https://github.com/prometheus/node_exporter#docker
     node-exporter:
         logging: *logging
-        image: docker.io/prom/node-exporter:v1.12.1
+        image: docker.io/prom/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
         restart: unless-stopped
         profiles: [monitoring]
         <<: *monitoring-hardening
@@ -967,7 +967,7 @@ services:
     # empty, so it can read them (as their owner) and do nothing else.
     alloy:
         logging: *logging
-        image: docker.io/grafana/alloy:v1.5.1
+        image: docker.io/grafana/alloy:v1.20.1@sha256:2aa2099af76c0098d4af7a4d6e48f86cb66dc1a000222ad927a1c67c6542d13f
         restart: unless-stopped
         profiles: [monitoring]
         <<: *monitoring-hardening
