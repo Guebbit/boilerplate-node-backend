@@ -87,6 +87,18 @@ export const ORDER_EVENTS = {
     }
 } as const satisfies Record<string, OrderEvent>;
 
+/**
+ * The settlement of a lost parcel nobody reshipped: `processing -> cancelled`, written by the
+ * system as cause `lost`. Deliberately NOT in {@link ORDER_EVENTS}: a `system` actor on that
+ * edge would make `statusesLeadingTo(cancelled, 'system')` include `processing`, and the three
+ * system cancels (`cancel()` reads that column) would start matching orders in fulfilment. Its
+ * one door, `markUndeliverable`, filters on this `from` itself.
+ */
+export const UNDELIVERABLE_EVENT = {
+    from: [OrderStatus.processing],
+    to: OrderStatus.cancelled
+} as const satisfies Omit<OrderEvent, 'actors'>;
+
 /** The name of one lifecycle event. */
 export type OrderEventName = keyof typeof ORDER_EVENTS;
 
