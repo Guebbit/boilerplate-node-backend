@@ -131,6 +131,18 @@ describe('POST /examples', () => {
 
         expect(response.status).toBe(422);
     });
+
+    it('answers a field-level 422 for a whitespace-only title, never a stored blank', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+
+        const response = await api()
+            .post('/examples')
+            .set('Authorization', bearer)
+            .send({ title: '   ', body: 'A body' });
+
+        expect(response.status).toBe(422);
+        expect(response.body.errors[0].details).toEqual({ field: 'title' });
+    });
 });
 
 describe('GET /examples and POST /examples/search', () => {

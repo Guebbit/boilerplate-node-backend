@@ -15,12 +15,7 @@ import {
     writeTranslations
 } from '@kernel/translation';
 import type { TranslationBatch } from '@kernel/translation';
-import type {
-    CallerContext,
-    ProductTranslationFieldsPatch,
-    ProductTranslationFieldsWrite,
-    ServerImageFields
-} from '@types';
+import type { CallerContext, ProductTranslationFieldsPatch, ServerImageFields } from '@types';
 import {
     generateSuccess,
     type ResponseReject,
@@ -97,9 +92,8 @@ export const create = async (
     const plan = await planTranslations('product', toUpsertTranslationsRequest(data.translations));
     if (!isTranslationPlan(plan)) return prefixTranslationErrors(plan);
 
-    // Guaranteed present and non-null by the schema's own refinement — a plan cannot validate
-    // without it.
-    const fallbackEntry = data.translations[getFallbackLocale()] as ProductTranslationFieldsWrite;
+    // Present by the schema's own refinement; a create has no null locale.
+    const fallbackEntry = data.translations[getFallbackLocale()];
     const { translations: _translations, ...productFields } = data;
 
     const product = await withTransaction((session) =>
@@ -110,7 +104,8 @@ export const create = async (
                 // `null` on a create means no image: the schema default applies to `undefined` only.
                 imageUrl: imageExtras.imageUrl ?? undefined,
                 title: fallbackEntry.title,
-                description: fallbackEntry.description ?? ''
+                // No description is no field on disk, never `''`.
+                description: fallbackEntry.description
             },
             session
         ).then((inserted) =>
@@ -161,7 +156,7 @@ export const updateById = async (
               ...(fallbackEntry.title === undefined ? {} : { title: fallbackEntry.title }),
               ...(fallbackEntry.description === undefined
                   ? {}
-                  : { description: fallbackEntry.description ?? '' })
+                  : { description: fallbackEntry.description })
           }
         : {};
 

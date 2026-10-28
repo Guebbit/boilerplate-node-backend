@@ -575,6 +575,7 @@ components:
                 note:
                     type: string
                     maxLength: 500
+                    minLength: 1
                     description: >-
                         Shown to the buyer with the refusal, so write it as if they read it
                         (GDPR Art. 22(3): the reason and how to contest it).
@@ -603,8 +604,8 @@ components:
                 active:
                     type: boolean
                     default: true
-                imageUrl:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageRemoval'
+                # No `imageUrl`: a create has no image to remove, so `null` is a 422 here. The picture
+                # arrives as multipart `imageUpload` bytes.
                 locale:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
 

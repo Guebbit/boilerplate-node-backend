@@ -466,7 +466,7 @@ describe('what the timeline says of a preorder', () => {
         expect(await typesOf(orderId)).toEqual(['fulfillment_held', 'release_date_moved']);
     });
 
-    it('writes a null date when the date is cleared', async () => {
+    it('leaves the `to` date out when the date is cleared', async () => {
         const { orderId, productIds } = await preorder(30);
         await moveDate(productIds[0], null);
 
@@ -477,7 +477,8 @@ describe('what the timeline says of a preorder', () => {
             'release_date_moved',
             'delay_notice_sent'
         ]);
-        expect(rows[1].data).toMatchObject({ to: null });
+        expect(rows[1].data).toHaveProperty('from');
+        expect(rows[1].data).not.toHaveProperty('to');
     });
 
     it("writes the sweep's notice once, as due", async () => {

@@ -594,7 +594,7 @@ describe('PUT /cart/shipping-method', () => {
             .send({ shippingMethodId: null });
 
         expect(response.status).toBe(200);
-        expect(response.body.shipping.selected).toBeNull();
+        expect(response.body.shipping).not.toHaveProperty('selected');
     });
 
     it('matches the error contract for an unknown method', async () => {

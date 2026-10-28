@@ -14,6 +14,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
+import { fieldChange } from '@infrastructure/observability/audit-changes';
 import { orderService } from '@modules/orders';
 import { FulfillmentOrderKind } from '@types';
 import type { AuthContext, CallerContext, Shipment } from '@types';
@@ -38,7 +39,7 @@ const trackingAuditMetadata = (
 ): Record<string, unknown> =>
     before === after
         ? { shipmentId }
-        : { shipmentId, changes: { trackingCode: { from: before ?? null, to: after ?? null } } };
+        : { shipmentId, changes: { trackingCode: fieldChange(before, after) } };
 
 /**
  * Save the code, audit it, and mail the buyer when it changed.

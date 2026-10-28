@@ -112,6 +112,8 @@ The contract is OpenAPI **3.1.0**, where `nullable: true` does not exist: JSON S
 | a `$ref` that may be `null` | `oneOf: [{ $ref: … }, { type: 'null' }]` |
 | only ever `null` (`ImageRemoval`) | `type: 'null'` |
 
+`'null'` is legal in **request bodies only**: a response says "no value" by leaving the key out, and `tests/cross-cutting/contract-responses-never-null.test.ts` fails on a `'null'` in any response schema. The rule, both directions: [Empty, `null`, omitted](./write-methods.md#empty-null-omitted).
+
 A 3.1 `$ref` may carry its own `description` beside it, so a shared parameter such as `OrderIdPathParam` is referenced with a per-operation description. The generated clients keep the component's description, not the sibling one.
 
 ## Who may call an operation

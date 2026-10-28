@@ -4,14 +4,17 @@
  * never the frozen snapshot, which carries none (`orderLineProductSchema` declares no
  * `imageUrl`/`thumbnailUrl`; see `../model`). One batched `$in` query per response,
  * however many orders or lines it holds, so a page of results costs one extra query rather than
- * one per line. `null` means the catalogue product (`product.id`) has been hard-deleted; a live product
- * with no picture yields an empty object. The frontend draws the placeholder either way.
+ * one per line. An absent `current` means the catalogue product (`product.id`) has been
+ * hard-deleted; a live product with no picture yields an empty object. The frontend draws the placeholder either way.
  */
 
 import { productService } from '@modules/products';
 
-/** The live picture for one order line, or `null` when its product is gone. */
-type OrderLineCurrent = { imageUrl?: string; thumbnailUrl?: string } | null;
+/** The live picture for one order line; the line has none at all when its product is gone. */
+interface OrderLineCurrent {
+    imageUrl?: string;
+    thumbnailUrl?: string;
+}
 
 /** The one thing this needs from a serialized order line: the catalogue id it was bought from. */
 interface OrderLineShape {
@@ -57,13 +60,12 @@ export const resolveCurrentImages = <T extends OrderShape>(orders: T[]): Promise
             for (const line of linesOf(order)) {
                 const product =
                     typeof line.product?.id === 'string' ? byId.get(line.product.id) : undefined;
-                line.current = product
-                    ? {
-                          // A product with no picture carries neither field.
-                          ...(product.imageUrl ? { imageUrl: product.imageUrl } : {}),
-                          ...(product.thumbnailUrl ? { thumbnailUrl: product.thumbnailUrl } : {})
-                      }
-                    : null;
+                // A hard-deleted product leaves `current` absent; one with no picture gets `{}`.
+                if (product)
+                    line.current = {
+                        ...(product.imageUrl ? { imageUrl: product.imageUrl } : {}),
+                        ...(product.thumbnailUrl ? { thumbnailUrl: product.thumbnailUrl } : {})
+                    };
             }
 
         return orders;

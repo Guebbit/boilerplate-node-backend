@@ -122,13 +122,13 @@ export const shippingOptionsFor = (
  *
  * @param stored - the id stored on the cart, if any
  * @param options - the basket's fitting options, from {@link shippingOptionsFor}
- * @returns the stored id when it still fits, otherwise `null`
+ * @returns the stored id when it still fits, otherwise `undefined` (none)
  */
 export const effectiveShippingChoice = (
     stored: string | undefined,
     options: CartShipping['options']
-): string | null =>
-    stored !== undefined && options.some((option) => option.id === stored) ? stored : null;
+): string | undefined =>
+    stored !== undefined && options.some((option) => option.id === stored) ? stored : undefined;
 
 /** Assemble the view from lines already joined and the ledger's units, with no further read. */
 const buildView = (
@@ -163,7 +163,7 @@ const buildView = (
         // would show 5.5600000000000005 for a basket that is charged 5.56.
         totalPrice: orderTotal({ items: lines, shippingCost, currency }),
         currency,
-        shipping: { required, selected, options },
+        shipping: { required, ...(selected === undefined ? {} : { selected }), options },
         lineMax: cartLineMax()
     });
 };

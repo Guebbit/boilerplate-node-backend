@@ -61,9 +61,10 @@ describe('an unlimited backorder cap', () => {
 
         const { items } = await inventoryService.listPreorders();
 
-        expect(items).toEqual([
-            expect.objectContaining({ productId, backorderLimit: null, left: null })
-        ]);
+        expect(items).toHaveLength(1);
+        expect(items[0]).toMatchObject({ productId });
+        expect(items[0]).not.toHaveProperty('backorderLimit');
+        expect(items[0]).not.toHaveProperty('left');
     });
 
     it('leaves the number out for a product that is neither a preorder nor open to backorder', async () => {
@@ -73,8 +74,8 @@ describe('an unlimited backorder cap', () => {
 
         const { items } = await inventoryService.listPreorders();
 
-        expect(items).toEqual([expect.not.objectContaining({ left: expect.anything() })]);
-        expect(items[0]).toMatchObject({ productId, backorderLimit: null });
+        expect(items[0]).toMatchObject({ productId });
+        expect(items[0]).not.toHaveProperty('backorderLimit');
         expect(items[0]).not.toHaveProperty('left');
     });
 

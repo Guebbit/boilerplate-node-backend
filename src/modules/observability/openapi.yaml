@@ -291,8 +291,8 @@ components:
                 docs/reference/ops.md#scheduled-jobs.
             properties:
                 name: { type: string }
-                lastSuccessAt: { type: [string, 'null'], format: date-time }
-                lastError: { type: [string, 'null'] }
+                lastSuccessAt: { type: string, format: date-time }
+                lastError: { type: string }
 
         ObservabilityHealthQueue:
             type: object

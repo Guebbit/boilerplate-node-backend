@@ -106,7 +106,8 @@ export type UpdateControllerSpec<
 
 /**
  * The fields a PUT clears by omitting them: every field whose schema accepts `null`. A field that
- * cannot be `null` — a password, a consent flag — is left unchanged when omitted instead.
+ * cannot be `null` has no cleared state, so the PUT schema should list it as `required` (omitting it
+ * is then a 422); one that slips through unrequired is left unchanged, never cleared.
  *
  * @param schema - the PUT body's schema
  * @returns the names of its nullable fields

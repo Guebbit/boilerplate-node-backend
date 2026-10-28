@@ -116,6 +116,17 @@ describe('POST /tickets — the contract bounds the form restates nothing of', (
         expect(response.body.errors[0].details).toEqual({ field });
     });
 
+    it('refuses a whitespace-only orderNumber and name, naming the field', async () => {
+        for (const field of ['orderNumber', 'name']) {
+            const response = await api()
+                .post('/tickets')
+                .send({ ...CONTACT_PAYLOAD, [field]: '   ' });
+
+            expect(response.status).toBe(422);
+            expect(response.body.errors[0].details).toEqual({ field });
+        }
+    });
+
     it('trims the text it keeps', async () => {
         const response = await api()
             .post('/tickets')
@@ -386,6 +397,19 @@ describe('assignment and notes', () => {
         expect(noted.status).toBe(201);
         expect(read.body.notes).toHaveLength(1);
         expect(read.body.notes[0]).toMatchObject({ body: 'Called back.' });
+    });
+
+    it('422s a whitespace-only note, naming the field', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const id = await createContactTicket();
+
+        const response = await api()
+            .post(`/tickets/${id}/notes`)
+            .set('Authorization', bearer)
+            .send({ body: '   ' });
+
+        expect(response.status).toBe(422);
+        expect(response.body.errors[0].details).toEqual({ field: 'body' });
     });
 
     it('422s an empty note', async () => {

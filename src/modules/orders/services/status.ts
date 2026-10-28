@@ -134,13 +134,11 @@ export const markPaid = (
     const { from, to } = ORDER_EVENTS.pay;
     const movePaid = withTimeline(
         (active) => orderRepository.markPaid(orderId, from[0], paymentMethod, active),
-        (order) => [
-            {
-                type: 'paid',
-                actor: by.actor,
-                data: { method: by.method ?? paymentMethod ?? order.paymentMethod ?? null }
-            }
-        ]
+        (order) => {
+            const method = by.method ?? paymentMethod ?? order.paymentMethod;
+            // No known method is the absent key, never `null`.
+            return [{ type: 'paid', actor: by.actor, data: { ...(method ? { method } : {}) } }];
+        }
     );
     return announceMove(
         session,

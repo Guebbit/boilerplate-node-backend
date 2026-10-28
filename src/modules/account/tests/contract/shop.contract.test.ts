@@ -12,6 +12,12 @@ import { api, authenticateAs } from '@tests/http';
 import { checkoutAs } from '@tests/checkout-as';
 import { requestAndDownloadExport } from '@tests/account-export';
 import { eventually } from '@tests/eventually';
+import { nullPathsIn } from '@tests/response-contract';
+import { accessService, DEPLOYMENT_TENANT_SLUG } from '@modules/access';
+import { giveAddress } from '@modules/addresses/tests/factories';
+import { createExample } from '@modules/example/tests/factories';
+import { createRefundTicket } from '@modules/tickets/tests/factories';
+import { createNotification } from '@modules/notifications/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, forceOrderStatus, toOrderItem } from '@modules/orders/tests/factories';
@@ -31,6 +37,9 @@ setupTestDb();
 
 // A requested export is built in the background and written to the sandbox: wait, then sweep.
 afterEach(() => settleInlineExports().then(emptyFileSandbox));
+
+/** Sections the rich seed below leaves empty, sorted. */
+const EXPECTED_EMPTY_SECTIONS: string[] = [];
 
 /** The metadata an exported session may carry, and nothing more: never a credential. */
 const EXPORTED_SESSION_KEYS = new Set(['id', 'createdAt', 'expiration', 'lastUsedAt', 'device']);
@@ -77,6 +86,71 @@ describe('POST /account/export', () => {
             createdAt: expect.any(String),
             expiration: expect.any(String)
         });
+    });
+
+    // A GDPR export is legally visible: every section holds real rows here, and none of them may
+    // carry a `null` (the shared contract afterEach would also catch one; this names the path).
+    it('holds no null anywhere in an account that has something in every section', async () => {
+        await accessService.ensureTenant(DEPLOYMENT_TENANT_SLUG, 'Export shop');
+        const { user, bearer } = await authenticateAs('admin');
+        const product = await createProduct({ price: 25, onHand: 5 });
+        const soldOut = await createProduct({ onHand: 0 });
+        await giveAddress(user.id);
+        await createNotification({ userId: user.id });
+        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        await paymentService.createIntent(String(order._id), asCustomer(user.id));
+        const shipped = await createOrder(user, [toOrderItem(product, 1)]);
+        await carryOrderTo(String(shipped._id), 'shipped');
+        await api()
+            .post('/returns')
+            .set('Authorization', bearer)
+            .send({ orderId: String(shipped._id), reason: 'withdrawal' });
+        await createExample({ userId: user.id });
+        await createRefundTicket(user.id);
+        const held = await createOrder(user, [toOrderItem(product, 1)]);
+        await forceOrderStatus(String(held._id), OrderStatus.processing);
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(String(held._id));
+        await deliveryService.holdFulfillmentOrder(
+            String(fulfillmentOrder._id),
+            { reason: 'high_risk', note: 'rang twice' },
+            asAdmin(),
+            callerContextAs('admin')
+        );
+        await api()
+            .post('/cart/items')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id), quantity: 1 });
+        await api()
+            .post('/wishlist/items')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id) });
+        await api()
+            .post('/stock-alerts')
+            .set('Authorization', bearer)
+            .send({ productId: String(soldOut._id) });
+        await api()
+            .post('/api-keys')
+            .set('Authorization', bearer)
+            .send({
+                name: 'export check',
+                permissions: ['read:WebhookSubscription'],
+                expiresAt: new Date(Date.now() + 7 * 24 * 3_600_000).toISOString()
+            });
+        await api()
+            .post('/tickets')
+            .set('Authorization', bearer)
+            .send({ email: user.email, subject: 'Help', message: 'My parcel is late.' });
+
+        const response = await requestAndDownloadExport(bearer);
+
+        expect(response.status).toBe(200);
+        const empty = Object.entries(response.data)
+            .filter(([, rows]) => Array.isArray(rows) && rows.length === 0)
+            .map(([section]) => section);
+        // Sections this seed cannot fill (a returns flow, webhooks, invoicing, examples, translation
+        // work, a system ticket) stay named here, so a new empty one is noticed.
+        expect(empty.toSorted()).toEqual(EXPECTED_EMPTY_SECTIONS);
+        expect(nullPathsIn(response.data)).toEqual([]);
     });
 
     it('carries the invoice, the credit note and the cart line with exactly their documented fields', async () => {

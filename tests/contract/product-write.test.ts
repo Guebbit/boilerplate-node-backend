@@ -75,6 +75,37 @@ describe('POST /products', () => {
         ]);
     });
 
+    it.each([
+        [
+            'a null locale',
+            { price: 10, translations: { en: { title: 'Memory Foam Bed' }, it: null } }
+        ],
+        [
+            'a null imageUrl',
+            { price: 10, translations: { en: { title: 'Memory Foam Bed' } }, imageUrl: null }
+        ]
+    ])('refuses %s: a create has nothing to clear', async (_label, body) => {
+        const { bearer } = await authenticateAsRole('editor');
+
+        const response = await api().post('/products').set('Authorization', bearer).send(body);
+
+        expect(response.status).toBe(422);
+    });
+
+    it('stores no description, and answers none, for a product created without one', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+
+        const response = await api()
+            .post('/products')
+            .set('Authorization', bearer)
+            .send({ price: 10, translations: { en: { title: 'Memory Foam Bed' } } });
+
+        expect(response.status).toBe(201);
+        expect(response.body).not.toHaveProperty('description');
+        const stored = await productRepository.findById(String(response.body.id));
+        expect(stored?.description).toBeUndefined();
+    });
+
     it('rejects a body missing the fallback locale', async () => {
         const { bearer } = await authenticateAsRole('editor');
 
@@ -157,6 +188,8 @@ describe('PUT /products/{id}', () => {
                 active: true,
                 purchasable: true,
                 requiresShipping: true,
+                allowBackorder: false,
+                noWithdrawal: false,
                 categories: [],
                 tags: [],
                 translations: { en: { title: 'Bed, replaced' } }
@@ -187,6 +220,8 @@ describe('PUT /products/{id}', () => {
                 active: true,
                 purchasable: true,
                 requiresShipping: true,
+                allowBackorder: false,
+                noWithdrawal: false,
                 categories: [],
                 tags: [],
                 translations: { en: { title: 'Bed, replaced' } }
@@ -200,6 +235,33 @@ describe('PUT /products/{id}', () => {
 
     // A PUT body IS the new resource (RFC 9110 §9.3.4) — `active`/`requiresShipping`/`categories`/
     // `tags` have no legal "cleared" state, so all of them are required alongside price/translations.
+    it.each(['allowBackorder', 'noWithdrawal'])(
+        'refuses a PUT that leaves out %s: it has no cleared state',
+        async (field) => {
+            const { bearer } = await authenticateAsRole('editor');
+            const product = await createProduct({ title: 'Bed', price: 10 });
+            const body: Record<string, unknown> = {
+                price: 15,
+                active: true,
+                purchasable: true,
+                requiresShipping: true,
+                allowBackorder: false,
+                noWithdrawal: false,
+                categories: [],
+                tags: [],
+                translations: { en: { title: 'Bed, replaced' } }
+            };
+            delete body[field];
+
+            const response = await api()
+                .put(`/products/${String(product._id)}`)
+                .set('Authorization', bearer)
+                .send(body);
+
+            expect(response.status).toBe(422);
+        }
+    );
+
     it('refuses a PUT body missing a required field', async () => {
         const { bearer } = await authenticateAsRole('editor');
         const product = await createProduct({ title: 'Bed', price: 10 });
@@ -234,6 +296,8 @@ describe('PUT /products/{id}', () => {
                 active: true,
                 purchasable: true,
                 requiresShipping: true,
+                allowBackorder: false,
+                noWithdrawal: false,
                 categories: [],
                 tags: [],
                 translations: { en: { title: 'Dog Bed, replaced' } }
@@ -257,6 +321,8 @@ describe('PUT /products/{id}', () => {
                 active: true,
                 purchasable: true,
                 requiresShipping: true,
+                allowBackorder: false,
+                noWithdrawal: false,
                 categories: [],
                 tags: [],
                 translations: { it: { title: 'Cuccia' } }
@@ -279,6 +345,8 @@ describe('PUT /products/{id}', () => {
                 active: true,
                 purchasable: true,
                 requiresShipping: true,
+                allowBackorder: false,
+                noWithdrawal: false,
                 categories: [],
                 tags: [],
                 translations: { en: { title: 'Bed, replaced' } }
@@ -402,7 +470,7 @@ describe('PATCH /products/{id} translations, field by field (RFC 7396)', () => {
             .send({ translations: { en: { description: null } } });
 
         expect(response.status).toBe(200);
-        expect(response.body.description).toBe('');
+        expect(response.body).not.toHaveProperty('description');
         expect(await readEnglish(bearer, id)).toEqual({ title: 'Cozy Bed' });
     });
 
@@ -432,6 +500,8 @@ describe('PATCH /products/{id} translations, field by field (RFC 7396)', () => {
                 active: true,
                 purchasable: true,
                 requiresShipping: true,
+                allowBackorder: false,
+                noWithdrawal: false,
                 categories: [],
                 tags: [],
                 translations: { en: { title: 'Cozy Bed XL' } }
@@ -692,6 +762,8 @@ describe('product states: `purchasable`', () => {
                 price: 15,
                 active: true,
                 requiresShipping: true,
+                allowBackorder: false,
+                noWithdrawal: false,
                 categories: [],
                 tags: [],
                 translations: { en: { title: 'Bed, replaced' } }

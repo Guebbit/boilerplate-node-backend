@@ -54,7 +54,7 @@ describe('productService.updateById — the audit row of a money edit', () => {
         });
     });
 
-    it('says null for a field that was unset or is cleared', async () => {
+    it('leaves out the side of a field that was unset or is cleared', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const product = await createProduct({ price: 10, taxClass: 'reduced' });
 
@@ -66,8 +66,8 @@ describe('productService.updateById — the audit row of a money edit', () => {
 
         expect(updatedRowMetadata(auditSpy)).toEqual({
             changes: {
-                taxClass: { from: 'reduced', to: null },
-                rateType: { from: null, to: 'standard' }
+                taxClass: { from: 'reduced' },
+                rateType: { to: 'standard' }
             }
         });
     });
@@ -107,7 +107,7 @@ describe('productService.updateById — the audit row of a money edit', () => {
                 purchasable: { from: true, to: false },
                 requiresShipping: { from: true, to: false },
                 noWithdrawal: { from: false, to: true },
-                weight: { from: 500, to: null },
+                weight: { from: 500 },
                 sku: { from: 'OLD-1', to: 'NEW-1' },
                 categories: { from: ['mugs'], to: ['cups'] }
             }
@@ -129,7 +129,7 @@ describe('productService.updateById — the audit row of a money edit', () => {
 
         const metadata = updatedRowMetadata(auditSpy);
         expect(metadata).toEqual({
-            changes: { releaseDate: { from: null, to: '2031-01-01T00:00:00.000Z' } },
+            changes: { releaseDate: { to: '2031-01-01T00:00:00.000Z' } },
             changedFields: ['title']
         });
         expect(JSON.stringify(metadata)).not.toContain('different title');

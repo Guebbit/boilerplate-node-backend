@@ -103,6 +103,25 @@ const assertProblemMediaType = (response: Response): void => {
 };
 
 /**
+ * Where a JSON value holds `null`, as dotted paths (`items.0.current`).
+ *
+ * A response never carries `null`: an unset value is the absent key. The generated schemas already
+ * refuse it where the contract is closed; this walk also covers the free-form objects they accept
+ * whole (`additionalProperties: true`, such as an audit row's `metadata` or a timeline's `data`).
+ *
+ * @param value - a parsed JSON body, or any part of one
+ * @param at - the path to `value`, empty at the root
+ */
+export const nullPathsIn = (value: unknown, at = ''): string[] => {
+    if (value === null) return [at === '' ? '(body)' : at];
+    if (typeof value !== 'object') return [];
+
+    return Object.entries(value).flatMap(([key, child]) =>
+        nullPathsIn(child, at === '' ? key : `${at}.${key}`)
+    );
+};
+
+/**
  * Checks one captured response against `openapi.yaml`, throwing a plain `Error` on a mismatch.
  *
  * An undeclared path is not this function's job — that's the 404-envelope contract test's own
@@ -155,5 +174,11 @@ export const assertResponseMatchesContract = (response: Response): void => {
     if (!result.success)
         throw new Error(
             `${method.toUpperCase()} ${pathname} (${String(response.status)}) does not match ${operationId}'s documented shape:\n${zod.prettifyError(result.error)}`
+        );
+
+    const nulls = typeof body === 'string' ? [] : nullPathsIn(body);
+    if (nulls.length > 0)
+        throw new Error(
+            `${method.toUpperCase()} ${pathname} (${String(response.status)}) sent null at ${nulls.join(', ')}: a response never carries null, an unset value is the absent key (docs/api/write-methods.md#empty-null-omitted)`
         );
 };
