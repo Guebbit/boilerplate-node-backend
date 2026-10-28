@@ -13,6 +13,7 @@ import {
     withAppLevelResponses,
     withErrorCodes,
     withModuleStamps,
+    withNotModified,
     withVersionedResources
 } from '../../../../scripts/contracts/openapi-bundle';
 
@@ -305,5 +306,59 @@ describe('withVersionedResources', () => {
                 }
             })
         ).toThrow(/inline 200/);
+    });
+});
+
+/** `withNotModified` — the shared 304 on the listed reads, and only those. */
+const run304 = (reads: string[]) =>
+    (
+        parseYaml(
+            withNotModified(
+                stringifyYaml({
+                    openapi: '3.1.0',
+                    paths: {
+                        '/things': { get: { responses: { '200': { description: 'ok' } } } },
+                        '/other': { get: { responses: { '200': { description: 'ok' } } } }
+                    }
+                }),
+                reads
+            )
+        ) as { paths: Record<string, { get: { responses: Record<string, unknown> } }> }
+    ).paths;
+
+describe('withNotModified', () => {
+    it('adds the shared 304 to a listed read and leaves its other answers', () => {
+        const paths = run304(['/things']);
+
+        expect(paths['/things']?.get.responses['304']).toEqual({
+            $ref: '#/components/responses/NotModified'
+        });
+        expect(paths['/things']?.get.responses['200']).toEqual({ description: 'ok' });
+    });
+
+    it('leaves an unlisted read alone, and skips a listed path nothing documents', () => {
+        const paths = run304(['/things', '/undocumented']);
+
+        expect(paths['/other']?.get.responses['304']).toBeUndefined();
+        expect(paths['/undocumented']).toBeUndefined();
+    });
+});
+
+/** `withVersionedResources` keeps headers an operation already declares on its 200. */
+describe('withVersionedResources and an operation header of its own', () => {
+    it('adds ETag beside an existing Cache-Control header', () => {
+        const item = run({
+            '/widgets/{id}': {
+                'x-versioned': ['get'],
+                get: {
+                    responses: { '200': { description: 'ok', headers: { 'Cache-Control': {} } } }
+                }
+            }
+        });
+
+        expect(Object.keys(item?.get?.responses['200']?.headers as object).toSorted()).toEqual([
+            'Cache-Control',
+            'ETag'
+        ]);
     });
 });

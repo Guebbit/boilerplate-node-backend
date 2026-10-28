@@ -468,10 +468,16 @@ anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` 
   `createDeleteController` open the precondition for the request; `repository.save` and
   `repository.deleteOne` meet it. A module's service never sees a header.
 - **The body is validated first.** A 422 for a body the schema refuses wins over a 412.
-- **Only a versioned read can answer `304`.** The tag covers the row's own edits, not what is
-  derived from config (prices, the caller's language), so it validates *writes* only.
-  `If-None-Match` is ignored on these reads. The `privateNoCache` reads (`orders`, `users`,
-  `tickets`) are the exception: Express's own ETag check answers them `304` on no change.
+- **The tag of a versioned read validates writes, not reads.** It covers the row's own edits, not
+  what is derived from config (prices, the caller's language), so the contract does not offer a
+  `304` from it.
+- **The cached reads are a separate case.** Two families answer `If-None-Match` with `304` on no
+  change, through Express's own ETag check: the `privateNoCache` reads (`orders`, `users`,
+  `tickets`, `payments`, `returns`, `stats`: a private copy the browser revalidates) and every
+  `setCache` read (`locales`, `products` `/facets` and `/:id`: the shared copy, revalidated once
+  `max-age` runs out or at once under `browserRevalidate`). The bundler declares that answer (the
+  shared `NotModified`: no body, an `ETag` header) on every such `GET`, so no fragment repeats it.
+  The sitemap streams its XML and carries no `ETag`, so it is not one of them.
 - **Browsers** may send `If-Match` and read `ETag` cross-origin: both are in the CORS allow and
   expose lists.
 
