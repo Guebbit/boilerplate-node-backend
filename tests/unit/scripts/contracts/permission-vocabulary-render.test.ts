@@ -1,7 +1,7 @@
 import {
     readPermissionActions,
     renderPermissionActions
-} from '../../../../scripts/contracts/permission-actions-render';
+} from '../../../../scripts/contracts/permission-vocabulary-render';
 
 describe('readPermissionActions', () => {
     it('returns the declared actions in order', () => {

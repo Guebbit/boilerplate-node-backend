@@ -3,7 +3,7 @@
  * document, and render the TypeScript that carries it. No filesystem, so a test can walk it.
  *
  * SHARED SCRIPT — byte-identical in both repos of the pair, like `generate-error-codes.ts`.
- * See: docs/tools/permission-actions.md
+ * See: docs/tools/permission-vocabulary.md
  */
 import { parse } from 'yaml';
 

@@ -4,19 +4,19 @@
  * runtime array plus the union type derived from it.
  *
  * SHARED SCRIPT — byte-identical in both repos of the pair, and both write a
- * `permission-actions` module beside their other generated contract types. The input is the SAME
+ * `permission-vocabulary` module beside their other generated contract types. The input is the SAME
  * document in both: the backend reads its `shared/authorization-keys.yaml`, the frontend the copy
  * `sync:frontend` hands it (`contracts/authorization-keys.yaml`).
  *
  * `--check` writes nothing and exits 1 on a mismatch — the contract every generator here keeps.
  *
- * Usage: tsx scripts/contracts/generate-permission-actions.ts --in <yaml> --out <path> [--check]
+ * Usage: tsx scripts/contracts/generate-permission-vocabulary.ts --in <yaml> --out <path> [--check]
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writeOrCheck } from './generated-file';
-import { readPermissionActions, renderPermissionActions } from './permission-actions-render';
+import { readPermissionActions, renderPermissionActions } from './permission-vocabulary-render';
 import { requiredPath } from '../cli';
 
 /** The repo root. `import.meta.url` rather than `__dirname`: this script runs as ESM. */

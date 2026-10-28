@@ -32,7 +32,7 @@ import type {
     TenantCaller
 } from '@types';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
-import { PERMISSION_ACTIONS, type PermissionAction } from '@api/permission-actions';
+import { PERMISSION_ACTIONS, type PermissionAction } from '@api/permission-vocabulary';
 
 /**
  * The id of the rule that does `action` to `subject`: `display:Order`.
@@ -50,9 +50,9 @@ export const ruleId = (action: string, subject: string): string => `${action}:${
  * The action vocabulary a declared RULE may carry, generated from `shared/authorization-keys.yaml`'s
  * `actions:` so the type and the Zod schema below draw on the one list. `manage` is deliberately
  * absent: there is no wildcard of any kind, so nothing declares it as ITS action.
- * See docs/tools/permission-actions.md.
+ * See docs/tools/permission-vocabulary.md.
  */
-export type { PermissionAction } from '@api/permission-actions';
+export type { PermissionAction } from '@api/permission-vocabulary';
 
 /** The two scopes a rule or role may carry — kept here as a runtime array purely to validate the shared YAML against {@link AuthorizationScope} without duplicating the literal elsewhere. */
 const AUTHORIZATION_SCOPES = [
