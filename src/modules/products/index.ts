@@ -13,6 +13,9 @@ export * from './services';
 
 export * from './events';
 
+/** The path of a product's page on the paired frontend; the sitemap and the back-in-stock mail link to it. */
+export { productPagePath } from './config';
+
 /**
  * Resolves a product's `taxClass` into the decimal VAT rate it is charged. Published so `orders`
  * can freeze the resolved rate onto an order line at checkout time — see `services/snapshot.ts`.

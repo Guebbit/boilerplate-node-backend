@@ -27,6 +27,11 @@ tester.run('barrel-allowed-sources', barrelAllowedSources as never, {
             filename: 'src/modules/products/index.ts'
         },
         {
+            // `config` is the same allowance: `productPagePath` is the page address a sibling links to.
+            code: `export { productPagePath } from './config';`,
+            filename: 'src/modules/products/index.ts'
+        },
+        {
             // A presenter's OUTPUT TYPE is the one thing it may publish — the same
             // types-only treatment `./model` gets above.
             code: `export type * from './presenter';`
