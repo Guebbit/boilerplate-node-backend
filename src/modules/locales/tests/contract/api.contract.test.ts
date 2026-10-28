@@ -15,7 +15,7 @@ import { listSupportedLocales, getDefaultLocale, getFallbackLocale } from '@infr
 import { translator } from '@infrastructure/i18n';
 import { MISSING_ID } from '@tests/ids';
 import { createLanguage, PORTUGUESE } from './support';
-import itTranslation from '../../../../locales/it.json';
+import itTranslation from '../../../../../shared/locales/it.json';
 
 setupTestDb();
 

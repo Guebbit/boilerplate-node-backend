@@ -11,6 +11,7 @@ import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 import { modulesWith } from '../modules-on-disk';
+import { jobsBlockSchema } from '../../src/infrastructure/config/shared-rules/jobs';
 import { rateLimitsBlockSchema } from '../../src/infrastructure/config/shared-rules/rate-limits';
 
 /**
@@ -60,7 +61,12 @@ export const moduleDescriptorSchema = z
          * The module's rate-limit budgets as data. `npm run regenerate` writes
          * `<module>/rate-limits.generated.ts` from it; `rate-limits.ts` adds the key and skip logic.
          */
-        rateLimits: rateLimitsBlockSchema.optional()
+        rateLimits: rateLimitsBlockSchema.optional(),
+        /**
+         * The module's scheduled jobs as data (name, cron, summary). `npm run regenerate` writes
+         * `<module>/jobs.generated.ts` from it; `jobs.ts` adds what each one runs.
+         */
+        jobs: jobsBlockSchema.optional()
     })
     .strict();
 

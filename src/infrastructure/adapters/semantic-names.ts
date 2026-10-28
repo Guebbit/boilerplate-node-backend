@@ -13,6 +13,7 @@
  */
 
 import { isPlainObject } from '../object-guards';
+import { semanticLogNameData } from './semantic-log-names.generated';
 
 /** One structured log record, before or after the rename. */
 type LogRecord = Record<string, unknown>;
@@ -27,28 +28,9 @@ type LogRecord = Record<string, unknown>;
  * `traceId` and `spanId` become `trace_id` and `span_id`: the OpenTelemetry Logs Data Model
  * puts trace context at the top level of a record, and `@opentelemetry/instrumentation-winston`
  * writes exactly those two keys. Grafana's Loki -> Tempo link reads `trace_id` (docs/tools/loki.md).
+ * The table is data: `shared/rules/semantic-log-names.yaml`.
  */
-export const SEMANTIC_LOG_NAMES: Readonly<Record<string, string>> = {
-    service: 'service.name',
-    traceId: 'trace_id',
-    spanId: 'span_id',
-    requestId: 'app.request.id',
-    clientRequestId: 'app.request.client_id',
-    method: 'http.request.method',
-    route: 'http.route',
-    statusCode: 'http.response.status_code',
-    durationMs: 'app.request.duration_ms',
-    ip: 'client.address',
-    userAgent: 'user_agent.original',
-    action: 'event.name',
-    outcome: 'app.audit.outcome',
-    actorUserId: 'user.id',
-    actorRoleName: 'app.actor.role_name',
-    actorCredentialId: 'app.actor.credential_id',
-    actorScope: 'app.actor.scope',
-    targetType: 'app.target.type',
-    targetId: 'app.target.id'
-};
+export const SEMANTIC_LOG_NAMES: Readonly<Record<string, string>> = semanticLogNameData;
 
 /**
  * `error` -> the `exception.*` attributes (https://opentelemetry.io/docs/specs/semconv/exceptions/).

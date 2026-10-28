@@ -20,7 +20,7 @@ This is the subtlest module in the repo, and almost all of the subtlety is one d
 
 **There are two tiers, and they never merge.**
 
-_Tier 1 is the API's own copy_ — `src/locales/*.json` plus every module's `locales/` folder, loaded
+_Tier 1 is the API's own copy_ — `shared/locales/*.json` plus every module's `locales/` folder, loaded
 into i18next at boot. It is what `t()` resolves, what decides `Content-Language`, and it stays on
 the filesystem permanently. It exists so a client can render copy _when no response arrives_, and
 putting it behind a database would make it unavailable in exactly the outage it was created for.
@@ -49,7 +49,7 @@ its own in it until a file is deployed, so each message falls back to the defaul
 at a time. `GET /locales` reports `apps` per language rather than a bare list of tags, so "does the
 API have its own Spanish words" (the backend app) and "may I download a Spanish dictionary" (a
 frontend app) stay two questions. The seeded scenario (`scenarios/locales.ts`) registers `es` with
-no `src/locales/es.json` behind it precisely so the answers really are _no_ and _yes_. <!-- doc-paths:ignore -->
+no `shared/locales/es.json` behind it precisely so the answers really are _no_ and _yes_. <!-- doc-paths:ignore -->
 :::
 
 One language has one shape. `GET /locales` lists it, `GET /locales/{locale}` reads it, and
@@ -76,7 +76,7 @@ publishing, and none refuses the write. A tag this deployment has no language fo
 | A row whose language no longer exists (a write racing a delete)                                                               | Served by nothing, for the same reason: the read is an allow-list of live languages                                                                                                                                                                                                                                                                                                                           |
 | `translations` on `GET /products/{id}`, for a holder of `read:Translation`                                                    | Lists every row, drafts included                                                                                                                                                                                                                                                                                                                                                                              |
 | `GET /locales/{locale}/messages` and the dictionary                                                                           | `404` to everyone but staff holding `display:Locale`                                                                                                                                                                                                                                                                                                                                                          |
-| The manifest, `GET /locales`                                                                                                  | Listed `active: false`, a language with a deployed file (`src/locales/it.json`) included: the frontend bundles that file, and the flag is how it learns to stop offering it. A registered language is absent for a visitor. Staff holding `display:Locale` see every row                                                                                                                                      |
+| The manifest, `GET /locales`                                                                                                  | Listed `active: false`, a language with a deployed file (`shared/locales/it.json`) included: the frontend bundles that file, and the flag is how it learns to stop offering it. A registered language is absent for a visitor. Staff holding `display:Locale` see every row                                                                                                                                   |
 | The sitemap                                                                                                                   | Lists the active languages only: the switched-off one has no page and no `hreflang`                                                                                                                                                                                                                                                                                                                           |
 | The API itself: negotiation, the dictionary, mail, order snapshots                                                            | Never picks it. `Accept-Language` for it gets the default language, `GET /locales/{locale}/dictionary` answers `404`, mail to a buyer who saved it goes out in the default language, and a snapshot freezes the default language's text. The list the pick is made from is refreshed in the worker that took the write at once, and in the others within one refresh interval (except a staff preview, below) |
 | Cached product responses                                                                                                      | Cleared when the flag changes and when the language is deleted, since both change what is served and no entity was written                                                                                                                                                                                                                                                                                    |
@@ -146,7 +146,7 @@ The two tiers, and the two sinks they never share. Follow `app` and the whole mo
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 28, 'rankSpacing': 60}}}%%
 flowchart LR
-    F["src/locales/*.json<br/><i>+ every module's locales/ — the files decide what EXISTS</i>"] --> I["i18next at boot<br/><i>tier 1 · what t() resolves</i>"]
+    F["shared/locales/*.json<br/><i>+ every module's locales/ — the files decide what EXISTS</i>"] --> I["i18next at boot<br/><i>tier 1 · what t() resolves</i>"]
     AD["admin<br/><i>never opens a code editor</i>"] --> DB[("override rows<br/><i>tier 2 · one per locale·app·key</i>")]
     DB -->|"app: backend<br/><i>re-layered at boot · on a timer · after every write</i>"| I
     DB -->|"app: frontend"| HT["GET /locales/:locale/messages"]

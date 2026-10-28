@@ -7,7 +7,8 @@
  * - `<out>.generated.ts`: for a rules file that types a union or holds plain numbers, the
  *   committed `as const` TypeScript code imports instead of reading the YAML.
  *
- * Module-owned rules (`src/modules/<m>/rules.yaml` + `rules.schema.ts`) are discovered, not listed.
+ * Module-owned rules (`src/modules/<m>/rules.yaml` + `rules.schema.ts`) and the data blocks of a
+ * `module.yaml` (`rateLimits:`, `jobs:`) are discovered, not listed.
  * `--check` reports a stale file instead of rewriting it.
  *
  * See: docs/theory/shared-rules.md
@@ -25,6 +26,8 @@ import { renderGenerated } from './shared-rules-render';
 import type { GenerateSpec } from '../../src/infrastructure/config/shared-rules/generate-spec';
 import { SHARED_RULES } from '../../src/infrastructure/config/shared-rules/registry';
 import { personasSchema } from '../../scenarios/personas-schema';
+import { jobsBlockSchema } from '../../src/infrastructure/config/shared-rules/jobs';
+import { stepUpDocumentSchema } from '../../src/infrastructure/config/shared-rules/step-up';
 import { rateLimitsBlockSchema } from '../../src/infrastructure/config/shared-rules/rate-limits';
 
 /** The folder every exported schema is committed under, beside its data. */
@@ -81,33 +84,69 @@ const loadModuleSource = (moduleName: string): Promise<GeneratedSource> =>
 const camelCaseOf = (name: string): string =>
     name.replaceAll(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
 
-/** A `module.yaml` seen only for its `rateLimits:` block; the rest is the descriptor's business. */
-const moduleRateLimitsSchema = z.looseObject({ rateLimits: rateLimitsBlockSchema });
+/** A block a module's `module.yaml` may carry, and the TypeScript it generates beside the module. */
+interface ModuleBlock {
+    /** The top-level key in `module.yaml`. */
+    key: string;
+    /** The block's own schema. */
+    schema: z.ZodType;
+    /** File written in the module's folder. */
+    file: string;
+    /** The constant's name for a module, from its camelCase folder name. */
+    exportName: (camelModule: string) => string;
+    /** The constant's docblock for a module. */
+    description: (moduleName: string) => string;
+}
 
 /**
- * The generated budgets file of every module whose `module.yaml` declares `rateLimits:`.
+ * Every block `module.yaml` carries as data, in one table: adding a block is one row, not a
+ * second collector.
+ */
+const MODULE_BLOCKS: readonly ModuleBlock[] = [
+    {
+        key: 'rateLimits',
+        schema: rateLimitsBlockSchema,
+        file: 'rate-limits.generated.ts',
+        exportName: (camelModule) => `${camelModule}RateLimitData`,
+        description: (moduleName) =>
+            `${moduleName}'s rate-limit budgets as data; \`rate-limits.ts\` adds their key and skip logic.`
+    },
+    {
+        key: 'jobs',
+        schema: jobsBlockSchema,
+        file: 'jobs.generated.ts',
+        exportName: (camelModule) => `${camelModule}JobData`,
+        description: (moduleName) =>
+            `${moduleName}'s scheduled jobs as data; \`jobs.ts\` adds what each one runs.`
+    }
+];
+
+/**
+ * The generated file of every module whose `module.yaml` declares `block`.
  *
+ * @param block - the block to look for
  * @returns one source per such module
  */
-const collectRateLimitSources = (): GeneratedSource[] =>
+const collectBlockSources = (block: ModuleBlock): GeneratedSource[] =>
     modulesWith(MODULES_ROOT, 'module.yaml').flatMap((moduleName) => {
         const source = `src/modules/${moduleName}/module.yaml`;
         const parsed = parse(readFileSync(path.join(REPO_ROOT, source), 'utf8')) as
             | Record<string, unknown>
             | undefined;
-        if (!parsed || !('rateLimits' in parsed)) return [];
+        if (!parsed || !(block.key in parsed)) return [];
         return [
             {
                 source,
-                schema: moduleRateLimitsSchema,
+                // Loose: the rest of the descriptor is `module-descriptor.ts`'s business.
+                schema: z.looseObject({ [block.key]: block.schema }),
                 spec: {
-                    out: `src/modules/${moduleName}/rate-limits.generated.ts`,
+                    out: `src/modules/${moduleName}/${block.file}`,
                     exports: [
                         {
-                            exportName: `${camelCaseOf(moduleName)}RateLimitData`,
+                            exportName: block.exportName(camelCaseOf(moduleName)),
                             shape: 'verbatim' as const,
-                            field: 'rateLimits',
-                            description: `${moduleName}'s rate-limit budgets as data; \`rate-limits.ts\` adds their key and skip logic.`
+                            field: block.key,
+                            description: block.description(moduleName)
                         }
                     ]
                 }
@@ -115,7 +154,28 @@ const collectRateLimitSources = (): GeneratedSource[] =>
         ];
     });
 
-/** Every rules file that generates TypeScript: the registry's, each module's, then the budgets. */
+/**
+ * The step-up windows live in the permission keys document, beside the tiers they size, so they
+ * are listed here rather than in the registry (which is `shared/rules/<name>.yaml` only).
+ */
+const STEP_UP_SOURCE: GeneratedSource = {
+    source: 'shared/authorization-keys.yaml',
+    schema: stepUpDocumentSchema,
+    spec: {
+        out: 'src/kernel/step-up.generated.ts',
+        exports: [
+            {
+                exportName: 'stepUpWindowData',
+                shape: 'verbatim',
+                field: 'stepUp',
+                description:
+                    'Seconds a sign-in stays fresh, per step-up tier; the environment overrides each.'
+            }
+        ]
+    }
+};
+
+/** Every rules file that generates TypeScript: the registry's, each module's, then the module blocks. */
 const collectSources = (): Promise<GeneratedSource[]> =>
     Promise.all(
         modulesWith(MODULES_ROOT, 'rules.yaml').map((moduleName) => loadModuleSource(moduleName))
@@ -132,7 +192,8 @@ const collectSources = (): Promise<GeneratedSource[]> =>
                 : []
         ),
         ...moduleSources,
-        ...collectRateLimitSources()
+        STEP_UP_SOURCE,
+        ...MODULE_BLOCKS.flatMap((block) => collectBlockSources(block))
     ]);
 
 /**

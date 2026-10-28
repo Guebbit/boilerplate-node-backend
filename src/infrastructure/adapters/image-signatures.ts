@@ -4,11 +4,12 @@
  * trivially spoofable — so the type is decided by the leading bytes instead, which a format's
  * spec fixes. It matters because of what reads the file later: a static server labelling by
  * extension, an SVG carrying `<script>`, or a decoder handed attacker-controlled input.
- * Deliberately not a dependency (`file-type` et al): three signatures is easier to audit inline
- * than to trust.
+ * Deliberately not a dependency (`file-type` et al): three signatures is easier to audit in a
+ * table than to trust.
  */
 
 import { open } from 'node:fs/promises';
+import { imageRuleData } from './images.generated';
 
 /**
  * One accepted image format: its real MIME type, any alias spelling a client may declare, the
@@ -33,39 +34,10 @@ interface ImageFormat {
 
 /**
  * Raster formats only. No SVG: it is XML that browsers execute, so accepting it means accepting
- * script upload, and no amount of sniffing makes that safe.
+ * script upload, and no amount of sniffing makes that safe. The table is data:
+ * `shared/rules/images.yaml`, with each signature's reasoning beside it.
  */
-const SUPPORTED_IMAGE_FORMATS: readonly ImageFormat[] = [
-    // \x89PNG\r\n\x1a\n — the trailing bytes exist to catch transfers that mangled line endings,
-    // which is exactly why matching all eight is worth more than matching the first four.
-    {
-        mime: 'image/png',
-        offset: 0,
-        bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
-        extension: 'png'
-    },
-    // SOI marker plus the first byte of the next marker. JPEG has no longer fixed prefix: what
-    // follows varies by encoder (JFIF, Exif, raw), so three bytes is the honest maximum.
-    // 'image/jpg' is not a real IANA type, but enough clients send it that rejecting it would be
-    // rejecting valid JPEGs over a spelling mistake.
-    {
-        mime: 'image/jpeg',
-        aliases: ['image/jpg'],
-        offset: 0,
-        bytes: [0xff, 0xd8, 0xff],
-        extension: 'jpg'
-    },
-    // 'WEBP', at offset 8, inside a RIFF container. The RIFF magic alone would also match WAV
-    // and AVI, so the check reaches past it; 'WEBP' alone would match any bytes 0-7, so it
-    // also demands 'RIFF' at offset 0.
-    {
-        mime: 'image/webp',
-        offset: 8,
-        bytes: [0x57, 0x45, 0x42, 0x50],
-        extension: 'webp',
-        alsoRequires: [{ offset: 0, bytes: [0x52, 0x49, 0x46, 0x46] }]
-    }
-];
+const SUPPORTED_IMAGE_FORMATS: readonly ImageFormat[] = imageRuleData.formats;
 
 /** Every spelling a client may declare, across all supported formats — including aliases. */
 export const ACCEPTED_UPLOAD_MIMETYPES = new Set(

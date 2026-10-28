@@ -15,30 +15,31 @@ import type { Request } from 'express';
 import { Counter, Histogram, Gauge } from 'prom-client';
 import { routeTemplateOf } from '@infrastructure/http/request';
 import { metricsRegistry } from '@infrastructure/observability/metrics-registry';
+import {
+    counterConfig,
+    gaugeConfig,
+    histogramConfig
+} from '@infrastructure/observability/metric-config';
+import { infrastructureMetricData } from '@infrastructure/observability/metrics.generated';
 
 /**
  * Total HTTP requests by method, route template, and status code.
  * The canonical RED-metric numerator: rate and error ratio both derive from it.
  */
 export const httpRequestsTotal = new Counter({
-    name: 'http_requests_total',
-    help: 'Total number of HTTP requests handled.',
+    ...counterConfig(infrastructureMetricData.httpRequestsTotal),
     // Labels = the dimensions you can slice by. Every distinct label *combination* becomes its
     // own time series, so cardinality must stay bounded — which is exactly why `route` is the
     // template Express matched (see `getRouteLabel`) and never a path from the request.
-    labelNames: ['method', 'route', 'status_code'] as const,
     registers: [metricsRegistry]
 });
 
 /** Request duration histogram (milliseconds). */
 export const httpRequestDuration = new Histogram({
-    name: 'http_request_duration_milliseconds',
-    help: 'HTTP request duration in milliseconds.',
+    ...histogramConfig(infrastructureMetricData.httpRequestDuration),
     // No `status_code` label (would multiply series by bucket count). Buckets are roughly
     // logarithmic — cache hits (5-25ms), DB-backed (50-250ms), pathological (1-5s) — tighter at
     // the low end since percentiles can only resolve to a bucket boundary.
-    labelNames: ['method', 'route'] as const,
-    buckets: [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000],
     registers: [metricsRegistry]
 });
 
@@ -48,9 +49,7 @@ export const httpRequestDuration = new Histogram({
  * `HighErrorRate` does not read it, since a client mistake is not a server failure.
  */
 export const httpRequestErrorsTotal = new Counter({
-    name: 'http_request_errors_total',
-    help: 'Total number of HTTP requests that returned a 4xx or 5xx status.',
-    labelNames: ['method', 'route', 'status_code'] as const,
+    ...counterConfig(infrastructureMetricData.httpRequestErrorsTotal),
     registers: [metricsRegistry]
 });
 
@@ -60,8 +59,7 @@ export const httpRequestErrorsTotal = new Counter({
  * than they complete, i.e. the service is saturating.
  */
 export const httpInflightRequests = new Gauge({
-    name: 'http_requests_in_flight',
-    help: 'Number of HTTP requests currently in flight.',
+    ...gaugeConfig(infrastructureMetricData.httpInflightRequests),
     // Unlabelled: a single number for the whole process is what makes it useful at a glance.
     registers: [metricsRegistry]
 });

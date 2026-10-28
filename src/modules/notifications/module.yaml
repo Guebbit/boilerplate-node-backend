@@ -15,3 +15,15 @@ dependsOn:
     - webhooks # subscribes to its event, a subscription auto-disabled
     - wishlist # subscribes to its event
 noAudit: "Writes and clears courtesy messages and pointers to work: nothing money, stock or identity related, every row is the owner's to delete, and the screen a work notice points at audits its own acts."
+jobs:
+    sweepStaffDigest:
+        name: sweep:staff-digest
+        schedule: 30 6 * * *
+        summary: Rewrites the staff summary rows (transfers due, unshipped, undecided returns, open
+            holds, missing tracking codes, undelivered parcels, stale refunds, low stock) and mails
+            each person the overdue ones that appeared or grew.
+    sweepStaffWeekly:
+        name: sweep:staff-weekly
+        schedule: 30 6 * * 1
+        summary: Rewrites the late-preorder summary row for the staff who edit orders, and mails it
+            when it appeared or grew.

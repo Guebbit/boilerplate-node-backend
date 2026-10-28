@@ -13,9 +13,9 @@ import {
     readLocaleDictionary,
     resetSupportedLocales
 } from '@infrastructure/i18n';
-import enTranslation from '../../../../src/locales/en.json';
+import enTranslation from '../../../../shared/locales/en.json';
 import enUsers from '@modules/users/locales/en.json';
-import itTranslation from '../../../../src/locales/it.json';
+import itTranslation from '../../../../shared/locales/it.json';
 import itUsers from '@modules/users/locales/it.json';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
@@ -23,7 +23,7 @@ import path from 'node:path';
 import { setEnvironment } from '@tests/environment';
 
 describe('locale discovery', () => {
-    it('lists every dictionary in src/locales', () => {
+    it('lists every dictionary in shared/locales', () => {
         expect(listSupportedLocales()).toEqual(expect.arrayContaining(['en', 'it']));
     });
 

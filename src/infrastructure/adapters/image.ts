@@ -11,15 +11,20 @@
 import sharp from 'sharp';
 import type { Sharp } from 'sharp';
 import { imageConfig } from '@infrastructure/adapters/config';
+import { imageRuleData } from '@infrastructure/adapters/images.generated';
 
 /**
- * The three formats an upload can declare, per `SUPPORTED_IMAGE_FORMATS` in `image-signatures.ts`.
+ * The formats an upload can declare and `digestImage` can re-encode: the `reencodable` entries of
+ * `shared/rules/images.yaml`.
  * `digestImage` re-encodes into the SAME one it is given — never converts — because the extension
  * on disk already picked the `Content-Type` `express.static` will send, and changing the bytes'
  * format without changing the extension recreates the exact mismatch the upload gates exist to
  * remove.
  */
-export type ReencodableImageMime = 'image/png' | 'image/jpeg' | 'image/webp';
+export type ReencodableImageMime = Extract<
+    (typeof imageRuleData.formats)[number],
+    { reencodable: true }
+>['mime'];
 
 /*
  * Sharp: cap libvips to one thread per process.

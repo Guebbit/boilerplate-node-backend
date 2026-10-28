@@ -19,6 +19,7 @@ import {
     writeFileAtomically
 } from '@infrastructure/adapters/filesystem';
 import type { ReencodableImageMime } from '@infrastructure/adapters/image';
+import { imageRuleData } from '@infrastructure/adapters/images.generated';
 import { imageConfig } from '@infrastructure/adapters/config';
 import type { ServerImageFields } from '@types';
 
@@ -116,7 +117,7 @@ export const IMAGES_SEGMENT = 'images';
 
 /** Version segment for thumbnails — bump it, rather than overwriting existing files in place, the
  * day quality settings change: every url is `immutable, 1y` and cannot be revalidated. */
-const THUMBNAIL_VERSION = 'v1';
+const THUMBNAIL_VERSION = imageRuleData.thumbnailVersion;
 
 /** The directory `express.static` serves at the site root — where a promoted image finally lands. */
 export const publicRoot = () => path.resolve(imageConfig().NODE_PUBLIC_PATH);
@@ -140,11 +141,9 @@ export const thumbnailsDirectory = (root: string) =>
 const thumbnailFilename = (key: string) => `${path.basename(key, path.extname(key))}.webp`;
 
 /** The file extension `promote` writes for each accepted format — the standard short spelling. */
-const EXTENSION_OF: Record<ReencodableImageMime, string> = {
-    'image/png': '.png',
-    'image/jpeg': '.jpg',
-    'image/webp': '.webp'
-};
+const EXTENSION_OF: Readonly<Record<string, string>> = Object.fromEntries(
+    imageRuleData.formats.map((format) => [format.mime, `.${format.extension}`])
+);
 
 /**
  * Resolve a stored `imageUrl` to a real path, refusing anything that would escape `root`.

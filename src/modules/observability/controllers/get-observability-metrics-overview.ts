@@ -27,10 +27,10 @@ interface MetricSample {
  * Read a domain counter's samples by metric NAME rather than by importing the counter.
  *
  * This is what keeps the dashboard from depending on the domains it reports on. The counters
- * belong to `account`, `cart` and `orders` now; importing them would couple this module to three
- * domains and make deleting any of them a compile error here — in the one place whose whole job is
- * to survive them. `module-coupling-observability` in `.dependency-cruiser.cjs` keeps it that way:
- * this module may reach `audit-logs` and nothing else.
+ * belong to `account`, `cart`, `inventory` and `orders` now; importing them would couple this
+ * module to four domains and make deleting any of them a compile error here — in the one place
+ * whose whole job is to survive them. `module-coupling-observability` in `.dependency-cruiser.cjs`
+ * keeps it that way: this module may reach `audit-logs` and nothing else.
  *
  * An absent metric is a normal state, not an error: it means the module that owns it is not in
  * this build, and the overview reports zero for that row. The one exception is the whole

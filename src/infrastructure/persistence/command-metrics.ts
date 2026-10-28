@@ -11,18 +11,17 @@
 import type { Connection, mongo } from 'mongoose';
 import { Histogram } from 'prom-client';
 import { metricsRegistry } from '@infrastructure/observability/metrics-registry';
+import { histogramConfig } from '@infrastructure/observability/metric-config';
+import { infrastructureMetricData } from '@infrastructure/observability/metrics.generated';
 
 /**
  * Time every database command takes, by collection, command name and outcome.
  * Named after the OpenTelemetry database semantic conventions so stock dashboards understand it.
  */
 export const databaseOperationDuration = new Histogram({
-    name: 'db_client_operation_duration_seconds',
-    help: 'Duration of database commands in seconds, by collection, operation and outcome.',
+    ...histogramConfig(infrastructureMetricData.databaseOperationDuration),
     // `collection` and `operation` are bounded by the schema and the driver's command set;
     // `outcome` is `success` or `error`.
-    labelNames: ['collection', 'operation', 'outcome'] as const,
-    buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
     registers: [metricsRegistry]
 });
 

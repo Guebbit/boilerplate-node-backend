@@ -11,15 +11,15 @@ import { Counter } from 'prom-client';
 import type { CallerContext } from '@types';
 import { recordAudit, coreAuditActions, type AuditAction } from './audit';
 import { metricsRegistry } from './metrics-registry';
+import { counterConfig } from '@infrastructure/observability/metric-config';
+import { infrastructureMetricData } from '@infrastructure/observability/metrics.generated';
 
 /**
  * Attacks on a credential, by event. The label is the audit action string, so a rule and a log
  * query name the same thing; it is bounded by {@link SecurityEventAction}, never request data.
  */
 export const securityEventsTotal = new Counter({
-    name: 'security_events_total',
-    help: 'Security events (forged or guessed credentials), labelled by audit action.',
-    labelNames: ['event'] as const,
+    ...counterConfig(infrastructureMetricData.securityEventsTotal),
     registers: [metricsRegistry]
 });
 
@@ -28,9 +28,7 @@ export const securityEventsTotal = new Counter({
  * Metric only — the FE token expires every few minutes, so auditing it would be noise.
  */
 export const staleCredentialsTotal = new Counter({
-    name: 'auth_stale_credentials_total',
-    help: 'Expired or revoked credentials presented, labelled by kind and reason.',
-    labelNames: ['kind', 'reason'] as const,
+    ...counterConfig(infrastructureMetricData.staleCredentialsTotal),
     registers: [metricsRegistry]
 });
 

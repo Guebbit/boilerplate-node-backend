@@ -19,3 +19,10 @@ rateLimits:
             caller a person, and an address-keyed budget would let one signed-in manager behind a
             shared address starve every other caller on it.
         audited: true
+jobs:
+    reapOrders:
+        name: reap:orders
+        schedule: 10 2 * * *
+        summary:
+            Anonymizes an order's remaining PII once its retention window has passed, and unsets
+            a timeline row's staff text once its own window has.

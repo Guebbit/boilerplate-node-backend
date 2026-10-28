@@ -7,6 +7,7 @@
  */
 
 import type { JobDeclaration } from '@kernel/registry';
+import { stockAlertsJobData } from './jobs.generated';
 import { logger } from '@infrastructure/adapters/logger';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { stockAlertService } from './service';
@@ -14,12 +15,7 @@ import { stockAlertService } from './service';
 /** The jobs `stock-alerts` owns. */
 export const stockAlertsJobs: readonly JobDeclaration[] = [
     {
-        name: 'sweep:stock-alerts',
-        // Hourly: a release date has no write to ride on, and an hour is soon enough for a
-        // courtesy mail. Idempotent: an answered request is deleted.
-        schedule: '35 * * * *',
-        summary:
-            'Answers waiting back-in-stock requests for a product that can be ordered again without any write announcing it, such as a preorder whose release date passed.',
+        ...stockAlertsJobData.sweepStockAlerts,
         run: () =>
             stockAlertService
                 .sweepBuyable(new Date())

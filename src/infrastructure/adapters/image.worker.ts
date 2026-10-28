@@ -17,6 +17,7 @@ import { imageStore } from '@infrastructure/adapters/image-store';
 import { digestImage, thumbnailImage } from '@infrastructure/adapters/image';
 import type { ReencodableImageMime } from '@infrastructure/adapters/image';
 import { identifyImage } from '@infrastructure/adapters/image-signatures';
+import { imageRuleData } from '@infrastructure/adapters/images.generated';
 import { IMAGE_QUEUE, publishToQueue } from '@infrastructure/adapters/queue';
 import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
 
@@ -24,11 +25,12 @@ import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
 export { IMAGE_QUEUE } from '@infrastructure/adapters/queue';
 
 /** The only formats `digestImage` can re-encode — see `ReencodableImageMime`. */
-const REENCODABLE_MIMES: ReadonlySet<string> = new Set<ReencodableImageMime>([
-    'image/png',
-    'image/jpeg',
-    'image/webp'
-]);
+const REENCODABLE_MIMES: ReadonlySet<string> = new Set(
+    // Widened from the literal types: a format marked `reencodable: false` is a YAML edit away.
+    (imageRuleData.formats as readonly { mime: string; reencodable: boolean }[])
+        .filter((format) => format.reencodable)
+        .map((format) => format.mime)
+);
 
 /** Narrows a declared mime to {@link ReencodableImageMime}, `undefined` included as "no". */
 const isReencodableMime = (mime: string | undefined): mime is ReencodableImageMime =>

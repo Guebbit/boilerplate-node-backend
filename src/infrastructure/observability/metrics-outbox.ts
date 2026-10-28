@@ -10,18 +10,18 @@
 import mongoose from 'mongoose';
 import { Counter, Gauge } from 'prom-client';
 import { metricsRegistry } from './metrics-registry';
+import { counterConfig, gaugeConfig } from '@infrastructure/observability/metric-config';
+import { infrastructureMetricData } from '@infrastructure/observability/metrics.generated';
 
 /** Events the relay dispatched and marked published. A duplicate publish counts again. */
 export const outboxEventsPublishedTotal = new Counter({
-    name: 'outbox_events_published_total',
-    help: 'Outbox events dispatched to their consumers and marked published.',
+    ...counterConfig(infrastructureMetricData.outboxEventsPublishedTotal),
     registers: [metricsRegistry]
 });
 
 /** Dispatch attempts that failed and were rescheduled with backoff. */
 export const outboxEventsRetriedTotal = new Counter({
-    name: 'outbox_events_retried_total',
-    help: 'Outbox dispatch attempts that failed and were rescheduled with backoff.',
+    ...counterConfig(infrastructureMetricData.outboxEventsRetriedTotal),
     registers: [metricsRegistry]
 });
 
@@ -30,8 +30,7 @@ export const outboxEventsRetriedTotal = new Counter({
  * (`OutboxEventsDead`): a consumer is down or a bug is deterministic, and nothing else says so.
  */
 export const outboxEventsDeadTotal = new Counter({
-    name: 'outbox_events_dead_total',
-    help: 'Outbox events parked as dead after exhausting every dispatch attempt.',
+    ...counterConfig(infrastructureMetricData.outboxEventsDeadTotal),
     registers: [metricsRegistry]
 });
 
@@ -56,8 +55,7 @@ export const setOutboxPendingReader = (reader: () => Promise<number>): void => {
  * for the same reason the job gauge is: a scrape must answer fast.
  */
 const _outboxPendingGauge = new Gauge({
-    name: 'outbox_pending_events',
-    help: 'Outbox events written but not yet published (includes ones backing off).',
+    ...gaugeConfig(infrastructureMetricData.outboxPendingEvents),
     registers: [metricsRegistry],
     collect() {
         if (

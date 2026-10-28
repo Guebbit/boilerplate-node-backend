@@ -56,7 +56,7 @@ Two things deliberately do **not** go to YAML:
 | Its TS (opt-in) | `<out>.generated.ts`, an `as const` file built from the YAML, committed             |
 | Cases           | `shared/cases/<name>.cases.yaml`                                                    |
 | Cases test      | `tests/cross-cutting/<name>-conformance.test.ts`, through `tests/support/cases.ts`  |
-| Moved verbatim  | `shared/rules/breached-passwords.txt`                                               |
+| Moved verbatim  | `shared/rules/breached-passwords.txt`, `shared/locales/*.json`                      |
 
 `shared/**` is byte-identical in both repos. The twin picks the files up from there; nothing here
 writes to the twin.
@@ -96,6 +96,10 @@ flowchart LR
 - A shared file opts in with `generate: { out, exportName, shape }` in `registry.ts`.
 - A module-owned file is `src/modules/<m>/rules.yaml` + `rules.schema.ts` (exports `rulesSchema`,
   `rulesGenerate`) and is found by the generator, not listed.
+- A block in a module's `module.yaml` (`rateLimits:`, `jobs:`) is found the same way. The generator
+  keeps one table of such blocks, `{ key, schema, file, exportName }`: a new block is one row.
+- Data that sits in another shared document (the `stepUp:` windows in
+  `authorization-keys.yaml`) is listed in the generator beside the registry's entries.
 - `shape` is `verbatim` (dump the parsed data) or `keyed-list` (`{ value, description }` rows become
   `{ KEY: 'value' }` with a JSDoc per key).
 - The generated files are excluded from Stryker and staged by the pre-commit hook.
@@ -128,6 +132,15 @@ flowchart LR
 | `modules/example/rules.yaml`                | `example/rules.generated.ts`, read by `example/audit.ts`, `analytics.ts`                                                             |
 | `rules/rate-limits.yaml`                    | `http/middlewares/rate-limits.generated.ts`, read by `rate-limit.ts` (the browsing, api-key and upload budgets)                      |
 | `modules/<m>/module.yaml` `rateLimits:`     | `<m>/rate-limits.generated.ts`, read by `<m>/rate-limits.ts` (account, cart, example, invoicing, orders, payments, returns, tickets) |
+| `rules/outbox.yaml`                         | `kernel/outbox.generated.ts`, read by `kernel/config.ts` (env defaults) and `kernel/outbox.ts` (backoff)                             |
+| `authorization-keys.yaml` `stepUp:`         | `kernel/step-up.generated.ts`, read by `kernel/config.ts` (`NODE_REAUTH_TIME_*` defaults)                                            |
+| `rules/defaults.yaml`                       | `config/defaults.generated.ts`, read by the http, persistence and adapters configs (cache, idempotency, page size, images, uploads)  |
+| `rules/metrics.yaml`                        | `observability/metrics.generated.ts`, turned into constructor options by `observability/metric-config.ts`                            |
+| `rules/semantic-log-names.yaml`             | `adapters/semantic-log-names.generated.ts`, read by `adapters/semantic-names.ts`                                                     |
+| `rules/images.yaml`                         | `adapters/images.generated.ts`, read by `image-signatures.ts`, `image-store.ts`, `image.ts`, `image.worker.ts`                       |
+| `rules/jobs.yaml`                           | `app/jobs.generated.ts`, read by `app/jobs.ts` (the kernel jobs)                                                                     |
+| `modules/<m>/module.yaml` `jobs:`           | `<m>/jobs.generated.ts`, read by `<m>/jobs.ts` (every module with a job, `notifications` included)                                   |
+| `locales/*.json`                            | `infrastructure/i18n/catalog.ts` (the app-level dictionaries; each module's own sit in its `locales/`)                               |
 | `rules/password-hash.yaml`                  | `security/password-hash.ts`                                                                                                          |
 | `rules/breached-passwords.txt`              | `security/breached-passwords`                                                                                                        |
 | `cases/log-redaction.cases.yaml`            | `tests/cross-cutting/log-redaction-conformance.test.ts`                                                                              |

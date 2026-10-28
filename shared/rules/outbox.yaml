@@ -1,0 +1,17 @@
+# The transactional outbox's retry policy defaults, as data the PHP twin copies.
+#
+# Not read at boot. `npm run regenerate` writes `src/kernel/outbox.generated.ts` from it. Each of
+# `retentionDays`, `maxAttempts` and `leaseSeconds` is overridden by an environment variable
+# (`NODE_OUTBOX_*`); the backoff pair is fixed. Units are in the key name.
+outbox:
+    # Days a published row is kept before the sweep deletes it.
+    retentionDays: 7
+    # Failed dispatches before a row is parked as `dead`.
+    maxAttempts: 10
+    # Seconds a relay's claim on a row lasts. It must outlast one dispatch, or a slow one is
+    # duplicated.
+    leaseSeconds: 60
+    # Wait after the first failure; it doubles with each further one.
+    backoffBaseMs: 5000
+    # The wait never exceeds this, however many attempts have failed: one hour.
+    backoffCapMs: 3600000

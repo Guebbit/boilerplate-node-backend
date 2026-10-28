@@ -9,6 +9,8 @@
 
 import { Counter } from 'prom-client';
 import { metricsRegistry } from './metrics-registry';
+import { counterConfig } from '@infrastructure/observability/metric-config';
+import { infrastructureMetricData } from '@infrastructure/observability/metrics.generated';
 
 /**
  * Jobs parked in `<queue>.dead` — a permanent rejection (malformed, contract-invalid,
@@ -18,9 +20,7 @@ import { metricsRegistry } from './metrics-registry';
  * (`QueueJobsParked` in `prometheus.alert-rules.yaml`), not a threshold on top of it.
  */
 export const queueJobsDeadLetteredTotal = new Counter({
-    name: 'queue_jobs_dead_lettered_total',
-    help: 'Jobs parked in a dead-letter queue, by queue name.',
+    ...counterConfig(infrastructureMetricData.queueJobsDeadLetteredTotal),
     // Bounded by construction: queue names come from WORKER_CHANNELS, never request data.
-    labelNames: ['queue'] as const,
     registers: [metricsRegistry]
 });
