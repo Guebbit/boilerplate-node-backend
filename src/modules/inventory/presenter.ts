@@ -38,8 +38,8 @@ export const presentInventoryLevel = (
 });
 
 /**
- * The wire form of a stored cap. Storage keeps `null` for "no cap" (and an absent field means 0,
- * closed), so the mapping happens here: a response never carries `null`, so no cap is the absent key.
+ * The wire form of a stored cap. The meaning is inverted on purpose: on disk `null` is no cap and an
+ * absent field is 0 (closed); on the wire an absent key is no cap and `0` is closed. A response never carries `null`.
  *
  * @param backorderLimit - the stored allowance
  */

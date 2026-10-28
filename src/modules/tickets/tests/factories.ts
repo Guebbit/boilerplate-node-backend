@@ -5,6 +5,7 @@
  */
 
 import { TicketKind, TicketSource } from '@types';
+import { toObjectId } from '@infrastructure/persistence/create-repository';
 import type { TicketDocument } from '../model';
 import { ticketRepository } from '../repository';
 
@@ -12,13 +13,15 @@ import { ticketRepository } from '../repository';
  * Persist an open system ticket about a refund owed by hand, the kind routed to
  * `PaymentRefunding`.
  *
+ * @param subjectId - the account the ticket is about, when it is about one
  * @returns the stored ticket
  */
-export const createRefundTicket = (): Promise<TicketDocument> =>
+export const createRefundTicket = (subjectId?: string): Promise<TicketDocument> =>
     ticketRepository.create({
         source: TicketSource.system,
         kind: TicketKind.manual_refund_owed,
         routeSet: 'PaymentRefunding',
         subject: 'A refund is owed by hand',
-        message: 'Refund r1 needs a person.'
+        message: 'Refund r1 needs a person.',
+        ...(subjectId === undefined ? {} : { subjectId: toObjectId(subjectId) })
     });

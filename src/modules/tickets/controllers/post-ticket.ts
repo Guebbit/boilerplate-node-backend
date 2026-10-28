@@ -24,7 +24,8 @@ const createContactTicketSchema = CreateContactTicketBody.extend({
     name: trimmedInto(CreateContactTicketBody.shape.name.unwrap()).optional(),
     email: trimmedInto(CreateContactTicketBody.shape.email),
     subject: trimmedInto(CreateContactTicketBody.shape.subject),
-    message: trimmedInto(CreateContactTicketBody.shape.message)
+    message: trimmedInto(CreateContactTicketBody.shape.message),
+    orderNumber: trimmedInto(CreateContactTicketBody.shape.orderNumber.unwrap()).optional()
 });
 
 /**

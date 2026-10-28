@@ -12,7 +12,13 @@ import { successResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { requireId } from '@infrastructure/http/ids';
+import { trimmedInto } from '@infrastructure/http/schemas';
 import { ticketService } from '../service';
+
+/** The note body trimmed first, so whitespace alone is the field-level 422 an empty one is. */
+const createTrimmedNoteBody = CreateTicketNoteBody.extend({
+    body: trimmedInto(CreateTicketNoteBody.shape.body)
+});
 
 /** POST /tickets/:id/notes (staff) */
 export const postTicketNote = (
@@ -21,7 +27,7 @@ export const postTicketNote = (
 ) => {
     const id = requireId(request, response, { notFound: 'generic.error-item-gone' });
     if (!id) return Promise.resolve();
-    const body = parseBody(CreateTicketNoteBody, request.body, response);
+    const body = parseBody(createTrimmedNoteBody, request.body, response);
     if (!body) return Promise.resolve();
 
     return ticketService
