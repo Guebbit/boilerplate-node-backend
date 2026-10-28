@@ -6,3 +6,15 @@ dependsOn:
     - orders # a fulfillment order and a shipment are about an order
     - products # the event a moved release date announces, which the buyers who already paid are told about; and the dates the staff preview reads
     - shop # the currency a rate is quoted in
+jobs:
+    reapDelivery:
+        name: reap:delivery
+        schedule: 11 2 * * *
+        summary: Unsets a fulfillment order's hold note and a shipment's loss note once they have
+            not changed for their retention window.
+    sweepPreorders:
+        name: sweep:preorders
+        # Once a day: the sweep looks a day ahead, and is idempotent.
+        schedule: 20 2 * * *
+        summary: Tells the buyer of a preorder whose expected date is a day away or gone, with the
+            goods still not here, that it will miss the date, once. It asks nothing and cancels nothing.

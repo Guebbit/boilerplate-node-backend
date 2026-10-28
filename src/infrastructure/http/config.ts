@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { defineConfig } from '@infrastructure/config/define';
 import { csv, int, text } from '@infrastructure/config/fields';
+import { sharedDefaults } from '@infrastructure/config/defaults.generated';
 import type { RateLimitBudget } from '@types';
 
 /** Where this deployment and its paired frontend live. */
@@ -53,7 +54,7 @@ export const rateLimitConfig = defineConfig({
 export const uploadConfig = defineConfig({
     name: 'uploads',
     shape: {
-        NODE_MAX_UPLOAD_BYTES: int({ default: 5 * 1024 * 1024, min: 1 }),
+        NODE_MAX_UPLOAD_BYTES: int({ default: sharedDefaults.uploads.maxBytes, min: 1 }),
         NODE_UPLOAD_STAGING_PATH: text({ default: path.join(tmpdir(), 'node-api-uploads') }),
         NODE_PENDING_IMAGE_URL: text({ default: '/images/system/pending.png' }),
         NODE_PENDING_THUMBNAIL_URL: text({ default: '/images/system/pending-thumb.webp' })
@@ -64,8 +65,11 @@ export const uploadConfig = defineConfig({
 export const responseCacheConfig = defineConfig({
     name: 'response-cache',
     shape: {
-        NODE_REDIS_CACHE_DEV_TTL_MAX: int({ default: 30, min: 0 }),
-        NODE_REDIS_CACHE_MAX_BYTES: int({ default: 256 * 1024, min: 1 })
+        NODE_REDIS_CACHE_DEV_TTL_MAX: int({
+            default: sharedDefaults.responseCache.devTtlMaxSeconds,
+            min: 0
+        }),
+        NODE_REDIS_CACHE_MAX_BYTES: int({ default: sharedDefaults.responseCache.maxBytes, min: 1 })
     }
 });
 
@@ -73,7 +77,10 @@ export const responseCacheConfig = defineConfig({
 export const idempotencyConfig = defineConfig({
     name: 'idempotency',
     shape: {
-        NODE_IDEMPOTENCY_RETENTION_HOURS: int({ default: 24, min: 1 })
+        NODE_IDEMPOTENCY_RETENTION_HOURS: int({
+            default: sharedDefaults.idempotency.retentionHours,
+            min: 1
+        })
     }
 });
 

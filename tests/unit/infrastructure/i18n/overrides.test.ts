@@ -29,7 +29,7 @@ import {
     t,
     type LocaleOverlay
 } from '@infrastructure/i18n';
-import enTranslation from '../../../../src/locales/en.json';
+import enTranslation from '../../../../shared/locales/en.json';
 import { setEnvironment } from '@tests/environment';
 
 /** A provider answer: the given overrides and registered languages, none by default. */

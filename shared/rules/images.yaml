@@ -1,0 +1,38 @@
+# The image formats an upload may be, identified by their leading bytes (a client's
+# `Content-Type` is whatever it wrote). Raster only: SVG is XML browsers execute.
+#
+# Not read at boot. `npm run regenerate` writes
+# `src/infrastructure/adapters/images.generated.ts` from it.
+#
+# `bytes` must appear at `offset`; each `alsoRequires` marker must appear too (WebP: `RIFF` at 0
+# as well as `WEBP` at 8, since either alone also matches other containers). `aliases` are other
+# `Content-Type` spellings clients send. `extension` is what the file is stored under, never the
+# client's filename. `reencodable` marks a format the digest job can re-encode.
+images:
+    # Bumped, rather than overwriting in place, the day thumbnail quality settings change: every
+    # thumbnail URL is `immutable, 1y`.
+    thumbnailVersion: v1
+    formats:
+        # \x89PNG\r\n\x1a\n: the trailing bytes catch transfers that mangled line endings.
+        - mime: image/png
+          offset: 0
+          bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+          extension: png
+          reencodable: true
+        # SOI plus the first byte of the next marker: what follows varies by encoder. `image/jpg`
+        # is no IANA type, but enough clients send it.
+        - mime: image/jpeg
+          aliases: [image/jpg]
+          offset: 0
+          bytes: [0xff, 0xd8, 0xff]
+          extension: jpg
+          reencodable: true
+        # 'WEBP' at offset 8, inside a RIFF container.
+        - mime: image/webp
+          offset: 8
+          bytes: [0x57, 0x45, 0x42, 0x50]
+          extension: webp
+          alsoRequires:
+              - offset: 0
+                bytes: [0x52, 0x49, 0x46, 0x46]
+          reencodable: true

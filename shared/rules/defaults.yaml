@@ -1,0 +1,30 @@
+# The plain-number defaults both backends start from. Each has an environment variable that
+# overrides it; the number here is what an unset variable means.
+#
+# Not read at boot. `npm run regenerate` writes `src/infrastructure/config/defaults.generated.ts`
+# from it.
+defaults:
+    responseCache:
+        # Longest TTL a development run may ask for, in seconds (`NODE_REDIS_CACHE_DEV_TTL_MAX`).
+        devTtlMaxSeconds: 30
+        # Largest body the cache stores: 256 KiB (`NODE_REDIS_CACHE_MAX_BYTES`).
+        maxBytes: 262144
+    idempotency:
+        # Hours a stored response is replayable (`NODE_IDEMPOTENCY_RETENTION_HOURS`).
+        retentionHours: 24
+    pagination:
+        # Rows per page when the caller names no limit (`NODE_SETTINGS_PAGINATION_PAGE_SIZE`).
+        pageSize: 10
+    images:
+        # Most pixels a decoder may open (`NODE_IMAGE_MAX_INPUT_PIXELS`): a decompression-bomb cap.
+        maxInputPixels: 50000000
+        # Longest side of a stored original (`NODE_IMAGE_MAX_DIMENSION`).
+        maxDimension: 2048
+        # Longest side of a thumbnail (`NODE_IMAGE_THUMBNAIL_DIMENSION`).
+        thumbnailDimension: 320
+        # Hours a quarantined upload is left alone before it counts as abandoned
+        # (`NODE_QUARANTINE_RETENTION_HOURS`).
+        quarantineRetentionHours: 24
+    uploads:
+        # Largest accepted upload body: 5 MiB (`NODE_MAX_UPLOAD_BYTES`).
+        maxBytes: 5242880

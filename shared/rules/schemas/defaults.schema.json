@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "defaults": {
+      "type": "object",
+      "properties": {
+        "responseCache": {
+          "type": "object",
+          "properties": {
+            "devTtlMaxSeconds": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "maxBytes": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "devTtlMaxSeconds",
+            "maxBytes"
+          ],
+          "additionalProperties": false
+        },
+        "idempotency": {
+          "type": "object",
+          "properties": {
+            "retentionHours": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "retentionHours"
+          ],
+          "additionalProperties": false
+        },
+        "pagination": {
+          "type": "object",
+          "properties": {
+            "pageSize": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "pageSize"
+          ],
+          "additionalProperties": false
+        },
+        "images": {
+          "type": "object",
+          "properties": {
+            "maxInputPixels": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "maxDimension": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "thumbnailDimension": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "quarantineRetentionHours": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "maxInputPixels",
+            "maxDimension",
+            "thumbnailDimension",
+            "quarantineRetentionHours"
+          ],
+          "additionalProperties": false
+        },
+        "uploads": {
+          "type": "object",
+          "properties": {
+            "maxBytes": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "maxBytes"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "responseCache",
+        "idempotency",
+        "pagination",
+        "images",
+        "uploads"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "defaults"
+  ],
+  "additionalProperties": false
+}

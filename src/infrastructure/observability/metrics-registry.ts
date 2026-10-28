@@ -13,6 +13,8 @@ import mongoose from 'mongoose';
 import { register, Gauge, collectDefaultMetrics } from 'prom-client';
 import { listLeaseSummaries } from '@infrastructure/persistence/lease';
 import type { LeaseSummary } from '@infrastructure/persistence/lease';
+import { gaugeConfig } from '@infrastructure/observability/metric-config';
+import { infrastructureMetricData } from '@infrastructure/observability/metrics.generated';
 
 /**
  * Shared prom-client registry. `register` is the library's default global registry, the
@@ -36,8 +38,7 @@ collectDefaultMetrics({ register: metricsRegistry });
 // Gauge: name follows Prometheus's snake_case/_seconds convention; help is mandatory and shown
 // verbatim as `# HELP`; collect() runs at scrape time (non-arrow so `this` is the gauge).
 const _processUptimeGauge = new Gauge({
-    name: 'process_uptime_seconds',
-    help: 'Uptime of the Node.js process in seconds.',
+    ...gaugeConfig(infrastructureMetricData.processUptimeSeconds),
     registers: [metricsRegistry],
     collect() {
         this.set(process.uptime());
@@ -53,8 +54,7 @@ const _processUptimeGauge = new Gauge({
  * means "close to OOM" (see `HighHeapUsage` in `prometheus.alert-rules.yaml`).
  */
 const _heapSizeLimitGauge = new Gauge({
-    name: 'nodejs_heap_size_limit_bytes',
-    help: 'Maximum heap size V8 will allocate for this process, in bytes.',
+    ...gaugeConfig(infrastructureMetricData.nodejsHeapSizeLimitBytes),
     registers: [metricsRegistry],
     collect() {
         this.set(getHeapStatistics().heap_size_limit);
@@ -103,9 +103,7 @@ const collectJobGauge = (
  * be renamed `exported_job`, which no rule would match.
  */
 const _jobLastSuccessGauge = new Gauge({
-    name: 'job_last_success_timestamp_seconds',
-    help: "Unix time of each crontab job's last recorded success.",
-    labelNames: ['task'],
+    ...gaugeConfig(infrastructureMetricData.jobLastSuccessTimestampSeconds),
     registers: [metricsRegistry],
     collect() {
         return collectJobGauge(this, (summary) => summary.lastSuccessAt);
@@ -119,9 +117,7 @@ const _jobLastSuccessGauge = new Gauge({
  * staleness rules cannot see it.
  */
 const _jobLastRunGauge = new Gauge({
-    name: 'job_last_run_timestamp_seconds',
-    help: "Unix time of each crontab job's last recorded run, whether it succeeded or not.",
-    labelNames: ['task'],
+    ...gaugeConfig(infrastructureMetricData.jobLastRunTimestampSeconds),
     registers: [metricsRegistry],
     collect() {
         return collectJobGauge(this, (summary) => summary.lastRunAt);

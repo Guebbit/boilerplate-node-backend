@@ -10,6 +10,8 @@
 
 import { Counter } from 'prom-client';
 import { metricsRegistry } from './metrics-registry';
+import { counterConfig } from '@infrastructure/observability/metric-config';
+import { infrastructureMetricData } from '@infrastructure/observability/metrics.generated';
 
 /**
  * Store operations that could not use the `limits` Redis, by budget namespace.
@@ -18,10 +20,8 @@ import { metricsRegistry } from './metrics-registry';
  * weaker than configured.
  */
 export const rateLimitStoreFallbackTotal = new Counter({
-    name: 'rate_limit_store_fallback_total',
-    help: 'Rate-limit store operations served without the limits Redis, so budgets are per process or open.',
+    ...counterConfig(infrastructureMetricData.rateLimitStoreFallbackTotal),
     // Bounded by construction: namespaces are literals declared on the budgets, never request data.
-    labelNames: ['namespace'] as const,
     registers: [metricsRegistry]
 });
 
@@ -31,9 +31,7 @@ export const rateLimitStoreFallbackTotal = new Counter({
  * brake, which writes no audit entry. A sustained rate is the alert signal.
  */
 export const rateLimitRefusalsTotal = new Counter({
-    name: 'rate_limit_refusals_total',
-    help: 'Requests refused with 429 by a rate-limit budget.',
+    ...counterConfig(infrastructureMetricData.rateLimitRefusalsTotal),
     // Bounded by construction: namespaces are literals declared on the budgets, never request data.
-    labelNames: ['budget'] as const,
     registers: [metricsRegistry]
 });

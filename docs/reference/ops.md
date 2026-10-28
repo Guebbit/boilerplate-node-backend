@@ -90,7 +90,9 @@ the jobs the modules declare — one runner, `scripts/ops/run-job.ts`, via `scri
 **A job is declared once**, as a `JobDeclaration` on the manifest of the module that owns the work
 (`AppModule.jobs`), or in `src/app/jobs.ts` when it belongs to none: its name, schedule, one-line
 summary, the function that does the work, and what it needs (the event subscriptions, the
-translations, a lease). `npm run regenerate` writes the two things derived from it —
+translations, a lease). The name, schedule and summary are data, in the owner's `module.yaml`
+`jobs:` block (`shared/rules/jobs.yaml` for the kernel's), generated into `jobs.generated.ts`
+beside `jobs.ts`, which adds the rest. `npm run regenerate` writes the two things derived from it —
 `docker/crontab` and the table below — and `npm run check` fails `complete` when either has
 drifted. `npm run job <name>` runs one by hand; with no name it lists them. Deleting a module deletes its jobs on the next regeneration.
 

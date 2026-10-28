@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "outbox": {
+      "type": "object",
+      "properties": {
+        "retentionDays": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "maxAttempts": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "leaseSeconds": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "backoffBaseMs": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "backoffCapMs": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "retentionDays",
+        "maxAttempts",
+        "leaseSeconds",
+        "backoffBaseMs",
+        "backoffCapMs"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "outbox"
+  ],
+  "additionalProperties": false
+}

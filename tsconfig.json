@@ -41,6 +41,7 @@
         "scenarios/**/*.json",
         "scripts/**/*.ts",
         "shared/contracts/*.ts",
+        "shared/locales/*.json",
         "package.json"
     ]
 }

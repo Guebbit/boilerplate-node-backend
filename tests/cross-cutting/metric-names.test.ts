@@ -36,6 +36,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { MODULES_ROOT } from '@tests/paths';
+import { infrastructureMetricData } from '@infrastructure/observability/metrics.generated';
 
 const OVERVIEW_CONTROLLER = path.join(
     MODULES_ROOT,
@@ -52,25 +53,11 @@ const OVERVIEW_CONTROLLER = path.join(
 const withoutComments = (source: string): string =>
     source.replaceAll(/\/\*[\S\s]*?\*\//g, '').replaceAll(/^[^\S\n]*\/\/.*$/gm, '');
 
-/**
- * `db_client_operation_duration_seconds` is infrastructure-owned, not domain-owned — every module's
- * queries feed it, so no single module can claim it — but the overview endpoint still reads it by
- * name like every other row, so the sweep below has to find it too.
- */
-const INFRASTRUCTURE_METRIC_FILES = [
-    path.join(__dirname, '../../src/infrastructure/persistence/command-metrics.ts')
-];
-
-/** Every `src/modules/<name>/metrics.ts`, discovered rather than listed, plus the above. */
-const metricFiles = (): { module: string; file: string }[] => [
-    ...readdirSync(MODULES_ROOT)
+/** Every `src/modules/<name>/metrics.ts`, discovered rather than listed. */
+const metricFiles = (): { module: string; file: string }[] =>
+    readdirSync(MODULES_ROOT)
         .map((module) => ({ module, file: path.join(MODULES_ROOT, module, 'metrics.ts') }))
-        .filter(({ file }) => existsSync(file)),
-    ...INFRASTRUCTURE_METRIC_FILES.filter((file) => existsSync(file)).map((file) => ({
-        module: 'infrastructure/persistence',
-        file
-    }))
-];
+        .filter(({ file }) => existsSync(file));
 
 interface Declaration {
     module: string;
@@ -86,14 +73,23 @@ interface Declaration {
  * One match per `new <Kind>({ … })` block, so the three facts stay attached to each other: a
  * separate sweep per field would happily pair one metric's name with another's help.
  */
-const declarations = (): Declaration[] =>
-    metricFiles().flatMap(({ module, file }) =>
+const declarations = (): Declaration[] => [
+    ...metricFiles().flatMap(({ module, file }) =>
         [
             ...withoutComments(readFileSync(file, 'utf8')).matchAll(
                 /new (Counter|Gauge|Histogram|Summary)\({\s*name: '([^']+)',\s*help: '([^']*)'/g
             )
         ].map(([, kind, name, help]) => ({ module, name, kind, help }))
-    );
+    ),
+    // Infrastructure metrics are data (`shared/rules/metrics.yaml`), shared by every module's
+    // queries and requests, so no single module claims them; the overview still reads them by name.
+    ...Object.values(infrastructureMetricData).map(({ name, kind, help }) => ({
+        module: 'infrastructure',
+        name,
+        kind: `${kind.charAt(0).toUpperCase()}${kind.slice(1)}`,
+        help
+    }))
+];
 
 /** Every `name:` assignment in a metrics file, literal or not. */
 const nameAssignments = (): { module: string; line: string }[] =>

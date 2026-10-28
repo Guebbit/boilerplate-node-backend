@@ -183,7 +183,7 @@ const LOCALE_ENTRIES: LocaleEntryRow[] = [
 
     /*
      * The overlay that DOES apply — same keys as the pair above, but Italian has a deployed
-     * `src/locales/it.json`, so these override real strings rather than introducing new ones.
+     * `shared/locales/it.json`, so these override real strings rather than introducing new ones.
      */
     [
         '65e0200a9a7d4b2e1c0f3101',

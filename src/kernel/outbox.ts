@@ -33,6 +33,7 @@ import {
     type DomainEventName
 } from './events';
 import { outboxConfig } from '@kernel/config';
+import { outboxRuleData } from './outbox.generated';
 import { withTransaction } from '@infrastructure/runtime/database';
 
 declare module './events' {
@@ -127,12 +128,6 @@ const outboxMaxAttempts = (): number => outboxConfig().NODE_OUTBOX_MAX_ATTEMPTS;
 /** Seconds a relay's claim on a row lasts. Must outlast one dispatch, or a slow one is duplicated. */
 const outboxLeaseSeconds = (): number => outboxConfig().NODE_OUTBOX_LEASE_SECONDS;
 
-/** Backoff after the first failure. Doubles each time. */
-const BACKOFF_BASE_MS = 5000;
-
-/** Backoff never exceeds this, however many attempts have failed. */
-const BACKOFF_CAP_MS = 3_600_000;
-
 /**
  * Wait before the next dispatch after `failedAttempts` failures: 5s, 10s, 20s ... capped at 1h.
  * No jitter: the rows are claimed one aggregate at a time, so there is no herd to spread.
@@ -140,7 +135,7 @@ const BACKOFF_CAP_MS = 3_600_000;
  * @param failedAttempts - how many dispatches of this row have failed (1-based)
  */
 export const outboxBackoffMs = (failedAttempts: number): number =>
-    Math.min(BACKOFF_CAP_MS, BACKOFF_BASE_MS * 2 ** (failedAttempts - 1));
+    Math.min(outboxRuleData.backoffCapMs, outboxRuleData.backoffBaseMs * 2 ** (failedAttempts - 1));
 
 /**
  * Write an event to the outbox, inside the caller's transaction.

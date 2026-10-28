@@ -1,0 +1,27 @@
+# The kernel's scheduled jobs, as data: the ones that belong to no module. A module's own jobs sit
+# in its `module.yaml` under `jobs:`, same fields.
+#
+# Not read at boot. `npm run regenerate` writes `src/app/jobs.generated.ts` from it, and
+# `docker/crontab` from the whole set. What each job runs, its lease and what it needs booted stay
+# code (`src/app/jobs.ts`).
+#
+# Each entry is keyed by its `name` in camelCase. `schedule` is cron, in UTC.
+jobs:
+    reapQuarantine:
+        name: reap:quarantine
+        schedule: 0 2 * * *
+        summary: Deletes quarantined upload files past their retention window.
+    reapOrphanedImages:
+        name: reap:orphaned-images
+        schedule: 3 2 * * *
+        summary: Deletes a stored image or thumbnail no document names, once it is over an hour old.
+    reapMailSpool:
+        name: reap:mail-spool
+        schedule: 30 2 * * *
+        summary: Deletes a spooled email attachment older than its retention window — a mail job died mid-flight.
+    sweepOutbox:
+        name: sweep:outbox
+        # Every minute: the outbox's backstop relay. The writer already nudges one after commit, so
+        # this only carries what a crash or a retry backoff left behind.
+        schedule: '* * * * *'
+        summary: Publishes every due outbox event — the backstop for the writer's own after-commit nudge.

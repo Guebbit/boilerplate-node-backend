@@ -24,7 +24,7 @@ tags:
 
 # ── Two tiers, and they never merge ──────────────────────────────────────────────────────────
 #
-# TIER 1 — the API's OWN copy. Files under `src/locales/` and `src/modules/*/locales/`, loaded
+# TIER 1 — the API's OWN copy. Files under `shared/locales/` and `src/modules/*/locales/`, loaded
 # into i18next at boot. It is what `t()` resolves and what `GET /locales/{locale}/dictionary` serves.
 # Editable only by a deploy, permanently: it exists to let a client render copy when NO RESPONSE
 # ARRIVES, and putting it behind a database would make it unavailable in exactly the situation it

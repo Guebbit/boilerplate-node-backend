@@ -59,3 +59,15 @@ rateLimits:
             Calls to `POST /payments` and `POST /payments/:id/sync`, pooled — each reaches the payment
             provider.
         audited: true
+jobs:
+    reapPayments:
+        name: reap:payments
+        schedule: 15 2 * * *
+        summary: Deletes abandoned (never-settled) payment attempts past their retention window.
+    sweepPaymentEffects:
+        name: sweep:payment-effects
+        # Every 5 minutes, well inside the 30-minute reservation hold a stuck `commit` would
+        # otherwise outlive.
+        schedule: '*/5 * * * *'
+        summary: Retries refunds the provider has not answered, and settles unsettled payments whose
+            webhook never arrived.

@@ -1,7 +1,8 @@
 # App, Kernel & Types
 
 The five files at the top of `src/`, the assembly layer under `src/app/`, the module system under
-`src/kernel/`, and the three supporting directories (`types/`, `locales/`, `domain-primitives/`).
+`src/kernel/`, the two supporting directories (`types/`, `domain-primitives/`), and the shared locale bundles
+under `shared/locales/`.
 
 Read [Architecture](../theory/architecture.md) first if the four tiers are new: dependencies run
 one way — `infrastructure` → `kernel` → `modules` → `app` — and `eslint.config.ts` enforces it.
@@ -88,11 +89,11 @@ The kernel knows what a module _is_. It never knows which modules exist.
 | `src/types/server-image.ts`       | `WithServerImage<T>` — a request type whose wire `imageUrl` is replaced by the path the upload pipeline decided, so a client body can never name one.                                                                                                                        | [Image Processing](../tools/image-processing.md)        |
 | `src/types/auth-context.ts`       | The transport-safe representation of the caller. Keeps the HTTP and auth flow free of Mongoose document internals, so a controller never holds a live document it might accidentally save.                                                                                   | [Layers](../theory/layers.md)                           |
 
-## `src/locales/`
+## `shared/locales/`
 
-| Pattern              | What it is                                                                                                                                                                                                                                                                                                        | Read next                                                              |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `src/locales/*.json` | App-level translation bundles — the strings that belong to no module: validation defaults, transport errors, the shared envelope. One file per language. Module-owned strings live in `src/modules/*/locales/*.json` instead, and `tests/cross-cutting/locale-namespaces.test.ts` keeps the two from overlapping. | [Internationalisation](../tools/i18n.md) · [Modules](./src-modules.md) |
+| Pattern                 | What it is                                                                                                                                                                                                                                                                                                        | Read next                                                              |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `shared/locales/*.json` | App-level translation bundles — the strings that belong to no module: validation defaults, transport errors, the shared envelope. One file per language. Module-owned strings live in `src/modules/*/locales/*.json` instead, and `tests/cross-cutting/locale-namespaces.test.ts` keeps the two from overlapping. | [Internationalisation](../tools/i18n.md) · [Modules](./src-modules.md) |
 
 ## `src/domain-primitives/`
 

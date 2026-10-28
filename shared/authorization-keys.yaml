@@ -111,6 +111,13 @@ scopes:
 # deserves a fresh session wherever it is reached from, and a second route that reaches it would
 # otherwise have to remember. `amr` may also be named, so a future passkey tier is a line here
 # rather than a guard change — the reason `amr` was carried as a list rather than a boolean.
+#
+# `stepUp` below is each tier's window in seconds: how recent a sign-in must be. The environment
+# variables above override these defaults. Not read at boot: `npm run regenerate` writes
+# `src/kernel/step-up.generated.ts` from it.
+stepUp:
+    critical: 300
+    sensitive: 900
 
 # Credential — whether an API key can be minted with the rule.
 #
