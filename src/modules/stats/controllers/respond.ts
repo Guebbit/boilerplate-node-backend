@@ -5,6 +5,7 @@
  */
 
 import type { Request, Response } from 'express';
+import { StatsInterval } from '@types';
 import { z, type ZodType } from 'zod';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
 import { readInput } from '@infrastructure/http/request';
@@ -20,10 +21,7 @@ export const periodFields = {
 };
 
 /** `interval` as a query string carries it: blank is absent. */
-export const intervalField = z.preprocess(
-    blankToUndefined,
-    z.enum(['day', 'week', 'month']).optional()
-);
+export const intervalField = z.preprocess(blankToUndefined, z.enum(StatsInterval).optional());
 
 /**
  * Build a stats handler.
@@ -36,7 +34,7 @@ export const statsHandler = <
     TSchema extends ZodType<{
         from: string;
         to: string;
-        interval?: 'day' | 'week' | 'month' | undefined;
+        interval?: StatsInterval | undefined;
     }>
 >(
     name: string,

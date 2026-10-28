@@ -4,14 +4,14 @@
  * is the same in every zone.
  */
 
+import type { StatsInterval } from '@types';
 import {
     addDays,
     bucketStart,
     inclusiveDays,
     nextBucket,
     parseDay,
-    type CalendarDay,
-    type CalendarInterval
+    type CalendarDay
 } from './calendar';
 
 /** The longest period one request may cover, two years of days. */
@@ -27,7 +27,7 @@ export type RangeRefusal = 'invalid-day' | 'out-of-order' | 'too-long' | 'too-ma
 export interface CalendarRange {
     from: CalendarDay;
     to: CalendarDay;
-    interval: CalendarInterval;
+    interval: StatsInterval;
     /** The first day of every bucket the period touches, the first one possibly before `from`. */
     bucketStarts: CalendarDay[];
 }
@@ -41,7 +41,7 @@ export interface CalendarRange {
 export const bucketStartsBetween = (
     from: CalendarDay,
     to: CalendarDay,
-    interval: CalendarInterval
+    interval: StatsInterval
 ): CalendarDay[] => {
     const starts: CalendarDay[] = [];
     let cursor = bucketStart(from, interval);
@@ -60,7 +60,7 @@ export const bucketStartsBetween = (
 export const checkRange = (input: {
     from: string;
     to: string;
-    interval: CalendarInterval;
+    interval: StatsInterval;
 }): { range: CalendarRange } | { refusal: RangeRefusal } => {
     const from = parseDay(input.from);
     const to = parseDay(input.to);

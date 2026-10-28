@@ -7,8 +7,13 @@
  * A session's credential never reaches the wire: the family id is the handle a client revokes by.
  */
 
-import type { AccountExport, ExportSession, OAuthLinks, Session } from '@types';
-import type { ExportStatus } from './model';
+import type {
+    AccountExport,
+    AccountExportStatus,
+    ExportSession,
+    OAuthLinks,
+    Session
+} from '@types';
 import type { AccountExportRow, SessionRow } from './repository';
 
 /**
@@ -56,7 +61,7 @@ export const presentExportSession = (row: SessionRow): ExportSession =>
  */
 export const presentExport = (
     row: Pick<AccountExportRow, '_id' | 'createdAt' | 'expiresAt'>,
-    status: ExportStatus
+    status: AccountExportStatus
 ): AccountExport => ({
     id: String(row._id),
     status,

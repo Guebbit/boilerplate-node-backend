@@ -94,7 +94,7 @@ export { yearInZone } from './shop-time';
 
 /** What an order's timeline may say, and which audience each type is for. */
 export { TIMELINE_AUDIENCE, isBuyerVisible } from './timeline';
-export type { TimelineAudience, TimelineEntryInput } from './timeline';
+export type { TimelineEntryInput } from './timeline';
 
 /** The orders CSV: its columns, and one order as one row. */
 export { ORDER_CSV_COLUMNS, toOrderCsvRow } from './export';

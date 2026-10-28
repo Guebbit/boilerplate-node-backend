@@ -10,7 +10,7 @@ import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { hashPassword } from '@infrastructure/security/password-hash';
 import { localeConfig } from '@infrastructure/i18n/config';
-import { type User } from '@types';
+import { PurchaseHoldReason, type User } from '@types';
 import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 
@@ -195,7 +195,7 @@ export interface UserRecord extends Omit<
  */
 export interface PurchaseHoldRecord {
     until: Date;
-    reason: 'repeated_cancellations' | 'staff';
+    reason: PurchaseHoldReason;
     /** Written for the buyer to read. Absent on an automatic hold. */
     note?: string;
     /** The staff account that set it; absent for the shop's own automatic hold. Never in any output. */
@@ -496,7 +496,7 @@ export const userSchema = new Schema<UserDocument, UserModel>(
                     until: { type: Date, required: true },
                     reason: {
                         type: String,
-                        enum: ['repeated_cancellations', 'staff'],
+                        enum: Object.values(PurchaseHoldReason),
                         required: true
                     },
                     note: { type: String, maxlength: 500 },

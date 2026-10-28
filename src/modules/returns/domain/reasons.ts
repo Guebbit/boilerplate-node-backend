@@ -8,6 +8,7 @@
  */
 
 import { ReturnReason } from '@types';
+import type { ReturnPolicyException } from '@types';
 
 /**
  * Reasons that ride the shop's withdrawal period (30 days by default), and with it the Art. 16
@@ -73,9 +74,6 @@ export const isGuaranteeReason = (reason: ReturnReason): boolean =>
 export const isReasonOpen = (order: FrozenDeadlines, reason: ReturnReason, now: Date): boolean =>
     reasonsOpenAt(order, now).includes(reason);
 
-/** A rule staff waived when they opened a return for a buyer. */
-export type PolicyException = 'window_closed' | 'excluded_goods';
-
 /**
  * What a staff-opened return waived, judged on the day the buyer asked: `window_closed` when the
  * reason's deadline had already passed then, `excluded_goods` when a goodwill return takes goods
@@ -92,7 +90,7 @@ export const policyExceptionsOf = (
     reason: ReturnReason,
     requestedAt: Date,
     takesExcludedGoods: boolean
-): PolicyException[] => [
+): ReturnPolicyException[] => [
     ...(isReasonOpen(order, reason, requestedAt) ? [] : ['window_closed' as const]),
     ...(takesExcludedGoods && !isGuaranteeReason(reason) ? ['excluded_goods' as const] : [])
 ];
