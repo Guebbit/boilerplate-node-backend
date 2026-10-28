@@ -43,7 +43,7 @@ A hand-maintained list rots. Somebody adds `PATCH /products/{id}`, nobody adds i
 
 `listOperations()` reads the spec. Add a route to `openapi.yaml` and it is fuzzed on the next run.
 
-That auto-discovery is the main thing [`schemathesis`](https://schemathesis.readthedocs.io/) offers, and it is why choosing against it needed a reason. The reason is that this is a **boilerplate**: every project derived from it would inherit a Python toolchain alongside Node, for a capability that can be assembled from four things the repo already has — the spec, `fast-check`, `supertest`, and the orval-generated, per-status Zod schemas `tests/support/response-contract.ts` judges a response against.
+That auto-discovery is what an off-the-shelf contract fuzzer offers. It is assembled here instead, because this is a **boilerplate**: every project derived from it would inherit a Python toolchain alongside Node, for a capability that can be assembled from four things the repo already has — the spec, `fast-check`, `supertest`, and the orval-generated, per-status Zod schemas `tests/support/response-contract.ts` judges a response against.
 
 ## Spec-valid, but hostile
 
@@ -147,38 +147,12 @@ One table, two readers: `tests/support/contract-data.ts` reads it too, so a tric
 
 It also drives **one request at a time**. `create order → pay → cancel → pay again` is a real class of bug — a status check that only runs on the happy path, a reservation released twice — and nothing above can see it, because nothing above remembers the response of one request while building the next.
 
-## Stateful fuzzing: sequences, not single requests
+## Sequences and cross-user access
 
-That gap is real enough to change the answer above. `openapi.yaml` now declares `links` on the operations that chain into an order's lifecycle (`createOrder`/`checkout` → `createPayment` → `confirmPayment` → `createRefund`/`cancelOrderById`) — contract work, in the leaf `src/modules/*/openapi.yaml` fragments, independent of any test. See [OpenAPI Workflow](../api/openapi-workflow.md).
+Neither is fuzzed. Each is covered by a test that builds the state it needs:
 
-Following those links to build a legal, in-order **sequence** of requests is not something the hand-rolled walk above does, and re-implementing it would be re-implementing Schemathesis's one genuinely hard feature. So `.github/workflows/schemathesis.yml` runs the real [`schemathesis`](https://schemathesis.readthedocs.io/) CLI, from its own Docker image, against the app booted via `npm run demo`:
-
-```bash
-docker run --rm --network host \
-  -v "$PWD/openapi.yaml:/spec/openapi.yaml:ro" \
-  -v "$PWD/tmp/reports/schemathesis:/reports" \
-  "$SCHEMATHESIS_IMAGE" \
-  run /spec/openapi.yaml \
-  --url http://localhost:3000 \
-  --checks all --phases=stateful --generation-deterministic \
-  --report junit --report-dir /reports
-```
-
-The reasoning against a Python dependency in the first section still holds for the single-request case, which is why `tests/fuzz/` stays hand-rolled. It does not hold for sequences: the `stateful` phase is not a capability worth re-deriving from four building blocks when the actual gap is state, not generation. `--generation-deterministic` keeps a red run reproducible, same requirement as the seeded run below. Python never enters `package.json` — the workflow is the only place it exists, exactly like `test:prism`'s relationship with the Prism CLI.
-
-The image tag is pinned to a specific release, not `:stable` — a floating tag moved from v3 to v4
-on 2026-09-03, first breaking on a missing module, then on `--stateful` itself (v4 renamed it to
-the `stateful` phase, and `--hypothesis-derandomize` to `--generation-deterministic`). Nothing
-about a floating base image told anyone the meaning of a passing run had changed underneath it; a
-pin at least makes that a diff someone has to write.
-
-The workflow logs in as the demo profile's admin first and hands Schemathesis the bearer token
-(`--header "Authorization: Bearer …"`), so the chains reach the routes that need a session instead
-of stopping at the first 401.
-
-Nightly and advisory: a stateful failure is a finding, not something a merge should block on. A
-red run also opens (or comments on) a `schemathesis`-labelled issue, the same pattern
-`mutation.yml`'s `mutation-notify` uses.
+- **Sequences:** the lifecycle tests in each module's `tests/contract/` and `tests/integration/`, which walk an order through pay, ship, deliver, refund and return over real HTTP.
+- **Cross-user access:** `tests/contract/ownership-contract.test.ts` and `ownership-shop.contract.test.ts`. Customer B sends every id customer A owns, in the path, the body or a list filter, and must get the same answer as for an id that does not exist. The list of such ids is derived from the routes and the contract, so a route added tomorrow is caught.
 
 ## Where the per-request fuzzer runs
 
@@ -203,7 +177,6 @@ it passes the oracle, but it locks `authenticateAs` out and the fuzzing quietly 
 | `tests/support/http.ts`              | The supertest harness and `authenticateAs`, shared with the integration and contract suites                |
 | `tests/support/response-contract.ts` | `assertResponseMatchesContract` — judges one response against its operation+status Zod schema              |
 | `.github/workflows/fuzz.yml`         | The nightly schedule and manual dispatch                                                                   |
-| `.github/workflows/schemathesis.yml` | Stateful sequence fuzzing, following `openapi.yaml`'s `links` — see above                                  |
 
 ## Commands
 
