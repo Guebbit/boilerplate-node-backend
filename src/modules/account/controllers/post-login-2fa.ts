@@ -13,7 +13,6 @@ import { isRestorable } from '@modules/users';
 import { accountService, twoFactorService } from '../services';
 import { issueSession } from '../session/session';
 import { rememberDevice } from '../session/device-cookie';
-import { toRememberTier } from '../session/config';
 import { recordLoginSuccess } from '../session/login-observability';
 import { authTwoFactorChallengeTotal } from '../metrics';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
@@ -76,7 +75,7 @@ export const postLoginTwoFactor = (
             }
 
             return issueSession(request, response, userId, {
-                remember: toRememberTier(remember),
+                remember: remember,
                 amr: withProofs(amr, AMR.otp),
                 provedAt,
                 transport

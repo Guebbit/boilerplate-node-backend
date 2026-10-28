@@ -5,6 +5,7 @@
  * dead predecessor, answer success, and leave the device signed in.
  */
 
+import { RememberTier } from '@types';
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment } from '@tests/environment';
@@ -13,7 +14,6 @@ import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { advanceDate, freezeDate } from '@tests/clock';
 import { rotateRefreshToken, TokenReuseError, startSession } from '../../session/jwt';
-import { RefreshTokenExpiryTime } from '../../session/config';
 
 setupTestDb();
 
@@ -94,7 +94,7 @@ describe('reuse detection with a session family', () => {
             async () => {
                 freezeDate();
                 const user = await createUser({ verifiedAt: new Date() });
-                const first = await startSession(user.id, ['pwd'], RefreshTokenExpiryTime.SHORT);
+                const first = await startSession(user.id, ['pwd'], RememberTier.short);
                 const { refreshToken: successor } = await rotateRefreshToken(first);
                 // Replaying the superseded token outside the grace window is theft.
                 advanceDate(5000);

@@ -8,6 +8,7 @@
  * See: docs/modules/account-sessions.md
  */
 
+import type { RememberTier } from '@types';
 import type { Request, Response } from 'express';
 import type { Types } from 'mongoose';
 import { bearerOf, readSessionCookie } from '@kernel/cookies';
@@ -28,7 +29,7 @@ import {
     type TokenData
 } from './jwt';
 import { createSessionCookie } from './cookies';
-import { getCookieMaxAgeMilliseconds, type RefreshTokenExpiryTime } from './config';
+import { getCookieMaxAgeMilliseconds } from './config';
 import { resolveProof } from './auth-context';
 import { listSessions } from './listing';
 import { looksLikeSessionId } from './session-id';
@@ -50,11 +51,11 @@ const mintSession = (
     response: Response,
     userId: string,
     amr: readonly string[],
-    remember: RefreshTokenExpiryTime | undefined,
+    remember: RememberTier | undefined,
     mint: (
         id: string,
         amr: readonly string[],
-        remember?: RefreshTokenExpiryTime,
+        remember?: RememberTier,
         continued?: SessionSnapshot
     ) => Promise<string>,
     continued?: SessionSnapshot
@@ -73,7 +74,7 @@ const mintSession = (
  * continued one otherwise. `undefined` stays a browser-session cookie.
  */
 const cookieMaxAgeOf = (
-    remember: RefreshTokenExpiryTime | undefined,
+    remember: RememberTier | undefined,
     continued: SessionSnapshot | undefined
 ): number | undefined =>
     remember && continued?.expiresAt
