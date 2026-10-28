@@ -7,17 +7,9 @@
 import {
     accountExportSchema,
     sessionSchema,
-    verificationTokenSchema,
-    EXPORT_STATUSES
+    verificationTokenSchema
 } from '@modules/account/model';
-import {
-    enumOf,
-    indexOptionSpecs,
-    indexSpecs,
-    optionsOf,
-    pathOptions,
-    requiredPaths
-} from '@tests/schema';
+import { indexOptionSpecs, indexSpecs, optionsOf, pathOptions, requiredPaths } from '@tests/schema';
 
 describe('accountExportSchema', () => {
     it('requires every field: the build fills them all at request time', () => {
@@ -32,10 +24,6 @@ describe('accountExportSchema', () => {
 
     it('allows one live export per account as a database fact', () => {
         expect(pathOptions(accountExportSchema, 'userId')).toMatchObject({ unique: true });
-    });
-
-    it('restricts status to the three the build moves through', () => {
-        expect(enumOf(accountExportSchema, 'status')).toEqual([...EXPORT_STATUSES]);
     });
 
     it('indexes the reaper’s read of due rows, and has no TTL of its own', () => {

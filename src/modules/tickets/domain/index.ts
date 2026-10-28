@@ -23,7 +23,7 @@ export {
 } from './lifecycle';
 export { actionsOf, type ActionFacts, type TicketActionFlags } from './actions';
 export { ownTicketsFilter, type OwnerRef, type OwnTicketsFilter } from './ownership';
-export { ROUTED_SETS, routeSetOf, TICKET_KINDS, type TicketKindName } from './routing';
+export { ROUTED_SETS, routeSetOf, TICKET_KINDS } from './routing';
 export {
     accountReviewOpening,
     amountMismatchOpening,

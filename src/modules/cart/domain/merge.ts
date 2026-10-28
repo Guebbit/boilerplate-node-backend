@@ -5,8 +5,7 @@
  * See `docs/theory/domain-layer.md`.
  */
 
-/** Why a merged line did not land exactly as asked — the contract's `MergeLineReason`. */
-export type MergeReason = 'summed' | 'capped' | 'removed';
+import type { MergeLineReason } from '@types';
 
 /** What one guest line asks the rule to decide on. */
 export interface MergeLineFacts {
@@ -28,7 +27,7 @@ export interface MergePlan {
     /** Units to add to the cart; `0` writes nothing. */
     add: number;
     /** Absent when the line lands exactly as asked. */
-    reason?: MergeReason;
+    reason?: MergeLineReason;
 }
 
 /**

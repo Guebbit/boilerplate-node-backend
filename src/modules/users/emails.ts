@@ -9,13 +9,14 @@
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
+import type { PurchaseHoldReason } from '@types';
 
 /** What a buyer is told when a hold is placed on their account. */
 export interface PurchaseHoldNotice {
     /** When the pause ends by itself. */
     until: Date;
     /** `repeated_cancellations`: the shop's own rule; `staff`: a person placed it. */
-    reason: 'repeated_cancellations' | 'staff';
+    reason: PurchaseHoldReason;
     /** The rule's numbers; read only for `repeated_cancellations`. */
     cancelCount?: number;
     windowDays?: number;

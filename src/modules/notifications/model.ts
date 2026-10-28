@@ -9,50 +9,47 @@
 
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
-import { NotificationSeverity } from '@types';
-import type {
-    CartLineRemovedParams,
-    CartMergeRefusedParams,
-    FulfillmentHeldParams,
-    FulfillmentDelayedParams,
-    NotificationAudience,
-    WorkCountParams,
-    OutboxDeadParams,
-    ReturnRequestedParams,
-    ShipmentLostParams,
-    PurchaseHoldPlacedParams,
-    TicketAssignedParams,
-    TicketOpenedParams,
-    WebhookDisabledParams
-} from '@types';
+import { NotificationAudience, NotificationSeverity } from '@types';
+import type { Notification } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 
-/** Every code a notification can carry — the contract's `NotificationCode`, spelled out once. */
-export const NOTIFICATION_CODES = [
-    'notifications.cart-line-removed',
-    'notifications.wishlist-item-removed',
-    'notifications.cart-merge-refused',
-    'notifications.fulfillment-delayed',
-    'notifications.fulfillment-held',
-    'notifications.shipment-lost',
-    'notifications.stock-alert',
-    'notifications.staff.purchase-hold-placed',
-    'notifications.staff.webhook-disabled',
-    'notifications.staff.ticket-opened',
-    'notifications.staff.ticket-assigned',
-    'notifications.staff.return-requested',
-    'notifications.staff.outbox-dead',
-    'notifications.staff.transfers-due',
-    'notifications.staff.preorders-late',
-    'notifications.staff.delivery-holds-open',
-    'notifications.staff.withdrawals-awaiting-goods',
-    'notifications.staff.returns-undecided',
-    'notifications.staff.low-stock',
-    'notifications.staff.unshipped',
-    'notifications.staff.awaiting-tracking',
-    'notifications.staff.undelivered',
-    'notifications.staff.stale-refunds'
-] as const;
+/** One of the contract's notification codes: the `code` of each variant of `Notification`. */
+export type NotificationCode = Notification['code'];
+
+/**
+ * Every code, as keys. The `satisfies` makes the list complete as well as valid: a code the
+ * contract adds and this table lacks is a compile error, not a runtime refusal by the `enum`
+ * of the schema below.
+ */
+const CODE_TABLE = {
+    'notifications.cart-line-removed': true,
+    'notifications.wishlist-item-removed': true,
+    'notifications.cart-merge-refused': true,
+    'notifications.fulfillment-delayed': true,
+    'notifications.fulfillment-held': true,
+    'notifications.shipment-lost': true,
+    'notifications.stock-alert': true,
+    'notifications.staff.purchase-hold-placed': true,
+    'notifications.staff.webhook-disabled': true,
+    'notifications.staff.ticket-opened': true,
+    'notifications.staff.ticket-assigned': true,
+    'notifications.staff.return-requested': true,
+    'notifications.staff.outbox-dead': true,
+    'notifications.staff.transfers-due': true,
+    'notifications.staff.preorders-late': true,
+    'notifications.staff.delivery-holds-open': true,
+    'notifications.staff.withdrawals-awaiting-goods': true,
+    'notifications.staff.returns-undecided': true,
+    'notifications.staff.low-stock': true,
+    'notifications.staff.unshipped': true,
+    'notifications.staff.awaiting-tracking': true,
+    'notifications.staff.undelivered': true,
+    'notifications.staff.stale-refunds': true
+} satisfies Record<NotificationCode, true>;
+
+/** Every code a notification can carry. */
+// `Object.keys` types as `string[]`; `CODE_TABLE`'s keys are exactly `NotificationCode`.
+export const NOTIFICATION_CODES = Object.keys(CODE_TABLE) as NotificationCode[];
 
 /** The codes of work notices: the ones `./staff-routing` finds an audience for. */
 export const STAFF_NOTIFICATION_CODES = [
@@ -72,7 +69,7 @@ export const STAFF_NOTIFICATION_CODES = [
     'notifications.staff.awaiting-tracking',
     'notifications.staff.undelivered',
     'notifications.staff.stale-refunds'
-] as const satisfies readonly (typeof NOTIFICATION_CODES)[number][];
+] as const satisfies readonly NotificationCode[];
 
 /**
  * The work notices that are a count of what waits, rewritten by the daily digest instead of
@@ -97,38 +94,13 @@ export type StaffSummaryCode = (typeof STAFF_SUMMARY_CODES)[number];
 /** One of {@link STAFF_NOTIFICATION_CODES}. */
 export type StaffNotificationCode = (typeof STAFF_NOTIFICATION_CODES)[number];
 
-/** One of {@link NOTIFICATION_CODES}. */
-export type NotificationCode = (typeof NOTIFICATION_CODES)[number];
-
 /**
  * What each code's `params` holds — the contract's per-variant params, keyed by the code that
  * owns them. The one place a code and its params are tied together.
  */
-export interface NotificationParametersByCode {
-    'notifications.cart-line-removed': CartLineRemovedParams;
-    'notifications.wishlist-item-removed': CartLineRemovedParams;
-    'notifications.cart-merge-refused': CartMergeRefusedParams;
-    'notifications.fulfillment-delayed': FulfillmentDelayedParams;
-    'notifications.fulfillment-held': FulfillmentHeldParams;
-    'notifications.shipment-lost': ShipmentLostParams;
-    'notifications.stock-alert': CartLineRemovedParams;
-    'notifications.staff.purchase-hold-placed': PurchaseHoldPlacedParams;
-    'notifications.staff.webhook-disabled': WebhookDisabledParams;
-    'notifications.staff.ticket-opened': TicketOpenedParams;
-    'notifications.staff.ticket-assigned': TicketAssignedParams;
-    'notifications.staff.return-requested': ReturnRequestedParams;
-    'notifications.staff.outbox-dead': OutboxDeadParams;
-    'notifications.staff.transfers-due': WorkCountParams;
-    'notifications.staff.preorders-late': WorkCountParams;
-    'notifications.staff.delivery-holds-open': WorkCountParams;
-    'notifications.staff.withdrawals-awaiting-goods': WorkCountParams;
-    'notifications.staff.returns-undecided': WorkCountParams;
-    'notifications.staff.low-stock': WorkCountParams;
-    'notifications.staff.unshipped': WorkCountParams;
-    'notifications.staff.awaiting-tracking': WorkCountParams;
-    'notifications.staff.undelivered': WorkCountParams;
-    'notifications.staff.stale-refunds': WorkCountParams;
-}
+export type NotificationParametersByCode = {
+    [N in Notification as N['code']]: N['params'];
+};
 
 /**
  * The `code` + `params` pair of one notification, as a union with one member per code. Narrowing
@@ -181,7 +153,12 @@ export const notificationSchema: Schema<NotificationDocument> = new Schema<Notif
         code: { type: String, enum: NOTIFICATION_CODES, required: true },
         params: { type: Schema.Types.Mixed, default: {} },
         severity: { type: String, enum: Object.values(NotificationSeverity), required: true },
-        audience: { type: String, enum: ['own', 'staff'], default: 'own', required: true },
+        audience: {
+            type: String,
+            enum: Object.values(NotificationAudience),
+            default: 'own',
+            required: true
+        },
         readAt: { type: Date },
         tenantId: { type: String },
         sets: { type: [String], default: undefined },

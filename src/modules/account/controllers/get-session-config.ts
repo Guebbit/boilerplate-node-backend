@@ -3,16 +3,12 @@
  * `GET /account/session-config` controller — which session mode this deployment runs.
  */
 
+import { RememberTier } from '@types';
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { catchAs } from '@infrastructure/http/controller';
 import type { SessionConfig } from '@types';
-import {
-    getExpiryTime,
-    getSessionMode,
-    getStaffLifetimeSeconds,
-    RefreshTokenExpiryTime
-} from '../session/config';
+import { getExpiryTime, getSessionMode, getStaffLifetimeSeconds } from '../session/config';
 
 /**
  * GET /account/session-config (public)
@@ -26,9 +22,9 @@ export const getSessionConfig = (_request: Request, response: Response) =>
             successResponse<SessionConfig>(response, {
                 mode: getSessionMode(),
                 lifetimeSeconds: {
-                    short: getExpiryTime(RefreshTokenExpiryTime.SHORT),
-                    medium: getExpiryTime(RefreshTokenExpiryTime.MEDIUM),
-                    long: getExpiryTime(RefreshTokenExpiryTime.LONG)
+                    short: getExpiryTime(RememberTier.short),
+                    medium: getExpiryTime(RememberTier.medium),
+                    long: getExpiryTime(RememberTier.long)
                 },
                 // 0 switches the cap off: nothing to state.
                 ...(staffLifetimeSeconds > 0 && { staffLifetimeSeconds })

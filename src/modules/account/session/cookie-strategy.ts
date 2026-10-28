@@ -14,6 +14,7 @@
  * See: docs/theory/sessions.md
  */
 
+import { RememberTier } from '@types';
 import type { Response } from 'express';
 import { Types } from 'mongoose';
 import { bearerOf, readSessionCookie } from '@kernel/cookies';
@@ -26,7 +27,7 @@ import { sessionRepository, type SessionRow } from '../repository';
 import { recordActivity } from './activity';
 import { resolveProof } from './auth-context';
 import { createSessionCookie } from './cookies';
-import { RefreshTokenExpiryTime, getExpiryTimeMilliseconds } from './config';
+import { getExpiryTimeMilliseconds } from './config';
 import { describeDevice } from './device-label';
 import { listSessions } from './listing';
 import { hasIdledOut, hasOutlivedStaffCap } from './idle';
@@ -46,8 +47,8 @@ import type {
 const USE_STAMP_INTERVAL_MS = 60_000;
 
 /** The tier stored on a row, back as the enum — `undefined` for a browser-session login. */
-const rememberOf = (row: Pick<SessionRow, 'remember'>): RefreshTokenExpiryTime | undefined =>
-    Object.values(RefreshTokenExpiryTime).find((tier) => tier === row.remember);
+const rememberOf = (row: Pick<SessionRow, 'remember'>): RememberTier | undefined =>
+    Object.values(RememberTier).find((tier) => tier === row.remember);
 
 /** What the session being started inherits from the one it replaces. */
 type Inherited = Pick<SessionSnapshot, 'familyId' | 'startedAt' | 'expiresAt' | 'device'>;
@@ -64,7 +65,7 @@ type Inherited = Pick<SessionSnapshot, 'familyId' | 'startedAt' | 'expiresAt' | 
 const storeSession = (
     userId: string,
     proof: { amr: readonly string[]; provedAt: number },
-    remember: RefreshTokenExpiryTime | undefined,
+    remember: RememberTier | undefined,
     inherited: Inherited = {}
 ): Promise<{ id: string; expiresAt: Date }> => {
     const id = newSessionId();
@@ -103,7 +104,7 @@ const storeSession = (
 const deliver = (
     response: Response,
     started: { id: string; expiresAt: Date },
-    remember: RefreshTokenExpiryTime | undefined,
+    remember: RememberTier | undefined,
     transport: SessionTransport
 ): IssuedSession => {
     if (transport === 'bearer') return { sessionToken: started.id };

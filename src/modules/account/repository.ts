@@ -5,6 +5,7 @@
  */
 
 import type { ClientSession, Types } from 'mongoose';
+import type { AccountExportStatus } from '@types';
 import { toObjectId, type Lean } from '@infrastructure/persistence/create-repository';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import {
@@ -12,7 +13,6 @@ import {
     sessionModel,
     verificationTokenModel,
     type AccountExportDocument,
-    type ExportStatus,
     type SessionDocument,
     type VerificationTokenDocument
 } from './model';
@@ -65,7 +65,7 @@ const insert = (
  */
 const settleBuilding = (
     id: string,
-    status: Exclude<ExportStatus, 'building'>,
+    status: Exclude<AccountExportStatus, 'building'>,
     expiresAt: Date,
     session?: ClientSession
 ): Promise<AccountExportRow | null> =>

@@ -48,7 +48,8 @@ import {
     returnableQuantities,
     wireLines
 } from '../domain';
-import type { PolicyException, ProductQuantity, Statement } from '../domain';
+import type { ReturnPolicyException } from '@types';
+import type { ProductQuantity, Statement } from '../domain';
 import { frozenDeadlinesOf } from './deadlines';
 import { openableOrder } from './ownership';
 import { syncReturnStatus } from './projection';
@@ -116,7 +117,7 @@ const appendOpened = async (
 interface Opening extends Statement {
     /** The staff member opening it for the buyer, absent when the buyer does. */
     staffId?: string | undefined;
-    policyExceptions: PolicyException[];
+    policyExceptions: ReturnPolicyException[];
 }
 
 /**

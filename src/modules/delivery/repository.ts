@@ -21,6 +21,7 @@ import {
 } from './model';
 import type { FulfillmentOrderDocument, ShipmentDocument } from './model';
 import { DUE_NOTICE_LEAD_MS, type FulfillmentOrderDraft, type WaitCause } from './domain';
+import type { ListPreorderFulfillmentOrdersCause } from '@types';
 import {
     FulfillmentHoldReason,
     FulfillmentOrderStatus,
@@ -38,7 +39,7 @@ import { DAY_MS } from '@domain-primitives/time';
 /** What the preorder board filters by. */
 export interface BoardFilters {
     /** Why it waits: `preorder`, `backorder`, or `any` dated wait (they carry an agreed date). */
-    cause?: 'preorder' | 'backorder' | 'any' | undefined;
+    cause?: ListPreorderFulfillmentOrdersCause | undefined;
     state?: PreorderFulfillmentState | undefined;
     productId?: string | undefined;
     /** Expected date passed with units remaining. */
