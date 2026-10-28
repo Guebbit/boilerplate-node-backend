@@ -36,6 +36,8 @@ import {
     callerInScope,
     ruleId,
     staffRoleWithheld,
+    type ActionOn,
+    type PermissionSubject,
     type StepUpTier
 } from '@kernel/permissions';
 import { t } from '@infrastructure/i18n';
@@ -474,7 +476,11 @@ const challengeForFreshAuth = (
  * @param action - the action the guard asks for
  * @param subject - the subject it asks about
  */
-const wouldHoldOnceEnrolled = (context: AuthContext, action: string, subject: string): boolean =>
+const wouldHoldOnceEnrolled = <TSubject extends PermissionSubject>(
+    context: AuthContext,
+    action: ActionOn<TSubject>,
+    subject: TSubject
+): boolean =>
     staffRoleWithheld(context) &&
     holds(callerForSubject({ ...context, authenticatorArmed: true }, subject), action, subject);
 
@@ -492,7 +498,10 @@ const wouldHoldOnceEnrolled = (context: AuthContext, action: string, subject: st
  * @param subject - the CASL subject the action is taken on, e.g. `Payment`
  * @throws Error at mount time when no module declares a rule for the pair
  */
-export const requirePermission = (action: string, subject: string) => {
+export const requirePermission = <TSubject extends PermissionSubject>(
+    action: ActionOn<TSubject>,
+    subject: TSubject
+) => {
     const declared = assertDeclared(action, subject);
     const permission = ruleId(action, subject);
     // The one place this guard's own scope is known — everything it audits below states it
@@ -641,11 +650,11 @@ export const requirePermission = (action: string, subject: string) => {
  * @returns the resolved user when they hold the rule, otherwise `undefined`
  * @throws {Error} when the credential itself was refused
  */
-const judgeRuleHolder = (
+const judgeRuleHolder = <TSubject extends PermissionSubject>(
     request: Request,
     resolution: Resolution<AuthContext | undefined>,
-    action: string,
-    subject: string
+    action: ActionOn<TSubject>,
+    subject: TSubject
 ) => {
     if ('miss' in resolution) {
         noteMiss(request, 'session', resolution.miss);
@@ -680,7 +689,10 @@ const judgeRuleHolder = (
  * @param subject - the subject it is taken on
  * @throws Error at mount time when no module declares the rule
  */
-export const requirePermissionViaCookie = (action: string, subject: string) => {
+export const requirePermissionViaCookie = <TSubject extends PermissionSubject>(
+    action: ActionOn<TSubject>,
+    subject: TSubject
+) => {
     assertDeclared(action, subject);
 
     // Named for the same reason as `requirePermissionGuard` above.
@@ -736,10 +748,10 @@ export const requirePermissionViaCookie = (action: string, subject: string) => {
  * @param subject - the subject it is asked about
  * @returns whether the caller still holds the rule
  */
-export const stillHoldsRuleViaCookie = (
+export const stillHoldsRuleViaCookie = <TSubject extends PermissionSubject>(
     request: Request,
-    action: string,
-    subject: string
+    action: ActionOn<TSubject>,
+    subject: TSubject
 ): Promise<boolean> =>
     Promise.resolve()
         .then(() => request.sessionRecheck?.() ?? { miss: 'revoked' as const })

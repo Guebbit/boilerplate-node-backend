@@ -10,7 +10,7 @@
 
 import { logger } from '@infrastructure/adapters/logger';
 import type { Resolution, ResolvedCredential } from '@kernel/authentication';
-import { keysInScope, assembleCaller } from '@kernel/permissions';
+import { isRuleId, keysInScope, assembleCaller } from '@kernel/permissions';
 import { heldRules } from '@kernel/ability';
 import { accessService } from '@modules/access';
 import { userService } from '@modules/users';
@@ -105,7 +105,7 @@ export const fromBearerToken = (token: string): Promise<Resolution<ResolvedCrede
             // The literal rules: a minter who is now only a customer holds `read:Order`, not the
             // `display:Order` the credential was minted with, and must not pass for it.
             const minterKeys = heldRules(currentCaller);
-            const held = apiKey.permissions.filter((key) => minterKeys.has(key));
+            const held = apiKey.permissions.filter((key) => isRuleId(key) && minterKeys.has(key));
 
             // Never fewer than a stranger holds: a read scope compiled from `request.caller` (the
             // catalogue's, since `callerScope` takes it) would otherwise hide the public storefront

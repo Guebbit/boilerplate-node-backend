@@ -4,6 +4,7 @@
  * "a role is a bundle of sets, so routing to a set routes to every role holding it" lives in one
  * place. Admin holds every set by construction, so there is no admin special case.
  */
+import type { PermissionSetName } from '@api/permission-vocabulary';
 
 /** Every kind of ticket: the contact form's, and the situations the system opens. */
 export const TICKET_KINDS = [
@@ -22,7 +23,7 @@ export const TICKET_KINDS = [
 export type TicketKindName = (typeof TICKET_KINDS)[number];
 
 /** The permission set that works each kind. */
-const ROUTE_SET_OF_KIND: Readonly<Record<TicketKindName, string>> = {
+const ROUTE_SET_OF_KIND: Readonly<Record<TicketKindName, PermissionSetName>> = {
     contact: 'TicketDisplay',
     account_review: 'UserBanning',
     manual_refund_owed: 'PaymentRefunding',
@@ -39,7 +40,9 @@ const ROUTE_SET_OF_KIND: Readonly<Record<TicketKindName, string>> = {
  *
  * @param kind - the ticket's kind
  */
-export const routeSetOf = (kind: TicketKindName): string => ROUTE_SET_OF_KIND[kind];
+export const routeSetOf = (kind: TicketKindName): PermissionSetName => ROUTE_SET_OF_KIND[kind];
 
 /** Every set any kind is routed to, each once. */
-export const ROUTED_SETS: readonly string[] = [...new Set(Object.values(ROUTE_SET_OF_KIND))];
+export const ROUTED_SETS: readonly PermissionSetName[] = [
+    ...new Set(Object.values(ROUTE_SET_OF_KIND))
+];
