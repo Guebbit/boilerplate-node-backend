@@ -901,7 +901,7 @@ jobs:
             # Logs in to the registry named by `registry`; the token never reaches a build step.
             # https://github.com/docker/login-action
             - name: Log in to the registry
-              uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+              uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
               with:
                   registry: ${{ vars.IMAGE_REGISTRY }}
                   username: ${{ vars.IMAGE_REGISTRY_USER }}
