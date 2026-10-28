@@ -87,6 +87,7 @@ const operationOf = (route: MountedRoute): string =>
  */
 const APP_LEVEL_OPERATIONS = [
     'GET /',
+    'GET /config',
     'GET /livez',
     'GET /readyz',
     'GET /.well-known/security.txt'

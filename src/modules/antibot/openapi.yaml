@@ -13,25 +13,6 @@ x-error-codes:
     ANTIBOT_VERIFICATION_FAILED: { status: 403, description: 'The human-challenge token is missing, expired, or the provider rejected it.' }
 
 paths:
-    /antibot/config:
-        get:
-            tags: [Antibot]
-            summary: Read the active human-challenge provider's public parameters, and every rung's status
-            description: >
-                Rung 3 of the anti-automation ladder, plus a `rungs` summary of every other one.
-                Always answers 200; the default `none` provider reports an empty parameter map,
-                which means there is no widget to render and no token to send. Reachable with no
-                credential; guarding it behind a login would defeat signup, which has none yet.
-            operationId: getAntibotConfig
-            security: []
-            responses:
-                '200':
-                    description: The active provider and what the client needs to render it
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/AntibotConfig'
-
     /antibot/challenge:
         get:
             tags: [Antibot]
@@ -54,7 +35,7 @@ paths:
 
 components:
     schemas:
-        # ---------- antibot — the schemas only this module's paths reference. ----------
+        # ---------- antibot — the schemas this module owns; `GET /config` publishes `AntibotConfig`. ----------
         AntibotConfig:
             type: object
             additionalProperties: false

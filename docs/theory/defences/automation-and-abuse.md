@@ -64,7 +64,7 @@ flowchart TB
 Rung 3 follows the same port shape as `PaymentProvider` (`payments/providers/index.ts`): a `none`
 no-op ships in the box and always passes — what every test and the demo run through — a real
 vendor is a name away behind `NODE_ANTIBOT_PROVIDER`, and its public parameters (site key and so
-on) are read from `GET /antibot/config` so the frontend knows whether to render a challenge at all.
+on) are read from `antibot` on `GET /config` so the frontend knows whether to render a challenge at all.
 Turnstile ships as the worked example, and so does ALTCHA, a self-hosted proof-of-work provider
 (`NODE_ANTIBOT_PROVIDER=altcha`) for a deployment that wants no third party at all — see
 [antibot](../../modules/antibot.md#choosing-a-provider).

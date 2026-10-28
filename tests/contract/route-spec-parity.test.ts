@@ -21,6 +21,7 @@ import path from 'node:path';
 import { parse } from 'yaml';
 import { enabledModules } from '../../src/modules';
 import { router as systemRouter } from '../../src/app/system-routes';
+import { router as configRouter } from '../../src/app/config-routes';
 import { routeTable } from '@tests/routes';
 
 /** The HTTP methods an OpenAPI path item may carry as operations. */
@@ -48,12 +49,13 @@ const operationsOf = (prefix: string, router: Parameters<typeof routeTable>[0]):
         return `${method} ${toSpecPath(full)}`;
     });
 
-/** Every operation the app mounts: each enabled module's router, then the system router. */
+/** Every operation the app mounts: each enabled module's router, then the system and config routers. */
 const mountedOperations = (): OperationKey[] => [
     ...enabledModules
         .flatMap(({ mounts = [] }) => mounts)
         .flatMap(({ basePath, routes }) => operationsOf(basePath, routes)),
-    ...operationsOf('', systemRouter)
+    ...operationsOf('', systemRouter),
+    ...operationsOf('', configRouter)
 ];
 
 /** Every operation the bundled contract declares. */

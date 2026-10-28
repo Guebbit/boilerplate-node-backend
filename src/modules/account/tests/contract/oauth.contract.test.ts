@@ -1,6 +1,6 @@
 /**
  * @module
- * Contract tests for the OAuth surface: `GET /account/oauth/providers`, and the full
+ * Contract tests for the OAuth surface: `GET /config`'s providers are in `tests/contract/config.contract.test.ts`; this is the full
  * start → callback round trip through the `fake` provider — the same path a Cypress spec walks
  * against a real browser, exercised here against the real routes, the real CSRF cookie, and a
  * real database. Registers `fake` the way the dev preload does: production seeds no such
@@ -44,15 +44,6 @@ beforeAll(() => {
  */
 const attemptCookies = (start: { headers: Record<string, unknown> }): string =>
     cookieHeader(start, '__Host-oauth_state', '__Host-oauth_verifier');
-
-describe('GET /account/oauth/providers', () => {
-    it('lists the fake provider once it is registered', async () => {
-        const response = await api().get('/account/oauth/providers');
-
-        expect(response.status).toBe(200);
-        expect(response.body.providers).toContain('fake');
-    });
-});
 
 describe('GET /account/oauth/:provider', () => {
     it('answers 404 for a provider this deployment never configured', async () => {

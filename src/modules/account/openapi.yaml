@@ -749,34 +749,13 @@ paths:
                 # `credentialLimiters` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
 
-    /account/session-config:
-        get:
-            tags: [Auth]
-            summary: How this deployment keeps people signed in
-            description: >-
-                Public, like `GET /antibot/config`: a client reads it once at boot and adapts, so it
-                needs no switch of its own. `jwt` — a short access token in memory plus a rotating
-                refresh cookie (`POST /account/refresh` exists). `cookie` — one HttpOnly
-                `__Host-session` cookie, nothing to refresh, and every state-changing request that
-                a cookie authenticates must come from an allowed `Origin`.
-            operationId: getSessionConfig
-            security: []
-            responses:
-                '200':
-                    description: The active session mode
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/SessionConfig'
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-
     /account/login:
         post:
             tags: [Auth]
             summary: Login
             description: >-
                 Authenticates a user with email and password credentials. On success, the session
-                is started in whichever mode the deployment runs (`GET /account/session-config`):
+                is started in whichever mode the deployment runs (`session.mode` of `GET /config`):
                 in `jwt` mode the body carries a short-lived access token (`token`) to pass as a
                 Bearer token, and a refresh cookie is set; in `cookie` mode the session is an
                 HttpOnly `__Host-session` cookie and the body carries no credential — unless the
@@ -864,22 +843,6 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
 
-    /account/oauth/providers:
-        get:
-            tags: [Auth]
-            summary: List enabled OAuth providers
-            description: The OAuth providers this deployment holds credentials for — an empty list means none are configured. The frontend uses this to decide which "Continue with…" buttons to render.
-            operationId: listOAuthProviders
-            security: []
-            responses:
-                '200':
-                    description: Enabled provider names
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/OAuthProviders'
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-
     /account/oauth/links:
         get:
             tags: [Auth]
@@ -922,7 +885,7 @@ paths:
                   schema:
                       type: string
                       maxLength: 32
-                  description: One of the `provider` names `GET /account/oauth/providers` lists.
+                  description: One of the `oauthProviders` names `GET /config` lists.
                 - name: continue
                   in: query
                   required: false
@@ -987,7 +950,7 @@ paths:
                   schema:
                       type: string
                       maxLength: 32
-                  description: One of the names `GET /account/oauth/providers` lists.
+                  description: One of the `oauthProviders` names `GET /config` lists.
                 - name: continue
                   in: query
                   required: false
@@ -1324,16 +1287,6 @@ components:
                             description: >-
                                 `POST /account/export` would start a new build. `false` while one is
                                 `building`: asking then only returns that one.
-
-        OAuthProviders:
-            type: object
-            additionalProperties: false
-            required: [providers]
-            properties:
-                providers:
-                    type: array
-                    items: { type: string }
-                    description: Registry names this deployment holds credentials for, e.g. `["google", "github"]`.
 
         OAuthLink:
             type: object

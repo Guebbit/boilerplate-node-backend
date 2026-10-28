@@ -68,8 +68,6 @@ import { getAccountExport, getAccountExportStatus } from './controllers/get-acco
 import { deleteAccount } from './controllers/delete-account';
 import { postAccountRestore } from './controllers/post-account-restore';
 import { postLoginRestore } from './controllers/post-login-restore';
-import { getOAuthProviders } from './controllers/get-oauth-providers';
-import { getSessionConfig } from './controllers/get-session-config';
 import { postSessionTouch } from './controllers/post-session-touch';
 import { getSession } from './controllers/get-session';
 import { getOAuthLinks } from './controllers/get-oauth-links';
@@ -257,10 +255,6 @@ router.post('/reauth', isAuth, sessionCredentialLimiters, postReauth);
 // since both spend the same mailbox.
 router.post('/reauth/methods/:method/send', isAuth, accountCodeSendLimiter, postReauthMethodSend);
 
-// GET /account/session-config — how this deployment keeps people signed in (`jwt` or `cookie`).
-// Public, like `GET /antibot/config`: a client reads it before it has a session.
-router.get('/session-config', getSessionConfig);
-
 // POST /account/refresh — create a new access token from the refresh cookie. A POST, since it
 // rotates the token (a state change a GET must not make), and origin-checked: the cookie alone
 // authenticates it, so a request from someone else's page must not act.
@@ -370,12 +364,8 @@ router.post(
 // around whichever factor is actually armed.
 router.post('/2fa/backup-codes', isAuth, requireFreshAuth('critical'), post2faBackupCodes);
 
-// GET /account/oauth/providers — which providers this deployment has credentials for. Public,
-// informational; registered ABOVE the `:provider` route below so it isn't swallowed by it.
-router.get('/oauth/providers', getOAuthProviders);
-
 // GET /account/oauth/links — the caller's connected providers. Registered ABOVE the `:provider`
-// route below, like `/oauth/providers`, so it is not swallowed by it.
+// route, so it is not swallowed by it.
 router.get('/oauth/links', isAuth, getOAuthLinks);
 
 // POST /account/oauth/links/:provider — connect a provider to the SIGNED-IN account. Sensitive
