@@ -6,17 +6,14 @@
  */
 
 import type { JobDeclaration } from '@kernel/registry';
+import { inventoryJobData } from './jobs.generated';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { runReservationSweep } from './services/sweep';
 
 /** The jobs `inventory` owns. */
 export const inventoryJobs: readonly JobDeclaration[] = [
     {
-        name: 'sweep:reservations',
-        // Every 5 minutes, well inside the card window and the 168-hour bank-transfer one.
-        schedule: '*/5 * * * *',
-        summary:
-            'Drains every stale checkout hold (batches of 200) and cancels the order behind each.',
+        ...inventoryJobData.sweepReservations,
         // Each expiry's announcement rides the outbox; settled inside the lease so `orders` has
         // heard every one before the connections close.
         run: () => runReservationSweep().then(() => settleOutboxNudges()),

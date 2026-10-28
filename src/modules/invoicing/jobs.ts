@@ -6,6 +6,7 @@
  */
 
 import type { JobDeclaration } from '@kernel/registry';
+import { invoicingJobData } from './jobs.generated';
 import { logger } from '@infrastructure/adapters/logger';
 import { reapDocuments } from '@infrastructure/adapters/document-store';
 import { invoicingConfig } from './config';
@@ -18,10 +19,7 @@ const retentionMs = (): number => invoicingConfig().NODE_INVOICE_PDF_RETENTION_D
 /** The jobs `invoicing` owns. */
 export const invoicingJobs: readonly JobDeclaration[] = [
     {
-        name: 'reap:invoice-pdfs',
-        schedule: '8 2 * * *',
-        summary:
-            'Deletes stored invoice and credit-note PDFs past their retention window; the next download renders again.',
+        ...invoicingJobData.reapInvoicePdfs,
         run: () =>
             reapDocuments(retentionMs()).then(({ checked, reaped }) => {
                 logger.info({ message: 'Stored documents reaped.', checked, reaped });
@@ -30,10 +28,7 @@ export const invoicingJobs: readonly JobDeclaration[] = [
         connectFirst: false
     },
     {
-        name: 'reap:invoices',
-        schedule: '14 2 * * *',
-        summary:
-            "Blanks an invoice's or credit note's buyer block once its tax retention has ended; the numbered document stays and its cached PDF is deleted.",
+        ...invoicingJobData.reapInvoices,
         run: () =>
             eraseDueBuyers().then((erased) => {
                 logger.info({ message: 'Invoice buyer blocks erased.', ...erased });

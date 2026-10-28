@@ -45,7 +45,7 @@ flowchart TD
 | Page                                      | Covers                                                                                                        |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | [Repository Root](./root.md)              | Everything with no directory above it — configs, manifests, tool entry points                                 |
-| [App, Kernel & Types](./src-app.md)       | `src/app/`, `src/kernel/`, `src/types/`, `src/locales/`, and the three files at the top of `src/`             |
+| [App, Kernel & Types](./src-app.md)       | `src/app/`, `src/kernel/`, `src/types/`, `shared/locales/`, and the three files at the top of `src/`          |
 | [Infrastructure](./src-infrastructure.md) | `src/infrastructure/` — adapters, http, observability, persistence, runtime                                   |
 | [Modules](./src-modules.md)               | The file shapes a module is built from, and which module has which                                            |
 | [Contracts](./contracts.md)               | `openapi.yaml`, `asyncapi.yaml`, `shared/contracts/`, generated `api/`, collection exports, Spectral rulesets |

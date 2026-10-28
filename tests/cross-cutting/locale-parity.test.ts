@@ -17,7 +17,7 @@
  * translation.
  *
  * ── Why the languages are read rather than named ─────────────────────────────────────────────
- * Naming `en` and `it` explicitly would leave any THIRD language — sitting in `src/locales/` and
+ * Naming `en` and `it` explicitly would leave any THIRD language — sitting in `shared/locales/` and
  * in every module's own locale directory — with its completeness checked by nothing: a key could
  * go missing there and the suite would stay green.
  *

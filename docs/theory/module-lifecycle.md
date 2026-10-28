@@ -461,7 +461,7 @@ locales recipe of `measure:demo-strip` shares) takes the mechanical share of the
   (`docker/observability/prometheus.alert-rules*.yaml`). A metric is the module's when only its
   folder registers it.
 - **The shared validation labels only its fields used go** (`validation.attributes` in
-  `src/locales/*.json`): a field its contract names that no surviving request carries.
+  `shared/locales/*.json`): a field its contract names that no surviving request carries.
 - **The scenario files go with it**: `scenarios/<name>.ts` (its fixtures),
   `scenarios/values/<name>.ts` (its example values for the generated client collections) and
   `scenarios/support/doubles/<name>/`. Nothing is edited to unlist them — the registries that

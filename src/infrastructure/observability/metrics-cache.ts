@@ -9,6 +9,8 @@
 
 import { Counter } from 'prom-client';
 import { metricsRegistry } from './metrics-registry';
+import { counterConfig } from '@infrastructure/observability/metric-config';
+import { infrastructureMetricData } from '@infrastructure/observability/metrics.generated';
 
 /**
  * Invalidations that could not reach Redis, by tag.
@@ -17,10 +19,8 @@ import { metricsRegistry } from './metrics-registry';
  * observability is the only possible action. A rate above zero means the catalogue is lying.
  */
 export const cacheInvalidationFailuresTotal = new Counter({
-    name: 'cache_invalidation_failures_total',
-    help: 'Cache invalidations that could not reach Redis, so stale responses survive their write.',
+    ...counterConfig(infrastructureMetricData.cacheInvalidationFailuresTotal),
     // Bounded by construction: tags are literals declared on the routes, never request data.
-    labelNames: ['tag'] as const,
     registers: [metricsRegistry]
 });
 
@@ -32,9 +32,7 @@ export const cacheInvalidationFailuresTotal = new Counter({
  * this caller won the rebuild claim. `miss`: nothing cached at all.
  */
 export const cacheRequestsTotal = new Counter({
-    name: 'cache_requests_total',
-    help: 'HTTP cache lookups by outcome: hit, miss, stale (served old), or refresh (rebuilding).',
+    ...counterConfig(infrastructureMetricData.cacheRequestsTotal),
     // Bounded by construction: the four literals setCache's own branches produce.
-    labelNames: ['result'] as const,
     registers: [metricsRegistry]
 });

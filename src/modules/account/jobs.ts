@@ -7,6 +7,7 @@
  */
 
 import type { JobDeclaration } from '@kernel/registry';
+import { accountJobData } from './jobs.generated';
 import { logger } from '@infrastructure/adapters/logger';
 import { accountConfig } from './config';
 import { reapInactiveAccounts, type InactiveReapCounts } from './services/reap-inactive';
@@ -34,10 +35,7 @@ const reapInactive = (): Promise<InactiveReapCounts> => {
 /** The jobs `account` owns: the nightly sweeps in the order they run, then the hourly purge. */
 export const accountJobs: readonly JobDeclaration[] = [
     {
-        name: 'reap:inactive-accounts',
-        schedule: '5 2 * * *',
-        summary:
-            'Minimises an account inactive past NODE_INACTIVE_MINIMISE_DAYS; with deletion turned on, warns, then soft-, then hard-deletes one inactive past NODE_INACTIVE_ACCOUNT_DAYS.',
+        ...accountJobData.reapInactiveAccounts,
         run: reapInactive,
         // Minimise and erase hooks are resolved from the manifests, and the warning mail renders
         // translated copy. Leased: it hard-deletes accounts, so "exactly one runner" earns its keep.
@@ -45,10 +43,7 @@ export const accountJobs: readonly JobDeclaration[] = [
         lease: { ttlMs: 15 * 60 * 1000 }
     },
     {
-        name: 'reap:previous-emails',
-        schedule: '7 2 * * *',
-        summary:
-            'Forgets the previous email of an account whose undo link has lapsed (sessions and one-time tokens delete themselves at their own expiry date).',
+        ...accountJobData.reapPreviousEmails,
         run: () =>
             reapLapsedPreviousEmails().then((cleared) => {
                 logger.info({ message: 'Previous emails reaped.', previousEmailsCleared: cleared });
@@ -57,10 +52,7 @@ export const accountJobs: readonly JobDeclaration[] = [
         lease: { ttlMs: 30 * 60 * 1000 }
     },
     {
-        name: 'reap:account-exports',
-        schedule: '9 2 * * *',
-        summary:
-            'Deletes built data exports (file and row) past NODE_ACCOUNT_EXPORT_TTL_DAYS; the account can ask again.',
+        ...accountJobData.reapAccountExports,
         run: () =>
             reapExpiredExports().then(({ rows, files }) => {
                 logger.info({ message: 'Account exports reaped.', rows, strayFiles: files });
@@ -68,10 +60,7 @@ export const accountJobs: readonly JobDeclaration[] = [
             })
     },
     {
-        name: 'reap:scheduled-deletions',
-        schedule: '13 * * * *',
-        summary:
-            'Erases, cascade included, every account whose owner asked to delete it and whose grace (NODE_ACCOUNT_DELETION_GRACE_DAYS) has run out, then mails the goodbye.',
+        ...accountJobData.reapScheduledDeletions,
         run: purgeScheduledDeletions,
         // Erase hooks come from the manifests and the goodbye mail renders translated copy.
         // Leased: it hard-deletes accounts, so "exactly one runner" earns its keep.

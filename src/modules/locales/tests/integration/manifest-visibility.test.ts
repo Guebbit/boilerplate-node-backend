@@ -1,7 +1,7 @@
 /**
  * @module
  * Who the manifest offers a switched-off language to. A language with a deployed dictionary file
- * (`src/locales/it.json`) is always among the supported ones, so the scoped read that drops a
+ * (`shared/locales/it.json`) is always among the supported ones, so the scoped read that drops a
  * switched-off ROW is not enough: the file-backed language came back as `active: true`. Every
  * caller now sees it as `active: false`: a client that bundles the language itself needs that row
  * to stop offering it. The sitemap, which lists only the active ones, leaves it out.

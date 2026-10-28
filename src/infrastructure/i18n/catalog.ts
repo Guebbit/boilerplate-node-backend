@@ -19,7 +19,7 @@ import { localeConfig } from '@infrastructure/i18n/config';
  * it is the same directory whether the entry point is `src/cluster.ts`, a Jest worker or a
  * migration.
  */
-const LOCALES_DIRECTORY = path.join(__dirname, '..', '..', 'locales');
+const LOCALES_DIRECTORY = path.join(__dirname, '..', '..', '..', 'shared', 'locales');
 
 /** The locale a request falls back to when it asks for none. Read lazily, so a test can set it after import. */
 export const getDefaultLocale = (): string => localeConfig().NODE_DEFAULT_LOCALE;

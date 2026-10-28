@@ -9,13 +9,14 @@
 
 import { Counter } from 'prom-client';
 import { metricsRegistry } from './metrics-registry';
+import { counterConfig } from '@infrastructure/observability/metric-config';
+import { infrastructureMetricData } from '@infrastructure/observability/metrics.generated';
 
 /**
  * Promise rejections no handler caught. Any rate above zero is a bug: a lost error, and whatever
  * work the promise was meant to finish.
  */
 export const processUnhandledRejectionsTotal = new Counter({
-    name: 'process_unhandled_rejections_total',
-    help: 'Promise rejections that reached the process-level unhandledRejection handler.',
+    ...counterConfig(infrastructureMetricData.processUnhandledRejectionsTotal),
     registers: [metricsRegistry]
 });

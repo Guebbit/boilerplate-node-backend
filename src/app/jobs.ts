@@ -17,6 +17,7 @@ import { quarantineRoot } from '@infrastructure/adapters/image-store';
 import { reapSpooled } from '@infrastructure/adapters/mail-spool';
 import { reapOrphanedImages } from '@infrastructure/adapters/orphaned-images';
 import { enabledModules } from '../modules';
+import { appJobData } from './jobs.generated';
 
 /** One hour, in milliseconds. */
 const HOUR_MS = 60 * 60 * 1000;
@@ -37,9 +38,7 @@ const mailSpoolRetentionMs = (): number =>
 /** The jobs no module owns. */
 export const appJobs: readonly JobDeclaration[] = [
     {
-        name: 'reap:quarantine',
-        schedule: '0 2 * * *',
-        summary: 'Deletes quarantined upload files past their retention window.',
+        ...appJobData.reapQuarantine,
         run: () => {
             const root = quarantineRoot();
             return reapDirectory(root, Date.now() - quarantineRetentionMs(), 'Quarantine').then(
@@ -52,17 +51,11 @@ export const appJobs: readonly JobDeclaration[] = [
         connectFirst: false
     },
     {
-        name: 'reap:orphaned-images',
-        schedule: '3 2 * * *',
-        summary:
-            'Deletes a stored image or thumbnail no document names, once it is over an hour old.',
+        ...appJobData.reapOrphanedImages,
         run: () => reapOrphanedImages(Object.keys(resolveImageTargets(enabledModules)))
     },
     {
-        name: 'reap:mail-spool',
-        schedule: '30 2 * * *',
-        summary:
-            'Deletes a spooled email attachment older than its retention window — a mail job died mid-flight.',
+        ...appJobData.reapMailSpool,
         run: () =>
             reapSpooled(mailSpoolRetentionMs()).then((reaped) => {
                 if (reaped > 0)
@@ -71,12 +64,7 @@ export const appJobs: readonly JobDeclaration[] = [
         connectFirst: false
     },
     {
-        name: 'sweep:outbox',
-        // Every minute: the outbox's backstop relay. The writer already nudges one after commit, so
-        // this only carries what a crash or a retry backoff left behind.
-        schedule: '* * * * *',
-        summary:
-            "Publishes every due outbox event — the backstop for the writer's own after-commit nudge.",
+        ...appJobData.sweepOutbox,
         run: () =>
             relayOutbox().then((result) => {
                 logger.info({ message: 'outbox: sweep finished', ...result });

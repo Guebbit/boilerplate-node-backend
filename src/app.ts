@@ -154,7 +154,7 @@ export const createApp = (options: AppOptions = {}): AppInstance => {
             .then(() =>
                 // Modules carry their own copy, so deleting one deletes its strings. `infrastructure`
                 // sits below every module and cannot go looking for them, so the paths are handed in.
-                // Every dictionary in src/locales is registered, so dropping in a file is the only
+                // Every dictionary in shared/locales is registered, so dropping in a file is the only
                 // step needed to add a language — the middleware negotiates against the same list.
                 bootI18n(enabledModuleDirectories('locales'))
             )

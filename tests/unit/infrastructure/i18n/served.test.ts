@@ -30,8 +30,8 @@ import {
     translator,
     type LocaleOverlay
 } from '@infrastructure/i18n';
-import enTranslation from '../../../../src/locales/en.json';
-import itTranslation from '../../../../src/locales/it.json';
+import enTranslation from '../../../../shared/locales/en.json';
+import itTranslation from '../../../../shared/locales/it.json';
 
 /** A provider answer carrying only the registered languages' on/off state. */
 const languagesOf = (activeTags: string[], inactiveTags: string[]): LocaleOverlay => ({

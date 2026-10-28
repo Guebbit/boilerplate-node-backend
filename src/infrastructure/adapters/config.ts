@@ -13,6 +13,7 @@
 import path from 'node:path';
 import { defineConfig } from '@infrastructure/config/define';
 import { choice, csv, flag, int, text } from '@infrastructure/config/fields';
+import { sharedDefaults } from '@infrastructure/config/defaults.generated';
 
 /**
  * SMTP hosts a live e2e run may dial: this machine, or the compose `mailpit` service.
@@ -94,11 +95,17 @@ export const redisConfig = defineConfig({
 export const imageConfig = defineConfig({
     name: 'images',
     shape: {
-        NODE_IMAGE_MAX_INPUT_PIXELS: int({ default: 50_000_000, min: 1 }),
-        NODE_IMAGE_MAX_DIMENSION: int({ default: 2048, min: 1 }),
-        NODE_IMAGE_THUMBNAIL_DIMENSION: int({ default: 320, min: 1 }),
+        NODE_IMAGE_MAX_INPUT_PIXELS: int({ default: sharedDefaults.images.maxInputPixels, min: 1 }),
+        NODE_IMAGE_MAX_DIMENSION: int({ default: sharedDefaults.images.maxDimension, min: 1 }),
+        NODE_IMAGE_THUMBNAIL_DIMENSION: int({
+            default: sharedDefaults.images.thumbnailDimension,
+            min: 1
+        }),
         NODE_PUBLIC_PATH: text({ default: 'public' }),
-        NODE_QUARANTINE_RETENTION_HOURS: int({ default: 24, min: 1 }),
+        NODE_QUARANTINE_RETENTION_HOURS: int({
+            default: sharedDefaults.images.quarantineRetentionHours,
+            min: 1
+        }),
         NODE_QUARANTINE_PATH: text({ default: path.join('tmp', 'quarantine') })
     }
 });

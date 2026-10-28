@@ -6,16 +6,13 @@
  */
 
 import type { JobDeclaration } from '@kernel/registry';
+import { webhooksJobData } from './jobs.generated';
 import { sweepDueWebhookDeliveries } from './services/sweep';
 
 /** The jobs `webhooks` owns. */
 export const webhooksJobs: readonly JobDeclaration[] = [
     {
-        name: 'sweep:webhook-retries',
-        // Every minute: the sweep interval IS the retry granularity.
-        schedule: '* * * * *',
-        summary:
-            "Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.",
+        ...webhooksJobData.sweepWebhookRetries,
         run: () => sweepDueWebhookDeliveries()
     }
 ];

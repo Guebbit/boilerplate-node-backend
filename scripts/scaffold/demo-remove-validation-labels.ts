@@ -1,6 +1,6 @@
 /**
  * @module
- * The shared validation labels (`validation.attributes` in `src/locales/<locale>.json`) that only
+ * The shared validation labels (`validation.attributes` in `shared/locales/<locale>.json`) that only
  * a removed module's request fields used.
  *
  * The shared dictionaries label every field a request can carry, and
@@ -18,7 +18,7 @@ import { modulesWith } from '../modules-on-disk';
 import type { RemovalNote } from './demo-remove-registry';
 
 /** Where the shared dictionaries live, relative to the repo root. */
-const SHARED_LOCALES = path.join('src', 'locales');
+const SHARED_LOCALES = path.join('shared', 'locales');
 
 /**
  * Every parsed `openapi*.yaml` in one folder.

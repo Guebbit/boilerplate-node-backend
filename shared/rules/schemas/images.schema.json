@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "images": {
+      "type": "object",
+      "properties": {
+        "thumbnailVersion": {
+          "type": "string",
+          "pattern": "^v[0-9]+$"
+        },
+        "formats": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "mime": {
+                "type": "string",
+                "pattern": "^image\\/[a-z0-9.+-]+$"
+              },
+              "aliases": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^image\\/[a-z0-9.+-]+$"
+                }
+              },
+              "offset": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "bytes": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 255
+                }
+              },
+              "extension": {
+                "type": "string",
+                "pattern": "^[a-z0-9]+$"
+              },
+              "alsoRequires": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "offset": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "bytes": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 255
+                      }
+                    }
+                  },
+                  "required": [
+                    "offset",
+                    "bytes"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "reencodable": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "mime",
+              "offset",
+              "bytes",
+              "extension",
+              "reencodable"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "thumbnailVersion",
+        "formats"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "images"
+  ],
+  "additionalProperties": false
+}

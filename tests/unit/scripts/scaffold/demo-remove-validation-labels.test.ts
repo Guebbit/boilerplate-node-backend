@@ -28,7 +28,7 @@ const labelsOf = (locale: string): string[] =>
     Object.keys(
         (
             JSON.parse(
-                readFileSync(path.join(root, 'src', 'locales', `${locale}.json`), 'utf8')
+                readFileSync(path.join(root, 'shared', 'locales', `${locale}.json`), 'utf8')
             ) as {
                 validation: { attributes: Record<string, string> };
             }
@@ -115,8 +115,8 @@ beforeEach(() => {
     write('src/modules/account/openapi.yaml', SURVIVOR);
     write('src/modules/cart/openapi.yaml', REMOVED);
     mkdirSync(path.join(root, 'shared', 'contracts'), { recursive: true });
-    write('src/locales/en.json', dictionary('The'));
-    write('src/locales/it.json', dictionary('Il'));
+    write('shared/locales/en.json', dictionary('The'));
+    write('shared/locales/it.json', dictionary('Il'));
 });
 
 afterEach(() => {
@@ -139,18 +139,18 @@ describe('stripValidationLabels', () => {
 
         expect(labelsOf('en')).toEqual(['email', 'city', 'page', 'imageUpload']);
         expect(labelsOf('it')).toEqual(['email', 'city', 'page', 'imageUpload']);
-        expect(readFileSync(path.join(root, 'src', 'locales', 'it.json'), 'utf8')).toContain(
+        expect(readFileSync(path.join(root, 'shared', 'locales', 'it.json'), 'utf8')).toContain(
             '"ok": "Il"'
         );
         expect(notes.map((note) => note.file).toSorted()).toEqual([
-            path.join('src', 'locales', 'en.json'),
-            path.join('src', 'locales', 'it.json')
+            path.join('shared', 'locales', 'en.json'),
+            path.join('shared', 'locales', 'it.json')
         ]);
     });
 
     it('writes nothing when no label names a removed field', () => {
         expect(stripValidationLabels(root, new Set(['nowhere']))).toEqual([]);
-        expect(readFileSync(path.join(root, 'src', 'locales', 'en.json'), 'utf8')).toBe(
+        expect(readFileSync(path.join(root, 'shared', 'locales', 'en.json'), 'utf8')).toBe(
             dictionary('The')
         );
     });

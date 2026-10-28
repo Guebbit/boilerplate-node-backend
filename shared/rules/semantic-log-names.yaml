@@ -1,0 +1,31 @@
+# The name a structured log line is WRITTEN with, per field the code logs (camelCase on the left).
+#
+# Standard OpenTelemetry names where the spec has one (https://opentelemetry.io/docs/specs/semconv/),
+# `app.*` where it has none: custom attributes live under the producer's own namespace, never on a
+# standard one. `traceId` and `spanId` become `trace_id` and `span_id` because the OpenTelemetry
+# Logs Data Model puts trace context at the top level of a record, and Grafana's Loki -> Tempo
+# link reads `trace_id`.
+#
+# Not read at boot. `npm run regenerate` writes
+# `src/infrastructure/adapters/semantic-log-names.generated.ts` from it. Each side converts the
+# case of its own field names; this table is the one place the target names live.
+semanticLogNames:
+    service: service.name
+    traceId: trace_id
+    spanId: span_id
+    requestId: app.request.id
+    clientRequestId: app.request.client_id
+    method: http.request.method
+    route: http.route
+    statusCode: http.response.status_code
+    durationMs: app.request.duration_ms
+    ip: client.address
+    userAgent: user_agent.original
+    action: event.name
+    outcome: app.audit.outcome
+    actorUserId: user.id
+    actorRoleName: app.actor.role_name
+    actorCredentialId: app.actor.credential_id
+    actorScope: app.actor.scope
+    targetType: app.target.type
+    targetId: app.target.id
