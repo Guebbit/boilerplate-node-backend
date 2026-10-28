@@ -79,7 +79,6 @@ import { getOAuthStart } from './controllers/get-oauth-start';
 import { getOAuthCallback } from './controllers/get-oauth-callback';
 import { noStore } from '@infrastructure/http/middlewares/cache';
 import { requireAllowedOrigin } from '@infrastructure/http/middlewares/origin';
-import { getMyAbilities } from './controllers/get-my-abilities';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 
 /**
@@ -261,16 +260,6 @@ router.post('/reauth/methods/:method/send', isAuth, accountCodeSendLimiter, post
 // GET /account/session-config — how this deployment keeps people signed in (`jwt` or `cookie`).
 // Public, like `GET /antibot/config`: a client reads it before it has a session.
 router.get('/session-config', getSessionConfig);
-
-/*
- * GET /account/abilities — the rules the server enforces, for a client to render from.
- *
- * No guard beyond the router-wide `router.use(getAuth)` above: a stranger has rules too (the
- * `guest` role), and a shop front that greys nothing out for a visitor is a shop front that lies
- * twice. Not mounted a second time here — `getAuth` already ran for every route on this router
- * and already stashed `request.authContext`; `getMyAbilities` reads that directly.
- */
-router.get('/abilities', getMyAbilities);
 
 // POST /account/refresh — create a new access token from the refresh cookie. A POST, since it
 // rotates the token (a state change a GET must not make), and origin-checked: the cookie alone

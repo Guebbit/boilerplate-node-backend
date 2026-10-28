@@ -824,7 +824,7 @@ components:
                 # `unverified` and `customer` are computed per request, never stored or granted.
                 # A NAME rather than a key list: roles are data a deployment may edit, and
                 # publishing the keys would freeze each account at the permissions its role held on
-                # the day it was written. What a caller may DO is `GET /account/abilities`, which
+                # the day it was written. What a caller may DO is `abilities` on `GET /account`, which
                 # answers for the caller rather than about a row.
                 role:
                     type: string
@@ -837,7 +837,7 @@ components:
                 # absent until it is. Self-signup starts absent and confirms by email;
                 # admin-created and OAuth accounts start set because an operator or the provider
                 # already vouches for the address. Set, the account is a `customer`; absent, it is
-                # `unverified` and holds no `checkout:Cart` (see `GET /account/abilities`) — so
+                # `unverified` and holds no `checkout:Cart` (see `abilities` on `GET /account`) — so
                 # a client renders this as a banner, never as a wall of its own.
                 verifiedAt:
                     type: string
@@ -905,6 +905,21 @@ components:
                 # on `/users`, and the data export carries it with the rest of the profile.
                 purchaseHold:
                     $ref: '#/components/schemas/PurchaseHold'
+
+        # What `GET /account` answers: the account as its holder sees it, plus what a client needs
+        # to render from it without a second call. A separate schema, not optional members on
+        # `Account`: `PUT`/`PATCH` replace an `Account`, and `abilities`/`activity` are not theirs to
+        # write. Lives here, beside `Account`, because the field list is shared by anchor.
+        AccountView:
+            type: object
+            additionalProperties: false
+            required: [id, email, username, abilities, activity]
+            properties:
+                <<: *accountProperties
+                abilities:
+                    $ref: '../../src/modules/access/openapi.yaml#/components/schemas/Abilities'
+                activity:
+                    $ref: '../../src/modules/account/openapi.yaml#/components/schemas/SessionActivity'
 
         # The account as STAFF see it on the `/users` reads and writes: every `Account` field, plus
         # what the caller may do to this row and the shop's own review flag. A separate schema rather
@@ -1188,8 +1203,6 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change'
     /account/email-change/resend:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change~1resend'
-    /account/abilities:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1abilities'
     /account/password:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1password'
     /account/password/check:

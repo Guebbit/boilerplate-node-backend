@@ -327,7 +327,7 @@ enforced per rule.
   write on a buyer's behalf are its consumers.
 - **`kernel/access/query.ts`** compiles the rules into the Mongo filter every scoped read spreads,
   so a rule that grants more returns more without anybody editing a fragment.
-- **`GET /account/abilities`** publishes the packed rules; the frontend evaluates _those_, not a
+- **`abilities` on `GET /account`** (and on the sign-in and refresh answers) publishes the packed rules; the frontend evaluates _those_, not a
   copy of them.
 - Route guards take an action and a subject. `delete:User` and `create:Refund` carry `stepUp: critical`, and the
   guard demands the fresh session and audits that it did.
@@ -348,7 +348,7 @@ and forcing one abstraction over both makes both worse.
 | The vocabulary: `action`, `subject`, `conditions`, `fields`, `Caller` (no `manage`, no `all`: there is no wildcard) | The library doing the evaluating               |
 | The permission rules and sets, and the preset roles seeded on day one                                               | How rules become a query                       |
 | The scope model: `tenant` \| `platform`, never both, never derived from a flag                                      | `guard_name`, which only the PHP package needs |
-| The wire format of `GET /account/abilities`                                                                         | Everything else about the implementation       |
+| The wire format of `abilities`                                                                                      | Everything else about the implementation       |
 | The conformance suite — one fixture file, identical bytes, run by both                                              | —                                              |
 
 Here that is `@casl/ability`, whose rules compile straight into a Mongo query and can be shipped to
