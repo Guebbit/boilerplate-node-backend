@@ -1,8 +1,8 @@
 /**
  * @module
- * Prints the GET routes that mount `privateNoCache`, as OpenAPI paths, for the bundler.
+ * Prints the GET routes that mount `privateNoCache` or `setCache`, as OpenAPI paths, for the bundler.
  *
- * Runs as its own process (see {@link privateNoCacheReads} in `openapi-bundle.ts`): reading the
+ * Runs as its own process (see {@link revalidatingReads} in `openapi-bundle.ts`): reading the
  * mounted routers back is the only exact answer, and importing the whole app into the bundler
  * itself would drag every module's runtime into a build step.
  */
@@ -22,18 +22,22 @@ interface Layer {
     };
 }
 
+/** `setCache` returns a closure named `setCacheMiddleware` (cache.ts), the one way to spot it. */
+const isSetCache = (handle: unknown): boolean =>
+    typeof handle === 'function' && handle.name === 'setCacheMiddleware';
+
 /** Express `/:id` to OpenAPI `/{id}`, and no trailing slash. */
 const toOpenApiPath = (basePath: string, routePath: string): string => {
     const joined = `${basePath}${routePath}`.replaceAll(/:(\w+)/g, '{$1}');
     return joined.length > 1 ? joined.replace(/\/$/, '') : joined;
 };
 
-/** Every `privateNoCache` GET across the mounted modules. */
+/** Every `privateNoCache` or `setCache` GET across the mounted modules. */
 const paths = enabledModules.flatMap(({ mounts = [] }) =>
     mounts.flatMap(({ basePath, routes }) =>
         (routes.stack as Layer[]).flatMap(({ route }) =>
             route?.methods.get === true &&
-            route.stack.some(({ handle }) => handle === privateNoCache)
+            route.stack.some(({ handle }) => handle === privateNoCache || isSetCache(handle))
                 ? [toOpenApiPath(basePath, route.path)]
                 : []
         )

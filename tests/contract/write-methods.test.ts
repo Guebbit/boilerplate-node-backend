@@ -256,3 +256,17 @@ describe('a revalidating read answers 304 (RFC 9110 §13.1.2)', () => {
         expect(revalidated.headers.etag).toBe(read.headers.etag);
     });
 });
+
+describe('a public cached read answers 304 too', () => {
+    // `GET /products/facets` mounts `setCache`; same shared response check as above.
+    it('answers a matching If-None-Match with an empty 304', async () => {
+        const read = await api().get('/products/facets');
+        const revalidated = await api()
+            .get('/products/facets')
+            .set('If-None-Match', read.headers.etag);
+
+        expect(read.status).toBe(200);
+        expect(revalidated.status).toBe(304);
+        expect(revalidated.text).toBe('');
+    });
+});

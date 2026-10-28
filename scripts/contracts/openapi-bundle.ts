@@ -12,7 +12,7 @@
  * takes a bearer, with the origin `403` on its unsafe methods; {@link withAppLevelResponses} merges the root's
  * `x-app-level-responses` (429, 500 and 503 for every operation; 400/413/415 for a body-carrying one, and 415 for a body-less write too) into every
  * operation that doesn't already declare its own; {@link withNotModified} adds the shared `304` to the
- * per-caller reads that revalidate; {@link withVersionedResources} hangs `ETag`,
+ * cached and revalidating reads; {@link withVersionedResources} hangs `ETag`,
  * `If-Match` and 412 on every path marked `x-versioned`; {@link withModuleStamps} tags every operation
  * with the `x-module` its owning fragment names — never hand-written per operation; and
  * {@link withErrorCodes} publishes every fragment's own `x-error-codes` as one collected catalogue.
@@ -358,7 +358,7 @@ export const withVersionedResources = (bundled: string): string => {
 const ROUTES_MARKER = 'PRIVATE_NO_CACHE_ROUTES=';
 
 /**
- * The OpenAPI paths of every GET that mounts `privateNoCache`, read back from the mounted routers.
+ * The OpenAPI paths of every GET that mounts `privateNoCache` or `setCache`, read back from the mounted routers.
  *
  * A child process, because the answer lives in the running app's router stack and the bundler
  * must not import the app. `NODE_CLUSTER_WORKERS=1` keeps the app's start-up logger quiet; the
@@ -366,7 +366,7 @@ const ROUTES_MARKER = 'PRIVATE_NO_CACHE_ROUTES=';
  *
  * @throws Error if the process fails or prints no result
  */
-export const privateNoCacheReads = (): string[] => {
+export const revalidatingReads = (): string[] => {
     const output = execFileSync(
         process.execPath,
         [
@@ -382,7 +382,7 @@ export const privateNoCacheReads = (): string[] => {
     );
     const line = output.split('\n').find((each) => each.startsWith(ROUTES_MARKER));
     if (line === undefined)
-        throw new Error('[openapi] the privateNoCache route listing printed no result.');
+        throw new Error('[openapi] the cached-read route listing printed no result.');
     return JSON.parse(line.slice(ROUTES_MARKER.length)) as string[]; // we wrote this JSON ourselves
 };
 
@@ -394,7 +394,7 @@ export const privateNoCacheReads = (): string[] => {
  * documents (an example module that ships no contract) is skipped.
  *
  * @param bundled - the bundled OpenAPI document, as YAML text
- * @param reads - OpenAPI paths of the `privateNoCache` GETs, from {@link privateNoCacheReads}
+ * @param reads - OpenAPI paths of the `privateNoCache` and `setCache` GETs, from {@link revalidatingReads}
  * @throws Error if the bundled document does not parse to an object
  */
 export const withNotModified = (bundled: string, reads: readonly string[]): string => {
@@ -645,7 +645,7 @@ const compile = (): string => {
                             withAppLevelResponses(
                                 withCookieAuth(withBrowserEvents(readFileSync(temporary, 'utf8')))
                             ),
-                            privateNoCacheReads()
+                            revalidatingReads()
                         )
                     ),
                     moduleOfPath()
