@@ -10,7 +10,7 @@ import { orderService } from '@modules/orders';
 import { returnService } from '@modules/returns';
 import type { SalesStats } from '@types';
 import { addRawFigures, emptyRawFigures, figuresOf, type RawFigures } from './figures';
-import type { Period } from './range';
+import type { Period, WithoutLimits } from './range';
 import { shopCurrency } from '@modules/shop';
 
 /** Raw figures per currency, then per bucket (keyed by the bucket's ISO instant). */
@@ -81,7 +81,7 @@ const totalOf = (row: Map<string, RawFigures> | undefined): RawFigures => {
  *
  * @param period - the resolved period
  */
-export const getSalesStats = (period: Period): Promise<SalesStats> =>
+export const getSalesStats = (period: Period): Promise<WithoutLimits<SalesStats>> =>
     Promise.all([rawFiguresFor(period.window), rawFiguresFor(period.previous)]).then(
         ([current, previous]) => {
             const currencies = new Set([shopCurrency(), ...current.keys(), ...previous.keys()]);

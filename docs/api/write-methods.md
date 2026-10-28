@@ -326,9 +326,9 @@ response body that holds a `null` anywhere, free-form objects included (an audit
 timeline row's `data`). An unset side of an audit `{ from, to }` is the absent key.
 
 One exception: permission rule conditions on the session answers (a sign-in, `GET /account`, a
-refresh). A packed rule's `{ deletedAt: null }` is a Mongo query, where `null` is an operand ("unset"),
-not a value the response reports; the client evaluates it with CASL, and dropping it would change what
-the rule means. Any other response carrying the same shape is still refused.
+refresh). A permission rule's conditions are a query, not a value; `null` there is the operand "has no
+value" (`{ deletedAt: null }`), and the client evaluates it with CASL. Any other response carrying the
+same shape is still refused.
 
 A stored `null` that means something (a product's `backorderLimit`: no cap) is mapped in the
 presenter, so the wire still says "absent". RFC 7396 §1 is why: a `GET` that served `"x": null`,

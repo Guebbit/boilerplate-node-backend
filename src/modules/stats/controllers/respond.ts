@@ -1,7 +1,7 @@
 /**
  * @module
  * The one handler shape every stats read shares: read the query, check it, resolve the period
- * against the shop's zone, run the composer, answer. Only the schema and the composer differ.
+ * against the shop's zone, run the composer, answer with its figures and the period ceilings. Only the schema and the composer differ.
  */
 
 import type { Request, Response } from 'express';
@@ -11,7 +11,12 @@ import { readInput } from '@infrastructure/http/request';
 import { blankToUndefined } from '@infrastructure/http/schemas';
 import { catchAs, namedHandler, parseBody } from '@infrastructure/http/controller';
 import { t } from '@infrastructure/i18n';
+import type { StatsLimits } from '@types';
 import { resolvePeriod, type Period } from '../services/range';
+import { MAX_BUCKETS, MAX_RANGE_DAYS } from '../domain';
+
+/** The ceilings every period read enforces, carried on each answer so a form never keeps a copy. */
+const LIMITS: StatsLimits = { maxRangeDays: MAX_RANGE_DAYS, maxBuckets: MAX_BUCKETS };
 
 /** The period every read takes: two shop-local days, and optionally the bucket size. */
 export const periodFields = {
@@ -41,7 +46,7 @@ export const statsHandler = <
 >(
     name: string,
     schema: TSchema,
-    run: (period: Period, query: TSchema['_output'], request: Request) => Promise<unknown>
+    run: (period: Period, query: TSchema['_output'], request: Request) => Promise<object>
 ) =>
     namedHandler(name, (request: Request, response: Response) => {
         // readInput, `search` surface: the query as the lists read it.
@@ -56,7 +61,7 @@ export const statsHandler = <
 
         return run(resolved.period, query, request)
             .then((data) => {
-                successResponse(response, data);
+                successResponse(response, { ...data, limits: LIMITS });
             })
             .catch(catchAs(response, name));
     });
