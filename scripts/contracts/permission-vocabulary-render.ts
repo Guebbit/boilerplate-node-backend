@@ -121,12 +121,11 @@ export const readPermissionVocabulary = (yamlText: string): PermissionVocabulary
         const action = ruleActions[index];
         if (!actions.includes(action))
             throw new Error(`authorization-keys.yaml rule uses undeclared action \`${action}\``);
-        const { scope } = rule;
+        const { scope, stepUp: tier } = rule;
         if (typeof scope !== 'string' || !scopes.includes(scope))
             throw new Error(
                 `authorization-keys.yaml rule has undeclared scope \`${String(scope)}\``
             );
-        const tier: unknown = rule.stepUp;
         if (tier !== undefined && (typeof tier !== 'string' || !stepUpTiers.includes(tier)))
             throw new Error(
                 `authorization-keys.yaml rule has undeclared stepUp \`${JSON.stringify(tier)}\``
