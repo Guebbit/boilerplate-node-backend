@@ -83,7 +83,7 @@ export interface TimelineEntryInput {
     /** Free text `orders` owns, such as an override's reason. Never a sibling module's text. */
     text?: string | undefined;
     /** What the type needs to say; scalars only, so a row stays small and exportable. */
-    data?: Readonly<Record<string, string | number | boolean | null>> | undefined;
+    data?: Readonly<Record<string, string | number | boolean>> | undefined;
     /** When it happened; the write's own instant when omitted. */
     at?: Date | undefined;
 }

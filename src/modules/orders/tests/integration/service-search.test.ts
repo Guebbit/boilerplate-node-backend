@@ -288,7 +288,7 @@ describe('orderService.search — current (live) image', () => {
         expect(items[0].items[0].current).toEqual({});
     });
 
-    it('resolves null once the product has been hard-deleted', async () => {
+    it('leaves current out once the product has been hard-deleted', async () => {
         const user = await createUser();
         const product = await createProduct({ imageUrl: '/images/doomed.jpg' });
 
@@ -297,7 +297,7 @@ describe('orderService.search — current (live) image', () => {
 
         const { items } = await orderService.search({});
 
-        expect(items[0].items[0].current).toBeNull();
+        expect(items[0].items[0].current).toBeUndefined();
     });
 });
 

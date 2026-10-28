@@ -312,11 +312,22 @@ derives from the contract's paths and mounted twice in `src/app/routes.ts`: befo
 
 ## Empty, `null`, omitted
 
-| On the wire | Means | Legal on |
+`null` is a **write verb**. It travels in a request, never in a response.
+
+| | request (write) | response (read) |
 | --- | --- | --- |
-| omitted | nothing to say about this field | every write |
-| `null` | clear it | PUT and PATCH, where the field's `type` lists `'null'` |
-| `''` | an empty value — **never** "clear" | only a field with no `minLength` (a blank translation) |
+| key absent | nothing to say (POST: default · PATCH: untouched · PUT: cleared if clearable, else 422) | no value |
+| `null` | clear it; PUT/PATCH only, only where `type` lists `'null'`; 422 on a create | **never sent** |
+| `''` | an empty value, never "clear"; only where no `minLength` | only a real empty value (a blank translation), never "none" |
+
+The read half is guarded twice: `tests/cross-cutting/contract-responses-never-null.test.ts` refuses
+a `'null'` type in any response schema, and `tests/support/response-contract.ts` fails any real
+response body that holds a `null` anywhere, free-form objects included (an audit row's `changes`, a
+timeline row's `data`). An unset side of an audit `{ from, to }` is the absent key.
+
+A stored `null` that means something (a product's `backorderLimit`: no cap) is mapped in the
+presenter, so the wire still says "absent". RFC 7396 §1 is why: a `GET` that served `"x": null`,
+written back by a `PATCH`, would delete `x`.
 
 Every optional free-text field in a write body carries `minLength: 1`, so a blank string is a
 422 rather than a stored `''`. Search bodies are reads: an empty filter there is ignored.

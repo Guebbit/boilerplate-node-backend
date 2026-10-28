@@ -1428,6 +1428,7 @@ components:
                 currency:
                     type: string
                     maxLength: 3
+                    minLength: 1
                     description: >-
                         ISO-4217 code of `amount`. Optional; when sent it must equal the payment's
                         own currency, so an amount written in another unit is refused instead of

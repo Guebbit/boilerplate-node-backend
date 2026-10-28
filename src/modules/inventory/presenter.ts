@@ -33,13 +33,22 @@ export const presentInventoryLevel = (
     onHand: level.onHand,
     reserved: level.reserved,
     available: level.available,
-    backorderLimit: level.backorderLimit,
+    ...capOf(level.backorderLimit),
     backordered: level.backordered
 });
 
 /**
+ * The wire form of a stored cap. Storage keeps `null` for "no cap" (and an absent field means 0,
+ * closed), so the mapping happens here: a response never carries `null`, so no cap is the absent key.
+ *
+ * @param backorderLimit - the stored allowance
+ */
+const capOf = (backorderLimit: number | null): { backorderLimit?: number } =>
+    backorderLimit === null ? {} : { backorderLimit };
+
+/**
  * One row of the preorder board. `left` is the room under the cap and exists only while the cap
- * promises something; `null` is the contract's way to say there is no cap, so no number is left.
+ * promises something and there is one: no cap, no number left.
  *
  * @param row - the counters
  * @param facts - what `products` says about this product
@@ -47,16 +56,15 @@ export const presentInventoryLevel = (
 export const presentPreorderLevel = (
     row: PreorderLevelRow,
     { title, releaseDate, sellsAgainstCap }: PreorderProductFacts
-): PreorderLevel => ({
-    ...row,
-    title: title ?? row.productId,
-    ...(releaseDate ? { releaseDate: releaseDate.toISOString() } : {}),
-    ...(sellsAgainstCap
-        ? {
-              left:
-                  row.backorderLimit === null
-                      ? null
-                      : Math.max(0, row.backorderLimit - row.backordered)
-          }
-        : {})
-});
+): PreorderLevel => {
+    const { backorderLimit, ...counters } = row;
+    return {
+        ...counters,
+        ...capOf(backorderLimit),
+        title: title ?? row.productId,
+        ...(releaseDate ? { releaseDate: releaseDate.toISOString() } : {}),
+        ...(sellsAgainstCap && backorderLimit !== null
+            ? { left: Math.max(0, backorderLimit - row.backordered) }
+            : {})
+    };
+};

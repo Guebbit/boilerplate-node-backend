@@ -48,10 +48,11 @@ describe('productSchema — what a product must carry', () => {
         expect(defaultOf(productSchema, 'requiresShipping')).toBe(true);
     });
 
-    it('defaults the text and list fields to empty rather than absent', () => {
+    it('defaults the list fields to empty rather than absent, and the description to none', () => {
         // `categories` and `tags` feed the facet endpoint, which counts array members: `undefined`
         // there is a different code path in every consumer, and one of them will forget it.
-        expect(defaultOf(productSchema, 'description')).toBe('');
+        // A description is the other way round: none is no field, never `''` on the wire.
+        expect(defaultOf(productSchema, 'description')).toBeUndefined();
         expect(defaultOf(productSchema, 'categories')).toEqual([]);
         expect(defaultOf(productSchema, 'tags')).toEqual([]);
     });

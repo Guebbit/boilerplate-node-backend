@@ -135,7 +135,7 @@ components:
                         - `ownOrder` (boolean): `true` when staff acted on an order they placed
                           themselves; absent otherwise. Filter with `GET /audit?ownOrder=`.
                         - `changes` (object): an `*.updated` action's non-personal fields that moved,
-                          `{ <field>: { from, to } }`, `null` meaning unset.
+                          `{ <field>: { from, to } }`; a side that is unset is the absent key, never `null`.
                         - `changedFields` (string[]): an `*.updated` action's free-text and personal
                           fields that moved, by NAME only. The trail is never scrubbed on erasure, so
                           their values never enter it.

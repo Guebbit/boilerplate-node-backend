@@ -340,9 +340,9 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             default: 0,
             min: 0
         },
+        // No default: a product with no description has no field, never `''`.
         description: {
-            type: String,
-            default: ''
+            type: String
         },
         // No default: a product with no image has no field, and the client draws its own
         // placeholder. `imageUrl: null` on an update unsets it.

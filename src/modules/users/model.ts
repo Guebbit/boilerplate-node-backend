@@ -790,6 +790,8 @@ export const applyUserTransform = applySerialization(userSchema, {
         // One `as`: the serialized bag is untyped, and the hold's stored shape is known here.
         const hold = serialized.purchaseHold as Partial<PurchaseHoldRecord> | undefined;
         if (hold) delete hold.setBy;
+        // Stored `null` means unverified; the wire says it by leaving the key out.
+        if (serialized.verifiedAt === null) delete serialized.verifiedAt;
     }
 });
 

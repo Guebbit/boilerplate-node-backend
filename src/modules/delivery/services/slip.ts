@@ -71,8 +71,11 @@ const recordDateMoved = (
             at: now,
             data: {
                 fulfillmentOrderId: String(fulfillmentOrder._id),
-                from: fulfillmentOrder.expectedAt?.toISOString() ?? null,
-                to: next?.toISOString() ?? null
+                // An unset side (no date before, or none now) is the absent key.
+                ...(fulfillmentOrder.expectedAt
+                    ? { from: fulfillmentOrder.expectedAt.toISOString() }
+                    : {}),
+                ...(next ? { to: next.toISOString() } : {})
             }
         },
         session

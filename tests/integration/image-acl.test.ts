@@ -154,6 +154,8 @@ describe('imageUrl is never a client-named path', () => {
                 active: true,
                 purchasable: true,
                 requiresShipping: true,
+                allowBackorder: false,
+                noWithdrawal: false,
                 categories: [],
                 tags: []
             };

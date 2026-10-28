@@ -581,6 +581,9 @@ components:
                     schema:
                         $ref: '#/components/schemas/Problem'
 
+    # `null` is a write verb. In a REQUEST it means "clear this" (PUT/PATCH only, only where `type`
+    # lists 'null'). A RESPONSE never carries it: "no value" is the absent key.
+    # docs/api/write-methods.md#empty-null-omitted
     schemas:
         # ---------- Shared — scalars and the entities more than one module references. ----------
         Page:
@@ -837,7 +840,7 @@ components:
                 # `unverified` and holds no `checkout:Cart` (see `GET /account/abilities`) — so
                 # a client renders this as a banner, never as a wall of its own.
                 verifiedAt:
-                    type: [string, 'null']
+                    type: string
                     format: date-time
                 # Set only by `PUT`/`PATCH /account` requesting a new address, cleared once
                 # `POST /account/email-change/confirm` proves it or `DELETE /account/email-change`

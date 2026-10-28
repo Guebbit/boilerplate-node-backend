@@ -64,7 +64,7 @@ export const presentProduct = (document: ProductDocument): Product => {
         ...(document.sku === undefined ? {} : { sku: document.sku }),
         ...(document.onHand === undefined ? {} : { onHand: document.onHand }),
         ...(document.reserved === undefined ? {} : { reserved: document.reserved }),
-        ...(document.description === undefined ? {} : { description: document.description }),
+        ...(document.description ? { description: document.description } : {}),
         ...(document.active === undefined ? {} : { active: document.active }),
         ...(document.purchasable === undefined ? {} : { purchasable: document.purchasable }),
         ...(document.releaseDate === undefined
