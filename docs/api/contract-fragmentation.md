@@ -17,7 +17,7 @@ choice, not a gap: a versioned, publishable contract artefact is worth building 
 API consumer exists (a second frontend, a mobile client, a partner integration), not before. Until
 then, `sync:frontend` copying the shared files on every change is the cheapest correct thing, and
 `spec-identity` (both repos) and `contracts-bundle-freshness` are what make "lockstep" a checked
-claim rather than a hope. The nightly Schemathesis run fuzzes this repo against its own spec — it
+claim rather than a hope. The fuzz suite (`tests/fuzz/`) fuzzes this repo against its own spec — it
 compares nothing across repos, so it isn't part of that lockstep guarantee.
 
 ## The seven bundles

@@ -10,7 +10,7 @@ name: Order-random (nightly)
 
 on:
     schedule:
-        # 04:30 UTC — after schemathesis.yml (04:00), so the nightlies do not compete for runners.
+        # 04:30 UTC — after fuzz.yml's nightly, so the two do not compete for runners.
         - cron: '30 4 * * *'
     workflow_dispatch:
 

@@ -14,6 +14,9 @@
  * list here instead of failing. A module's contract file asserts a 401 or a 403 only when it
  * checks more than the status (an error `code`, a row left untouched).
  *
+ * `ownership-contract.test.ts` sweeps the other half of the same question: a role that DOES reach
+ * a route, aimed at another customer's row.
+ *
  * `request-contract.test.ts` is this file's mirror image, sweeping request BODIES against the
  * contract instead of AUTHORIZATION.
  *

@@ -56,7 +56,7 @@ jobs:
 
     audit-notify:
         # One issue, updated in place, instead of a channel nobody watches. Shares `notify-failure`
-        # with `mutation.yml` and `schemathesis.yml`. No npm, no install: only the issue API.
+        # with `mutation.yml`. No npm, no install: only the issue API.
         needs: [audit]
         if: always() && contains(needs.*.result, 'failure')
         runs-on: ubuntu-latest
