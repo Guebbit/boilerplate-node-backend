@@ -237,3 +237,22 @@ describe('conditional writes (RFC 9110 §13.1.1)', () => {
         expect(write.headers.etag).not.toBe(read.headers.etag);
     });
 });
+
+describe('a revalidating read answers 304 (RFC 9110 §13.1.2)', () => {
+    // `GET /users` mounts `privateNoCache`; the bundler adds the shared `304` to it, so the
+    // shared response check refuses this status if the spec stops declaring it.
+    it('answers a matching If-None-Match with an empty 304 that keeps the ETag', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const read = await api().get('/users').set('Authorization', bearer);
+        const revalidated = await api()
+            .get('/users')
+            .set('Authorization', bearer)
+            .set('If-None-Match', read.headers.etag);
+
+        expect(read.status).toBe(200);
+        expect(revalidated.status).toBe(304);
+        expect(revalidated.text).toBe('');
+        expect(revalidated.headers.etag).toBe(read.headers.etag);
+    });
+});

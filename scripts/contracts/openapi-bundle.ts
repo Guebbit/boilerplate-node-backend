@@ -7,11 +7,12 @@
  * boundary, never by assuming a neighbour's text is concatenated above.
  *
  * Compiled by `redocly bundle` rather than concatenated, because the comments that matter are in
- * the MODULE files, which are authored, not in the bundle, which nobody reads by hand. Five steps
+ * the MODULE files, which are authored, not in the bundle, which nobody reads by hand. Six steps
  * run after it, on the bundle: {@link withCookieAuth} adds `cookieAuth` to every operation that
  * takes a bearer, with the origin `403` on its unsafe methods; {@link withAppLevelResponses} merges the root's
  * `x-app-level-responses` (429, 500 and 503 for every operation; 400/413/415 for a body-carrying one, and 415 for a body-less write too) into every
- * operation that doesn't already declare its own; {@link withVersionedResources} hangs `ETag`,
+ * operation that doesn't already declare its own; {@link withNotModified} adds the shared `304` to the
+ * per-caller reads that revalidate; {@link withVersionedResources} hangs `ETag`,
  * `If-Match` and 412 on every path marked `x-versioned`; {@link withModuleStamps} tags every operation
  * with the `x-module` its owning fragment names — never hand-written per operation; and
  * {@link withErrorCodes} publishes every fragment's own `x-error-codes` as one collected catalogue.
@@ -295,7 +296,9 @@ const withEtagHeader = (operation: Operation, where: string): void => {
         throw new Error(
             `[openapi] ${where}: an \`x-versioned\` operation needs an inline 200 to hang \`ETag\` on, not a $ref.`
         );
-    Object.assign(ok, { headers: { ETag: { $ref: '#/components/headers/ETag' } } });
+    // Merged, not replaced: the operation may already declare its own headers (`Cache-Control`).
+    const own = (ok as { headers?: Record<string, unknown> }).headers;
+    Object.assign(ok, { headers: { ...own, ETag: { $ref: '#/components/headers/ETag' } } });
 };
 
 /**
@@ -348,6 +351,66 @@ export const withVersionedResources = (bundled: string): string => {
 
     // `lineWidth: 0` turns off line folding, so long descriptions stay one line and diffs stay small.
     // https://eemeli.org/yaml/#tostring-options
+    return stringifyYaml(parsed, { lineWidth: 0 });
+};
+
+/** What the route-listing process prints before its JSON; see `scripts/contracts/private-no-cache-routes.ts`. */
+const ROUTES_MARKER = 'PRIVATE_NO_CACHE_ROUTES=';
+
+/**
+ * The OpenAPI paths of every GET that mounts `privateNoCache`, read back from the mounted routers.
+ *
+ * A child process, because the answer lives in the running app's router stack and the bundler
+ * must not import the app. `NODE_CLUSTER_WORKERS=1` keeps the app's start-up logger quiet; the
+ * marker finds the result among whatever else reaches stdout.
+ *
+ * @throws Error if the process fails or prints no result
+ */
+export const privateNoCacheReads = (): string[] => {
+    const output = execFileSync(
+        process.execPath,
+        [
+            path.join(REPO_ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'),
+            path.join(REPO_ROOT, 'scripts', 'contracts', 'private-no-cache-routes.ts')
+        ],
+        {
+            cwd: REPO_ROOT,
+            env: { ...process.env, NODE_CLUSTER_WORKERS: '1' },
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe']
+        }
+    );
+    const line = output.split('\n').find((each) => each.startsWith(ROUTES_MARKER));
+    if (line === undefined)
+        throw new Error('[openapi] the privateNoCache route listing printed no result.');
+    return JSON.parse(line.slice(ROUTES_MARKER.length)) as string[]; // we wrote this JSON ourselves
+};
+
+/**
+ * Adds the shared `304` to each listed GET that the bundle documents.
+ *
+ * These reads answer `304` through Express's own ETag check, and no fragment says so: the bundler
+ * adds it, from the routers, rather than 20-odd fragments repeating it. A listed path no fragment
+ * documents (an example module that ships no contract) is skipped.
+ *
+ * @param bundled - the bundled OpenAPI document, as YAML text
+ * @param reads - OpenAPI paths of the `privateNoCache` GETs, from {@link privateNoCacheReads}
+ * @throws Error if the bundled document does not parse to an object
+ */
+export const withNotModified = (bundled: string, reads: readonly string[]): string => {
+    const parsed: unknown = parseYaml(bundled);
+    if (!isBundledDocument(parsed))
+        throw new Error('[openapi] the bundled document did not parse to an object.');
+
+    for (const route of reads) {
+        const operation = parsed.paths?.[route]?.get;
+        if (!isOperation(operation)) continue;
+        operation.responses = {
+            ...operation.responses,
+            '304': { $ref: '#/components/responses/NotModified' }
+        };
+    }
+
     return stringifyYaml(parsed, { lineWidth: 0 });
 };
 
@@ -578,8 +641,11 @@ const compile = (): string => {
             withErrorCodes(
                 withModuleStamps(
                     withVersionedResources(
-                        withAppLevelResponses(
-                            withCookieAuth(withBrowserEvents(readFileSync(temporary, 'utf8')))
+                        withNotModified(
+                            withAppLevelResponses(
+                                withCookieAuth(withBrowserEvents(readFileSync(temporary, 'utf8')))
+                            ),
+                            privateNoCacheReads()
                         )
                     ),
                     moduleOfPath()

@@ -457,10 +457,14 @@ anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` 
   `createDeleteController` open the precondition for the request; `repository.save` and
   `repository.deleteOne` meet it. A module's service never sees a header.
 - **The body is validated first.** A 422 for a body the schema refuses wins over a 412.
-- **Only a versioned read can answer `304`.** The tag covers the row's own edits, not what is
-  derived from config (prices, the caller's language), so it validates *writes* only.
-  `If-None-Match` is ignored on these reads. The `privateNoCache` reads (`orders`, `users`,
-  `tickets`) are the exception: Express's own ETag check answers them `304` on no change.
+- **The tag of a versioned read validates writes, not reads.** It covers the row's own edits, not
+  what is derived from config (prices, the caller's language), so the contract does not offer a
+  `304` from it.
+- **The `privateNoCache` reads are a separate case.** `orders`, `users`, `tickets`, `payments`,
+  `returns` and `stats` let the browser keep a private copy and revalidate it, and Express's own
+  ETag check answers `If-None-Match` with `304` on no change. The bundler declares that answer
+  (the shared `NotModified`: no body, an `ETag` header) on every such `GET`, so no fragment
+  repeats it.
 - **Browsers** may send `If-Match` and read `ETag` cross-origin: both are in the CORS allow and
   expose lists.
 

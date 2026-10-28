@@ -472,6 +472,18 @@ components:
     responses:
         NoContent:
             description: Done. There is nothing to say, so the body is empty (RFC 9110 section 15.3.5).
+        NotModified:
+            description: >-
+                The caller's `If-None-Match` still matches: nothing changed since the copy it holds,
+                so the body is empty and that copy is still good (RFC 9110 section 15.4.5). Only
+                the per-caller reads that revalidate on every use answer it — the bundler adds it
+                to each of them; an operation never declares it by hand.
+            headers:
+                ETag:
+                    required: true
+                    description: The entity-tag the request matched (RFC 9110 section 8.8.3).
+                    schema:
+                        type: string
         BadRequest:
             description: >-
                 The request could not be understood or authenticated as what it claims to be —

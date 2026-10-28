@@ -105,6 +105,10 @@ paths:
             responses:
                 '200':
                     description: Locale capabilities
+                    headers:
+                        Cache-Control:
+                            description: '`public, no-cache`: the shared cache keeps it, a browser revalidates first. A caller who sees more than the public answer gets `private, no-cache`.'
+                            schema: { type: string }
                     content:
                         application/json:
                             schema:
@@ -164,6 +168,10 @@ paths:
             responses:
                 '200':
                     description: The configured apps
+                    headers:
+                        Cache-Control:
+                            description: '`public, no-cache`: the shared cache keeps it, a browser revalidates first.'
+                            schema: { type: string }
                     content:
                         application/json:
                             schema:
@@ -194,6 +202,10 @@ paths:
             responses:
                 '200':
                     description: Dictionary for the requested locale
+                    headers:
+                        Cache-Control:
+                            description: '`public, no-cache`: the shared cache keeps it, a browser revalidates first.'
+                            schema: { type: string }
                     content:
                         application/json:
                             schema:
@@ -224,6 +236,10 @@ paths:
             responses:
                 '200':
                     description: The language
+                    headers:
+                        Cache-Control:
+                            description: '`public, no-cache`: the shared cache keeps it, a browser revalidates first. A caller who sees more than the public answer gets `private, no-cache`.'
+                            schema: { type: string }
                     content:
                         application/json:
                             schema:
@@ -426,6 +442,10 @@ paths:
             responses:
                 '200':
                     description: The built dictionary for the requested language
+                    headers:
+                        Cache-Control:
+                            description: '`public, no-cache`: the shared cache keeps it, a browser revalidates first. A caller who sees more than the public answer gets `private, no-cache`.'
+                            schema: { type: string }
                     content:
                         application/json:
                             schema:
