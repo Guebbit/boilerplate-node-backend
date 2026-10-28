@@ -13,7 +13,7 @@ import type { SitemapItemLoose } from 'sitemap';
 import { siteConfig } from '@infrastructure/http/config';
 import { getDefaultLocale } from '@infrastructure/i18n/catalog';
 import { listServedLocales } from '@infrastructure/i18n/served';
-import { productService } from '@modules/products';
+import { productPagePath, productService } from '@modules/products';
 import { STATIC_PAGES, sitemapConfig } from './config';
 
 /** The languages a page is offered in, and the one `x-default` points at. */
@@ -114,13 +114,8 @@ export const sitemapService = {
         const products = await productService.listPublicPage(page, size);
         if (products.length === 0) return null;
 
-        const template = sitemapConfig().NODE_FRONTEND_LINK_PRODUCT;
         return products.flatMap(({ id, updatedAt }) =>
-            entriesFor(
-                languages,
-                template.replaceAll('{id}', () => encodeURIComponent(id)),
-                updatedAt
-            )
+            entriesFor(languages, productPagePath(id), updatedAt)
         );
     }
 };

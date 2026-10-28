@@ -83,10 +83,11 @@ submits"). The line is written by the frontend only when indexing is switched on
 
 ## Configuration
 
-| Variable                     | Default         | Meaning                                                       |
-| ---------------------------- | --------------- | ------------------------------------------------------------- |
-| `NODE_FRONTEND_LINK_PRODUCT` | `products/{id}` | path of a product page under the language                     |
-| `NODE_SITEMAP_URL_LIMIT`     | `50000`         | most `<url>` entries in one file; lowered only to see a split |
+| Variable                 | Default | Meaning                                                       |
+| ------------------------ | ------- | ------------------------------------------------------------- |
+| `NODE_SITEMAP_URL_LIMIT` | `50000` | most `<url>` entries in one file; lowered only to see a split |
+
+A product page's path is `products`' `NODE_FRONTEND_LINK_PRODUCT` (`productPagePath`).
 
 ## Libraries
 

@@ -1,6 +1,6 @@
 /**
  * @module
- * The two VAT rates a deployment charges, read per call rather than captured at import — the
+ * The two VAT rates a deployment charges and the address of a product page, read per call rather than captured at import — the
  * pattern `inventory/config.ts` sets, so a test can vary a rate per case. A rate change reaches
  * production with a restart, like every environment variable.
  *
@@ -10,7 +10,8 @@
  */
 
 import { defineConfig } from '@infrastructure/config/define';
-import { decimal } from '@infrastructure/config/fields';
+import { decimal, text } from '@infrastructure/config/fields';
+import { FRONTEND_LINK_RULES } from '@infrastructure/http/frontend-link';
 import { stockConfig } from '@infrastructure/runtime/config';
 
 /**
@@ -34,7 +35,9 @@ export const productsConfig = defineConfig({
             min: 0,
             lessThan: 1,
             required: { minLength: 1 }
-        })
+        }),
+        // `{id}` is replaced by the product's id, like every `NODE_FRONTEND_LINK_*` template.
+        NODE_FRONTEND_LINK_PRODUCT: text({ default: FRONTEND_LINK_RULES.links.product })
     }
 });
 
@@ -59,3 +62,14 @@ export const vatRateReduced = (): number => productsConfig().NODE_VAT_RATE_REDUC
  * @returns the configured threshold, in units
  */
 export const lowStockThreshold = (): number => stockConfig().NODE_LOW_STOCK_THRESHOLD;
+
+/**
+ * The path of a product's page on the paired frontend, under the language segment: the
+ * `NODE_FRONTEND_LINK_PRODUCT` template with the id filled in and URL-encoded. The sitemap and the
+ * back-in-stock mail both point at it, so one setting moves both.
+ * @param id - the product's id
+ * @returns the path, e.g. `products/65f0`
+ */
+export const productPagePath = (id: string): string =>
+    // A function replacer, so a `$&` in an id is text, not a replacement pattern.
+    productsConfig().NODE_FRONTEND_LINK_PRODUCT.replaceAll('{id}', () => encodeURIComponent(id));

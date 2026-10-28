@@ -20,7 +20,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { announceInTransaction } from '@kernel/outbox';
-import { isBuyable, productService } from '@modules/products';
+import { isBuyable, productPagePath, productService } from '@modules/products';
 import { userService, isAuthenticatable } from '@modules/users';
 import { ERROR_CODES } from '@api/error-codes';
 import type { StockAlertsResponse } from '@types';
@@ -159,7 +159,7 @@ const mailBuyer = (
             const locale = user.locale ?? getDefaultLocale();
             const mail = backInStockEmail(locale, user.username, {
                 title: titleFor(titles, locale),
-                productUrl: frontendLink('products/{id}', locale, { id: productId })
+                productUrl: frontendLink(productPagePath(productId), locale)
             });
             // eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects (it logs its own failure)
             void enqueueEmail({ to: user.email, subject: mail.subject }, mail.template, mail.data);

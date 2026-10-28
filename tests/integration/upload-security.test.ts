@@ -106,13 +106,18 @@ describe('upload content validation', () => {
 
     /**
      * The other direction: a genuine image whose declared type is wrong is refused by
-     * `fileFilter` before it is written. The request still succeeds — a dropped file is not an
-     * error, by multer's contract — so what matters is that nothing was stored.
+     * `fileFilter` before it is written, and the sender is told: the 415 every undeclared
+     * media type gets, listing what is accepted.
      */
-    it('drops a real image declared as a non-image, without storing it', async () => {
+    it('answers 415 with the accepted types for a real image declared as a non-image', async () => {
         const response = await uploadAvatarWith(PNG_BYTES, 'avatar.png', 'application/pdf');
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(415);
+        expect(response.body.errors[0].code).toBe('UNSUPPORTED_MEDIA_TYPE');
+        expect(response.body.errors[0].details.accepted).toEqual(
+            expect.arrayContaining(['image/png', 'image/jpeg'])
+        );
+        expect(response.body.errors[0].details.accepted).not.toContain('application/pdf');
         expect(uploadedFiles()).toEqual([]);
     });
 
