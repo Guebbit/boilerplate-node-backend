@@ -10,7 +10,8 @@ import { inventoryService } from '@modules/inventory';
 import { productService } from '@modules/products';
 import type { ProductDocument } from '@modules/products';
 import type { Lean } from '@infrastructure/persistence/create-repository';
-import { lineAvailability, type LineAvailability } from '../domain';
+import type { LineAvailability } from '@types';
+import { lineAvailability } from '../domain';
 import { availabilityProductOf, backorderIdsOf, preorderIdsOf } from './preorder';
 
 /** One product's shelf: the document (`null` = hard-deleted) and the units for sale. */

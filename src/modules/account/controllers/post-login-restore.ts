@@ -13,7 +13,6 @@ import { accountService } from '../services';
 import { issueSession } from '../session/session';
 import { withAccountView } from '../session/account-view';
 import { rememberDevice } from '../session/device-cookie';
-import { toRememberTier } from '../session/config';
 import { recordLoginSuccess } from '../session/login-observability';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
@@ -52,7 +51,7 @@ export const postLoginRestore = (
             const userId = user._id.toString();
 
             return issueSession(request, response, userId, {
-                remember: toRememberTier(parsed.remember),
+                remember: parsed.remember,
                 amr,
                 provedAt,
                 transport: parsed.transport

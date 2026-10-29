@@ -14,7 +14,6 @@ import { accountService, twoFactorService } from '../services';
 import { issueSession } from '../session/session';
 import { withAccountView } from '../session/account-view';
 import { rememberDevice } from '../session/device-cookie';
-import { toRememberTier } from '../session/config';
 import { recordLoginSuccess } from '../session/login-observability';
 import { authTwoFactorChallengeTotal } from '../metrics';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
@@ -78,7 +77,7 @@ export const postLoginTwoFactor = (
 
             const proofs = withProofs(amr, AMR.otp);
             return issueSession(request, response, userId, {
-                remember: toRememberTier(remember),
+                remember,
                 amr: proofs,
                 provedAt,
                 transport

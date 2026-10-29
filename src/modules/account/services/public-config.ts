@@ -4,13 +4,8 @@
  * OAuth providers it holds credentials for. Public and constant for the life of the process.
  */
 
-import type { SessionConfig } from '@types';
-import {
-    getExpiryTime,
-    getSessionMode,
-    getStaffLifetimeSeconds,
-    RefreshTokenExpiryTime
-} from '../session/config';
+import { RememberTier, type SessionConfig } from '@types';
+import { getExpiryTime, getSessionMode, getStaffLifetimeSeconds } from '../session/config';
 import { enabledProviders } from '../oauth/providers';
 
 /**
@@ -22,9 +17,9 @@ export const sessionConfig = (): SessionConfig => {
     return {
         mode: getSessionMode(),
         lifetimeSeconds: {
-            short: getExpiryTime(RefreshTokenExpiryTime.SHORT),
-            medium: getExpiryTime(RefreshTokenExpiryTime.MEDIUM),
-            long: getExpiryTime(RefreshTokenExpiryTime.LONG)
+            short: getExpiryTime(RememberTier.short),
+            medium: getExpiryTime(RememberTier.medium),
+            long: getExpiryTime(RememberTier.long)
         },
         // 0 switches the cap off: nothing to state.
         ...(staffLifetimeSeconds > 0 && { staffLifetimeSeconds })

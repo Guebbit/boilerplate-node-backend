@@ -27,7 +27,7 @@ import {
     getLocaleContext,
     localeCandidatesFor
 } from '@infrastructure/i18n';
-import type { Caller } from '@types';
+import type { Caller, TranslationOrigin } from '@types';
 import { carryVersion } from '@infrastructure/persistence/versioning';
 
 /**
@@ -51,7 +51,7 @@ export type TranslationFieldChanges = Record<string, string | null>;
  */
 export type TranslationBatch = Record<
     string,
-    { fields: TranslationFieldChanges; origin?: 'machine' | 'human' } | null
+    { fields: TranslationFieldChanges; origin?: TranslationOrigin } | null
 >;
 
 /**

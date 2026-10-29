@@ -6,6 +6,7 @@
  * `../integration/session-modes.test.ts`'s, against a real store and over HTTP.
  */
 
+import { RememberTier } from '@types';
 import { Types } from 'mongoose';
 import { asStub } from '@tests/stub';
 import { setEnvironment } from '@tests/environment';
@@ -70,7 +71,6 @@ import { userService } from '@modules/users';
 import { accessService } from '@modules/access';
 import { hashToken } from '@infrastructure/security/hash-token';
 import { cookieSet, recordingResponse, requestWith } from '../strategy-doubles';
-import { RefreshTokenExpiryTime } from '@modules/account/session/config';
 
 /** The account every case signs in. */
 const USER_ID = '507f1f77bcf86cd799439011';
@@ -373,7 +373,7 @@ describe('issue', () => {
         await cookieStrategy.issue(requestWith(), response, USER_ID, {
             amr: ['pwd'],
             provedAt: Date.now(),
-            remember: RefreshTokenExpiryTime.LONG
+            remember: RememberTier.long
         });
 
         const row = insertedRow();
@@ -431,7 +431,7 @@ describe('snapshot', () => {
         await expect(
             cookieStrategy.snapshot(requestWith({ cookie: SOME_ID }), USER_ID)
         ).resolves.toEqual({
-            remember: RefreshTokenExpiryTime.MEDIUM,
+            remember: RememberTier.medium,
             familyId: row.familyId,
             startedAt: row.startedAt,
             expiresAt: row.expiresAt,
@@ -462,7 +462,7 @@ describe('reissue', () => {
         await cookieStrategy.reissue(requestWith({ cookie: SOME_ID }), response, USER_ID, {
             amr: ['pwd'],
             snapshot: {
-                remember: RefreshTokenExpiryTime.LONG,
+                remember: RememberTier.long,
                 familyId: kept.familyId,
                 startedAt: kept.startedAt,
                 expiresAt: kept.expiresAt

@@ -19,26 +19,8 @@ import {
 import type { Environment } from '@infrastructure/config/store';
 import { siteConfig } from '@infrastructure/http/config';
 import type { VersionedKey } from '@infrastructure/security/versioned-secret';
+import type { RememberTier } from '@types';
 import { SESSION_MODES, type SessionMode } from '../session-mode';
-
-/** The "remember me" tiers a refresh token may be issued under — see the table in the doc above. */
-export enum RefreshTokenExpiryTime {
-    SHORT = 'short',
-    MEDIUM = 'medium',
-    LONG = 'long'
-}
-
-/**
- * Narrows the contract's wire literal (`'short' | 'medium' | 'long'`) to the enum the session
- * code speaks. The generated request types carry plain literals, which a string enum won't accept.
- *
- * @param wire - the `remember` field of a request body, already schema-validated
- * @returns the matching tier, `undefined` when the box was unticked
- */
-export const toRememberTier = (
-    wire?: `${RefreshTokenExpiryTime}`
-): RefreshTokenExpiryTime | undefined =>
-    Object.values(RefreshTokenExpiryTime).find((tier) => tier === wire);
 
 /**
  * Whether the environment selects `cookie` mode — what a `jwt`-only variable's presence rule asks
@@ -131,12 +113,12 @@ export const sessionConfig = defineConfig({
               ]
 });
 
-/** Each tier's variable. */
+/** Each tier's variable. Complete by construction: a tier the contract adds is a compile error. */
 const TOKEN_EXPIRY = {
-    [RefreshTokenExpiryTime.SHORT]: 'NODE_SESSION_TIME_SHORT',
-    [RefreshTokenExpiryTime.MEDIUM]: 'NODE_SESSION_TIME_MEDIUM',
-    [RefreshTokenExpiryTime.LONG]: 'NODE_SESSION_TIME_LONG'
-} as const satisfies Record<RefreshTokenExpiryTime, string>;
+    short: 'NODE_SESSION_TIME_SHORT',
+    medium: 'NODE_SESSION_TIME_MEDIUM',
+    long: 'NODE_SESSION_TIME_LONG'
+} as const satisfies Record<RememberTier, string>;
 
 /**
  * Which session mode this deployment runs — `jwt` unless `NODE_SESSION_MODE` says `cookie`.
@@ -156,8 +138,8 @@ export const getSessionMode = (): SessionMode => sessionConfig().NODE_SESSION_MO
  * @param remember - the ticked tier, absent for a browser-session login
  * @returns seconds as integer, the tier's default if the env var is unset
  */
-export const getExpiryTime = (remember?: RefreshTokenExpiryTime) =>
-    sessionConfig()[TOKEN_EXPIRY[remember ?? RefreshTokenExpiryTime.SHORT]];
+export const getExpiryTime = (remember?: RememberTier) =>
+    sessionConfig()[TOKEN_EXPIRY[remember ?? 'short']];
 
 /**
  * Millisecond wrapper around {@link getExpiryTime}.
@@ -165,7 +147,7 @@ export const getExpiryTime = (remember?: RefreshTokenExpiryTime) =>
  * @param remember - the ticked tier, absent for a browser-session login
  * @returns expiry in ms
  */
-export const getExpiryTimeMilliseconds = (remember?: RefreshTokenExpiryTime) =>
+export const getExpiryTimeMilliseconds = (remember?: RememberTier) =>
     getExpiryTime(remember) * 1000;
 
 /**
@@ -199,7 +181,7 @@ export const getAccessExpiryTime = () => sessionConfig().NODE_TOKEN_ACCESS_TIME;
  * @param remember - the ticked tier, absent when the box was unticked
  * @returns milliseconds when the cookie must persist, otherwise `undefined` (no `Max-Age`)
  */
-export const getCookieMaxAgeMilliseconds = (remember?: RefreshTokenExpiryTime) =>
+export const getCookieMaxAgeMilliseconds = (remember?: RememberTier) =>
     remember ? getExpiryTimeMilliseconds(remember) : undefined;
 
 /**

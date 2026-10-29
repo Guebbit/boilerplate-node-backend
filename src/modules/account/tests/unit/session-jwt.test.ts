@@ -568,7 +568,7 @@ describe('startSession', () => {
         // disagree about when a session ends.
         mintable();
 
-        const token = await startSession(USER_ID, ['pwd'], 'long' as never);
+        const token = await startSession(USER_ID, ['pwd'], 'long');
         const { iat, exp } = decodeJwt(token) as { iat: number; exp: number };
         const [row] = mockedSessions.insert.mock.calls[0] as [{ startedAt: Date; expiresAt: Date }];
 
@@ -591,7 +591,7 @@ describe('startSession', () => {
     it('stamps the ticked tier as a claim, and stamps none for a browser-session login', async () => {
         mintable();
 
-        const remembered = decodeJwt(await startSession(USER_ID, ['pwd'], 'long' as never));
+        const remembered = decodeJwt(await startSession(USER_ID, ['pwd'], 'long'));
         const session = decodeJwt(await startSession(USER_ID, ['pwd']));
 
         expect(remembered).toMatchObject({ remember: 'long' });

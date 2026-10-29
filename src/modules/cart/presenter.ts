@@ -6,8 +6,8 @@
  */
 
 import { toMinorUnits } from '@domain-primitives/money';
-import type { CartResponse, CartShipping } from '@types';
-import { isBuyable, type LineAvailability } from './domain';
+import type { CartResponse, CartShipping, LineAvailability } from '@types';
+import { isBuyable } from './domain';
 
 /** The cart as `openapi.yaml` declares it: `CartResponse`, built rather than serialized. */
 export type CartView = CartResponse;

@@ -8,13 +8,12 @@
  * never `undefined` (the boot gate refuses an unset one outside test).
  */
 
+import { RememberTier } from '@types';
 import {
-    RefreshTokenExpiryTime,
     getExpiryTime,
     getExpiryTimeMilliseconds,
     getAccessExpiryTime,
     getCookieMaxAgeMilliseconds,
-    toRememberTier,
     getAccessTokenRing,
     getRefreshTokenRing,
     getSessionMode,
@@ -49,9 +48,9 @@ describe('getExpiryTime', () => {
         setEnvironment({ NODE_SESSION_TIME_MEDIUM: '86400' });
         setEnvironment({ NODE_SESSION_TIME_LONG: '2592000' });
 
-        expect(getExpiryTime(RefreshTokenExpiryTime.SHORT)).toBe(3600);
-        expect(getExpiryTime(RefreshTokenExpiryTime.MEDIUM)).toBe(86_400);
-        expect(getExpiryTime(RefreshTokenExpiryTime.LONG)).toBe(2_592_000);
+        expect(getExpiryTime(RememberTier.short)).toBe(3600);
+        expect(getExpiryTime(RememberTier.medium)).toBe(86_400);
+        expect(getExpiryTime(RememberTier.long)).toBe(2_592_000);
     });
 
     it('uses the short tier when no tier is given (a browser-session login)', () => {
@@ -65,7 +64,7 @@ describe('getExpiryTime', () => {
 
     it('falls back to the tier default when the variable is unset', () => {
         expect(getExpiryTime()).toBe(86_400);
-        expect(getExpiryTime(RefreshTokenExpiryTime.LONG)).toBe(2_592_000);
+        expect(getExpiryTime(RememberTier.long)).toBe(2_592_000);
     });
 
     it('falls back for an empty variable rather than returning NaN', () => {
@@ -87,15 +86,15 @@ describe('getExpiryTimeMilliseconds', () => {
     it('is the seconds value scaled by exactly 1000', () => {
         setEnvironment({ NODE_SESSION_TIME_MEDIUM: '86400' });
 
-        expect(getExpiryTimeMilliseconds(RefreshTokenExpiryTime.MEDIUM)).toBe(86_400_000);
+        expect(getExpiryTimeMilliseconds(RememberTier.medium)).toBe(86_400_000);
     });
 
     it('honours the same tier routing as getExpiryTime', () => {
         setEnvironment({ NODE_SESSION_TIME_SHORT: '60' });
         setEnvironment({ NODE_SESSION_TIME_MEDIUM: '120' });
 
-        expect(getExpiryTimeMilliseconds(RefreshTokenExpiryTime.SHORT)).toBe(60_000);
-        expect(getExpiryTimeMilliseconds(RefreshTokenExpiryTime.MEDIUM)).toBe(120_000);
+        expect(getExpiryTimeMilliseconds(RememberTier.short)).toBe(60_000);
+        expect(getExpiryTimeMilliseconds(RememberTier.medium)).toBe(120_000);
         expect(getExpiryTimeMilliseconds()).toBe(60_000);
     });
 
@@ -162,23 +161,11 @@ describe('getCookieMaxAgeMilliseconds', () => {
     it('is the tier in milliseconds when a tier was ticked', () => {
         setEnvironment({ NODE_SESSION_TIME_MEDIUM: '86400' });
 
-        expect(getCookieMaxAgeMilliseconds(RefreshTokenExpiryTime.MEDIUM)).toBe(86_400_000);
+        expect(getCookieMaxAgeMilliseconds(RememberTier.medium)).toBe(86_400_000);
     });
 
     it('is undefined (a browser-session cookie) when nothing was ticked', () => {
         expect(getCookieMaxAgeMilliseconds()).toBeUndefined();
-    });
-});
-
-describe('toRememberTier', () => {
-    it('maps each wire literal to its enum member', () => {
-        expect(toRememberTier('short')).toBe(RefreshTokenExpiryTime.SHORT);
-        expect(toRememberTier('medium')).toBe(RefreshTokenExpiryTime.MEDIUM);
-        expect(toRememberTier('long')).toBe(RefreshTokenExpiryTime.LONG);
-    });
-
-    it('is undefined when the field is omitted', () => {
-        expect(toRememberTier()).toBeUndefined();
     });
 });
 

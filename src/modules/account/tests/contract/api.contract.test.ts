@@ -7,6 +7,7 @@
  * token, someone else's session. Listing assertions check IDs, never just lengths.
  */
 
+import { RememberTier } from '@types';
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs, bearerForCookie, loginBearer } from '@tests/http';
@@ -28,14 +29,12 @@ import {
 import { WEAK_PASSWORD } from '@modules/users/tests/factories';
 import { loginWithCookie } from './support';
 import { getSessionMode } from '../../session/config';
-import {
-    getExpiryTime,
-    getAccessExpiryTime,
-    RefreshTokenExpiryTime
-} from '@modules/account/session/config';
+
+import { getExpiryTime, getAccessExpiryTime } from '@modules/account/session/config';
 import { MISSING_ID } from '@tests/ids';
 import { freezeDate, advanceDate } from '@tests/clock';
 import { reauthWindowSeconds } from '@kernel/config';
+
 import { plantToken, tokenRowOf } from '../factories';
 import { sessionRepository } from '../../repository';
 import { emptyFileSandbox } from '@tests/file-sandbox';
@@ -132,7 +131,7 @@ describe('POST /account/login — remember me', () => {
         expect(response.status).toBe(200);
         // Read through the same accessor the app signs with, not the raw variable: the tiers carry
         // code-side defaults, so an environment that never sets them still has a right answer.
-        const expected = getExpiryTime(RefreshTokenExpiryTime.MEDIUM);
+        const expected = getExpiryTime(RememberTier.medium);
         // `jwt` counts the tier exactly; `cookie` counts what is left of the row, which a second
         // may already have eaten into.
         expect(cookieMaxAge(response, '__Host-session')).toBeGreaterThan(expected - 5);
@@ -245,7 +244,7 @@ describe('the username ceiling', () => {
 });
 
 describe('the "remember me" choice survives every re-mint', () => {
-    const MEDIUM = getExpiryTime(RefreshTokenExpiryTime.MEDIUM);
+    const MEDIUM = getExpiryTime(RememberTier.medium);
 
     it('signup gets browser-session cookies', async () => {
         const response = await api().post('/account/signup').send({
@@ -308,7 +307,7 @@ describe('the "remember me" choice survives every re-mint', () => {
 
         const value = /__Host-session=([^;]+)/.exec(jwtCookie)![1];
         const { iat, exp } = decodeJwt(value) as { iat: number; exp: number };
-        expect(exp - iat).toBe(getExpiryTime(RefreshTokenExpiryTime.SHORT));
+        expect(exp - iat).toBe(getExpiryTime(RememberTier.short));
     });
 
     it('reauth keeps a remembered login at its tier', async () => {

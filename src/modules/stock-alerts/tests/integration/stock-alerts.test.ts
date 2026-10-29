@@ -23,6 +23,7 @@ import { STOCK_ALERT_SENT } from '../../events';
 import { enabledModules } from '../../../../modules';
 import { testCallerContext } from '@tests/callers';
 import { userRepository } from '@modules/users/tests/factories';
+import { withEnvironmentOverrides } from '@tests/environment';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -188,6 +189,21 @@ describe('the signal', () => {
         expect(mockEnqueueEmail.mock.calls[0]?.[1]).toBe('stock-alerts.back-in-stock');
         expect(await sentEvents()).toMatchObject([{ productId }]);
         expect(await stockAlertModel.countDocuments()).toBe(0);
+    });
+
+    it('links the mail to the product page the deployment configured', async () => {
+        const { bearer } = await shopper();
+        const productId = await soldOut();
+        await api().post('/stock-alerts').set('Authorization', bearer).send({ productId });
+
+        await withEnvironmentOverrides({ NODE_FRONTEND_LINK_PRODUCT: 'shop/item-{id}' }, () =>
+            inventoryService
+                .receive(productId, 3, undefined, testCallerContext)
+                .then(() => settleOutboxNudges())
+        );
+
+        const data = mockEnqueueEmail.mock.calls[0]?.[2] as { linkUrl: string } | undefined;
+        expect(data?.linkUrl).toMatch(new RegExp(`/shop/item-${productId}$`));
     });
 
     it('answers the request of a locked account without mailing it', async () => {

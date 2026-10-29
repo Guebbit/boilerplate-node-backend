@@ -7,6 +7,8 @@
  * `publicEvents`; the `fulfillment_order.*` events are internal.
  */
 
+import type { FulfillmentHeldParamsNotice, ShipmentLostReason } from '@types';
+
 /** What a shipment carries, per product — the lines of a `shipment.*` payload. */
 export interface ShipmentEventLine {
     productId: string;
@@ -33,7 +35,7 @@ export interface ShipmentLostOwedLine {
  */
 export interface ShipmentLostPayload extends ShipmentEventPayload {
     /** Why the parcel will not arrive. */
-    reason: 'lost' | 'damaged';
+    reason: ShipmentLostReason;
     /** The buyer; absent once the account was erased, so there is no inbox to write to. */
     userId?: string;
     /** The sentence staff wrote for the buyer, if any. */
@@ -86,7 +88,7 @@ export interface FulfillmentOrderHoldNoticed {
     /** The buyer; absent once the account was erased, so there is no inbox to write to. */
     userId?: string;
     /** `check_address` when the address needs a look, else `delayed`. */
-    notice: 'check_address' | 'delayed';
+    notice: FulfillmentHeldParamsNotice;
     /** What staff wrote for the buyer, if anything. */
     message?: string;
 }

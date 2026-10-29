@@ -5,11 +5,11 @@
  * emitted here rather than in the service — see the note below on why.
  */
 
+import { RememberTier } from '@types';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { isRestorable } from '@modules/users';
 import { accountService, twoFactorService } from '../services';
-import { RefreshTokenExpiryTime } from '../session/config';
 import { SESSION_TRANSPORTS } from '../session/strategy';
 import { issueSession } from '../session/session';
 import { withAccountView } from '../session/account-view';
@@ -23,7 +23,7 @@ import { AMR } from '../domain/session-proof';
 
 /** The "remember me" tiers the contract declares, checked against the enum the cookies use. */
 const rememberSchema = z.object({
-    remember: z.enum(RefreshTokenExpiryTime).optional(),
+    remember: z.enum(RememberTier).optional(),
     transport: z.enum(SESSION_TRANSPORTS).optional()
 });
 

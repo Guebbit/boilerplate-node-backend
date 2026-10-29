@@ -10,6 +10,7 @@
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
+import type { FulfillmentHeldParamsNotice, ShipmentLostReason } from '@types';
 import { shopTimezone } from '@modules/shop';
 
 /** A line of a shipment, as the email lists it. */
@@ -47,7 +48,7 @@ export interface DeliveredEmailInput {
 /** What the lost-parcel email says. */
 export interface LostEmailInput {
     /** Lost by the carrier, or damaged in transit. */
-    reason: 'lost' | 'damaged';
+    reason: ShipmentLostReason;
     /** What the parcel carried. */
     lines: readonly EmailLine[];
     /** The units the shelf could not cover again; empty when everything ships again from the shelf. */
@@ -217,7 +218,7 @@ export const shipmentLostEmail = (
 /** What the hold-notice email says. */
 export interface HoldNoticeEmailInput {
     /** `check_address`: the buyer can fix something; `delayed`: a plain delay. */
-    notice: 'check_address' | 'delayed';
+    notice: FulfillmentHeldParamsNotice;
     /** What staff wrote for the buyer, if anything. */
     message?: string | undefined;
     /** The order page, where the buyer reads the same and acts. */

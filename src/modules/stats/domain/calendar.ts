@@ -6,6 +6,7 @@
  */
 
 import { DAY_MS } from '@domain-primitives/time';
+import type { StatsInterval } from '@types';
 
 /** A calendar day as the shop's wall calendar shows it. `month` is 1-12. */
 export interface CalendarDay {
@@ -13,9 +14,6 @@ export interface CalendarDay {
     month: number;
     day: number;
 }
-
-/** The bucket sizes a report may ask for. */
-export type CalendarInterval = 'day' | 'week' | 'month';
 
 /**
  * A calendar day as a UTC timestamp at midnight — the one representation arithmetic is done in.
@@ -87,7 +85,7 @@ export const inclusiveDays = (from: CalendarDay, to: CalendarDay): number =>
  * @param day - any day
  * @param interval - the bucket size
  */
-export const bucketStart = (day: CalendarDay, interval: CalendarInterval): CalendarDay => {
+export const bucketStart = (day: CalendarDay, interval: StatsInterval): CalendarDay => {
     if (interval === 'day') return day;
     if (interval === 'month') return { ...day, day: 1 };
     // getUTCDay: 0 is Sunday; a Monday-first week puts Sunday last.
@@ -100,7 +98,7 @@ export const bucketStart = (day: CalendarDay, interval: CalendarInterval): Calen
  * @param start - a day {@link bucketStart} returned
  * @param interval - the bucket size
  */
-export const nextBucket = (start: CalendarDay, interval: CalendarInterval): CalendarDay => {
+export const nextBucket = (start: CalendarDay, interval: StatsInterval): CalendarDay => {
     if (interval === 'day') return addDays(start, 1);
     if (interval === 'week') return addDays(start, 7);
     return start.month === 12

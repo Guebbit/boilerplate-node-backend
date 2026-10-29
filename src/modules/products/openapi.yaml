@@ -176,6 +176,10 @@ paths:
             responses:
                 '200':
                     description: Categories and tags with counts
+                    headers:
+                        Cache-Control:
+                            description: '`public, max-age=3600, stale-while-revalidate=60, stale-if-error=300`: the shared cache and the browser may both keep it.'
+                            schema: { type: string }
                     content:
                         application/json:
                             schema:
@@ -207,6 +211,10 @@ paths:
             responses:
                 '200':
                     description: Product
+                    headers:
+                        Cache-Control:
+                            description: '`public, no-cache`: the shared cache keeps it, a browser revalidates first. A caller who sees more than the public answer gets `private, no-cache`.'
+                            schema: { type: string }
                     content:
                         application/json:
                             schema:
