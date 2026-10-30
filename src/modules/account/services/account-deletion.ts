@@ -28,6 +28,7 @@ import {
 } from '../emails';
 import { authAccountDeleteTotal } from '../metrics';
 import { ACCOUNT_RESTORE_TOKEN_TYPE } from '../token-types';
+import { recordCancellation } from './erasure-ledger';
 import { sendAccountMail } from './mail';
 import { revokeFor } from './revocation';
 import { issueToken, redeemLiveToken, refuseLink, removeTokens } from './tokens';
@@ -119,10 +120,12 @@ export const restoreAccount = (
     userService.restoreOwnAccount(user).then((restored) => {
         if (!restored) return false;
 
-        return removeTokens(user.id, [ACCOUNT_RESTORE_TOKEN_TYPE]).then(() => {
-            announceRestored(user, via, context);
-            return true;
-        });
+        return removeTokens(user.id, [ACCOUNT_RESTORE_TOKEN_TYPE])
+            .then(() => recordCancellation(user.id))
+            .then(() => {
+                announceRestored(user, via, context);
+                return true;
+            });
     });
 
 /**
@@ -191,6 +194,7 @@ export const restoreAccountByLink = (
  */
 export const handleRestoredByStaff = (userId: string): Promise<void> =>
     removeTokens(userId, [ACCOUNT_RESTORE_TOKEN_TYPE])
+        .then(() => recordCancellation(userId))
         .then(() => userService.getById(userId))
         .then((user) => {
             // The staff member is in `users`' own audit row; this trail records the cancellation.

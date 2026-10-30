@@ -4,8 +4,8 @@
  * everywhere, and the two-step account deletion. A second service over `users`' record rather
  * than a merged one — `/account` and `/users` are different mounts.
  *
- * Owns:        `accountexports` (one row per account that asked for its data), `sessions` and
- *              `verificationtokens`. The address book lives in `addresses`; the User record stays
+ * Owns:        `accountexports` (one row per account that asked for its data), `sessions`,
+ *              `verificationtokens` and `erasureledgers` (who was erased, and when). The address book lives in `addresses`; the User record stays
  *              with `users`, kept replaceable for a future identity provider.
  * Shares:      the User document with `users` — the repo's one shared kernel, invisible to the
  *              import graph. Both read and write it, so a schema change there is agreed twice.
@@ -45,6 +45,7 @@ import { router } from './routes';
 import { accountRateLimits } from './rate-limits';
 import { setPersonalDataSections } from './services/personal-data-registry';
 import { eraseExports } from './services/export';
+import { recordErasure } from './services/erasure-ledger';
 import { exportSessions, eraseSessionsAndTokens } from './services/sessions';
 import { runExportJob } from './services/export-job';
 import { reencryptTotpSecrets } from './services/reencrypt';
@@ -94,6 +95,16 @@ export default {
             section: 'sessions',
             collect: ({ userId }) => exportSessions(userId),
             erase: ({ userId }, session) => eraseSessionsAndTokens(userId, session)
+        },
+        /*
+         * The erasure ledger: one row per erased account, written INSIDE the erasure transaction
+         * so it exists exactly when the account is gone. Holds no personal data (id and date), so
+         * there is nothing to export: `collect` resolves `undefined`, which omits the section.
+         */
+        {
+            section: 'erasureLedger',
+            collect: () => Promise.resolve(undefined),
+            erase: (subject, session) => recordErasure(subject, session)
         }
     ],
     /*

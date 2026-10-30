@@ -200,15 +200,16 @@ backup system (see [Backups](../tools/backups.md#the-restore-drill)), and `npm r
 ## Scheduled jobs — `scripts/ops/`
 
 One of the two subtrees that **ship in the production image**, whole — see the intro above. These
-run against a live deployment, from the cron container or, for `reencrypt`, by an operator, never
+run against a live deployment, from the cron container or, for `reencrypt` and `ops:reapply-erasures`, by an operator, never
 from a developer's terminal. A developer tool belongs in another folder. Each one
 takes the `scripts/run-script.ts` wrapper, which gives it an exit code, cleanup on the failure
 path, and a readable error.
 
-| File                       | What it is                                                                                                                                                                                                                                                     | Read next                                                             |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `scripts/ops/run-job.ts`   | The one runner for every scheduled job — `npm run job <name>`, e.g. `npm run job reap:orders`. Each job is declared on its module's manifest (`AppModule.jobs`) or in `src/app/jobs.ts`; `npm run regenerate` writes `docker/crontab` from those declarations. | [Scheduled jobs](./ops.md#scheduled-jobs)                             |
-| `scripts/ops/reencrypt.ts` | Re-encrypts every stored secret onto the newest key of its ring, so a rotation can retire the old key — `npm run reencrypt`.                                                                                                                                   | [Security](../tools/security.md#database-credential-and-key-rotation) |
+| File                              | What it is                                                                                                                                                                                                                                                     | Read next                                                                |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `scripts/ops/run-job.ts`          | The one runner for every scheduled job — `npm run job <name>`, e.g. `npm run job reap:orders`. Each job is declared on its module's manifest (`AppModule.jobs`) or in `src/app/jobs.ts`; `npm run regenerate` writes `docker/crontab` from those declarations. | [Scheduled jobs](./ops.md#scheduled-jobs)                                |
+| `scripts/ops/reencrypt.ts`        | Re-encrypts every stored secret onto the newest key of its ring, so a rotation can retire the old key — `npm run reencrypt`.                                                                                                                                   | [Security](../tools/security.md#database-credential-and-key-rotation)    |
+| `scripts/ops/reapply-erasures.ts` | Erases again the accounts the erasure ledger names since a snapshot, on a restored database with the app stopped — `npm run ops:reapply-erasures -- --since <time>`.                                                                                           | [Erasures after a restore](../tools/backups.md#erasures-after-a-restore) |
 
 ## Setup and scaffolding — `scripts/setup/`, `scripts/scaffold/`
 

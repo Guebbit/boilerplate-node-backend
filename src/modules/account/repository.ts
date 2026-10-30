@@ -10,9 +10,12 @@ import { toObjectId, type Lean } from '@infrastructure/persistence/create-reposi
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import {
     accountExportModel,
+    erasureLedgerModel,
     sessionModel,
     verificationTokenModel,
     type AccountExportDocument,
+    type ErasureLedgerDocument,
+    type ErasureLedgerKind,
     type SessionDocument,
     type VerificationTokenDocument
 } from './model';
@@ -640,4 +643,56 @@ export const verificationTokenRepository: {
     lastSentAt: lastVerificationTokenSentAt,
     userIdsWithLive: userIdsWithLiveVerificationToken,
     removeAll: removeAllVerificationTokens
+};
+
+/** One ledger row as the services read it. */
+export type ErasureLedgerRow = Lean<ErasureLedgerDocument>;
+
+/**
+ * Write (or move) the ledger row for an account and kind. An upsert that only ever moves `at`
+ * forward (`$max`), so a repeat erasure after a restore, which carries the original date, finds
+ * its row and changes nothing.
+ *
+ * @param userId - the account
+ * @param kind - what happened to it
+ * @param at - when
+ * @param expiresAt - when the database forgets the row
+ * @param session - joins the erasure's transaction; absent for a cancellation, which has none
+ */
+const upsertErasureLedgerRow = (
+    userId: string,
+    kind: ErasureLedgerKind,
+    at: Date,
+    expiresAt: Date,
+    session?: ClientSession
+): Promise<void> =>
+    erasureLedgerModel
+        .updateOne(
+            { userId: toObjectId(userId), kind },
+            { $max: { at, expiresAt } },
+            { upsert: true, ...(session ? { session } : {}) }
+        )
+        .exec()
+        .then(() => undefined);
+
+/**
+ * Every ledger row dated at or after `since`, oldest first, so a repeat erasure replays in the
+ * order the erasures happened.
+ *
+ * @param since - the snapshot time the restore went back to
+ */
+const findErasureLedgerSince = (since: Date): Promise<ErasureLedgerRow[]> =>
+    erasureLedgerModel
+        .find({ at: { $gte: since } })
+        .sort({ at: 1, _id: 1 })
+        .lean<ErasureLedgerRow[]>()
+        .exec();
+
+/** Explicit annotation: same TS7056 reason as every other module's repository. */
+export const erasureLedgerRepository: {
+    upsert: typeof upsertErasureLedgerRow;
+    findSince: typeof findErasureLedgerSince;
+} = {
+    upsert: upsertErasureLedgerRow,
+    findSince: findErasureLedgerSince
 };

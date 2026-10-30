@@ -66,6 +66,7 @@
         "config:check": "tsx scripts/ops/check-config.ts",
         "job": "tsx scripts/ops/run-job.ts",
         "reencrypt": "tsx scripts/ops/reencrypt.ts",
+        "ops:reapply-erasures": "tsx scripts/ops/reapply-erasures.ts",
         "refresh:breached-passwords": "tsx scripts/security/refresh-breached-passwords.ts",
         "compose": "${CONTAINER_ENGINE:-podman} compose",
         "compose:up": "npm run compose -- up -d",

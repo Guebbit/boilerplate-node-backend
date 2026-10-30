@@ -1,7 +1,7 @@
 # account
 
 ::: tip At a glance
-**Owns** — every way into an account: signup, login, [OAuth](./account-oauth.md), [two-factor auth](./account-two-factor.md), refresh, re-auth, password reset, session listing and revocation, logout-everywhere, [scheduled deletion](#scheduled-deletion), and the [data export](#data-export). Three collections of its own: `sessions`, `verificationtokens` and `accountexports`; the address book is [`addresses`](./addresses.md).
+**Owns** — every way into an account: signup, login, [OAuth](./account-oauth.md), [two-factor auth](./account-two-factor.md), refresh, re-auth, password reset, session listing and revocation, logout-everywhere, [scheduled deletion](#scheduled-deletion), and the [data export](#data-export). Four collections of its own: `sessions`, `verificationtokens`, `accountexports` and `erasureledgers` (the [erasure ledger](../theory/data-retention.md#backups-and-erasure): who was erased and when, so a backup restore can erase them again); the address book is [`addresses`](./addresses.md).
 **Depends on** — [`users`](./users.md), whose record it authenticates. The repo's only `shared-kernel` edge.
 **Breaks if you change** — the token lifetimes or the cookie flags. Every guard in the app resolves through this module.
 :::

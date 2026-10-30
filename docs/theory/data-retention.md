@@ -5,6 +5,11 @@ window. This page says **why** each window is as long as it is, and what the ind
 
 Not legal advice — the same caveat as [Data Protection](./data-protection.md#what-this-page-is-not).
 
+**This page is the deletion concept** (ISO/IEC 27555, which replaced DIN 66398 in 2025): one rule
+per kind of data, each with its period, its trigger and its legal basis. The per-purpose clocks
+below are the rules; [Backups and erasure](#backups-and-erasure) is how the concept survives a
+restore.
+
 ## The rule: one clock per purpose
 
 | GDPR article          | Says                                                               | Here it means                    |
@@ -236,8 +241,8 @@ The purge's first write is a claim on `purgeAt <= now`, so a restore and a purge
 configured for erasure) to delete the person and its events:
 [Erasure in PostHog](../tools/analytics.md#erasure-in-posthog).
 
-**Backups.** A snapshot restore must re-apply `auth.account_delete.scheduled` and `.cancelled` since
-the snapshot, or the purge erases an account the person restored:
+**Backups.** A snapshot restore must replay the erasure ledger, or the purge erases an account the
+person restored and an erased one comes back:
 [Erasures after a restore](../tools/backups.md#erasures-after-a-restore).
 
 ## The previous email after a change
@@ -402,19 +407,46 @@ A backup is a copy of everything, kept for as long as the keep knobs say (24 hou
 6 monthly by default, so up to about six months). It therefore holds accounts that were erased _after_
 the snapshot was taken.
 
-| Question                                   | Answer                                                                                                                                               |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Must an erasure reach the backups at once? | No. The ICO and CNIL both accept that a backup keeps the data until it ages out, **if** it is "beyond use": nobody reads it to serve the subject     |
-| What keeps it "beyond use"?                | Backups are encrypted (restic, client side), reachable only through the restore path, and never queried for live work                                |
-| What is promised after a restore?          | **Every erasure since the snapshot is re-applied.** An erased account does not come back to life                                                     |
-| Who re-applies it, and how?                | A person, by the runbook: [Erasures after a restore](../tools/backups.md#erasures-after-a-restore). There is no automatic re-application, on purpose |
-| Where does the list come from?             | The `auditlogs` events, taken **before** the restore (the restored database only knows older erasures), or the Winston lines in Loki                 |
+| Question                                   | Answer                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Must an erasure reach the backups at once? | No. The ICO accepts that a backup keeps the data until it ages out, **if** it is "beyond use": nobody reads it to serve the subject. The EDPB's 2025 enforcement report (Feb 2026, §4.2.6) asks for the same: do not alter backups where unwise, but keep track of erasure requests and comply with them on restored systems |
+| What keeps it "beyond use"?                | Backups are encrypted (restic, client side), reachable only through the restore path, and never queried for live work                                                                                                                                                                                                        |
+| What is promised after a restore?          | **Every erasure since the snapshot is re-applied before the app opens.** An erased account does not come back to life, not even for the minutes between a restore and a manual fix                                                                                                                                           |
+| Where does the list come from?             | The **erasure ledger**: one row `{ userId, at, kind }` per erased account, written in the erasure's own transaction and kept longer than the oldest backup (`NODE_ERASURE_LEDGER_RETENTION_DAYS`)                                                                                                                            |
+| Who re-applies it, and how?                | A person, with `npm run ops:reapply-erasures -- --since <snapshot time>`, on the restored database with the app and cron stopped. Never on its own, never from a schedule                                                                                                                                                    |
+| What does the ledger hold?                 | Ids and dates only: no email, ip or user agent. A deletion record carries no content data (SDM Baustein 60)                                                                                                                                                                                                                  |
 
-The audit log keeps 90 days (`NODE_AUDIT_RETENTION_DAYS`) and the backups up to six, so restoring a
-snapshot older than 90 days needs Loki for the older part. If neither source survives (the whole host
-lost), the runbook says to record it in the incident log, as the
-[Art. 33 runbook](./data-protection.md#breach-runbook-art-33-72-hours) already asks.
+```mermaid
+flowchart LR
+    Erase["erasure<br/><i>one transaction</i>"] --> Cascade["every module's<br/>erase hook"]
+    Erase --> Ledger[("erasure ledger<br/>userId, at, kind")]
+    Cascade --> Gone["account gone"]
+    Restore["restore an old snapshot<br/><i>app and cron stopped</i>"] --> Quarantine["quarantine:<br/>nothing reads it yet"]
+    Ledger -. "newest copy: live DB<br/>or newest snapshot" .-> Quarantine
+    Quarantine --> Reapply["ops:reapply-erasures<br/>--since snapshot"]
+    Reapply --> Log["restoration log<br/><i>who, which snapshot, how many</i>"]
+    Reapply --> Open["start the stack"]
+```
+
+The ledger is a layer of one design, not a rival of the standards: a deletion concept (this page,
+ISO/IEC 27555), a ledger that outlives the backups, a quarantine restore (SDM Baustein 60, M60.S10:
+erase again **immediately, before use**) and a restoration log (ISO/IEC 27701). The earlier
+`auditlogs` and Loki sources are shorter than the backups (90 days and 7 by default), which is why
+they are only the fallback for a lost host together with a lost newest snapshot.
+
+**Cancelled deletions.** A scheduled deletion that its owner (or staff) cancelled is noted as a
+`cancelled` row. The command never erases from one, and counts them in its report: a restored
+snapshot that still shows the account as scheduled would let the purge job erase an account the
+person had since restored, so the operator looks at those accounts before starting the stack.
+
+**What a repeat erasure keeps.** The original erasure date: an order's PII scrub clock starts
+where it started the first time, instead of restarting at the restore.
 
 **Why not erase from the backups themselves.** restic repositories are immutable by design (and the
 second machine is append-only on purpose): rewriting history to remove one person would remove the
-property that makes the backup worth having. Ageing out is the standard.
+property that makes the backup worth having. Ageing out is the standard. Crypto-shredding was
+rejected too: it needs a separate key store and still leaves plaintext email, logs and uploads.
+
+**What would change this:** the EDPB's promised backup guidance, if it requires purging inside
+backups; the shop starting to hold Art. 9 data (SDM then asks for correction runs on the backups);
+a deployment with a single backup copy (the newest snapshot is the ledger's off-host copy).
