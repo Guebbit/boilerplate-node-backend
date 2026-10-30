@@ -30,7 +30,7 @@ export interface DeclaredSection {
  */
 export interface OpenApiFragment {
     tags?: DeclaredTag[];
-    paths?: Record<string, Record<string, { tags?: string[] } | undefined>>;
+    paths?: Record<string, Record<string, { tags?: string[]; 'x-cache'?: string } | undefined>>;
     components?: { schemas?: Record<string, unknown> };
     'x-error-codes'?: Record<string, unknown>;
     'x-personal-data'?: Record<string, DeclaredSection>;

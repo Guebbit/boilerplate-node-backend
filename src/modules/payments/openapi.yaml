@@ -47,6 +47,7 @@ paths:
 
     /payments:
         get:
+            x-cache: private-no-cache
             tags: [Payments]
             summary: List payments (staff)
             description: >-
@@ -204,6 +205,7 @@ paths:
 
     /payments/refunds:
         get:
+            x-cache: private-no-cache
             tags: [Payments]
             summary: List refunds (staff)
             description: >-
@@ -247,6 +249,7 @@ paths:
 
     /payments/attention:
         get:
+            x-cache: private-no-cache
             tags: [Payments]
             summary: Payments that need a person (staff)
             description: >-

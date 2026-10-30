@@ -80,6 +80,7 @@ paths:
                 # `contactLimiters` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
         get:
+            x-cache: private-no-cache
             tags: [Tickets]
             summary: List tickets
             description: >
@@ -205,6 +206,7 @@ paths:
 
     /tickets/{id}:
         get:
+            x-cache: private-no-cache
             tags: [Tickets]
             summary: Get a ticket
             description: >

@@ -30,6 +30,7 @@ paths:
     # --------- Users ---------
     /users:
         get:
+            x-cache: private-no-cache
             tags: [Users]
             summary: List users (paginated)
             description: Returns a paginated list of user accounts.
@@ -164,6 +165,7 @@ paths:
         x-versioned: [get, put, patch, delete]
         # Same as GET /users?id={id}
         get:
+            x-cache: private-no-cache
             tags: [Users]
             summary: User details
             description: Returns the full profile of the user identified by `{id}`. Functionally equivalent to `GET /users?id={id}`.

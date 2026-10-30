@@ -38,6 +38,7 @@ x-personal-data:
 paths:
     /returns:
         get:
+            x-cache: private-no-cache
             tags: [Returns]
             summary: List returns (paginated)
             description: >-
@@ -162,6 +163,7 @@ paths:
 
     /returns/options:
         get:
+            x-cache: private-no-cache
             tags: [Returns]
             summary: What an order can still send back or cancel
             description: >-
@@ -199,6 +201,7 @@ paths:
 
     /returns/{id}:
         get:
+            x-cache: private-no-cache
             tags: [Returns]
             summary: Get a return
             description: >-

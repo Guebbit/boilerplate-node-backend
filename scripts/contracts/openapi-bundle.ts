@@ -11,8 +11,8 @@
  * run after it, on the bundle: {@link withCookieAuth} adds `cookieAuth` to every operation that
  * takes a bearer, with the origin `403` on its unsafe methods; {@link withAppLevelResponses} merges the root's
  * `x-app-level-responses` (429, 500 and 503 for every operation; 400/413/415 for a body-carrying one, and 415 for a body-less write too) into every
- * operation that doesn't already declare its own; {@link withNotModified} adds the shared `304` to the
- * cached and revalidating reads; {@link withVersionedResources} hangs `ETag`,
+ * operation that doesn't already declare its own; {@link withNotModified} adds the shared `304` to every read that declares `x-cache`;
+ * {@link withVersionedResources} hangs `ETag`,
  * `If-Match` and 412 on every path marked `x-versioned`; {@link withModuleStamps} tags every operation
  * with the `x-module` its owning fragment names — never hand-written per operation; and
  * {@link withErrorCodes} publishes every fragment's own `x-error-codes` as one collected catalogue.
@@ -155,6 +155,8 @@ interface AppLevelResponse {
 interface Operation {
     requestBody?: unknown;
     responses?: Record<string, unknown>;
+    /** The cache policy the fragment declares: `private-no-cache`, `revalidate`, `max-age: <s>` or `no-store`. */
+    'x-cache'?: string;
 }
 
 /** One error code's declaration, as a fragment's `x-error-codes` map holds it. */
@@ -355,57 +357,52 @@ export const withVersionedResources = (bundled: string): string => {
     return stringifyYaml(parsed, { lineWidth: 0 });
 };
 
-/** What the route-listing process prints before its JSON; see `scripts/contracts/private-no-cache-routes.ts`. */
-const ROUTES_MARKER = 'PRIVATE_NO_CACHE_ROUTES=';
-
 /**
- * The OpenAPI paths of every GET that mounts `privateNoCache` or `setCache`, read back from the mounted routers.
- *
- * A child process, because the answer lives in the running app's router stack and the bundler
- * must not import the app. `NODE_CLUSTER_WORKERS=1` keeps the app's start-up logger quiet; the
- * marker finds the result among whatever else reaches stdout.
- *
- * @throws Error if the process fails or prints no result
+ * Declares `Cache-Control: no-store` on the `200` of a read whose fragment says `x-cache: no-store`.
+ * A `200` that is a `$ref`, absent, or already has the header is left as its fragment wrote it.
  */
-export const revalidatingReads = (): string[] => {
-    const output = execFileSync(
-        process.execPath,
-        [
-            path.join(REPO_ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'),
-            path.join(REPO_ROOT, 'scripts', 'contracts', 'private-no-cache-routes.ts')
-        ],
-        {
-            cwd: REPO_ROOT,
-            env: { ...process.env, NODE_CLUSTER_WORKERS: '1' },
-            encoding: 'utf8',
-            stdio: ['ignore', 'pipe', 'pipe']
+const withNoStoreHeader = (operation: Operation): void => {
+    const ok = operation.responses?.['200'];
+    if (typeof ok !== 'object' || ok === null || '$ref' in ok) return;
+    const headers = (ok as { headers?: Record<string, unknown> }).headers ?? {};
+    if ('Cache-Control' in headers) return;
+    Object.assign(ok, {
+        headers: {
+            ...headers,
+            'Cache-Control': {
+                description: '`no-store`: no cache, shared or private, may keep the answer.',
+                schema: { type: 'string' }
+            }
         }
-    );
-    const line = output.split('\n').find((each) => each.startsWith(ROUTES_MARKER));
-    if (line === undefined)
-        throw new Error('[openapi] the cached-read route listing printed no result.');
-    return JSON.parse(line.slice(ROUTES_MARKER.length)) as string[]; // we wrote this JSON ourselves
+    });
 };
 
 /**
- * Adds the shared `304` to each listed GET that the bundle documents.
+ * Stamps the cache answers on every GET whose fragment declares an `x-cache` policy.
  *
- * These reads answer `304` through Express's own ETag check, and no fragment says so: the bundler
- * adds it, from the routers, rather than 20-odd fragments repeating it. A listed path no fragment
- * documents (an example module that ships no contract) is skipped.
+ * `private-no-cache`, `revalidate` and `max-age: <s>` reads answer `304` through Express's own ETag
+ * check, and no fragment says so: the shared `304` is added here, rather than 29 operations
+ * repeating it. `no-store` gets no `304`, only the `Cache-Control: no-store` header on its `200`.
+ *
+ * Static on purpose: reading the mounted routers would boot the app, which needs files this very
+ * build generates. `tests/cross-cutting/cache-policy-declared.test.ts` holds the `304` family equal
+ * to the `privateNoCache` / `setCache` GETs the app really mounts.
  *
  * @param bundled - the bundled OpenAPI document, as YAML text
- * @param reads - OpenAPI paths of the `privateNoCache` and `setCache` GETs, from {@link revalidatingReads}
  * @throws Error if the bundled document does not parse to an object
  */
-export const withNotModified = (bundled: string, reads: readonly string[]): string => {
+export const withNotModified = (bundled: string): string => {
     const parsed: unknown = parseYaml(bundled);
     if (!isBundledDocument(parsed))
         throw new Error('[openapi] the bundled document did not parse to an object.');
 
-    for (const route of reads) {
-        const operation = parsed.paths?.[route]?.get;
-        if (!isOperation(operation)) continue;
+    for (const pathItem of Object.values(parsed.paths ?? {})) {
+        const operation = pathItem.get;
+        if (!isOperation(operation) || operation['x-cache'] === undefined) continue;
+        if (operation['x-cache'] === 'no-store') {
+            withNoStoreHeader(operation);
+            continue;
+        }
         operation.responses = {
             ...operation.responses,
             '304': { $ref: '#/components/responses/NotModified' }
@@ -649,8 +646,7 @@ const compile = (): string => {
                                         withBrowserEvents(readFileSync(temporary, 'utf8'))
                                     )
                                 )
-                            ),
-                            revalidatingReads()
+                            )
                         )
                     ),
                     moduleOfPath()
