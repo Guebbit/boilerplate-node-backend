@@ -213,6 +213,10 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     findScheduledDeletionsDue: (now: Date) => Promise<UserDocument[]>;
     forgetHoldSetter: (staffId: string, session: ClientSession) => Promise<void>;
     restoreScheduledDeletion: (id: string, now: Date, session?: ClientSession) => Promise<boolean>;
+    setOwnerDeletionState: (
+        id: string,
+        schedule: { requestedAt: Date; purgeAt: Date } | null
+    ) => Promise<boolean>;
     claimScheduledErasure: (id: string, now: Date, session: ClientSession) => Promise<boolean>;
 } = {
     reencrypt: reencryptOf(userModel),
@@ -920,6 +924,40 @@ export const userRepository: Repository<UserDocument, UserWire> & {
                 // `session`: the caller's transaction, so the cancel commits with its announcement.
                 { timestamps: false, session }
             )
+            .exec()
+            .then(({ modifiedCount }) => modifiedCount === 1),
+
+    /**
+     * Put an account's owner-deletion state back to a known value, unconditionally: the write
+     * `ops:reapply-erasures` makes on a restored database. Unlike {@link restoreScheduledDeletion}
+     * it has no `purgeAt > now` condition, since a restored lock may already be past its date.
+     * Clearing touches only an OWNER lock; staff's soft delete is not this state.
+     * `timestamps: false`: bookkeeping, not a profile edit.
+     *
+     * @param schedule - the lock to set, or `null` to clear it
+     * @returns whether the document changed (a repeat of the same state changes nothing)
+     */
+    setOwnerDeletionState: (id: string, schedule: { requestedAt: Date; purgeAt: Date } | null) =>
+        (schedule
+            ? userModel.updateOne(
+                  { _id: toObjectId(id) },
+                  {
+                      $set: {
+                          deletedAt: schedule.requestedAt,
+                          deletedBy: 'owner',
+                          purgeAt: schedule.purgeAt
+                      },
+                      // Same as the original request: every token issued before it dies.
+                      $max: { tokensValidAfter: schedule.requestedAt }
+                  },
+                  { timestamps: false }
+              )
+            : userModel.updateOne(
+                  { _id: toObjectId(id), deletedBy: 'owner' },
+                  { $unset: { deletedAt: '', deletedBy: '', purgeAt: '' } },
+                  { timestamps: false }
+              )
+        )
             .exec()
             .then(({ modifiedCount }) => modifiedCount === 1),
 

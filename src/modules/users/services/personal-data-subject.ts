@@ -14,9 +14,14 @@ import type { UserDocument } from '../model';
  * that proved the address (anyone can sign up with a stranger's).
  *
  * @param user - the account being exported or erased
+ * @param erasedAt - only for a repeat erasure on a restored database: the original erasure date
  */
-export const personalDataSubjectOf = (user: UserDocument): PersonalDataSubject => ({
+export const personalDataSubjectOf = (
+    user: UserDocument,
+    erasedAt?: Date
+): PersonalDataSubject => ({
     userId: String(user._id),
     email: user.email,
-    emailVerified: Boolean(user.verifiedAt)
+    emailVerified: Boolean(user.verifiedAt),
+    ...(erasedAt ? { erasedAt } : {})
 });

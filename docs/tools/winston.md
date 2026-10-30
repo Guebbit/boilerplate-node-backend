@@ -140,6 +140,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `account`        | `AUTH_EMAIL_CHANGE_UNDONE`                   | `auth.email_change.undone`                   | —                      |
 | `account`        | `AUTH_EMAIL_VERIFY_COMPLETED`                | `auth.email_verify.completed`                | —                      |
 | `account`        | `AUTH_EMAIL_VERIFY_REQUESTED`                | `auth.email_verify.requested`                | —                      |
+| `account`        | `AUTH_ERASURES_REAPPLIED`                    | `auth.erasures.reapplied`                    | —                      |
 | `account`        | `AUTH_LOGGED_OUT`                            | `auth.logout`                                | —                      |
 | `account`        | `AUTH_LOGGED_OUT_EVERYWHERE`                 | `auth.logout_all`                            | —                      |
 | `account`        | `AUTH_LOGIN`                                 | `auth.login`                                 | `login_identifier`     |

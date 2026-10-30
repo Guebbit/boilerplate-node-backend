@@ -164,3 +164,39 @@ export const eraseScheduledDeletion = (
  */
 export const findDueScheduledDeletions = (now: Date = new Date()): Promise<UserDocument[]> =>
     userRepository.findScheduledDeletionsDue(now);
+
+/**
+ * Erase an account again on a restored database, keeping the date it was first erased on. The
+ * door `ops:reapply-erasures` uses: a restore brought the account back, the erasure ledger says
+ * it was erased.
+ *
+ * @param userId - the account the ledger names
+ * @param erasedAt - the original erasure date, so the clocks the erasure starts do not restart
+ * @param context - the operator's system context
+ * @returns `null` when the restored database does not hold the account (nothing to erase)
+ */
+export const eraseAgain = (
+    userId: string,
+    erasedAt: Date,
+    context: CallerContext
+): Promise<Awaited<ReturnType<typeof erase>> | null> =>
+    userRepository
+        .findById(userId)
+        .then((user) => (user ? erase(user, context, undefined, erasedAt) : null));
+
+/**
+ * Put an account's owner-deletion lock back as the erasure ledger remembers it, on a restored
+ * database: set it to the stored dates, or clear it. The door `ops:reapply-erasures` uses, since
+ * {@link restoreOwnAccount} refuses once `purgeAt` has passed.
+ *
+ * @param userId - the account the ledger names
+ * @param schedule - the stored dates the owner was promised, or `null` for "cancelled"
+ * @returns `null` when the database does not hold the account; else whether it changed
+ */
+export const restoreDeletionState = (
+    userId: string,
+    schedule: { requestedAt: Date; purgeAt: Date } | null
+): Promise<boolean | null> =>
+    userRepository
+        .findById(userId)
+        .then((user) => (user ? userRepository.setOwnerDeletionState(userId, schedule) : null));

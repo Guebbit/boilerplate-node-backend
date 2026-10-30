@@ -41,6 +41,8 @@ export const accountConfig = defineConfig({
         // Ceiling in code, not in the contract: nothing on the wire is bounded by it. 31 is the
         // longest month; `purgeAt` is also capped at one calendar month (GDPR Art. 12(3)).
         NODE_ACCOUNT_DELETION_GRACE_DAYS: int({ default: 30, min: 1, max: 31 }),
+        // 220 days: the default backup keep (6 monthly snapshots, up to ~7 months back) plus a margin.
+        NODE_ERASURE_LEDGER_RETENTION_DAYS: int({ default: 220, min: 1 }),
         NODE_TERMS_VERSION: text({ default: '1' }),
         NODE_ACCOUNT_SUPPORT_EMAIL: email()
     }
@@ -103,3 +105,10 @@ export const deletionPurgeAt = (requestedAt: Date): Date =>
  */
 export const exportRetentionMs = (): number =>
     accountConfig().NODE_ACCOUNT_EXPORT_TTL_DAYS * DAY_MS;
+
+/**
+ * How long an erasure-ledger row is kept, in milliseconds. It must outlast the oldest backup, or a
+ * restore of that snapshot brings back an account the ledger has already forgotten.
+ */
+export const erasureLedgerRetentionMs = (): number =>
+    accountConfig().NODE_ERASURE_LEDGER_RETENTION_DAYS * DAY_MS;

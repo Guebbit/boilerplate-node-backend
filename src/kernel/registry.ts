@@ -243,6 +243,13 @@ export interface PersonalDataSubject {
      * (GDPR Art. 12(6) — verify identity before disclosing).
      */
     emailVerified: boolean;
+    /**
+     * The moment an erasure counts from, when it is not now: set only by `ops:reapply-erasures`,
+     * which erases an account again on a restored database and must keep the ORIGINAL date so a
+     * clock the erasure starts (an order's PII scrub) does not restart. Absent: the erasure is
+     * happening now.
+     */
+    erasedAt?: Date;
 }
 
 /**
