@@ -20,7 +20,12 @@ import { accessibleBy } from '@casl/mongoose';
 import { Types } from 'mongoose';
 import type { AuthContext, Caller } from '@types';
 import { buildAbility } from '@kernel/ability';
-import { anonymousCaller, callerForSubject } from '@kernel/permissions';
+import {
+    anonymousCaller,
+    callerForSubject,
+    type PermissionAction,
+    type PermissionSubject
+} from '@kernel/permissions';
 
 /**
  * Fields the rules speak that this deployment's collections do not store.
@@ -161,8 +166,8 @@ export const hasAnonymousReadScope = <TWho>(
  */
 export const accessibleFilterFor = (
     caller: Caller | undefined,
-    subject: string,
-    action = 'read'
+    subject: PermissionSubject,
+    action: PermissionAction = 'read'
 ): Record<string, unknown> => {
     // CASL `accessibleBy(ability, action).ofType(subject)`: the ability's rules for that action on
     // that subject, turned into a MongoDB filter. https://casl.js.org/v6/en/package/casl-mongoose
@@ -186,7 +191,7 @@ export const accessibleFilterFor = (
  */
 export const accessibleFilter = (
     context: AuthContext | undefined,
-    subject: string,
-    action = 'read'
+    subject: PermissionSubject,
+    action: PermissionAction = 'read'
 ): Record<string, unknown> =>
     accessibleFilterFor(context ? callerForSubject(context, subject) : undefined, subject, action);

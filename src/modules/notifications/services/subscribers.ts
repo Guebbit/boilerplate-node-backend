@@ -10,6 +10,7 @@
 
 import { Types } from 'mongoose';
 import type { DomainEventMap } from '@kernel/events';
+import type { PermissionSetName } from '@kernel/permissions';
 import type { NewNotification } from '../repository';
 import { notificationsCreate } from './inbox';
 import { ticketService } from '@modules/tickets';
@@ -195,6 +196,9 @@ export const onOutboxEventDead = ({
         dedupeKey: `outbox-dead:${eventId}`
     }).then(() => undefined);
 
+/** The set that works a contact message; a typo here would alert nobody. */
+const CONTACT_ALERT_SET: PermissionSetName = 'TicketManagement';
+
 /**
  * Who hears of a new ticket: the sets that WORK it. A contact message is read by those who may
  * read it (`TicketDisplay`, which includes managers) but worked by `TicketManagement`; alerting
@@ -203,7 +207,7 @@ export const onOutboxEventDead = ({
  * @param opened - the `ticket.opened` fact
  */
 const alertSetsOf = ({ kind, routeSet }: DomainEventMap['ticket.opened']): string[] =>
-    kind === 'contact' ? ['TicketManagement'] : [routeSet];
+    kind === 'contact' ? [CONTACT_ALERT_SET] : [routeSet];
 
 /**
  * A ticket was opened: everyone who works its kind hears of it once, by id and kind alone.

@@ -177,7 +177,7 @@ export default withMermaid(
                                 link: '/tools/external-services'
                             },
                             { text: 'Pairing & Ports', link: '/tools/pairing-and-ports' },
-                            { text: 'Permission Actions', link: '/tools/permission-actions' },
+                            { text: 'Permission Vocabulary', link: '/tools/permission-vocabulary' },
                             { text: 'Runtime', link: '/tools/runtime' },
                             { text: 'Internationalisation', link: '/tools/i18n' },
                             { text: 'Demo profile', link: '/tools/demo-profile' },
