@@ -420,7 +420,7 @@ fail the bundle.
 
 ```mermaid
 flowchart LR
-    W["webhooks/asyncapi.yaml<br/>server + WebhookHeaders"] --> S["webhooks section"]
+    W["webhooks/asyncapi.yaml<br/>server + Id + WebhookHeaders"] --> S["webhooks section"]
     D["delivery/asyncapi.webhooks.yaml"] --> S
     O["orders/asyncapi.webhooks.yaml"] --> S
     P["payments/asyncapi.webhooks.yaml"] --> S

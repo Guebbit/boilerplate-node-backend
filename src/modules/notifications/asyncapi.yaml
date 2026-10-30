@@ -125,6 +125,7 @@ components:
                     type: string
                 requested:
                     type: integer
+                    minimum: 1
                 titles:
                     description: Locale → the product's name in it.
                     type: object

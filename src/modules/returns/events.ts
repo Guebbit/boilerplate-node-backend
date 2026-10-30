@@ -5,7 +5,7 @@
  * projected into `webhooks`' public catalogue by `module.ts`'s `publicEvents`.
  */
 
-import type { ReturnRemedy } from '@types';
+import type { ReturnReason, ReturnRemedy } from '@types';
 
 /** Registers this module's event payloads into the kernel's app-wide `DomainEventMap`. */
 declare module '@kernel/events' {
@@ -17,7 +17,7 @@ declare module '@kernel/events' {
         'return.requested': {
             returnId: string;
             orderId: string;
-            reason: string;
+            reason: ReturnReason;
             /** When the buyer asked or stated it (ISO), not when the shop recorded it. */
             requestedAt: string;
             /** How a withdrawal was stated; absent on any other reason. */
