@@ -1,18 +1,16 @@
 /**
  * @module
  * The stats reads: one thin controller each, onto the shared handler in `./respond`. Every route
- * takes a shop-local period except the pipeline (a snapshot of right now) and the limits.
+ * takes a shop-local period except the pipeline (a snapshot of right now).
  */
 
 import { z } from 'zod';
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
-import type { StatsLimits } from '@types';
 import { catchAs, namedHandler } from '@infrastructure/http/controller';
 import { requireId } from '@infrastructure/http/ids';
 import { blankToUndefined } from '@infrastructure/http/schemas';
 import { statsService } from '../services';
-import { MAX_BUCKETS, MAX_RANGE_DAYS } from '../domain';
 import { intervalField, periodFields, statsHandler } from './respond';
 
 /** `GET /stats/sales`. */
@@ -85,11 +83,3 @@ export const getPipelineStats = (_request: Request, response: Response) =>
             successResponse(response, data);
         })
         .catch(catchAs(response, 'getPipelineStats'));
-
-/** `GET /stats/limits` — the ceilings every period read enforces, for a form to check against. */
-export const getStatsLimits = (_request: Request, response: Response) => {
-    successResponse<StatsLimits>(response, {
-        maxRangeDays: MAX_RANGE_DAYS,
-        maxBuckets: MAX_BUCKETS
-    });
-};

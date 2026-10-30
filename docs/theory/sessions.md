@@ -4,7 +4,7 @@ A deployment keeps people signed in in one of two ways. A setting picks which, a
 the login code, from the frontend to the permission guards, behaves the same either way.
 
 ::: tip At a glance
-**The switch** — `NODE_SESSION_MODE=jwt|cookie`, default `jwt`. A frontend reads `GET /account/session-config` at boot and needs no switch of its own.
+**The switch** — `NODE_SESSION_MODE=jwt|cookie`, default `jwt`. A frontend reads `session` on `GET /config` at boot and needs no switch of its own.
 **Same in both** — login, logout, logout everywhere, revoking one device, the session list, the password check before money or deletion, the second factor.
 **Different** — what the browser holds, and what a stolen credential costs.
 **Changing it** signs everyone out: a session belongs to the mode that made it.

@@ -306,6 +306,7 @@ export default withMermaid(
                         items: [
                             { text: 'Overview', link: '/api/' },
                             { text: 'Endpoints', link: '/api/endpoints' },
+                            { text: 'Boot answer (GET /config)', link: '/api/config' },
                             { text: 'Write Methods', link: '/api/write-methods' },
                             { text: 'Success Responses', link: '/api/responses' },
                             { text: 'Error Responses', link: '/api/errors' },

@@ -240,10 +240,10 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
     });
 
     it('answers what mode it is and how long a session lasts, with no credential at all', async () => {
-        const response = await api().get('/account/session-config');
+        const response = await api().get('/config');
 
         expect(response.status).toBe(200);
-        expect(response.body).toEqual({
+        expect(response.body.session).toEqual({
             mode,
             lifetimeSeconds: { short: 86_400, medium: 604_800, long: 2_592_000 },
             staffLifetimeSeconds: 86_400
@@ -669,7 +669,8 @@ describe('cookie mode only', () => {
         const response = await logIn('browser@example.com');
 
         expect(response.status).toBe(200);
-        expect(response.body).toEqual({});
+        // No credential in the body: only the account view the sign-in carries.
+        expect(Object.keys(response.body)).toEqual(['account']);
         const header = setCookie(response, '__Host-session') ?? '';
         expect(header).toMatch(/;\s*HttpOnly/i);
         expect(header).toMatch(/;\s*Secure/i);

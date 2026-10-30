@@ -56,7 +56,7 @@ export interface ChallengeParameters {
  * See: docs/modules/antibot.md
  */
 export interface HumanChallengeProvider {
-    /** The name `NODE_ANTIBOT_PROVIDER` selects, and the one `GET /antibot/config` publishes. */
+    /** The name `NODE_ANTIBOT_PROVIDER` selects, and the one `antibot` on `GET /config` publishes. */
     name: string;
 
     /**

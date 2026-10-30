@@ -12,6 +12,7 @@ import { t } from '@infrastructure/i18n';
 import { isRestorable } from '@modules/users';
 import { accountService, twoFactorService } from '../services';
 import { issueSession } from '../session/session';
+import { withAccountView } from '../session/account-view';
 import { rememberDevice } from '../session/device-cookie';
 import { recordLoginSuccess } from '../session/login-observability';
 import { authTwoFactorChallengeTotal } from '../metrics';
@@ -74,19 +75,22 @@ export const postLoginTwoFactor = (
                     });
             }
 
+            const proofs = withProofs(amr, AMR.otp);
             return issueSession(request, response, userId, {
-                remember: remember,
-                amr: withProofs(amr, AMR.otp),
+                remember,
+                amr: proofs,
                 provedAt,
                 transport
             }).then((issued) =>
-                recordLoginSuccess(request, userId).then(() => {
-                    authTwoFactorChallengeTotal.inc({ status: 'success' });
-                    destroyMfaChallengeCookie(response);
-                    // The login is only complete here, so the browser becomes familiar here.
-                    rememberDevice(request, response, user.email);
-                    successResponse<LoginTwoFactorOutcome>(response, issued, 200);
-                })
+                recordLoginSuccess(request, userId)
+                    .then(() => withAccountView(issued, userId, { amr: proofs, provedAt }))
+                    .then((body) => {
+                        authTwoFactorChallengeTotal.inc({ status: 'success' });
+                        destroyMfaChallengeCookie(response);
+                        // The login is only complete here, so the browser becomes familiar here.
+                        rememberDevice(request, response, user.email);
+                        successResponse<LoginTwoFactorOutcome>(response, body, 200);
+                    })
             );
         })
         .catch((error: unknown) => {

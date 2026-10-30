@@ -92,8 +92,10 @@ export const FIRST_PARTY_CLIENT_ID = 'first-party';
 /**
  * What a rotation hands the controller. `refreshMaxAgeMs` is the new refresh cookie's `maxAge`,
  * or `undefined` for a browser-session login, whose cookie must stay a session cookie.
+ * `userId` is whose session this is, for the answer's abilities.
  */
 export interface RotatedSession {
+    userId: string;
     accessToken: string;
     refreshToken: string;
     refreshMaxAgeMs: number | undefined;
@@ -518,6 +520,7 @@ const storeSuccessor = (
         .then(() => recordActivity(claims.sub))
         .then(() => signAccessToken({ ...claims, sid: String(previous.familyId) }))
         .then((accessToken) => ({
+            userId: claims.sub,
             accessToken,
             refreshToken: newRefreshToken,
             // Only a persistent login keeps a persistent cookie.

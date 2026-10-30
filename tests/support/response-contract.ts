@@ -122,6 +122,32 @@ export const nullPathsIn = (value: unknown, at = ''): string[] => {
 };
 
 /**
+ * The operations whose answer carries the caller's packed rules: the session answers.
+ * `account.abilities` rides on a sign-in and `GET /account`, `abilities` on a refresh.
+ */
+const SESSION_ANSWERS: ReadonlySet<string> = new Set([
+    'login',
+    'loginTwoFactor',
+    'loginRestore',
+    'getAccount',
+    'refreshToken'
+]);
+
+/**
+ * Whether a null sits inside a packed CASL rule's conditions of a session answer
+ * (`account.abilities.tenant.0.2.deletedAt`). Anywhere else it is still refused.
+ *
+ * A rule's conditions are a Mongo query, where `null` is an OPERAND ("`deletedAt` is unset"), not a
+ * value the response reports. Dropping it would change what the rule means on the client.
+ *
+ * @param operationId - the operation that answered
+ * @param path - a dotted path from {@link nullPathsIn}
+ */
+export const isPackedRuleOperand = (operationId: string, path: string): boolean =>
+    SESSION_ANSWERS.has(operationId) &&
+    /^(account\.)?abilities\.(tenant|platform)\.\d+\.2\./.test(path);
+
+/**
  * Checks one captured response against `openapi.yaml`, throwing a plain `Error` on a mismatch.
  *
  * An undeclared path is not this function's job — that's the 404-envelope contract test's own
@@ -177,7 +203,10 @@ export const assertResponseMatchesContract = (response: Response): void => {
             `${method.toUpperCase()} ${pathname} (${String(response.status)}) does not match ${operationId}'s documented shape:\n${zod.prettifyError(result.error)}`
         );
 
-    const nulls = typeof body === 'string' ? [] : nullPathsIn(body);
+    const nulls =
+        typeof body === 'string'
+            ? []
+            : nullPathsIn(body).filter((path) => !isPackedRuleOperand(operationId, path));
     if (nulls.length > 0)
         throw new Error(
             `${method.toUpperCase()} ${pathname} (${String(response.status)}) sent null at ${nulls.join(', ')}: a response never carries null, an unset value is the absent key (docs/api/write-methods.md#empty-null-omitted)`

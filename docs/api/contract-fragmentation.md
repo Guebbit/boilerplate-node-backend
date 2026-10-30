@@ -194,7 +194,7 @@ hit them first:
   the order resource itself — fragmenting by `basePath` still splits the two files correctly.
 - **`access` has no HTTP surface of its own** — headless by design, the one module whose manifest
   declares no `mounts`. Its `openapi.yaml` is components only (`paths: {}`):
-  the abilities schemas `GET /account/abilities` returns, and the `roles` section of the data
+  the abilities schemas `GET /account` carries, and the `roles` section of the data
   export. A components-only fragment owns no folder in the client collections.
 
 Also note that `Auth` and `Account` are two tags over one `basePath`. **Fragment by `basePath`, not

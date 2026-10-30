@@ -74,7 +74,7 @@ describe('a restore never loses an index', () => {
 });
 
 describe('a restore never strands the tenant cache', () => {
-    it('GET /account/abilities publishes the tenant id the database holds', async () => {
+    it('GET /account publishes the tenant id the database holds', async () => {
         // Twice, not once: the cache in `resolveDeploymentTenantId` is process-lifetime, so the
         // property under test is that a SECOND restore still agrees with it, not that the first
         // one happened to populate it correctly.
@@ -82,9 +82,9 @@ describe('a restore never strands the tenant cache', () => {
         await restoreScenario('blank');
 
         const { bearer } = await authenticateAs('admin');
-        const response = await api().get('/account/abilities').set('Authorization', bearer);
+        const response = await api().get('/account').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.tenantId).toBe(DEPLOYMENT_TENANT_ID);
+        expect(response.body.abilities.tenantId).toBe(DEPLOYMENT_TENANT_ID);
     });
 });

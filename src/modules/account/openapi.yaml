@@ -28,51 +28,6 @@ x-personal-data:
                 $ref: '#/components/schemas/ExportSession'
 
 paths:
-    # --------- What this caller may do ---------
-    # The plan calls this `/me/abilities`. It lives under `/account` instead, because a module
-    # here mounts at one `basePath` and a second mount point for a single route would make the
-    # account module two things. Same endpoint, same shape, inside the module that owns the
-    # caller's own record.
-    /account/abilities:
-        get:
-            tags: [Account]
-            summary: The caller's own authorization rules
-            description: |
-                The rules the SERVER enforces, packed for a client to evaluate.
-
-                Published so a client can grey out what it would be refused, from the same rules
-                rather than from a copy of them — a hand-maintained duplicate of "what may I do"
-                drifts, and the drift is silent until somebody is shown a button that answers 403.
-
-                Answered in BOTH scopes, as two separate lists. A request acts in exactly one — the
-                one its key declares — but a client renders the shop's screens and the
-                installation's health dashboard from a single navigation, so it needs both and must
-                never merge them.
-
-                **The client's copy has no authority.** It decides what to RENDER, never what is
-                allowed; every request is re-evaluated server-side. Published here because the
-                alternative is every client inventing the same guess.
-
-                `grantableRoles` lists the tenant-scope roles the caller may assign through the user
-                writes, computed by the same rule as their `403`/`422`; a role picker reads it instead of a
-                hard-coded list. Empty for an anonymous caller. It has no authority either.
-
-                Answered for an anonymous caller too: a stranger holds the `guest` role, which is
-                a value in the model rather than an absence, and a shop front that greys nothing
-                out for a visitor is a shop front that lies twice.
-            operationId: getMyAbilities
-            security:
-                - {}
-                - bearerAuth: []
-            responses:
-                '200':
-                    description: The caller's packed rules.
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '../access/openapi.yaml#/components/schemas/Abilities'
-
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
     # --------- Authentication and profile ---------
     /account:
         # Bundler: adds the `If-Match` parameter and 412 to the writes listed, and `ETag` to the 200s.
@@ -80,17 +35,29 @@ paths:
         get:
             tags: [Account]
             summary: Current user info
-            description: Returns the full profile of the currently authenticated user
+            description: |
+                Returns the full profile of the currently authenticated user, plus two read-only
+                members that ride with it so a client needs no second call: `abilities` (the
+                rules the SERVER enforces, packed for the client to evaluate) and `activity` (the
+                session's idle clock).
+
+                `abilities` is the same object a sign-in and a token refresh carry. The client's
+                copy has NO AUTHORITY: it decides what to render, never what is allowed, and every
+                request is re-evaluated server-side. A non-passive `GET /account` also counts as
+                activity, so a restore needs no separate touch.
+
+                The `ETag` is computed over the stored account, not over this body: a role change
+                does not make an `If-Match` taken from an earlier read answer `412`.
             operationId: getAccount
             security:
                 - bearerAuth: []
             responses:
                 '200':
-                    description: Current user info
+                    description: Current user info, with the caller's abilities and idle clock
                     content:
                         application/json:
                             schema:
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Account'
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AccountView'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
         put:
             tags: [Account]
@@ -782,34 +749,13 @@ paths:
                 # `credentialLimiters` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
 
-    /account/session-config:
-        get:
-            tags: [Auth]
-            summary: How this deployment keeps people signed in
-            description: >-
-                Public, like `GET /antibot/config`: a client reads it once at boot and adapts, so it
-                needs no switch of its own. `jwt` — a short access token in memory plus a rotating
-                refresh cookie (`POST /account/refresh` exists). `cookie` — one HttpOnly
-                `__Host-session` cookie, nothing to refresh, and every state-changing request that
-                a cookie authenticates must come from an allowed `Origin`.
-            operationId: getSessionConfig
-            security: []
-            responses:
-                '200':
-                    description: The active session mode
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/SessionConfig'
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-
     /account/login:
         post:
             tags: [Auth]
             summary: Login
             description: >-
                 Authenticates a user with email and password credentials. On success, the session
-                is started in whichever mode the deployment runs (`GET /account/session-config`):
+                is started in whichever mode the deployment runs (`session.mode` of `GET /config`):
                 in `jwt` mode the body carries a short-lived access token (`token`) to pass as a
                 Bearer token, and a refresh cookie is set; in `cookie` mode the session is an
                 HttpOnly `__Host-session` cookie and the body carries no credential — unless the
@@ -897,22 +843,6 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
 
-    /account/oauth/providers:
-        get:
-            tags: [Auth]
-            summary: List enabled OAuth providers
-            description: The OAuth providers this deployment holds credentials for — an empty list means none are configured. The frontend uses this to decide which "Continue with…" buttons to render.
-            operationId: listOAuthProviders
-            security: []
-            responses:
-                '200':
-                    description: Enabled provider names
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/OAuthProviders'
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-
     /account/oauth/links:
         get:
             tags: [Auth]
@@ -955,7 +885,7 @@ paths:
                   schema:
                       type: string
                       maxLength: 32
-                  description: One of the `provider` names `GET /account/oauth/providers` lists.
+                  description: One of the `oauthProviders` names `GET /config` lists.
                 - name: continue
                   in: query
                   required: false
@@ -1020,7 +950,7 @@ paths:
                   schema:
                       type: string
                       maxLength: 32
-                  description: One of the names `GET /account/oauth/providers` lists.
+                  description: One of the `oauthProviders` names `GET /config` lists.
                 - name: continue
                   in: query
                   required: false
@@ -1358,16 +1288,6 @@ components:
                                 `POST /account/export` would start a new build. `false` while one is
                                 `building`: asking then only returns that one.
 
-        OAuthProviders:
-            type: object
-            additionalProperties: false
-            required: [providers]
-            properties:
-                providers:
-                    type: array
-                    items: { type: string }
-                    description: Registry names this deployment holds credentials for, e.g. `["google", "github"]`.
-
         OAuthLink:
             type: object
             additionalProperties: false
@@ -1422,15 +1342,27 @@ components:
                         The `ses_…` session id, to send back as `Authorization: Bearer ses_…`.
                         Present only for a `cookie`-mode login that asked for `transport: bearer`
                         (or a re-proof by such a client); that login sets no cookie.
+                account:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AccountView'
+                    description: >-
+                        The signed-in account, with its abilities and idle clock — exactly what
+                        `GET /account` answers, so a sign-in needs no follow-up read. Present on the
+                        answers that START a session (login, its second step, restore);
+                        absent on a re-mint after a password or factor change.
 
         RefreshTokenResponse:
             type: object
             additionalProperties: false
-            required: [token]
+            required: [token, abilities]
             properties:
                 token:
                     type: string
                     description: New access JWT
+                abilities:
+                    $ref: '../access/openapi.yaml#/components/schemas/Abilities'
+                    description: >-
+                        The caller's abilities as they stand now, so a role granted mid-session
+                        shows within one refresh.
 
         MfaChallenge:
             type: object

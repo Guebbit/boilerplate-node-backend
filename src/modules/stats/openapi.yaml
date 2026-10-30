@@ -220,27 +220,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
 
-    /stats/limits:
-        get:
-            tags: [Stats]
-            summary: How big a period may be (staff)
-            description: >-
-                The two ceilings every period read enforces, so a form can refuse a period before a
-                round trip does: the most calendar days (inclusive) and the most buckets one request
-                may cover. Needs `read:Stats`.
-            operationId: getStatsLimits
-            security:
-                - bearerAuth: []
-            responses:
-                '200':
-                    description: The ceilings
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/StatsLimits'
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-
 components:
     parameters:
         StatsFromParam:
@@ -371,10 +350,12 @@ components:
         SalesStats:
             type: object
             additionalProperties: false
-            required: [period, currencies]
+            required: [period, limits, currencies]
             properties:
                 period:
                     $ref: '#/components/schemas/StatsPeriod'
+                limits:
+                    $ref: '#/components/schemas/StatsLimits'
                 currencies:
                     type: array
                     items:
@@ -400,10 +381,12 @@ components:
         ProductStats:
             type: object
             additionalProperties: false
-            required: [period, products]
+            required: [period, limits, products]
             properties:
                 period:
                     $ref: '#/components/schemas/StatsPeriod'
+                limits:
+                    $ref: '#/components/schemas/StatsLimits'
                 products:
                     type: array
                     items:
@@ -421,10 +404,12 @@ components:
         ProductSeries:
             type: object
             additionalProperties: false
-            required: [period, productId, buckets]
+            required: [period, limits, productId, buckets]
             properties:
                 period:
                     $ref: '#/components/schemas/StatsPeriod'
+                limits:
+                    $ref: '#/components/schemas/StatsLimits'
                 productId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 title:
@@ -448,10 +433,12 @@ components:
         CategoryStats:
             type: object
             additionalProperties: false
-            required: [period, categories]
+            required: [period, limits, categories]
             properties:
                 period:
                     $ref: '#/components/schemas/StatsPeriod'
+                limits:
+                    $ref: '#/components/schemas/StatsLimits'
                 categories:
                     type: array
                     items:
@@ -473,10 +460,12 @@ components:
         PaymentMix:
             type: object
             additionalProperties: false
-            required: [period, rows]
+            required: [period, limits, rows]
             properties:
                 period:
                     $ref: '#/components/schemas/StatsPeriod'
+                limits:
+                    $ref: '#/components/schemas/StatsLimits'
                 rows:
                     type: array
                     items:
@@ -485,10 +474,12 @@ components:
         OperationsStats:
             type: object
             additionalProperties: false
-            required: [period, cancellation, returns, refunds]
+            required: [period, limits, cancellation, returns, refunds]
             properties:
                 period:
                     $ref: '#/components/schemas/StatsPeriod'
+                limits:
+                    $ref: '#/components/schemas/StatsLimits'
                 cancellation:
                     type: object
                     additionalProperties: false
@@ -521,10 +512,12 @@ components:
         CustomerStats:
             type: object
             additionalProperties: false
-            required: [period, customers, newCustomers, returningCustomers, returningRate]
+            required: [period, limits, customers, newCustomers, returningCustomers, returningRate]
             properties:
                 period:
                     $ref: '#/components/schemas/StatsPeriod'
+                limits:
+                    $ref: '#/components/schemas/StatsLimits'
                 customers: { type: integer, description: 'Accounts with at least one paid order in the period.' }
                 newCustomers: { type: integer, description: 'Of those, accounts whose first paid order is in the period.' }
                 returningCustomers: { type: integer }
@@ -550,6 +543,8 @@ components:
                     type: integer
                     description: Orders `paid` or `processing`, so not yet handed to a carrier.
 
+        # The ceilings every period read enforces, carried on each period answer so a form can
+        # refuse a period before a round trip does — no read of its own.
         StatsLimits:
             type: object
             additionalProperties: false

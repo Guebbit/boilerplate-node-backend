@@ -160,7 +160,7 @@ describe('the OpenAPI bundle', () => {
         // Whatever the bundle documents and no module claims belongs to the root — the
         // application shell answering for itself: `GET /` (the client ping), `GET /livez`
         // (liveness) and `GET /readyz` (readiness) and `GET /.well-known/security.txt`,
-        // all in `src/app/system-routes.ts`, none owned by a module.
+        // all in `src/app/system-routes.ts`, and `GET /config` in `src/app/config-routes.ts`, none owned by a module.
         const fromRoot = documented.filter((url) => !fromModules.includes(url));
 
         expect([...fromModules, ...fromRoot].toSorted()).toEqual(documented.toSorted());
@@ -168,6 +168,7 @@ describe('the OpenAPI bundle', () => {
         expect(fromRoot.toSorted()).toEqual([
             '/',
             '/.well-known/security.txt',
+            '/config',
             '/livez',
             '/readyz'
         ]);
