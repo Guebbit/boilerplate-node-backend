@@ -630,7 +630,6 @@ components:
                     type: boolean
                     default: true
                 imageUpload:
-                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional user profile image
@@ -688,7 +687,6 @@ components:
                     maxLength: 64
                     minLength: 1
                 imageUpload:
-                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional user profile image
@@ -753,7 +751,6 @@ components:
                     maxLength: 64
                     minLength: 1
                 imageUpload:
-                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional user profile image

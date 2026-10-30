@@ -18,6 +18,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { ERROR_CODES } from '@api/error-codes';
+import { ACCEPTED_UPLOAD_TYPES } from '@api/upload-types';
 import { createLocaleContext, runWithLocaleContext, t } from '@infrastructure/i18n';
 import {
     ACCEPTED_UPLOAD_MIMETYPES,
@@ -232,7 +233,7 @@ const refuseUnsupportedType = (error: unknown, response: Response, next: NextFun
         {
             code: ERROR_CODES.UNSUPPORTED_MEDIA_TYPE,
             message: t('generic.error-unsupported-media-type'),
-            details: { accepted: [...ACCEPTED_UPLOAD_MIMETYPES] }
+            details: { accepted: [...ACCEPTED_UPLOAD_TYPES] }
         }
     ]);
 };

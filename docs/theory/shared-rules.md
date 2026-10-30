@@ -121,36 +121,36 @@ flowchart LR
 
 ## 7 · Today
 
-| File                                        | Read by                                                                                                                              |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `rules/frontend-links.yaml`                 | `http/frontend-link.ts`, read by account, users, orders, sitemap; handed to the frontend, whose router spec walks it                 |
-| `scenarios/personas.yaml`                   | `scenarios/accounts.ts`, `users.ts`, `config.ts`; the generated account tables in `docs/tools/demo-profile.md`                       |
-| `rules/log-redaction.yaml`                  | `adapters/logger.ts`, `runtime/otel-sdk.ts`                                                                                          |
-| `rules/audit-actions.yaml`                  | `observability/audit-actions.generated.ts`, imported by `observability/audit.ts`                                                     |
-| `modules/account/rules.yaml`                | `account/rules.generated.ts`, read by `two-factor/lockout.ts`, `delivered-codes.ts`                                                  |
-| `modules/webhooks/rules.yaml`               | `webhooks/domain/rules.generated.ts`, read by `domain/backoff.ts`                                                                    |
-| `modules/example/rules.yaml`                | `example/rules.generated.ts`, read by `example/audit.ts`, `analytics.ts`                                                             |
-| `rules/rate-limits.yaml`                    | `http/middlewares/rate-limits.generated.ts`, read by `rate-limit.ts` (the browsing, api-key and upload budgets)                      |
-| `modules/<m>/module.yaml` `rateLimits:`     | `<m>/rate-limits.generated.ts`, read by `<m>/rate-limits.ts` (account, cart, example, invoicing, orders, payments, returns, tickets) |
-| `rules/outbox.yaml`                         | `kernel/outbox.generated.ts`, read by `kernel/config.ts` (env defaults) and `kernel/outbox.ts` (backoff)                             |
-| `authorization-keys.yaml` `stepUp:`         | `kernel/step-up.generated.ts`, read by `kernel/config.ts` (`NODE_REAUTH_TIME_*` defaults)                                            |
-| `rules/defaults.yaml`                       | `config/defaults.generated.ts`, read by the http, persistence and adapters configs (cache, idempotency, page size, images, uploads)  |
-| `rules/metrics.yaml`                        | `observability/metrics.generated.ts`, turned into constructor options by `observability/metric-config.ts`                            |
-| `rules/semantic-log-names.yaml`             | `adapters/semantic-log-names.generated.ts`, read by `adapters/semantic-names.ts`                                                     |
-| `rules/images.yaml`                         | `adapters/images.generated.ts`, read by `image-signatures.ts`, `image-store.ts`, `image.ts`, `image.worker.ts`                       |
-| `rules/jobs.yaml`                           | `app/jobs.generated.ts`, read by `app/jobs.ts` (the kernel jobs)                                                                     |
-| `modules/<m>/module.yaml` `jobs:`           | `<m>/jobs.generated.ts`, read by `<m>/jobs.ts` (every module with a job, `notifications` included)                                   |
-| `locales/*.json`                            | `infrastructure/i18n/catalog.ts` (the app-level dictionaries; each module's own sit in its `locales/`)                               |
-| `rules/password-hash.yaml`                  | `security/password-hash.ts`                                                                                                          |
-| `rules/breached-passwords.txt`              | `security/breached-passwords`                                                                                                        |
-| `cases/log-redaction.cases.yaml`            | `tests/cross-cutting/log-redaction-conformance.test.ts`                                                                              |
-| `cases/crypto.cases.yaml`                   | `tests/cross-cutting/crypto-conformance.test.ts`                                                                                     |
-| `cases/env-booleans.cases.yaml`             | `tests/cross-cutting/env-booleans-conformance.test.ts`                                                                               |
-| `cases/money.cases.yaml`                    | `tests/cross-cutting/money-conformance.test.ts`                                                                                      |
-| `cases/normalize-email.cases.yaml`          | `tests/cross-cutting/normalize-email-conformance.test.ts`                                                                            |
-| `cases/outbox-backoff.cases.yaml`           | `tests/cross-cutting/outbox-backoff-conformance.test.ts`                                                                             |
-| `cases/permission-model-version.cases.yaml` | `tests/cross-cutting/permission-model-version-conformance.test.ts`                                                                   |
-| `cases/rate-limit-keys.cases.yaml`          | `tests/cross-cutting/rate-limit-keys-conformance.test.ts`                                                                            |
-| `cases/request-headers.cases.yaml`          | `tests/cross-cutting/request-headers-conformance.test.ts`                                                                            |
-| `cases/security-headers.cases.yaml`         | `tests/cross-cutting/security-headers-conformance.test.ts`                                                                           |
-| `cases/ssrf.cases.yaml`                     | `tests/cross-cutting/ssrf-conformance.test.ts`                                                                                       |
+| File                                        | Read by                                                                                                                                                                |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rules/frontend-links.yaml`                 | `http/frontend-link.ts`, read by account, users, orders, sitemap; handed to the frontend, whose router spec walks it                                                   |
+| `scenarios/personas.yaml`                   | `scenarios/accounts.ts`, `users.ts`, `config.ts`; the generated account tables in `docs/tools/demo-profile.md`                                                         |
+| `rules/log-redaction.yaml`                  | `adapters/logger.ts`, `runtime/otel-sdk.ts`                                                                                                                            |
+| `rules/audit-actions.yaml`                  | `observability/audit-actions.generated.ts`, imported by `observability/audit.ts`                                                                                       |
+| `modules/account/rules.yaml`                | `account/rules.generated.ts`, read by `two-factor/lockout.ts`, `delivered-codes.ts`                                                                                    |
+| `modules/webhooks/rules.yaml`               | `webhooks/domain/rules.generated.ts`, read by `domain/backoff.ts`                                                                                                      |
+| `modules/example/rules.yaml`                | `example/rules.generated.ts`, read by `example/audit.ts`, `analytics.ts`                                                                                               |
+| `rules/rate-limits.yaml`                    | `http/middlewares/rate-limits.generated.ts`, read by `rate-limit.ts` (the browsing, api-key and upload budgets)                                                        |
+| `modules/<m>/module.yaml` `rateLimits:`     | `<m>/rate-limits.generated.ts`, read by `<m>/rate-limits.ts` (account, cart, example, invoicing, orders, payments, returns, tickets)                                   |
+| `rules/outbox.yaml`                         | `kernel/outbox.generated.ts`, read by `kernel/config.ts` (env defaults) and `kernel/outbox.ts` (backoff)                                                               |
+| `authorization-keys.yaml` `stepUp:`         | `kernel/step-up.generated.ts`, read by `kernel/config.ts` (`NODE_REAUTH_TIME_*` defaults)                                                                              |
+| `rules/defaults.yaml`                       | `config/defaults.generated.ts`, read by the http, persistence and adapters configs (cache, idempotency, page size, images, uploads)                                    |
+| `rules/metrics.yaml`                        | `observability/metrics.generated.ts`, turned into constructor options by `observability/metric-config.ts`                                                              |
+| `rules/semantic-log-names.yaml`             | `adapters/semantic-log-names.generated.ts`, read by `adapters/semantic-names.ts`                                                                                       |
+| `rules/images.yaml`                         | `adapters/images.generated.ts`, read by `image-signatures.ts`, `image-store.ts`, `image.ts`, `image.worker.ts`; signatures only: the accepted types are the contract's |
+| `rules/jobs.yaml`                           | `app/jobs.generated.ts`, read by `app/jobs.ts` (the kernel jobs)                                                                                                       |
+| `modules/<m>/module.yaml` `jobs:`           | `<m>/jobs.generated.ts`, read by `<m>/jobs.ts` (every module with a job, `notifications` included)                                                                     |
+| `locales/*.json`                            | `infrastructure/i18n/catalog.ts` (the app-level dictionaries; each module's own sit in its `locales/`)                                                                 |
+| `rules/password-hash.yaml`                  | `security/password-hash.ts`                                                                                                                                            |
+| `rules/breached-passwords.txt`              | `security/breached-passwords`                                                                                                                                          |
+| `cases/log-redaction.cases.yaml`            | `tests/cross-cutting/log-redaction-conformance.test.ts`                                                                                                                |
+| `cases/crypto.cases.yaml`                   | `tests/cross-cutting/crypto-conformance.test.ts`                                                                                                                       |
+| `cases/env-booleans.cases.yaml`             | `tests/cross-cutting/env-booleans-conformance.test.ts`                                                                                                                 |
+| `cases/money.cases.yaml`                    | `tests/cross-cutting/money-conformance.test.ts`                                                                                                                        |
+| `cases/normalize-email.cases.yaml`          | `tests/cross-cutting/normalize-email-conformance.test.ts`                                                                                                              |
+| `cases/outbox-backoff.cases.yaml`           | `tests/cross-cutting/outbox-backoff-conformance.test.ts`                                                                                                               |
+| `cases/permission-model-version.cases.yaml` | `tests/cross-cutting/permission-model-version-conformance.test.ts`                                                                                                     |
+| `cases/rate-limit-keys.cases.yaml`          | `tests/cross-cutting/rate-limit-keys-conformance.test.ts`                                                                                                              |
+| `cases/request-headers.cases.yaml`          | `tests/cross-cutting/request-headers-conformance.test.ts`                                                                                                              |
+| `cases/security-headers.cases.yaml`         | `tests/cross-cutting/security-headers-conformance.test.ts`                                                                                                             |
+| `cases/ssrf.cases.yaml`                     | `tests/cross-cutting/ssrf-conformance.test.ts`                                                                                                                         |

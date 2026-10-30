@@ -32,6 +32,7 @@ import { orderSections } from './section-order';
 import { assembleRoot, readModuleFragments } from './root-assembly';
 import { withBrowserEvents } from './analytics-browser-events';
 import { withCookieAuth } from './cookie-auth';
+import { withImageUploadEncoding } from './image-upload-encoding';
 import { stageExportSchema } from './personal-data-assembly';
 import { pruneUnused } from './prune-unused';
 import { REPO_ROOT, MODULES_ROOT, modulesWith } from '../modules-on-disk';
@@ -643,7 +644,11 @@ const compile = (): string => {
                     withVersionedResources(
                         withNotModified(
                             withAppLevelResponses(
-                                withCookieAuth(withBrowserEvents(readFileSync(temporary, 'utf8')))
+                                withCookieAuth(
+                                    withImageUploadEncoding(
+                                        withBrowserEvents(readFileSync(temporary, 'utf8'))
+                                    )
+                                )
                             ),
                             revalidatingReads()
                         )

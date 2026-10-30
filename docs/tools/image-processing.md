@@ -56,6 +56,24 @@ flowchart LR
     class Quarantine,Public,DB,Writeback store;
 ```
 
+## Which types an upload accepts
+
+The **contract** lists them, once: the root's `x-image-upload-types` (`shared/contracts/openapi.root.yaml`)
+is stamped by the bundler onto every upload body as OpenAPI 3.1's `encoding.imageUpload.contentType`.
+`npm run gen:api` turns that into `api/upload-types.ts` (`ACCEPTED_UPLOAD_TYPES`), which the backend's
+`fileFilter` reads and the frontend's file picker reads its own generated copy.
+
+| Fact                        | Home                                   | Why there                                          |
+| --------------------------- | -------------------------------------- | -------------------------------------------------- |
+| Accepted types              | the contract                           | API surface: a client must know what to send       |
+| Byte signatures, extensions | `shared/rules/images.yaml`             | server internals; the twin needs them too          |
+| Largest file                | `NODE_MAX_UPLOAD_BYTES`, env each side | a static number cannot know a deployment's setting |
+
+The signature table must cover exactly the contract's types: `SIGNATURES_COVER_CONTRACT` in
+`image-signatures.ts` fails `tsc` when a type has no signature, or a signature has no type.
+`image/jpg` is not API surface: the table lists it as an alias so a sloppy client is still taken,
+and a wrong type answers 415 with the contract's list in `details.accepted`.
+
 ## Where the code lives
 
 | Concern                                          | File                                                                         |
