@@ -902,8 +902,9 @@ export default tseslint.config(
                 },
                 { type: 'kernel', pattern: 'src/kernel', partialMatch: false },
                 /*
-                 * Our own pure, generic code that every tier — `domain/` included — may import
-                 * (Money first). It reaches npm and nothing else, so sharing it loosens no wall.
+                 * Our own pure code that every tier — `domain/` included — may import: generic
+                 * (Money) or domain-specific (the postal-address PII fields). It reaches npm and
+                 * `@types` and nothing else, so sharing it loosens no wall.
                  * See `docs/theory/layers.md`.
                  */
                 {

@@ -1,7 +1,7 @@
 /**
  * @module
  * Encrypts and decrypts one address-book entry's PII fields —
- * fullName/street/city/zip/country/phone, the fields GDPR calls out specifically. `./repository`
+ * the shared postal-address fields, the ones GDPR calls out specifically. `./repository`
  * is the one caller of both directions: `encryptAddressItem` covers the two writes that place a
  * whole entry (`create`'s seed path, `addEntry`), and `decryptAddressItem` covers every reader
  * (`addresses/service.ts`'s wire mapping, `cart/services/checkout.ts`'s order snapshot). Neither
@@ -11,16 +11,35 @@
 
 import { encryptPii, decryptPii } from '@infrastructure/security/pii-encryption';
 import type { Types } from 'mongoose';
+import { POSTAL_ADDRESS_FIELDS, type PostalAddressField } from '@domain-primitives/postal-address';
 import type { AddressItem } from './model';
 
 /** The PII fields every entry must have, in the order they are reported. */
-export const REQUIRED_PII_FIELDS = ['fullName', 'street', 'city', 'zip', 'country'] as const;
+export const REQUIRED_PII_FIELDS = [
+    'fullName',
+    'street',
+    'city',
+    'zip',
+    'country'
+] as const satisfies readonly Exclude<PostalAddressField, 'phone'>[];
+
+/**
+ * Entry keys that are not personal data. Anything else on `AddressItem` must be in the shared
+ * postal-address list, or {@link ADDRESS_PII_FIELDS} stops compiling.
+ */
+type NonPiiItemKeys = '_id' | 'label' | 'default';
 
 /**
  * Every PII field of an entry — the one list encrypt, decrypt, update and re-encrypt all walk, so a
  * new field cannot be stored in plaintext by missing one of them. `phone` alone is optional.
+ * It is the shared list, narrowed at compile time to `AddressItem`'s own keys: a field added to the
+ * entry and not to the primitive turns the type into `never`.
  */
-export const ADDRESS_PII_FIELDS = [...REQUIRED_PII_FIELDS, 'phone'] as const;
+export const ADDRESS_PII_FIELDS: [
+    Exclude<keyof AddressItem, NonPiiItemKeys | PostalAddressField>
+] extends [never]
+    ? readonly PostalAddressField[]
+    : never = POSTAL_ADDRESS_FIELDS;
 
 /**
  * The PII fields shared by a stored entry and an incoming write — `AddressItem` and the
