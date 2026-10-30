@@ -407,7 +407,7 @@ components:
                 # ledger stores a signed delta anyway.
                 delta:
                     type: integer
-                    description: Signed. Negative is shrinkage or damage; positive is a miscount found in your favour.
+                    description: Signed and non-zero (0 is a 422 naming `delta`). Negative is shrinkage or damage; positive is a miscount found in your favour.
                 note:
                     type: string
                     maxLength: 1000
