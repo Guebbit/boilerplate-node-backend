@@ -183,6 +183,7 @@ diff looks like the backend broke something.
 | `asyncapi.public.yaml`                                 | `asyncapi.yaml` — the shared subset is the whole of the async contract as far as that repo is concerned                                                                                                           |
 | `shared/authorization-keys.yaml`                       | `<frontend>/contracts/authorization-keys.yaml` — read there only for `actions:`, see [Permission Actions](./permission-actions.md)                                                                                |
 | `shared/rules/frontend-links.yaml`                     | `<frontend>/contracts/frontend-links.yaml` — the paths mail and sitemap links point at; the frontend's router spec walks every one, so a renamed route fails there instead of as a 404 in an inbox                |
+| `shared/rules/cookies.yaml`                            | `<frontend>/contracts/cookies.yaml` — every cookie the backend sets; the frontend's browser-storage inventory is built from it and its own file, and the build fails when a row has no place in the display order |
 | `scenarios/support/tls/webhook-sink-{ca,cert,key}.pem` | `<frontend>/scripts/e2e/tls/` — the demo webhook sink's test CA and leaf: this side trusts the CA, the frontend's Cypress sink serves the leaf. See [HTTPS in the demo](../modules/webhooks.md#https-in-the-demo) |
 
 There is no analytics event catalogue on the list: pageviews are automatic and everything with a

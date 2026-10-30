@@ -76,6 +76,12 @@ export const SHARED_FILES: readonly SharedFile[] = [
      */
     { backend: 'shared/rules/frontend-links.yaml', frontend: 'contracts/frontend-links.yaml' },
     /*
+     * Every cookie the backend sets. The frontend builds its browser-storage inventory (the privacy
+     * page's table, the names its code reads) from this file plus its own, and fails its build when
+     * a row here has no place in its display order.
+     */
+    { backend: 'shared/rules/cookies.yaml', frontend: 'contracts/cookies.yaml' },
+    /*
      * The demo webhook sink's TLS pair. The backend trusts the CA (the dev preload), the
      * frontend's Cypress sink serves the leaf and its key: a fork between them fails every demo
      * delivery at the handshake, and nothing in either suite would say why.
