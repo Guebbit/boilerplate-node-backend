@@ -345,7 +345,7 @@ components:
         InventoryLevel:
             type: object
             additionalProperties: false
-            required: [productId, title, onHand, reserved, available, backorderLimit, backordered]
+            required: [productId, title, onHand, reserved, available, backordered]
             properties:
                 productId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -362,9 +362,9 @@ components:
                     type: integer
                     minimum: 0
                 backorderLimit:
-                    type: [integer, 'null']
+                    type: integer
                     minimum: 0
-                    description: How many units may be backordered at once. `0` means it is closed; `null` means there is no cap.
+                    description: How many units may be backordered at once. `0` means it is closed; absent means there is no cap.
                 backordered:
                     type: integer
                     minimum: 0
@@ -427,7 +427,7 @@ components:
         PreorderLevel:
             type: object
             additionalProperties: false
-            required: [productId, title, backorderLimit, backordered, held, paid, ordered]
+            required: [productId, title, backordered, held, paid, ordered]
             properties:
                 productId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -436,9 +436,9 @@ components:
                 releaseDate:
                     $ref: '../products/openapi.yaml#/components/schemas/ReleaseDate'
                 backorderLimit:
-                    type: [integer, 'null']
+                    type: integer
                     minimum: 0
-                    description: The cap on owed units. `null` means there is no cap.
+                    description: The cap on owed units. Absent means there is no cap.
                 backordered:
                     type: integer
                     minimum: 0
@@ -452,9 +452,9 @@ components:
                     minimum: 0
                     description: Outstanding units on paid orders, waiting for stock oldest payment first.
                 left:
-                    type: [integer, 'null']
+                    type: integer
                     minimum: 0
-                    description: '`backorderLimit - backordered`, never below zero: how many more may be ordered. `null` when there is no cap. Absent while the product is neither a preorder nor open to backorder: its cap then promises nothing.'
+                    description: '`backorderLimit - backordered`, never below zero: how many more may be ordered. Absent when there is no number to show: no cap (the row has no `backorderLimit` either), or the product is neither a preorder nor open to backorder, so its cap promises nothing.'
                 ordered:
                     type: integer
                     minimum: 0

@@ -13,12 +13,13 @@
  * row only ever belongs to the mode that issued it. See docs/theory/sessions.md.
  */
 
+import type { RememberTier } from '@types';
 import type { Request, Response } from 'express';
 import type { Types } from 'mongoose';
 import type { Resolution, StreamWatch } from '@kernel/authentication';
 import type { ResolveOptions, AuthContext, Session } from '@types';
 import type { SessionMode } from '../session-mode';
-import { getSessionMode, type RefreshTokenExpiryTime } from './config';
+import { getSessionMode } from './config';
 import { jwtStrategy } from './jwt-strategy';
 import { cookieStrategy } from './cookie-strategy';
 
@@ -40,7 +41,7 @@ export type SessionTransport = (typeof SESSION_TRANSPORTS)[number];
 /** What a login asks of a strategy. */
 export interface IssueOptions {
     /** The ticked "remember me" tier; absent for a browser-session login. */
-    remember?: RefreshTokenExpiryTime;
+    remember?: RememberTier;
     /** How `authTime` was proved; the mint refuses a 2FA account whose proof lacks `otp`. */
     amr: readonly string[];
     /**
@@ -59,7 +60,7 @@ export interface IssueOptions {
  * deletes the session (a password change, a factor change), so the re-mint can continue it.
  */
 export interface SessionSnapshot {
-    remember?: RefreshTokenExpiryTime;
+    remember?: RememberTier;
     familyId?: Types.ObjectId;
     startedAt?: Date;
     expiresAt?: Date;

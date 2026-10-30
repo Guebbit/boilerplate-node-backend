@@ -367,12 +367,15 @@ Decisions rather than mechanics:
 
 ## Abilities {#abilities}
 
-`GET /account/abilities` publishes the caller's packed rules in both scopes, so a client renders
-from the server's rules instead of a copy. It also carries `grantableRoles`: the tenant roles the
+`GET /account` carries the caller's packed rules in both scopes as `abilities`, and the idle
+clock as `activity`. A sign-in answer carries the whole `account` view (`AuthTokens.account`), and
+a refresh answer carries `abilities`, so a client needs no follow-up read. A client renders from
+the server's rules instead of a copy. An API key reads nothing of this: its own record lists the
+permissions it was minted with. It also carries `grantableRoles`: the tenant roles the
 caller may assign through the user writes. The list comes from `grantableRoles` in the
 [`access`](./access.md) service, which asks the same rule as the `409` those writes answer, so a role
 picker built from it offers exactly what the write accepts. Like the rules, it has no authority:
-the write is re-checked. Empty for an anonymous caller.
+the write is re-checked.
 
 ## Terms version {#terms-version}
 

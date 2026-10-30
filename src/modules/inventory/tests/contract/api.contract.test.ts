@@ -339,7 +339,7 @@ describe('PATCH /inventory/levels/:productId', () => {
             .send({ backorderLimit: null });
 
         expect(response.status).toBe(200);
-        expect(response.body.backorderLimit).toBeNull();
+        expect(response.body).not.toHaveProperty('backorderLimit');
     });
 
     it('is open to the warehouse and closed to a customer', async () => {

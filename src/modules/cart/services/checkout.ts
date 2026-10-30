@@ -605,7 +605,7 @@ const runCheckout = async (
     const shippingResolution = await resolveShipping(
         userId,
         addressId,
-        chosenMethodId ?? undefined,
+        chosenMethodId,
         needsShipping(joined)
     );
     if (!shippingResolution.ok) return shippingResolution.reject;

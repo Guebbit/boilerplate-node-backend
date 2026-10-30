@@ -65,7 +65,7 @@ const EMPTY_CART = {
     checkoutable: false,
     // An empty basket needs no shipment — `shippingOptionsFor` reads `needsShipping` as false
     // for an empty line list, the same as an all-digital one.
-    shipping: { required: false, selected: null, options: [] }
+    shipping: { required: false, options: [] }
 };
 
 /** Reads the persisted quantity for a product, so assertions survive the round trip to Mongo. */
@@ -291,7 +291,7 @@ describe('shipping (FA-D6/B3)', () => {
 
         const { shipping } = await cartService.getForBadge(user.id);
 
-        expect(shipping).toEqual({ required: false, selected: null, options: [] });
+        expect(shipping).toEqual({ required: false, options: [] });
     });
 
     it('prices a free-above threshold live, crossed by the basket alone', async () => {
@@ -330,7 +330,7 @@ describe('shipping (FA-D6/B3)', () => {
 
         const { shipping } = await cartService.getForBadge(user.id);
 
-        expect(shipping.selected).toBeNull();
+        expect(shipping.selected).toBeUndefined();
         expect(shipping.options.map((option) => option.id)).not.toContain('express');
     });
 });
@@ -407,7 +407,6 @@ describe('setItemById', () => {
             // against this basket's own `itemsTotal` (50 — under `standard`'s 100 free-above).
             shipping: {
                 required: true,
-                selected: null,
                 options: [
                     { id: 'standard', price: 5, requiresAddress: true, tracked: false },
                     { id: 'express', price: 15, requiresAddress: true, tracked: true },

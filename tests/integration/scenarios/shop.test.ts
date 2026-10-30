@@ -150,7 +150,7 @@ describe('each subject names a row that really has the property', () => {
 
     it('product.barebones carries only what the schema requires', async () => {
         const product = await productModel.findById(subjects['product.barebones']).exec();
-        expect(product?.description).toBe('');
+        expect(product?.description).toBeUndefined();
     });
 
     it('product.inStock is buyable once the flows have finished shopping', async () => {

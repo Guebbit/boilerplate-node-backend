@@ -5,13 +5,14 @@
  * emitted here rather than in the service — see the note below on why.
  */
 
+import { RememberTier } from '@types';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { isRestorable } from '@modules/users';
 import { accountService, twoFactorService } from '../services';
-import { RefreshTokenExpiryTime } from '../session/config';
 import { SESSION_TRANSPORTS } from '../session/strategy';
 import { issueSession } from '../session/session';
+import { withAccountView } from '../session/account-view';
 import { rememberDevice } from '../session/device-cookie';
 import { recordLoginFailure, recordLoginSuccess } from '../session/login-observability';
 import { successResponse } from '@infrastructure/http/response';
@@ -22,7 +23,7 @@ import { AMR } from '../domain/session-proof';
 
 /** The "remember me" tiers the contract declares, checked against the enum the cookies use. */
 const rememberSchema = z.object({
-    remember: z.enum(RefreshTokenExpiryTime).optional(),
+    remember: z.enum(RememberTier).optional(),
     transport: z.enum(SESSION_TRANSPORTS).optional()
 });
 
@@ -108,18 +109,21 @@ export const postLogin = (
                 });
             }
 
+            const amr = [AMR.password];
             return issueSession(request, response, userId, {
-                amr: [AMR.password],
+                amr,
                 provedAt,
                 remember,
                 transport
             }).then((issued) =>
-                recordLoginSuccess(request, userId).then(() => {
-                    // A completed login marks this browser familiar for the account, so a
-                    // lockout an attacker caused cannot keep the owner out.
-                    rememberDevice(request, response, data.email);
-                    successResponse<LoginOutcome>(response, issued, 200);
-                })
+                recordLoginSuccess(request, userId)
+                    .then(() => withAccountView(issued, userId, { amr, provedAt }))
+                    .then((body) => {
+                        // A completed login marks this browser familiar for the account, so a
+                        // lockout an attacker caused cannot keep the owner out.
+                        rememberDevice(request, response, data.email);
+                        successResponse<LoginOutcome>(response, body, 200);
+                    })
             );
         })
         .catch((error: unknown) => {

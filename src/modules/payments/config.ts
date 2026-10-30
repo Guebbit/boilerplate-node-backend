@@ -12,6 +12,7 @@
 import { electronicFormatIBAN, isValidBIC, isValidIBAN } from 'ibantools';
 import { defineConfig } from '@infrastructure/config/define';
 import { int, secret, text } from '@infrastructure/config/fields';
+import type { PaymentMethodId } from '@types';
 
 /**
  * The account name a transfer should be made out to. Unset means transfer is not offered at all.
@@ -67,7 +68,7 @@ export const bankTransferEnabled = (): boolean =>
  * One payment method `GET /payments/methods` and checkout may offer.
  */
 export interface PaymentMethodInfo {
-    id: 'card' | 'bank_transfer';
+    id: PaymentMethodId;
     /** Only present for `bank_transfer` — see `bankTransferHoldHours`'s own docblock. */
     holdHours?: number;
 }

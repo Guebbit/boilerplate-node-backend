@@ -17,6 +17,7 @@ import multer, { type FileFilterCallback, type Multer } from 'multer';
 import { randomBytes } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
+import { ERROR_CODES } from '@api/error-codes';
 import { createLocaleContext, runWithLocaleContext, t } from '@infrastructure/i18n';
 import {
     ACCEPTED_UPLOAD_MIMETYPES,
@@ -121,12 +122,20 @@ const fileStorage = multer.diskStorage({
 });
 
 /**
+ * Raised by {@link fileFilter} for a part whose declared type is not an accepted image. It is not
+ * an app error: {@link refuseUnsupportedType} turns it into the 415 before it can reach the
+ * central handler.
+ */
+class UnsupportedUploadTypeError extends Error {}
+
+/**
  * First gate: the type the client CLAIMS.
  *
  * Runs before the file is written, so an obviously-wrong upload never touches disk. Not a real
  * type check — `mimetype` is client-supplied and unverified; the bytes are checked after the
- * write by {@link validateUploadedImages}. Rejecting with `callback(null, false)` silently drops
- * the file (the request still succeeds with no `request.file`), rather than surfacing an Error.
+ * write by {@link validateUploadedImages}. A wrong type is refused with an error (answered as the
+ * 415 by {@link refuseUnsupportedType}), never `callback(null, false)`: that drops the file and
+ * the request succeeds, so the sender is never told.
  *
  * @param request - the in-flight Express request (unused here)
  * @param file - multer's descriptor: fieldname, originalname, mimetype, size
@@ -138,7 +147,9 @@ export const fileFilter = (
     callback: FileFilterCallback
 ): void =>
     // Images only. Note 'image/jpg' is not a real IANA type, but some clients send it anyway.
-    ACCEPTED_UPLOAD_MIMETYPES.has(file.mimetype) ? callback(null, true) : callback(null, false);
+    ACCEPTED_UPLOAD_MIMETYPES.has(file.mimetype)
+        ? callback(null, true)
+        : callback(new UnsupportedUploadTypeError());
 
 /**
  * Ceiling on a single upload, in bytes: `NODE_MAX_UPLOAD_BYTES`, 5 MB by default.
@@ -197,12 +208,34 @@ const withLocaleRestored =
     (middleware: RequestHandler): RequestHandler =>
     (request, response, next) =>
         middleware(request, response, (error?: unknown) => {
-            if (error || !request.locale) {
-                next(error);
-                return;
-            }
-            runWithLocaleContext(createLocaleContext(request.locale), () => next());
+            const proceed = () => (error ? refuseUnsupportedType(error, response, next) : next());
+            if (request.locale) runWithLocaleContext(createLocaleContext(request.locale), proceed);
+            else proceed();
         });
+
+/**
+ * Answers {@link UnsupportedUploadTypeError} with the 415 the contract already declares, listing
+ * the accepted types in `details.accepted` like the Content-Type guard does. Any other error goes
+ * on to the central handler. Runs inside the restored locale context, so the message is
+ * translated.
+ *
+ * @param error - what multer passed to its callback
+ * @param response - answered directly with the 415
+ * @param next - receives any error that is not an unsupported type
+ */
+const refuseUnsupportedType = (error: unknown, response: Response, next: NextFunction): void => {
+    if (!(error instanceof UnsupportedUploadTypeError)) {
+        next(error);
+        return;
+    }
+    rejectResponse(response, 415, [
+        {
+            code: ERROR_CODES.UNSUPPORTED_MEDIA_TYPE,
+            message: t('generic.error-unsupported-media-type'),
+            details: { accepted: [...ACCEPTED_UPLOAD_MIMETYPES] }
+        }
+    ]);
+};
 
 /**
  * Second gate: the type the FILE ACTUALLY IS.

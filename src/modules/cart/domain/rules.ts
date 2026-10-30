@@ -4,7 +4,8 @@
  * See `docs/theory/domain-layer.md`.
  */
 
-import { isBuyable, lineAvailability, type LineAvailability } from './availability';
+import type { LineAvailability } from '@types';
+import { isBuyable, lineAvailability } from './availability';
 
 /**
  * A cart line as the rules see it. `product: null` is what the service-level join

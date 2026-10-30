@@ -16,7 +16,7 @@ per endpoint. This page is the *why* around both.
 
 ## System (public)
 
-A minimal root endpoint used to verify the process is alive.
+A minimal root endpoint used to verify the process is alive, and `GET /config`: the one public answer a client boots from ([what it carries](./config.md)).
 
 An unknown path answers 404. A path the contract knows, asked with a method it does not give it, answers 405 with an `Allow` header ([why and how](./write-methods.md#a-known-path-with-the-wrong-method)).
 
@@ -30,7 +30,7 @@ Endpoints for health checks, metrics, and audit logs. None of these is public. T
 
 > The domain behind these routes: [`account`](../modules/account.md) · routes and middleware: `src/modules/account/routes.ts`
 
-Two ways to stay signed in, picked per deployment (`GET /account/session-config` says which; [the two modes](../theory/sessions.md)). In `jwt` mode login returns a short-lived access `token` and sets a long-lived refresh cookie, and `POST /account/refresh` issues a new access token without re-authenticating. In `cookie` mode login sets one HttpOnly `__Host-session` cookie (or, for a client that asks for `transport: bearer`, returns a `sessionToken` to send as `Authorization: Bearer ses_…`), and there is nothing to refresh. Password reset is a two-step flow: request sends an email with a signed link, confirm validates it and updates the password. Email verification follows the same two-step shape — signup sends the first link automatically, and `verified` on the `User` is informational only (no endpoint refuses an unverified account).
+Two ways to stay signed in, picked per deployment (`session` on `GET /config` says which; [the two modes](../theory/sessions.md)). In `jwt` mode login returns a short-lived access `token` and sets a long-lived refresh cookie, and `POST /account/refresh` issues a new access token without re-authenticating. In `cookie` mode login sets one HttpOnly `__Host-session` cookie (or, for a client that asks for `transport: bearer`, returns a `sessionToken` to send as `Authorization: Bearer ses_…`), and there is nothing to refresh. Password reset is a two-step flow: request sends an email with a signed link, confirm validates it and updates the password. Email verification follows the same two-step shape — signup sends the first link automatically, and `verified` on the `User` is informational only (no endpoint refuses an unverified account).
 
 Expired sessions and one-time tokens need no sweep: each row carries its own expiry date and the
 database deletes it. The one nightly job here, `reap:previous-emails`
@@ -175,7 +175,7 @@ One read, `GET /audit`, behind `read:AuditLog` — the queryable trail, kept for
 
 > The domain behind these routes: [`antibot`](../modules/antibot.md) · routes and middleware: `src/modules/antibot/routes.ts`
 
-`GET /antibot/config` says which human-challenge provider is active; `GET /antibot/challenge` issues the work a self-hosted provider asks for.
+`antibot` on `GET /config` says which human-challenge provider is active; `GET /antibot/challenge` issues the work a self-hosted provider asks for.
 
 ## Analytics
 

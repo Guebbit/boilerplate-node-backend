@@ -11,8 +11,8 @@ import type { AuthTokens, LoginRestoreRequest } from '@types';
 import { t } from '@infrastructure/i18n';
 import { accountService } from '../services';
 import { issueSession } from '../session/session';
+import { withAccountView } from '../session/account-view';
 import { rememberDevice } from '../session/device-cookie';
-import { toRememberTier } from '../session/config';
 import { recordLoginSuccess } from '../session/login-observability';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
@@ -51,16 +51,18 @@ export const postLoginRestore = (
             const userId = user._id.toString();
 
             return issueSession(request, response, userId, {
-                remember: toRememberTier(parsed.remember),
+                remember: parsed.remember,
                 amr,
                 provedAt,
                 transport: parsed.transport
             }).then((issued) =>
-                recordLoginSuccess(request, userId).then(() => {
-                    destroyDeletionChallengeCookie(response);
-                    rememberDevice(request, response, user.email);
-                    successResponse<AuthTokens>(response, issued, 200);
-                })
+                recordLoginSuccess(request, userId)
+                    .then(() => withAccountView(issued, userId, { amr, provedAt }))
+                    .then((body) => {
+                        destroyDeletionChallengeCookie(response);
+                        rememberDevice(request, response, user.email);
+                        successResponse<AuthTokens>(response, body, 200);
+                    })
             );
         })
         .catch((error: unknown) => {

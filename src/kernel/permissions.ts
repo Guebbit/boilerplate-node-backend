@@ -353,7 +353,7 @@ const expandSets = (owner: string, names: readonly string[]): string[] => [
 ];
 
 /**
- * A fingerprint of a permission-rule set, for `GET /account/abilities`' cache-busting `version`.
+ * A fingerprint of a permission-rule set, for the abilities' cache-busting `version`.
  *
  * A plain COUNT (the previous version of this) cannot tell "the same 40 rules" from "40 DIFFERENT
  * rules" — a rule rename or a rule-for-rule swap leaves the length untouched, so a client's cached
@@ -373,15 +373,6 @@ export const permissionModelVersion = (ids: readonly string[]): number => {
     const digest = createHash('sha256').update(ids.toSorted().join('\n')).digest();
     return digest.readUInt32BE(0);
 };
-
-/**
- * Every CASL subject a declared rule names, deduplicated and sorted — published on
- * `GET /account/abilities` so a client's `meta.can` rules can be typed against the real set
- * instead of an unchecked string.
- */
-export const PERMISSION_SUBJECTS: readonly string[] = [
-    ...new Set(PERMISSION_RULES.map((entry) => entry.subject))
-].toSorted();
 
 /** Every preset role, read once at import — fixed data, not a runtime-editable set; see this module's own docblock. */
 export const PRESET_ROLES: readonly PresetRole[] = rolesDocument.roles.map((role) => ({

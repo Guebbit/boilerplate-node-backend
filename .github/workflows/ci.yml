@@ -33,7 +33,7 @@ name: CI
 #                     (outside the gate until its first green run — see its own comment)
 #
 # The slow and hunting suites live elsewhere on a schedule: mutation.yml, fuzz.yml (the deep pass —
-# the shallow one is in `complete`), schemathesis.yml and order-random.yml.
+# the shallow one is in `complete`) and order-random.yml.
 
 on:
     # Run on every PR and on direct pushes to main.

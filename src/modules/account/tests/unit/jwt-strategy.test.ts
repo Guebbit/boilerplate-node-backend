@@ -6,6 +6,7 @@
  * layer itself is `./session-jwt.test.ts`'s and is REPLACED here.
  */
 
+import { RememberTier } from '@types';
 import { Types } from 'mongoose';
 import { asStub } from '@tests/stub';
 import { setEnvironment } from '@tests/environment';
@@ -57,7 +58,6 @@ import { jwtStrategy } from '@modules/account/session/jwt-strategy';
 import * as jwt from '@modules/account/session/jwt';
 import { resolveProof } from '@modules/account/session/auth-context';
 import { sessionRepository } from '@modules/account/repository';
-import { RefreshTokenExpiryTime } from '@modules/account/session/config';
 import { hashToken } from '@infrastructure/security/hash-token';
 import { cookieSet, recordingResponse, requestWith } from '../strategy-doubles';
 
@@ -138,7 +138,7 @@ describe('issue', () => {
         await jwtStrategy.issue(requestWith(), response, USER_ID, {
             amr: ['pwd'],
             provedAt: Date.now(),
-            remember: RefreshTokenExpiryTime.MEDIUM
+            remember: RememberTier.medium
         });
 
         expect(cookieSet(cookie, '__Host-session')?.[2].maxAge).toBe(86_400_000);
@@ -161,7 +161,7 @@ describe('issue', () => {
 
 describe('reissue', () => {
     it('re-mints unguarded, keeping the tier the presented refresh cookie carries, and retires it', async () => {
-        tokens.rememberOfRefreshToken.mockResolvedValue(RefreshTokenExpiryTime.MEDIUM);
+        tokens.rememberOfRefreshToken.mockResolvedValue(RememberTier.medium);
         const { cookie, response } = recordingResponse();
 
         const issued = await jwtStrategy.reissue(
@@ -219,7 +219,7 @@ describe('reissue', () => {
     it('takes the tier from a snapshot when the change already deleted the row', async () => {
         await jwtStrategy.reissue(requestWith(), recordingResponse().response, USER_ID, {
             amr: ['pwd'],
-            snapshot: { remember: RefreshTokenExpiryTime.LONG }
+            snapshot: { remember: RememberTier.long }
         });
 
         expect(tokens.rememberOfRefreshToken).not.toHaveBeenCalled();
@@ -252,7 +252,7 @@ describe('remint', () => {
         await expect(
             jwtStrategy.remint(requestWith(), response, USER_ID, {
                 amr: ['pwd', 'otp'],
-                snapshot: { remember: RefreshTokenExpiryTime.MEDIUM }
+                snapshot: { remember: RememberTier.medium }
             })
         ).resolves.toEqual({});
 

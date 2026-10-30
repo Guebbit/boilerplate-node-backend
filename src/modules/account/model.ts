@@ -19,18 +19,16 @@ import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { VERIFICATION_TOKEN_TYPES, ONE_LIVE_TOKEN_TYPES } from './token-types';
 import type { VerificationTokenType } from './token-types';
+import { AccountExportStatus } from '@types';
 import { SESSION_MODES, type SessionMode } from './session-mode';
 
 /** How far an export got. `building` until the worker settles it, then one of the other two. */
-export const EXPORT_STATUSES = ['building', 'ready', 'failed'] as const;
-
-/** One of {@link EXPORT_STATUSES}. */
-export type ExportStatus = (typeof EXPORT_STATUSES)[number];
+export const EXPORT_STATUSES = Object.values(AccountExportStatus);
 
 /** One account's export. */
 export interface AccountExportDocument extends Document {
     userId: Types.ObjectId;
-    status: ExportStatus;
+    status: AccountExportStatus;
     /** The file's name in the export store — the row's own id plus `.json`. */
     file: string;
     /** When the request was made — what a `building` row's age is measured from. */

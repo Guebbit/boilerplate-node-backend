@@ -1,14 +1,14 @@
 /**
  * @module
- * What the sitemap needs from the deployment: the shape of a product page's address and the
- * ceiling on one file's size. The shop's static pages are `STATIC_PAGES` below, not configuration:
+ * What the sitemap needs from the deployment: the ceiling on one file's size (a product page's
+ * address is `products/config.ts`). The shop's static pages are `STATIC_PAGES` below, not configuration:
  * a page exists or not with the frontend's router, not per deployment.
  *
  * See: docs/modules/sitemap.md
  */
 
 import { defineConfig } from '@infrastructure/config/define';
-import { int, text } from '@infrastructure/config/fields';
+import { int } from '@infrastructure/config/fields';
 import { FRONTEND_LINK_RULES } from '@infrastructure/http/frontend-link';
 
 /** The sitemaps.org ceiling on `<url>` entries in one sitemap file. */
@@ -24,8 +24,6 @@ export const STATIC_PAGES: readonly string[] = FRONTEND_LINK_RULES.staticPages;
 export const sitemapConfig = defineConfig({
     name: 'sitemap',
     shape: {
-        // `{id}` is replaced by the product's id, like every `NODE_FRONTEND_LINK_*` template.
-        NODE_FRONTEND_LINK_PRODUCT: text({ default: FRONTEND_LINK_RULES.links.product }),
         // Lowered only to make a file split visible; the ceiling is the protocol's own.
         NODE_SITEMAP_URL_LIMIT: int({ default: SITEMAP_URL_LIMIT, min: 1, max: SITEMAP_URL_LIMIT })
     }

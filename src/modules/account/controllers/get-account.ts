@@ -5,17 +5,18 @@
 
 import type { Request, Response } from 'express';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
-import type { Account } from '@types';
-import { userService } from '@modules/users';
+import type { AccountView } from '@types';
 import { accountService } from '../services';
 import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs } from '@infrastructure/http/controller';
 import { setEtag } from '@infrastructure/http/preconditions';
+import { accountViewOf } from '../session/account-view';
 
 /**
  * GET /account — the authenticated user's full profile, read fresh from the users collection.
  * The JWT only carries id/email/username/admin; echoing it would silently drop `verifiedAt` and
- * `locale`, which the client's verify banner and saved-language flow need.
+ * `locale`, which the client's verify banner and saved-language flow need. It also carries the
+ * caller's abilities and idle clock, so a signed-in reload needs no second call.
  */
 export const getAccount = (request: Request, response: Response): void => {
     const { authContext } = request;
@@ -33,12 +34,10 @@ export const getAccount = (request: Request, response: Response): void => {
                 rejectResponse(response, 401);
                 return;
             }
-            // The version a profile edit sends back as `If-Match`.
+            // The version a profile edit sends back as `If-Match`: over the stored document, not
+            // the body, so a role change never turns an earlier read's `If-Match` into a 412.
             setEtag(response, user);
-            successResponse<Account>(
-                response,
-                userService.toAccount(user, authContext.roles.tenant)
-            );
+            successResponse<AccountView>(response, accountViewOf(user, authContext));
         })
         .catch(catchAs(response, 'getAccount'));
 };

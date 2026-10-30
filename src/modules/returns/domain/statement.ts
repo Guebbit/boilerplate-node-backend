@@ -10,13 +10,8 @@
  * See: docs/modules/returns.md#staff-open-a-return-for-the-buyer
  */
 
+import type { ReturnStatementChannel, StaffStatementChannel } from '@types';
 import type { ReturnKind, ReturnReason } from './lifecycle';
-
-/** How a buyer stated a withdrawal. `online` is the shop's own button. */
-export type StatementChannel = 'online' | 'phone' | 'email' | 'letter' | 'other';
-
-/** The channels staff can record: everything but the shop's own button. */
-export type StaffStatementChannel = Exclude<StatementChannel, 'online'>;
 
 /** What {@link checkStatement} reads. */
 export interface StatementInput {
@@ -36,7 +31,7 @@ export interface StatementInput {
 export interface Statement {
     requestedAt: Date;
     /** Set on a withdrawal only. */
-    statedVia?: StatementChannel;
+    statedVia?: ReturnStatementChannel;
 }
 
 /** The verdict {@link checkStatement} returns. */

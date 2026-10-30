@@ -23,6 +23,7 @@ import {
 } from '@infrastructure/persistence/search';
 import type {
     AuthContext,
+    ListPreorderFulfillmentOrdersCause,
     PreorderFulfillmentOrder,
     PreorderFulfillmentState,
     PreorderProductSummary
@@ -35,7 +36,7 @@ import { presentPreorderFulfillmentOrder, presentProductSummary } from '../prese
 
 /** What the list route accepts, beyond the page. */
 export interface BoardQuery extends PaginationInput {
-    cause?: 'preorder' | 'backorder' | 'any' | undefined;
+    cause?: ListPreorderFulfillmentOrdersCause | undefined;
     state?: PreorderFulfillmentState | undefined;
     productId?: string | undefined;
     late?: boolean | undefined;

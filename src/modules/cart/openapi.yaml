@@ -233,17 +233,6 @@ paths:
                         application/json:
                             schema:
                                 $ref: '../orders/openapi.yaml#/components/schemas/Order'
-                    links:
-                        PayOrder:
-                            operationId: createPayment
-                            parameters:
-                                orderId: '$response.body#/data/id'
-                            description: The new order's id is the `orderId` to freeze into a payment intent.
-                        CancelOrder:
-                            operationId: cancelOrderById
-                            parameters:
-                                id: '$response.body#/data/id'
-                            description: The new order's id can be cancelled directly.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # An `addressId` that names none of the caller's saved addresses — the checkout
@@ -716,7 +705,7 @@ components:
         CartShipping:
             type: object
             additionalProperties: false
-            required: [required, selected, options]
+            required: [required, options]
             description: >-
                 What this basket needs from shipping, and what it may choose from — replaces a
                 client computing its own basket weight and free-above math against the unfiltered
@@ -729,9 +718,9 @@ components:
                         all-digital cart, which `PUT /cart/shipping-method` and checkout both
                         refuse a method against (`CART_SHIPPING_NOT_APPLICABLE`).
                 selected:
-                    type: [string, 'null']
+                    type: string
                     description: >-
-                        The cart's chosen shipping method (`PUT /cart/shipping-method`). `null`
+                        The cart's chosen shipping method (`PUT /cart/shipping-method`). Absent
                         when none is chosen, when `required` is `false`, or once the stored choice
                         no longer fits the basket's weight — the same "reads as none" state
                         checkout itself falls back to (`CART_SHIPPING_METHOD_REQUIRED`).

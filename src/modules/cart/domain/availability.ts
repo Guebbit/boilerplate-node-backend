@@ -6,17 +6,8 @@
  * See: docs/modules/cart.md#line-availability
  */
 
+import type { LineAvailability } from '@types';
 import { fitsStock } from './stock';
-
-/** The contract's `LineAvailability`, spelled out so this layer imports nothing. */
-export type LineAvailability =
-    | 'in_stock'
-    | 'insufficient_stock'
-    | 'out_of_stock'
-    | 'unavailable'
-    | 'preorder'
-    | 'backorder'
-    | 'removed';
 
 /** What the rule reads off a joined product. */
 export interface AvailabilityProduct {

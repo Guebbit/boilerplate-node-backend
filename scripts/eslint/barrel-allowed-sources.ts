@@ -6,8 +6,8 @@
  *
  * Checked forms:
  * - `export * from './x'` / `export type * from './x'` — against the two allowlists below.
- * - `export { x } from './y'` — same allowlists, plus a named pick from `tax`, PRODUCTS' barrel
- *   only (its own VAT lookup) — see `products/index.ts`'s own comment. `factories` is never
+ * - `export { x } from './y'` — same allowlists, plus a named pick from `tax` or `config`,
+ *   PRODUCTS' barrel only (its own VAT lookup, and `productPagePath`) — see `products/index.ts`'s own comment. `factories` is never
  *   allowed from any barrel — CLAUDE.md's own rule — and `factoriesImportPattern`
  *   (`no-restricted-imports` in `eslint.config.ts`) already refuses that import categorically, so
  *   this rule does not need its own allowance for it, dead or otherwise. A named pick from
@@ -88,7 +88,7 @@ export const barrelAllowedSources = ESLintUtils.RuleCreator.withoutDocs<Options,
             notAllowed:
                 '{{declaration}} is not one of the files a barrel may publish — services, domain, ' +
                 'events and emails as values, model and the presenter(s) as `export type *` only, ' +
-                'plus (products only) a named pick from tax. See docs/theory/strategic-ddd.md §5.',
+                'plus (products only) a named pick from tax or config. See docs/theory/strategic-ddd.md §5.',
             modelAsValue:
                 "The model is published as types only — `export type * from './model'`, never " +
                 "`export * from './model'`, which would also publish the mongoose schema and " +
@@ -123,7 +123,7 @@ export const barrelAllowedSources = ESLintUtils.RuleCreator.withoutDocs<Options,
         /** local name → source stem, for `import { x } from './y'; export { x };`. */
         const importSourceOf = new Map<string, string>();
 
-        // `tax` is products' own VAT lookup — a named pick from it is allowed from THIS barrel
+        // `tax` (VAT lookup) and `config` (`productPagePath`) are products' own — a named pick is allowed from THIS barrel
         // only, never from a sibling's, which the module name captured off the file path decides.
         const isProductsBarrel = MODULE_BARREL_PATH.exec(context.filename)?.[1] === 'products';
 
@@ -238,7 +238,7 @@ export const barrelAllowedSources = ESLintUtils.RuleCreator.withoutDocs<Options,
                     }
 
                     if (VALUE_SOURCES.has(stem)) return;
-                    if (stem === 'tax' && isProductsBarrel) return;
+                    if ((stem === 'tax' || stem === 'config') && isProductsBarrel) return;
 
                     context.report({
                         node: node.source,

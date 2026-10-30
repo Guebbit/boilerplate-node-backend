@@ -6,6 +6,7 @@
  * docs/modules/account-sessions.md.
  */
 
+import type { RememberTier } from '@types';
 import { randomUUID } from 'node:crypto';
 import { Types } from 'mongoose';
 import { SignJWT, jwtVerify, errors as joseErrors } from 'jose';
@@ -28,7 +29,7 @@ import {
     getRotationGraceMilliseconds,
     getReuseDetectionWindowMilliseconds
 } from './config';
-import type { RefreshTokenExpiryTime } from './config';
+
 import { keyId, keyForId } from './key-ring';
 import { predatesSessionEpoch } from '../domain/epoch';
 import { recordActivity } from './activity';
@@ -65,7 +66,7 @@ export interface TokenData {
      * every access-token mint and every rotation — because a rotation that dropped it would turn
      * the session cookie persistent again on the first refresh.
      */
-    remember?: RefreshTokenExpiryTime;
+    remember?: RememberTier;
     /**
      * The session family an ACCESS token belongs to, so a revoked session stops its access tokens
      * at once instead of when they expire. Never on a refresh token, and never carried forward: each
@@ -91,8 +92,10 @@ export const FIRST_PARTY_CLIENT_ID = 'first-party';
 /**
  * What a rotation hands the controller. `refreshMaxAgeMs` is the new refresh cookie's `maxAge`,
  * or `undefined` for a browser-session login, whose cookie must stay a session cookie.
+ * `userId` is whose session this is, for the answer's abilities.
  */
 export interface RotatedSession {
+    userId: string;
     accessToken: string;
     refreshToken: string;
     refreshMaxAgeMs: number | undefined;
@@ -354,7 +357,7 @@ const signRefreshToken = (claims: TokenData, expiresInSeconds: number): Promise<
 const mintRefreshToken = (
     id: string,
     { amr, provedAt }: { amr: readonly string[]; provedAt: number },
-    remember: RefreshTokenExpiryTime | undefined,
+    remember: RememberTier | undefined,
     guard: (user: { id: string; twoFactorEnabledAt?: Date; tokensValidAfter?: Date }) => void,
     continued?: SessionSnapshot
 ): Promise<string> =>
@@ -425,7 +428,7 @@ const mintRefreshToken = (
 export const startSession = (
     id: string,
     amr: readonly string[],
-    remember?: RefreshTokenExpiryTime,
+    remember?: RememberTier,
     provedAt: number = Date.now()
 ): Promise<string> =>
     mintRefreshToken(id, { amr, provedAt }, remember, (user) => {
@@ -446,7 +449,7 @@ export const startSession = (
 export const continueSession = (
     id: string,
     amr: readonly string[],
-    remember?: RefreshTokenExpiryTime,
+    remember?: RememberTier,
     continued?: SessionSnapshot
 ): Promise<string> =>
     // Stamped at the mint: a re-mint can follow its own epoch move (a password change), which a
@@ -517,6 +520,7 @@ const storeSuccessor = (
         .then(() => recordActivity(claims.sub))
         .then(() => signAccessToken({ ...claims, sid: String(previous.familyId) }))
         .then((accessToken) => ({
+            userId: claims.sub,
             accessToken,
             refreshToken: newRefreshToken,
             // Only a persistent login keeps a persistent cookie.
@@ -659,7 +663,7 @@ export const rotateRefreshToken = (oldToken: string): Promise<RotatedSession> =>
 export const rememberOfRefreshToken = (
     refreshToken: string | undefined,
     userId: string
-): Promise<RefreshTokenExpiryTime | undefined> =>
+): Promise<RememberTier | undefined> =>
     refreshToken
         ? verifyAgainstRing(refreshToken, getRefreshTokenRing(), 'refresh')
               .then((claims) => (claims.sub === userId ? claims.remember : undefined))

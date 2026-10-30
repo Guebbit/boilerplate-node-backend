@@ -286,11 +286,12 @@ automatic cancel is an unpaid order timing out (the reservation expiry, in
 
 ## Configuration
 
-| Variable                   | Default  | Meaning                                                                                                                                                                                                          |
-| -------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_VAT_RATE_DEFAULT`    | required | The rate charged on a product with no `taxClass` — every product's fallback. Required at boot and range-checked: unset, or outside `[0, 1)`, refuses to start. `0.22` is only the `NODE_ENV=test` default        |
-| `NODE_VAT_RATE_REDUCED`    | required | The rate charged on a product whose `taxClass` is `reduced`. Required and range-checked at boot like the default; `0.1` is only the `NODE_ENV=test` default                                                      |
-| `NODE_LOW_STOCK_THRESHOLD` | `5`      | Availability at or under which `lowStock` is true. The same variable `inventory` reads for its stock board (one `stockConfig` slice in `src/infrastructure/runtime/config.ts`), so the badge and the board agree |
+| Variable                     | Default         | Meaning                                                                                                                                                                                                          |
+| ---------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_VAT_RATE_DEFAULT`      | required        | The rate charged on a product with no `taxClass` — every product's fallback. Required at boot and range-checked: unset, or outside `[0, 1)`, refuses to start. `0.22` is only the `NODE_ENV=test` default        |
+| `NODE_VAT_RATE_REDUCED`      | required        | The rate charged on a product whose `taxClass` is `reduced`. Required and range-checked at boot like the default; `0.1` is only the `NODE_ENV=test` default                                                      |
+| `NODE_FRONTEND_LINK_PRODUCT` | `products/{id}` | Path of a product page under the language, `{id}` replaced by the product's id. The sitemap and the back-in-stock mail both link through it (`productPagePath`)                                                  |
+| `NODE_LOW_STOCK_THRESHOLD`   | `5`             | Availability at or under which `lowStock` is true. The same variable `inventory` reads for its stock board (one `stockConfig` slice in `src/infrastructure/runtime/config.ts`), so the badge and the board agree |
 
 Both are read per call from one slice (`config.ts`), which parses a set value through a
 whole-string-decimal grammar and refuses anything outside `[0, 1)` — at boot, and by the slice itself

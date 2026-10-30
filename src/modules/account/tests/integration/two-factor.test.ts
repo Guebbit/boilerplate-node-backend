@@ -8,6 +8,7 @@
  * authenticate a request on its own, nothing else here is worth anything.
  */
 
+import { RememberTier } from '@types';
 import { decodeJwt } from 'jose';
 import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
@@ -15,7 +16,7 @@ import { setEnvironment } from '@tests/environment';
 import { codeFor } from '@tests/totp';
 import { setCookie } from '@tests/cookies';
 import { forgetSessionEpoch } from '@tests/session-epoch';
-import { getExpiryTime, RefreshTokenExpiryTime } from '@modules/account/session/config';
+import { getExpiryTime } from '@modules/account/session/config';
 import { userRepository } from '@modules/users/tests/factories';
 import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
 import { twoFactorService } from '@modules/account/services';
@@ -712,7 +713,7 @@ describe('logging in with a device factor', () => {
 
         expect(response.status).toBe(200);
         const maxAge = /max-age=(\d+)/i.exec(setCookie(response, '__Host-session') ?? '')?.[1];
-        expect(Number(maxAge)).toBe(getExpiryTime(RefreshTokenExpiryTime.MEDIUM));
+        expect(Number(maxAge)).toBe(getExpiryTime(RememberTier.medium));
     });
 
     it('answers the 2FA step with a browser-session cookie when no tier was ticked', async () => {

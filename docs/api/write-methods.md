@@ -312,11 +312,27 @@ derives from the contract's paths and mounted twice in `src/app/routes.ts`: befo
 
 ## Empty, `null`, omitted
 
-| On the wire | Means | Legal on |
+`null` is a **write verb**. It travels in a request, never in a response.
+
+| | request (write) | response (read) |
 | --- | --- | --- |
-| omitted | nothing to say about this field | every write |
-| `null` | clear it | PUT and PATCH, where the field's `type` lists `'null'` |
-| `''` | an empty value — **never** "clear" | only a field with no `minLength` (a blank translation) |
+| key absent | nothing to say (POST: default · PATCH: untouched · PUT: cleared if clearable, else 422) | no value |
+| `null` | clear it; PUT/PATCH only, only where `type` lists `'null'`; 422 on a create | **never sent** |
+| `''` | an empty value, never "clear"; only where no `minLength` | only a real empty value (a blank translation), never "none" |
+
+The read half is guarded twice: `tests/cross-cutting/contract-responses-never-null.test.ts` refuses
+a `'null'` type in any response schema, and `tests/support/response-contract.ts` fails any real
+response body that holds a `null` anywhere, free-form objects included (an audit row's `changes`, a
+timeline row's `data`). An unset side of an audit `{ from, to }` is the absent key.
+
+One exception: permission rule conditions on the session answers (a sign-in, `GET /account`, a
+refresh). A permission rule's conditions are a query, not a value; `null` there is the operand "has no
+value" (`{ deletedAt: null }`), and the client evaluates it with CASL. Any other response carrying the
+same shape is still refused.
+
+A stored `null` that means something (a product's `backorderLimit`: no cap) is mapped in the
+presenter, so the wire still says "absent". RFC 7396 §1 is why: a `GET` that served `"x": null`,
+written back by a `PATCH`, would delete `x`.
 
 Every optional free-text field in a write body carries `minLength: 1`, so a blank string is a
 422 rather than a stored `''`. Search bodies are reads: an empty filter there is ignored.
@@ -457,10 +473,16 @@ anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` 
   `createDeleteController` open the precondition for the request; `repository.save` and
   `repository.deleteOne` meet it. A module's service never sees a header.
 - **The body is validated first.** A 422 for a body the schema refuses wins over a 412.
-- **Only a versioned read can answer `304`.** The tag covers the row's own edits, not what is
-  derived from config (prices, the caller's language), so it validates *writes* only.
-  `If-None-Match` is ignored on these reads. The `privateNoCache` reads (`orders`, `users`,
-  `tickets`) are the exception: Express's own ETag check answers them `304` on no change.
+- **The tag of a versioned read validates writes, not reads.** It covers the row's own edits, not
+  what is derived from config (prices, the caller's language), so the contract does not offer a
+  `304` from it.
+- **The cached reads are a separate case.** Two families answer `If-None-Match` with `304` on no
+  change, through Express's own ETag check: the `privateNoCache` reads (`orders`, `users`,
+  `tickets`, `payments`, `returns`, `stats`: a private copy the browser revalidates) and every
+  `setCache` read (`locales`, `products` `/facets` and `/:id`: the shared copy, revalidated once
+  `max-age` runs out or at once under `browserRevalidate`). The bundler declares that answer (the
+  shared `NotModified`: no body, an `ETag` header) on every such `GET`, so no fragment repeats it.
+  The sitemap streams its XML and carries no `ETag`, so it is not one of them.
 - **Browsers** may send `If-Match` and read `ETag` cross-origin: both are in the CORS allow and
   expose lists.
 

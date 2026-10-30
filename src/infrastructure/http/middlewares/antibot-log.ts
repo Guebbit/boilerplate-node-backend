@@ -9,7 +9,7 @@ import type { Request, Response } from 'express';
 import { logger } from '@infrastructure/adapters/logger';
 import { rejectResponse, type ResponseErrorItem } from '@infrastructure/http/response';
 
-/** Which rung refused — matches the names `GET /antibot/config` publishes under `rungs`. */
+/** Which rung refused — matches the names `antibot` on `GET /config` publishes under `rungs`. */
 export type AntibotRung = 'rate-limit' | 'email-policy' | 'human-challenge';
 
 /**

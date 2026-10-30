@@ -6,24 +6,13 @@
  */
 import type { PermissionSetName } from '@api/permission-vocabulary';
 
-/** Every kind of ticket: the contact form's, and the situations the system opens. */
-export const TICKET_KINDS = [
-    'contact',
-    'account_review',
-    'manual_refund_owed',
-    'amount_mismatch',
-    'paid_without_hold',
-    'export_failed',
-    'consent_due',
-    'refund_refused',
-    'dispute'
-] as const;
+import { TicketKind } from '@types';
 
-/** One kind of ticket. */
-export type TicketKindName = (typeof TICKET_KINDS)[number];
+/** Every kind of ticket: the contact form's, and the situations the system opens. */
+export const TICKET_KINDS = Object.values(TicketKind);
 
 /** The permission set that works each kind. */
-const ROUTE_SET_OF_KIND: Readonly<Record<TicketKindName, PermissionSetName>> = {
+const ROUTE_SET_OF_KIND: Readonly<Record<TicketKind, PermissionSetName>> = {
     contact: 'TicketDisplay',
     account_review: 'UserBanning',
     manual_refund_owed: 'PaymentRefunding',
@@ -40,7 +29,7 @@ const ROUTE_SET_OF_KIND: Readonly<Record<TicketKindName, PermissionSetName>> = {
  *
  * @param kind - the ticket's kind
  */
-export const routeSetOf = (kind: TicketKindName): PermissionSetName => ROUTE_SET_OF_KIND[kind];
+export const routeSetOf = (kind: TicketKind): PermissionSetName => ROUTE_SET_OF_KIND[kind];
 
 /** Every set any kind is routed to, each once. */
 export const ROUTED_SETS: readonly PermissionSetName[] = [

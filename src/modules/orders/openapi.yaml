@@ -165,17 +165,6 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Order'
-                    links:
-                        PayOrder:
-                            operationId: createPayment
-                            parameters:
-                                orderId: '$response.body#/data/id'
-                            description: The new order's id is the `orderId` to freeze into a payment intent.
-                        CancelOrder:
-                            operationId: cancelOrderById
-                            parameters:
-                                id: '$response.body#/data/id'
-                            description: The new order's id can be cancelled directly.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -716,7 +705,7 @@ components:
                 `remainder_cancelled`. Returns: `return_requested`, `return_approved`,
                 `return_declined`, `return_received`, `return_closed`, `return_canceled`. Documents: `invoice_issued`,
                 `credit_note_issued`. Preorders: `release_date_moved`, `delay_notice_sent`.
-                Staff-only: `address_corrected`, `refund_canceled`, `refund_reversed`, `dispute_opened`, `dispute_closed`.
+                Which of these a buyer sees is the row's own `audience` (`buyer` or `staff`), set per type by the server.
 
         OrderTimelineEntry:
             type: object
@@ -756,7 +745,7 @@ components:
                     description: >-
                         What the type needs to say, as ids, codes and numbers — never another
                         module's free text. `status_overridden`: `mode` (`status`),
-                        `from`, `to`. `paid`: `method`. `delivered`: `withdrawUntil`. `cancelled`:
+                        `from`, `to`. `paid`: `method` (absent when unknown). `delivered`: `withdrawUntil`. `cancelled`:
                         `by`, `cause` (why: `customer`, `operator`, `withdrawal`, `reservation_expired`,
                         `erasure`, `payment_mismatch` or `lost`: a lost parcel refunded with nothing ever delivered; `by` is shared by the
                         system's causes), `refund` (whether the cancel returned the money). Shipment and hold rows: `shipmentId` or `fulfillmentOrderId`,
@@ -816,7 +805,7 @@ components:
                     description: >-
                         What the type needs to say, as ids, codes and numbers — never another
                         module's free text. `status_overridden`: `mode` (`status`),
-                        `from`, `to`. `paid`: `method`. `delivered`: `withdrawUntil`. `cancelled`:
+                        `from`, `to`. `paid`: `method` (absent when unknown). `delivered`: `withdrawUntil`. `cancelled`:
                         `by`, `cause` (why: `customer`, `operator`, `withdrawal`, `reservation_expired`,
                         `erasure`, `payment_mismatch` or `lost`: a lost parcel refunded with nothing ever delivered; `by` is shared by the
                         system's causes), `refund` (whether the cancel returned the money). Shipment and hold rows: `shipmentId` or `fulfillmentOrderId`,
@@ -1107,8 +1096,8 @@ components:
 
         # The picture, resolved LIVE from the catalogue product `OrderItem.product.id` still
         # names — never frozen, so a hard-deleted or replaced image can never leak through order
-        # history. `null` means the product no longer exists; that is what lets "buy again" tell
-        # a deleted product apart from one that simply never had a picture (`imageUrl` absent).
+        # history. `OrderItem.current` absent means the product no longer exists; that is what lets
+        # "buy again" tell a deleted product apart from one that simply has no picture (`{}`).
         OrderLineCurrent:
             type: object
             additionalProperties: false
@@ -1121,7 +1110,7 @@ components:
         OrderItem:
             type: object
             additionalProperties: false
-            required: [product, quantity, locale, current, taxAmount, netAmount]
+            required: [product, quantity, locale, taxAmount, netAmount]
             properties:
                 product:
                     $ref: '#/components/schemas/OrderLineProduct'
@@ -1155,11 +1144,9 @@ components:
                         Whether `promisedAt` was a date the product named. `false` means the buyer was
                         promised delivery "within 30 days" of the order. Present with `promisedAt`.
                 current:
-                    oneOf:
-                        - $ref: '#/components/schemas/OrderLineCurrent'
-                        - type: 'null'
+                    $ref: '#/components/schemas/OrderLineCurrent'
                     description: >-
-                        The product's picture, resolved live — `null` when the catalogue product
+                        The product's picture, resolved live — absent when the catalogue product
                         (`product.id`) has been hard-deleted. Never the terms of the sale, so it
                         is never frozen; see `OrderLineCurrent`.
                 # Both derived at serialization from `product.price`/`quantity`/`product.taxRate`

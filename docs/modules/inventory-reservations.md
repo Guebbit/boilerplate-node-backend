@@ -93,11 +93,11 @@ A preorder is sold before its units exist, so it claims an **allowance** instead
 stock level gains two counters, a third ledger column and two `reason` values; the hold's lines gain
 a `kind` (`stock` or `backorder`).
 
-| Counter / column   | Meaning                                                                                                                          |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| `backorderLimit`   | how many units may be owed at once; set by staff holding `update:StockLevel` (admin, warehouse), `0` closes it, `null` is no cap |
-| `backordered`      | units claimed against it and not yet allocated stock, paid or not                                                                |
-| `backorderedDelta` | the ledger column that makes `backordered` replayable, like `onHandDelta` and `reservedDelta`                                    |
+| Counter / column   | Meaning                                                                                                                                                               |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `backorderLimit`   | how many units may be owed at once; set by staff holding `update:StockLevel` (admin, warehouse), `0` closes it, stored `null` is no cap (the wire leaves the key out) |
+| `backordered`      | units claimed against it and not yet allocated stock, paid or not                                                                                                     |
+| `backorderedDelta` | the ledger column that makes `backordered` replayable, like `onHandDelta` and `reservedDelta`                                                                         |
 
 A claim is a `backorder` movement (`backordered` +n, nothing else), guarded in the write's own filter by
 `backordered + n <= backorderLimit`. The shelf is never read: 50 units on hand do not widen the

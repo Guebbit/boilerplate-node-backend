@@ -20,7 +20,7 @@ x-error-codes:
     RETURN_ORDER_NOT_RETURNABLE: { status: 409, description: 'The order is not in a state a return can be opened on — cancelled, or (for a reason other than withdrawal) still in the shop''s hands.' }
     RETURN_CANCELLATION_INVALID: { status: 422, description: 'A cancellation names no fulfillment order of this order, or sends `lines` (the remainder is its lines), or a return names a fulfillment order. Also the reason does not fit the caller: the order''s buyer cancels only as a `withdrawal`.' }
     RETURN_STATEMENT_INVALID: { status: 422, description: 'The date or the channel of what the buyer stated is missing where staff must give it (a withdrawal recorded for the buyer), given where it does not belong (by the buyer, or on a reason that is not a withdrawal), in the future, or before the order was made.' }
-    RETURN_NOTHING_TO_CANCEL: { status: 409, description: 'The fulfillment order has nothing left to cancel, or nothing has shipped from the order yet (cancel the whole order instead).' }
+    RETURN_NOTHING_TO_CANCEL: { status: 409, description: 'The fulfillment order has nothing left to cancel, is not part of this order, or nothing has shipped from the order yet (cancel the whole order instead).' }
     RETURN_WINDOW_CLOSED: { status: 409, description: 'The period for the reason named has ended: the withdrawal period for a withdrawal or other, two years from delivery for a defect or a wrong item.' }
 
 # This module's section of the account data export (`POST /account/export`): the bundler

@@ -12,7 +12,7 @@ Three gates in a fixed order, composed in one place so a route cannot mount half
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%
 flowchart TB
     U["Multipart upload"] --> G1
-    G1["Gate 1 · declared type<br/><i>3 raster formats, closed set</i>"] --> G2
+    G1["Gate 1 · declared type<br/><i>3 raster formats, closed set; another type answers 415 with the accepted list</i>"] --> G2
     G2["Gate 2 · actual bytes<br/><i>magic-number sniff must agree</i>"] --> G3
     G3["Gate 3 · re-encode<br/><i>libvips decode → encode, metadata dropped</i>"] --> P
     S["Staging dir<br/><i>system temp, NOT public/</i>"] -.holds.- G1

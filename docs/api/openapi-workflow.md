@@ -40,18 +40,6 @@ This repository owns the contract; the frontend holds a byte-identical copy and 
 How the file is meant to be split per module and how it travels between the two repos is
 [Contract Ownership & Fragmentation](./contract-fragmentation.md).
 
-## Declaring state-machine `links`
-
-A response's `links` block names the operation a legal next request would call, and how to read
-its parameters out of this response — e.g. `createOrder`'s `201` names `createPayment`,
-reading `orderId` from `$response.body#/data/id`. Declared per leaf fragment, same as everything
-else in the contract, on the response object that starts the transition.
-
-This is what lets a tool follow a **sequence** (create an order, pay it, cancel it) instead of one
-request at a time — see [Stateful fuzzing](../tools/fuzz-testing.md#stateful-fuzzing-sequences-not-single-requests)
-for the consumer. It is pure documentation until something reads it; nothing in the app enforces
-that a `links` chain matches the actual lifecycle, so keep it in sync with the module's `domain/lifecycle.ts` by hand.
-
 ## OpenAPI vs AsyncAPI in this repository
 
 - Use OpenAPI for REST endpoint contracts.
@@ -93,12 +81,15 @@ generates the `zod` client only. Its comments list the other flavors and why eac
 import type { CreateProductRequest, Product } from '@types';
 ```
 
-**Importing enum const objects** — orval generates enums as `as const` objects (not TypeScript enum declarations). Import the const object to use it with `z.nativeEnum()` or for runtime value checks:
+**Importing enum const objects** — orval generates enums as `as const` objects (not TypeScript enum declarations). Import the const object to use it with `z.enum()` or for runtime value checks:
 
 ```typescript
 import { TicketStatus } from '@types';
 
-z.nativeEnum(TicketStatus)
+z.enum(TicketStatus);
+
+// Need the list at runtime: Object.values(X). Never respell a contract enum.
+Object.values(TicketStatus);
 ```
 
 A shared enum is a named schema (`TicketStatus`) that every property `$ref`s, and the const keeps that name. An enum declared inline on a property is named schema name + property name, PascalCase. For example, `HealthPing.status` → `HealthPingStatus`.
@@ -123,6 +114,8 @@ The contract is OpenAPI **3.1.0**, where `nullable: true` does not exist: JSON S
 | a scalar that may be `null` | `type: [string, 'null']` |
 | a `$ref` that may be `null` | `oneOf: [{ $ref: … }, { type: 'null' }]` |
 | only ever `null` (`ImageRemoval`) | `type: 'null'` |
+
+`'null'` is legal in **request bodies only**: a response says "no value" by leaving the key out, and `tests/cross-cutting/contract-responses-never-null.test.ts` fails on a `'null'` in any response schema. The rule, both directions: [Empty, `null`, omitted](./write-methods.md#empty-null-omitted).
 
 A 3.1 `$ref` may carry its own `description` beside it, so a shared parameter such as `OrderIdPathParam` is referenced with a per-operation description. The generated clients keep the component's description, not the sibling one.
 

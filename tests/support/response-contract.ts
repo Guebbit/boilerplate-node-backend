@@ -103,6 +103,51 @@ const assertProblemMediaType = (response: Response): void => {
 };
 
 /**
+ * Where a JSON value holds `null`, as dotted paths (`items.0.current`).
+ *
+ * A response never carries `null`: an unset value is the absent key. The generated schemas already
+ * refuse it where the contract is closed; this walk also covers the free-form objects they accept
+ * whole (`additionalProperties: true`, such as an audit row's `metadata` or a timeline's `data`).
+ *
+ * @param value - a parsed JSON body, or any part of one
+ * @param at - the path to `value`, empty at the root
+ */
+export const nullPathsIn = (value: unknown, at = ''): string[] => {
+    if (value === null) return [at === '' ? '(body)' : at];
+    if (typeof value !== 'object') return [];
+
+    return Object.entries(value).flatMap(([key, child]) =>
+        nullPathsIn(child, at === '' ? key : `${at}.${key}`)
+    );
+};
+
+/**
+ * The operations whose answer carries the caller's packed rules: the session answers.
+ * `account.abilities` rides on a sign-in and `GET /account`, `abilities` on a refresh.
+ */
+const SESSION_ANSWERS: ReadonlySet<string> = new Set([
+    'login',
+    'loginTwoFactor',
+    'loginRestore',
+    'getAccount',
+    'refreshToken'
+]);
+
+/**
+ * Whether a null sits inside a packed CASL rule's conditions of a session answer
+ * (`account.abilities.tenant.0.2.deletedAt`). Anywhere else it is still refused.
+ *
+ * A rule's conditions are a Mongo query, where `null` is an OPERAND ("`deletedAt` is unset"), not a
+ * value the response reports. Dropping it would change what the rule means on the client.
+ *
+ * @param operationId - the operation that answered
+ * @param path - a dotted path from {@link nullPathsIn}
+ */
+export const isPackedRuleOperand = (operationId: string, path: string): boolean =>
+    SESSION_ANSWERS.has(operationId) &&
+    /^(account\.)?abilities\.(tenant|platform)\.\d+\.2\./.test(path);
+
+/**
  * Checks one captured response against `openapi.yaml`, throwing a plain `Error` on a mismatch.
  *
  * An undeclared path is not this function's job — that's the 404-envelope contract test's own
@@ -138,12 +183,13 @@ export const assertResponseMatchesContract = (response: Response): void => {
             `${method.toUpperCase()} ${pathname} (${String(response.status)}) is missing the \`${missingHeader}\` header ${operationId} documents as required`
         );
 
-    // A 204 has no body by definition (RFC 9110 §15.3.5): the generated schema is `void`, which
-    // an empty parsed body (`{}`) would fail, so the check is that nothing was sent.
-    if (response.status === 204) {
+    // A 204 and a 304 have no body by definition (RFC 9110 §15.3.5, §15.4.5): the generated schema
+    // is `void`/`unknown`, which an empty parsed body (`{}`) would not fairly judge, so the check
+    // is that nothing was sent.
+    if (response.status === 204 || response.status === 304) {
         if (response.text !== '')
             throw new Error(
-                `${method.toUpperCase()} ${pathname} answered 204 with a body, which HTTP forbids`
+                `${method.toUpperCase()} ${pathname} answered ${String(response.status)} with a body, which HTTP forbids`
             );
         return;
     }
@@ -155,5 +201,14 @@ export const assertResponseMatchesContract = (response: Response): void => {
     if (!result.success)
         throw new Error(
             `${method.toUpperCase()} ${pathname} (${String(response.status)}) does not match ${operationId}'s documented shape:\n${zod.prettifyError(result.error)}`
+        );
+
+    const nulls =
+        typeof body === 'string'
+            ? []
+            : nullPathsIn(body).filter((path) => !isPackedRuleOperand(operationId, path));
+    if (nulls.length > 0)
+        throw new Error(
+            `${method.toUpperCase()} ${pathname} (${String(response.status)}) sent null at ${nulls.join(', ')}: a response never carries null, an unset value is the absent key (docs/api/write-methods.md#empty-null-omitted)`
         );
 };

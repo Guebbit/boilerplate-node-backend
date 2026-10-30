@@ -176,6 +176,10 @@ paths:
             responses:
                 '200':
                     description: Categories and tags with counts
+                    headers:
+                        Cache-Control:
+                            description: '`public, max-age=3600, stale-while-revalidate=60, stale-if-error=300`: the shared cache and the browser may both keep it.'
+                            schema: { type: string }
                     content:
                         application/json:
                             schema:
@@ -207,6 +211,10 @@ paths:
             responses:
                 '200':
                     description: Product
+                    headers:
+                        Cache-Control:
+                            description: '`public, no-cache`: the shared cache keeps it, a browser revalidates first. A caller who sees more than the public answer gets `private, no-cache`.'
+                            schema: { type: string }
                     content:
                         application/json:
                             schema:
@@ -493,10 +501,29 @@ components:
                 One or more locales, keyed by BCP 47 tag, each stated WHOLE: a `PUT` replaces the
                 set, so a stored locale this map omits is deleted and a `description` a locale
                 omits is cleared, drafts included. The fallback locale (`NODE_FALLBACK_LOCALE`) MUST
-                be present and non-null on create and on `PUT`. A tag this deployment has no
+                be present and non-null on `PUT`. A tag this deployment has no
                 language for is a 422. A registered language that is switched off is accepted and
                 stored as a draft: it is not served, searched or copied into a message until the
                 language is switched on.
+            example:
+                en:
+                    title: Orthopedic Memory Foam Dog Bed
+                    description: Extra support for joints during rest.
+                it:
+                    title: Cuccia ortopedica in memory foam
+                    description: Un supporto extra per le articolazioni durante il riposo.
+
+        # `POST /products`'s locale map: a create has no locale to delete, so a `null` entry is a 422.
+        ProductTranslationsCreate:
+            type: object
+            additionalProperties:
+                $ref: '#/components/schemas/ProductTranslationFieldsWrite'
+            description: >-
+                One or more locales, keyed by BCP 47 tag, each stated whole. The fallback locale
+                (`NODE_FALLBACK_LOCALE`) MUST be present. A tag this deployment has no language for
+                is a 422. A registered language that is switched off is accepted and stored as a
+                draft: it is not served, searched or copied into a message until the language is
+                switched on.
             example:
                 en:
                     title: Orthopedic Memory Foam Dog Bed
@@ -588,7 +615,7 @@ components:
             required: [price, translations]
             properties:
                 translations:
-                    $ref: '#/components/schemas/ProductTranslationsWrite'
+                    $ref: '#/components/schemas/ProductTranslationsCreate'
                 price:
                     type: number
                     format: double
@@ -645,8 +672,8 @@ components:
                     type: integer
                     minimum: 0
                     description: Grams. Absent counts as 0 for shipping-method filtering.
-                imageUrl:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageRemoval'
+                # No `imageUrl`: a create has no image to remove, so `null` is a 422 here. The picture
+                # arrives as multipart `imageUpload` bytes.
                 categories:
                     type: array
                     items:
@@ -741,7 +768,7 @@ components:
         ReplaceProductRequest:
             type: object
             additionalProperties: false
-            required: [price, translations, active, purchasable, requiresShipping, categories, tags]
+            required: [price, translations, active, purchasable, allowBackorder, requiresShipping, noWithdrawal, categories, tags]
             properties:
                 translations:
                     $ref: '#/components/schemas/ProductTranslationsWrite'
@@ -810,7 +837,7 @@ components:
         ReplaceProductRequestMultipart:
             type: object
             additionalProperties: false
-            required: [price, translations, active, purchasable, requiresShipping, categories, tags]
+            required: [price, translations, active, purchasable, allowBackorder, requiresShipping, noWithdrawal, categories, tags]
             properties:
                 translations:
                     type: string

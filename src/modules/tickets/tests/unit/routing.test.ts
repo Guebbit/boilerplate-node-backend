@@ -5,14 +5,9 @@
  */
 
 import { PERMISSION_SETS, permissionsOfRole } from '@kernel/permissions';
-import { TicketKind } from '@types';
 import { ROUTED_SETS, routeSetOf, TICKET_KINDS } from '../../domain';
 
 describe('routing', () => {
-    it('knows every kind the contract declares, and no other', () => {
-        expect([...TICKET_KINDS].toSorted()).toEqual(Object.values(TicketKind).toSorted());
-    });
-
     it.each(TICKET_KINDS)('routes %s to a declared permission set', (kind) => {
         expect(PERMISSION_SETS.map((set) => set.name)).toContain(routeSetOf(kind));
     });

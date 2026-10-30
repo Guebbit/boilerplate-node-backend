@@ -5,6 +5,8 @@
  * projected into `webhooks`' public catalogue by `module.ts`'s `publicEvents`.
  */
 
+import type { ReturnRemedy } from '@types';
+
 /** Registers this module's event payloads into the kernel's app-wide `DomainEventMap`. */
 declare module '@kernel/events' {
     interface DomainEventMap {
@@ -47,7 +49,7 @@ declare module '@kernel/events' {
             refundAmount: number;
             currency: string;
             /** What the buyer was given; absent on a return born closed. */
-            remedy?: 'refund' | 'replace' | 'repair';
+            remedy?: ReturnRemedy;
         };
     }
 }

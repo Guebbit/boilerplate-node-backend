@@ -26,9 +26,15 @@ import type {
 import { successResponse, createdResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { requireId } from '@infrastructure/http/ids';
+import { trimmedInto } from '@infrastructure/http/schemas';
 import { localeService } from '../services';
 import { presentLocaleEntry } from '../presenters';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
+
+/** The create body with `key` trimmed first, so a blank key is a field-level 422. */
+const createTrimmedEntryBody = CreateLocaleEntryBody.extend({
+    key: trimmedInto(CreateLocaleEntryBody.shape.key)
+});
 
 /**
  * POST /locales/:locale/apps/:app/entries (admin)
@@ -38,7 +44,7 @@ export const createLocaleEntry = (
     request: Request<{ locale: string; app: string }, unknown, CreateLocaleEntryRequest>,
     response: Response
 ) => {
-    const body = parseBody(CreateLocaleEntryBody, request.body, response);
+    const body = parseBody(createTrimmedEntryBody, request.body, response);
     if (!body) return;
 
     return localeService

@@ -22,14 +22,9 @@ import type { CallerContext, ReturnKind, ReturnRemedy } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import type { ReturnDocument } from '../model';
 import { returnsAuditActions } from '../audit';
+import type { StaffStatementChannel } from '@types';
 import { RETURN_CLOSED, RETURN_DECIDED, RETURN_REQUESTED } from '../events';
-import type {
-    ReturnReason,
-    ProductQuantity,
-    StaffStatementChannel,
-    Statement,
-    StatementVerdict
-} from '../domain';
+import type { ReturnReason, ProductQuantity, Statement, StatementVerdict } from '../domain';
 
 /** What a customer sends to open a return or withdraw. */
 export interface CreateReturnInput {

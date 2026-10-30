@@ -130,6 +130,18 @@ describe('POST /users', () => {
         resetDomainEvents();
     });
 
+    it('refuses a null imageUrl: a create has no image to remove', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api().post('/users').set('Authorization', bearer).send({
+            email: 'no-image@example.com',
+            username: 'noimage',
+            imageUrl: null
+        });
+
+        expect(response.status).toBe(422);
+    });
+
     it('creates a user without a password, exposes no credentials, and mails the owner a setup link', async () => {
         markDomainEventsWired();
         const seen: string[] = [];

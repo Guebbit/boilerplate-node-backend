@@ -7,14 +7,21 @@
 
 import { zonedStartOfDay } from '@domain-primitives/time';
 import type { ReportWindow } from '@infrastructure/persistence/report';
-import { addDays, formatDay, type CalendarDay, type CalendarInterval } from '../domain/calendar';
+import type { StatsInterval } from '@types';
+import { addDays, formatDay, type CalendarDay } from '../domain/calendar';
 import { checkRange, previousOf, type RangeRefusal } from '../domain/range';
 import { shopTimezone } from '@modules/shop';
+
+/**
+ * A stats answer as a composer builds it: without `limits`, which the shared handler adds to every
+ * period answer (`controllers/respond.ts`) so no composer repeats them.
+ */
+export type WithoutLimits<T> = Omit<T, 'limits'>;
 
 /** A period the owners can be asked about. */
 export interface Period {
     /** The requested days, as the contract echoes them. */
-    echo: { from: string; to: string; interval: CalendarInterval; timeZone: string };
+    echo: { from: string; to: string; interval: StatsInterval; timeZone: string };
     /** The half-open instant window of the period. */
     window: ReportWindow;
     /** The equal-length window just before, for the "vs previous" figures. */
@@ -39,7 +46,7 @@ const startOf = (day: CalendarDay, timeZone: string): Date =>
  */
 const windowOf = (
     range: { from: CalendarDay; to: CalendarDay },
-    interval: CalendarInterval,
+    interval: StatsInterval,
     timeZone: string
 ): ReportWindow => ({
     from: startOf(range.from, timeZone),
@@ -57,7 +64,7 @@ const windowOf = (
 export const resolvePeriod = (query: {
     from: string;
     to: string;
-    interval?: CalendarInterval | undefined;
+    interval?: StatsInterval | undefined;
 }): { period: Period } | { refusal: RangeRefusal } => {
     const interval = query.interval ?? 'day';
     const checked = checkRange({ from: query.from, to: query.to, interval });

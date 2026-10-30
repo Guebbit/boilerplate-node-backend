@@ -18,6 +18,7 @@ import {
     auditChanges,
     type AuditChanges,
     type AuditedFields,
+    fieldChange,
     type FieldChange
 } from '@infrastructure/observability/audit-changes';
 import { rearmPrecondition } from '@infrastructure/persistence/versioning';
@@ -81,6 +82,7 @@ type ProductUpdateData = Partial<
         Product,
         | 'id'
         | 'imageUrl'
+        | 'description'
         | 'weight'
         | 'taxClass'
         | 'rateType'
@@ -92,6 +94,8 @@ type ProductUpdateData = Partial<
     /** Set alongside a new pending-image placeholder — see `readUploadedImage`. */
     pendingImageKey?: string;
     imageUrl?: string | null;
+    /** `null` clears it back to unset. */
+    description?: string | null;
     weight?: number | null;
     taxClass?: TaxClass | null;
     rateType?: RateType | null;
@@ -371,24 +375,19 @@ const applyUpdate = (
      * transitions in `@modules/inventory` (`POST /inventory/levels/{productId}/receive`,
      * `POST /inventory/levels/{productId}/adjust`), each of which says what happened and can't lose a sale.
      */
-    if (data.description !== undefined) product.description = data.description;
+    // `null` clears the description back to unset — $unset on save, same as weight/taxClass.
+    if (data.description !== undefined) product.description = clearedOrValue(data.description);
     if (data.active !== undefined) product.active = data.active;
     if (data.purchasable !== undefined) product.purchasable = data.purchasable;
     // `null` clears the date back to unset — $unset on save, same as weight/taxClass.
     const releaseDateChange = applyDate(product, 'releaseDate', data.releaseDate);
     if (releaseDateChange)
-        changes.releaseDate = {
-            from: releaseDateChange.from ?? null,
-            to: releaseDateChange.to ?? null
-        };
+        changes.releaseDate = fieldChange(releaseDateChange.from, releaseDateChange.to);
     if (data.allowBackorder !== undefined) product.allowBackorder = data.allowBackorder;
     // `null` clears the date back to unset ("within 30 days") — $unset on save.
     const restockDateChange = applyDate(product, 'restockDate', data.restockDate);
     if (restockDateChange)
-        changes.restockDate = {
-            from: restockDateChange.from ?? null,
-            to: restockDateChange.to ?? null
-        };
+        changes.restockDate = fieldChange(restockDateChange.from, restockDateChange.to);
     if (data.categories !== undefined) product.categories = sanitizeStringArray(data.categories);
     if (data.tags !== undefined) product.tags = sanitizeStringArray(data.tags);
     // `null` clears a recorded weight back to unset — $unset on save.

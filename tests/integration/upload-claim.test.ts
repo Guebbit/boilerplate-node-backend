@@ -99,6 +99,8 @@ describe('PUT /products/:id', () => {
             .field('active', 'true')
             .field('purchasable', 'true')
             .field('requiresShipping', 'true')
+            .field('allowBackorder', 'false')
+            .field('noWithdrawal', 'false')
             .field('categories', '[]')
             .field('tags', '[]')
             .attach('imageUpload', PNG_BYTES, IMAGE);
@@ -119,6 +121,8 @@ describe('PUT /products/:id', () => {
             .field('active', 'true')
             .field('purchasable', 'true')
             .field('requiresShipping', 'true')
+            .field('allowBackorder', 'false')
+            .field('noWithdrawal', 'false')
             .field('categories', '[]')
             .field('tags', '[]')
             .attach('imageUpload', PNG_BYTES, IMAGE);

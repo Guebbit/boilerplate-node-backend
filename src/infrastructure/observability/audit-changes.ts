@@ -12,11 +12,23 @@
  * field is invisible until someone chooses which list it belongs to.
  */
 
-/** One field that moved: what it was and what it is now. `null` is "unset". */
+/** One field that moved: what it was and what it is now. An unset side is the absent key. */
 export interface FieldChange {
-    from: unknown;
-    to: unknown;
+    from?: unknown;
+    to?: unknown;
 }
+
+/**
+ * A {@link FieldChange} with no `null` in it: a side that is unset (`null` or `undefined`) is left
+ * out, because a response never carries `null` (`docs/api/write-methods.md#empty-null-omitted`).
+ *
+ * @param from - the value before
+ * @param to - the value after
+ */
+export const fieldChange = (from: unknown, to: unknown): FieldChange => ({
+    ...(from === undefined || from === null ? {} : { from }),
+    ...(to === undefined || to === null ? {} : { to })
+});
 
 /** What an update moved; each half is absent when it has nothing to say. */
 export interface AuditChanges extends Record<string, unknown> {
@@ -66,7 +78,7 @@ export const auditChanges = <TKey extends string>(
     const changes = Object.fromEntries(
         fields.valued
             .filter((field) => moved(field))
-            .map((field) => [field, { from: before[field] ?? null, to: data[field] }])
+            .map((field) => [field, fieldChange(before[field], data[field])])
     );
     const changedFields = fields.named.filter((field) => moved(field));
 

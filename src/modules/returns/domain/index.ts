@@ -35,16 +35,10 @@ export {
     policyExceptionsOf,
     reasonsOpenAt
 } from './reasons';
-export type { FrozenDeadlines, PolicyException } from './reasons';
+export type { FrozenDeadlines } from './reasons';
 
 export { checkStatement } from './statement';
-export type {
-    Statement,
-    StatementChannel,
-    StatementInput,
-    StatementVerdict,
-    StaffStatementChannel
-} from './statement';
+export type { Statement, StatementInput, StatementVerdict } from './statement';
 
 export { resolveRestock } from './restock';
 export type { RestockRequest, RestockVerdict } from './restock';

@@ -3,8 +3,8 @@ info:
     title: access — module contract
     version: '0.1.0'
 
-# Components only: `access` has no HTTP routes of its own. `GET /account/abilities` (in `account`)
-# serves the rules below, and the role list is this module's section of the account data export.
+# Components only: `access` has no HTTP routes of its own. `account` carries the rules below on
+# `GET /account`, the sign-in answers and the refresh answer, and the role list is this module's section of the account data export.
 x-personal-data:
     # A role lives in a membership row, not a field on the user document, so `profile`
     # alone does not say what this account may do. Scope only, never the tenant id:
@@ -42,7 +42,7 @@ components:
                 the installation's health dashboard sit in one navigation. Publishing only the
                 caller's tenant rules left every platform screen with no rule to grey out, so it
                 was gated on a tenant key that happened to correlate, which is exactly the
-                hand-maintained guess this endpoint exists to abolish.
+                hand-maintained guess these rules exist to abolish.
 
                 The two lists never merge. A tenant rule can never satisfy a platform key and the
                 reverse is equally impossible (`shared/authorization-keys.yaml`'s one invariant),
@@ -53,7 +53,7 @@ components:
                 out what it would be refused from the same rules the server enforces, rather than
                 from a hand-maintained duplicate that drifts — the drift is silent until somebody
                 is shown a button that answers 403.
-            required: [tenant, platform, version, subjects, grantableRoles, secondFactorRequired]
+            required: [tenant, platform, version, grantableRoles, secondFactorRequired]
             properties:
                 secondFactorRequired:
                     type: boolean
@@ -61,16 +61,7 @@ components:
                         `true` when the caller holds a staff role that grants nothing yet because no
                         authenticator app is armed. The rules above are then the account's customer
                         ones; a client shows an "enrol to use your staff tools" prompt instead of
-                        a staff menu. `false` for everyone else, an anonymous caller and an API key
-                        included.
-                subjects:
-                    type: array
-                    items: { type: string }
-                    description: |
-                        Every CASL subject a declared key names, deduplicated and sorted — the
-                        `Order`/`Product`/`ApiKey`/... a rule's second element may be. Published so
-                        a client's own `meta.can` rules are typed against the real set rather than
-                        an unchecked string a typo can silently fail closed on.
+                        a staff menu. `false` for everyone else.
                 grantableRoles:
                     type: array
                     items: { type: string }
@@ -79,7 +70,7 @@ components:
                         /users`, in the order `shared/authorization-roles.yaml` declares them.
                         Computed by the same rule as the `403`/`422` those writes answer, so a role
                         picker built from it offers exactly what the write accepts. Empty for a
-                        caller who may grant nothing, an anonymous one included. It has NO
+                        caller who may grant nothing. It has NO
                         AUTHORITY: the write is re-checked server-side.
                 tenantId:
                     type: string
@@ -92,8 +83,7 @@ components:
                         - $ref: '#/components/schemas/PackedRules'
                     description: |
                         What the caller may do INSIDE their shop. Empty for a caller with no tenant
-                        membership; for an anonymous visitor it is the `guest` role's rules, which
-                        are a value in the model rather than an absence.
+                        membership.
                 platform:
                     allOf:
                         - $ref: '#/components/schemas/PackedRules'
@@ -112,20 +102,20 @@ components:
         PackedRules:
             type: array
             description: |
-                CASL packed rules — `[action, subject, conditions?, fields?, inverted?, reason?]`,
-                with trailing absent members omitted.
+                CASL packed rules — `[action, subject, conditions | 0, inverted 1 | 0, fields, reason]`,
+                with trailing absent members omitted. `0` stands in for an absent `conditions` or
+                `inverted: false` when a later member is present.
             items:
                 type: array
                 description: |
-                    One packed rule. OpenAPI 3.0 has no tuple, so a position is declared as the
-                    union of what it may hold: the action and the subject are strings, `conditions`
-                    an object, `fields` a list of strings and `inverted` a boolean.
+                    One packed rule. OpenAPI has no tuple, so a position is declared as the union of
+                    what it may hold: the action, the subject, the comma-joined `fields` and the
+                    `reason` are strings, `conditions` an object, and `inverted` (and the absent
+                    `conditions`) the numbers `1` and `0`.
                 items:
                     oneOf:
                         - type: string
-                        - type: boolean
+                        - type: integer
+                          enum: [0, 1]
                         - type: object
-                        - type: array
-                          items:
-                              type: string
 

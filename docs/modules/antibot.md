@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — rung 3 of the anti-automation ladder: the human-challenge port, and the two endpoints
-a frontend uses: `GET /antibot/config` (which provider is active) and `GET /antibot/challenge`
+a frontend uses: `antibot` on `GET /config` (which provider is active) and `GET /antibot/challenge`
 (the work a self-hosted provider issues).
 **Depends on** — nothing, and nothing depends on it. `account` and `tickets` reach
 `infrastructure/adapters/antibot-providers` directly, through `humanChallengeGate` — a
@@ -24,7 +24,7 @@ _Nothing reaches `antibot` and it reaches nothing — no imports either way, no 
 **Off by default, and the switch is a name rather than a boolean.** `NODE_ANTIBOT_PROVIDER`
 selects an implementation from the registry in `infrastructure/adapters/antibot-providers`; the
 default `none` passes every caller and publishes nothing to render. The same selection answers two
-questions: what `GET /antibot/config` reports, and whether `humanChallengeGate` demands a token.
+questions: what `antibot` on `GET /config` reports, and whether `humanChallengeGate` demands a token.
 It is mounted unconditionally in `account/routes.ts` on `/signup`/`/reset` and in
 `tickets/routes.ts` on `/contact`; on `/login` it sits behind `loginChallengeGate` instead, which
 only delegates to it once the per-account failure budget rung 1 tracks, or the caller's address-block budget, is at least half spent —
@@ -36,7 +36,7 @@ throws instead of falling back to `none`, on the same reasoning as `NODE_ANTIBOT
 deployment's misspelling must not read as "protection off".
 
 **The config endpoint always answers, on or off, and reports every rung, not just this one.**
-`GET /antibot/config` reports `provider: "none"` with an empty parameter map rather than 404 or an
+`antibot` on `GET /config` reports `provider: "none"` with an empty parameter map rather than 404 or an
 empty body, so the frontend can call it unconditionally and decide what to render from the response
 alone. Its `rungs` object adds rung 1's status (`identityBudgets`, always `true`) and rung 2's
 active posture (`emailPolicy` — `off`/`disposable`/`mx`), so "what is active on this deployment" has

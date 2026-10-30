@@ -302,7 +302,7 @@ components:
                 maxLength: 4096
             description: >
                 The token the active human-challenge provider issued to the client — see
-                `GET /antibot/config`. Absent when that provider is `none`.
+                `antibot` on `GET /config`. Absent when that provider is `none`.
 
         # Opt-in per route (see `src/infrastructure/http/middlewares/idempotency.ts`) — never
         # required at the contract level, since a caller not asking for replay protection must
@@ -472,6 +472,19 @@ components:
     responses:
         NoContent:
             description: Done. There is nothing to say, so the body is empty (RFC 9110 section 15.3.5).
+        NotModified:
+            description: >-
+                The caller's `If-None-Match` still matches: nothing changed since the copy it holds,
+                so the body is empty and that copy is still good (RFC 9110 section 15.4.5). Every
+                `GET` the app caches (`setCache`) or lets a browser keep and revalidate
+                (`privateNoCache`) can answer it; the bundler adds it to each of them, an
+                operation never declares it by hand.
+            headers:
+                ETag:
+                    required: true
+                    description: The entity-tag the request matched (RFC 9110 section 8.8.3).
+                    schema:
+                        type: string
         BadRequest:
             description: >-
                 The request could not be understood or authenticated as what it claims to be —
@@ -581,6 +594,9 @@ components:
                     schema:
                         $ref: '#/components/schemas/Problem'
 
+    # `null` is a write verb. In a REQUEST it means "clear this" (PUT/PATCH only, only where `type`
+    # lists 'null'). A RESPONSE never carries it: "no value" is the absent key.
+    # docs/api/write-methods.md#empty-null-omitted
     schemas:
         # ---------- Shared — scalars and the entities more than one module references. ----------
         Page:
@@ -821,7 +837,7 @@ components:
                 # `unverified` and `customer` are computed per request, never stored or granted.
                 # A NAME rather than a key list: roles are data a deployment may edit, and
                 # publishing the keys would freeze each account at the permissions its role held on
-                # the day it was written. What a caller may DO is `GET /account/abilities`, which
+                # the day it was written. What a caller may DO is `abilities` on `GET /account`, which
                 # answers for the caller rather than about a row.
                 role:
                     type: string
@@ -834,10 +850,10 @@ components:
                 # absent until it is. Self-signup starts absent and confirms by email;
                 # admin-created and OAuth accounts start set because an operator or the provider
                 # already vouches for the address. Set, the account is a `customer`; absent, it is
-                # `unverified` and holds no `checkout:Cart` (see `GET /account/abilities`) — so
+                # `unverified` and holds no `checkout:Cart` (see `abilities` on `GET /account`) — so
                 # a client renders this as a banner, never as a wall of its own.
                 verifiedAt:
-                    type: [string, 'null']
+                    type: string
                     format: date-time
                 # Set only by `PUT`/`PATCH /account` requesting a new address, cleared once
                 # `POST /account/email-change/confirm` proves it or `DELETE /account/email-change`
@@ -902,6 +918,36 @@ components:
                 # on `/users`, and the data export carries it with the rest of the profile.
                 purchaseHold:
                     $ref: '#/components/schemas/PurchaseHold'
+
+        # What `GET /config` answers: three pieces, each owned by its own module.
+        Config:
+            type: object
+            additionalProperties: false
+            required: [session, oauthProviders, antibot]
+            properties:
+                session:
+                    $ref: '../../src/modules/account/openapi.yaml#/components/schemas/SessionConfig'
+                oauthProviders:
+                    type: array
+                    items: { type: string }
+                    description: Registry names this deployment holds OAuth credentials for, e.g. `["google", "github"]`. Empty when none are configured.
+                antibot:
+                    $ref: '../../src/modules/antibot/openapi.yaml#/components/schemas/AntibotConfig'
+
+        # What `GET /account` answers: the account as its holder sees it, plus what a client needs
+        # to render from it without a second call. A separate schema, not optional members on
+        # `Account`: `PUT`/`PATCH` replace an `Account`, and `abilities`/`activity` are not theirs to
+        # write. Lives here, beside `Account`, because the field list is shared by anchor.
+        AccountView:
+            type: object
+            additionalProperties: false
+            required: [id, email, username, abilities, activity]
+            properties:
+                <<: *accountProperties
+                abilities:
+                    $ref: '../../src/modules/access/openapi.yaml#/components/schemas/Abilities'
+                activity:
+                    $ref: '../../src/modules/account/openapi.yaml#/components/schemas/SessionActivity'
 
         # The account as STAFF see it on the `/users` reads and writes: every `Account` field, plus
         # what the caller may do to this row and the shop's own review flag. A separate schema rather
@@ -1076,6 +1122,35 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/HealthPing'
 
+    /config:
+        get:
+            tags: [System]
+            summary: What a client needs to boot, before it has a session
+            description: |
+                One public answer for the three things a client reads before anyone has signed in:
+                how the deployment keeps people signed in (`session`), which "Continue with..."
+                buttons to render (`oauthProviders`) and which human challenge a protected form
+                asks for (`antibot`). Each piece is owned by its own module and composed here, so
+                a client makes one call at start instead of three.
+
+                None of it is secret and none of it changes while the process runs, so it is
+                cached for a short while. `GET /shop` stays its own call: the shop is removable and
+                this answer must exist without it.
+            operationId: getConfig
+            security: []
+            responses:
+                '200':
+                    description: The deployment's public configuration
+                    headers:
+                        Cache-Control:
+                            description: A short public lifetime; the values only change with a restart.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Config'
+
     /livez:
         get:
             tags: [System]
@@ -1169,8 +1244,6 @@ paths:
         $ref: '../../src/modules/audit-logs/openapi.yaml#/paths/~1audit'
 
     # ---------- antibot ----------
-    /antibot/config:
-        $ref: '../../src/modules/antibot/openapi.yaml#/paths/~1antibot~1config'
     /antibot/challenge:
         $ref: '../../src/modules/antibot/openapi.yaml#/paths/~1antibot~1challenge'
 
@@ -1185,8 +1258,6 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change'
     /account/email-change/resend:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change~1resend'
-    /account/abilities:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1abilities'
     /account/password:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1password'
     /account/password/check:
@@ -1249,8 +1320,6 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1methods~1{method}~1remove'
     /account/2fa/backup-codes:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1backup-codes'
-    /account/oauth/providers:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1oauth~1providers'
     /account/oauth/links:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1oauth~1links'
     /account/oauth/links/{provider}:

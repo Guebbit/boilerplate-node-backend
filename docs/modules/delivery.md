@@ -674,16 +674,16 @@ is given back is the preorder allowance and not shelf units.
 Each act writes its rows to the order's [timeline](./orders.md#the-timeline) in its own transaction
 (`services/announce.ts`), beside the outbox event it already wrote.
 
-| Row                    | Written when                                                   | Carries                                                      |
-| ---------------------- | -------------------------------------------------------------- | ------------------------------------------------------------ |
-| `shipment_shipped`     | a shipment is cut (also a digital fulfilment)                  | shipment and fulfillment order ids, `number`, `trackingCode` |
-| `shipment_delivered`   | a shipment arrives                                             | the same ids                                                 |
-| `shipment_lost`        | staff report a shipment lost or damaged                        | the same ids, `reason` code; never the note or the message   |
-| `fulfillment_held`     | staff hold one, or a preorder group is born on hold            | `reason` code; never the note (staff only)                   |
-| `fulfillment_released` | staff, or an allocation of stock, release it (staff only)      | fulfillment order id                                         |
-| `remainder_cancelled`  | `returns` cancels what had not shipped                         | fulfillment order id                                         |
-| `release_date_moved`   | a product's date moved and this order's expected date followed | fulfillment order id, `from` and `to` (ISO, or `null`)       |
-| `delay_notice_sent`    | the buyer was told: the date moved, or it will be missed       | fulfillment order id, `reason`, `expectedAt`                 |
+| Row                    | Written when                                                   | Carries                                                              |
+| ---------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `shipment_shipped`     | a shipment is cut (also a digital fulfilment)                  | shipment and fulfillment order ids, `number`, `trackingCode`         |
+| `shipment_delivered`   | a shipment arrives                                             | the same ids                                                         |
+| `shipment_lost`        | staff report a shipment lost or damaged                        | the same ids, `reason` code; never the note or the message           |
+| `fulfillment_held`     | staff hold one, or a preorder group is born on hold            | `reason` code; never the note (staff only)                           |
+| `fulfillment_released` | staff, or an allocation of stock, release it (staff only)      | fulfillment order id                                                 |
+| `remainder_cancelled`  | `returns` cancels what had not shipped                         | fulfillment order id                                                 |
+| `release_date_moved`   | a product's date moved and this order's expected date followed | fulfillment order id, `from` and `to` (ISO; an unset side is absent) |
+| `delay_notice_sent`    | the buyer was told: the date moved, or it will be missed       | fulfillment order id, `reason`, `expectedAt`                         |
 
 A whole-order cancel writes no `remainder_cancelled`: the order's own `cancelled` row says it. The
 shipment row comes first, then the order's own move that it caused (`shipped`, `delivered`). A
