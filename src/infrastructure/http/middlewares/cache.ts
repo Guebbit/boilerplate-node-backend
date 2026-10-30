@@ -552,8 +552,8 @@ export const setCache = (seconds = 0, options: CacheOptions) => {
     // and sorting it is what makes `?a=1&b=2` and `?b=2&a=1` one entry instead of two.
     const sortedKeyParameters = options.keyParameters.toSorted();
 
-    // Named, so the contract bundler can tell a `setCache` route from any other when it walks the
-    // routers (`scripts/contracts/private-no-cache-routes.ts`); an anonymous closure has no name.
+    // Named, so the `cache-policy-declared` test can tell a `setCache` route from any other when it walks the
+    // routers (`tests/support/cached-routes.ts`); an anonymous closure has no name.
     const setCacheMiddleware = (request: Request, response: Response, next: NextFunction) => {
         // Outside production the TTL is clamped (see resolveCacheTtl) so writes that bypass the
         // API cannot leave stale answers around for an hour — resolved before the headers so

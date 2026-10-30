@@ -11,6 +11,7 @@ tags:
 paths:
     /stats/sales:
         get:
+            x-cache: private-no-cache
             tags: [Stats]
             summary: Sales over time (staff)
             description: >-
@@ -41,6 +42,7 @@ paths:
 
     /stats/products:
         get:
+            x-cache: private-no-cache
             tags: [Stats]
             summary: Top products (staff)
             description: >-
@@ -71,6 +73,7 @@ paths:
 
     /stats/products/{productId}:
         get:
+            x-cache: private-no-cache
             tags: [Stats]
             summary: One product's sales over time (staff)
             description: >-
@@ -103,6 +106,7 @@ paths:
 
     /stats/categories:
         get:
+            x-cache: private-no-cache
             tags: [Stats]
             summary: Sales by category (staff)
             description: >-
@@ -128,6 +132,7 @@ paths:
 
     /stats/payments:
         get:
+            x-cache: private-no-cache
             tags: [Stats]
             summary: Payments mix (staff)
             description: >-
@@ -152,6 +157,7 @@ paths:
 
     /stats/operations:
         get:
+            x-cache: private-no-cache
             tags: [Stats]
             summary: Operations rates (staff)
             description: >-
@@ -177,6 +183,7 @@ paths:
 
     /stats/customers:
         get:
+            x-cache: private-no-cache
             tags: [Stats]
             summary: New and returning customers (staff)
             description: >-
@@ -202,6 +209,7 @@ paths:
 
     /stats/pipeline:
         get:
+            x-cache: private-no-cache
             tags: [Stats]
             summary: What is waiting right now (staff)
             description: >-

@@ -213,6 +213,28 @@ schemes — stays in the shared root fragment. **Duplicating a shared schema int
 the failure mode to watch for**: the bundle will contain two definitions that drift apart silently,
 and nothing but a careful reading catches it.
 
+### Declaring a cached read: `x-cache`
+
+A `GET` that mounts `privateNoCache` or `setCache` says so in its own fragment, on the operation:
+
+```yaml
+/products/facets:
+    get:
+        x-cache: 'max-age: 3600'   # or `private-no-cache`, `revalidate`, `no-store`
+```
+
+- `private-no-cache`: the route mounts `privateNoCache`.
+- `revalidate`: `setCache` with `browserRevalidate`.
+- `max-age: <s>`: `setCache` without it, the browser keeps the answer for `<s>` seconds.
+- `no-store`: never cached (a PDF, an export). No `304`; the bundler declares
+  `Cache-Control: no-store` on the `200`. Declared only: no router middleware marks it, so the test
+  does not compare it with the routers.
+
+The bundler stamps the shared `304` on every operation that carries the key. It reads the contract
+only: it never boots the app, because the app imports files this same build generates.
+`tests/cross-cutting/cache-policy-declared.test.ts` names the missing or stray operation when a
+router and its `x-cache` disagree. It checks which GETs are cached, not the value.
+
 ## Practical example: the `products` module
 
 `products` owns everything about itself, its slice of the contract included:

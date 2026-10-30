@@ -480,8 +480,11 @@ anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` 
   change, through Express's own ETag check: the `privateNoCache` reads (`orders`, `users`,
   `tickets`, `payments`, `returns`, `stats`: a private copy the browser revalidates) and every
   `setCache` read (`locales`, `products` `/facets` and `/:id`: the shared copy, revalidated once
-  `max-age` runs out or at once under `browserRevalidate`). The bundler declares that answer (the
-  shared `NotModified`: no body, an `ETag` header) on every such `GET`, so no fragment repeats it.
+  `max-age` runs out or at once under `browserRevalidate`). Each such `GET` carries
+  `x-cache` in its fragment, and the bundler declares the answer (the shared `NotModified`: no
+  body, an `ETag` header) on every operation that does, so no fragment repeats it.
+  `tests/cross-cutting/cache-policy-declared.test.ts` walks the mounted routers and holds them
+  equal to the `x-cache` operations, both ways.
   The sitemap streams its XML and carries no `ETag`, so it is not one of them.
 - **Browsers** may send `If-Match` and read `ETag` cross-origin: both are in the CORS allow and
   expose lists.
