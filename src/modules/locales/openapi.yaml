@@ -67,6 +67,7 @@ paths:
     # --------- Locales ---------
     /locales:
         get:
+            x-cache: revalidate
             tags: [Locales]
             summary: Supported languages
             description: |
@@ -150,6 +151,7 @@ paths:
 
     /locales/apps:
         get:
+            x-cache: revalidate
             tags: [Locales]
             summary: Translation apps
             description: |
@@ -179,6 +181,7 @@ paths:
 
     /locales/{locale}/dictionary:
         get:
+            x-cache: revalidate
             tags: [Locales]
             summary: API message dictionary
             description: |
@@ -214,6 +217,7 @@ paths:
 
     /locales/{locale}:
         get:
+            x-cache: revalidate
             tags: [Locales]
             summary: Read a language
             description: |
@@ -404,6 +408,7 @@ paths:
 
     /locales/{locale}/messages:
         get:
+            x-cache: revalidate
             tags: [Locales]
             summary: Client message dictionary
             description: |

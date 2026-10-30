@@ -26,6 +26,7 @@ x-personal-data:
 paths:
     /examples:
         get:
+            x-cache: private-no-cache
             tags: [Examples]
             summary: List examples
             description: Returns the caller's own examples, newest first by default. A caller holding `display:Example` sees everyone's.
@@ -123,6 +124,7 @@ paths:
         # Bundler: adds the `If-Match` parameter and 412 to the writes listed, and `ETag` to the 200s.
         x-versioned: [get, put, patch, delete]
         get:
+            x-cache: private-no-cache
             tags: [Examples]
             summary: Read an example
             description: >-
