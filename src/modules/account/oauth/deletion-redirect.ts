@@ -8,10 +8,11 @@
 
 import type { Request, Response } from 'express';
 import { cookieOf } from '@infrastructure/http/cookies';
+import { cookieData } from '@infrastructure/http/cookies.generated';
 import { hostCookieOptions } from '../session/cookies';
 
 /** The deletion-restore claim-check cookie — cleared once the check is spent. */
-const DELETION_CHALLENGE_COOKIE = '__Host-oauth_deletion_challenge';
+const DELETION_CHALLENGE_COOKIE = cookieData.oauthDeletionChallenge.name;
 
 /**
  * Set the claim-check cookie for one OAuth sign-in. Its lifetime tracks the check's own expiry.

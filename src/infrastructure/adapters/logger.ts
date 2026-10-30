@@ -18,6 +18,7 @@ import { correlationDigest } from '../security/pseudonymise';
 import { toSemanticNames } from './semantic-names';
 import { loadSharedRules } from '../config/shared-rules/load';
 import { logRedactionSchema } from '../config/shared-rules/log-redaction';
+import { cookieData } from '../http/cookies.generated';
 
 /**
  * The redaction lists, from `shared/rules/log-redaction.yaml` — the file the PHP twin reads too.
@@ -57,13 +58,20 @@ export interface Logger {
  *
  * A `Set`, not an array, so the recursive walk below is O(1) per key. Compared after
  * {@link normalizeKey}, so one entry catches every spelling of it: `Authorization`,
- * `new_password`/`newPassword`/`new-password`, `x-api-key`/`xApiKey`.
+ * `new_password`/`newPassword`/`new-password`, `x-api-key`/`xApiKey`. It is `log-redaction.yaml`'s
+ * list plus every secret cookie name from `cookies.yaml`.
  *
  * Exported so `tests/unit/infrastructure/adapters/logger.test.ts` can assert every entry
  * individually rather than sampling — a redaction list is a security policy, and the entries
  * nobody sampled are the ones that leak.
  */
-export const SENSITIVE_FIELDS = new Set(redactionRules.sensitiveFields);
+export const SENSITIVE_FIELDS = new Set([
+    ...redactionRules.sensitiveFields,
+    // The cookie names marked `secret` in `shared/rules/cookies.yaml`: the twin adds them the same way.
+    ...Object.values(cookieData)
+        .filter((cookie) => cookie.secret)
+        .map((cookie) => cookie.name)
+]);
 
 /**
  * Fragments that make a key sensitive wherever they appear in it, after {@link normalizeKey}.

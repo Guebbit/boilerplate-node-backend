@@ -1,0 +1,120 @@
+# Every cookie the backend sets, once. Read by the code that sets it (the name and the lifetime),
+# by the log scrubber (the `secret` ones) and by the GDPR cookie table in
+# docs/theory/data-protection.md. The paired frontend's own `browser-storage.yaml` uses the same
+# format for what it stores itself.
+#
+# Log redaction = log-redaction.yaml UNION the `secret: true` names here. The twin must do the same.
+#
+# The map key is the row's id (camelCase): the frontend's translation key for its purpose text.
+cookies:
+    # In `jwt` mode it carries the refresh token, in `cookie` mode the session id. The name is also
+    # the contract's `cookieAuth.name`; a cross-cutting test keeps the two equal.
+    session:
+        name: __Host-session
+        setter: backend
+        kind: cookie
+        purpose: >-
+            The credential, httpOnly and never readable by script: the refresh token in `jwt` mode,
+            the random session id in `cookie` mode. It IS the login the visitor asked for.
+        necessity: necessary
+        secret: true
+        lifetime: sessionTier
+
+    # A hint for the client, not a credential: set beside the session cookie, same lifetime.
+    isAuth:
+        name: isAuth
+        setter: backend
+        kind: cookie
+        purpose: >-
+            The signed-in flag. The frontend only reads it and clears it at sign-out. It holds no
+            credential.
+        necessity: necessary
+        secret: false
+        lifetime: sessionTier
+
+    # 180 days, renewed by every successful login. Up to five HMAC tokens, one per account.
+    device:
+        name: __Host-device
+        setter: backend
+        kind: cookie
+        purpose: >-
+            Up to five HMAC tokens, each tied to one account's email under a server secret,
+            httpOnly, host-bound. Lets the owner's browser keep signing in while a guesser has
+            used up the failure budget.
+        necessity: necessary
+        secret: true
+        maxAgeMs: 15552000000
+
+    # The five sign-in-with-a-provider cookies share one short lifetime: long enough to pick an
+    # account at the provider, short enough to bound reuse. Cleared by the callback.
+    oauthState:
+        name: __Host-oauth_state
+        setter: backend
+        kind: cookie
+        purpose: >-
+            The CSRF state of a sign-in-with-a-provider attempt in flight. It IS the sign-in the
+            visitor asked for.
+        necessity: necessary
+        secret: true
+        maxAgeMs: 300000
+
+    oauthVerifier:
+        name: __Host-oauth_verifier
+        setter: backend
+        kind: cookie
+        purpose: The PKCE verifier of the same attempt.
+        necessity: necessary
+        secret: true
+        maxAgeMs: 300000
+
+    # Not secret: a path and a language code. Kept readable in logs on purpose.
+    oauthContinue:
+        name: __Host-oauth_continue
+        setter: backend
+        kind: cookie
+        purpose: The page to return to once the provider has sent the visitor back.
+        necessity: necessary
+        secret: false
+        maxAgeMs: 300000
+
+    oauthLocale:
+        name: __Host-oauth_locale
+        setter: backend
+        kind: cookie
+        purpose: The language the visitor was using when the attempt began.
+        necessity: necessary
+        secret: false
+        maxAgeMs: 300000
+
+    oauthLink:
+        name: __Host-oauth_link
+        setter: backend
+        kind: cookie
+        purpose: >-
+            The link attempt, set only when a signed-in account connects a provider.
+        necessity: necessary
+        secret: true
+        maxAgeMs: 300000
+
+    # The next two last as long as the challenge they carry (read off the challenge, not from here).
+    oauthMfaChallenge:
+        name: __Host-oauth_mfa_challenge
+        setter: backend
+        kind: cookie
+        purpose: >-
+            The second-factor step of a provider sign-in: the login challenge, carried across the
+            redirect instead of in the URL.
+        necessity: necessary
+        secret: true
+        lifetime: challenge
+
+    oauthDeletionChallenge:
+        name: __Host-oauth_deletion_challenge
+        setter: backend
+        kind: cookie
+        purpose: >-
+            The restore-a-pending-deletion step of a provider sign-in: the claim check, carried
+            across the redirect instead of in the URL.
+        necessity: necessary
+        secret: true
+        lifetime: challenge
