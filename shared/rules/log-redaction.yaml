@@ -3,6 +3,8 @@
 # every spelling: `new_password` / `newPassword` / `new-password`.
 
 # Credentials. Replaced with a marker, never hashed-and-kept.
+# The cookie names are not listed here: the `secret: true` rows of cookies.yaml are added to this
+# list (redaction = this file UNION those rows; the twin does the same).
 sensitiveFields:
     - password
     - passwordhash
@@ -21,13 +23,6 @@ sensitiveFields:
     - antibot-challenge-token
     - otp
     - jwt
-    - __Host-session
-    - __Host-device
-    - __Host-oauth_state
-    - __Host-oauth_verifier
-    - __Host-oauth_link
-    - __Host-oauth_mfa_challenge
-    - __Host-oauth_deletion_challenge
     - secret
     - new_secret
     - api_key

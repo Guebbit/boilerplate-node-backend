@@ -132,6 +132,13 @@ const STEPS: readonly Step[] = [
             "docs/tools/security.md's rate-limit budget table, read off every module's own manifest"
     },
     {
+        name: 'cookie inventory',
+        command: ['tsx', 'scripts/docs/generate-cookie-table.ts'],
+        checks: true,
+        because:
+            "docs/theory/data-protection.md's table of the cookies the backend sets, read off shared/rules/cookies.yaml"
+    },
+    {
         name: 'scheduled jobs',
         command: ['tsx', 'scripts/docs/generate-jobs.ts'],
         checks: true,

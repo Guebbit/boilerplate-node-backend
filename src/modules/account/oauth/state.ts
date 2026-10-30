@@ -13,25 +13,26 @@
 
 import { randomBytes, createHash } from 'node:crypto';
 import type { Response } from 'express';
+import { cookieData } from '@infrastructure/http/cookies.generated';
 import { hostCookieOptions } from '../session/cookies';
 
 /** The CSRF cookie — cleared by both a successful and a failed callback. */
-export const OAUTH_STATE_COOKIE = '__Host-oauth_state';
+export const OAUTH_STATE_COOKIE = cookieData.oauthState.name;
 
 /** The PKCE verifier cookie — same lifetime and clearing points as {@link OAUTH_STATE_COOKIE}. */
-export const OAUTH_VERIFIER_COOKIE = '__Host-oauth_verifier';
+export const OAUTH_VERIFIER_COOKIE = cookieData.oauthVerifier.name;
 
 /** The saved `?continue=` cookie — same lifetime and clearing points as {@link OAUTH_STATE_COOKIE}. */
-export const OAUTH_CONTINUE_COOKIE = '__Host-oauth_continue';
+export const OAUTH_CONTINUE_COOKIE = cookieData.oauthContinue.name;
 
 /** The saved `?locale=` cookie — same lifetime and clearing points as {@link OAUTH_STATE_COOKIE}. */
-export const OAUTH_LOCALE_COOKIE = '__Host-oauth_locale';
+export const OAUTH_LOCALE_COOKIE = cookieData.oauthLocale.name;
 
 /** The connect-attempt cookie: present only when a SIGNED-IN account is linking a provider. */
-export const OAUTH_LINK_COOKIE = '__Host-oauth_link';
+export const OAUTH_LINK_COOKIE = cookieData.oauthLink.name;
 
 /** Minutes-scale on purpose: long enough to pick a Google account, short enough to bound reuse. */
-const OAUTH_COOKIE_TTL_MS = 5 * 60 * 1000;
+const OAUTH_COOKIE_TTL_MS = cookieData.oauthState.maxAgeMs;
 
 /** A fresh CSRF token for one login attempt — 128 bits, same entropy `hashToken`'s callers rely on. */
 export const generateOAuthState = (): string => randomBytes(16).toString('hex');

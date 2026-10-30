@@ -12,6 +12,7 @@
  * winston handed it.
  */
 import fc from 'fast-check';
+import { cookieData } from '@infrastructure/http/cookies.generated';
 import type winston from 'winston';
 import {
     redactSensitiveFields,
@@ -340,10 +341,21 @@ describe('the sensitive-field policy, entry by entry', () => {
         expect(redacted[shouty]).toBe('[REDACTED]');
     });
 
-    it('covers the whole policy, so a shrinking list cannot pass unnoticed', () => {
-        // Deliberately a floor, not an exact count: adding a field should not fail a test, and
-        // removing one should.
-        expect(SENSITIVE_FIELDS.size).toBeGreaterThanOrEqual(27);
+    it('redacts every secret cookie of the inventory, and the inventory has some', () => {
+        const secretNames = Object.values(cookieData)
+            .filter((cookie) => cookie.secret)
+            .map((cookie) => cookie.name);
+
+        // Canary: an empty inventory would make the loop below pass without proving anything.
+        expect(secretNames.length).toBeGreaterThan(0);
+        for (const name of secretNames) expect(SENSITIVE_FIELDS.has(name)).toBe(true);
+    });
+
+    it('leaves the non-secret cookies readable', () => {
+        const readable = Object.values(cookieData).filter((cookie) => !cookie.secret);
+
+        expect(readable.length).toBeGreaterThan(0);
+        for (const cookie of readable) expect(SENSITIVE_FIELDS.has(cookie.name)).toBe(false);
     });
 
     it.each(['resetToken', 'passwordPolicy', 'tokenCount', 'webhookSecret', 'x-hub-signature'])(

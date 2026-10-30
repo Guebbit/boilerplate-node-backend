@@ -9,6 +9,7 @@
 
 import type { Response } from 'express';
 import { SESSION_COOKIE } from '@kernel/cookies';
+import { cookieData } from '@infrastructure/http/cookies.generated';
 import { isRelaxedEnvironment } from '@infrastructure/runtime/config';
 
 /**
@@ -72,7 +73,7 @@ export const destroySessionCookie = (response: Response) => {
  *   `createSessionCookie`, which this is always set alongside with the same value.
  */
 const createLoggedCookie = (response: Response, maxAgeMs?: number) => {
-    response.cookie('isAuth', 'true', {
+    response.cookie(cookieData.isAuth.name, 'true', {
         // No `httpOnly`/`secure`: this cookie holds no credential, only a hint the client may read.
         maxAge: maxAgeMs,
         sameSite: 'lax',
@@ -84,7 +85,7 @@ const createLoggedCookie = (response: Response, maxAgeMs?: number) => {
  * Destroy the logged-in indicator cookie.
  */
 const destroyLoggedCookie = (response: Response) => {
-    response.clearCookie('isAuth', {
+    response.clearCookie(cookieData.isAuth.name, {
         path: '/'
     });
 };

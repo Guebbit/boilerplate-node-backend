@@ -19,16 +19,16 @@ import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 import { readBodyField } from '@infrastructure/http/middlewares/rate-limit';
 import { hostCookieOptions } from './cookies';
 import { sessionConfig } from './config';
-import { DAY_MS } from '@domain-primitives/time';
+import { cookieData } from '@infrastructure/http/cookies.generated';
 
 /** The cookie's name; `__Host-` because it is host-only and httpOnly, like the session's. */
-export const DEVICE_COOKIE = '__Host-device';
+export const DEVICE_COOKIE = cookieData.device.name;
 
 /** How many accounts one browser may be familiar for; the oldest drops first. */
 const MAX_TOKENS = 5;
 
-/** How long a device stays familiar: 180 days, renewed by every successful login. */
-const DEVICE_COOKIE_MAX_AGE_MS = 180 * DAY_MS;
+/** How long a device stays familiar, renewed by every successful login. */
+const DEVICE_COOKIE_MAX_AGE_MS = cookieData.device.maxAgeMs;
 
 /** The separator between tokens: not in base64url, so a token can never contain it. */
 const SEPARATOR = '.';
