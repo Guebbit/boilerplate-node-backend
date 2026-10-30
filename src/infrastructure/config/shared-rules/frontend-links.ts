@@ -1,7 +1,7 @@
 /**
  * @module
  * The schema of `shared/rules/frontend-links.yaml`: the frontend paths a mail or a sitemap links
- * to, and the sitemap's static pages.
+ * to, the staff screens a work-notice mail points at, and the sitemap's static pages.
  *
  * Relative imports only: see `src/infrastructure/config/shared-rules/load.ts`.
  */
@@ -35,6 +35,27 @@ export const frontendLinksSchema = z.strictObject({
         contact: template,
         /** The privacy notice. */
         privacy: template
+    }),
+    /** Staff screens a work-notice mail links to, under the frontend's `/<locale>/`. */
+    staffPages: z.strictObject({
+        /** One user's account screen. */
+        user: template,
+        /** One webhook subscription. */
+        webhookSubscription: template,
+        /** One ticket. */
+        ticket: template,
+        /** One return. */
+        return: template,
+        /** The orders list. */
+        salesOrders: template,
+        /** The preorders list. */
+        salesPreorders: template,
+        /** The payments list. */
+        salesPayments: template,
+        /** The returns list. */
+        returns: template,
+        /** The inventory board. */
+        inventory: template
     }),
     /** Public pages that take no id. The empty string is the home page. */
     staticPages: z.array(z.string())

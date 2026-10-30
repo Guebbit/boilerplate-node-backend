@@ -60,6 +60,59 @@
       ],
       "additionalProperties": false
     },
+    "staffPages": {
+      "type": "object",
+      "properties": {
+        "user": {
+          "type": "string",
+          "minLength": 1
+        },
+        "webhookSubscription": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ticket": {
+          "type": "string",
+          "minLength": 1
+        },
+        "return": {
+          "type": "string",
+          "minLength": 1
+        },
+        "salesOrders": {
+          "type": "string",
+          "minLength": 1
+        },
+        "salesPreorders": {
+          "type": "string",
+          "minLength": 1
+        },
+        "salesPayments": {
+          "type": "string",
+          "minLength": 1
+        },
+        "returns": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inventory": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "user",
+        "webhookSubscription",
+        "ticket",
+        "return",
+        "salesOrders",
+        "salesPreorders",
+        "salesPayments",
+        "returns",
+        "inventory"
+      ],
+      "additionalProperties": false
+    },
     "staticPages": {
       "type": "array",
       "items": {
@@ -69,6 +122,7 @@
   },
   "required": [
     "links",
+    "staffPages",
     "staticPages"
   ],
   "additionalProperties": false

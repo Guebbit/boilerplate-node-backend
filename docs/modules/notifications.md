@@ -165,6 +165,9 @@ flowchart LR
   security); every other code is the bell alone. There are no per-person mail preferences: the
   choice is made once, in the table. A `now` mail is short: what happened and a link, in the
   recipient's own language, with ids and dates only (no buyer address, no name).
+- **Links are shared data.** The staff screens a notice points at are the `staffPages:` block of
+  `shared/rules/frontend-links.yaml`, which the frontend's router spec walks; the code-to-screen
+  mapping stays in `staff-routing.ts`. A dead event about an order links through `orders`' `orderPagePath`.
 - **Once per situation.** Each row carries a `dedupeKey` (`<kind>:<entity>`) under a unique
   `{ userId, dedupeKey }` index, so a redelivered event writes nothing, pushes nothing and mails
   nothing a second time.
