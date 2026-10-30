@@ -1,34 +1,31 @@
 ---
 source: src/modules/api-keys/emails.ts
-sha256: 9b362bbcd16b7f8faee85c92b2fe80af94bc4687f4cbbbddd8ba679835dfa084
-generated_at: 2026-10-15T10:20:22.913926+00:00
+sha256: fe33995eb13f968ab0a5e05a8f713dfc9767df94f585cc73980780562e0bc97d
+generated_at: 2026-10-29T03:12:56.980963+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/api-keys/emails.ts
 
 ## Purpose
-
-Provides the resolved, human-readable copy for the two emails the API-keys module sends: a notification when a credential is minted, and a notification when credentials are revoked due to a possible compromise. Follows the same convention as `@modules/account/emails` — language is passed in as an argument, and the output is fully interpolated text ready for a template to render.
+Defines the two email content builders for API-key lifecycle events — one sent when a credential is minted, one when credentials are revoked. Each function resolves i18n strings into a finished `EmailContent` object; the file itself never sends mail or touches secrets.
 
 ## Key elements
-
-- **`apiKeyMintedEmail(locale, keyName, credential, expires)`** — Builds the "your key was created" email. Returns an `EmailContent` with template `api-keys.minted`. Carries no secret and no actionable link; `credential` is the public display id only.
-- **`apiKeysRevokedEmail(locale, reason, credentials)`** — Builds the "your credentials were revoked" email. Returns an `EmailContent` with template `api-keys.revoked`. The body key is interpolated at runtime as `api-keys.email-revoked.body-${reason}`. `credentials` is joined into a comma-separated `list` field.
+- **`KeysRevokedReason`** (type) — Union of `SessionsRevokedReason` (from the account module) and `'authenticator-removed'`, representing the possible triggers for a bulk revocation.
+- **`apiKeyMintedEmail`** — Returns an `EmailContent` for template `api-keys.minted`. Accepts locale, key name, public display id, and pre-formatted expiry; interpolates only display values into the body.
+- **`apiKeysRevokedEmail`** — Returns an `EmailContent` for template `api-keys.revoked`. Accepts locale, revocation reason, and a list of credential labels; selects the body string via a `body-${reason}` i18n key and joins the credential list into a single line.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/mailer.ts`** — Source of the `EmailContent` return type both functions use; defines the shape the mailer adapter expects (`template`, `subject`, `data`).
-- **`src/infrastructure/i18n/index.ts`** — Exports `translator`, which both functions call with the recipient's locale to obtain the translation function `t`.
-- **`src/infrastructure/i18n/context.ts`** — Underlying context the translator operates on (indirect dependency through the i18n package).
-- **`src/modules/account/index.ts`** — Re-exports the `SessionsRevokedReason` type used as the `reason` parameter of `apiKeysRevokedEmail`.
-- **`src/modules/account/domain/revocation.ts`** — Original definition of `SessionsRevokedReason`; determines which i18n body key is selected.
-- **`src/modules/api-keys/services/api-keys.ts`** — Service layer that invokes these email builders and passes the resulting `EmailContent` to the mailer.
-- **`src/modules/api-keys/tests/unit/emails.test.ts`** — Unit tests for both exported functions.
-- **`tests/unit/infrastructure/adapters/mailer-templates.test.ts`** — Tests the email templates (`api-keys.minted`, `api-keys.revoked`) that these functions reference by name.
+- **`@infrastructure/adapters/mailer`** — Imports the `EmailContent` type used as the return type of both builders.
+- **`@infrastructure/i18n`** — Imports `translator` to produce the per-locale translation function (`t`) used inside every field.
+- **`@modules/account`** — Imports `SessionsRevokedReason` to compose `KeysRevokedReason`.
+- **`src/modules/api-keys/index.ts`** — Barrel file that re-exports this module's public surface to the rest of the codebase.
+- **`src/modules/api-keys/services/api-keys.ts`** — Upstream caller that invokes these builders and passes the result to the mailer.
+- **`src/modules/api-keys/tests/unit/emails.test.ts`** — Unit tests for both builders.
+- **`tests/unit/infrastructure/adapters/mailer-templates.test.ts`** — Verifies the mailer templates (`api-keys.minted`, `api-keys.revoked`) referenced by the `template` field.
 
 ## Notes
-
-- The `reason` parameter is used to construct an i18n key dynamically (`api-keys.email-revoked.body-${reason}`), so every valid `SessionsRevokedReason` value must have a corresponding translation key or the lookup will fail.
-- Both functions are pure: they take arguments and return an `EmailContent` object without side effects (no sending, no logging).
-- The `data` object always includes a `locale` field, presumably so the template renderer can set the document language.
+- The file is deliberately side-effect free: it only *builds* content; sending is the mailer adapter's job.
+- The i18n convention here (and in the parallel `account/emails` file) is: language is passed in as a plain string argument, and the output is fully-resolved text — no deferred lookups at render time.
+- `apiKeyMintedEmail` intentionally excludes any secret key material or action links; the credential parameter is a public display id only.
+- The revoked email's body key is dynamic (`api-keys.email-revoked.body-${reason}`), so adding a new `KeysRevokedReason` member requires a matching i18n key or the body will be empty at runtime.

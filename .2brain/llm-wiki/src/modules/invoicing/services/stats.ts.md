@@ -1,7 +1,7 @@
 ---
 source: src/modules/invoicing/services/stats.ts
-sha256: 003c2c146fe9a90df93334d892ec32c06938886668db3cdd9fd00f65ce0586b6
-generated_at: 2026-10-15T10:39:55.611026+00:00
+sha256: 25bdff92861ce2a1feadb519c01a5f04933414089fec3e05601f50799a206ce7
+generated_at: 2026-10-29T04:15:50.941472+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Computes per-currency, per-bucket money totals (invoiced vs. credited) from frozen invoice and credit-note rows. It exists as the single source of money figures for reporting because orders carry no totals and refunds carry no VAT/shipping split—only issued documents do.
+Computes invoiced and credited money totals per currency and time bucket. It is the authoritative source for every money figure in stats: invoices and credit notes are the frozen, dated rows (`issuedAt`) that carry the full VAT/shipping split, whereas orders store no total and refunds hold only a single gross amount.
 
 ## Key elements
 
-- **`DocumentTotals`** (interface) — shape of one document-type aggregate: `documents` count plus `goodsNet`, `shippingNet`, `tax`, `gross` as `Money` (minor units).
-- **`MoneyBucket`** (interface) — one currency + bucket date, holding side-by-side `invoiced` and `credited` `DocumentTotals`.
-- **`NONE`** (const) — zeroed `DocumentTotals` used as the initial value when a bucket has no rows for a document type.
-- **`totalsOf`** (private helper) — converts a `DocumentBucketRow` (decimal columns) into a `DocumentTotals` via `toMinorUnits`.
-- **`moneyBuckets`** (exported function) — accepts a `ReportWindow`, calls `invoicingRepository.sumInvoices` and `.sumCreditNotes` concurrently, merges the two result sets into a `Map` keyed by `currency|bucketISO`, and returns `MoneyBucket[]`.
+- **`DocumentTotals`** (interface) — one document type's sum in one bucket: `documents` count, `goodsNet`, `shippingNet`, `tax`, `gross` (all `Money` in minor units).
+- **`MoneyBucket`** (interface) — one currency × one bucket, carrying both an `invoiced` and a `credited` `DocumentTotals`.
+- **`NONE`** (const) — zero-value `DocumentTotals` used as the default for whichever side has no rows in a bucket.
+- **`totalsOf`** (internal helper) — converts a `DocumentBucketRow` (summed decimals) into a `DocumentTotals` via `toMinorUnits`.
+- **`moneyBuckets(window: ReportWindow)`** (exported) — the main entry point. Calls `invoicingRepository.sumInvoices` and `sumCreditNotes` in parallel, merges their rows into a `Map` keyed on `currency|bucket.toISOString()`, and returns `MoneyBucket[]`.
 
 ## Relationships
 
-- **`src/shared-kernel/money.ts`** — imports `NO_MONEY`, `toMinorUnits`, and the `Money` type; all monetary values in this file are expressed in minor units via that module.
-- **`src/infrastructure/persistence/report.ts`** — imports the `ReportWindow` type that defines the half-open date window and bucket size passed into `moneyBuckets`.
-- **`src/modules/invoicing/repository.ts`** — imports `invoicingRepository` (the data-access layer) and the `DocumentBucketRow` row shape; all SQL aggregation lives in the repository, this file only maps and merges.
-- **`src/modules/invoicing/services/index.ts`** — re-exports this module's public API (`moneyBuckets`, `DocumentTotals`, `MoneyBucket`) to consumers.
+- **`src/domain-primitives/money.ts`** — provides the `Money` type, the `NO_MONEY` sentinel, and the `toMinorUnits` conversion used to lift repository decimals into the domain representation.
+- **`src/infrastructure/persistence/report.ts`** — supplies the `ReportWindow` type (half-open date range + bucket size) that parameterises the query.
+- **`src/modules/invoicing/repository.ts`** — source of the raw data: `invoicingRepository.sumInvoices(window)` and `.sumCreditNotes(window)` return `DocumentBucketRow[]` arrays that this module aggregates.
+- **`src/modules/invoicing/services/index.ts`** — barrel file for the invoicing services directory; re-exports this module so consumers can import `moneyBuckets` via the services index.
 
 ## Notes
 
-- Bucketing key is `currency + ISO date string`; two rows that differ only in document type (invoice vs. credit-note) land in the same `MoneyBucket` cell.
-- Dates are interpreted in the shop's timezone before bucketing (handled upstream in the repository query); this file trusts the `bucket` value it receives.
-- `goodsNet` excludes shipping; `tax` and `gross` include it. Don't add `goodsNet + shippingNet` expecting `gross`—`gross` also carries tax.
-- The function is async but performs no I/O itself; the `Promise.all` wraps two repository calls.
+- Bucketing is by the document's **issue date in the shop's zone**. An invoice follows its payment by seconds; a credit note follows its refund's settlement.
+- If a bucket has invoices but no credit notes (or vice-versa), the missing side is filled with the `NONE` constant rather than omitted.
+- `totalsOf` is intentionally **not** exported — it is a thin adapter from the repository row shape to the public `DocumentTotals` shape.
+- The merge key is a plain string concatenation (`currency|bucket.toISOString()`); no dedicated tuple or struct is used.

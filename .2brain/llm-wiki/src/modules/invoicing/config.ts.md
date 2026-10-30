@@ -1,7 +1,7 @@
 ---
 source: src/modules/invoicing/config.ts
-sha256: f8d49c2b394d5fc17038adbcb2a59028cf51f11dcf51356eadf2376b8e141325
-generated_at: 2026-10-15T10:37:41.277250+00:00
+sha256: 7960d42d58b4aae7bff8db649e526c14b68bd567514a67771b75a1f61c8ab23d
+generated_at: 2026-10-29T04:10:03.892290+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the module-level configuration for the invoicing subsystem: which e-invoicing provider is active and how long rendered PDFs are retained before reaping. It deliberately excludes seller identity fields (legal name, VAT, address), which belong to `@modules/orders/config.ts` because the withdrawal notice also prints them and `orders` must not depend on this module.
+Defines the runtime configuration surface for the invoicing module—specifically which e-invoicing provider is active and how long rendered PDFs and buyer identity blocks are retained. It exists as a separate, per-call-readable config so that individual tests can override values without mutating shared state, and so that seller-identity fields (which belong to the `orders` module) stay decoupled.
 
 ## Key elements
 
-- **`invoicingConfig`** – the single exported value, produced by `defineConfig`. Shape:
-  - `NODE_EINVOICING_PROVIDER` – `text` field, default `'pdf'`, forced to lower-case. Selects which e-invoicing provider implementation is used.
-  - `NODE_INVOICE_PDF_RETENTION_DAYS` – `int` field, default `30`, minimum `0`. Controls how many days a rendered invoice PDF is kept before the reap job deletes it.
+- **`invoicingConfig`** — The single exported config object, built via `defineConfig` with name `'invoicing'`. Contains three shape fields:
+  - `NODE_EINVOICING_PROVIDER` (`text`, default `'pdf'`, lower-cased) — selects which e-invoicing provider is used.
+  - `NODE_INVOICE_PDF_RETENTION_DAYS` (`int`, default `30`, min `0`) — how many days a rendered PDF is kept.
+  - `NODE_INVOICE_BUYER_RETENTION_YEARS` (`int`, default `10`, min `1`) — how many years after the issue year the buyer block remains on the document.
 
 ## Relationships
 
-- **`@infrastructure/config/define`** / **`@infrastructure/config/fields`** – provides the `defineConfig` factory and the `text` / `int` field constructors used to build `invoicingConfig`.
-- **`src/modules/invoicing/module.ts`** – registers `invoicingConfig` with the module so it is available at runtime.
-- **`src/modules/invoicing/providers/index.ts`** – reads `NODE_EINVOICING_PROVIDER` to pick the concrete provider (e.g. the PDF renderer vs. a future XML provider).
-- **`src/modules/invoicing/services/render.ts`** – reads config values during the render/issue flow.
-- **`scripts/ops/reap-invoice-pdfs.ts`** – reads `NODE_INVOICE_PDF_RETENTION_DAYS` to determine the cutoff age for PDFs eligible for deletion.
+- **`src/infrastructure/config/define.ts`** — Provides `defineConfig`, the function used to construct `invoicingConfig`.
+- **`src/infrastructure/config/fields.ts`** — Provides the `text` and `int` field-constructor helpers used for the three shape fields.
+- **`src/modules/invoicing/module.ts`** — Registers/exposes `invoicingConfig` as part of the module's public surface.
+- **`src/modules/invoicing/providers/index.ts`** — Reads `NODE_EINVOICING_PROVIDER` to select the active provider implementation.
+- **`src/modules/invoicing/services/retention.ts`** — Reads `NODE_INVOICE_PDF_RETENTION_DAYS` and `NODE_INVOICE_BUYER_RETENTION_YEARS` to govern cleanup of stored PDFs and buyer blocks.
+- **`src/modules/invoicing/services/render.ts`** — Consumes the config (provider choice, retention) when producing invoice documents.
+- **`src/modules/invoicing/jobs.ts`** — Schedules work (e.g., retention sweeps) that depends on the retention values defined here.
 
 ## Notes
 
-- Config is **read per call**, not cached at module-load time. This is intentional: tests can vary values case-by-case without monkey-patching a singleton.
-- Do **not** add seller-identity fields (legal name, VAT ID, address) here. They live in `@modules/orders/config.ts` to avoid a circular dependency (`orders` must not import `invoicing`).
+- The config is intentionally **read per call** (not cached at module level) so tests can vary values case-by-case.
+- Seller identity (legal name, VAT, address) is deliberately **not** here; it lives in `@modules/orders/config.ts` because the `orders` module must not import from `invoicing`. The withdrawal-notice rendering reuses that orders-side config.
+- `NODE_INVOICE_BUYER_RETENTION_YEARS` counts years **after the end of the issue year**, not from the invoice date.

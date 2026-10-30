@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/controllers/create-product.ts
-sha256: 3f643f6db077a9c85cdc1d3a765bcbfbed8765c0fb5e949a8fefd880cd21a54d
-generated_at: 2026-10-15T11:39:58.185014+00:00
+sha256: b46ad0d783ec47b73d925f64e34373420a9ae7e6bfb5c78f4874cbe0d3b3cfa7
+generated_at: 2026-10-29T05:24:49.936740+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Admin-facing controller that handles `POST /products`. It decodes a mixed JSON/multipart request body (scalar fields + `translations` JSON), reads an optional image upload, validates the assembled payload against the Zod schema, and delegates the actual write to `productService.writeCreate`.
+Admin-facing HTTP handler for `POST /products`. It decodes the multipart or JSON request body (including a base64 image upload and per-language translations), validates the payload against the service's Zod schema, persists the product via `productService.create`, and returns a `201` with the new product or an appropriate error.
 
 ## Key elements
 
-- **`createProduct`** (exported function, signature `(request, response) => void`)
-  - Parses typed fields (`booleans`, `numbers`, `stringArrays`, `jsonFields`) via `readInput`.
-  - Reads the image upload (`imageUrl`, `thumbnailUrl`, `pendingImageKey`) via `readUploadedImage`; `pendingImageKey` is `undefined` when no image is supplied.
-  - Validates the full body with `parseBody(productService.zodProductCreateSchema, …)`; on 422 the function returns early.
-  - Calls `productService.writeCreate(body, callerContextOf(request), { imageUrl, thumbnailUrl, pendingImageKey })`.
-  - On success: `claimUpload(request)`, maps result to a `Product` via `productService.toProduct`, responds `201` with a `Location` header.
-  - On service-level refusal (`!result.success`): responds with the returned status + errors; the upload is cleaned up by the middleware close hook.
-  - On unhandled error: `rejectDatabaseError` sends a 500.
+- **`createProduct(request, response)`** – the sole export. Orchestrates the full create flow:
+  1. Extracts typed fields (booleans, numbers, string arrays, JSON `translations`) from the request via `readInput`.
+  2. Validates the merged body against `productService.zodProductCreateSchema` using `parseBody` (answers 422 on failure).
+  3. Reads the server-side image upload through `writeWithUploadedImage` and passes the decoded image to the service.
+  4. Calls `productService.create(body, callerContextOf(request), image)`.
+  5. Maps the result to `createdResponse` (201 + `Location` header) or `rejectResponse` (service-level 4xx).
+  6. Catches and routes unexpected database errors through `rejectDatabaseError`.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/products/services/index.ts` | Imports `productService`; calls `writeCreate`, `zodProductCreateSchema`, `toProduct`. |
-| `src/infrastructure/http/controller.ts` | Imports `parseBody` for Zod validation. |
-| `src/infrastructure/http/request.ts` | Imports `readInput` (typed field decoding) and `callerContextOf` (caller metadata). |
-| `src/infrastructure/http/uploads.ts` | Imports `readUploadedImage` (extract image metadata) and `claimUpload` (prevent close-hook deletion on success). |
-| `src/infrastructure/http/response.ts` | Imports `createdResponse` (201) and `rejectResponse` (4xx service refusal). |
-| `src/infrastructure/http/errors.ts` | Imports `rejectDatabaseError` (500 fallback). |
-| `src/modules/products/routes.ts` | Consumes this handler as the route target for `POST /products`. |
-| `src/types/index.ts` | Provides `CreateProductRequest`, `CreateProductRequestMultipart`, `Product` type imports. |
+- **`src/modules/products/services/index.ts`** – provides `productService`, the domain logic (Zod schema, `create`, `toProduct`) this controller delegates to.
+- **`src/modules/products/routes.ts`** – registers `createProduct` as the handler for `POST /products`.
+- **`src/infrastructure/http/request.ts`** – supplies `readInput` (typed field extraction) and `callerContextOf` (auth/caller context).
+- **`src/infrastructure/http/controller.ts`** – supplies `parseBody`, which runs the Zod schema and short-circuits with 422.
+- **`src/infrastructure/http/response.ts`** – supplies `createdResponse` and `rejectResponse` for shaping HTTP replies.
+- **`src/infrastructure/http/errors.ts`** – supplies `rejectDatabaseError` for unexpected DB failures.
+- **`src/infrastructure/http/uploads.ts`** – supplies `writeWithUploadedImage`, which reads the server-decided image fields, writes the product, and claims the upload on success.
+- **`src/types/index.ts`** – provides the `CreateProductRequest`, `CreateProductRequestMultipart`, and `Product` types used in the handler signature.
+- **`src/modules/example/tests/integration/capabilities.test.ts`** – integration test that exercises this endpoint.
 
 ## Notes
 
-- `translations` can arrive as a nested JSON object (`application/json`) **or** a JSON-encoded string (multipart part). `readInput`'s `jsonFields` option handles both via the same decode path used for `numbers`/`stringArrays`.
-- Image URLs must not default to `''`; `ImageUrl` schema has `minLength: 1`. "No image" is expressed as `undefined` on the schema's `.optional()` field.
-- Upload lifecycle is implicit: on any non-2xx path the upload middleware's close hook deletes the file. The controller only calls `claimUpload` on the success path to signal "keep it."
-- `imageUrl` / `thumbnailUrl` / `pendingImageKey` are **server-decided** and passed as a third argument to `writeCreate`; they are intentionally excluded from the Zod-validated body.
+- `translations` is transported as a JSON-encoded **string** in multipart requests (multipart parts cannot carry nested objects). `readInput` decodes it via the `jsonFields` option, mirroring how `numbers` and `stringArrays` handle their string-transported values.
+- The image upload is never part of the Zod-validated body; `writeWithUploadedImage` reads server-decided image fields separately and claims the upload only on a successful write. On a 4xx/5xx the upload middleware's close hook deletes it.
+- `parseBody` returns `undefined` after sending a 422; the handler must early-return in that case (the `if (!body) return` guard).
+- The handler is a plain Express `(req, res)` function, not a class-based controller, consistent with the module's controller style.

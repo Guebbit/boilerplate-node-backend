@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/controllers/get-users.ts
-sha256: 856dc746f4dc2ef38e5a257099bffdf346ae5c8f4bce92b2f113a414e5835bad
-generated_at: 2026-10-15T12:07:10.401666+00:00
+sha256: 1bfa1b9700cc717de558d1c87595100b6194fb270150fe7b461d940a083e03d2
+generated_at: 2026-10-29T06:11:36.026794+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Controller that exposes the admin-facing `GET /users` endpoint (and its `POST /users/search` counterpart) for listing and searching users via query parameters or a JSON body. It delegates the actual lookup to the users service and post-processes results into per-caller contracts before returning.
+Admin-facing controller that handles `GET /users` (query-parameter search) and `POST /users/search` (body search). It validates incoming pagination and filter params against a Zod schema, delegates to `userService.search`, then enriches the resulting rows via `userService.toUserContracts` so each user carries its current role and the `actions` the caller's rank permits.
 
 ## Key elements
 
-- **`searchUsersQuerySchema`** — Extends the orval-generated `SearchUsersBody` with `page`, `pageSize`, `active`, and `deleted` fields drawn from the shared HTTP schemas, so this endpoint enforces the same pagination/boolean rules as every other search surface.
-- **`getUsers`** (export) — A search controller produced by `createSearchController`. Its `runSearch` calls `userService.search(parsed)` and then maps the raw `User[]` through `userService.toUserContracts(items, request.caller)` to attach the caller's current role and permitted actions. Returns `{ items, meta }` shaped as `User[]` + `PaginatedMeta`.
+- **`searchUsersQuerySchema`** — Zod schema built by extending the orval-generated `SearchUsersBody` with `page`, `pageSize`, `active`, `deleted`, `purchaseHold`, and `purchaseHoldReview`. The two `purchaseHold*` fields are further constrained to `literal(true).optional()` so a `false` value yields a 422 rather than a silent no-op.
+- **`getUsers`** (export) — The search controller created via `createSearchController({ entity: 'users', schema, runSearch })`. `runSearch` calls `userService.search(parsed)`, then maps results through `userService.toUserContracts(items, caller)` before returning `{ items: User[], meta: PaginatedMeta }`.
 
 ## Relationships
 
-- **`src/infrastructure/http/schemas.ts`** — Source of `optionalBooleanSchema`, `pageSchema`, and `pageSizeSchema` used to build `searchUsersQuerySchema`.
-- **`src/infrastructure/surfaces/create-search-controller.ts`** — Factory that `getUsers` is instantiated from; provides the HTTP wiring (method selection, validation, response shaping) around the `runSearch` callback.
-- **`src/infrastructure/persistence/search.ts`** — Supplies the `PaginatedMeta` type used in the controller's declared return shape.
-- **`src/modules/users/services/index.ts`** — Provides `userService.search` (the data lookup) and `userService.toUserContracts` (role/action enrichment).
-- **`src/modules/users/routes.ts`** — Registers `getUsers` on the `/users` route (the consumer of this export).
-- **`src/types/index.ts`** — Source of the `User` domain type referenced in the `runSearch` return annotation.
+- **`@infrastructure/surfaces/create-search-controller`** — Factory that wraps validation, error handling, and response shaping; this file supplies the entity name, schema, and the async `runSearch` callback.
+- **`@infrastructure/http/request`** — `callerContextOf(request)` extracts the authenticated caller (set upstream by `requirePermission`) and passes it into `toUserContracts` for per-caller role/action computation.
+- **`@infrastructure/http/schemas`** — Source of the shared `pageSchema`, `pageSizeSchema`, and `optionalBooleanSchema` so all search endpoints agree on legal values.
+- **`@modules/users/services`** — `userService` provides both `search` (filtering + pagination) and `toUserContracts` (role/action enrichment, batched per page).
+- **`@infrastructure/persistence/search`** — Contributes the `PaginatedMeta` type used in the return shape.
+- **`@types`** — Contributes the `User` entity type used in the return annotation.
+- **`@modules/users/routes`** — Imports `getUsers` and mounts it on the route table.
 
 ## Notes
 
-- `page`, `pageSize`, and `active` arrive as **strings** in a GET query; the shared schemas handle coercion. The schema intentionally leaves them *optional* — `normalizePagination` (inside `createSearchController`) is responsible for applying defaults, not the schema.
-- `request.caller` is guaranteed to be populated because the route sits behind `requirePermission`; `toUserContracts` relies on it to compute per-caller `actions`.
-- Role and action data are **not** stored on the serialized user document; `toUserContracts` fetches them fresh (batched for the whole page) because `applyUserTransform`'s own serialization carries no role information.
+- `page` / `pageSize` / `active` are **string-coerced** because they arrive as query text on GET, not JSON. Defaults are *not* applied here; `normalizePagination` (inside the search controller or service) owns defaulting.
+- `purchaseHold` and `purchaseHoldReview` intentionally accept **only `true`** (or absent). Sending `false` is a 422, by design—there is no "not held" listing.
+- The doc header references `docs/modules/users.md` for broader context.
+- `toUserContracts` is called **after** the raw search, batched over the whole page, because the persistence layer's serialization has no caller context to derive roles/actions.

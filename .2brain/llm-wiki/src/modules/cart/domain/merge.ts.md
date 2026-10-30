@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/domain/merge.ts
-sha256: d646f478949e659ef39fc7e3615dcfb4aab698c460e8c0b5ed478be68d247508
-generated_at: 2026-10-15T10:22:54.608803+00:00
+sha256: 32659dfc2d40c80d641e783feae859b75fe7ba01175be35e25f5ce68ffbfe696
+generated_at: 2026-10-29T03:21:30.679037+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure domain rule that decides how many units a single guest cart line adds to an existing cart, given the current held quantity, whether the product is listed, and the per-line cap. It is side-effect-free and intentionally knows nothing about stock, the catalogue, or persistence — the caller supplies all context.
+Pure decision function that computes how many units a single guest cart line should add, given the current cart contents, the product's listed status, and the per-line cap. It exists to isolate the merge arithmetic from I/O so the cap and stock checks live in the service layer above.
 
 ## Key elements
 
-- **`MergeReason`** — union type `'summed' | 'capped' | 'removed'`; the contract's explanation for why a line didn't land exactly as requested.
-- **`MergeLineFacts`** — input shape: `requested`, `held`, `listed` (publicly visible), `lineMax` (per-line ceiling).
-- **`MergePlan`** — output shape: `add` (units to write) and an optional `reason`.
-- **`planMergeLine(facts)`** — the single exported function. Returns `{ add }` when the line fits exactly; otherwise attaches the first applicable reason in priority order: `removed` (product not listed) → `capped` (hit the line cap) → `summed` (merges on top of existing quantity).
+- **`MergeLineFacts`** (interface) — input: `requested`, `held`, `listed` (visible vs. deleted/hidden), `lineMax`.
+- **`MergePlan`** (interface) — output: `add` (units to append; `0` means write nothing) and an optional `reason`.
+- **`planMergeLine(facts): MergePlan`** — the sole exported function. Returns `{ add: 0, reason: 'removed' }` when `listed` is false; otherwise caps at `lineMax` and reports `capped` if the shopper received less than requested, `summed` if the line was merged into an existing holding, or no reason when it lands exactly as asked.
 
 ## Relationships
 
-- **`src/modules/cart/domain/index.ts`** — barrel file that re-exports this module's types and `planMergeLine` for consumers within the cart domain.
-- **`src/modules/cart/services/merge.ts`** — service-layer caller; passes in resolved facts (catalogue listing, stock check via `fitsStock`, the line cap) and receives the `MergePlan` to execute the write.
-- **`src/modules/cart/tests/unit/merge-rule.test.ts`** — unit tests exercising `planMergeLine` across the reason-priority and boundary cases.
+- **`src/types/index.ts`** — provides the `MergeLineReason` union used in `MergePlan.reason`.
+- **`src/modules/cart/domain/index.ts`** — barrel re-export of this module into the domain public surface.
+- **`src/modules/cart/services/merge.ts`** — service-layer caller that supplies the cap and `fitsStock` flag, then applies the returned `add`/`reason` to the cart model.
+- **`src/modules/cart/tests/unit/merge-rule.test.ts`** — unit tests covering the reason-priority and boundary cases.
 
 ## Notes
 
-- **Stock is deliberately excluded.** A sold-out or short product is merged the same way as any other. The caller is responsible for capping via `fitsStock`; doing it inside the rule would let a probing caller read exact stock by requesting 999 (see `docs/theory/defences/authorization.md`, "Reading the shelf").
-- **Reason priority is fixed and singular.** When multiple conditions apply, only the highest-priority reason is reported (`removed` > `capped` > `summed`). `summed` is informational context, not an error.
-- **`reason` is omitted (not set to a neutral value)** when the line lands exactly as asked — i.e. `held` is 0 and the cap is not hit.
-- The file has zero imports; it is a leaf module in the domain layer.
+- **Reason priority is fixed**: `removed` → `capped` → `summed`. Only one is ever reported.
+- **Stock is deliberately absent.** A sold-out product is added the same way; the caller is responsible for `fitsStock` enforcement. Lowering the line to available stock here would let an attacker probe exact inventory by submitting `requested: 999` (see `docs/theory/defences/authorization.md`).
+- **`listed` ≠ "in stock."** A product merely off sale is still listed and takes a line; a deleted/hidden product does not.
+- The function is a pure constant arrow (`export const …`) with no side effects and no imports beyond the type.

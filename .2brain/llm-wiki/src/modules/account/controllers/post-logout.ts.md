@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/post-logout.ts
-sha256: a5a94c8edca7a38f23507426075ff0c6ff7e95c304dd975671e60ceedac6dd85
-generated_at: 2026-10-15T09:55:41.864698+00:00
+sha256: ff86663235e97fdc8c64f75001b737c8087a09b9d5d0399a5ccfc6fbb553ac1b
+generated_at: 2026-10-29T02:30:54.082020+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter for `POST /account/logout`. It extracts the session credential from the request cookie, delegates to `accountService.logoutCurrentSession`, then clears the session cookie and returns a localized 200. The cookie acts as both credential and session address, so no bearer token is required.
+HTTP adapter for `POST /account/logout`. Translates an Express request/response into a single call to `accountService.logoutCurrentSession`, then clears the session cookie and returns 200 No Content. It exists to keep the logout logic in the service layer while this file handles only the HTTP surface (credential extraction, cookie teardown, error mapping).
 
 ## Key elements
 
-- **`postLogout(request, response)`** — The sole export. Reads the credential via `sessionCredentialOf`, calls `accountService.logoutCurrentSession(credential, callerContextOf(request))`, then destroys the session cookie and sends `successResponse` with the `account.logout.success` i18n string. Errors are forwarded to `catchAs(response, 'postLogout')`.
+- **`postLogout(request, response)`** (exported) — The sole handler. Reads the session credential from the request, delegates to `accountService.logoutCurrentSession`, then destroys the session cookie and sends a 200. Errors are funneled through `catchAs(response, 'postLogout')`.
 
 ## Relationships
 
-- **`routes.ts`** — Registers this function as the handler for the `POST /account/logout` route.
-- **`services/index.ts`** — Source of `accountService`; this controller calls `logoutCurrentSession` on it.
-- **`session/session.ts`** — Provides `sessionCredentialOf(request)`, which extracts the refresh-cookie credential used as the logout target.
-- **`session/cookies.ts`** — Provides `destroySessionCookie(response)`, invoked after successful logout.
-- **`infrastructure/http/controller.ts`** — Provides the `catchAs` error-handling helper.
-- **`infrastructure/http/request.ts`** — Provides `callerContextOf(request)`, passed to the service for logging/audit context.
-- **`infrastructure/http/response.ts`** — Provides `successResponse` for the 200 reply.
-- **`infrastructure/i18n/index.ts` / `context.ts`** — Provides the `t()` translation function for the success message.
+- **`src/modules/account/services/index.ts`** — Imports `accountService`; calls `logoutCurrentSession(credential, callerContext)`, which performs the actual token revocation.
+- **`src/modules/account/session/cookies.ts`** — Calls `destroySessionCookie(response)` to clear the client-side cookie after a successful logout.
+- **`src/modules/account/session/session.ts`** — Calls `sessionCredentialOf(request)` to extract the stored refresh-token credential used as the logout target.
+- **`src/infrastructure/http/response.ts`** — Imports `noContentResponse` to emit the 200 body.
+- **`src/infrastructure/http/request.ts`** — Imports `callerContextOf` to build the caller context passed to the service.
+- **`src/infrastructure/http/controller.ts`** — Imports `catchAs` for uniform error-to-HTTP mapping.
+- **`src/modules/account/routes.ts`** — Registers `postLogout` as the handler for the `POST /account/logout` route.
 
 ## Notes
 
-- **Always 200.** A missing or already-revoked cookie is treated as "not logged in here" and still yields success — it is never an error condition.
-- **Session-scoped only.** Revokes the token for the *current* session (identified by the cookie) and leaves other devices signed in.
-- **No body expected or returned.** The credential arrives exclusively via the refresh cookie; the response body is `undefined` with a localized message.
+- **Always 200.** A missing or already-revoked cookie is treated as "not logged in here" and still results in a 200; there is no 401/404 path in the happy-or-error branches.
+- **Cookie-as-credential pattern.** The refresh cookie itself identifies *which* session to revoke (analogous to `POST /account/refresh`), so no bearer token is expected. Only the current device is logged out; other devices remain signed in.
+- **Thin by design.** No business logic lives here — validation, revocation, and auditing are all in the service.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/services/index.ts
-sha256: b035c0859b0a0355f6e20f6e728f49009a1c0afbd23b0e289f6eafe005c5ec1a
-generated_at: 2026-10-15T11:56:38.797161+00:00
+sha256: 158836318f0bca4f085e396f8590789969bf68b3dafd408efcb6afbbc7ec20fa
+generated_at: 2026-10-29T05:43:00.278692+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel (index) file for the returns services layer. It re-exports every public function and type from the individual service files (`create`, `decide`, `receive`, `read`, `options`, `retention`, `stats`, `close`, `cancel-remainder`, `personal-data`) and also bundles a subset of them into a single `returnService` object, giving callers one stable import surface instead of reaching into each leaf file.
+Barrel module that re-exports every returns-domain function into a single `returnService` handle. Controllers and the module container interact with one object instead of scattering imports across a dozen sub-files.
 
 ## Key elements
 
-- **Named re-exports** — `createReturn`, `approveReturn`, `declineReturn`, `receiveReturn`, `listReturns`, `getReturn`, `withActions`, `getReturnOptions`, `collectPersonalData`, `scrubReturnText`, `closeReturn`, `cancelUnanswered`, and the type `CreateReturnInput`, `CreateReturnOutcome`, `ReceiveReturnInput`, `ReturnFilters`, `ReturnedBucket`.
-- **`returnService`** — a const object exposing `createReturn`, `approveReturn`, `declineReturn`, `receiveReturn`, `listReturns`, `getReturn`, `getReturnOptions`, `withActions`, `scrubReturnText`, `returnedBuckets`, `returnedByProduct`, `returnedSeries` as a single namespace handle.
+- **`returnService`** (const object) — the sole named export of this file. Aggregates 19 functions covering the full return lifecycle:
+  - *Write path:* `createReturn`, `approveReturn`, `declineReturn`, `receiveReturn`, `closeReturnByHand`, `cancelReturn`
+  - *Read / query:* `listReturns`, `getReturn`, `withActions`, `getReturnOptions`
+  - *Retention / privacy:* `scrubReturnText`, `collectPersonalData`
+  - *Notification:* `mailReturnRequested`, `mailReturnDecided`, `mailReturnClosed`
+  - *Reporting:* `returnedBuckets`, `returnedByProduct`, `returnedSeries`, `returnsDigest`
+- **Type re-exports** — `CreateReturnInput`, `CreateReturnOutcome`, `ReceiveReturnInput`, `ReturnFilters`, `ReturnedBucket` (convenience for callers that need types without importing the sub-file directly).
 
 ## Relationships
 
-- **Controllers** (`post-return.ts`, `get-returns.ts`, `get-return-by-id.ts`, `get-return-options.ts`, `post-return-decision.ts`, `post-return-receive.ts`) import individual service functions (or the `returnService` object) through this file to perform their operations.
-- **`src/modules/returns/index.ts`** re-exports this file, making it the public API surface for the returns module.
-- **`scripts/ops/reap-returns.ts`** imports from this file for operational/batch use (e.g. `cancelUnanswered`).
-- **Leaf service files** (`create.ts`, `decide.ts`, `receive.ts`, `read.ts`, `options.ts`, `close.ts`, `cancel-remainder.ts`, `personal-data.ts`, `retention.ts`, `stats.ts`) are the sources this barrel re-exports from.
+- **Downstream (this file →):** imports individual functions from `./create`, `./decide`, `./close`, `./cancel` (and other sibling service files). These are the leaf implementations; this file only re-exports them.
+- **Upstream (→ this file):** the returns controllers (`post-return.ts`, `post-return-decision.ts`, `post-return-receive.ts`, `post-return-cancel.ts`, `post-return-close.ts`, `get-returns.ts`, `get-return-by-id.ts`, `get-return-options.ts`) and the module wiring (`module.ts`, `returns/index.ts`) consume `returnService` from this module to call the appropriate lifecycle step.
 
 ## Notes
 
-- `closeReturn`, `cancelUnanswered`, and `collectPersonalData` are re-exported but are **not** members of the `returnService` object — they are only available via the individual named exports.
-- `returnedBuckets`, `returnedByProduct`, and `returnedSeries` are included in `returnService` but have no corresponding `import` statement in this file; they are re-exported directly from `./stats`.
-- The `import` block at the top does not cover every re-export (e.g. `close`, `cancel-remainder`, `personal-data`), which is valid because re-exports can reference modules without a prior import.
+- The object is intentionally flat (no nesting). Call sites do `returnService.approveReturn(...)`, not `returnService.decide.approveReturn(...)`.
+- `withActions` is a read-path helper that layers permitted actions onto a return record; it is not a CRUD verb despite living among them.
+- `scrubReturnText` (retention) and `collectPersonalData` are grouped with the lifecycle functions even though they are governance operations, not state transitions.

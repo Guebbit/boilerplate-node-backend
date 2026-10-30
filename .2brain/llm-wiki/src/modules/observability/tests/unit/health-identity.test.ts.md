@@ -1,7 +1,7 @@
 ---
 source: src/modules/observability/tests/unit/health-identity.test.ts
-sha256: 63157bdc63c7ac6f2375ece5e4ee39948485319db7ced37d5fa2c330754d73a0
-generated_at: 2026-10-15T10:57:21.591842+00:00
+sha256: c2b43fc741a769e61f779493a6c7bf6b27d700b527227d3e55d4077c802a516b
+generated_at: 2026-10-29T04:37:19.303316+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests that verify how `buildObservabilityHealth` names the answering process in the `GET /observability/health` payload — specifically the `environment` and `service` fields. The job- and queue-health sub-responses are mocked out so this suite focuses exclusively on identity reporting, leaving those concerns to their own test files.
+Unit tests that verify `buildObservabilityHealth` correctly populates the two identity fields (`environment` and `service`) in the `GET /observability/health` response. Job and queue health are mocked away so the suite isolates "which process answered" from "what jobs/queues report."
 
 ## Key elements
 
-- **`jest.mock('../../services/job-health')`** — stubs `jobHealth` to resolve `[]`, removing it from the test's scope of concern.
-- **`jest.mock('../../services/parked-jobs')`** — stubs `queueHealth` to resolve `[]`, same rationale.
-- **`setEnvironment` / `resetEnvironment`** (from `@tests/environment`) — helpers that mutate and restore `process.env` around each test. `resetEnvironment` is registered in a top-level `afterEach`.
-- **`buildObservabilityHealth`** (from `../../services/health`) — the async function under test; each `it` asserts a slice of its resolved object with `toMatchObject`.
-- **Four test cases:**
-  - `NODE_ENV` unset → `environment` is the literal string `'unset'`.
-  - `NODE_ENV` set (e.g. `'staging'`) → `environment` echoes the value.
-  - `NODE_SERVICE_NAME` unset → `service` defaults to `'api'`.
-  - `NODE_SERVICE_NAME` set (e.g. `'shop-api'`) → `service` echoes the value.
+- **`jest.mock` for `job-health` / `parked-jobs`** – forces both to resolve to `[]`, removing them from the assertion surface.
+- **`describe('buildObservabilityHealth identity')`** – single suite containing four cases:
+  - *Unset `NODE_ENV`* → `environment` is the string `'unset'` (not `undefined`).
+  - *Set `NODE_ENV` (`'staging'`)* → `environment` mirrors the value verbatim.
+  - *Unset `NODE_SERVICE_NAME`* → `service` defaults to `'api'`.
+  - *Set `NODE_SERVICE_NAME` (`'shop-api'`)* → `service` mirrors the value verbatim.
 
 ## Relationships
 
-- **`src/modules/observability/services/health.ts`** — exports `buildObservabilityHealth`, the function being tested. This is the sole system-under-test dependency.
-- **`tests/support/environment.ts`** — provides `setEnvironment` (sets arbitrary `NODE_ENV` / `NODE_SERVICE_NAME` values) and `resetEnvironment` (restores prior env), used to make each test hermetic.
-- **`../../services/job-health`** and **`../../services/parked-jobs`** — imported only to be *mocked*; the tests never exercise their real logic.
+- **`src/modules/observability/services/health.ts`** – source of `buildObservabilityHealth`, the function under test.
+- **`tests/support/environment.ts`** – provides `setEnvironment`, the shared helper used to control `NODE_ENV` / `NODE_SERVICE_NAME` per test case.
 
 ## Notes
 
-- The mocks are declared **before** the import of `buildObservabilityHealth`, which is required for Jest to hoist them correctly. Forgetting the ordering (or using ESM `import` before the `jest.mock` call) will silently un-mock the modules.
-- `'unset'` is a deliberate sentinel string, not `undefined` or an empty string. Tests asserting identity should compare against that exact value, not falsiness.
-- The default service name `'api'` is a hard-coded fallback in the implementation, not derived from any config file; changing it upstream will break the third test.
+- The file's own doc comment states the design intent: this suite is about *naming* the process, not about health data. Keep new assertions here limited to `environment` / `service` shape.
+- Unset `NODE_ENV` is deliberately reported as `'unset'` (a deployment scenario), not `'development'` or omitted.
+- Service name fallback (`'api'`) is a product convention, not a runtime default—assert it explicitly when changing the fallback.

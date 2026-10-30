@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/services/options.ts
-sha256: de1f09eb3df3b5369a665709b968f865a7f5115d12697290e8e3ef497299837a
-generated_at: 2026-10-15T11:57:06.211452+00:00
+sha256: 3c43e80df2b299100296329c469a70a56017b65b1ee467a79a53cb30b1879369
+generated_at: 2026-10-29T05:43:35.144490+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Computes, in a single server-side call, what an order can still **return** (shipped units not already heading back) and what it can still **cancel** (fulfillment orders with a remainder, plus the exact refund owed). Centralising this logic ensures no client re-derives quantities or refund amounts.
+Computes the full set of return and cancellation options for a single order in one pass: which shipped goods the caller may still return (and under which reasons), and which fulfillment-order remainders they may still cancel (with the exact refund owed). Centralising this derivation here means no client re-computes quantities, deadlines, or refund amounts independently.
 
 ## Key elements
 
-- **`getReturnOptions`** *(exported)* — Main entry point. Takes `orderId` + `AuthContext`, returns `ResponseSuccess<ReturnOptions>` or a 404 `ResponseReject`. Resolves the order, fetches existing returns, shipped quantities, and remainder options in parallel, then assembles the `returnable` and `cancellable` sections.
-- **`readableOrder`** *(internal)* — Permission gate: staff holding `returns.any.read` may read any order; everyone else is limited to their own via `ownOrder`.
-- **`optionLines`** *(internal)* — Formats a `productId → units` map into titled option lines, pulling the product title frozen on the order.
+- **`getReturnOptions(orderId, authContext)`** *(export)* — Main entry point. Resolves the order, then in parallel fetches existing returns, shipped quantities, and remainder options; assembles a `ResponseSuccess<ReturnOptions>` or a 404 `ResponseReject`.
+- **`readableOrder(orderId, authContext)`** — Guards access: staff holding `read:Return` may read any order; everyone else is restricted to their own order via `ownOrder`.
+- **`offeredReasons(order, authContext, now)`** — Returns which `ReturnReason`s the caller may name (buyer: only open deadlines; staff with `update:Return`: all reasons, with past-deadline non-withdrawal reasons listed as `exceptions`).
+- **`optionLines(order, quantities, excluded)`** — Maps a product-quantity map into display lines with frozen product titles and a `withdrawable` flag per line.
+- **`OfferedReasons`** *(interface)* — Carries `reasons`, `exceptions` (staff-only preview of waived deadlines), and a `staff` boolean.
 
 ## Relationships
 
-- **`@infrastructure/http/response`** — Shapes the API envelope via `generateSuccess` / `generateReject`.
-- **`@infrastructure/i18n`** (`i18n/index.ts`) — Localises the 404 message with `t('returns.order-not-found')`.
-- **`@kernel/permissions`** — Derives the caller's permission subject via `callerForSubject`.
-- **`@kernel/ability`** — Checks the `returns.any.read` key with `holdsKey`.
-- **`@modules/delivery`** (`delivery/index.ts`) — Sources `shippedQuantities` and `remainderOptions`.
-- **`@modules/orders`** (`orders/index.ts`) — Reads the order document via `orderService.getById`; filters Art.-16-excluded items via `isExcludedFromWithdrawal`; types the document as `OrderDocument`.
-- **`../domain`** (`returns/domain/index.ts`) — Supplies `returnableQuantities`, `wireLines`, `holdsReturnedGoods`, and the `ProductQuantity` type used to compute what is still returnable after subtracting in-flight returns.
-- **`./cancellation-refund`** — Computes `refund.total` and `refund.shipping` for each cancellable fulfillment.
-- **`./ownership`** — Resolves the caller's own order when the caller is not staff.
+- **`@infrastructure/http/response`** — Wraps results in `generateSuccess` / `generateReject` and types the return as `ResponseSuccess<ReturnOptions> | ResponseReject`.
+- **`@infrastructure/i18n`** — Translates the 404 error message via `t('returns.order-not-found')`.
+- **`@kernel/ability` / `@kernel/permissions`** — `holds` + `callerForSubject` perform the `read:Return` and `update:Return` permission checks that gate visibility and reason access.
+- **`@modules/delivery`** — `deliveryService.shippedQuantities` supplies what has shipped; `deliveryService.remainderOptions` supplies cancellable remainder lines (and whether delivery refund applies).
+- **`@modules/orders`** — `orderService.getById` loads the order; `isBuyer` identifies the buyer; `isExcludedFromWithdrawal` marks Art. 16 goods; `OrderDocument` is the shared order shape.
+- **`../domain`** (returns domain barrel) — Provides the pure computation helpers: `returnableQuantities`, `wireLines`, `holdsReturnedGoods`, `isReasonOpen`, `reasonsOpenAt`, `isGuaranteeReason`, and the `ProductQuantity` type.
+- **`./cancellation-refund`** — `cancellationRefundOn` computes the exact refund (total + shipping) for a given remainder.
+- **`./deadlines`** — `frozenDeadlinesOf` extracts the per-reason deadlines frozen on the order at creation time.
+- **`./cancel-right`** — `cancelRefusalOf` mirrors the write-path refusal rule so the UI's `cancel` flag never advertises a cancellation that would be rejected.
+- **`./ownership`** — `ownOrder` restricts non-staff callers to their own order.
 
 ## Notes
 
-- **Art. 16 exclusions:** Order items flagged by `isExcludedFromWithdrawal` are removed from the returnable set before quantities are computed — they are never offered as return options.
-- **`returnable` vs `cancellable`:** `returnable` covers already-shipped units minus goods currently in a return; `cancellable` covers not-yet-fully-shipped fulfillment orders that still have a remainder. These are distinct concepts and should not be conflated.
-- **Shipping refund on last unit:** `cancellationRefundOn` includes a delivery-refund component when cancelling the last unit of a fulfillment order; this is surfaced as the `shippingRefund` field per cancellation line.
-- All three data fetches (`findByOrderId`, `shippedQuantities`, `remainderOptions`) run in parallel via `Promise.all` before any computation.
+- `returnable` is force-emptied when no reason deadline is open for the caller, so the client can treat an empty array as "no return form to show."
+- Art. 16 excluded goods (`isExcludedFromWithdrawal`) are hidden from `returnable` **unless** the caller is staff or an open guarantee (non-withdrawal) reason applies; this is the `excludedOffered` guard.
+- The `cancel` boolean on each `cancellable` entry is computed with the *same* rule the mutation path uses (`cancelRefusalOf`), guaranteeing the button and the write agree.
+- `shippingRefund` on a cancellable line is non-zero only when that remainder is the last unit of its fulfillment order — the delivery cost is refunded with it.

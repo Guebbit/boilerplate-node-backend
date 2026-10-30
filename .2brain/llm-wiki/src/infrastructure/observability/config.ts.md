@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/observability/config.ts
-sha256: c8105ea97321ee278f6315f4e80a5641a851ffabce9f8e2d9721e6edb2fb2ae9
-generated_at: 2026-10-14T08:05:46.437294+00:00
+sha256: 504507dcaa78f247a66412f97d0863ec73a293954e6a010a783965541ea07757
+generated_at: 2026-10-29T02:09:25.844329+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the runtime configuration shape for product analytics: which provider is active, whether a consent gate is required, and the per-provider endpoints and credentials. It is a leaf config definition that other layers (the provider registry, individual providers, and the app boot sequence) consume to resolve and validate analytics settings.
+Declares the runtime configuration shape for product analytics: which provider is active, whether consent gating applies, and the per-provider endpoint/credential fields (Umami, PostHog). It is a single `defineConfig` export that every analytics consumer reads at runtime.
 
 ## Key elements
 
-- **`analyticsConfig`** — The single exported `defineConfig` object (name: `'analytics'`). Its `shape` maps seven env-var keys to typed fields:
-  - `NODE_ANALYTICS_PROVIDER` — `text`, default `'umami'`, lowercased. Identifies the active analytics provider.
-  - `NODE_ANALYTICS_REQUIRE_CONSENT` — `flag`, default `true`. Toggles the consent gate.
-  - `NODE_UMAMI_HOST` / `NODE_UMAMI_INGEST_HOST` / `NODE_UMAMI_WEBSITE_ID` — Umami-specific connection settings.
-  - `NODE_POSTHOG_API_KEY` — marked `sensitive: true`.
-  - `NODE_POSTHOG_HOST` — PostHog endpoint.
-- **`defineConfig`** (imported) — Wraps the shape into the project's config-construction contract.
-- **`flag`, `text`** (imported) — Field constructors that add defaults, case handling, and sensitivity metadata.
+- **`analyticsConfig`** — the sole export; a `defineConfig` object named `'analytics'` whose `shape` maps env-var names to typed fields:
+  - `NODE_ANALYTICS_PROVIDER` (`text`, default `'umami'`, lowercased) — selects the active provider.
+  - `NODE_ANALYTICS_REQUIRE_CONSENT` (`flag`, default `true`) — gates all analytics behind a consent flow.
+  - Umami fields: `NODE_UMAMI_HOST`, `NODE_UMAMI_INGEST_HOST`, `NODE_UMAMI_WEBSITE_ID`.
+  - PostHog fields: `NODE_POSTHOG_API_KEY` (sensitive), `NODE_POSTHOG_HOST`, `NODE_POSTHOG_PERSONAL_API_KEY` (sensitive), `NODE_POSTHOG_PROJECT_ID`, `NODE_POSTHOG_API_HOST`.
 
 ## Relationships
 
-- **`src/infrastructure/config/define.ts`** & **`src/infrastructure/config/fields.ts`** — Direct imports; supply `defineConfig`, `text`, and `flag` used to build `analyticsConfig`.
-- **`src/infrastructure/observability/analytics/index.ts`** (provider registry) — Imports this file to read the provider name and resolve it; per the module comment, the registry is the authority on which provider names are valid.
-- **`src/infrastructure/observability/analytics/umami.ts`** / **`posthog.ts`** — Individual providers that consume the UMAMI/POSTHOG fields defined here at runtime.
-- **`src/app/config.ts`** — Probes `analyticsConfig` at boot to fail fast on an unrecognised provider name before the app starts serving.
+- **Imports** `defineConfig` from `@infrastructure/config/define` and the `flag`/`text` field constructors from `@infrastructure/config/fields`.
+- **Imported by** the provider registry (`analytics/index.ts`), which validates the `NODE_ANALYTICS_PROVIDER` string against known names. The registry in turn is probed at boot by `src/app/config.ts`.
+- **Read by** the provider implementations (`analytics/umami.ts`, `analytics/posthog.ts`) to obtain their endpoints and credentials at runtime.
+- **Referenced by** `modules/observability/services/health.ts` as part of observability health reporting.
 
 ## Notes
 
-- `NODE_ANALYTICS_PROVIDER` is intentionally a plain `text` field (not an enum/union) *here*. Validation of the provider name is deferred to the registry in `analytics/index.ts`, which imports this file. This inverts the dependency: the registry knows the valid names, but the config definition stays provider-agnostic.
-- `NODE_POSTHOG_API_KEY` carries the `sensitive: true` flag, so downstream tooling (logging, redaction, secret-scanning) must respect that marker.
-- See `docs/tools/configuration.md` for the broader env-var contract and setup instructions.
+- `NODE_ANALYTICS_PROVIDER` is deliberately a plain `text` field, **not** an enum. The set of valid names lives in the provider registry (which imports this file); making it an enum here would create a circular import. The registry's resolver rejects unknown values at boot.
+- Fields marked `sensitive: true` are excluded from logs/dumps by the config layer; all other analytics fields are treated as non-sensitive.
+- Only the fields for the *active* provider are required at runtime; the other provider's fields can be empty without error.

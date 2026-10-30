@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/security/subkey.ts
-sha256: 96a03a49b40e0cbef03b1362524a8b07c92e3bfacef693525708112565ac9a81
-generated_at: 2026-10-14T08:17:48.414632+00:00
+sha256: 16449650c05e8ccddea05e4c8a4abc0e0e4860fee009ab94d9f07b0ab6c756f4
+generated_at: 2026-10-29T02:16:29.627922+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single entry point for deriving purpose-bound subkeys from a root secret via HKDF-SHA256 (RFC 5869). Enforces key separation (one root key never directly serves two purposes, per NIST SP 800-57 §5.2) by binding each derived key to an explicit `info` label. Caches results to avoid re-derivation on the request path.
+Single-purpose module that derives a 32-byte HKDF-SHA256 subkey from a root secret, binding the result to a specific use via the `info` parameter (per NIST SP 800-57 §5.2 key-separation guidance). Caches results so repeated derivations on the request path are cheap.
 
 ## Key elements
 
-- **`deriveSubkey(root: string, info: string): KeyObject`** — the sole export. Runs `hkdfSync('sha256', root, '', info, 32)` and wraps the output in an immutable `KeyObject` via `createSecretKey`. Returns the same instance for repeated calls with the same arguments.
-- **`derived: Map<string, Map<string, KeyObject>>`** — module-level cache keyed by root string → info string. Never invalidated; lives for the process lifetime.
-- Uses only `node:crypto` (`createSecretKey`, `hkdfSync`); no external dependencies.
+- **`deriveSubkey(root: string, info: string): KeyObject`** — the sole export. Runs `hkdfSync('sha256', root, '', info, 32)` (empty salt, since roots are already high-entropy) and wraps the bytes in a `KeyObject` via `createSecretKey`. Returns the cached instance for identical `(root, info)` pairs.
+- **`derived` (module-private)** — a `Map<string, Map<string, KeyObject>>` keyed first by root string, then by `info`. Exists because tests mutate the environment between cases and HKDF, while cheap, runs on the request path.
+- **`KeyObject` return type** — immutable, and directly consumable by `createHmac` / `createCipheriv` without a `Buffer` round-trip.
 
 ## Relationships
 
-- **`src/infrastructure/security/pseudonymise.ts`** — caller; imports `deriveSubkey` to obtain a pseudonymisation key from a shared root.
-- **`src/infrastructure/security/versioned-secret.ts`** — caller; derives a versioned-encryption subkey.
-- **`src/modules/account/two-factor/delivered-codes.ts`** — caller; derives the key used to seal delivered 2FA codes.
-- **`tests/unit/infrastructure/security/subkey.test.ts`** — unit test; exercises `deriveSubkey` across multiple root/info combinations.
+- **`src/infrastructure/security/pseudonymise.ts`** — imports `deriveSubkey` to obtain a purpose-bound key for pseudonymisation. This import is why the module uses only relative imports (it sits on jest's `globalSetup` dependency chain).
+- **`tests/unit/infrastructure/security/subkey.test.ts`** — unit-tests the derivation output and cache behavior.
+- **`tests/cross-cutting/crypto-conformance.test.ts`** — exercises this module alongside other crypto primitives to verify conformance (e.g., RFC 5869 test vectors).
 
 ## Notes
 
-- The salt is intentionally empty (`''`) because the root secrets are already high-entropy; `info` carries all separation.
-- Returns a `KeyObject`, not a `Buffer` — it is immutable and directly consumable by `createHmac` / `createCipheriv` without re-wrapping.
-- The file sits on jest's `globalSetup` chain and `pseudonymise.ts` is a transitive dependency; the doc comment flags this as the reason for the **relative-imports-only** convention (avoid circular or absolute-import resolution issues under the jest config).
-- Cache is never cleared. If a test mutates the root secret between cases it must use a *different* root string; mutating the same string in place will return a stale key.
+- Salt is always the empty string. Do **not** pass a salt here; the design assumes the root is already high-entropy and the `info` label carries the separation.
+- Cache is unbounded (no eviction). The key space is small in practice (few roots × few purposes), but a long-lived process with many distinct roots would grow this map.
+- The `KeyObject` is immutable after creation; safe to share across async boundaries.
+- `info` should be a stable, purpose-specific label (optionally including a scheme version). Changing the string invalidates the cached entry and yields a different key.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/domain/withdrawal.ts
-sha256: 913abb138d178c741221bfa99151ec099c50654e633d51989153ca394c27b20e
-generated_at: 2026-10-15T11:03:35.241749+00:00
+sha256: 1c451453dc89fd1016f19e58474345416b17f5da7e1fcf9c4a6eddd2b3732f21
+generated_at: 2026-10-29T04:41:34.473840+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure decision logic for the EU right of withdrawal (Consumer Rights Directive Art. 9, 11a, 16) as applied to a single order. It answers three questions—whether a withdrawal is a cancel or a return, when the 14/21/30-day window closes, and whether the withdrawal button should render—without touching a database or any side effect.
+Pure domain logic for the right of withdrawal (Consumer Rights Directive Art. 9, 11a) and the statutory guarantee of conformity (Directive 2019/771 / 2019/770). Given only an order's status, lines, and timestamps, it computes when the withdrawal window opens and closes, whether the button may show, when the guarantee expires, and whether a withdrawal is a cancel or a return. No I/O, no side effects.
 
 ## Key elements
 
-- **`isBeforeDispatch(order: DispatchCandidate): boolean`** — Returns `true` when the order is in a pre-dispatch status *and* nothing has shipped (`fulfillment.shipped !== true`). Used to decide whether a withdrawal is a cancel (nothing left) vs. a return (goods in transit or delivered).
-- **`withdrawUntilFrom(start: Date, days: number): Date`** — Computes the last instant the window is open using **calendar-day** semantics (Regulation 1182/71 Art. 3): the event day is not counted; the period ends at 23:59:59.999 of the `days`-th day. Days are UTC.
-- **`withdrawalStartFor(order: WithdrawalClockCandidate, at: Date): Date`** — Returns the clock-start instant: `paidAt` for digital-only orders (contract conclusion, Art. 9(2)(c)), otherwise `at` (delivery, Art. 9(2)(b)).
-- **`isExcludedFromWithdrawal(line: WithdrawableLine): boolean`** — True when `line.product?.noWithdrawal === true` (Art. 16(c)–(d) goods: made-to-order, personalised, perishable).
-- **`canWithdraw(order: WithdrawalCandidate, now: Date): boolean`** — Combines status traits (`withdrawable`), per-line exclusion, and window expiry into a single "show the button?" check.
-
-Supporting types: `DispatchCandidate`, `WithdrawalClockCandidate`, `WithdrawableLine`, `WithdrawalCandidate` — minimal read-only shapes so callers need not pass a full order entity.
+- **`isBeforeDispatch(order)`** — Whether a withdrawal is a cancel (nothing shipped) vs. a return. Reads `fulfillment.shipped`, not the order status, so a partially-shipped order that is still `processing` is treated as dispatched.
+- **`canCorrectAddress(order)`** — Whether staff may still redirect an unshipped remainder to a new address.
+- **`withdrawUntilFrom(start, days)`** — The *announced* last calendar day (end-of-UTC-day) of the withdrawal window.
+- **`withdrawalClosesAt(withdrawUntil)`** — The *real* close: one silent UTC day after the announced date, so a one-day counting discrepancy never blocks a buyer.
+- **`conformityUntilFrom(deliveredAt)`** — The legal 2-year guarantee deadline, including a 7-day margin for UTC-offset and weekend-rollover.
+- **`repairedConformityUntil(current)`** — Extends the guarantee by 12 months after a repair (Directive 2024/1799).
+- **`withdrawalStartFor(order, at)`** — Clock start: `paidAt` for digital-only orders (Art. 9(2)(c)), arrival for goods (Art. 9(2)(b)).
+- **`deliveryClockFor(order, at, days)`** — Freezes both deadlines (`DeliveryClock`) at delivery time.
+- **`isExcludedFromWithdrawal(line)`** — Art. 16(c)–(d) exclusion (made-to-order, personalised, perishable), read from the product flag frozen at checkout.
+- **`withdrawalRefusalOf(order, now)`** — Single source of the refusal reason (`all_excluded` | `window_closed` | `nothing_left`) shared by the UI button and the `POST /returns` endpoint.
+- **`canWithdraw(order, now)`** — Convenience: status is withdrawable **and** no refusal applies.
 
 ## Relationships
 
-- **`./rules`** — Imports `isDigitalOnlyOrder` and `ShippableLineCandidate`; used inside `withdrawalStartFor` to detect digital-only orders.
-- **`./status-traits`** — Imports `ORDER_STATUS_TRAITS`; consulted by both `isBeforeDispatch` (`.beforeDispatch`) and `canWithdraw` (`.withdrawable`).
-- **`./fulfillment`** — Imports the `FulfillmentSummary` type (used via `Pick<…, 'shipped'>` in `DispatchCandidate`).
-- **`./index.ts`** — Barrel file that re-exports this module for consumers.
-- **`src/modules/orders/services/status.ts`, `services/override.ts`, `services/scope.ts`** — Downstream services that call `canWithdraw` / `isBeforeDispatch` to gate UI or state transitions.
-- **`src/modules/returns/services/cancel-remainder.ts`, `services/create.ts`, `services/options.ts`** — Return-flow services that use `isBeforeDispatch` to choose cancel vs. return paths.
-- **`src/modules/orders/tests/unit/withdrawal.test.ts`** — Unit tests covering all exported functions.
+- **`@domain-primitives/time`** — Supplies `DAY_MS` and `endOfUtcDay` used by every date arithmetic.
+- **`./status-traits`** — Reads `ORDER_STATUS_TRAITS` for `beforeDispatch` and `withdrawable` flags per status.
+- **`./rules`** — Calls `isDigitalOnlyOrder` and uses the `ShippableLineCandidate` type to decide the clock-start rule.
+- **`./fulfillment`** — Uses the `FulfillmentSummary` shape (`shipped`, `remaining`) in candidate interfaces.
+- **`./index.ts`** — Re-exports this module's public surface for the rest of the orders module.
+- **`services/actions.ts`, `services/status.ts`, `services/guarantee.ts`, `services/address.ts`** — Consume the pure functions above to build API responses and side-effects.
+- **`emails.ts`** — Reads `withdrawUntil` / `conformityUntil` to render dates in customer mail.
+- **`repository.ts`** — Persists the frozen `DeliveryClock` values on the order row.
+- **`tests/integration/timeline.test.ts`, `tests/integration/override-sync.test.ts`, `tests/integration/service.test.ts`** — Exercise these functions through the order lifecycle.
 
 ## Notes
 
-- **Calendar-day math, not `days × 24 h`.** `withdrawUntilFrom` floors to UTC midnight of the event day, adds `(days + 1)` days, then subtracts 1 ms. Do not replace with a simple `start + days * DAY_MS` offset.
-- **`isBeforeDispatch` reads `fulfillment.shipped`, not the order status.** An order can be `processing` yet partially shipped; keying on status alone would misclassify a mixed order as a cancel.
-- **`withdrawUntil` is `undefined` until the clock starts.** `canWithdraw` treats `undefined` as "no deadline yet" (window is open). Callers must not confuse this with a zero-date.
-- **Weekend / public-holiday rollover (Reg. 1182/71 Art. 3(4)) is deliberately omitted.** The configured minimum period (`orders/config.ts`) always exceeds 14 days, so the roll-over can never be the binding constraint.
-- **`isExcludedFromWithdrawal` uses strict `=== true`.** A `null` or `undefined` flag means the line is *not* excluded; only an explicit `true` excludes it.
-- The module is intentionally side-effect-free and stateless; all temporal data arrives as parameters. No I/O, no config reads.
+- **Announced vs. real deadline.** `withdrawUntil` is the date shown to the buyer; `withdrawalClosesAt` (one UTC day later) is the enforcement instant. Code that checks "is it still open?" must use `withdrawalClosesAt`, not `withdrawUntil`.
+- **Calendar days, not 24 h.** Periods follow Regulation 1182/71 Art. 3: the event-day is excluded, the period ends at 23:59:59 UTC of the last day. Weekend/holiday rollover (Art. 3(4)) is intentionally *not* computed — the configured minimum always exceeds it.
+- **Guarantee margin is asymmetric.** `conformityUntilFrom` adds 7 days past the 2-year anniversary; `repairedConformityUntil` adds exactly 12 months. Do not confuse them.
+- **Digital vs. goods clock.** `withdrawalStartFor` picks `paidAt` or arrival based on `isDigitalOnlyOrder`. Calling `withdrawUntilFrom` with the wrong start silently shifts the deadline.
+- **`isBeforeDispatch` ignores status.** A partially-shipped order is still `processing` by status but is *not* before dispatch — the check is `fulfillment.shipped !== true`.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/oauth/config.ts
-sha256: 16302212227e69bdac69ecdd4310577f5a5cdf0805dc28ebec449969f4a13c55
-generated_at: 2026-10-14T08:42:37.087294+00:00
+sha256: b2669c5172b2f34b10dec019aa0714c06ab0140fea61a824f6d43f257a8bf3b2
+generated_at: 2026-10-29T02:36:31.993790+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,41 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Centralizes all OAuth environment-variable access and URL construction for the account module. Providers and controllers consume the exports here rather than spelling `NODE_OAUTH_*` names or deriving redirect URIs from untrusted request data. The file reads and validates configuration only; it does not hold tokens or mint sessions.
+Centralised OAuth configuration: declares the four `NODE_OAUTH_*` env vars, computes the absolute redirect/callback URIs from `NODE_URL`, and builds the frontend redirect URLs (success, 2FA, deletion-grace). It exists so that `./providers/*` and the account controllers never spell an env-var name or assemble a redirect URI themselves.
 
 ## Key elements
 
-- **`OAUTH_FETCH_TIMEOUT_MS`** (`5000`) — single timeout shared by all outbound provider HTTP calls (token exchange, profile fetch), applied via `AbortSignal.timeout`.
-- **`oauthConfig`** — `defineConfig` block declaring the four `NODE_OAUTH_{GOOGLE,GITHUB}_CLIENT_{ID,SECRET}` vars (secrets marked `sensitive`). Its `check` function rejects boot when a provider is enabled but mail delivery is unavailable, since provider accounts have no password and rely on mail for step-up.
-- **`OAuthCredentials`** — interface: optional `clientId` / `clientSecret` strings.
-- **`getOAuthCredentials(name)`** — returns the matching provider's credential pair from `oauthConfig()`; returns `{}` for an unrecognized name.
-- **`isOAuthProviderConfigured(name)`** — `true` only when both `clientId` and `clientSecret` are set; used as the registry's "enabled" gate.
-- **`oauthRedirectUri(provider)`** — absolute backend callback URL (`<NODE_URL>/account/oauth/<provider>/callback`), always derived from `NODE_URL` via `new URL()` to avoid trailing-slash bugs.
-- **`oauthCallbackUrl(provider, originalUrl)`** — same base URL with the request's **raw** query string sliced from `originalUrl` (preserves repeated params that a rebuilt query would collapse).
-- **`oauthFrontendCallbackUrl(errorCode?, continueTo?, locale?)`** — frontend landing-page URL with optional `error`, `continue`, `locale` query params.
-- **`oauthFrontendMfaCallbackUrl(challenge, continueTo?, locale?)`** — frontend URL for the 2FA step; serializes `expiresAt`, `methods`, optional `defaultMethod` as query params. The `MfaChallenge` token is deliberately **excluded** (travels in a cookie instead).
-- **`backendUrl(path)`** (private) — resolves a relative path against `siteConfig().NODE_URL`.
-- **`PROVIDER_PAIRS`** (private) — `as const` array of the four env-var name pairs, used by the `check` function.
+- **`OAUTH_FETCH_TIMEOUT_MS`** (5000) — shared `AbortSignal.timeout` budget for every outbound provider HTTP call (token exchange, GitHub profile/email).
+- **`oauthConfig`** — `defineConfig` block declaring `NODE_OAUTH_GOOGLE_CLIENT_ID/SECRET` and `NODE_OAUTH_GITHUB_CLIENT_ID/SECRET`; its `check` rejects boot when a provider is enabled but `mailDelivers` is false (passwordless accounts would be locked out of step-up).
+- **`OAuthCredentials`** — interface for a provider's `{ clientId?, clientSecret? }`.
+- **`getOAuthCredentials(name)`** — returns the pair for `'google'` or `'github'`; empty object for anything else.
+- **`isOAuthProviderConfigured(name)`** — true only when both halves are set; the registry's "is this provider live?" check.
+- **`oauthRedirectUri(provider)`** — absolute `NODE_URL + /account/oauth/<provider>/callback`, built via `new URL` so a missing trailing slash on `NODE_URL` cannot corrupt the path.
+- **`oauthCallbackUrl(provider, originalUrl)`** — the same base with the request's **raw** query string sliced off `originalUrl` (avoids the parser folding repeated `code` into an array).
+- **`oauthFrontendCallbackUrl(errorCode?, continueTo?, locale?, linked?)`** — `NODE_FRONTEND_URL/oauth/callback` + query params for the success / link / error paths.
+- **`oauthFrontendMfaCallbackUrl(challenge, continueTo?, locale?)`** — same base; carries `mfaRequired`, `expiresAt`, `methods` (token itself stays in `MFA_CHALLENGE_COOKIE`).
+- **`oauthFrontendDeletionCallbackUrl(pending, continueTo?, locale?)`** — same base; carries `deletionPending`, `purgeAt`, `expiresAt` (claim check stays in its own cookie).
 
 ## Relationships
 
-- **`@infrastructure/config/define`** — provides `defineConfig` and `isRelaxedIn` used by the config declaration and its boot check.
-- **`@infrastructure/config/fields`** — provides the `text()` field descriptor for each env var.
-- **`@infrastructure/adapters/config`** — supplies `mailConfig` read inside the `check` function.
-- **`@infrastructure/adapters/mail-transports`** — supplies `mailDelivers()` used in the same check.
-- **`@infrastructure/http/config`** — supplies `siteConfig()` for `NODE_URL` and `NODE_FRONTEND_URL`.
-- **`@types`** — imports the `MfaChallenge` type used in `oauthFrontendMfaCallbackUrl`.
-- **`./providers/client.ts`** — consumes `OAUTH_FETCH_TIMEOUT_MS` when issuing provider HTTP requests.
-- **`./providers/github.ts` / `./providers/index.ts`** — call `getOAuthCredentials` / `isOAuthProviderConfigured` to resolve credentials and gate registration.
-- **`../controllers/get-oauth-start.ts`** — reads `oauthRedirectUri` to build the provider authorization URL.
-- **`../controllers/get-oauth-callback.ts`** — reads `oauthCallbackUrl`, `oauthFrontendCallbackUrl`, and `oauthFrontendMfaCallbackUrl` to complete the flow.
-- **`../module.ts`** — wires the two controller routes that depend on these exports.
-- **Tests** (`oauth-github.test.ts`, `oauth-google.test.ts`, `reauth-policy.test.ts`) — exercise credential resolution, redirect-URI construction, and the mail-delivery boot check.
+- **`@infrastructure/config/define`** — supplies `defineConfig` and `isRelaxedIn` (the latter gates the mail check in test envs).
+- **`@infrastructure/config/fields`** — supplies the `text()` field descriptor used in `oauthConfig.shape`.
+- **`@infrastructure/adapters/config`** — provides `mailConfig`, read inside the boot `check`.
+- **`@infrastructure/adapters/mail-transports`** — provides `mailDelivers`, the predicate in the boot `check`.
+- **`@infrastructure/http/config`** — provides `siteConfig` (source of `NODE_URL` and `NODE_FRONTEND_URL`).
+- **`controllers/get-oauth-start.ts` / `post-oauth-link-start.ts`** — call `isOAuthProviderConfigured`, `getOAuthCredentials`, and `oauthRedirectUri` to build the provider-authorisation redirect.
+- **`controllers/get-oauth-callback.ts`** — calls `oauthCallbackUrl`, `oauthFrontendCallbackUrl`, `oauthFrontendMfaCallbackUrl`, and `oauthFrontendDeletionCallbackUrl`.
+- **`oauth/providers/client.ts` / `github.ts` / `index.ts`** — read `getOAuthCredentials` and `OAUTH_FETCH_TIMEOUT_MS`; `index.ts` uses `isOAuthProviderConfigured` as its registry gate.
+- **`tests/unit/oauth-*.test.ts` / `reauth-policy.test.ts`** — exercise the config shape, the boot `check`, and the URL builders.
 
 ## Notes
 
-- **Redirect URIs are never request-derived.** Both `oauthRedirectUri` and `oauthCallbackUrl` build the scheme/host from `NODE_URL` only; the request's `Host` or `Origin` is intentionally ignored to prevent open-redirect / callback-confusion attacks.
-- **Raw query preservation.** `oauthCallbackUrl` slices `?…` off `request.originalUrl` verbatim rather than rebuilding from `request.query`, because the parser would fold a repeated `code` param into an array and hide an invalid callback.
-- **`getOAuthCredentials` returns `{}` for unknown names**, not `undefined`—callers must still check `isOAuthProviderConfigured` before treating a provider as available.
-- **`oauthFrontendMfaCallbackUrl`** intentionally strips `mfaRequired` and `challenge` token from the serialized challenge; passing a full `MfaChallenge` object would leak the token into the URL.
-- The `check` function is a **boot-time guard only**; it does not block a deployment that has no provider enabled (`PROVIDER_PAIRS.some(…)` is `false`).
+- **Redirect URI is never request-derived.** `oauthRedirectUri` builds exclusively from `NODE_URL`; a request-supplied `redirect_uri` is treated as an open-redirect vector and is never honoured.
+- **`oauthCallbackUrl` uses the raw `originalUrl` string**, not `request.query`. Re-parsing would collapse a repeated `code` parameter into an array and hide the library's "duplicate param" rejection.
+- **`continueTo` is a caller-validated value** (checked against `isSameOriginPath` in `oauth/state.ts` before being passed in). The URL builders do not re-validate; passing a raw cookie/query value would be a bug.
+- **Secrets never enter the frontend URLs.** The MFA challenge token and the deletion claim token are deliberately excluded from the URL and travel in dedicated cookies (`MFA_CHALLENGE_COOKIE`, the deletion cookie). The builders accept `Omit`/`Pick` types to make that exclusion structural.
+- **Boot check is environment-gated.** `isRelaxedIn(environment)` skips the mail-deliverability assertion in test, where SMTP is typically stubbed.

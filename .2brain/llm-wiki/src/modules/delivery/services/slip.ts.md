@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/services/slip.ts
-sha256: a25e5723849df15c48c32b9e1ba5363a669a605f9e31a021efa6d811f1e3b556
-generated_at: 2026-10-14T15:33:51.181004+00:00
+sha256: 9d6c48defb40e948b458f0af8b939a5446a0efc90823f35ed73c0088ac344e02
+generated_at: 2026-10-29T03:44:24.534910+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Listener for the `product.release_date_changed` event. When a product's release date moves, this file finds every fulfillment order still waiting for it, computes the new expected date from the catalogue, applies the pure verdict from `judgeSlip`, and acts within a transaction (update date, record a notice, or ask the buyer). It is the delivery-side narrator because `orders` cannot subscribe to `products` directly (import direction).
+Listener for `product.release_date_changed` and `product.restock_date_changed` events. When a product's release or restock date moves, this module determines the new expected date for every fulfillment order still waiting on that product and decides what the buyer is owed (nothing, or an email with a cancel option), applying the result inside a per-order transaction.
 
 ## Key elements
 
-- **`expectedFrom(fulfillmentOrder)`** – Reads the catalogue via `productService.findManyByIds` for the order's remaining lines and returns the latest `releaseDate` (or `undefined`). Reads from the catalogue, not the event payload, so multi-product orders stay correct when one product moves earlier.
-- **`recordDateMoved(fulfillmentOrder, next, now, session)`** – Appends a `release_date_moved` entry to the order timeline via `orderService.appendTimeline`. Called only when the date actually changed, keeping redelivered events from writing a second row.
-- **`apply(fulfillmentOrder, verdict, next, now, session)`** – Branches on `SlipVerdict.kind`: `earlier` silently claims the new date; `notice`/`ask` record a notice (with `needsAnswer` for `ask`) and then stamps the timeline. Returns the `SentNotice` for post-commit mailing.
-- **`judgeOne(fulfillmentOrderId)`** – Wraps the read → judge → apply sequence in a single `runAct` transaction. Skips orders lacking `agreedAt`/`expectedAt`. Returns `undefined` on refusal.
-- **`onReleaseDateChanged(productId)`** *(exported)* – Entry point. Finds all waiting fulfillment orders for the product, then processes them **sequentially** (one transaction each), mailing after each commit.
+- **`onDateChanged(productId, cause)`** *(exported)* — Entry point. Finds all waiting fulfillment orders for the given product and cause, then judges them sequentially (each in its own transaction).
+- **`judgeOne(fulfillmentOrderId)`** *(internal)* — Wraps a single judgement in `runAct`: loads the order in the session, computes the new expected date, calls `judgeMove`, and delegates to `apply`.
+- **`apply(fulfillmentOrder, verdict, next, now, session)`** *(internal)* — Executes the verdict. For `'earlier'`: updates `expectedAt` via `fulfillmentOrderRepository.claim` and records the timeline entry (no email). For later/cleared: calls `recordNotice` (email + cancel option), then records the timeline entry.
+- **`expectedFrom(fulfillmentOrder)`** *(internal)* — Reads the product catalogue (`productService.findManyByIds`) to resolve the current expected date for the order, choosing `releaseDate` or `restockDate` based on the order's `cause`.
+- **`recordDateMoved(fulfillmentOrder, next, now, session)`** *(internal)* — Appends a `release_date_moved` entry to the order's timeline via `orderService.appendTimeline`. The `from`/`to` keys are conditionally present.
 
 ## Relationships
 
-- **`../domain` (preorder.ts via index)** – Imports `judgeSlip` (pure verdict table) and `remainingOfLine` (filter to active lines).
-- **`../repository`** – `fulfillmentOrderRepository.findWaitingForProduct`, `.findInSession`, `.claim` for reads and optimistic-concurrency updates.
-- **`../model`** – `FulfillmentOrderDocument` type.
-- **`./act`** – `runAct` provides the per-order Mongoose session/transaction.
-- **`./notice`** – `recordNotice` writes the notice row; `mailNotice` delivers after commit; `SentNotice` is the return shape.
-- **`@modules/orders`** – `orderService.appendTimeline` writes the `release_date_moved` timeline entry.
-- **`@modules/products`** – `productService.findManyByIds` fetches current `releaseDate` values.
-- **`../module.ts`** – Registers `onReleaseDateChanged` as the event subscriber for `product.release_date_changed`.
+- **`../domain` (preorder.ts, fulfillment.ts via index.ts)** — Provides the pure decision logic: `judgeMove`, `expectedDateOfWaiting`, and the `SlipVerdict`/`WaitCause` types. This file is the side-effectful layer around that table.
+- **`../repository.ts`** — `fulfillmentOrderRepository` supplies `findWaitingForProduct`, `findInSession`, and `claim` (optimistic-concurrency update).
+- **`../model.ts`** — `FulfillmentOrderDocument` type used throughout.
+- **`./act.ts`** — `runAct` provides the per-order Mongoose transaction wrapper.
+- **`./notice.ts`** — `recordNotice` sends the buyer email / cancel-option notice; `SentNotice` is the return type threaded through `apply` and `judgeOne`.
+- **`@modules/orders`** — `orderService.appendTimeline` writes the `release_date_moved` timeline entry. Delivery mediates this because `orders` already imports `products`, making a direct `orders ← products` event listener a circular dependency.
+- **`@modules/products`** — `productService.findManyByIds` reads the current catalogue dates (the event payload's date is deliberately *not* trusted).
+- **`./index.ts`** — Re-exports `onDateChanged` for the module's public API.
 
 ## Notes
 
-- **Idempotency is structural, not via a dedup key.** A redelivered event re-reads the catalogue, gets the same `next`, `judgeSlip` returns `earlier`, and the `claim` guard (date unchanged) prevents a second write. No outbox dedup table.
-- **Sequential, not batched.** Each order is its own transaction; a slow order blocks the next. This is intentional — each buyer's mail follows its own commit.
-- **`earlier` verdict sends no mail.** The buyer is not notified of good news; the date is silently followed and the timeline row is the only trace.
-- **Timeline ordering.** `recordDateMoved` is stamped with the same `now` as the notice so the timeline row sorts *before* the notice row, even though it is written after it.
+- **Idempotent by design.** The outbox delivers at-least-once. A redelivered event finds the order's `expectedAt` already matching (or no expected date left for a cleared date) and `judgeMove` returns no verdict, so nothing is written.
+- **Sequential, not parallel.** `onDateChanged` loops with `await` over each waiting order. Each iteration is an independent transaction; a failure in one does not roll back the others, but the outbox redelivery covers it.
+- **Date source is the catalogue, not the event.** `expectedFrom` re-reads products via `productService`, so a multi-product fulfillment order still resolves correctly when one of its products moves earlier than another.
+- **Conditional timeline keys.** `from` and `to` in the `release_date_moved` timeline entry are spread in only when the corresponding date exists; an absent key signals "no date" rather than `null`.
+- **Email only for bad news.** An `'earlier'` verdict (date moved up or stayed) writes only the timeline row. The buyer sees the new date on the order page without receiving a notice.

@@ -1,7 +1,7 @@
 ---
 source: tests/integration/image-acl.test.ts
-sha256: c092b39b41ac35d21d5e7222660ce1acc77d0ab901e470a59968b8e15cd0dad5
-generated_at: 2026-10-15T12:47:22.457032+00:00
+sha256: 6d041aca7f7ec85ba8239ad4c44d0073ed1d8b666e8a44e99a27cb9d79c19565
+generated_at: 2026-10-29T06:55:51.059349+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test enforcing a cross-module security rule: a client may never supply a `imageUrl` path in a write body. It drives every route that accepts an image (account, users, products) with a malicious `imageUrl` pointing at another record's file, over both JSON and multipart encodings, and asserts the response is 422 **and** the victim's file still exists on disk. It also pins the positive contract: `imageUrl: null` removes only the record's own image, and omitting the field leaves it untouched.
+Integration test that enforces a cross-module security rule: a client may never supply a path in the image store via the `imageUrl` body field. It verifies that every write endpoint that accepts an image rejects a body naming *another* record's file (returning 422) while confirming on disk that the victim's file is untouched. It also pins the legitimate behaviours: `imageUrl: null` clears only the record's own image, omitting the field preserves it, and multipart upload still works.
 
 ## Key elements
 
-- **`doors`** – Array of `{ name, method, route, as, body }` objects describing every write endpoint that can accept an `imageUrl` (PATCH/PUT `/account`, POST/PATCH/PUT `/users`, plus three product routes defined inline).
-- **`send(door, encoding, imageUrl)`** – Builds a Supertest request in either JSON or multipart encoding, attaching `imageUrl` as the attack payload.
-- **`fileExists(url)`** – Resolves a `/images/…` URL against `PUBLIC_DIRECTORY` and checks `existsSync`; the primary security assertion helper.
-- **`PNG_BYTES`** – A 4×4 PNG generated via `sharp` in `beforeAll`; every upload path must accept a decodable image inline.
-- **`beforeEach`** – Seeds a locale, authenticates admin + user, uploads a "victim" product image, and captures its stored URL.
-- **`describe('what stays allowed')`** – Positive tests: `null` clears own image, omission preserves it, PUT is lossless without `imageUrl`, multipart `imageUpload` attachment sets the image.
+- **`PUBLIC_DIRECTORY`** – resolved from `publicDirectory()` at module top; the on-disk root for `/images/…` URLs.
+- **`PNG_BYTES`** – a decodable PNG generated once in `beforeAll`; every upload without a broker is digested inline, so sharp must accept it.
+- **`fileExists(url)`** – small helper that checks `existsSync` under `PUBLIC_DIRECTORY`; used as the primary assertion target.
+- **`Door` interface / `doors` array** – a table of the five account/user write endpoints (PATCH/PUT `/account`, POST `/users`, PATCH/PUT `/users/{id}`) with method, route resolver, auth role, and minimal valid body. Drives the `describe.each` parametric tests.
+- **`send(door, encoding, imageUrl)`** – builds a supertest request in either JSON or multipart encoding, attaching `imageUrl` as a plain string field for multipart.
+- **`beforeEach`** – creates a "victim" product via multipart upload, captures its `imageUrl`, and asserts the file is on disk. Also seeds locales and authenticates admin + user.
+- **`describe.each(doors)` block** – for every door × encoding (json, multipart): expects 422, a body mentioning `imageUrl`, and the victim file still present.
+- **Product endpoint tests** – same 422 + file-survives assertions for `POST /products`, `PUT /products/{id}`, `PATCH /products/{id}`.
+- **"what stays allowed" block** – four positive tests: null removes own image, omitting preserves it, PUT-without-`imageUrl` is lossless, multipart upload sets the image.
 
 ## Relationships
 
-- **`tests/support/http.ts`** – Provides `api()` (Supertest instance) and `authenticateAs()` (role-scoped bearer tokens).
-- **`tests/support/file-sandbox.ts`** – `emptyFileSandbox` runs in `afterEach` to isolate filesystem state between tests.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` initialises the in-memory test database before any test runs.
-- **`src/infrastructure/config/store.ts`** – `currentEnvironment().NODE_PUBLIC_PATH` resolves the public directory root used by `fileExists`.
-- **`src/modules/locales/repository.ts`** – `localeRepository.create` seeds the `en` locale required by product writes.
-- **`src/modules/locales/factories.ts`** – `makeLocale` builds the locale entity for that seed.
-- **`src/modules/locales/services/index.ts`** – `localeService.setTranslatables` registers product translatable-field config so product writes exercise the locale pipeline.
-- **`src/modules/products/repository.ts`** – `productRepository.existsById / writeTranslatedFields / markEdited` supply the hooks the locale service calls during product creation.
+- **`tests/support/http.ts`** – supplies `api()` (supertest wrapper) and `authenticateAs()` used in every request.
+- **`tests/support/file-sandbox.ts`** – `emptyFileSandbox` is the `afterEach` cleaner; the sandbox also assigns `publicDirectory` before this file's top-level code runs.
+- **`tests/support/setup-test-db.ts`** – `setupTestDb()` initialises the test database for the file.
+- **`src/modules/locales/tests/factories.ts`** – `givenLocale('en')` seeds the locale required by product/account endpoints.
+- **`tests/support/images.ts`** – `decodablePng()` produces the upload bytes; `publicDirectory()` returns the images root.
 
 ## Notes
 
-- The non-null assertion on `NODE_PUBLIC_PATH!` is safe because `tests/support/setup-file-sandbox.ts` (imported by the test-runner setup, not by this file) guarantees the value is set before any top-level test code executes.
-- The security assertion is deliberately on the **filesystem**, not just the 422 status: a hypothetical bug that returns 422 but still deletes the old file would be caught.
-- Multipart encoding serialises every body value to a string (objects via `JSON.stringify`), mirroring how a browser form would encode them; this ensures the multipart channel is not a bypass.
-- The product-route sub-test (`it.each(['POST /products', …])`) is written imperatively rather than through the `doors` table because product bodies include a `translations` object and additional required fields, making them incompatible with the uniform `send` helper.
+- The security assertion is **filesystem-level** (victim file still exists), not merely an HTTP status check.
+- Both JSON and multipart encodings are tested because the multipart channel validates against the same JSON schema—an `imageUrl` text part is the same vector.
+- Multipart bodies encode objects via `JSON.stringify` and booleans via `String(value)`; the test mirrors how a real form would serialize them.
+- `PUBLIC_DIRECTORY` uses a non-null assertion (`!`) because `setup-file-sandbox.ts` guarantees it is set before this file executes; the `!` exists only to satisfy the type checker.
+- The `doors` table deliberately uses the *minimal valid body* so that a 422 can only be attributable to `imageUrl`, not to a missing required field.

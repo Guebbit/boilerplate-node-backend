@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/domain/index.ts
-sha256: 78b90c0fdb94060ae068f01271fa7af56c5d367e35264c065a394621606c5889
-generated_at: 2026-10-15T10:22:44.810363+00:00
+sha256: ac573fa9444076f3862e71796239aea2d0d86933d88a24bcf74fe2e5ab94df0b
+generated_at: 2026-10-29T03:21:22.526398+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel (re-export) file for the cart **domain layer**. It provides a single, stable public surface for all pure business rules and types, so that services and tests import from one path rather than reaching into individual submodules. The file declares no logic of its own — it exists purely to aggregate exports and enforce the "framework-free" boundary noted in `docs/theory/domain-layer.md`.
+Barrel (re-export) file for the cart **domain layer**. It aggregates the pure, framework-free business rules—checkout validation, stock checks, merge planning, and line availability—into a single import surface so that consumers (services, presenter, tests) never need to reach into individual submodules.
 
 ## Key elements
 
-- **`./rules`** — `evaluateCheckout`, `basketWeight`, `needsShipping`, `evaluateShippingRequirement`; types `CheckoutShortfall`, `UnavailableCartLine`, `ShippingRequirementVerdict`.
-- **`./merge`** — `planMergeLine`; types `MergeLineFacts`, `MergePlan`, `MergeReason`.
-- **`./stock`** — `fitsStock`.
-- **`./availability`** — `lineAvailability`; types `LineAvailability`, `AvailabilityFacts`, `AvailabilityProduct`.
-
-All exports are re-exported (value or type only) with no transformation.
+- **`evaluateCheckout`, `basketWeight`, `needsShipping`, `evaluateShippingRequirement`** (from `./rules`) — pure functions that validate a cart against checkout constraints and shipping requirements.
+- **`planMergeLine`** (from `./merge`) — computes how an incoming line merges into an existing one.
+- **`fitsStock`** (from `./stock`) — determines whether a line quantity is within available stock.
+- **`lineAvailability`, `isBuyable`** (from `./availability`) — evaluate per-line buyability from availability facts.
+- **Re-exported types** — `AvailabilityFacts`, `AvailabilityProduct`, `MergeLineFacts`, `MergePlan`, `CheckoutShortfall`, `CheckoutVerdict`, `UnavailableCartLine`, `ShippingRequirementVerdict` — shared input/output contracts for the above functions.
 
 ## Relationships
 
-- **`./availability.ts`, `./merge.ts`, `./rules.ts`, `./stock.ts`** — Direct dependency targets; this file re-exports their symbols verbatim.
-- **`src/modules/cart/index.ts`** — Upward consumer; the cart module's public entry point is expected to re-export this domain barrel.
-- **Services (`checkout`, `items`, `merge`, `preorder`, `shelf`, `view`)** — Downstream consumers that import domain rules/types through this barrel rather than importing submodules directly.
-- **Tests (`line-availability.test.ts`, `merge-rule.test.ts`, `stock-rule.test.ts`)** — Unit tests that exercise the re-exported symbols.
+- **Depends on** (re-exports from): `domain/rules.ts`, `domain/merge.ts`, `domain/stock.ts`, `domain/availability.ts`.
+- **Consumed by**: `src/modules/cart/index.ts` (module-level public API), `presenter.ts`, and the service files (`services/checkout.ts`, `services/items.ts`, `services/merge.ts`, `services/preorder.ts`, `services/shelf.ts`, `services/view.ts`).
+- **Tested indirectly** via `tests/unit/line-availability.test.ts`, `tests/unit/merge-rule.test.ts`, `tests/unit/stock-rule.test.ts`.
 
 ## Notes
 
-- Because this is a pure re-export barrel, lint rules (referenced in the file's doc comment) enforce that **no framework imports** leak into the domain layer through this file. Adding a new domain rule means exporting it from the relevant submodule *and* adding it here.
-- Type-only exports (`export type { … }`) are kept separate from value exports. Use `import type` or rely on the barrel's `export type` forms when you only need compile-time symbols.
+- The module docstring references `docs/theory/domain-layer.md` for the rationale behind the "pure, lint-guaranteed framework-free" constraint.
+- Consumers should import from this barrel (or from `src/modules/cart/index.ts`) rather than from individual submodules; the barrel is the intended public contract for the domain layer.
+- No logic lives here—it is purely a re-export surface, so changes to function signatures must be made in the source files, not here.

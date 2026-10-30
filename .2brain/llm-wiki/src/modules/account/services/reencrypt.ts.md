@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/reencrypt.ts
-sha256: ec8d14cb6fa0996a5c66b4ab4065efa1fa16ec4c05d86466ccf12ebab8b98d52
-generated_at: 2026-10-14T08:52:34.170544+00:00
+sha256: 69cf4ca4c61e296ad5ed79ee3315092c278f1da33cda367056ab792136317dfb
+generated_at: 2026-10-29T02:44:06.462959+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin orchestration layer that re-encrypts every enrolled TOTP device secret onto the newest entry in the TOTP key ring. It exists to bind together the key-ring source (session config) and the binding rule (two-factor TOTP) into a single call to the users-module walker, so the ops script and the account services barrel both have one account-scoped entry point.
+Provides the account-domain entry point for re-encrypting all enrolled TOTP secrets onto the newest key in the TOTP encryption key ring. The actual walk over `users` documents is performed by the users service; this file assembles the key ring and binding rule and delegates. Intended to be invoked by the ops script `reencrypt` (see `@infrastructure/security/reencrypt`).
 
 ## Key elements
 
-- **`reencryptTotpSecrets(dryRun?: boolean)`** – Exports a single function. Resolves the current key ring via `getTotpEncryptionKeyRing()` and the binding rule via `totpBinding`, then delegates to `reencryptTwoFactorSecrets` in the users module. `dryRun` (default `false`) causes the walk to count moves without writing.
+- **`reencryptTotpSecrets(dryRun = false)`** – Sole export. Passes `{ ring, bindingOf }` to `userService.reencryptTwoFactorSecrets`. When `dryRun` is `true`, the users service counts what would be moved and writes nothing.
 
 ## Relationships
 
-- **`src/modules/account/session/config.ts`** — Provides `getTotpEncryptionKeyRing`, the ordered list of TOTP encryption keys (newest last).
-- **`src/modules/account/two-factor/totp.ts`** — Provides `totpBinding`, the rule that maps a secret to the key slot it should occupy.
-- **`src/modules/users/services/reencrypt.ts`** (via `src/modules/users/index.ts`) — Owns the actual database walk and write logic (`reencryptTwoFactorSecrets`); this file only supplies the ring and binding.
-- **`scripts/ops/reencrypt.ts`** — The CLI/ops entry point that invokes `reencryptTotpSecrets` to trigger a live re-encryption run.
-- **`src/modules/account/services/index.ts`** — Barrel that re-exports this function so consumers can import from the services namespace.
-- **`tests/integration/scripts/reencrypt.test.ts`** — Integration test that exercises the end-to-end re-encryption flow through the ops script.
+- **`../session/config`** (`getTotpEncryptionKeyRing`) – supplies the ordered key ring that defines "newest key" and the re-encryption target.
+- **`../two-factor/totp`** (`totpBinding`) – supplies the binding rule (which field / sub-document the TOTP secret lives on the user record).
+- **`@modules/users`** (`userService`) – executes the actual per-user re-encryption walk; this file never touches the DB directly.
+- **`src/modules/account/services/index.ts`** – barrel that re-exports this function for consumers within the account module.
+- **`src/modules/account/module.ts`** – account module registration; makes the reencrypt service part of the module's public surface.
+- **`src/modules/users/services/index.ts`** – where `reencryptTwoFactorSecrets` is defined and exported to `userService`.
 
 ## Notes
 
-- The walk happens on the `users` collection (not `account`), because TOTP secrets are stored on the user document. This module's role is purely to supply the account-scoped ring and binding rule; all I/O lives in the users module.
-- The key ring is ordered with the **newest key last**; `reencryptTwoFactorSecrets` rewrites secrets to that last key. The ring is read at call time, so adding a new `NODE_TOTP_ENCRYPTION_KEY` value and restarting is sufficient to make the next run pick it up.
-- `dryRun` is a boolean flag, not an options object; pass `true` to audit counts without mutation.
+- This file owns the *policy* (which ring, which binding) but not the *mechanics* (iteration, writes). If the binding rule or ring source changes, edit here, not in the users service.
+- `dryRun` defaults to `false`; the ops script is responsible for passing `true` when it wants a dry-run count.

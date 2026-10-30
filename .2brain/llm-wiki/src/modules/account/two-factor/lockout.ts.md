@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/two-factor/lockout.ts
-sha256: 24f53465152e61684c5ab05b39ff2a6d72d7039c43d21cba7c9cb0c3c9ad2831
-generated_at: 2026-10-14T14:49:07.001735+00:00
+sha256: 7bd903b71239d6a1e0b9ae6b7a42c10418572d04c1bf7b0bee17d2e7455c7aa5
+generated_at: 2026-10-29T03:07:05.818677+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,19 +9,19 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the two policy constants that govern the 2FA wrong-code lockout: how many failed reservations an account may make before it is locked, and how long that lock persists. The file contains no logic — it is a pure constants module so the values have a single named home.
+Exports the two constants that define the per-account wrong-code lockout policy for armed 2FA: how many consecutive failures are allowed and how long the resulting lock lasts. The actual enforcement (storing the counter, applying the lock) lives elsewhere (`users`); this file only supplies the policy numbers.
 
 ## Key elements
 
-- **`MFA_MAX_FAILURES`** (`10`) — Maximum number of wrong codes an account may reserve against its armed 2FA before the lock triggers. Documented as a deliberate choice below the NIST SP 800-63B ceiling of 100.
-- **`MFA_LOCK_MS`** (`15 * 60_000` → 900 000 ms) — Duration of the lock once `MFA_MAX_FAILURES` is reached (15 minutes).
+- **`MFA_MAX_FAILURES: number`** — Max wrong-code attempts before the account's 2FA locks. Sourced from `twoFactorRules.lockout.maxFailures`. Comment notes NIST SP 800-63B caps this at 100; the chosen value (10) is meant to cover plausible mistyping.
+- **`MFA_LOCK_MS: number`** — Duration of the lock (in milliseconds) once `MFA_MAX_FAILURES` is reached. Sourced from `twoFactorRules.lockout.lockMs`.
 
 ## Relationships
 
-- **`src/modules/account/two-factor/index.ts`** — The only consumer in the dependency graph. The module-level JSDoc in this file states that the `account` layer owns the policy decision and hands these two values to the `users` module's reservation door on every 2FA attempt; `index.ts` is where that wiring lives.
+- **`src/modules/account/rules.generated.ts`** — Import source. Provides the `twoFactorRules` object (generated from `rules.yaml`) from which both constants are read at module-load time.
+- **`src/modules/account/two-factor/index.ts`** — Barrel file for the `two-factor` directory; re-exports these two constants so consumers can import them from the package entry point rather than this file directly.
 
 ## Notes
 
-- Both exports are `const` numbers; there is no class, function, or runtime behavior. Importers should treat them as configuration, not as computed values.
-- The JSDoc explicitly assigns ownership: `users` stores the per-account failure counter, while `account` (this module's parent) decides the threshold and duration. Don't add mutable state or side-effectful logic here.
-- The NIST SP 800-63B reference is a design note, not an import; the file itself does not validate or enforce the limit.
+- Values are not hardcoded here; they are pulled from the generated rules module, which in turn is generated from `rules.yaml`. Changing the policy means editing `rules.yaml` and regenerating, not touching this file.
+- The module doc comment references a "users door" and "every reservation" as the enforcement sites, but neither is defined or imported in this file—treat those as pointers to other modules, not as APIs exposed here.

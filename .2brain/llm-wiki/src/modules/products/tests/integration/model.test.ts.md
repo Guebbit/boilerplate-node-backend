@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/tests/integration/model.test.ts
-sha256: 306c9caf35c9fd741d05f1e9ef4dd7cbe2b1110e793529e8cfceb1875f647ef9
-generated_at: 2026-10-15T11:48:13.369957+00:00
+sha256: c2540924727d9a3845d357e3cc8cef4672e6b28160acd2d2fa5c4080e6da7eca
+generated_at: 2026-10-29T05:32:47.059000+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that enforce a single invariant: product responses must never expose Mongoose internals (`_id`, `__v`). It covers both serialization paths — hydrated documents (via `toJSON`) and `.lean()` query results (which bypass `toJSON` and rely on manual mapping inside the service).
+Integration test that guards a single invariant: a Product must never expose MongoDB internals (`_id`, `__v`) on any response path. It covers both the hydrated-document path (`toJSON`) and the `.lean()` list path (which bypasses `toJSON` and must be transformed manually).
 
 ## Key elements
 
-- **`describe('product serialization')`** — the sole test block, containing three cases:
-  - **Hydrated document (`toJSON`)** — creates a product via factory, calls `product.toJSON()`, asserts `id` is the string form of `_id` and that neither `_id` nor `__v` appears in the JSON output.
-  - **Single lookup (`getById`)** — calls `productService.getById` with an admin caller scope; asserts the returned object is already in wire shape (service calls `.toJSON()` internally) and contains no Mongoose fields.
-  - **Lean list (`search`)** — calls `productService.search`, asserts each item has a 24-char hex `id` and that `_id` / `__v` are `undefined`. Uses `asStub` to widen the type for assertion.
+- **`setupTestDb()`** — called once at module level to spin up (or reset) the test database before the suite runs.
+- **`describe('product serialization')`** — the single suite; three test cases:
+  - *normalizes a hydrated document via `toJSON`* — seeds a product with `createProduct`, calls `product.toJSON()`, asserts `id` is present and a stringified dump contains neither `_id` nor `__v`.
+  - *normalizes a single lookup via `productService.getById`* — seeds a product, calls `getById` with an admin caller scope, asserts the returned object already matches the wire shape (`id`, `title`) and contains no internal fields.
+  - *normalizes a lean list via `productService.search`* — seeds a product, calls `search` with an empty filter and admin scope, asserts the single list item has a 24-hex `id` and that `_id` / `__v` are `undefined`.
 
 ## Relationships
 
-- **`@modules/products/services`** — the unit under test; exercises `getById`, `search`, and `callerScope`.
-- **`@modules/products/tests/factories`** — provides `createProduct` to seed known documents before each assertion.
-- **`@tests/callers`** — `callerAs('admin')` builds the caller identity passed to service methods.
-- **`@tests/setup-test-db`** — `setupTestDb()` initialises and tears down the in-test database connection.
-- **`@tests/stub`** — `asStub` cast used to assert on `.lean()` results without full Mongoose typings.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/products/services/index.ts` | Imports `productService`; exercises `getById` and `search` (both called with `productService.callerScope(callerAs('admin'))`). |
+| `src/modules/products/tests/factories.ts` | Imports `createProduct` to seed one document per test case. |
+| `tests/support/callers.ts` | Imports `callerAs` to build the admin-scope caller argument passed to service methods. |
+| `tests/support/setup-test-db.ts` | Imports `setupTestDb`; invoked at top level to prepare the DB. |
+| `tests/support/stub.ts` | Imports `asStub` solely to cast a `.lean()` list item to `Record<string, unknown>` for property assertions. |
 
 ## Notes
 
-- The `.lean()` path is the trickier one: `.lean()` returns plain objects that skip `toJSON`, so the service must map `_id → id` and strip `__v` manually (via `applyProductTransform` internally). This test exists to guard against a regression where that mapping is removed or the field set drifts.
-- `getById` already calls `.toJSON()` before returning, so the test asserts on the final wire shape directly — there is no second transform step to verify here.
-- Leakage checks use `JSON.stringify(...).not.toContain('_id')`, a blunt string check that catches both a field key and any accidental nested occurrence. It is intentional: the invariant is "zero Mongoose-internal tokens on the wire."
+- The file header JSDoc explicitly calls out **two** serialization paths that must be tested: `toJSON` (hydrated doc) and the manual `applyProductTransform` applied to `.lean()` results. The `getById` test covers the first; the `search` test covers the second.
+- `getById` already runs `.toJSON()` internally before resolving a translation, so the test does **not** call a second transform on its result — the returned object is already the wire shape.
+- Absence of `_id`/`__v` is verified via `JSON.stringify(...).not.toContain(...)`, which also catches nested occurrences (e.g., inside embedded objects), not just top-level keys.
+- The `asStub` import is a type-cast helper, not a behavior stub; it exists only to satisfy the TypeScript compiler on the `.lean()` result.

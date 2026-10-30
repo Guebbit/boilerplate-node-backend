@@ -1,36 +1,27 @@
 ---
 source: src/modules/returns/tests/unit/status-projection.test.ts
-sha256: bbfa2cceffa7c70dcd02c6d61dfd56f67400b212947fd04cb2fd7437e4fcf23d
-generated_at: 2026-10-15T12:02:25.816969+00:00
+sha256: f34b5e1e1fdf956ee6f6627f3b3282f87888a3fcfa2d504760124eeb95e8f2b9
+generated_at: 2026-10-29T05:51:29.066553+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/returns/tests/unit/status-projection.test.ts
 
 ## Purpose
-
-Unit tests for `projectReturnStatus`, the function that collapses an order's set of returns into a single display status (`'requested'`, `'in_progress'`, `'partially_returned'`, `'returned'`, or `undefined`). The tests pin down the priority rules, edge cases (empty returns, no-line returns, mixed kinds), and the special handling of cancellations.
+Unit tests for `projectReturnStatus`, verifying how a set of return records projects down to the single status word an order displays. Covers the full status spectrum (requested → in_progress → partially_returned → returned), edge cases (empty, declined, canceled, no-lines), cancellation-vs-return kind, and remedy (replace/repair) handling.
 
 ## Key elements
-
-- **`ret` helper** – Builds a `ProjectedReturn` object from a shorthand tuple of status, line items, and optional `kind` (defaults to `'return'`). Used by every test case to keep setup terse.
-- **`ordered` map** – The canonical "units still expected back" fixture: 2 × `a`, 1 × `b`. Represents what the caller has already subtracted cancelled quantities from.
-- **`describe('projectReturnStatus')`** – Ten test cases covering:
-  - Empty input → `undefined`
-  - Declined returns and no-line returns are ignored (don't affect the result)
-  - `requested` takes priority over `approved`
-  - `approved` with full quantity → `'in_progress'`
-  - Partially covered quantities → `'partially_returned'`
-  - Full coverage across multiple returns → `'returned'`
-  - Cancellation kind: its lines are excluded from the "units coming back" count; the caller pre-subtracts them from the `ordered` map
+- **`ordered`** – A `Map<string, number>` fixture representing an order with product `a` (qty 2) and product `b` (qty 1). Serves as the "remaining units" argument to every test call.
+- **`ret(status, lines, kind?)`** – Local factory that builds a `ProjectedReturn` object. Defaults `kind` to `'return'`; tests pass `'cancellation'` to exercise that branch.
+- **`describe('projectReturnStatus with a remedy')`** – Asserts that a closed return whose remedy is `replace` or `repair` yields `undefined` (buyer still holds the goods).
+- **`describe('projectReturnStatus')`** – The main suite covering: empty array, `declined`, `canceled`, empty-lines, `requested` priority, `approved` → `in_progress`, partial vs. full coverage → `partially_returned` / `returned`, cancellation kind excluded from coverage, and caller-side subtraction of cancelled units before the call.
 
 ## Relationships
-
-- **`src/modules/returns/domain/index.ts`** — The test imports `projectReturnStatus` and the `ProjectedReturn` type from this barrel. It does not reach into `status-projection.ts` directly.
-- **`src/modules/returns/domain/status-projection.ts`** — The implementation under test. The function and the `ProjectedReturn` type are defined here and re-exported through the domain index.
+- **`src/modules/returns/domain/index.ts`** – Re-exports `projectReturnStatus` and the `ProjectedReturn` type consumed by this test.
+- **`src/modules/returns/domain/status-projection.ts`** – The implementation file under test (the function's logic lives here).
 
 ## Notes
-
-- The `ordered` map is the *post-cancellation* expectation. The last test makes this explicit: the caller is responsible for subtracting cancelled quantities before invoking `projectReturnStatus`. The function itself does not inspect `kind` to skip cancellation lines; it simply compares closed/received line quantities against whatever map it receives.
-- `'cancellation'` is the only alternate `kind` exercised. The helper defaults to `'return'` so most cases omit it.
-- A return with zero lines is treated as a no-op even when its status would otherwise be terminal (`'closed'`); it neither satisfies nor blocks the projection.
+- The function's contract is "remaining units after the caller has already subtracted cancelled quantities." The cancellation test (`b: 0`) makes this explicit: the test does **not** expect the function to subtract cancellations internally.
+- `projectReturnStatus` returns `undefined` (not a string) whenever no goods are held back — callers must handle the `undefined` case.
+- Status priority is strictly ordered: `requested` beats `approved`; a single `requested` return in the list overrides all others.
+- The remedy tests are isolated in their own `describe` block, signalling that remedy handling is a distinct concern from plain status projection.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/tests/integration/service.test.ts
-sha256: c2bcb38c12ec262ad245251f04d16243f73a1bcb5685a8525cab790de3930e23
-generated_at: 2026-10-15T11:36:06.547504+00:00
+sha256: 31b96b772a67b5b9c08a90e0123e4c1daf4ebd15b84a945afcf98e940d5051f8
+generated_at: 2026-10-29T05:21:11.207808+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite that pins the core invariants of the payments service: an intent freezes the order's published total (shipping included), a confirm moves the order `pending → paid` and the payment to `succeeded` atomically, a decline is retryable, and refunds are at-most-once. The suite runs against real Mongo because the conditional writes *are* the guarantees under test; only the payment provider is faked.
+Integration test suite for the payments service (`src/modules/payments/services/`) that pins the core financial invariants against a real Mongo database: the intent freezes the order's published total (shipping included), confirm atomically transitions the order `pending → paid` before marking the payment `succeeded`, a decline is retryable, and a refund fires at-most-once. The payment provider is the controlled `fake` double, not a real gateway.
 
 ## Key elements
 
-- **`orderFor(price?, quantity?)`** — Fixture returning a user, product, and pending order; the starting point for most tests.
-- **`paidOrder()`** — Fixture that goes further: creates the intent *and* confirms it with a good card, yielding a fully paid order.
-- **`auth(user)`** — Wraps a user id as a customer-scoped caller context for service calls.
-- **`GOOD_METHOD` / `FAKE_DECLINE_METHOD`** — Opaque provider method handles (from the fake) for simulating success and decline.
-- **`describe('createIntent', …)`** — Pins: total freezes from `totalPrice` (not line-item sum), idempotency (one payment row per order), 404-for-stranger, 409-for-non-pending, and `method: 'card'` vocabulary.
-- **`describe('confirmPayment', …)`** — Pins: order→paid / payment→succeeded ordering, card overwrites `bank_transfer` on the order, decline is retryable (same doc confirms next), double-confirm rejected, confirm-after-cancel refused before the provider is ever called.
-- **`resetDomainEvents` / `settleOutboxNudges`** — Kernel cleanup called between tests to isolate event/outbox state.
-- **`registerCheckoutModules`** — Registers the real payments, orders, inventory, and access modules so the module graph is exercised as in production.
+- **`GOOD_METHOD`** — constant (`'pm_card_visa'`) representing the opaque card handle the fake provider expects for a successful charge.
+- **`orderFor(price, quantity)`** — fixture helper that creates a user, a product, and a single-line order; most tests start here.
+- **`paidOrder()`** — fixture helper that extends `orderFor` with a successful `payByCard` call; used by tests that need a completed payment.
+- **`auth(user)`** — shorthand wrapping `asCustomer(user.id)` to build the caller context.
+- **`describe('createIntent')`** — pins amount freezing (line total + shipping), idempotency (one payment per order), ownership (404 for strangers), status guard (409 on non-pending), and the `card` method vocabulary.
+- **`describe('confirmPayment')`** — pins the order→payment status ordering, the `paymentMethod` rewrite on card vs. offline (`bank_transfer`) paths, decline retryability, double-confirm refusal, and the "no new intent after money moved" rule.
+- **Audit port mock** — `jest.mock('@infrastructure/observability/audit', …)` replaces the real port with the shared `auditPortMock` so tests can assert audit calls without I/O.
+- **`setupTestDb()`** — initialises a real Mongo instance for the suite; all repository reads go against it.
 
 ## Relationships
 
-- **`src/modules/payments/services/index.ts`** (SUT) — Imports `createIntent`, `confirmPayment`, `syncPayment`, `applyWebhookDelivery`, `applyWebhookSettlement`, `getForOrder`, `withActions`, `refundByOrder`, `recordOfflinePayment`, `retryOpenRefunds`.
-- **`scenarios/support/doubles/payments/fake.ts`** — Provides `fakePaymentProvider`, `FAKE_DECLINE_METHOD`, `setFakeOutcome` to simulate provider outcomes without a real gateway.
-- **`src/modules/orders/index.ts`** — `orderService` used to assert post-conditions on order status and to cancel orders mid-flow.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `forceOrderStatus`, `toOrderItem` for order fixture setup.
-- **`src/modules/payments/repository.ts`** — `paymentRepository` used for direct DB assertions (amount, status, method, cardLast4, count).
-- **`src/modules/payments/module.ts`** — `paymentsModule` registered via `registerCheckoutModules` to wire the real module graph.
-- **`src/kernel/events.ts`** — `resetDomainEvents` clears the in-process event bus between tests.
-- **`src/kernel/outbox.ts`** — `outboxEventModel` and `settleOutboxNudges` manage outbox rows in the test DB.
-- **`src/kernel/access/tenant.ts`** — `DEPLOYMENT_TENANT_ID` for tenant-scoped assertions.
-- **`src/modules/access/index.ts`** — `assignRole` for RBAC guard tests.
-- **`src/modules/inventory/index.ts`** — `inventoryService` registered so the checkout module graph is complete.
+- **`scenarios/support/doubles/payments/fake.ts`** — supplies `fakePaymentProvider`, `FAKE_DECLINE_METHOD`, and `setFakeOutcome`; the test drives charge success/failure through this double rather than a real gateway.
+- **`src/modules/payments/services`** — the SUT: `paymentService.createIntent`, `.confirmPayment`, `.recordOfflinePayment`.
+- **`src/modules/payments/repository`** — `paymentRepository.findByOrderId` and `.count` are used to assert persisted state after each service call.
+- **`src/modules/payments/model.ts`** — `paymentModel` imported for direct collection access in assertions.
+- **`src/modules/payments/events.ts`** — `PAYMENT_SUCCEEDED` referenced when asserting outbox/domain event emission.
+- **`src/modules/payments/providers/index.ts`** — `WebhookRejected` and `ProviderWebhookEvent` types used in webhook-related assertions.
+- **`src/modules/payments/module.ts`** — `paymentsModule` imported to ensure the module's event listeners (e.g. the refund listener) are registered in the test harness.
+- **`src/modules/orders/index.ts` / `src/modules/orders/services/index.ts`** — `orderService.getById` reads order state; `ORDER_STATUS_CHANGED` is an event the test observes.
+- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `forceOrderStatus`, `toOrderItem` build and manipulate order fixtures.
+- **`src/modules/inventory/index.ts` / `src/modules/inventory/services/index.ts`** — `inventoryService` registered so inventory side-effects during order lifecycle are exercised.
+- **`src/kernel/events.ts`** — `resetDomainEvents` clears the in-memory event bus between tests.
+- **`src/kernel/outbox.ts`** — `outboxEventModel` and `settleOutboxNudges` let the test flush and inspect outbox rows.
+- **`src/kernel/access/tenant.ts`** — `DEPLOYMENT_TENANT_ID` used in multi-tenant or admin-context assertions.
+- **`src/modules/access/tests/factories.ts`** — `seedMembership` provisions role/membership data for admin-context tests.
+- **`src/infrastructure/observability/audit.ts`** — mocked at the module boundary; the test asserts audit entries via the shared port mock rather than hitting the real sink.
 
 ## Notes
 
-- **Real Mongo, fake provider.** The suite deliberately uses a real database because the invariants it pins (conditional writes, at-most-once refunds) only hold under real concurrency/atomicity. The *only* mock is the payment provider.
-- **Assertions anchor to `totalPrice`, not literals.** The shipping-inclusion test compares `payment.amount` to `order.totalPrice` (the value `openapi.yaml` publishes) rather than to a hardcoded number, guarding against the two files drifting apart again.
-- **404, not 403, for cross-tenant/cross-user access.** The "stranger" tests assert absence (404) as the stable contract, not a forbidden (403).
-- **`GOOD_METHOD` is an opaque handle** (`pm_card_visa`), not a card number; the fake maps it to a deterministic success with `cardLast4: '4242'`.
-- **Decline ≠ terminal.** After a `PAYMENT_DECLINED` 409, the *same* payment document can be confirmed with a different method — the test asserts this round-trip explicitly.
-- **Confirm-after-cancel (A1) is refused before the provider is called.** The test spies on the provider to prove no charge attempt is made, protecting against fee-loss on a post-charge refund.
+- The file deliberately uses **real Mongo** (`setupTestDb()`) because the invariants under test (conditional writes, at-most-once refund) are enforced at the database level; mocking the repository would make those guarantees invisible.
+- The `createIntent` shipping test compares the stored `amount` to `order.toJSON().totalPrice` (the number `openapi.yaml` publishes) rather than to a literal, guarding against the two totals drifting in separate files.
+- The audit port is **replaced**, not spied on (`jest.mock` → `auditPortMock`), so `jest.spyOn` on the real module would not intercept calls.
+- `payByCard` is imported from `@modules/payments/tests/factories` (a sibling of this file) and encapsulates the createIntent + confirmPayment happy path in one call for higher-level fixtures.

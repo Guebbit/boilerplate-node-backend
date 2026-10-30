@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/integration/order-numbering.test.ts
-sha256: abb84f428d25043228f1a160aee766a6a5b604db5f0ec371a0a50c4042deab5c
-generated_at: 2026-10-15T11:15:13.749708+00:00
+sha256: 3301dd801453b8a5219c881ee415fdaeaa21d408012e0d1c185e849f03997c95
+generated_at: 2026-10-29T04:54:38.473895+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test for `allocateOrderNumber`, verifying two invariants against a real MongoDB: order numbers are unique and the per-year sequence has no gaps. The concurrency test (50 simultaneous calls) specifically exercises the atomic `findOneAndUpdate` in the repository, which cannot be meaningfully asserted against a mock.
+Integration tests for `allocateOrderNumber`, verifying that the atomic counter increment in Mongo guarantees unique, gap-free order numbers under real concurrency and correct year-boundary behavior. These tests run against a live database because the property under test—atomicity of a single `findOneAndUpdate`—cannot be meaningfully asserted against a mock.
 
 ## Key elements
 
-- **`parse`** — local helper that splits a `"YYYY-NNNNNN"` order-number string into a `[year, sequence]` tuple.
-- **`allocateOrderNumber` first-number format** — asserts the initial number for a year is exactly `{year}-000001`, with the year derived via `yearInZone` / `shopTimezone` rather than UTC.
-- **Timezone boundary test** — freezes the clock at `2026-12-31T23:30Z` (00:30 in Rome) and expects the year in the number to be `2027`, proving the year cut follows the shop's calendar.
-- **Serial increment test** — three sequential calls yield sequences 1, 2, 3.
-- **Concurrency test (50 calls)** — fires all calls via `Promise.all`, then asserts the collected sequences are exactly `1…50` with no duplicates or gaps.
-- **Cross-year reset test** — allocates in year N, freezes the clock to year N+1, allocates again (expects sequence 1 in the new year), then returns to year N and expects sequence 2, confirming counters are separate per-year documents.
+- **`parse`** — local helper that splits a `{year}-{sequence}` order-number string into a `[year, sequence]` numeric tuple for assertions.
+- **`describe('allocateOrderNumber')`** — the test suite, containing five cases:
+  - *First number formatting* — asserts the initial order number is `{currentShopYear}-000001`.
+  - *Shop-calendar year boundary* — freezes the clock at `2026-12-31T23:30Z` (still Dec 31 in UTC, Jan 1 in Rome) and expects the year component to read `2027`.
+  - *Serial sequence* — three sequential calls yield sequences 1, 2, 3.
+  - *Concurrent uniqueness & no gaps* — 50 simultaneous calls must produce exactly the set `{1…50}` with no duplicates or skips.
+  - *Year rollover isolation* — after advancing the clock to the next UTC year, a fresh sequence starts at 1; returning to the original year resumes where it left off, confirming the two years use separate counter documents.
 
 ## Relationships
 
-- **`src/modules/orders/services/order-numbering.ts`** — source of `allocateOrderNumber`, the function under test.
-- **`src/modules/orders/config.ts`** — provides `shopTimezone()` used to compute the expected year.
-- **`src/modules/orders/domain/shop-time.ts`** — provides `yearInZone`, the timezone-aware year extractor.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module load to connect a real (in-memory or temp) MongoDB.
-- **`tests/support/clock.ts`** — `freezeDate` freezes `Date` so year-boundary and cross-year tests are deterministic; `jest.useRealTimers()` in `finally` blocks restores it.
+- **`src/modules/orders/services/order-numbering.ts`** — source of `allocateOrderNumber`, the sole function under test.
+- **`src/modules/orders/domain/shop-time.ts`** — provides `yearInZone`, used to compute the expected year in the first assertion.
+- **`src/modules/shop/index.ts`** — re-exports `shopTimezone`, which supplies the IANA timezone string used by `yearInZone` and (implicitly) by the allocation logic.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called once at module scope to establish a real Mongo connection and ensure a clean collection before the suite runs.
+- **`tests/support/clock.ts`** — `freezeDate` pins the system clock for timezone-boundary and year-rollover tests; each call is paired with `jest.useRealTimers()` in a `finally` block.
 
 ## Notes
 
-- `freezeDate` only stubs `Date`; the Mongo round-trip inside `allocateOrderNumber` is still a real network call. This is intentional — the test needs the server-side `$inc` atomicity.
-- The concurrency test's correctness depends on *not* awaiting calls sequentially; `Promise.all` is the minimal reproduction of a read-then-increment race.
-- The cross-year test proves the counter is stored **per-year** (a separate Mongo document per year), not as a single monotonic counter that gets reset.
-- All `freezeDate` calls are paired with `jest.useRealTimers()` in a `finally` block; forgetting the cleanup leaks the fake clock into subsequent tests.
+- The concurrency test uses `Promise.all` over 50 unawaited calls specifically so that a read-then-increment race would surface as a duplicate or gap; serially `await`-ed calls would never expose the bug.
+- Time-freezing tests always restore real timers in a `finally` block; a crash mid-test will not leave the suite pinned to a fake clock.
+- The year-rollover test proves counter isolation (separate Mongo documents per year) rather than a single global counter being reset.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/openapi.yaml
-sha256: 40be76ced9578b301213c85d2df8b4e8bdc1a152aea2f58b3cf1301e04a41f70
-generated_at: 2026-10-15T12:19:36.970479+00:00
+sha256: b01abfa162b2a3fe1dab122ec970248f6a6218bfb630f7027804381d821a0da8
+generated_at: 2026-10-29T06:28:06.925040+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.1.0 contract for the webhooks module: defines the REST surface for managing outbound webhook subscriptions (CRUD), one-time secret minting, secret-ring rotation, and secret removal. Serves as the single source of truth for request/response shapes, validation rules, and error semantics that both the server implementation and external consumers rely on.
+OpenAPI 3.1.0 contract for the **webhooks** module. It defines the REST surface for outbound webhook subscriptions (CRUD, enable/disable, secret management, replay, and the public event catalogue), along with a module-specific set of 409 error codes and the schemas that back each endpoint.
 
 ## Key elements
 
-- **Tag `Webhooks`** — groups all operations; scope is subscriptions, delivery log, replay, and the public event catalogue.
-- **`x-error-codes`** — module-level error vocabulary; currently `WEBHOOK_DELIVERY_IN_PROGRESS` (409).
-- **`/webhooks/subscriptions`** (GET / POST) — list (paginated, filterable by `enabled`) and create. Create mints the first secret and returns it in plaintext exactly once.
-- **`/webhooks/subscriptions/{id}`** (PUT / PATCH / DELETE) — full replace, partial update (accepts `application/json` and `application/merge-patch+json`), and permanent delete. Neither PUT nor PATCH touches the secret ring.
-- **`/webhooks/subscriptions/{id}/rotate-secret`** (POST) — adds a second active secret to the ring; returns the new secret in plaintext once. Command-style route, deliberately separate from PATCH.
-- **`/webhooks/subscriptions/{id}/secrets/{secretId}`** (DELETE) — removes one secret from the ring; refuses to leave the ring empty.
-- **Components (referenced, defined in `#/components/schemas/`)** — `WebhookSubscription`, `WebhookSubscriptionsResponseEnvelope`, `WebhookSubscriptionCreatedEnvelope`, `CreateWebhookSubscriptionRequest`, `ReplaceWebhookSubscriptionRequest`, `UpdateWebhookSubscriptionRequest`.
-- **Security** — every operation accepts `bearerAuth` or `apiKeyAuth`.
+- **`x-error-codes`** — Custom OpenAPI extension declaring five module-scoped 409 error codes (`WEBHOOK_DELIVERY_IN_PROGRESS`, `WEBHOOK_SUBSCRIPTION_LIMIT_REACHED`, `WEBHOOK_SUBSCRIPTION_ALREADY_ENABLED`, `WEBHOOK_SUBSCRIPTION_ALREADY_DISABLED`, `WEBHOOK_SUBSCRIPTION_DISABLED`) with their status and human-readable descriptions.
+- **`tags`** — Single `Webhooks` tag scoping all operations; its description names the four sub-domains (subscriptions, delivery log, replay, event catalogue).
+- **`paths`** — Full REST tree:
+  - `GET/POST /webhooks/subscriptions` — list (with pagination, sort, `enabled`/`autoDisabled` filters) and create (one-time plaintext secret in the 201 body).
+  - `GET/PUT/PATCH/DELETE /webhooks/subscriptions/{id}` — read, full-replace, partial-update (accepts both `application/json` and `application/merge-patch+json`), and delete.
+  - `POST /webhooks/subscriptions/{id}/enable` (and, per truncation, `/disable`, secret rotation, replay, delivery-log endpoints).
+- **`components/schemas`** — Request/response schemas (`WebhookSubscription`, `CreateWebhookSubscriptionRequest`, `ReplaceWebhookSubscriptionRequest`, `UpdateWebhookSubscriptionRequest`, `WebhookSubscriptionsResponse`, `WebhookSubscriptionCreated`, `WebhookSubscriptionSort`, …).
+- **`security`** — Every operation accepts `bearerAuth` *or* `apiKeyAuth`.
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — this file `$ref`s shared parameters (`PageParam`, `PageSizeParam`, `IdPathParam`), standard error responses (`Unauthorized`, `Forbidden`, `ValidationError`, `InternalError`, `NotFound`, `Success`), and the `Location` header from that root contract. Changes to those shared definitions propagate into every endpoint here.
-- **`tests/audit/compliance-rules.yaml`** — audit/test suite that validates this spec against compliance rules (e.g., security, error-shape, and documentation conventions).
+- **`shared/contracts/openapi.root.yaml`** — This spec `$ref`s into that file for: pagination parameters (`PageParam`, `PageSizeParam`), `IdPathParam`, the `Location` response header, and the shared standard responses (`Unauthorized`, `Forbidden`, `ValidationError`, `Conflict`, `NotFound`, `NoContent`). Any change to those shared definitions propagates into this module's contract.
+- **`tests/audit/compliance-rules.yaml`** — Consumes this spec (and the shared root) as input for automated compliance/audit checks; the `x-error-codes` block and the security scheme on every operation are the items those rules validate against.
 
 ## Notes
 
-- **Secret visibility is strictly one-shot.** The plaintext ring secret appears only in the `201`/`200` response of `POST /subscriptions` or `POST .../rotate-secret`. All list/get/put/patch responses return opaque IDs (`secretIds`) only.
-- **URL SSRF guard.** `url` must be `https://` and must not resolve to a private, loopback, or link-local address. The check runs at creation/update *and* on every delivery (DNS can shift). A refusal surfaces as `422` with `errors[].details.field = "url"` but deliberately omits which internal address was hit.
-- **PUT vs. PATCH semantics.** PUT is a full replace — omitting `description` clears it. PATCH is a partial update.
-- **Secret-ring invariants.** At most two active secrets at once. During the overlap window (default 24 h, `NODE_WEBHOOK_SECRET_OVERLAP_HOURS`) deliveries sign with both (`v1,… v1,…` in `webhook-signature`). Rotating again while two are present drops the oldest. `DELETE .../secrets/{id}` refuses to empty the ring.
-- **Delete preserves audit trail.** `DELETE /subscriptions/{id}` removes the subscription but leaves its delivery log intact.
-- **Merge-patch support.** PATCH explicitly advertises `application/merge-patch+json` alongside `application/json`.
+- **Secret visibility:** The plaintext signing secret appears **only** in the 201 response of `POST /webhooks/subscriptions` or the 200 of a secret-mint endpoint. Every list/get/put/patch response omits it by design.
+- **Sort grammar:** The `sort` query parameter follows JSON:API conventions (`?sort=-createdAt,url`), not a custom format.
+- **SSRF guard:** The destination URL must be `https://` and must not resolve to a private/loopback/link-local address. Resolution happens at create **and** again on every delivery (DNS can change), so a 422 at creation time is only the first check.
+- **PUT vs PATCH semantics:** `PUT` is a full replace — omitting `description` clears it. `PATCH` is a partial update. Neither touches the secret ring or the enabled flag.
+- **Enable idempotency trap:** Calling `POST …/enable` on an already-enabled subscription returns **409** and does **not** reset the failure streak. A healthy subscription's streak is only reset by a genuine enable-after-disable.
+- **Delete is not hard:** `DELETE` removes the subscription but deliberately preserves its delivery log for audit.
+- **`autoDisabled` filter:** Use together with `enabled=false` to isolate manual pauses from guard-triggered ones (`autoDisabledAt` set vs. unset).

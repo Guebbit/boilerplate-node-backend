@@ -1,7 +1,7 @@
 ---
 source: asyncapi.yaml
-sha256: 35a2d0271f056e124f76cf49d4c7c40bc8af67130478872136425953df124e19
-generated_at: 2026-10-14T06:45:37.619192+00:00
+sha256: 678b4ad3418b8ac5ffc5b0c2110353573df6082c33fef979bde7582092c8f8c1
+generated_at: 2026-10-29T01:17:08.055797+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Auto-generated AsyncAPI 3.0.0 specification that bundles all event-driven contract fragments (SSE streams, outbound webhooks, and RabbitMQ worker queues) into a single canonical document. It exists so that consumers, workers, and tooling have one authoritative reference for every real-time channel the backend exposes. Do not edit manually — regenerate via `npm run contracts:bundle`.
+Machine-readable AsyncAPI 3.0.0 contract for all real-time and event-driven channels in the boilerplate backend (SSE streams, outbound webhooks, and RabbitMQ job queues). It is **generated** by `npm run contracts:bundle` from per-module fragment files; hand-editing it will be overwritten. It serves as the single source of truth consumed by the type-generator script, Spectral lint rules, and any client that needs to know what events the backend emits and on which transport.
 
 ## Key elements
 
-- **Servers** — Four named endpoints:
-  - `sseLocal` / `sseNotificationsLocal` — local `localhost:3000` HTTP servers for observability and notification SSE streams.
-  - `subscriberEndpoint` — a *variable* server (`{subscriberHost}{subscriberPath}`) representing the per-subscription HTTPS URL that external receivers configure; the application calls outbound to this address.
-  - `rabbitmqLocal` — local `localhost:5672` AMQP broker for job queues.
-- **Channels (SSE)** — `observability.metrics.snapshot`, `observability.metrics.updated`, `observability.heartbeat`, `notifications.created`, `notifications.deleted`, `notifications.read`. Identified by the `x-transport: sse` extension (read by `scripts/contracts/generate-asyncapi-types.ts`).
-- **Channels (Webhooks)** — `order.*`, `shipment.*`, `payment.*`, `return.*`, `example.published`. Each binds to `subscriberEndpoint` and carries a single message type.
-- **Channels (Worker queues)** — `worker.account.export`, `worker.webhook.deliver`, `worker.email.send`, `worker.image.digest`. Bound to `rabbitmqLocal`; each represents a discrete job the corresponding worker consumes.
-- **Operations** — Explicit `send` actions for the SSE channels (`sseMetricsSnapshot`, `sseMetricsUpdated`, `sseHeartbeat`), documenting cadence (5 s tick, 15 s heartbeat) and payload semantics.
-- **Components / Messages** — All message schemas are `$ref`-ed from `#/components/messages/…`, defined in the source fragments.
-- **Meta** — `id: urn:boilerplate-node-backend:asyncapi:contracts`, version `0.1.0` (alpha; `check:asyncapi-breaking` ignores it), `defaultContentType: application/json`.
+- **`servers.sseLocal` / `servers.sseNotificationsLocal`** – `localhost:3000` HTTP endpoints for the observability and notification SSE streams.
+- **`servers.subscriberEndpoint`** – A *variable* server (`{subscriberHost}{subscriberPath}`) representing the outbound HTTPS URL each webhook subscription configures. Not a server this app runs; the app is the sender.
+- **`servers.rabbitmqLocal`** – `localhost:5672` AMQP broker for async worker job queues.
+- **`channels.*`** – One entry per event channel. Bound to exactly one server (SSE, webhook, or RabbitMQ). Each carries a single `messages` entry via `$ref` into `components.messages`.
+- **`x-transport: sse`** – Custom extension on SSE channels. Read by `scripts/contracts/generate-asyncapi-types.ts` to select which channels produce SSE types; the `observability.` name prefix alone is not sufficient.
+- **`info`** – Identifies the contract as version `0.1.0` (alpha), AGPL-3.0, tied to the `boilerplate-node-backend` project.
 
 ## Relationships
 
-- **docker-compose.production.yml** — The production compose file wires up the services this contract references (HTTP server on port 3000 for SSE, RabbitMQ broker on port 5672 for worker queues). The `servers` block in this file is the declarative counterpart to the container networking and port mappings defined there.
+- **`docker-compose.production.yml`** – Provides the runtime infrastructure referenced by this file's servers: the `localhost:3000` HTTP/SSE service and the `localhost:5672` RabbitMQ broker. In production the ports/hosts would differ, but the channel topology defined here remains the contract that consumers build against.
 
 ## Notes
 
-- **Generated file.** The header lists every source fragment; edits must go to those fragments, then re-bundle.
-- **`x-transport` is the SSE discriminator.** `generate-asyncapi-types.ts` keys off this extension, *not* the channel name prefix. Adding a channel outside the `observability` / `notifications` namespaces that is also SSE requires the extension.
-- **`subscriberEndpoint` is not a host this app listens on.** It is an outbound target whose address is set per subscription at runtime. Spectral rules still pass because the webhook channels explicitly bind to it.
-- **Metrics units are bytes.** The snapshot and updated events use the same units as `GET /observability/health` so dashboards can compare directly without conversion.
-- **Heartbeat carries no payload fields** beyond the event type; its sole purpose is to prevent idle-connection timeouts in intermediate proxies and to distinguish "alive, nothing changed" from "stream died."
+- **Do not edit.** The header comment and the `npm run contracts:bundle` pipeline regenerate this from `shared/contracts/asyncapi.root.yaml` plus per-module fragments under `src/modules/*/asyncapi*.yaml`.
+- **`subscriberEndpoint` is not a fixed address.** Every webhook subscription carries its own HTTPS URL at runtime; the `variables` block (`subscriberHost`, `subscriberPath`) is documentation, not a deployment target. Spectral rules pass because the channel-level `servers` binding is what they validate.
+- **Version field is informational only.** The breaking-change CI check explicitly ignores `info.version`; it mirrors the OpenAPI root version for consistency, not for semantic gating.
+- **`worker.*` channels** (e.g. `worker.account.export`, `worker.webhook.deliver`) are internal job-queue messages on RabbitMQ, not externally observable webhooks. They share this document because the same bundling step assembles them.

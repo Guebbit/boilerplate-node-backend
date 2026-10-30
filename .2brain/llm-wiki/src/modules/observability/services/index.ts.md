@@ -1,7 +1,7 @@
 ---
 source: src/modules/observability/services/index.ts
-sha256: c4b8034d7ce68f3abcfa2e244f89c3c9f4166a5028e66847a3034ce3bcaf3a66
-generated_at: 2026-09-27T15:05:19.585518+00:00
+sha256: 29a9ba782612f86acfbd515739b18cf0fe5102dff9d31207ed141fe556a5de80
+generated_at: 2026-10-29T04:36:14.235770+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel file for the observability services layer. It re-exports all service modules (health, job-health, dependency-health, parked-jobs, process-snapshot, stream) so that consumers can import from a single path (`.../observability/services`) rather than reaching into individual files.
+Barrel module for the observability services layer. It re-publishes every service function and probe into a single `observabilityService` object so that controllers and the module root (`src/modules/observability/index.ts`) can import from one stable entry point rather than reaching into individual service files.
 
 ## Key elements
 
-- **Re-exports (star exports):** `stream`, `health`, `job-health`, `dependency-health`, `process-snapshot`, `parked-jobs` — all six service modules are re-published in full.
-- No original logic, classes, or functions are defined here; the file is purely a re-export surface.
+- **`observabilityService`** – The sole value export. An object bundling:
+  - `buildObservabilityPayload` / `streamObservabilityMetrics` (from `./stream`)
+  - `buildObservabilityHealth` (from `./health`)
+  - `jobHealth` (from `./job-health`)
+  - `dependencyHealth` / `overallStatus` (from `./dependency-health`)
+  - `processSnapshot` (from `./process-snapshot`)
+  - `queueHealth` (from `./parked-jobs`)
+- **Re-exported types** – `DependencyHealth`, `ProcessMemorySnapshot`, `ProcessSnapshot` (type-only, via `export type`).
 
 ## Relationships
 
-- **`src/modules/observability/index.ts`** — parent barrel; almost certainly imports from this file to expose the services sub-path.
-- **`health.ts`** — the aggregate `GET /observability/health` payload; composed of data from the three sibling modules below.
-- **`job-health.ts`** — provides the "lease side" data consumed by `health.ts`.
-- **`dependency-health.ts`** — provides the "adapter side" data consumed by `health.ts`.
-- **`parked-jobs.ts`** — provides the "queue side" data consumed by `health.ts`.
-- **`process-snapshot.ts`** — shared process reader used by every other payload in this folder.
-- **`stream.ts`** — the live SSE feed, independent of the health aggregate.
+- **Consumed by controllers** – `get-observability-events.ts`, `get-observability-health.ts`, and `get-observability-metrics-overview.ts` import `observabilityService` (or its members) to build route responses.
+- **Re-exported upward** – `src/modules/observability/index.ts` surfaces this barrel so the module's public API stays flat.
+- **Composes lower-level services** – `health.ts` itself aggregates `job-health.ts` (lease side), `dependency-health.ts` (adapter side), and `parked-jobs.ts` (queue side); `process-snapshot.ts` is the shared process-reader underneath all of them.
+- **Tested indirectly** – `tests/unit/get-observability-events.test.ts` exercises code paths that flow through this barrel.
 
 ## Notes
 
-- Because every export is a star re-export, name collisions between the six modules would surface as ambiguous exports at the consumer. Adding a new service file here requires adding a matching `export * from './new-module';` line.
-- The docstring at the top of the file serves as the canonical description of how `health.ts` is composed; if that composition changes, the docstring should be updated alongside the code.
+- All imports here are **named value imports**; the type re-exports use `export type` to avoid pulling type-only modules into runtime bundles.
+- The JSDoc header documents the *composition* of `buildObservabilityHealth` (lease + adapter + queue) and identifies `process-snapshot.ts` as the single shared reader—useful context when modifying any one of the three sub-health builders.
+- Adding a new service function to this module means updating both the import list **and** the `observabilityService` object literal; there is no automatic spread.

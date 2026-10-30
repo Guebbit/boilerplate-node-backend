@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/integration/reencrypt.test.ts
-sha256: 7f753d4432738e20f261f263441b12daf258d165cb69688d41d91cfd79d4f8ea
-generated_at: 2026-10-15T10:12:41.534889+00:00
+sha256: 65a6f6eee091d256b29d39cf65667592b96db8eb04f882713a63ab499388d2d0
+generated_at: 2026-10-29T02:59:15.400354+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test for the account module's `reencrypt` walk: verifies that a TOTP secret still stamped `v1` is migrated to `v2` after a key rotation, and that the migrated ciphertext still decrypts correctly under its original method id.
+Integration test for the account module's `reencrypt` walk. Verifies that after a TOTP encryption-key rotation, an enrolled 2FA secret originally stamped `v1` is rewritten to `v2` in the database and remains decryptable under the same method id.
 
 ## Key elements
 
-- **`ROTATED_TOTP_KEY`** – A composite key string (`v2:new-totp-key-material,v1:test-totp-encryption-key`) that simulates a deployment mid-rotation (new v2 key in front, old v1 key behind).
-- **Test: "moves an enrolled secret to v2…"** – Creates a user with a v1 TOTP secret, runs `accountModule.reencrypt(false)` under the rotated key, then asserts:
-  - `report.rewritten === 1`
-  - `versionOf(secret)` returns `'v2'`
-  - `decryptTotpSecret(secret, methodId)` round-trips back to the original OTP secret.
+- **`ROTATED_TOTP_KEY`** — A composite `NODE_TOTP_ENCRYPTION_KEY` value (`v2:…,v1:…`) that simulates a deployment mid-rotation: the new key is active, the old key is still available for legacy decryption.
+- **`describe('account reencrypt')` / `it('moves an enrolled secret to v2…')`** — The single test case. It:
+  1. Creates a user with one TOTP two-factor method whose `secret` is encrypted under the bare `v1` key.
+  2. Runs `accountModule.reencrypt(false)` inside `withEnvironmentOverrides` that exposes the rotated key.
+  3. Asserts `report.rewritten === 1`, that the stored ciphertext now carries a `v2` stamp, and that `decryptTotpSecret` with the method id returns the original TOTP string.
 
 ## Relationships
 
-- **`account/module.ts`** – Imports `accountModule` and calls `reencrypt(false)`, the function under test.
-- **`two-factor/totp.ts`** – Imports `encryptTotpSecret` (to seed the v1 secret) and `decryptTotpSecret` (to verify post-migration decryption).
-- **`infrastructure/security/versioned-secret.ts`** – Imports `versionOf` to assert the stamped version on the ciphertext.
-- **`modules/users/repository.ts`** – Uses `userRepository.findByIdWithCredentials` to read the stored secret back from the database.
-- **`modules/users/tests/factories.ts`** – Uses `createUser` to insert a user with a pre-configured TOTP method document.
-- **`tests/support/environment.ts`** – Uses `withEnvironment` to temporarily set `NODE_TOTP_ENCRYPTION_KEY` to the rotated key for the duration of the assertion.
-- **`tests/support/setup-test-db.ts`** – Calls `setupTestDb()` at module load to provision an isolated test database.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/account/module.ts` | Calls `accountModule.reencrypt(false)` to execute the migration walk under test. |
+| `src/modules/account/two-factor/totp.ts` | Uses `encryptTotpSecret` (fixture setup) and `decryptTotpSecret` (post-migration verification). |
+| `src/infrastructure/security/versioned-secret.ts` | Uses `keyVersionOf` to read the version stamp directly off the stored ciphertext. |
+| `src/modules/users/repository.ts` | Uses `userRepository.findByIdWithCredentials` to read the rewritten document back from the DB. |
+| `src/modules/users/tests/factories.ts` | Uses `createUser` to seed a user with a pre-encrypted TOTP method. |
+| `tests/support/environment.ts` | Wraps the reencrypt call in `withEnvironmentOverrides` so the rotated key is visible only during the test. |
+| `tests/support/setup-test-db.ts` | `setupTestDb()` initialises the in-memory MongoDB used by all integration tests in this suite. |
 
 ## Notes
 
-- `reencrypt(false)` – the `false` argument indicates a real write (not a dry run).
-- The version stamp lives *on the ciphertext itself* (read via `versionOf`), not in a separate DB field. The test relies on this to verify migration without inspecting internal state.
-- Decryption is keyed by the **method id** (the `twoFactorMethods[0]._id`), not by the user id or the secret string — this is the contract the test pins down.
+- The stored `secret` field **is** the ciphertext; the version stamp is a prefix on the value itself (hence `keyVersionOf` can be called on the raw string with no separate metadata lookup).
+- The encryption binding key is the stringified Mongoose `ObjectId` of the two-factor method, so the test must use a real `Types.ObjectId` (not a string literal) to mirror production.
+- `reencrypt(false)` — the single boolean argument controls the walk's mode (presumably skip vs. execute); the test passes `false` to actually perform rewrites and check `report.rewritten`.

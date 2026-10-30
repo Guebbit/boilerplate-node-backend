@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/runtime/provider-registry.ts
-sha256: 452deccd81470659c0ddf574bd1e36f22499027149d3f681c88e6500d77cacc3
-generated_at: 2026-10-14T08:14:42.520843+00:00
+sha256: 4357e201086bbe9363119bf0582e409251f96796ce3ff87fe948485abb2c5ad8
+generated_at: 2026-10-29T02:15:06.655802+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A single generic, named-table abstraction that unifies the "name in, implementation out" shape previously duplicated across the antibot, analytics, payments, and OAuth ports. It provides registration, listing, and lookup; the *resolution policy* (throw on unknown name vs. return `undefined`) is deliberately left to each caller.
+Defines a single, generic `ProviderRegistry<T>` interface and two factory functions (private and process-wide) that every provider seam in the build—antibot, analytics, payments, OAuth, mail, PDF, etc.—shares. The registry itself is intentionally policy-free: it only stores, lists, and looks up implementations by name. The decision to *throw* on a missing name vs. *return `undefined`* is delegated to the caller via `requireProvider` or a bare `resolve()`, so each port enforces its own failure contract.
 
 ## Key elements
 
-- **`ProviderRegistry<T>`** (interface) — the three-method seam: `register(name, provider)`, `names()`, `resolve(name)`. `resolve` returns `T | undefined`; it never throws.
-- **`registryOver<T>(map)`** (private helper) — wraps a `Map<string, T>` into a `ProviderRegistry`. Shared by both public factory functions.
-- **`createProviderRegistry<T>(initial?)`** — returns a standalone registry backed by a fresh `Map`. `T` is unconstrained (plain objects or lazy factories like OAuth's `() => Provider | undefined`).
-- **`createSharedProviderRegistry<T>(name, initial?)`** — returns a registry whose backing map lives on `globalThis` under a `Symbol.for` key, so every module instance in the process sees the same registrations. `initial` is applied only on first creation (`??=`).
-- **`requireProvider<T>(registry, variable, name)`** — resolves via `registry.resolve(name)` and **throws** an `Error` listing all registered names when the lookup is `undefined`. Used by ports where an unknown name is a typo that must fail loudly (antibot, analytics, payments).
+- **`ProviderRegistry<T>` (interface)** — The shared seam: `register(name, provider)`, `names()`, `resolve(name): T | undefined`. Every provider registry in the codebase implements this shape.
+- **`registryOver` (internal helper)** — Wraps a `Map<string, T>` into the `ProviderRegistry<T>` interface. Not exported.
+- **`createProviderRegistry<T>(initial?)`** — Returns a private registry backed by a fresh `Map`. Use when the registry lives in the same module scope as its consumers and will not be reset.
+- **`createSharedProviderRegistry<T>(name, initial?)`** — Returns a registry whose backing `Map` is stashed on `globalThis` under a `Symbol.for` key. Survives `jest.resetModules` / `isolateModules`, so test doubles registered once in a `setupFiles` hook or dev-preload script remain visible after module re-evaluation. `initial` entries are applied only on the first (creating) call.
+- **`requireProvider<T>(registry, variable, name)`** — Resolves `name` from `registry`; if absent, throws an `Error` that names the env-var selector and lists all registered names. Intended for ports where an unknown name is a typo that must fail loudly (antibot, analytics, payments).
+- **`sharedKey` (internal helper)** — Derives the `Symbol.for` key from a registry name. Not exported.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/antibot-providers/index.ts`**, **`src/infrastructure/observability/analytics/index.ts`**, **`src/modules/payments/providers/index.ts`**, **`src/modules/invoicing/providers/index.ts`**, **`src/modules/payments/providers/registry.ts`** — consume the registry and call `requireProvider` for strict, fail-fast resolution at boot.
-- **`src/modules/account/oauth/providers/index.ts`** — consumes the registry but calls plain `resolve()`, treating an unregistered name as "not configured" rather than an error.
-- **`scenarios/flows/backdate.ts`**, **`scenarios/run-server.ts`**, **`scripts/testing/run-prism-smoke-test.ts`** — register test doubles (fake payment provider, mail log, etc.) via `createSharedProviderRegistry` *before* the application loads, so the doubles survive module resets.
-- **`src/infrastructure/adapters/mail-transports.ts`**, **`src/infrastructure/adapters/pdf.ts`**, **`src/infrastructure/adapters/pinned-https.ts`** — adjacent adapter modules in the same runtime/infrastructure layer; they are registered into or resolved from a provider registry by their respective ports.
-- **`src/infrastructure/runtime/database.ts`**, **`src/infrastructure/runtime/settle.ts`** — sibling runtime modules; no direct import relationship is visible in this file.
+- **Consumed by every adapter and module provider index** (antibot-providers, mail-transports, pdf, pinned-https, analytics, database, settle, OAuth providers, invoicing providers, payments providers/registry): each builds its registry via `createProviderRegistry` or `createSharedProviderRegistry` and exposes implementations to the app tier through the `ProviderRegistry<T>` interface.
+- **`requireProvider`** is the enforcement point used by the stricter ports (antibot, analytics, payments) at boot to fail fast on a misconfigured selector variable. The OAuth port deliberately calls `resolve()` instead, treating an absent provider as "not configured" rather than an error.
+- The `globalThis`-backed map in `createSharedProviderRegistry` parallels the pattern used by `config/store.ts` for process-wide state.
 
 ## Notes
 
-- **`globalThis` + `Symbol.for` for shared registries.** The backing map is deliberately stored outside module scope so it survives `jest.resetModules` / `isolateModules`. The `initial` record is seeded only on the *first* call for a given `name`; later calls with the same name get the existing map and their `initial` argument is ignored.
-- **`T` is intentionally unconstrained.** The registry stores and looks up values without ever invoking them. This is what lets OAuth store a factory (`() => Provider | undefined`) while other ports store concrete implementations.
-- **`names()` preserves insertion order** because it spreads `Map.keys()`, which are ordered by insertion.
-- **Resolution policy is a caller concern, not a registry concern.** The same `resolve()` method serves both the strict (`requireProvider`) and lenient (OAuth) paths; the registry itself never throws.
+- `T` is deliberately unconstrained. It can be a concrete implementation (antibot, payments) **or** a lazy factory (`() => OAuthProvider | undefined`). The registry never invokes `T`; callers are responsible for calling factories if needed.
+- `names()` returns insertion order, which is what appears in `requireProvider`'s error message.
+- When seeding a **shared** registry, `initial` is applied only by the first caller. Subsequent calls with the same `name` return the existing map and silently ignore their `initial` argument.
+- The registry is a pure storage/lookup structure—no events, no caching, no lifecycle hooks. Any such behavior belongs in the caller.

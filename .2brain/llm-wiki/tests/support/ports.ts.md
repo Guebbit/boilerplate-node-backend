@@ -1,7 +1,7 @@
 ---
 source: tests/support/ports.ts
-sha256: a277cb49adb2e058586573ce8aabb7a70a3dd1d0887207a5e94131ce1ce724df
-generated_at: 2026-10-15T12:59:40.814365+00:00
+sha256: 3608e37db3a82346227b103d4f8e89411b3c6be9435b98bd2f6552fec80ddeee
+generated_at: 2026-10-29T07:09:38.044783+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Test helper that provides a safe way to observe observability port functions (e.g. `emitAuditEvent`, `emitAnalyticsEvent`) from tests. It exists because `jest.spyOn` on namespace-imported ports throws under `@swc/jest` and Stryker's sandbox (non-configurable getters), so tests instead declare a module-level `jest.fn()` via `jest.mock` and use this helper to get a cleared, properly-typed mock at the assertion point.
+Test helper that works around a portability problem with `jest.spyOn` on namespace-imported port functions (`emitAuditEvent`, `emitAnalyticsEvent`). Under `@swc/jest` and Stryker's instrumented sandbox, the CommonJS namespace object exposes exports as non-configurable getters, so `spyOn` throws `TypeError: Cannot redefine property`. This file provides a module-replacement + call-history-clearing pattern that works identically under every transform.
 
 ## Key elements
 
-- **`observePort<T>(port: T): jest.MockedFunction<T>`** — the sole export. Accepts a function that is already a `jest.fn()` (from a `jest.mock`-replaced module), clears its call history, and returns it typed as a mock. If the argument is a real (non-mock) function, it throws a descriptive error directing the caller to add a `jest.mock` declaration to the test file.
+- **`observePort<T>(port: T): jest.MockedFunction<T>`** — Accepts a function that has already been replaced by a `jest.mock` factory. Clears its call history (`mockClear`) so the spy records only from the call site onward, then returns it typed as a mock. Throws a descriptive error if the argument is not actually a mock (i.e., the test file forgot to declare the `jest.mock` replacement).
+
+- **`auditPortMock()`** — Returns a full module replacement object for `@infrastructure/observability/audit`. Spreads `jest.requireActual` of the real module, replaces `emitAuditEvent` with a fresh `jest.fn()`, and rebuilds `recordAudit` so that it routes through that local `jest.fn()` (the real `recordAudit` closes over its own module's `emitAuditEvent` and would bypass the mock). A `recordAudit` call with no context is a no-op, matching real behavior.
 
 ## Relationships
 
-All listed neighbors are integration or contract test files (access, account, cart, example, feedback, inventory, orders) that:
-
-1. Declare their own `jest.mock('@infrastructure/observability/…', …)` at the top of the test file (required because `jest.mock` is hoisted per module registry and cannot be applied from a helper).
-2. Call `observePort(auditPort.emitAuditEvent)` (or the analytics equivalent) inside an `it()` block to obtain a cleared mock for `toHaveBeenCalledWith` / `not.toHaveBeenCalledWith` assertions.
-
-No source (`src/`) module imports this file; it is test-infrastructure only.
+- **`src/infrastructure/observability/audit.ts`** — The module that `auditPortMock` replaces. `auditPortMock` calls `jest.requireActual` on it to spread real exports and to access `buildAuditEvent` for the rebuilt `recordAudit`.
+- **All integration/contract test files listed as neighbors** — Each declares its own `jest.mock('@infrastructure/observability/audit', () => …auditPortMock())` (required because `jest.mock` is hoisted per module registry) and then calls `observePort(auditPort.emitAuditEvent)` at the point in the test where recording should begin.
 
 ## Notes
 
-- **`jest.mock` must live in the test file.** `observePort` cannot inject it. Forgetting the `jest.mock` line means the real function is passed in, and `observePort` will throw at runtime with a pointer to this file's header comment.
-- **The `mockClear()` call is load-bearing.** A module-level `jest.fn()` accumulates calls from the moment the module loaded; clearing at the `observePort` call-site restores the "record from this line" semantics that `jest.spyOn` would have provided, which is what makes negative assertions (`not.toHaveBeenCalledWith`) meaningful.
-- The generic constraint `T extends (...args: never[]) => unknown` is a deliberate no-op on call arguments so the returned mock is typed as the original function's signature rather than `jest.Mock`.
+- `jest.mock` **must** be declared in each test file individually; it cannot be applied from a helper because of per-registry hoisting. `observePort` is the "other half" that handles clearing and typing.
+- Clearing in `observePort` is intentional: a module-level `jest.fn()` records from file-load time, which would silently break `not.toHaveBeenCalledWith` assertions in "this event but not that one" cases.
+- The runtime guard in `observePort` (`typeof mocked.mockClear !== 'function'`) produces an error message that points back to this file's header for the full explanation.
+- `auditPortMock` sets `__esModule: true` so that interop with the namespace import in test files works correctly.

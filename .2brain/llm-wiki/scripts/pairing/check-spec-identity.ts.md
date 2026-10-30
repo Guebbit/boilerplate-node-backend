@@ -1,7 +1,7 @@
 ---
 source: scripts/pairing/check-spec-identity.ts
-sha256: d3344bc57f978ab0401538537e0b88952daa7f1648082c965c7b02cee2b6e9e3
-generated_at: 2026-10-14T07:29:14.889497+00:00
+sha256: 3263655e6deab590c4f5584b232577cbab96ad68d0017f08f618975c4044c78c
+generated_at: 2026-10-29T01:40:39.041169+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-CLI entry point (`npm run check:spec-identity`) that verifies the shared contract files in this repo are byte-identical to their counterparts in the paired frontend checkout. It exists so CI can detect contract drift between the two repositories before it becomes a runtime bug.
+CLI entry point (`npm run check`) that verifies the shared contract files in this repo are byte-identical to those in the paired frontend checkout. It exists to catch contract drift early—both on a developer's machine and in CI—so that the two repos don't silently fork their shared interfaces.
 
 ## Key elements
 
-- **Top-level flow** – Resolves the sibling path, guards on its existence, runs the comparison, and prints a verdict. There are no exported functions; the file *is* the script.
-- **`siblingRoot`** – Resolved once via `resolveFrontendPath()`. Drives every subsequent path reference.
-- **Missing-sibling guard** – If `existsSync(siblingRoot)` is false the script exits immediately: `0` (warn + skip) on a local dev machine, `2` (error) when `process.env.CI` is set.
-- **Comparison + reporting** – `compareSharedFiles(siblingRoot)` produces one verdict per shared file; `formatSharedFileProblems(comparisons, siblingRoot)` turns non-identical results into a human-readable string. Any non-empty result → `exit 1`.
-- **Success path** – Logs how many files matched and the resolved sibling root.
+- **Top-level script (no exports).** Runs directly via `tsx`; the exit code *is* the API.
+- **`siblingRoot`** — resolved at startup via `resolveFrontendPath()` (shell → `.env` → default).
+- **Absence guard (exit 0 vs 2).** If the sibling checkout doesn't exist, the script exits `0` (skip) on a dev machine but `2` under `CI`, distinguishing an environment misconfiguration from a real contract failure.
+- **`compareSharedFiles(siblingRoot)`** — returns a per-file verdict (identical / forked / missing) for every entry in `SHARED_FILES`.
+- **`formatSharedFileProblems(comparisons, siblingRoot)`** — renders a human-readable report of all non-identical files, or `null` when everything matches.
+- **Exit codes:** `0` identical (or skipped locally) · `1` contracts forked or a shared file is missing on one side · `2` sibling checkout not found in an environment that should have one.
 
 ## Relationships
 
-- **`scripts/pairing/spec-identity.ts`** – Supplies `SHARED_FILES` (the list of files to compare), `THIS_REPO` (repo label used in messages), and the two workhorse functions `compareSharedFiles` / `formatSharedFileProblems`. This file contains no comparison logic of its own.
-- **`scripts/pairing/paired-frontend-path.ts`** – Provides `resolveFrontendPath()` (shell `FRONTEND_PATH` → `.env` → default) and `DEFAULT_FRONTEND_PATH` (used in the "clone it beside this repo" hint). This file never touches the filesystem directly to locate the sibling; it delegates entirely to that module.
+- **`scripts/pairing/paired-frontend-path.ts`** — supplies `resolveFrontendPath` (the resolution chain for the sibling path) and `DEFAULT_FRONTEND_PATH` (used in the diagnostic message shown when the checkout is absent).
+- **`scripts/pairing/spec-identity.ts`** — supplies the core comparison logic (`compareSharedFiles`, `formatSharedFileProblems`), the list of files to compare (`SHARED_FILES`), and the identity label for this repo (`THIS_REPO`). This file contains no comparison logic of its own; it is purely the CLI/orchestration layer over those functions.
 
 ## Notes
 
-- **Exit-code contract is the API.** `0` = pass, `1` = contract drift, `2` = environment problem (sibling missing under CI). Consumers (`ci.yml`, `npm run complete`) branch on these codes, so changing them is a breaking change.
-- **CI vs. local leniency.** A missing sibling is *skipped* locally (exit 0) but *fatal* in CI (exit 2). The distinction exists because `ci.yml` is expected to check out the sibling itself; a miss there means a broken workflow, not a half-set-up dev machine.
-- **The frontend runs the mirror.** The docblock states the frontend repo has an equivalent script that compares against `BACKEND_PATH`. Keeping both sides in sync is a manual process (see `docs/tools/pairing-and-ports.md#keeping-the-pair-in-step`).
-- **Shebang is `#!/usr/bin/env tsx`**, so the file is plain TypeScript executed by `tsx`—no compile step.
+- The frontend repo ships a **mirror image** of this script that runs against `BACKEND_PATH`. The two are not a shared package; they are copies kept in lockstep.
+- Exit `2` is deliberately separate from `1`: `2` means "the environment is wrong, we can't even compare," while `1` means "we compared and found drift." CI pipelines can therefore alert on the two conditions differently.
+- The script is wired into `ci.yml` (which checks out the sibling and passes `FRONTEND_PATH`) and into `npm run complete`. It is not meant to be imported as a module.

@@ -1,7 +1,7 @@
 ---
 source: shared/contracts/openapi.root.yaml
-sha256: 9f4f6dd58faea83b7d40af15e0725b555f443dc5fecaa54c206eaf91bd0ca5c5
-generated_at: 2026-10-15T09:49:13.587143+00:00
+sha256: 02f88c9e461fc3da0ef7ae3824f8560a18ca475c7e2546417e54e54ff3269d81
+generated_at: 2026-10-29T01:47:30.087043+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Root OpenAPI 3.1.0 document that defines the global contract surface shared across all module fragments: the API's identity, the universal error-code catalogue (`x-error-codes`), the app-level responses injected by cross-cutting middlewares (`x-app-level-responses`), common security schemes, and shared parameters. Module-level `openapi.yaml` files are merged into this root by the bundler to produce the single published spec.
+Root OpenAPI 3.1.0 document for the "Boilerplate API". It defines the global contract surface that every module fragment inherits: the API's i18n and response-shape conventions, the shared error-code catalogue, app-level error responses that no single module owns, server URLs, and the base security scheme. Module fragments (e.g. `src/modules/*/openapi.yaml`) are merged into this document by the bundler to produce the final published spec.
 
 ## Key elements
 
-- **`info`** — API title, AGPL-3.0 license, version `0.1.0` (pre-1.0 development per SemVer §4), and a multi-paragraph description covering language negotiation (`Accept-Language` / `Content-Language` / `Vary`) and codegen intent.
-- **`x-error-codes`** — A flat map of ~25 error codes (e.g. `VALIDATION_ERROR`, `OUTRANKED`, `IDEMPOTENCY_KEY_MISMATCH`, `RATE_LIMITED`, multer `LIMIT_*` codes) that belong to no single module. Collected by the bundler into `errors[].code` examples (not an enum) so new codes are additive.
-- **`x-app-level-responses`** — Declares the four responses (400, 413, 415, 429, 503) that the global body-parser and rate-limiter middlewares can produce on *any* operation, tagged with `appliesTo: all | requestBody`. Merged into every matching operation by the bundler rather than hand-copied per module.
-- **`components.securitySchemes`** — Four schemes: `bearerAuth` (session JWT / opaque session id / API key), `apiKeyAuth` (opaque `sk_…` M2M credential), `cookieAuth` (`__Host-session` HttpOnly cookie), `metricsBearer` (static Prometheus scrape token).
-- **`components.parameters`** — Reusable query params (`PageParam`, `PageSizeParam`, `TextParam`) and `AntibotChallengeTokenHeader` (optional anti-bot token, required only when a provider is active).
-- **`servers`** — Two declared targets: `http://localhost:3000` (Local) and `https://api.example.com` (Production).
-- **`tags`** — A single `System` tag for public endpoints (ping, liveness).
+- **`info.description`** — The normative prose contract for language negotiation (`Accept-Language`, `Content-Language`, `Vary: Accept-Language`, draft-language preview for staff), success response shape (bare resource, `{items, meta}` paging, `204`, `201 + Location`), and error shape (RFC 9457 `application/problem+json` with the `errors[].code` extension). Serves as the de-facto spec for behaviour that is *not* declared per-operation (notably the `Accept-Language` header).
+- **`x-error-codes`** — Flat map of error codes that belong to no single module (HTTP-status-derived defaults, cross-cutting checks, multer upload limits, idempotency-key errors, 2FA/reauth codes). The bundler collects this map plus every module's own `x-error-codes` into one catalogue and publishes it as the `examples` for `errors[].code` (deliberately not an `enum`, per Zalando guideline #112).
+- **`x-app-level-responses`** — Declares the 400 / 413 / 415 / 429 / 500 / 503 responses that the application layer answers before or instead of any route. Each entry carries an `appliesTo` scope (`all`, `requestBody`, `requestBodyOrBodyless`) so the bundler knows which operations to inject it into. Declared once here rather than hand-copied into every module fragment.
+- **`servers`** — Local (`http://localhost:3000`) and production (`https://api.example.com`) base URLs.
+- **`components.securitySchemes.bearerAuth`** — HTTP bearer scheme; intentionally omits `bearerFormat` because the credential shape depends on deployment session mode.
+- **`tags`** — Global tag list (currently `System`).
+- **`security`** — Commented out by default; uncommenting would require authentication on every operation.
 
 ## Relationships
 
-- **`scripts/contracts/openapi-bundle.ts`** — Reads this file as the merge base, combines every module's `openapi.yaml` fragment into it, collects all `x-error-codes` into one catalogue, and injects `x-app-level-responses` into each operation. The output is the published spec.
-- **Module `openapi.yaml` files** (account, addresses, antibot, api-keys, audit-logs, cart, delivery, feedback, …) — Each declares its own paths, schemas, and module-specific `x-error-codes`; none of them redeclare the global schemes, parameters, or app-level responses defined here.
-- **`src/infrastructure/http/middlewares/idempotency.ts`** — Produces the `IDEMPOTENCY_KEY_REQUIRED`, `IDEMPOTENCY_IN_FLIGHT`, and `IDEMPOTENCY_KEY_MISMATCH` codes catalogued in `x-error-codes`.
-- **`src/infrastructure/http/middlewares/upload.ts`** — Produces the multer `LIMIT_*` and `MISSING_FIELD_NAME` codes catalogued in `x-error-codes`.
-- **`shared/contracts/spectral.modules.yaml`** — Spectral lint rules applied to the merged spec (this file and all fragments) during CI.
-- **`shared/contracts/asyncapi.root.yaml`** — Sibling root for the async/event side of the contract; independent of this file but published alongside it.
+- **`scripts/contracts/openapi-bundle.ts`** — Consumes this file as the root document. Reads `x-app-level-responses` and merges them into matching operations in each module fragment; also aggregates every fragment's `x-error-codes` (including this file's) into the final `errors[].code` examples list.
+- **`src/modules/*/openapi.yaml`** (account, addresses, antibot, api-keys, audit-logs, cart, delivery, feedback) — Sibling fragments that are bundled into this document. They declare their own `x-error-codes` and operation-level responses; the bundler merges them here without modifying this file.
+- **`shared/contracts/spectral.modules.yaml`** — Spectral lint rules that validate this document and every module fragment for schema compliance.
+- **`shared/contracts/asyncapi.root.yaml`** — Sibling root for the event-driven (AsyncAPI) contract; parallel structure, separate concern.
+- **`src/infrastructure/http/middlewares/idempotency.ts`** — Implements the behaviour behind the `IDEMPOTENCY_KEY_REQUIRED`, `IDEMPOTENCY_IN_FLIGHT`, and `IDEMPOTENCY_KEY_MISMATCH` codes declared in `x-error-codes`.
+- **`src/infrastructure/http/middlewares/upload.ts`** — Implements the behaviour behind the `LIMIT_*` and `MISSING_FIELD_NAME` codes (multer limits) declared in `x-error-codes`.
 
 ## Notes
 
-- `Accept-Language` is **deliberately not declared** as a parameter or header on any operation. Its contract is stated entirely in `info.description`. Do not add it to individual operations or to `components.parameters` — the bundler and codegen treat that paragraph as the single source of truth.
-- `x-error-codes` is published as `examples` on `errors[].code`, **not** as an `enum`. This is intentional (Zalando API guideline #112): adding a new code must never be a breaking response change.
-- `x-app-level-responses` exists to avoid hand-copying the same four/five responses into every module fragment. If you add a new global middleware that can reject any request, add its status here rather than in each module.
-- `bearerAuth` and `apiKeyAuth` are both `type: http, scheme: bearer` but are **distinct schemes** in the spec; operations opt into one or the other. Do not collapse them.
-- The `AntibotChallengeTokenHeader` parameter is `required: false` at the contract level; the server enforces it only when `NODE_ANTIBOT_PROVIDER` is set to a real provider. Codegen should emit it as optional.
+- **`Accept-Language` is intentionally absent from per-operation parameters.** The `info.description` paragraph is its contract. Clients set it once in an interceptor; declaring it on every operation would add a redundant parameter to every generated function.
+- **`x-app-level-responses` is the single source of truth for app-level errors.** Do not re-declare 400/413/415/429/500/503 in a module fragment's responses; the bundler injects them. Duplicating them creates a "published claim with no guard behind it" that goes stale silently.
+- **Error codes are published as `examples`, not `enum`.** Adding a new code is additive and non-breaking (Zalando API guideline #112). Never change an existing code's `status` or `description` in a minor version.
+- **`x-error-codes` here holds only cross-cutting codes.** Module-specific codes live in each module's own `openapi.yaml` under its own `x-error-codes`. The bundler merges them; there is no import mechanism between fragments.
+- **Version `0.1.0` signals pre-1.0 alpha.** Per SemVer §4, breaking changes are permitted until `1.0.0`.
+- The `security` block is commented out. When enabling it, every operation inherits the requirement unless it opts out with an empty `security: []`.

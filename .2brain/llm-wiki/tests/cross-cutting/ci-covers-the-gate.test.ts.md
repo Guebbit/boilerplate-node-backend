@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/ci-covers-the-gate.test.ts
-sha256: 691f3dde8216946fc75dbbdf4b4fd0258569c95f766bdc2d0dc2f6eb7fa40747
-generated_at: 2026-10-15T12:36:17.105223+00:00
+sha256: f0f0d75f33e9cddf0f4d7f0fd82b401c8ebbb7ee662de97261601319cac0d283
+generated_at: 2026-10-29T06:44:02.118919+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cross-cutting guard that asserts every check invoked by `npm run complete` (the local pre-commit gate) has a corresponding `npm run` reference in a GitHub Actions workflow. It exists to close the known bypass path where `--no-verify`, a missing husky install, or a fork PR lets a contributor skip local checks while CI stays green. The comparison is one-directional: CI is allowed to run *more* than the gate (e.g. nightly `fuzz.yml`, `mutation.yml`).
+Guards against drift between the local pre-commit gate (`npm run complete` chain) and the CI workflow definitions. If a check reaches the gate but has no corresponding CI job, a contributor using `--no-verify`, a machine without husky, or a PR from a fork bypasses it while CI stays green. This test asserts the CI "backstop" is complete.
 
 ## Key elements
 
-- **`packageScripts()`** — reads `scripts` from `package.json` at the repo root.
-- **`expand(script, all, seen?)`** — recursively resolves a script name into the *leaf* script names it ultimately invokes (follows `npm run X` links split on `&&`; real commands like `jest …` or `tsc` are leaves that contribute no further names). Returns an empty array for cycles.
-- **`scriptsRunByCi(all)`** — scans every `.yml` in `.github/workflows/` for `npm run <name>` references (skipping comment lines), then expands each name via `expand`. Returns a `Set<string>` of all covered script names.
-- **`COVERED_UNDER_ANOTHER_NAME`** — a small exception map (currently one entry: `test:cross-cutting` → `test:unit:report`) for checks that are covered under a different script name. Requires a justified diff entry.
-- **Test: "leaves no member of `complete` without a job"** — expands `complete`, subtracts the CI-covered set (plus exceptions), and asserts the remainder is empty.
-- **Test: "actually reads both sides"** — canary that both `expand('complete')` and `scriptsRunByCi()` return non-trivially sized results, so a silent path change (moved file, renamed script) fails loudly rather than producing an empty "all covered" set.
+- **`packageScripts()`** — Reads and returns the `scripts` map from `package.json` at the repo root.
+- **`expand(script, all, seen?)`** — Recursively resolves a script into the set of *leaf* script names it ultimately invokes. Splits on `&&`, matches `npm run <name>` steps, and recurses; non-script commands (`jest`, `tsc`, …) are leaves. Cycles are prevented via a `seen` set.
+- **`scriptsRunByCi(all)`** — Scans every `.yml` file in `.github/workflows/`, extracts `npm run <name>` references (excluding comment lines), and expands each name via `expand`. Returns the full `Set` of covered script names.
+- **`COVERED_UNDER_ANOTHER_NAME`** — A small, explicitly-argued exception map for gate members that CI covers under a different script name (currently `test:cross-cutting` → `test:unit:report`).
+- **`describe('CI runs every check the local gate does')`** — Two tests:
+  1. *leaves no member of `complete` without a job* — asserts the uncovered set is empty.
+  2. *actually reads both sides* — a canary: verifies `expand('complete', …)` yields > 10 members and `scriptsRunByCi(…)` yields > 5, preventing a vacuous pass if a path moves.
 
 ## Relationships
 
-- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — both files live in the "CI coverage" concern. This test explicitly references `mutation.yml` as a nightly workflow that is *deliberately absent* from `complete`; `waves.test.ts` exercises the mutation wave mechanics that `mutation.yml` invokes. Together they pin the contract that mutation checking exists in CI but is not part of the local gate.
+- **`tests/support/paths.ts`** — Imports `REPO_ROOT` to locate `package.json` and the `.github/workflows/` directory relative to the repository root.
 
 ## Notes
 
-- The `expand` function treats a script that contains **no** `npm run` child as a leaf and returns `[itself]`; a script that **does** contain children returns only the grandchildren. This means intermediate "grouping" scripts (e.g. `test-unit`) are skipped in the comparison — only the terminal units are checked.
-- Workflow parsing is intentionally regex-over-`npm run`; it does not understand YAML structure. The comment-filter (`.filter(line => !line.trimStart().startsWith('#'))`) exists because `ci.yml`'s header *mentions* `npm run complete` in prose and would otherwise count as coverage.
-- The test reads the filesystem at `__dirname/../../`, so it depends on being run from its canonical location. The canary test is the safety net if that assumption breaks.
+- **One-directional by design.** CI may run *more* than the gate (e.g., `fuzz.yml`, `mutation.yml` are nightly and intentionally absent from `complete`). The test only fails on the gate-minus-CI direction.
+- **Comment lines in YAML are filtered out.** Without this, a header comment in `ci.yml` that mentions a script name would count as coverage and mask the very gap the test exists to catch.
+- **`COVERED_UNDER_ANOTHER_NAME` is a deliberate exception list.** The repo avoids exception lists in general, but the alternative (comparing jest CLI arguments for semantic equality) is worse. The docblock notes that each entry must be argued in a diff.
+- **`expand` treats a script that runs no other `npm run` child as its own leaf.** This is what makes the comparison work at the right granularity rather than collapsing everything to top-level names.

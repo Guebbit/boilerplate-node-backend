@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/tests/unit/schema-contract.test.ts
-sha256: 5b6ec16bb26ee1be1cd28f9762feb5ae72cf2e4b13992c05f773b4970ae1abee
-generated_at: 2026-10-15T12:16:51.220586+00:00
+sha256: 649e12b78dc89bec5fadcdd031c8f19a5be8db5a6282d3341cef3cfe9803c8b6
+generated_at: 2026-10-29T06:24:19.474609+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the user Mongoose schema, focusing on its security-sensitive guarantees: password secrecy (dual-layer `select: false` + transform `omit`), email validation anchoring, OAuth-identity shape, index uniqueness as authentication invariants, and the pre-save hook that hashes only *modified* passwords. Exists so regressions in any of these layers fail loudly at the unit level, without a database.
+Contract tests for the `userSchema` Mongoose definition. Because this is the most security-sensitive schema in the codebase (password hashing, credential leakage, OAuth identity, uniqueness invariants), these tests pin down the schema's *declarative* guarantees—required paths, field defaults, `select: false` layers, index specs, and the pre-save hook's behavior—without touching a database or issuing real Mongoose saves.
 
 ## Key elements
 
-- **`describe('userSchema — what a user must carry')`** — asserts required paths (`email`, `username`), email regex (loose but anchored), defaults (`active: true`, `verifiedAt: null`, `locale` from env, `imageUrl` undefined, `deletedAt` undefined/Date-typed), and `timestamps`.
-- **`describe('userSchema — the credentials never load by accident')`** — verifies `password.select === false`, that `applyUserTransform` strips `password`/`oauthAccounts` and renames `_id → id`, and that a JSON round-trip of the serialized object contains no secret substring.
-- **`describe('userSchema — a linked OAuth identity')`** — checks `oauthAccounts` sub-schema required paths, its `select: false`, and default `[]`.
-- **`describe('userSchema — indexes')`** — pins the exact index specs and unique/partial-filter options for `users_email`, `users_oauth_identity`, `users_pending_email`.
-- **`preSaveHook()`** (local helper) — extracts the application's pre-save hook from Mongoose's internal `schema.s.hooks._pres` map by filtering on `fn.toString().includes("isModified('password')")`, avoiding a real `save()` and Mongoose's own internal hooks.
-- **`describe('userSchema — the pre-save password hook')`** — calls the extracted hook with stubbed documents: verifies argon2id hashing when `isModified('password')` is true, and that an already-hashed password is left untouched when `false`.
-- **Locale override test** (`it.each` with `jest.isolateModulesAsync`)** — sets `NODE_DEFAULT_LOCALE`, reloads the model module, and confirms the schema default follows the env var.
+- **`describe` blocks (5 groups):**
+  - *Required / defaults / email pattern / timestamps* — asserts `requiredPaths`, `defaultOf`, `typeOf`, email `match` regex (including anchoring and edge-case addresses), and `timestamps`.
+  - *Credentials never load by accident* — verifies `select: false` on `password`, that `applyUserTransform` omits `password`/`oauthAccounts` and renames `_id→id`, and that a JSON round-trip of the serialized object contains no hash substring.
+  - *Linked OAuth identity* — required sub-schema paths, `select: false` on `oauthAccounts`, and default of `[]`.
+  - *Indexes* — exact set of index specs and unique/partial-filter options via `indexSpecs` / `indexOptionSpecs`.
+  - *Pre-save password hook* — calls the extracted hook directly against a stub document with a mocked `isModified`.
+
+- **`preSaveHook()` (local helper):** Reaches into `userSchema.s.hooks._pres` (Mongoose internals) and selects the single pre-save entry whose source contains `isModified('password')`. Avoids grabbing Mongoose's own internal pre-save hooks. Throws a descriptive error if exactly one matching hook is not found.
+
+- **`setEnvironment` + `jest.isolateModulesAsync` block:** Reloads `@modules/users/model` under a modified `NODE_DEFAULT_LOCALE` to prove the `??` fallback is actually consulted, not just coincidentally equal to the default.
 
 ## Relationships
 
-- **`@modules/users/model`** — primary subject; `userSchema` and `applyUserTransform` are imported and introspected throughout.
-- **`@infrastructure/security/password-hash`** — `hashPassword` / `verifyPassword` validate the hook's output is a real argon2id hash.
-- **`@modules/users/factories`** — supplies `PLAIN_PASSWORD` used as the known-plain input for hook tests.
-- **`@tests/schema`** — provides the schema-introspection utilities (`requiredPaths`, `defaultOf`, `pathOptions`, `optionsOf`, `subSchema`, `typeOf`, `indexSpecs`, `indexOptionSpecs`) that turn Mongoose schema objects into plain assertions.
-- **`@tests/stub`** — `asStub` casts `userSchema` to reach Mongoose's non-public `s.hooks._pres` map.
-- **`@tests/environment`** — `setEnvironment` mutates process env before the module-reload locale test.
-- **`@infrastructure/config/store`** — `currentEnvironment()` read inside the locale default assertion to confirm the configured value.
+- **`src/modules/users/model.ts`** — source of `userSchema` and `applyUserTransform`; the primary subject under test.
+- **`src/modules/users/factories.ts`** — provides `PLAIN_PASSWORD` used by the pre-save hook tests.
+- **`src/infrastructure/security/password-hash.ts`** — `hashPassword` / `verifyPassword` verify that the hook produces a valid argon2id hash.
+- **`src/infrastructure/config/store.ts`** — `currentEnvironment` supplies the live `NODE_DEFAULT_LOCALE` value for the locale-default assertion.
+- **`tests/support/schema.ts`** — provides the `defaultOf`, `indexSpecs`, `indexOptionSpecs`, `optionsOf`, `pathOptions`, `requiredPaths`, `subSchema`, `typeOf` introspection helpers.
+- **`tests/support/stub.ts`** — `asStub` casts `userSchema` to access its private `.s.hooks._pres` map without a type error.
+- **`tests/support/environment.ts`** — `setEnvironment` mutates process env for the isolated-module reload test.
 
 ## Notes
 
-- The pre-save hook is reached through Mongoose's **internal** storage (`s.hooks._pres`), not by calling `schema.save()`. Mongoose registers its own pre-save hooks *before* the application's, so the test filters by source text (`isModified('password')`) rather than index `[0]`. If Mongoose moves this storage, the failure is a loud `undefined` / wrong-count error, not a silently skipped assertion.
-- The locale test must use `jest.isolateModulesAsync` to force a fresh `import('@modules/users/model')` because schema defaults are captured at module-load time; the default-check and the override-check are in separate tests because the plain check passes even with a broken `??` expression when env equals the fallback.
-- The JSON round-trip secrecy test searches for the **hash value** (`$2a$12$hash`) rather than the key name, so it still catches a leak if a future field is added beside `password`.
-- Email regex tests explicitly verify `^…$` anchoring; unanchored patterns would accept strings like `"Ada" <ada@example.com> evil@attacker.test`, enabling header-injection-style abuse in recovery emails.
+- The pre-save hook is exercised as a **pure function** on a plain object (`{ password, isModified }`), never through a real Mongoose `save()`. If Mongoose relocates its middleware storage (`s.hooks._pres`), the helper throws a loud error rather than silently skipping assertions.
+- Mongoose registers its own internal pre-save hooks before the user's, so the helper filters by source-code content (`isModified('password')`) instead of array index `[0]`.
+- The email-pattern tests read the *compiled* regex via `pathOptions(...).match`; they do not restate the pattern, keeping the test coupled to the actual schema definition.
+- The locale-fallback test (`jest.isolateModulesAsync`) exists because the checkout's env vars happen to equal the hardcoded fallbacks—without the reload, a broken `??` would still pass.

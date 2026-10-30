@@ -1,7 +1,7 @@
 ---
 source: src/modules/example/repository.ts
-sha256: 0983d2af2788dca640c17cdac125f2bf1bf3d492f7fda1a3c8bbd336aa149a24
-generated_at: 2026-10-14T15:44:08.539114+00:00
+sha256: 7179e4fcb9c27501cc2126aa0732a3a6d3c8d114f53f12cd1779c96be33c25d8
+generated_at: 2026-10-29T03:54:23.895036+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The single access point to the `example` collection within the module. It layers module-specific operations (scoped reads, translation writeback, image-pipeline writeback, optimistic publish, hard-delete) on top of the shared CRUD/search factory. Only the module's services import it; nothing outside the module touches the collection directly.
+The sole access point to the `example` collection within the module. It spreads the shared `createRepository` factory (plain CRUD + search) and layers on the operations this collection uniquely needs: scoped reads, transactional hard-delete, optimistic status transitions, translation, and image writeback. Services import this file; nothing outside the module does.
 
 ## Key elements
 
-- **`exampleRepository`** (sole export) — a const object that spreads `createRepository(exampleModel, …)` and adds the custom methods below. Typed explicitly as `Repository<ExampleDocument, ExampleRow> & { … }` to work around TS7056 with Mongoose generics.
-- **`findScoped(id, scope)`** — `findOne` by id *and* an authorization scope in a single query, so visibility is enforced atomically with the read.
-- **`deleteAllOf(userId, session)`** — deletes every row owned by `userId` inside the caller's transaction; returns the cover `imageUrl`s found before deletion so the caller can clean them up post-commit.
-- **`existsById(id)`** — lightweight existence check (implements the `locales` port's `exists`).
-- **`writeTranslatedFields(id, fields, session?)`** — copies fallback-locale text onto the document's own columns (`$set`, `null` → `''`). Uses `timestamps: false` so it doesn't masquerade as a user edit.
-- **`markEdited(id, session?)`** — bumps `updatedAt` to advance the ETag/revision counter after a translation write.
-- **`publishFrom(id, before, fields, session)`** — `findOneAndUpdate` guarded by `status: before`; only one concurrent publisher wins. Returns the post-update doc or `null`.
-- **`writebackImage(documentId, key, urls)`** — image-pipeline callback. Matches on `pendingImageKey` for idempotency; on a miss, falls back to checking whether the target URL is already stored (handles duplicate job dispatch).
-- **`searchable` config** (inside the factory call) — declares `objectIds`, `text`, and `sortable` keys. `status` is intentionally absent (closed enum, passed as a scope instead).
+- **`exampleRepository`** (const, exported) — the single public export. Typed explicitly as `Repository<ExampleDocument, ExampleRow>` intersected with five extra members. The explicit type exists because Mongoose's generics are too large for TS to serialize an inferred type at an export boundary (TS7056).
+  - **`findScoped(id, scope)`** — loads one document by id *and* an authorization scope in a single query; returns `null` if the scope doesn't match. `async` because `toObjectId` throws on malformed ids.
+  - **`deleteAllOf(userId, session)`** — transactional hard-delete of all rows for a user; returns the list of `imageUrl` values (for post-commit image cleanup).
+  - **`moveFrom(id, before, fields, session?)`** — conditional status write: the update only applies if the document's current `status` is still `before` (optimistic concurrency). Returns the saved doc or `null`.
+  - **`translatable`** — `TranslatableColumns` object derived from `translatableColumnsOf(exampleModel)`, used by the translation pipeline.
+  - **`writebackImage`** — `ImageWriteback` from `imageWritebackFor(exampleModel)`; matches on a pending key so stale/repeated jobs are no-ops.
+- **`searchable` config** (passed to the factory) — declares `objectIds: { id: '_id' }`, free-text on `title`/`body`, and sortable on `createdAt`, `title`, `status`. `status` is deliberately *excluded* from free-text filters; it is a closed enum the service passes as a scope instead.
 
 ## Relationships
 
-- **`src/modules/example/model.ts`** — supplies `exampleModel`, `applyExampleTransform`, and the `ExampleDocument` / `ExampleRow` types used throughout.
-- **`src/infrastructure/persistence/create-repository.ts`** — provides the `createRepository` factory (CRUD + search), `toObjectId`, and the `Repository` base type.
-- **`src/infrastructure/adapters/image.worker.ts`** — defines the `ImageWriteback` contract that `writebackImage` satisfies.
-- **`src/modules/example/services/crud.ts`** — consumes the base CRUD, `findScoped`, and `publishFrom`.
-- **`src/modules/example/services/cover.ts`** — drives the image pipeline via `writebackImage` and collects cover URLs from `deleteAllOf`.
-- **`src/modules/example/services/personal-data.ts`** — calls `deleteAllOf` for user-data erasure.
-- **`src/modules/example/module.ts`** — wires the repository into the service constructors at module registration time.
-- **`src/modules/example/tests/integration/*.test.ts`** — integration tests exercise the repository through the service layer.
-- **`src/modules/example/tests/factories.ts`** — test data factories for `ExampleDocument` / `ExampleRow`.
+- **`src/infrastructure/persistence/create-repository.ts`** — provides the `createRepository` factory (CRUD + `search`) and the `Repository` / `toObjectId` utilities that this file spreads and extends.
+- **`src/infrastructure/persistence/conditional-status.ts`** — exports `updateStatusIfIn`, consumed by `moveFrom` for the "only-if-status-is-still-`before`" guard.
+- **`src/infrastructure/persistence/image-writeback.ts`** — exports `imageWritebackFor`; assigned to `writebackImage`.
+- **`src/infrastructure/persistence/translatable-columns.ts`** — exports `translatableColumnsOf`; assigned to `translatable`.
+- **`src/infrastructure/adapters/image.worker.ts`** — supplies the `ImageWriteback` type that `writebackImage` is typed against.
+- **`src/modules/example/model.ts`** — source of `exampleModel`, `applyExampleTransform`, and the `ExampleDocument` / `ExampleRow` types used throughout.
+- **`src/modules/example/services/crud.ts`**, **`transition.ts`**, **`personal-data.ts`**, **`cover.ts`** — the service layer that calls into this repository (the "door"); they never expose it to other modules.
+- **`src/modules/example/tests/factories.ts`**, **`tests/integration/capabilities.test.ts`**, **`tests/integration/service.test.ts`** — test fixtures and integration tests that exercise the repository directly or through its services.
 
 ## Notes
 
-- The explicit type annotation on `exampleRepository` exists because Mongoose's inferred generic is too large for TypeScript to serialize at an export boundary (TS7056). Do not remove it in favor of `as const` or inference.
-- `timestamps: false` is deliberate on `writeTranslatedFields`, `markEdited`, and `writebackImage`: these are system-side writes and must not bump `updatedAt` as a user edit would (except `markEdited`, which sets it *by hand* to move the revision counter).
-- `deleteAllOf` returns image URLs **before** the transaction commits; the caller is responsible for deferring file deletion until after commit to avoid orphaning files on rollback.
-- `publishFrom` relies on the `status` filter in the query for optimistic concurrency — there is no `where` clause on a version column. If the status enum gains a new transitional value, the `before` parameter must still reflect what the caller last read.
-- `writebackImage`'s idempotency fallback (`exists` check on `imageUrl`) means a stale duplicate job returns `true` (treated as "already held") rather than `false`, preventing the caller from deleting live files.
+- `searchable.status` is intentionally absent from free filters. If a service needs to filter by status, it passes it as a `scope` object to `findScoped` (or the factory's `search` scope parameter), not as a text/objectId filter.
+- `deleteAllOf` returns image URLs *before* the delete runs (it queries first, then deletes). The caller is responsible for removing those images only after its transaction commits; the repository does not delete images itself.
+- `moveFrom` is not a general-purpose update — it only writes `status` and `publishedAt`. For other field changes use the factory's `update`.
+- Every write that takes a `ClientSession` must use the caller's session; passing `undefined` skips the transaction and breaks atomicity with sibling writes (e.g. outbox rows).

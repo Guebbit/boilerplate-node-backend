@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/services/publish.ts
-sha256: ccde70564b7a16c7a4e50e4fecff702ea78c4f5d60d25d35ef3a8959a22c66f9
-generated_at: 2026-10-15T12:21:57.308605+00:00
+sha256: 9134ad66b1f4d071170b55860598a586eb087827b019a4dd1894886ad55302c6
+generated_at: 2026-10-29T06:30:32.659195+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Domain-event subscriber that listens to every event a registered module's manifest names a `PublicEventTarget` for, matches each projected public event against enabled subscription filters, and fans out one delivery row plus one queue message per match. Registered once from `module.ts`'s `onRegistered` hook after all modules are known.
+The domain-event subscriber for webhooks. It registers one listener per `PublicEventTarget` declared by every module (resolved at boot via `kernel/registry.ts`), projects incoming domain events into public events, matches them against enabled subscriptions' filters, and fans out one delivery row plus one queue message per match. It is the single entry point that connects the kernel event bus to the webhook delivery pipeline without any module importing from `webhooks`.
 
 ## Key elements
 
-- **`subscribeToWebhookEvents(publicEvents)`** — sole export. Iterates the `Record<string, PublicEventTarget | undefined>` map (keyed by domain event name) and calls `subscribeToTarget` for each entry that has a target.
-- **`subscribeToTarget(domainEventName, target)`** — registers one `onDomainEvent` listener. Casts `target.toPublicEvent` to `(payload: unknown) => PublicEventProjection | undefined`, projects the payload, and calls `fanOut` only when a public event is produced.
-- **`fanOut(event, eventId?)`** — loads enabled subscriptions, filters via `matchesEventFilter`, and calls `deliverToOne` for each match using `Promise.allSettled`. Shares a single `eventId` (from `meta.eventId` or a fresh `randomUUID()`) across all matches for Standard Webhooks dedup. Collects rejections, logs, and rethrows so the outbox/bus can retry.
-- **`deliverToOne(subscription, event, eventId)`** — calls `createDeliveryRow`; if a row is returned, enqueues its first attempt via `enqueueDeliveryAttempt`. Returns `void` either way (existing row ≠ failure).
-- **`createDeliveryRow(subscription, event, eventId)`** — inserts a delivery document (`attempt: 1`, `status: 'pending'`). Catches duplicate-key errors (same `subscriptionId` + `eventId`) and returns `null` to make the write idempotent.
+- **`subscribeToWebhookEvents`** (exported) — Entry point called once from `../module.ts`'s `onRegistered` hook. Iterates over the `publicEvents` record and calls `subscribeToTarget` for each defined target.
+- **`subscribeToTarget`** (private) — Registers one `onDomainEvent` listener. Casts `toPublicEvent` to accept `unknown`, projects the payload, and calls `fanOut` only when the projection yields a public event.
+- **`fanOut`** (private) — Loads all enabled subscriptions, filters via `matchesEventFilter`, and calls `deliverToOne` for each match using `Promise.allSettled`. Shares a single `eventId` (from outbox `meta.eventId` or a fresh UUID) across all matches. Throws a combined error if any delivery fails.
+- **`deliverToOne`** (private) — Writes the delivery row for one subscription, then enqueues its first attempt via `enqueueDeliveryAttempt`. A row that already exists (duplicate) is a no-op, not a failure.
+- **`createDeliveryRow`** (private) — Inserts a `pending` delivery document (`attempt: 1`). Catches duplicate-key errors and returns `null` for idempotency on `(subscriptionId, eventId)`.
 
 ## Relationships
 
-- **`src/kernel/events.ts`** — imports `onDomainEvent` and `DomainEventName`; the listener registration mechanism.
-- **`src/kernel/registry.ts`** — imports `PublicEventProjection` and `PublicEventTarget` types that define the event→public-event mapping contract.
-- **`src/modules/webhooks/module.ts`** — caller of `subscribeToWebhookEvents` inside its `onRegistered` hook.
-- **`src/modules/webhooks/repository.ts`** — provides `webhookSubscriptionRepository.findEnabled()` and `webhookDeliveryRepository.create()`.
-- **`src/modules/webhooks/domain/index.ts`** (re-exports `event-filter.ts`) — provides `matchesEventFilter`.
-- **`src/modules/webhooks/services/enqueue.ts`** — provides `enqueueDeliveryAttempt`.
-- **`src/infrastructure/persistence/mongo-errors.ts`** — provides `isDuplicateKey` for the idempotency guard.
-- **`src/infrastructure/adapters/logger.ts`** — used for the fan-out failure error log.
-- **`src/modules/webhooks/model.ts`** — type source for `WebhookDeliveryDocument` and `WebhookSubscriptionDocument`.
+- **`@kernel/events`** — Calls `onDomainEvent` to attach listeners; imports `DomainEventName` type.
+- **`@kernel/registry`** — Imports `PublicEventProjection` and `PublicEventTarget` types; the `publicEvents` record passed into `subscribeToWebhookEvents` is the output of `resolvePublicEvents`.
+- **`@infrastructure/adapters/logger`** — Logs an error via `logger.error` when one or more fan-out deliveries fail.
+- **`@infrastructure/persistence/mongo-errors`** — Uses `isDuplicateKey` to treat a unique-index violation as "row already exists" rather than a real error.
+- **`../domain` (barrel → `event-filter.ts`)** — Calls `matchesEventFilter(event.eventType, subscription.eventTypes)` to decide whether a subscription matches the incoming event.
+- **`../model`** — Imports `WebhookDeliveryDocument` and `WebhookSubscriptionDocument` types.
+- **`../repository`** — Uses `webhookSubscriptionRepository.findEnabled()` and `webhookDeliveryRepository.create()`.
+- **`./enqueue`** — Calls `enqueueDeliveryAttempt` to push the first attempt onto the queue.
+- **`./index`** — Barrel re-export; this file is part of the public surface of the webhooks services module.
+- **`tests/integration/fan-out.test.ts`** — Integration tests exercising the fan-out path (matching, idempotency, failure aggregation).
+- **`tests/unit/infrastructure/adapters/queue.test.ts`** — Unit tests for the queue adapter whose publish path this file triggers fire-and-forget.
 
 ## Notes
 
-- **Fire-and-forget enqueue on purpose:** if the queue publish fails, the delivery row stays `pending` and is recovered by `scripts/ops/sweep-webhook-retries.ts`. Nothing is lost, only delayed.
-- **Idempotency is index-backed:** the unique `(subscriptionId, eventId)` index turns a second outbox delivery into a silent `null` return, not a duplicate row.
-- **Shared `eventId` across fan-out:** all subscriptions matching one event share the same id, so a consumer deduping on `webhook-id` treats them as one logical event (Standard Webhooks). On outbox redelivery the original id is preserved via `meta.eventId`; in-process emits get a fresh UUID.
-- **`allSettled` + throw-all:** every matching subscription is attempted even if an earlier one fails. Failures are then thrown as a single error so the bus/outbox retries the whole event; already-created rows are skipped on that retry by the duplicate-key guard.
-- **Two casts in `subscribeToTarget`** are documented as narrowing (the manifest is resolved at boot, not compile-time; the registry stores `toPublicEvent` as `(payload: never) => …`), not as `any` laundering.
+- **Fire-and-forget publish:** If the queue publish fails (no broker, transient error), the delivery row remains `pending`. The `sweep:webhook-retries` job re-publishes it. This is intentional — the system degrades to delayed delivery rather than losing the event.
+- **Shared `eventId`:** All subscriptions matched by one event share the same `eventId`, which is what a consumer deduplicates on (`webhook-id` header, per Standard Webhooks). When the event arrives via the outbox, `meta.eventId` is reused so redeliveries are recognised by the unique index.
+- **`allSettled` semantics:** Every matching subscription is attempted even if an earlier one fails. Failures are collected and thrown as a single error, causing the event bus to return `false` and the outbox to retry the whole event; already-created rows are then skipped idempotently.
+- **Two type casts:** `domainEventName` is cast to `DomainEventName` (it is a real name from a module manifest, just not a compile-time literal). `toPublicEvent` is cast from `(payload: never) => …` to `(payload: unknown) => …` because the registry stores one generic lookup for all modules. Neither is an `any` laundering.
+- **`attempt` always starts at 1** in `createDeliveryRow`; incrementing is the job of `./attempt.ts` during retries.

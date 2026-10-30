@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/step-up-auth-routes.test.ts
-sha256: a4a7e721250d692fac3ac6b31779f84da8a1d8990c4d1e1d0c153efa3850adc6
-generated_at: 2026-10-15T12:41:25.991700+00:00
+sha256: 7aea76c34d47d4708551b1be33f33b15f1e0a13f46a53025a59ba7ae5bfb842b
+generated_at: 2026-10-29T06:50:40.212721+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cross-cutting integration test that pins the **exact** set of routes carrying a step-up authentication guard (`requireFreshAuth` or `requireFreshAuthWhen`) across five money/identity routers. It enforces the `STEP_UP_ROUTES` table in both directions — every listed route must still be mounted, and every mounted step-up guard must appear in the table — so a new or changed guard is immediately visible here rather than silently appearing in a router file.
+Verifies that step-up authentication guards (`requireFreshAuth` / `requireFreshAuthWhen`) are applied to exactly the set of money- and identity-sensitive routes documented in `STEP_UP_ROUTES`, at the correct tier, and nowhere else. The check is bidirectional: every table entry must still be a mounted route, and every mounted route carrying the guard must appear in the table. This ensures a future developer adding a money or identity route inherits the guard by failing this test rather than by remembering to add it.
 
 ## Key elements
 
-- **`STEP_UP_ROUTES`** — Canonical `Record<string, string>` table. Keys are `` `${module} ${METHOD} ${path}` ``; values are the exact guard label (e.g. `requireFreshAuth(critical)`, `requireFreshAuthWhen(sensitive)`) that `authGuardsMock` records. Serves as both the test's expected data and the project's single documentation of which routes demand step-up auth and at which tier.
-- **`ROUTERS`** — Map of the five routers under test (`account`, `cart`, `payments`, `delivery`, `returns`) to their Express `Router` instances.
-- **`mountedStepUps()`** — Introspects every route on every router via `routeSignatures` / `guardsOn`, collects the first step-up guard label found per route, and returns the result keyed the same way as `STEP_UP_ROUTES`. Used by the bidirectional-equality assertion.
-- **Three test cases** (under one `describe`):
-  1. *No stale entry* — every key in `STEP_UP_ROUTES` resolves to a mounted route.
-  2. *Carries the expected label* — `it.each` over the table; asserts `guardsOn` includes the exact label.
-  3. *Exact table match* — `mountedStepUps()` deep-equals `STEP_UP_ROUTES` (catches unlisted mounts and wrong-tier drift).
-- **Jest mocks** — `cache`, `rate-limit`, `upload`, and `authorizations` middlewares are all replaced with fakes from `@tests/routes` so the test isolates step-up-guard behavior from infrastructure.
+- **`STEP_UP_ROUTES`** — The canonical table mapping `"${module} METHOD /path"` strings to the exact guard labels expected (e.g. `requireFreshAuth(critical)`, `requireFreshAuthWhen(sensitive)`). Covers 25 routes across cart, payments, account, returns, orders, and users.
+- **`ROUTERS`** — The seven Express routers under test, keyed by module name (`account`, `cart`, `payments`, `delivery`, `returns`, `users`, `orders`).
+- **`mountedStepUps()`** — Scans every route in `ROUTERS` via `routeSignatures` + `guardsOn`, collects all labels starting with `requireFreshAuth(` or `requireFreshAuthWhen(`, and returns a map in the same key format as `STEP_UP_ROUTES`.
+- **Three test cases** — (1) no stale entry (every key in `STEP_UP_ROUTES` is a live route), (2) each route carries its declared labels, (3) the full set of mounted guards equals the table exactly (no extra routes, no missing ones, no tier drift).
 
 ## Relationships
 
-- **`tests/support/routes.ts`** — Source of `guardsOn`, `routeSignatures`, and the mock factories (`cacheMock`, `securityMock`, `storageMock`, `authGuardsMock`). All introspection and mock wiring flows through this module.
-- **`src/modules/account/routes.ts`, `src/modules/cart/routes.ts`, `src/modules/payments/routes.ts`, `src/modules/delivery/routes.ts`, `src/modules/returns/routes.ts`** — The routers whose mounted middleware stack the test reads. No route file imports from this test; the dependency is one-directional (test → routers).
-- **`tests/contract/authorization-contract.test.ts`** — Complementary coverage: that contract test exercises the `requirePermission` / `stepUp:` key path (action-based step-up, e.g. `users.any.delete`). This file covers the route-mounted guard path (caller's own identity). The file's header comment states the split explicitly.
+- **`tests/support/routes.ts`** — Supplies `guardsOn` and `routeSignatures` for route inspection, and provides `cacheMock`, `securityMock`, `storageMock`, and `authGuardsMock` used in the `jest.mock` calls. `authGuardsMock` is the mechanism that records which guard label each route received, making the assertions possible.
+- **`src/modules/account/routes.ts`, `cart/routes.ts`, `payments/routes.ts`, `delivery/routes.ts`, `returns/routes.ts`, `users/routes.ts`, `orders/routes.ts`** — The routers under test. This file imports each module's `router` export and inspects their mounted middleware chain.
+- **`src/modules/delivery/routes.ts`** — Imported into `ROUTERS` but has no entries in `STEP_UP_ROUTES`; its inclusion in the sweep means any future guard added to a delivery route will be caught by the "nowhere else" assertion.
 
 ## Notes
 
-- **Two-step-up mechanisms, two test files.** A route mounts `requireFreshAuth(When)` directly when freshness is a property of the *route* (caller's own record). When freshness is a property of the *action*, `shared/authorization-keys.yaml` declares `stepUp:` and `requirePermission` enforces it; `tests/unit/kernel/step-up.test.ts` covers that path. Confusing the two will lead you to the wrong test file.
-- **Bidirectional equality is the core assertion.** Test 3 (`mountedStepUps()` equals `STEP_UP_ROUTES`) is the strongest check: it catches a new guard added to a router without a table entry *and* a table entry pointing to a route that no longer carries the guard. Tests 1 and 2 exist so a failure message identifies the specific route.
-- **`requireFreshAuthWhen` vs `requireFreshAuth`.** The `When` variant is conditional (e.g. `delivery` ship/deliver only step-up when `forced: true`; `account` password/profile changes only step-up when a second factor is armed). The table records the first guard label encountered on a route; `account DELETE /` has both a conditional and an unconditional guard, and the table key maps to the conditional one.
-- **Tier comments in `STEP_UP_ROUTES`** are load-bearing documentation (e.g. why `payments POST /:id/sync` is critical, why `returns POST /` is conditional). Treat them as the canonical "why this tier" rationale.
+- The file deliberately covers only the **route-mounted** half of step-up auth. The action-key half (e.g. `delete:User`, `create:Refund` enforcing step-up via `shared/authorization-keys.yaml` + `requirePermission`) is tested in `tests/unit/kernel/step-up.test.ts` and is **not** asserted here.
+- Some routes carry **two** guards (e.g. `account DELETE /` has both `requireFreshAuthWhen` and `requireFreshAuth`). The test checks the full array, not just the first match — the conditional guard may be skipped for accounts without 2FA, leaving the unconditional one as the sole gate.
+- Adding a new money/identity route requires adding an entry to `STEP_UP_ROUTES` **and** mounting the guard; failing either side fails this test. Removing a route or changing its tier without updating the table also fails.
+- The mock for `@kernel/middlewares/authorizations` delegates to `authGuardsMock` from `tests/support/routes.ts`, meaning the guard recording is centralized in the shared test support rather than re-implemented per test file.

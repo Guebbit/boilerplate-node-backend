@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/post-login.ts
-sha256: 313de4d7f6fc1aa854ff2ccb514837ae04fe9490f870bc857f5e542ea775ef63
-generated_at: 2026-10-15T09:55:23.185535+00:00
+sha256: e3224de60bd46177aa1f02e020876207c65d387c2fb1cff0697174cc3158f66b
+generated_at: 2026-10-29T02:30:36.458458+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,41 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The `POST /account/login` controller. It validates the request, delegates credential checking to the account service, and on success mints the full session (refresh token, transport cookies, short-lived access token). It also handles the two-factor branch and is the single place where login success/failure metrics, audit entries, and analytics events are emitted — intentionally kept here rather than in the service so that a 422 from body-shape validation does not silently drop the attempt from the trail.
+The `POST /account/login` controller. It validates the "remember me" tier, calls the account service to verify credentials, then branches into one of three outcomes: issue a full session (refresh cookie + short-lived access token), return a 2FA challenge, or surface a deletion-pending claim. All success/failure login metrics are recorded here at the controller level rather than inside the service.
 
 ## Key elements
 
-- **`rememberSchema`** — Zod schema validating the optional `remember` (a `RefreshTokenExpiryTime` tier) and `transport` (a `SESSION_TRANSPORTS` value) fields before any credential work begins.
-- **`postLogin(request, response)`** — The sole export; the Express handler for `POST /account/login`. Sequence:
-  1. Destructures `email`/`password` from `request.body ?? {}` (Express 5 leaves body `undefined` when no parser matched).
-  2. Parses `remember`/`transport` via `rememberSchema`; rejects with 422 on failure.
-  3. Captures `provedAt = Date.now()` before the hash check.
-  4. Calls `accountService.login(email, password)`.
-  5. On refusal → `recordLoginFailure` and return.
-  6. If `twoFactorEnabledAt` is set → calls `twoFactorService.buildLoginChallenge` and returns a 200 with the challenge payload (no cookies, no access token).
-  7. Otherwise → `issueSession` → `recordLoginSuccess` → `rememberDevice` → `successResponse`.
-  8. `.catch` → `rejectDatabaseError` (a post-auth infra failure is *not* recorded as a login failure).
+- **`rememberSchema`** – Zod schema validating the optional `remember` (against `RememberTier` enum) and `transport` (against `SESSION_TRANSPORTS`) fields. Parsed before the credential check so a malformed tier is rejected with 422 without leaking anything about the password.
+- **`postLogin`** – The exported Express handler. Destructures `email`/`password` from `request.body` (guarded with `?? {}` for Express 5's `undefined` body), parses the tier, records `provedAt`, then delegates to `accountService.login`. On success it either issues a session via `issueSession`, returns a 2FA challenge via `twoFactorService.buildLoginChallenge`, or returns a deletion-pending response via `accountService.buildDeletionPending`. On refusal it calls `recordLoginFailure`. Database/unexpected errors are funneled through `rejectDatabaseError`.
 
 ## Relationships
 
-- **`@infrastructure/http/controller.ts`** — Provides `rejectValidation` (422) and `refused` (401) used for the early-exit paths.
-- **`@infrastructure/http/errors.ts`** — Provides `rejectDatabaseError` for the catch-all on the promise chain.
-- **`@infrastructure/http/response.ts`** — Provides `successResponse` for the 200 reply.
-- **`@infrastructure/i18n/index.ts`** — `t()` localises the human-readable `message` in success and 2FA-required responses.
-- **`src/modules/account/services/index.ts`** — Source of `accountService.login` and `twoFactorService.buildLoginChallenge`.
-- **`src/modules/account/session/config.ts`** — `RefreshTokenExpiryTime` enum constrains the `remember` tier.
-- **`src/modules/account/session/strategy.ts`** — `SESSION_TRANSPORTS` enum constrains the `transport` field.
-- **`src/modules/account/session/session.ts`** — `issueSession` performs the actual token minting and cookie setting.
-- **`src/modules/account/session/device-cookie.ts`** — `rememberDevice` marks the browser as familiar for lockout-reset purposes.
-- **`src/modules/account/session/login-observability.ts`** — `recordLoginSuccess` / `recordLoginFailure` emit metrics, audit, and analytics events.
-- **`src/modules/account/domain/session-proof.ts`** — `AMR.password` is placed in the session's authentication-methods list.
-- **`@types`** — `LoginRequest` and `LoginOutcome` shape the typed request body and response payload.
-- **`src/modules/account/routes.ts`** — Registers `postLogin` as the handler for `POST /account/login`.
+- **`src/infrastructure/http/controller.ts`** – Provides `parseBody` (Zod validation helper that writes the 422 response) and `refused` (checks whether the service result is a rejection and writes the appropriate error response).
+- **`src/infrastructure/http/errors.ts`** – `rejectDatabaseError` handles unexpected/database errors in the `.catch` branch.
+- **`src/infrastructure/http/response.ts`** – `successResponse` writes the 200 body for all three success branches (full login, 2FA challenge, deletion-pending).
+- **`src/modules/account/services/index.ts`** – `accountService.login` performs credential verification; `accountService.buildDeletionPending` builds the grace-period claim response; `twoFactorService.buildLoginChallenge` constructs the 2FA challenge payload.
+- **`src/modules/account/session/session.ts`** – `issueSession` mints the refresh token, sets session cookies, and returns the short-lived access token.
+- **`src/modules/account/session/strategy.ts`** – `SESSION_TRANSPORTS` enum is used to constrain the `transport` field in the body schema.
+- **`src/modules/account/session/device-cookie.ts`** – `rememberDevice` marks the browser as "familiar" after a successful login so a lockout cannot keep the legitimate owner out.
+- **`src/modules/account/session/login-observability.ts`** – `recordLoginSuccess` / `recordLoginFailure` emit audit, metrics, and analytics events.
+- **`src/modules/account/domain/session-proof.ts`** – `AMR.password` is passed as the authentication method reference in both the session and the 2FA challenge.
+- **`src/modules/users/index.ts`** – `isRestorable` checks whether the account is in its deletion-grace window.
+- **`src/types/index.ts`** – Provides `RememberTier`, `LoginRequest`, and `LoginOutcome` type contracts.
+- **`src/modules/account/routes.ts`** – Wires `postLogin` to the `POST /account/login` route.
 
 ## Notes
 
-- **Express 5 body quirk:** `request.body` is typed `LoginRequest | undefined` because Express 5 sets it to `undefined` (not `{}`) when no body parser matches the `Content-Type`. The `?? {}` guard is therefore load-bearing, not defensive noise.
-- **Metrics live in the controller, not the service:** A 422 raised inside `accountService.login` still flows through `recordLoginFailure` because it is thrown *after* the credential check. A 422 raised here (e.g. bad `remember` tier) is by design non-secret and does not touch the credential trail.
-- **2FA is a 200, not a 401:** When two-factor is enabled the controller returns HTTP 200 with a challenge object; the login is *incomplete*, not failed. `recordLoginFailure` is not called on this path.
-- **`provedAt` is captured before the hash check** so that a password rotation occurring during the request causes the issued session to be invalidated (the service compares against this timestamp).
-- **Catch-all does not record a login failure:** An infrastructure error (DB down, token-signing failure) after a successful credential check is *not* a rejected login; `rejectDatabaseError` handles it without touching the observability path.
+- **Metrics live here, not in the service.** A 422 raised at the controller level (e.g. bad `remember` tier) would return *before* `recordLoginFailure`, dropping the attempt from the audit trail. The service's own 422 (malformed password shape) arrives *after* the failure hook, so it is recorded. This is why tier validation is done at the controller while password-shape validation is left to the service.
+- **Express 5 `request.body` can be `undefined`.** When no body parser matched the content-type, the body is `undefined` (not `{}` as in Express 4). The `?? {}` guard prevents a synchronous `TypeError` on destructure and lets the service produce its own 422.
+- **`provedAt` is captured before the async login call.** A password changed during the hash verification must cause the login to be refused; the timestamp ensures the proof is bound to the pre-change state.
+- **The `.catch` is deliberately not a login failure.** A database or token-minting error means the credential check may have succeeded, so it must not increment failure counters. It is routed through `rejectDatabaseError` instead.
+- **2FA and deletion-pending both return 200.** The `LoginOutcome` discriminant tells the client which branch fired; no session or cookies are set in either case.

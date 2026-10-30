@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/controllers/post-return-decision.ts
-sha256: c6c14194a8759b65f737e054eeb2f7c4f8d7f4c91a8d3b9ce63678bf5017c40c
-generated_at: 2026-10-15T11:51:37.190309+00:00
+sha256: 52f17491a9d5039fabf91a44b4785c7795b7c8b9bee27192f88c448819e056ae
+generated_at: 2026-10-29T05:36:31.467953+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin Express handlers for the two staff decision actions on a return request — `POST /returns/:id/approve` and `POST /returns/:id/decline`. Each validates input, delegates to `returnService`, enriches the result with available actions, and sends a `200` response containing the updated `Return` object.
+Express handlers for the two staff-facing return-decision actions (`POST /returns/:id/approve` and `POST /returns/:id/decline`). Each validates the request, delegates to `returnService`, and responds with the updated `Return` object (HTTP 200).
 
 ## Key elements
 
-- **`postReturnApprove`** — Reads the return `id` from params, calls `returnService.approveReturn(id, callerContext)`, enriches via `withActions`, and responds `200` with the `Return` payload. No request body is required.
-- **`postReturnDecline`** — Same flow as approve, but additionally parses and validates the request body against the `DeclineReturnBody` Zod schema (requiring a `reason` string) before calling `returnService.declineReturn(id, reason, callerContext)`.
+- **`postReturnApprove`** — Resolves the `:id` param, calls `returnService.approveReturn(id, callerContext)`, and returns the result wrapped in `successResponse`. No request body is read.
+- **`postReturnDecline`** — Resolves the `:id` param, validates `request.body` against the `DeclineReturnBody` Zod schema via `parseBody`, calls `returnService.declineReturn(id, body, callerContext)`, and returns the result in `successResponse`.
+- Both handlers use the shared `refused` guard to short-circuit with the service's error response if the operation was rejected, and `catchAs` for unhandled promise rejections.
 
 ## Relationships
 
-- **`src/modules/returns/services/index.ts`** — Calls `returnService.approveReturn`, `returnService.declineReturn`, and `returnService.withActions` for all business logic and response enrichment.
-- **`src/infrastructure/http/controller.ts`** — Uses `requireId` (via `ids.ts`), `parseBody`, `refused`, and `catchAs` for input validation, refusal short-circuit, and error handling.
-- **`src/infrastructure/http/request.ts`** — Uses `callerContextOf(request)` to derive the caller context passed to the service.
-- **`src/infrastructure/http/response.ts`** — Uses `successResponse` to emit the final `200` JSON body.
-- **`src/infrastructure/http/ids.ts`** — Uses `requireId` to extract and validate the `:id` param (sends `404` with `returns.not-found` code on failure).
-- **`src/modules/returns/routes.ts`** — Registers `postReturnApprove` and `postReturnDecline` as the handlers for the two POST routes.
-- **`src/types/index.ts`** — Imports the `Return` type used as the generic on `successResponse`.
+- **`src/infrastructure/http/controller.ts`** — Supplies `catchAs`, `parseBody`, and `refused` (shared error/validation/response helpers).
+- **`src/infrastructure/http/ids.ts`** — Supplies `requireId`, which extracts and validates the `:id` route param, returning `null` (and a 404) on failure.
+- **`src/infrastructure/http/request.ts`** — Supplies `callerContextOf(request)`, extracting the authenticated caller's context for the service call.
+- **`src/infrastructure/http/response.ts`** — Supplies `successResponse`, the standard JSON success envelope.
+- **`src/modules/returns/services/index.ts`** — Source of `returnService` (`approveReturn`, `declineReturn`, `withActions`).
+- **`src/types/index.ts`** — Provides the `Return` type used as the response payload generic.
+- **`src/modules/returns/routes.ts`** — Imports and mounts these two handlers on their respective `POST` routes (with `isAuth` middleware upstream).
 
 ## Notes
 
-- Both endpoints respond with **200** (not 201/204), intentionally returning the return's current state after the action.
-- `request.authContext!` uses a non-null assertion; the `isAuth` middleware (applied at the route level) guarantees it is present.
-- The approve handler does **not** accept or validate a request body, while the decline handler **requires** one (`DeclineReturnBody`).
-- `catchAs(response, 'postReturnApprove' | 'postReturnDecline')` is used as a uniform `.catch` that serializes errors into the standard error response; the string argument is the error source label.
+- Both endpoints are **POST** (not PATCH/PUT) by design — they model state-changing *actions*, not resource replacements, and always return **200** with the current return object (not 204).
+- `request.authContext!` uses a non-null assertion; safety is guaranteed by the `isAuth` middleware declared in `routes.ts`. The assertion will throw at runtime if the route is ever registered without that middleware.
+- `returnService.withActions(return, authContext)` enriches the plain `Return` record with context-dependent action metadata before it is sent to the client; the raw service result is **not** returned directly.
+- The approve handler reads **no** request body; only the decline handler parses one.

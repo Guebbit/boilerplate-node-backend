@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/repository.ts
-sha256: 09457b0865f482dd4307d6a6153792f437d65c98161272812843e560188c5435
-generated_at: 2026-10-15T11:28:41.767999+00:00
+sha256: 8b9bf69f6a03d82a9618d91441e35623142b11a50457ab19b6d3d0a210b61d59
+generated_at: 2026-10-29T05:09:18.621631+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,43 +9,43 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The persistence layer for the payments domain. It exposes standard CRUD (via the shared repository factory) plus every bespoke lookup and guarded write the payment services need: owner-scoped reads, the one-payment-per-order upsert, status-transition writes, refund lifecycle operations, staff/refund search, and the aggregation queries behind the Mix and Reap reports.
+Data-access layer for the Payments collection. It combines the generic CRUD factory (`createRepository`) with the bespoke reads and guarded writes that the payments service actually performs: intent/offline upserts, status transitions, refund sweeps, dispute recording, and the provider-facing lookups. The file exists to keep every Mongoose query, projection, and aggregation in one place so that service code only expresses intent.
 
 ## Key elements
 
-- **`PaymentWire`** – exported type; the wire shape with `providerRef` stripped (internal bookkeeping, never in the API contract).
-- **`PAYMENT_SEARCHABLE` / `PAYMENT_SORTABLE`** – single source of truth for which fields the staff list can filter and sort on.
-- **`aggregatePayments` / `aggregateRefundRows`** – thin wrappers around `paymentModel.aggregate`; the refund variant post-processes rows with `reviveDecimals` to convert Decimal128 → number.
-- **`refundMatch`** – builds the `$match` conditions for the Refunds tab from a `RefundFilters` object.
-- **`upsertConfirmable`** – shared mechanics for `upsertIntent` and `upsertOffline`: one `findOneAndUpdate` with an upsert guarded by a `$in` on confirmable statuses; duplicate-key is caught and returned as `null` (meaning "this order's money already moved").
-- **`base`** – the standard CRUD object from `createRepository`, spread into the final export.
-- **`paymentRepository`** – the exported singleton. Combines `base` with:
-  - Scoped reads: `ownerScope`, `findByIdScoped`, `findByOrderId` (scope lives in the filter, never checked post-read).
-  - Unscoped read: `findByProviderRef` (webhook path, authenticated by signature upstream).
-  - Writes: `attachProviderRef`, `upsertIntent`, `upsertOffline`, `detachUserId`, `deleteAbandonedBefore`, `updateStatusIfIn`.
-  - Refund operations: `addRefund`, `settleRefund`, `failRefund`.
-  - Search & reporting: `searchStaff`, `searchRefunds`, `sumMix`, `findOpenRefundRows`, `findWithOpenRefunds`, `findStaleInFlight`.
-- **`UpsertedPayment`** – `{ payment, created }` discriminated by `includeResultMetadata` so callers know whether a row was inserted or refreshed.
-- **`MixSums` / `RefundRow` / `RefundFilters`** – exported shapes for aggregation results and refund-tab input.
+- **`paymentRepository`** (exported) – The primary object. Extends the factory's `Repository<PaymentDocument, PaymentWire>` with domain-specific methods: `ownerScope`, `findByIdScoped`, `findByOrderId`, `findByProviderRef`, `attachProviderRef`, `upsertIntent`, `upsertOffline`, `recordDispute`, `searchRefunds`, `recordRefundSettlement`, `sweepClaimableRefunds`, `sweepRereadableRefunds`, `mix`, `searchStaff`, `report`.
+- **`PaymentWire`** (exported type) – The wire contract for a payment row; identical to `Wire<PaymentDocument>` minus `providerRef`, which is internal bookkeeping.
+- **`UpsertedPayment`** (exported interface) – Result of an upsert: the row plus a `created` boolean.
+- **`RecordedDispute`** (exported interface) – Outcome of `recordDispute`: `'opened' | 'updated'`, the payment snapshot, and optionally the previous dispute record.
+- **`RefundRow`** / **`RefundFilters`** / **`MixSums`** (exported interfaces) – Shapes for refund aggregation rows, the staff refund-tab filter, and the per-method/provider/currency mix summary.
+- **`upsertConfirmable`** (internal) – Shared `findOneAndUpdate` mechanics for `upsertIntent` and `upsertOffline`. Maps a duplicate-key collision to `null` rather than an error, because the collision *is* the answer "this order's money already moved."
+- **`claimableRefund`** / **`rereadableRefund`** (internal) – Build the `$elemMatch` body that identifies refunds ready for re-send vs. re-read during the sweep.
+- **`refundMatch`** (internal) – Builds the `$match` conditions for the staff Refunds tab over an unwound refund.
+- **`aggregateRefundRows`** (internal) – Wraps aggregation + `reviveDecimals` so Decimal128 amounts come back as numbers.
+- **`PAYMENT_SEARCHABLE`** / **`PAYMENT_SORTABLE`** (internal consts) – Single declaration of what the staff list may filter and sort by; passed to `createRepository`.
+- **`base`** (internal) – The `createRepository` instance kept by name so bespoke methods can reuse `buildWhere`, `count`, `findAll`.
 
 ## Relationships
 
-- **`./model`** – imports `paymentModel` (the Mongoose model) and `applyPaymentTransform` (document → wire mapping used by the factory and by `PaymentWire`).
-- **`./domain` (index)** – imports the status-guard constants (`CONFIRMABLE_PAYMENT_STATUSES`, `OPEN_REFUND_STATUSES`, `SETTLEABLE_PAYMENT_STATUSES`, `REAPABLE_PAYMENT_STATUSES`) that bound which transitions a write is allowed to attempt.
-- **`@infrastructure/persistence/create-repository`** – provides `createRepository`, `toObjectId`, `withScope`, and the `Repository`/`Wire` generic types that shape the base CRUD.
-- **`@infrastructure/persistence/search`** – provides pagination, sort-collation, and `buildPaginatedMeta` used by `searchStaff` and `searchRefunds`.
-- **`@infrastructure/persistence/money-field`** – `reviveDecimals` converts Decimal128 fields in aggregation rows back to plain numbers.
-- **`@infrastructure/persistence/mongo-errors`** – `isDuplicateKey` lets `upsertConfirmable` translate a unique-index collision into a `null` return instead of a thrown error.
-- **`@infrastructure/persistence/changes`** – `setAndUnset` splits a changes object into `$set` / `$unset` for the upsert.
-- **`@infrastructure/persistence/report`** – `ReportWindow` type constrains the `sumMix` parameter.
-- **Services (`intent`, `list`, `announce`, `effects`, `notify`)** – depend on this file: they call `paymentRepository` methods and pass session handles for multi-document transactions.
+| Neighbor | Interaction |
+|---|---|
+| `persistence/create-repository.ts` | Provides the `createRepository` factory, `toObjectId`, `withScope`, and the `Repository`/`Wire` types that this file extends. |
+| `persistence/search.ts` | `normalizePagination`, `sortOf`, `buildPaginatedMeta`, `DEFAULT_SORT`, `SORT_COLLATION` power the paginated/sortable staff list and refund tab. |
+| `persistence/conditional-status.ts` | `updateStatusIfIn` is the guarded write primitive used by status-transition methods so that only the expected prior status can be overwritten. |
+| `persistence/changes.ts` | `setAndUnset` splits a plain object into `$set`/`$unset` for the upsert `update` document. |
+| `persistence/money-field.ts` | `reviveDecimals` converts Mongoose Decimal128 values to JS numbers after aggregation. |
+| `persistence/mongo-errors.ts` | `isDuplicateKey` lets `upsertOutcome` swallow the expected E11000 collision as a business answer (`null`). |
+| `persistence/external-key-query.ts` | `EXTERNAL_KEY_QUERY` is the shared predicate shape for `findByProviderRef`. |
+| `persistence/report.ts` | `ReportWindow` type constrains the `report` method's date parameters. |
+| `domain/index.ts` | Re-exports the status sets (`CONFIRMABLE_PAYMENT_STATUSES`, `SETTLEABLE_PAYMENT_STATUSES`, `REAPABLE_PAYMENT_STATUSES`, `OPEN_REFUND_STATUSES`, `REFUNDABLE_PAYMENT_STATUS`), `MANUAL_PROVIDER`, `openDisputeFilter`, and `FINAL_REFUND_FAILURES` used in queries. Individual domain files (`disputes.ts`, `lifecycle.ts`) supply the constants consumed via this barrel. |
+| `model.ts` | `paymentModel` (the Mongoose model) and `applyPaymentTransform` (wire serializer) are the core dependencies; `PaymentDocument`, `RefundRecord`, `DisputeRecord`, `RefundSettlement` are the type shapes. |
+| `providers/registry.ts` | `paymentProviderRegistry` is called to resolve the concrete provider during refund sweep and settlement operations. |
 
 ## Notes
 
-- **Scope-in-the-filter rule.** `findByIdScoped` and `findByOrderId` spread the scope into the MongoDB filter. Checking ownership after the read would create a timing window and an information leak; this file never does that.
-- **`findByProviderRef` is the only unscoped read.** It exists for webhook delivery where the caller is the provider, not a user; authentication is a signature check upstream, not a scope filter.
-- **`upsertConfirmable` returns `null` on duplicate key.** Callers must treat `null` as "already confirmed" (the unique index on `orderId` enforces one-payment-per-order at the database level).
-- **`includeResultMetadata: true`** is required on the `findOneAndUpdate` options to get `lastErrorObject.updatedExisting`, which powers the `created` boolean in `UpsertedPayment`.
-- **`$setOnInsert` for `userId`.** On an update path the payer id is intentionally not written; an `undefined` userId means "no payer to record" (e.g., account already erased).
-- **`paymentModel` is imported directly, not through the factory.** The factory only shapes the CRUD surface; all bespoke queries go through the raw model.
-- **Aggregation rows need `reviveDecimals`.** Mongoose's `aggregate` does not apply the model's virtuals or schema casts, so Decimal128 amounts arrive as raw BSON in `MixSums` and `RefundRow`.
+- **Duplicate-key is not an error.** In both upserts, a Mongo E1100 on the unique `orderId` index is caught and returned as `null`, signalling "another writer already moved this order's money." Callers must treat `null` as a valid business outcome, not a failure.
+- **`includeResultMetadata`** is used (rather than comparing `value._id`) to determine whether the upsert inserted or updated. The driver flag is documented in the Mongoose API; the code relies on `lastErrorObject.updatedExisting === false`.
+- **`providerRef` is intentionally absent from the wire type.** `applyPaymentTransform` omits it and `PaymentWire` mirrors that omission. Any consumer that needs the provider's id must query the document directly, not the wire shape.
+- **Decimal128 revival is manual after aggregation.** Mongoose's query path auto-hydrates, but `aggregate().exec()` returns raw BSON; every refund-row and mix query must pass through `reviveDecimals` before the numbers are meaningful.
+- **`userId` is insert-only.** In `upsertConfirmable`, `userId` goes into `$setOnInsert` and is never overwritten on an existing row, so a payment recorded after the payer's account is erased still has no `userId`.
+- **`OPEN_TRANSFER_ROW` / `CANCELLED_TRANSFER_ROW`** encode two extra "takeover" shapes beyond `CONFIRMABLE_PAYMENT_STATUSES` so that a card intent or operator entry can replace a stale manual-transfer row without colliding.

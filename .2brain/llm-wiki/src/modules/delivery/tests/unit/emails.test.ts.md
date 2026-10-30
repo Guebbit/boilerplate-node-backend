@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/tests/unit/emails.test.ts
-sha256: 5f8d2427afa5f98ad0d365a5b9317d441cc36b938329fd3bf876699e44e9526e
-generated_at: 2026-10-15T10:29:08.382276+00:00
+sha256: 313bbc95506fcefe3c65c59ca6cd04b69696c5314dda4b732269872f577580ae
+generated_at: 2026-10-29T03:48:57.015616+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the two shipment email builders (`shipmentShippedEmail`, `shipmentDeliveredEmail`). They verify that the customer-facing fields a recipient must act on—tracking code, line items, remaining-units notice, withdrawal deadline—are populated correctly, are locale-aware, and never leak unresolved i18n keys or template placeholders.
+Unit tests for the four customer-facing delivery email builders. Each test verifies that the actionable fields a customer relies on (tracking code, withdrawal deadline, owed items) render correctly, that i18n keys are fully resolved (never leaked as raw `delivery.*` strings), and that locale-specific copy differs between `en` and `it`.
 
 ## Key elements
 
-- **Shared fixtures** — `NAME` (`'Ada Lovelace'`), `CODE` (`'TRK-99887766'`), `LINES` (two items), and `completing` (a shipment with `remainingUnits: 0`) used across both `describe` blocks.
-- **`describe('shipmentShippedEmail', …)`** — asserts template ID, tracking-code presence (and absence when `trackingCode` is `undefined`), line-item formatting (`"2 × Analytical Engine"`), conditional `more` field, greeting, full i18n resolution (no empty values, no `delivery.*` key echoes), and locale pass-through.
-- **`describe('shipmentDeliveredEmail', …)`** — asserts template ID, line-item list, greeting, conditional `withdraw` field (only when `withdrawUntil` is supplied), locale-aware date formatting (UTC), and full i18n resolution.
+- **Fixtures** — `NAME`, `CODE`, `LINES`, and `completing` (a full-shipment payload) are shared constants used across all describe blocks.
+- **`describe('shipmentShippedEmail')`** — Asserts template name, tracking-code presence (and absence of uninterpolated `{{`), three distinct subjects/bodies for the `added`/`corrected`/default variants, line formatting (`qty × title`), conditional `more` field, greeting, locale passthrough, and full i18n resolution.
+- **`describe('shipmentDeliveredEmail')`** — Asserts the `withdraw` deadline is date-only (no time-of-day), rendered in the buyer's locale, present only on the last delivery; plus lines, greeting, and i18n resolution.
+- **`describe('fulfillmentDelayedEmail')`** — Asserts dates render on the shop's local calendar (UTC-offset aware), three reason variants (`moved`, cleared, `due`) each produce unique subjects and bodies, a fixed "cancel any time" closing in both locales, and no `answer` slot is emitted.
+- **`describe('shipmentLostEmail')`** — Asserts `lost` vs `damaged` reason variants produce distinct copy, `owed` items and `owedIntro` appear only when non-empty, `message` defaults to `''`, and i18n resolution holds.
+- **Recurring "resolves every copy slot" check** — Each block iterates over `subject`, `data.pageMetaTitle`, `data.body`, etc., asserting none is empty and none matches `/^delivery\./`.
 
 ## Relationships
 
-- **`src/modules/delivery/emails.ts`** — sole dependency under test; provides `shipmentShippedEmail` and `shipmentDeliveredEmail`. The tests call each builder with `(locale, name, shipmentData)` and assert on the returned `{ template, subject, data }` object.
+- **`src/modules/delivery/emails.ts`** — Sole import source. This test file calls every exported builder (`shipmentShippedEmail`, `shipmentDeliveredEmail`, `fulfillmentDelayedEmail`, `shipmentLostEmail`) and asserts on their return shape (`template`, `subject`, `data.*`). No other files are imported.
 
 ## Notes
 
-- The "resolves every copy slot" tests guard against a class of bug where an i18n key (e.g. `delivery.shipment-shipped`) is returned verbatim instead of translated copy. They check that no value is empty **and** does not start with `delivery.`.
-- The tracking-code test explicitly rejects `{{` in the output, catching a half-interpolated template string.
-- `data.more` is expected to be `undefined` (not an empty string) when `remainingUnits` is `0`; `data.withdraw` is expected `undefined` when no `withdrawUntil` is passed.
-- The withdrawal date is asserted as a UTC calendar date (`November 14, 2026` / `14 novembre 2026`), not a timestamp, confirming the builder localizes a UTC instant.
+- **Date-rendering tests are locale- and timezone-sensitive.** The `fulfillmentDelayedEmail` tests use `23:00Z` inputs to simulate Rome local midnight (UTC+1), verifying the rendered date advances by one day. The `shipmentDeliveredEmail` test uses `00:00:00.001` UTC to confirm the mail never rounds back to the prior day and never appends a time.
+- **Tracking-code absence is explicit.** When `trackingCode` is `undefined`, `data.tracking` must be `undefined` (not an empty string or a leftover template token).
+- **The `{{` regex guard** appears in multiple assertions as a safety net against un-interpolated Handlebars-style placeholders leaking into customer-visible text.
+- **`it.each`** is used only once (delayed-email closing text) to parameterize the en/it expectation while looping over three reason scenarios inside.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/integration/oauth-link.test.ts
-sha256: 5d7046211ddfdc7a5e0bcff983f7bbad19d8dae3aca011e1f01cd611f9d65a93
-generated_at: 2026-10-14T09:11:16.479092+00:00
+sha256: 4142ee0b2323eaaee774d4d02901e054553b89f6ae6c5fe746760a7afe8c16dc
+generated_at: 2026-10-29T02:57:30.639672+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for `loginOrCreateFromOAuth` (the find-or-create-link triad in `services/oauth.ts`). Because the function performs a real identity lookup, a `$push` link, and a user insert, it lives here rather than in the unit-test folder. The suite covers all three outcome branches (login, link, signup) plus the security guard-rails (unverified email, account takeover, banned/soft-deleted refusal, idempotent re-link).
+Integration tests for the OAuth callback service (`loginOrCreateFromOAuth`) and the signed-in connect flow (`linkProviderToSignedInAccount`). Because these paths touch the real database (identity lookup, `$push` linking, user creation), they live in `tests/integration` rather than alongside the pure provider logic in `tests/unit`. The suite verifies find-or-create semantics, email-verification enforcement, token lifecycle, and security edge cases (account takeover, replay, cross-identity linking).
 
 ## Key elements
 
-- **`identity(overrides?)`** — factory that returns a default `OAuthIdentity` (verified email, `providerId: 'subject-1'`); every test starts from this and selectively overrides fields.
-- **`oauthAccountsOf(userId)`** — helper that reads `oauthAccounts` via `findByIdWithCredentials` because the field is `select: false` on the schema and invisible to a plain read.
-- **`jest.mock('@infrastructure/observability/audit', …)`** — replaces `emitAuditEvent` with a jest fn *and* re-wraps `recordAudit` so it funnels through that same fn (the real `recordAudit` closes over its own module's `emitAuditEvent`, which a plain spy wouldn't intercept).
-- **`jest.mock('@infrastructure/observability/analytics', …)`** — replaces `emitAnalyticsEvent` with a jest fn.
-- **`jest.mock('@infrastructure/adapters/remote-image', …)`** — stubs `rehostRemoteImage` to resolve `undefined`, isolating the signup logic from network I/O.
-- **`describe` blocks (5)** — one per scenario: already-linked login; verified-email link (including 2FA-armed and unverified-email rejections); banned/soft-deleted refusal; idempotent re-link; fresh signup.
+- **`loginOrCreateFromOAuth` — case 1 (already-linked identity):** Asserts the existing account is resolved with `outcome: 'login'`, no new user is created, and **no** audit or analytics event is emitted (that is the controller's job).
+- **`loginOrCreateFromOAuth` — case 2 (email matches but not linked):** Asserts `OAuthAccountExistsError` for verified-email collisions, `OAuthEmailUnverifiedError` when the provider doesn't vouch, and `OAuthAccountUnverifiedError` for squatted/unproven accounts. Each case confirms the account is left byte-for-byte unchanged (no link, no `verifiedAt` promotion).
+- **`startOAuthLink` / `linkProviderToSignedInAccount`:** Verifies the 5-minute token TTL, that the link is stored on the initiating account regardless of provider email, that the owner is mailed (no URL in the body), that the token is single-use (replay → `OAuthLinkExpiredError`), and that a mismatched signed-in user is refused.
+- **`identity(overrides?)`** — local helper that builds a default `OAuthIdentity` fixture (verified, `subject-1`).
+- **`oauthAccountsOf(userId)`** — reads `oauthAccounts` via `findByIdWithCredentials` because the field is `select: false` on the schema.
+- **`connecting(overrides?)`** — creates a verified user and calls `startOAuthLink`, returning `{ user, token }`.
+- **`mockOutbox`** — module-level array populated by the mocked `enqueueEmail`; cleared in `beforeEach`.
+- **Mocks (replaced, not spied):** `audit`, `analytics`, `rehostRemoteImage`, `mailer` — all replaced via `jest.mock` with the `tests/support/ports.ts` replacement pattern.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/account/services/oauth.ts` | System under test — imports `loginOrCreateFromOAuth`, `presentClaim`, and the three error classes. |
-| `src/modules/account/oauth/providers/port.ts` | Type-only import of `OAuthIdentity` used by the `identity()` helper. |
-| `src/modules/account/audit.ts` | Imports `accountAuditActions` enum to assert on the exact action name in audit payloads. |
-| `src/modules/account/analytics.ts` | Imports `accountAnalyticsEvents` enum to assert on the signup analytics event name. |
-| `src/modules/users/tests/factories.ts` | Supplies `createUser` (fixture) and `userRepository` (link / count / findById helpers). |
-| `src/infrastructure/observability/audit.ts` | Mocked at module level; spied on via `observePort`. |
-| `src/infrastructure/observability/analytics/index.ts` | Mocked at module level; spied on via `observePort`. |
-| `src/infrastructure/adapters/remote-image.ts` | Mocked so the avatar rehost step resolves without network. |
-| `tests/support/callers.ts` | Provides `testCallerContext` passed as the caller argument to the SUT. |
-| `tests/support/ports.ts` | Provides `observePort` — the replacement-based spy mechanism that works with the module-level mocks above. |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` seeds the in-memory Mongo used by every test in the file. |
+- **`src/modules/account/services/oauth.ts`** — the system under test; all exported service functions and error classes are exercised here.
+- **`src/modules/account/audit.ts`** — `accountAuditActions` enum values are asserted in audit-spy expectations.
+- **`src/modules/account/analytics.ts`** — `accountAnalyticsEvents` is imported for event-name assertions.
+- **`src/modules/account/oauth/providers/port.ts`** — `OAuthIdentity` type shapes the `identity()` fixture.
+- **`src/modules/account/tests/factories.ts`** — provides `tokenRowsOf` for inspecting `oauth-link` token rows.
+- **`src/modules/users/tests/factories.ts`** — `createUser` and `userRepository` create/inspect real user documents.
+- **`src/infrastructure/observability/audit.ts`** & **`analytics/index.ts`** — fully replaced with port mocks to observe (not intercept) emission.
+- **`src/infrastructure/adapters/remote-image.ts`** — `rehostRemoteImage` stubbed to `undefined` (network side is out of scope).
+- **`tests/support/ports.ts`** — `observePort` and `auditPortMock` implement the replace-not-spy pattern.
+- **`tests/support/callers.ts`** — `testCallerContext` supplies the caller identity for every service call.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the real test database before the suite runs.
 
 ## Notes
 
-- **Why "replaced, not spied on":** `observePort` (from `tests/support/ports.ts`) works by asserting against the *replacement* function, not by wrapping the original. The audit mock additionally re-wires `recordAudit` → `emitAuditEvent` because `recordAudit` closes over its own module-scope reference, making a simple `jest.spyOn` on `emitAuditEvent` blind to calls routed through `recordAudit`.
-- **Login branch emits no audit/analytics:** By design, the login outcome defers to the controller (`get-oauth-callback.ts`) to call `recordLoginSuccess` with the account's *real* role. The service layer intentionally emits nothing here to avoid hardcoding `actorRole: 'user'`.
-- **`presentClaim` is imported** but the visible test body does not exercise it directly; it is likely covered in the truncated tail of the file (e.g., a `describe` block for claim presentation).
-- **Security invariant tested explicitly:** linking is refused when *either* the provider email is unverified *or* the target account has never proved the address (`verifiedAt` is null). A refusal must leave the account's `verifiedAt` unchanged (no implicit promotion).
+- The login branch (case 1) **deliberately emits no audit or analytics event**. The comment explains that a correct emission requires the account's real role (admin vs. user) and increments `authLoginTotal`, both of which are controller-level concerns. Asserting `not.toHaveBeenCalled()` here is intentional, not an omission.
+- `oauthAccounts` is `select: false` on the Mongoose schema; a plain `findById` will never return it. Use `findByIdWithCredentials` (as `oauthAccountsOf` does) or the query will silently return `undefined`.
+- The token is **single-use**: the first successful `linkProviderToSignedInAccount` call spends it; a second call with the same token rejects with `OAuthLinkExpiredError` and does not create a second link row.
+- The mailer mock pushes into `mockOutbox` (module scope, not `jest.fn()` closure) so assertions can filter by template after the awaited call resolves.

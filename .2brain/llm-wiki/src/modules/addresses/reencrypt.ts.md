@@ -1,7 +1,7 @@
 ---
 source: src/modules/addresses/reencrypt.ts
-sha256: d887cce7c1faec40f53848de8eca378e3c14a9e4079dba47954ad80b6567f9f6
-generated_at: 2026-10-15T10:18:51.255838+00:00
+sha256: 674e8e5db1038e75466d4651be497424fb0e70d292cedd4b8f7fb698455fc14a
+generated_at: 2026-10-29T03:09:05.471406+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Application-level entry point for re-encrypting all address-book PII fields onto the newest `NODE_PII_ENCRYPTION_KEY`. It bridges the generic re-encryption machinery in `@infrastructure/security` with the concrete address-book schema, and is invoked by the ops script `reencrypt`.
+Module-level wrapper that re-encrypts every PII field in every address-book entry onto the current `NODE_PII_ENCRYPTION_KEY`. It exists so the ops script `reencrypt` (see `@infrastructure/security/reencrypt`) has a single, domain-aware entry point that knows *which* fields to touch and *how* to bind them to their address context.
 
 ## Key elements
 
-- **`reencryptAddressBooks(dryRun?)`** (exported) — Calls `addressBookRepository.reencrypt` with the current key ring and a `fieldsOf` mapper. Pass `dryRun: true` to count affected values without writing.
-- **`fieldsOf(book)`** (module-private) — Flattens every entry in a book into an array of `EncryptedField` objects, each carrying the dotted write-back `path` (e.g. `items.0.fullName`), the stored ciphertext, a `piiBinding`, and a human-readable `label`.
-- **`ENTRY_FIELDS`** (module-private constant) — The fixed list of encrypted fields (`fullName`, `street`, `city`, `zip`, `country`, `phone`) in reporting order.
+- **`reencryptAddressBooks(dryRun?)`** (exported) — The sole public export. Delegates to `addressBookRepository.reencrypt`, passing the PII key ring, a `fieldsOf` mapper, and the `dryRun` flag. `dryRun` (default `false`) makes the run count affected entries without writing.
+- **`fieldsOf(book)`** (module-private) — Flattens `book.items × ADDRESS_PII_FIELDS` into an `EncryptedField[]`. For each defined field it builds `{ path: "items.{i}.{field}", stored, binding, label }`, where `binding` is derived from `piiBinding(addressAad(field, entry._id!))`.
 
 ## Relationships
 
-- **`@infrastructure/security/reencrypt`** — Supplies the `EncryptedField` type used as the element shape of `fieldsOf`.
-- **`@infrastructure/security/pii-encryption`** — Supplies `getPiiEncryptionKeyRing` (key ring handed to the repository) and `piiBinding` (wraps the per-field AAD into the binding expected by the infrastructure).
-- **`./model`** — Imports the `AddressBookDocument` type that `fieldsOf` consumes.
-- **`./repository`** — Imports `addressBookRepository`; this file is the sole caller of its `reencrypt` method.
-- **`./pii`** — Imports `addressAad` to compute the per-field authentication data for each binding.
+- **`src/infrastructure/security/pii-encryption.ts`** — Supplies `getPiiEncryptionKeyRing()` (the ring handed to the repository) and `piiBinding()` (used to compute the per-field cryptographic binding).
+- **`src/infrastructure/security/reencrypt.ts`** — Defines the `EncryptedField` type that `fieldsOf` must return; also hosts the ops script that invokes `reencryptAddressBooks`.
+- **`src/modules/addresses/pii.ts`** — Provides `ADDRESS_PII_FIELDS` (the list of encryptable field names) and `addressAad()` (builds the AAD value for binding).
+- **`src/modules/addresses/repository.ts`** — `addressBookRepository.reencrypt(ring, fieldsOf, dryRun)` performs the actual read-modify-write loop; this file only shapes the inputs.
+- **`src/modules/addresses/model.ts`** — `AddressBookDocument` is the document type `fieldsOf` operates over.
 
 ## Notes
 
-- `fieldsOf` uses a non-null assertion on `entry._id!` when building the AAD. This assumes the repository never returns entries without an `_id`; if that invariant is violated, the binding will be built from `undefined`.
-- Adding a new encrypted field to an address entry requires updating both the `model` type **and** the `ENTRY_FIELDS` array here; the re-encryption run will silently skip any field not listed.
-- The file is a pure module (no top-level side effects); importing it does not trigger a re-encryption.
+- `fieldsOf` is passed as a **callback** to the repository; it is not invoked in this module. The repository calls it per document during iteration.
+- `entry._id!` uses a non-null assertion — the code assumes every item in `book.items` carries an `_id`. If an item lacks one, `addressAad` would receive `undefined`.
+- The `path` strings are dot-notation (`items.0.email`), implying the repository resolves them manually rather than using a deep-merge utility.
+- `dryRun` is a pure count: no writes, no key rotations occur.

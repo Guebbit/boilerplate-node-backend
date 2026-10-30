@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/http/middlewares/content-type.ts
-sha256: cbd7d80867c5fae98c0bf422006a3dfff86f5d5d90464848ccbb372f11b7c4e1
-generated_at: 2026-10-14T07:55:32.118494+00:00
+sha256: 0b4283f4bd5133e44c160950b45ab6687a5ee5a9f0ad339e8b04206edbe5b5c6
+generated_at: 2026-10-29T02:02:13.349589+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express middleware that returns **415 Unsupported Media Type** when a request carries a body whose `Content-Type` is not among the types the matched operation declares. It plugs a gap where `express.json` silently ignores undeclared types, producing an empty `{}` body that an all-optional PATCH schema would accept as a no-op 200.
+Express middleware that returns **415 Unsupported Media Type** when a write request carries a body whose `Content-Type` is not declared by the matched operation. Without it, `express.json` would leave an undeclared body as `{}`, and an all-optional PATCH schema would accept that — producing a misleading 200 that changed nothing.
 
 ## Key elements
 
-- **`requireDeclaredContentType(operations)`** *(exported)* — Builds an Express `RequestHandler` from a generated, most-specific-first list of `RequestContentType` operations. For each request it finds the matching operation (method + path pattern), checks whether the request actually carries bytes, and verifies the `Content-Type` via `request.is()`. On mismatch it responds 415 with an `ERROR_CODES.UNSUPPORTED_MEDIA_TYPE` payload listing the accepted types; otherwise it calls `next()`.
-- **`carriesBody(request)`** *(module-private)* — Returns `true` if the request uses chunked transfer-encoding or has a `Content-Length` greater than 0. Prevents false positives for body-less POSTs that still carry a `Content-Type` header.
+- **`carriesBody(request)`** (private) — Returns `true` only when the request actually sends bytes (chunked encoding or `Content-Length > 0`). Needed because `type-is` treats `Content-Length: 0` as a body, which would 415 action POSTs that legitimately carry no payload.
+- **`acceptsBody(request, types)`** (private) — Returns `true` when the request's type is in the declared list. Handles the empty-list case (operation takes no body) explicitly, since `request.is([])` returns the request's own type rather than `false`.
+- **`requireDeclaredContentType(operations)`** (exported) — Factory that returns an Express `RequestHandler`. Matches the request path/method against the generated operation table, then rejects with 415 if a body is present but its type is undeclared.
 
 ## Relationships
 
 - **`src/infrastructure/http/response.ts`** — Provides `rejectResponse`, used to emit the structured 415 error body.
-- **`src/infrastructure/i18n/index.ts`** — Provides the `t()` helper that localises the `generic.error-unsupported-media-type` message.
-- **`tests/unit/infrastructure/http/middlewares/content-type.test.ts`** — Unit tests covering the guard's matching, body-detection, and pass-through logic.
+- **`src/infrastructure/i18n/index.ts`** (re-exporting `context.ts`) — Provides `t()` for the localized error message string.
+- **`src/app/security.ts`** — Consumes this middleware, wiring `requireDeclaredContentType` into the application's request pipeline with the generated operation table.
+- **`tests/unit/infrastructure/http/middlewares/content-type.test.ts`** — Unit tests covering the guard's accept/reject logic.
 
 ## Notes
 
-- The `operations` array is **ordered by the generator**: static segments before parameterised ones, so `/products/search` is matched before `/products/{id}`. Do not re-sort at the call site.
-- A *missing* required body is **not** a 415 here; it falls through to schema validation (422). This middleware only rejects a body that is *present* but in an undeclared media type.
-- Routes absent from the operations table are passed through untouched — the middleware is permissive by default.
-- `carriesBody` is a deliberate workaround for `type-is` counting `Content-Length: 0` as "has body"; without it, every action POST with a `Content-Type` header but an empty body would be wrongly rejected.
+- The `operations` array must be ordered **most-specific first** (static segments before parameters). The factory relies on `Array.find` returning the first match, so `/products/search` must precede `/products/{id}`. The generator is expected to guarantee this ordering.
+- A *missing* required body is intentionally **not** handled here; that is the schema validator's 422. This guard only fires when a body is present but of the wrong type.
+- Routes absent from the operations table are passed through untouched (`next()`).
+- The error `details` field includes the list of accepted types, so clients can self-correct.

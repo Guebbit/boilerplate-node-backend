@@ -1,7 +1,7 @@
 ---
 source: src/modules/wishlist/controllers/delete-wishlist-item.ts
-sha256: 2752d469fd4f30b4c943eb5194f4a5fb3deae8210d77b48404bb0cce7e0f8b3d
-generated_at: 2026-10-15T12:25:42.124929+00:00
+sha256: 5f7259adae6f61c6dbb0d88b95995439d46ba6a87337f92d8cf75aabfcd4611e
+generated_at: 2026-10-29T06:33:34.341410+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter for `DELETE /wishlist/:productId`. Validates the path parameter, extracts caller identity and context from the request, and delegates the actual removal to `wishlistService.wishlistRemove`. Exists to keep routing and business logic decoupled.
+Thin HTTP adapter for `DELETE /wishlist/items/:productId`. Validates the incoming request, delegates to `wishlistService.remove`, and shapes the Express response. Exists to keep route registration in `routes.ts` declarative while isolating parameter validation and response formatting from the service layer.
 
 ## Key elements
 
-- **`deleteWishlistItem(request, response)`** – The sole export. Reads `userId` from `request.authContext`, validates `productId` via `requireId`, then calls `wishlistService.wishlistRemove(userId, productId, callerContextOf(request))`.
-- **Success path** – Responds with `200` and a `WishlistResponse` payload via `successResponse`.
-- **Rejection path** – `refused(response, result)` short-circuits when the service signals a denial (distinct from a 404).
-- **Error path** – `.catch(catchAs(response, 'deleteWishlistItem'))` maps unexpected throws to an HTTP error response.
+- **`deleteWishlistItem`** (exported function) — Route handler. Reads `userId` from `request.authContext`, validates `productId` via `requireId`, calls `wishlistService.remove(userId, productId, callerContext)`, then either sends a `refused` response, a `200` success with `WishlistResponse` data, or a caught error via `catchAs`.
 
 ## Relationships
 
-- **`src/modules/wishlist/service.ts`** – Calls `wishlistService.wishlistRemove`; the actual domain logic lives there.
-- **`src/modules/wishlist/routes.ts`** – Registers this handler on the `DELETE /wishlist/:productId` route.
-- **`src/infrastructure/http/ids.ts`** – `requireId` validates the `productId` param (must be a positive integer) and sends `400`/`404` (`wishlist.not-found`) when invalid.
-- **`src/infrastructure/http/request.ts`** – `callerContextOf` builds the context object passed to the service.
-- **`src/infrastructure/http/response.ts`** – `successResponse` shapes the 200 reply.
-- **`src/infrastructure/http/controller.ts`** – `catchAs` and `refused` centralize error/rejection response formatting.
-- **`src/types/index.ts`** – `WishlistResponse` type constrains the success payload.
+- **`src/modules/wishlist/service.ts`** — Imports `wishlistService` and calls its `.remove` method; this file is the sole HTTP-facing caller for that operation.
+- **`src/modules/wishlist/routes.ts`** — Registers `deleteWishlistItem` as the handler for the `DELETE /wishlist/items/:productId` route.
+- **`src/infrastructure/http/controller.ts`** — Provides `refused` (handles service-level rejection responses) and `catchAs` (unified error-to-response mapping).
+- **`src/infrastructure/http/ids.ts`** — Provides `requireId` to validate the `productId` route param; returns early (and ends the request) if the param is missing or malformed.
+- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf` to derive caller metadata passed into the service call.
+- **`src/infrastructure/http/response.ts`** — Provides `successResponse` to build the typed 200 JSON body.
+- **`src/types/index.ts`** — Supplies the `WishlistResponse` type used to type the success payload.
 
 ## Notes
 
-- `request.authContext!.id` uses a non-null assertion; an upstream auth middleware is expected to have populated it before this controller runs.
-- A product the caller doesn't own or that no longer exists returns **404**, not 403 — the contract mirrors the cart-remove endpoint so clients can treat "line vanished" uniformly.
-- `requireId` will short-circuit the handler (return early) when `productId` is missing or non-numeric, so the service is never called with an invalid id.
+- `request.authContext!` uses a non-null assertion; auth middleware is assumed to run before this handler. A missing context will throw at runtime rather than produce a 401 here.
+- A wishlist item the caller cannot see (deleted by another session, ownership mismatch, etc.) is surfaced as **404**, matching the cart-remove contract — the caller's view is considered stale.
+- `requireId` is configured with the i18n key `'wishlist.not-found'` for its not-found error message; ensure that key exists in the locale files.

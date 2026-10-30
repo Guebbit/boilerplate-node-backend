@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/surfaces/create-list-controller.ts
-sha256: bb86ee9df2956b146696a2d517a91f62005cdbbcdd96e34adcb5b0c58b4a248f
-generated_at: 2026-09-23T17:53:49.819553+00:00
+sha256: 02cc78b5d6ace8ae31d98a1a42044df0452e976f41b596620762db21b8aad37e
+generated_at: 2026-10-29T02:17:21.947320+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Factory that produces an Express handler for any paged-list endpoint. It encapsulates the single shared flow—read query-string input → validate against a Zod schema → invoke the module's query → wrap the result in the standard success envelope or a `catchAs` error—so each entity only supplies its differences (entity name, schema, and query function) rather than repeating the boilerplate.
+Factory that produces a single Express handler for any paged list endpoint (`GET /x`). It standardises the pipeline — read the query string, validate against a Zod schema, run the module's service call, and send the result or a 500 — so each entity only supplies its schema and query logic. Kept separate from `createSearchController` because a list has no request body, whereas a search reads the body first; conflating the two would require a `surface` knob inside a factory whose sole concern is *where* input comes from.
 
 ## Key elements
 
-- **`ListControllerSpec<TSchema, TResult>`** – Interface the caller fills in: `entity` (drives the operation name, e.g. `getInventoryLevels`), `schema` (Zod query schema, already `.partial()`-ed so absent fields stay absent), optional `input` (extra `readInput` declaration fields), and `runList` (the module's own query, returning a bare payload).
-- **`createListController(spec)`** – The exported factory. Returns a `namedHandler` whose name is `get<Entity>`. Internally calls `readInput(request, {…input, surface: 'list'})`, validates via `parseBody`, short-circuits with 422 on failure, then chains `runList` → `successResponse` / `catchAs`.
+- **`ListControllerSpec<TSchema, TResult>`** — Input interface the caller fills in:
+  - `entity` — camelCase plural name (e.g. `'inventoryLevels'`); drives the generated operation name (`getInventoryLevels`).
+  - `schema` — Zod query schema (typically `.partial()` of a generated schema) used to validate the merged query input.
+  - `input` — Optional `RequestInputDeclaration` (minus `surface`) for fields a plain query string can't type.
+  - `runList` — Async function that receives the validated input and the raw `Request`, returns the bare payload.
+- **`createListController`** — The exported factory. Returns an Express handler wrapped in `namedHandler(operation, …)` that:
+  1. Calls `readInput(request, { …input, surface: 'list' })` to build the input object.
+  2. Validates via `parseBody(schema, …)`; on failure responds 422 and returns.
+  3. Awaits `runList(parsed, request)` and sends the result with `successResponse`.
+  4. Catches any rejection with `catchAs(response, operation)` (logs under the operation name, then 500).
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** – Imports `catchAs`, `namedHandler`, `operationName`, `parseBody`. All validation, naming, and error-handling primitives come from here.
-- **`@infrastructure/http/request`** – Imports `readInput` and the `RequestInputDeclaration` type. `readInput` merges the query string into a single object under the `list` surface rules before validation.
-- **`@infrastructure/http/response`** – Imports `successResponse` to build the wire envelope around `runList`'s bare payload.
-- **Module controllers** (`list-api-keys`, `get-audit`, `get-inventory-levels`, `get-stock-movements`, `get-observability-udit`, `list-deliveries`, `list-subscriptions`) – Each is a consumer that calls `createListController` with its own spec to register its list route.
+- **`@infrastructure/http/controller`** (`src/infrastructure/http/controller.ts`) — Imports `catchAs`, `namedHandler`, `operationName`, `parseBody`; provides the naming, wrapping, validation, and error-respond helpers the factory delegates to.
+- **`@infrastructure/http/request`** (`src/infrastructure/http/request.ts`) — Imports `readInput` and the `RequestInputDeclaration` type; `readInput` with `surface: 'list'` merges the query string (and any extra declared fields) into one object before validation.
+- **`@infrastructure/http/response`** (`src/infrastructure/http/response.ts`) — Imports `successResponse`; the single way a successful payload is written to the HTTP response.
+- **Module list controllers** (`list-api-keys`, `get-audit`, `get-preorder-fulfillment-orders`, `get-inventory-levels`, `get-preorder-levels`, `get-stock-movements`, `get-observability-audit`, `get-returns`, `list-deliveries`, `list-subscriptions`) — Each calls `createListController` with its own `entity`, `schema`, and `runList` to obtain the handler it mounts on its route.
 
 ## Notes
 
-- Intentionally kept separate from `createSearchController` (sibling module) because a search reads the request **body** first while a list has no body. Folding them would require a `surface` knob on a factory whose entire subject is _where_ input comes from.
-- The schema is expected to be pre-`.partial()`-ed; absent fields must remain `undefined` so `normalizePagination` (inside the module's `runList`) can apply its own defaults. A fully-required schema would make 422 fire on missing pagination params.
-- `runList` must return the **bare payload**, not a wrapped response. `successResponse` builds the envelope once; a service that pre-wraps would double-wrap.
-- The `operation` string (e.g. `getInventoryLevels`) is the single source of truth for the log line, the stack-trace name, and the table generated under `docs/modules/`.
+- The `entity` string is the single source of truth for the operation name. It appears in stack traces, log lines, and the generated tables under `docs/modules/` — keep it consistent with the route path.
+- `runList` must return the **bare payload**; `successResponse` wraps it in the HTTP body. Pre-wrapping inside the service double-wraps the response.
+- The schema should be `.partial()` so that absent pagination fields remain `undefined`, letting `normalizePagination` (applied inside the module's service) own the defaults.
+- The handler returns `Promise.resolve()` (void) on validation failure after `parseBody` has already sent the 422 — it does not throw, so no further `.catch` runs.

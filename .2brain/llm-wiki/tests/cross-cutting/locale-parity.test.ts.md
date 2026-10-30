@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/locale-parity.test.ts
-sha256: 4c4b7da960d8c2664217ee91ba067cc2d4895511d6b29510d24f5cbf2ce2548d
-generated_at: 2026-09-23T19:56:24.885156+00:00
+sha256: 3c92e161b6b208bbfb76820d57c2ed3351bf11f3ba9fc594ab167e4d60aa0b71
+generated_at: 2026-10-29T06:46:51.449623+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cross-cutting parity test that asserts every supported locale declares **exactly the same set of keys** across the merged dictionaries (shared file + all per-module locale files). It catches the silent failure mode where a key exists in one locale but not another, which would otherwise surface to users as the raw key string in the wrong language. It is deliberately domain-agnostic: it checks a structural property that must hold regardless of how many modules exist.
+Cross-cutting test that asserts every supported locale declares an identical set of keys across the **merged** dictionary (shared file + all per-module locale files). It exists because a missing key in one language is otherwise invisible: each JSON file is valid on its own, and the gap only surfaces as a raw key printed to a user in production. The test is deliberately domain-agnostic — it holds no matter how many modules exist.
 
 ## Key elements
 
-- **`flattenKeys(dictionary, prefix?)`** — recursively collects every leaf key of a nested dictionary, dot-joins the path, and returns a sorted `string[]`. Used to turn a shape into a comparable key-set.
-- **`supported`** — the runtime list from `listSupportedLocales()`; drives both which locales are tested and how many.
-- **`reference` / `others`** — the first element of `supported` (typically `en`) is the baseline; the rest are compared against it.
-- **`referenceKeys`** — `flattenKeys(readLocaleDictionary(reference))`; the canonical key-set every other locale must match.
-- **`describe('locale files')`** — three tests:
-    1. _Canary:_ `supported.length > 1`, so the `it.each` below isn't vacuous.
-    2. _Parity (per locale):_ each non-reference locale's flattened keys equal `referenceKeys`.
-    3. _Canary:_ `referenceKeys.length > 20`, proving the per-module merge actually ran (otherwise all locales would trivially agree on the shared half alone).
+- **`flattenKeys(dictionary, prefix)`** — recursively walks a nested object and returns a sorted array of dot-joined leaf-key strings (e.g. `"common.confirm"`).
+- **`supported`** — the locale list obtained at test-load time via `listSupportedLocales()`. No language is hard-coded.
+- **`reference` / `referenceKeys`** — the first entry of `supported` (defaults to `'en'`) and its flattened key set; every other locale is compared against it.
+- **Three test cases** inside `describe('locale files')`:
+  1. *Canary*: asserts `supported.length > 1` so the `it.each` below is not vacuous.
+  2. *Parity* (`it.each(others)`): each non-reference locale's key set must `toEqual` the reference key set.
+  3. *Canary*: asserts the reference has more than 20 keys, guarding against the case where `registerLocaleDirectories` was never called and every locale "matches" on the shared half alone.
 
 ## Relationships
 
-- **`src/infrastructure/i18n/index.ts`** — the import target (`@infrastructure/i18n`); provides `listSupportedLocales` and `readLocaleDictionary` that this test calls to enumerate locales and load their merged dictionaries.
-- **`src/infrastructure/i18n/catalog.ts`** — implementation behind those two functions; this test exercises the _output_ of the catalog's merge logic (`registerLocaleDirectories`), which is why the `> 20 keys` canary exists.
+- **`src/infrastructure/i18n/index.ts`** — the `@infrastructure/i18n` barrel that this file imports from. Exports `listSupportedLocales` and `readLocaleDictionary`.
+- **`src/infrastructure/i18n/catalog.ts`** — the module behind the barrel that implements `listSupportedLocales` (returns the set of locales the deployment actually ships) and `readLocaleDictionary` (returns the merged dictionary for a given locale, i.e. shared keys + all registered module keys).
 
 ## Notes
 
-- **TIER 1 only.** This test covers the static dictionary files shipped in this repository (loaded at boot). It must **not** be extended to assert completeness of database-backed translations served by `src/modules/locales`; dynamic completeness is tracked via `entryCount` in `GET /locales`.
-- **Languages are discovered, not named.** The test iterates whatever `listSupportedLocales()` returns, so adding or removing a locale (or narrowing via `NODE_SUPPORTED_LOCALES`) requires zero test edits.
-- **Per-module _content_ correctness** (e.g., whether a message reads well) is asserted by each module's own `validation-messages` spec. This file only checks key-set equality.
-- **Comparison is one-reference, not pairwise.** Any locale can serve as the reference because "same keys" is symmetric; picking the first avoids N² duplicate defect reports.
+- **Tier 1 scope only.** The test checks the *static, deployed* dictionary files loaded at boot. It must not be extended to cover the dynamic database rows served by `src/modules/locales` (`entryCount` in `GET /locales`); those are owned by a different team/repo.
+- **No languages are named.** Adding or removing a language in config or on disk automatically adjusts what is asserted, with no test to edit.
+- **Per-module copy fidelity is out of scope.** Each module's own `validation-messages` spec verifies that its translations are semantically correct; this file only checks that the *key sets* line up.
+- **The `>20` threshold** in the merge canary is a heuristic, not a contract — it simply needs to be above the shared-file key count so that a failed module-registration is caught.

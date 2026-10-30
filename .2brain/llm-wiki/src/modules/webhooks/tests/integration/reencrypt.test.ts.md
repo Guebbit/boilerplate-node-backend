@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/tests/integration/reencrypt.test.ts
-sha256: c81113a3bdd309b08217c1b46a227a3b86c4e6aaa0623cbc8c89c1a0186d4200
-generated_at: 2026-10-15T12:23:52.107065+00:00
+sha256: 236b21cb1a175f77e43c9d41749d6ef2d3fb72baa9617b3a0ca5b54e49fbf2c9
+generated_at: 2026-10-29T06:32:15.681126+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test that verifies the webhook key-rotation `reencrypt` walk: after deploying a new `v2` encryption key, a previously stamped `v1` ring secret is rewritten in-place to `v2` while remaining decryptable under its original entry id. It reads the raw collection document (bypassing the repository's decrypt layer) to assert the version stamp actually changed.
+Integration test verifying the webhook key-rotation "reencrypt" walk: after a ring secret stamped `v1` is re-encrypted under a new `v2` key, the ciphertext version stamp updates and the secret still decrypts to a valid `whsec_` entry id.
 
 ## Key elements
 
-- **`ROTATED_WEBHOOK_KEY`** — Constant simulating a mid-rotation manifest: `v2:new-webhook-key-material,v1:test-webhook-secret-encryption-key`. Injected as `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY` via `withEnvironment`.
-- **`describe('webhooks reencrypt')`** — Single test that:
-  1. Creates a user and a webhook subscription (`eventTypes: ['*']`).
-  2. Calls `webhooksModule.reencrypt(false)` under the rotated-key environment.
-  3. Asserts `report.rewritten === 1`.
-  4. Reads the raw document from `webhookSubscriptionModel.collection` and checks `versionOf(ciphertext) === 'v2'`.
-  5. Confirms `decryptRingSecret(ciphertext, entry.id)` still yields a `whsec_…` value.
+- **`ROTATED_WEBHOOK_KEY`** – Simulates a mid-rotation manifest (`v2` key in front, the bare `v1` test key behind) used as the `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY` env override.
+- **`describe('webhooks reencrypt')` block** – Single test that:
+  1. Creates a user and a webhook subscription.
+  2. Swaps the encryption-key env var to the rotated manifest via `withEnvironmentOverrides`.
+  3. Calls `webhooksModule.reencrypt(false)` and asserts `report.rewritten === 1`.
+  4. Reads the raw document from the Mongo collection (bypassing repository decryption) to confirm the stored ciphertext is stamped `v2` and still decrypts to a `whsec_` token.
 
 ## Relationships
 
-- **`webhooks/module.ts`** — Source of the `reencrypt` entry point under test (`webhooksModule.reencrypt`).
-- **`webhooks/secrets.ts`** — Provides `decryptRingSecret`, used to prove the rewritten ciphertext still round-trips.
-- **`infrastructure/security/versioned-secret.ts`** — Provides `versionOf`, the function that inspects the version prefix stamped on a ciphertext.
-- **`webhooks/model.ts`** — `webhookSubscriptionModel.collection` is queried directly (bypassing the repository) to observe the raw stored document.
-- **`webhooks/services/subscriptions.ts`** — `create` builds the initial subscription fixture.
-- **`users/tests/factories.ts`** — `createUser` supplies the owning user for the subscription.
-- **`tests/support/environment.ts`** — `withEnvironment` temporarily sets the rotated-key env var around the test body.
-- **`tests/support/callers.ts`** — `callerAs('manager')` produces the caller identity required by `createSubscription`.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the in-memory Mongo used by the test.
+- **`webhooksModule`** (`module.ts`) – Under test; its `reencrypt()` method performs the version-bump walk.
+- **`decryptRingSecret`** (`secrets.ts`) – Used to prove the re-encrypted blob still decodes to the original `whsec_` entry id.
+- **`webhookSubscriptionModel`** (`model.ts`) – Accesses the raw collection to inspect the stored ciphertext without going through the repository's decrypt layer.
+- **`keyVersionOf`** (`versioned-secret.ts`) – Reads the version prefix out of the ciphertext string.
+- **`create`** (`services/subscriptions.ts`) – Seeds a subscription whose ring secret will be re-encrypted.
+- **`createUser`** (`users/tests/factories.ts`) – Creates the owning user record.
+- **`callerAs`** (`tests/support/callers.ts`) – Provides the `manager` caller context for subscription creation.
+- **`withEnvironmentOverrides`** (`tests/support/environment.ts`) – Temporarily replaces `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY` for the duration of the assertion block.
+- **`setupTestDb`** (`tests/support/setup-test-db.ts`) – Initializes the in-memory / temp database before the suite runs.
 
 ## Notes
 
-- The test reads the raw collection (`model.collection.findOne`) specifically to see the version stamp; the repository's own read path would transparently decrypt and hide the stamp.
-- `reencrypt` is called with `false` (dry-run disabled). A `true` dry-run would presumably report without persisting — this test asserts the write path.
-- The `v1` segment of `ROTATED_WEBHOOK_KEY` is the bare test key (`test-webhook-secret-encryption-key`), not a versioned prefix, reflecting that pre-rotation secrets carry no explicit stamp.
+- The test deliberately reads the raw Mongo document (`webhookSubscriptionModel.collection.findOne`) rather than going through the repository, so it can assert on the *stored* version stamp without the repository re-decrypting first.
+- `reencrypt(false)` — the `false` argument signals an actual rewrite (not a dry run); the test asserts exactly one document was rewritten.
+- The key manifest is a comma-separated list where position encodes priority (newest first); the test exploits this ordering to simulate a rotation where `v2` is now the active key.

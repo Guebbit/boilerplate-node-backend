@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/unit/timeline.test.ts
-sha256: b42b2e1aadd893ccf0fefe3e3cddf1fa8733be1095b7a40406d0b755468c99e1
-generated_at: 2026-10-15T11:21:40.816714+00:00
+sha256: e198401139586d31fe6af9f8b8222863fd3e66c537fe762df71833315c9a8513
+generated_at: 2026-10-29T05:01:02.785213+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests that lock down the timeline audience table: which `OrderTimelineType` values are hidden from buyers and which are visible. They exist to make the buyer/staff visibility boundary an explicit, diffable contract rather than an implicit side effect of domain logic.
+Unit test that pins down the buyer-visibility contract for order timeline events. It asserts exactly which `OrderTimelineType` values are hidden from buyers and that the `TIMELINE_AUDIENCE` table covers the full enum with no extras, so any reclassification is caught immediately.
 
 ## Key elements
 
-- **`describe('the timeline audience table')`** — groups two assertions around the visibility boundary.
-- **Test 1: "keeps exactly these types from the buyer"** — filters all `OrderTimelineType` values through `isBuyerVisible` and asserts the hidden set is exactly `fulfillment_held`, `fulfillment_released`, `refund_failed`, `status_overridden`. Adding or removing a hidden type requires editing this list.
-- **Test 2: "decides every type the contract names, and no other"** — asserts that `Object.keys(TIMELINE_AUDIENCE)` is a 1:1 set-equality with `Object.values(OrderTimelineType)`, catching both missing entries and stray keys.
+- **`describe('the timeline audience table')`** — the sole test suite in the file.
+- **`'keeps exactly these types from the buyer'`** — filters `OrderTimelineType` through `isBuyerVisible`, then asserts the hidden set equals a hard-coded sorted array of nine event types (dispute, fulfillment, refund, and `status_overridden` events).
+- **`'decides every type the contract names, and no other'`** — asserts the keys of `TIMELINE_AUDIENCE` (sorted) are identical to the values of `OrderTimelineType` (sorted), guaranteeing no type is unaccounted for.
 
 ## Relationships
 
-- **`src/modules/orders/domain/timeline.ts`** — source of `TIMELINE_AUDIENCE` and `isBuyerVisible`, the two symbols under test (imported via the domain barrel).
-- **`src/modules/orders/domain/index.ts`** — barrel file that re-exports the above; the test imports through this path (`../../domain`).
-- **`src/types/index.ts`** — defines the `OrderTimelineType` enum (imported as `@types`); the tests iterate its values to derive the hidden set and to check table completeness.
+- **`src/modules/orders/domain/timeline.ts`** — defines `TIMELINE_AUDIENCE` and `isBuyerVisible`, the two symbols under test.
+- **`src/modules/orders/domain/index.ts`** — barrel re-export through which the test imports those symbols (`../../domain`).
+- **`src/types/index.ts`** — defines the `OrderTimelineType` enum that both the hidden-list assertion and the coverage assertion are built against.
 
 ## Notes
 
-- The file's module doc-comment states the design intent: the staff-only set is written out explicitly so that reclassifying a type shows up as a one-line diff in this test rather than a silent behavior change in the domain module.
-- Both tests use `toSorted()` (immutable) for deterministic ordering; the comparisons are set-equality, so ordering in the enum definition is irrelevant.
-- The `@types` import alias maps to `src/types/index.ts`; no other files in this test need the alias.
+- The expected hidden list is written out explicitly (not derived) by design: the module doc states that moving a type across the buyer/staff boundary should appear as a visible diff, not a silent side effect of changing the table.
+- Uses `toSorted()` (non-mutating) rather than `sort()`, consistent with the project's functional-style convention.
+- The file is a `@module` (no named exports); it registers tests via Jest globals only.

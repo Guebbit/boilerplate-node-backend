@@ -1,7 +1,7 @@
 ---
 source: src/modules/api-keys/tests/integration/revoked-by-account.test.ts
-sha256: 31af034b88cfac31febc2ec1e4645e3f823cd8aa4ccf60afcde5766defa1e824
-generated_at: 2026-10-14T15:04:02.186784+00:00
+sha256: 0a4e198b4c9a271cd6488c0a28daf3e2340d4ae59d149bf0ef4e8205c949ce3e
+generated_at: 2026-10-29T03:16:43.075104+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test proving that the `account` module actually emits the `sessions-revoked` event at the points where a security epoch moves (logout-all, password reset, email-change-undo), and that this revokes previously minted API keys. It is the complement to `api-keys.test.ts`, which covers the event *handling*; this file covers the event *emission*.
+Integration tests proving that the `account` module emits the `sessions-revoked` event (delivered via the outbox) on the security-critical paths that should end every API key a user minted: logout-everywhere, password reset, and email-change undo. It also verifies the negative cases where keys must survive (replayed refresh token, ordinary password change) and the suspension-then-restore lifecycle during a scheduled account deletion. Event *handling* is covered elsewhere in `api-keys.test.ts`; this file only confirms `account` actually fires the event at the right moments.
 
 ## Key elements
 
-- **`FRONTEND`** – The single allowed CORS origin (`https://shop.example`) for this file's requests.
-- **`adminWithKey()`** – Shared fixture: creates a verified admin user, mints a 7-day API key scoped to `apikeys.any.read`, logs in via HTTP, and returns the user, a bearer token, and the key's secret.
-- **`describe("keys end with the sessions that may be compromised")`** – Five test cases:
-  - `logout-all` → key is revoked.
-  - `reset-confirm` (password reset) → key is revoked.
-  - `email-change-undo` (not-mine report) → key is revoked.
-  - Replayed refresh token (grace = 0, treated as theft) → all sessions die, but the key **survives** (a key is a deliberate act, not a browser artifact).
-  - Ordinary `password` change (owner proves current password) → key **survives**.
+- **`adminWithKey()`** – helper that creates a verified admin user, mints a live API key via `mint()`, performs an HTTP login, and returns `{ user, bearer, secret }` for use in each test.
+- **`describe('keys end with the sessions that may be compromised')`** – five tests covering: logout-everywhere, password-reset confirm, email-change undo (all revoke the key), a replayed refresh token (revokes sessions but *not* the key), and an ordinary password change (leaves the key intact).
+- **`describe('keys wait out a scheduled account deletion')`** – one test showing a scheduled deletion *suspends* the key (resolver refuses it) and a subsequent restore *reactivates* it, without any revocation event.
+- **`settleOutboxNudges()`** – called after each HTTP action that should emit an event; flushes the outbox relay so the revocation is applied before assertions.
+- **`credentialOf(secret)`** – test-support helper that resolves a key's current status; `toBeDefined()` means active, `toBeUndefined()` means revoked/suspended.
 
 ## Relationships
 
-- **`@modules/api-keys/module`** – Invoked via `apiKeysModule.onRegistered?.()` to install the credential resolver, mirroring real boot.
-- **`@modules/api-keys/services/api-keys`** – `mint()` is called directly (bypassing HTTP) to create the key under test.
-- **`@tests/credentials`** – `credentialOf(secret)` is the assertion helper that checks whether a key still exists in the database.
-- **`@kernel/outbox`** – `settleOutboxNudges()` flushes the async outbox relay after each security action; without it the revocation event has not yet been delivered.
-- **`@kernel/access/tenant` / `@kernel/permissions`** – Supply `DEPLOYMENT_TENANT_ID` and `permissionsOfRole('admin')` for constructing the `TenantCallerContext` passed to `mint`.
-- **`@modules/users/tests/factories`** – Provides `createUser`, `userRepository`, and the fixed `PLAIN_PASSWORD` / `REPLACEMENT_PASSWORD` constants.
-- **`@modules/account/tests/factories`** – `plantToken` seeds one-time tokens (reset, email-change-undo); `sessionRowsOf` asserts session state after a replayed-refresh scenario.
-- **`@tests/http`, `@tests/cookies`, `@tests/setup-test-db`, `@tests/environment`** – Standard test-infra: HTTP client, cookie extraction, DB lifecycle, and env-var overrides (e.g., `NODE_TOKEN_ROTATION_GRACE_MS`).
+- **`src/modules/api-keys/module.ts`** – `apiKeysModule.onRegistered?.()` is invoked at module load to install the credential resolver (mirrors real boot).
+- **`src/modules/api-keys/services/api-keys.ts`** – `mint()` creates the API key under test.
+- **`src/modules/account/tests/factories.ts`** – `plantToken` seeds token rows (password reset, email-change-undo, account-restore); `sessionRowsOf` inspects surviving sessions.
+- **`src/modules/users/tests/factories.ts`** – `createUser`, `userRepository`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD` provide user setup and password constants.
+- **`src/kernel/outbox.ts`** – `settleOutboxNudges` drains the outbox so the `sessions-revoked` event is delivered before assertions.
+- **`src/kernel/access/tenant.ts`** – `DEPLOYMENT_TENANT_ID` identifies the single-tenant context.
+- **`src/kernel/permissions.ts`** – `permissionsOfRole('admin')` builds the permission set for the caller context.
+- **`src/types/index.ts`** – `TenantCallerContext` type for the `mint()` call.
+- **`tests/support/http.ts`** – `api()` Supertest instance for all HTTP calls.
+- **`tests/support/cookies.ts`** – `cookieHeader()` extracts the session cookie from a login response.
+- **`tests/support/credentials.ts`** – `credentialOf()` resolves a key's live status.
+- **`tests/support/environment.ts`** – `setEnvironment()` adjusts `NODE_TOKEN_ROTATION_GRACE_MS` for the replay test.
+- **`tests/support/setup-test-db.ts`** – `setupTestDb()` bootstraps the in-memory DB before tests run.
 
 ## Notes
 
-- The test file does **not** assert on the shape of the `sessions-revoked` event or on the API-key handler logic; those belong to `api-keys.test.ts`. Keep new emission-coverage here and handling-coverage there.
-- Every revocation assertion is preceded by `settleOutboxNudges()`. The event is committed transactionally and delivered asynchronously via the outbox relay—skipping this call will produce false-negative "key still exists" results.
-- The replayed-refresh test intentionally sets `NODE_TOKEN_ROTATION_GRACE_MS` to `'0'` to force a theft classification. If the default grace window is restored (or this env is set elsewhere), the replay will succeed and the test's 401 expectation will fail.
-- `adminWithKey()` uses a *direct* `mint()` call with a hand-built `TenantCallerContext` rather than going through the HTTP API-key endpoint, so the test isolates the account-event path from key-creation validation.
+- The file explicitly does **not** test event *handling*; that lives in `api-keys.test.ts`. It only asserts the event was emitted and applied (key gone) or was *not* emitted (key still present).
+- The replayed-refresh-token test is a deliberate negative: the codebase treats a stolen refresh token as insufficient proof that a deliberately-minted key was compromised, so sessions are killed but the key survives. The inline comment in the test makes this design intent explicit.
+- Account deletion is a **suspension** (202 Accepted, resolver refuses), not a revocation. No outbox event fires; the key simply returns after a restore token is confirmed.
+- `apiKeysModule.onRegistered?.()` is called once at the top of the file (not in `beforeEach`), mirroring the one-time boot registration of the credential resolver.
+- `FRONTEND` is declared *after* `beforeEach` references it; this works because the callback is invoked later, but it's a readability trap.

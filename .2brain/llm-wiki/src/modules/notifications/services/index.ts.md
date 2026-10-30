@@ -1,7 +1,7 @@
 ---
 source: src/modules/notifications/services/index.ts
-sha256: 4e06c1534ac14d0d07c83b2e281c1facecfbdf1cf12a752c75723a2af7bd63db
-generated_at: 2026-10-15T10:51:40.111755+00:00
+sha256: 797b000a9410261b8e875c824fc825634f996b7270d3fb3688e8b2dedcc11657
+generated_at: 2026-10-29T04:30:41.465433+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel file and service facade for the notifications module. It re-exports the individual service functions (`inbox`, `stream`, `subscribers`) and additionally bundles the inbox CRUD operations into a single `notificationsService` object. Controllers and sibling modules import from here rather than reaching into the individual implementation files directly.
+Facade that aggregates the three internal notification services (`inbox`, `stream`, `subscribers`) behind a single exported object, `notificationsService`. Controllers and sibling modules interact with notifications exclusively through this surface rather than importing sub-service files directly.
 
 ## Key elements
 
-- **Re-exports from `./inbox`** — `notificationsList`, `notificationsCreate`, `notificationDelete`, `notificationsDismissAll`, `notificationsReadAll`, `notificationsDeleteByUserId`: the core read/write operations on notification rows.
-- **Re-exports from `./subscribers`** — `onCartLinesRemoved`, `onWishlistItemsRemoved`, `onCartMergeRefused`, `onFulfillmentOrderDelayed`: domain-event handlers that translate events into notification rows.
-- **Re-exports from `./stream`** — `streamNotifications`, `publishToUser`, `openStreamCount`: live-delivery (SSE/WebSocket) primitives for pushing notifications to connected clients.
-- **`notificationsService` (exported const)** — an object literal whose properties point at the same inbox functions. The file's doc comment states this is "the service's public surface — controllers call through this, never the bare functions."
+- **`notificationsService`** — the sole export. A plain object bundling:
+  - **Inbox CRUD** (`list`, `listStaffNotices`, `listVisible`, `get`, `create`, `remove`, `dismissAll`, `readAll`, `removeByUserId`) — delegates to `./inbox`.
+  - **Stream** (`stream`, `publishToUser`, `openStreamCount`) — delegates to `./stream`.
+  - **Domain-event handlers** (`onCartLinesRemoved`, `onWishlistItemsRemoved`, `onCartMergeRefused`, `onFulfillmentOrderDelayed`, `onStockAlertSent`, `onFulfillmentOrderHoldNoticed`, `onShipmentLost`, `onPurchaseHoldPlaced`, `onWebhookSubscriptionAutoDisabled`, `onTicketOpened`, `onTicketAssigned`, `onReturnRequested`, `onOutboxEventDead`) — delegates to `./subscribers`.
 
 ## Relationships
 
-- **Controllers** (`delete-notification.ts`, `get-notifications.ts`, `get-notifications-stream.ts`, `post-dismiss-all.ts`, `post-read-all.ts`) import `notificationsService` (or the individual stream/subscriber exports) from this file to perform their work.
-- **`src/modules/notifications/index.ts`** re-exports this module's surface outward to the rest of the application.
-- **`src/modules/notifications/module.ts`** wires the module together; the subscriber functions exported here are likely registered as event listeners during bootstrap.
-- **`services/inbox.ts`, `services/stream.ts`, `services/subscribers.ts`** are the actual implementations whose functions are re-exported (or wrapped) here.
-- **Tests** (`service.test.ts`, `api.contract.test.ts`, `events.test.ts`, `get-notifications-stream.test.ts`) exercise the exports defined in this file.
+- **Consumed by** every controller in `controllers/` (`get-notifications`, `get-notification`, `delete-notification`, `delete-notifications`, `get-notifications-stream`, `post-read-all`), which call `notificationsService.*` methods.
+- **Re-exported via** `notifications/index.ts`, which in turn is wired by `notifications/module.ts` (NestJS module binding).
+- **Wraps** `services/inbox.ts`, `services/stream.ts`, and `services/subscribers.ts` — the actual implementation files.
+- **Exercised by** `tests/integration/service.test.ts`, `tests/integration/digest.test.ts`, `tests/integration/events.test.ts`, and `tests/contract/api.contract.test.ts`.
 
 ## Notes
 
-- There are two ways to call inbox functions: the bare named exports (e.g. `import { notificationsList } from '…/services/index'`) *or* via the `notificationsService` object. The convention, per the in-file comment, is that controllers use `notificationsService.*` exclusively.
-- The subscriber and stream exports are **not** part of the `notificationsService` object; they are consumed by different callers (event bus / stream infrastructure) and are only re-exported here for convenience.
+- The file header comment states the convention explicitly: *"controllers and siblings call through this, never the bare functions."* Import from this index, not from `./inbox` or `./subscribers` directly.
+- The event-handler functions are re-exported individually (not namespaced under a sub-object), so consumers write `notificationsService.onShipmentLost(...)` — easy to miss if you expect them grouped under `notificationsService.subscribers.*`.
+- No class or DI decorator is present; it is a plain ES-module object. NestJS DI (if any) is handled at the `module.ts` level, not here.

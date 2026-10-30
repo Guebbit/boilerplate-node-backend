@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/presenters.ts
-sha256: 194b235668c51bc5948c9541db76936ff018556cd32e7aa9d85b3a19d78ec3c2
-generated_at: 2026-10-15T10:44:16.741965+00:00
+sha256: 82f931482ad6b795230ee77f18f962d9ce05386d6f945f20bf72c4855addc6ae
+generated_at: 2026-10-29T04:21:55.766759+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,20 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin presentation layer that converts locale and locale-entry database documents into their wire (API response) shapes. It exists because the model types (`LocaleDocument`, `LocaleEntryDocument`) carry stored representation (`_id`, native dates), while the public types (`Language`, `LocaleEntry`) expect `id` and ISO date strings. The two presenters bridge that gap by calling the model's `.toJSON()` transform and casting to the wire type.
+Provides the single presentation step that converts a stored `LocaleEntryDocument` into its wire-shape `LocaleEntry` (the `_id` → `id` rename and date → ISO-string mapping). It exists because the repository returns documents in their stored shape, and a single-document write path needs the wire shape before handing data to the client. Languages and list-search do not need a presenter: the language wire shape is built by `localeService.describeStoredLanguage`, and `search()` already returns `LocaleEntry` via the repository's lean transform.
 
 ## Key elements
 
-- **`presentLocale(document: LocaleDocument): Language`** — Calls `document.toJSON()` (which performs `_id` → `id` and date-to-ISO-string) and casts the result to `Language`. Used when a single locale document needs to be returned as an API payload.
-- **`presentLocaleEntry(document: LocaleEntryDocument): LocaleEntry`** — Same transform/cast for a single locale-entry document. Used when a single entry write/read needs to produce a wire shape (as opposed to `services/entries.ts`'s `search()`, which already returns `LocaleEntry` directly from the repository's lean transform).
+- **`presentLocaleEntry(document: LocaleEntryDocument): LocaleEntry`** — Calls `document.toJSON()` (which performs the `_id` → `id` and date-to-ISO-string transforms defined on the model) and casts the result to `LocaleEntry`. This is the file's sole export.
 
 ## Relationships
 
-- **`./model.ts`** — Provides the input types (`LocaleDocument`, `LocaleEntryDocument`) whose `.toJSON()` method performs the actual field mapping.
-- **`@types` (`src/types/index.ts`)** — Provides the output types (`Language`, `LocaleEntry`) that represent the API wire contract.
-- **`controllers/create-locale.ts`** — Imports `presentLocale` to shape the response after a new locale is persisted.
-- **`controllers/update-locale.ts`** — Imports `presentLocale` to shape the response after an update.
-- **`controllers/write-locale-entries.ts`** — Imports `presentLocaleEntry` to shape the response after a single-entry write.
+- **`./model` (`src/modules/locales/model.ts`)** — Supplies the `LocaleEntryDocument` type; its `toJSON()` method is what actually performs the field/date transformations this presenter delegates to.
+- **`src/types/index.ts`** — Supplies the `LocaleEntry` type that `presentLocaleEntry` returns.
+- **`src/modules/locales/controllers/write-locale-entries.ts`** — The stated consumer: "only a single-document write needs the cast this presenter replaces."
+- **`src/modules/locales/controllers/get-locale-entries.ts`** — Does **not** use this presenter; its `search()` path already returns `LocaleEntry` directly from the repository.
 
 ## Notes
 
-- Both presenters are essentially `doc.toJSON() as T`; the only work is the type cast. The real transformation logic lives on the model's `.toJSON()`.
-- The module docstring notes that the search/list path in `services/entries.ts` does **not** go through these presenters — it returns `LocaleEntry` directly. These presenters are only for single-document read/write paths.
+- The cast `as LocaleEntry` is a type-level assertion only; the actual shape transformation is done inside `document.toJSON()`. If the model's `toJSON` contract changes, the cast will silently mismatch the real output.
+- This file intentionally contains no logic of its own. If you find yourself adding transforms here, they probably belong in `LocaleEntryDocument.toJSON()`.

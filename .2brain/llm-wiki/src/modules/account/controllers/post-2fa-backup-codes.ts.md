@@ -1,36 +1,34 @@
 ---
 source: src/modules/account/controllers/post-2fa-backup-codes.ts
-sha256: 15e06daf56ac45c13bc4e27f19339ee058c86eefba6a82e711515c2dbbe35205
-generated_at: 2026-09-27T14:23:46.336801+00:00
+sha256: d68cf8c63959b48fd93c72119b70807e78ab5087a0d54c6171e7fa0f6b32a896
+generated_at: 2026-10-29T02:28:02.087759+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/account/controllers/post-2fa-backup-codes.ts
 
 ## Purpose
-
-Thin HTTP adapter for `POST /account/2fa/backup-codes`. It validates the request body, delegates to `twoFactorService.regenerateBackupCodes`, and formats the success/failure response. Requires both critical auth and a valid 2FA code before allowing backup-code regeneration.
+HTTP handler for `POST /account/2fa/backup-codes`. Accepts a valid 2FA code, delegates to `twoFactorService.regenerateBackupCodes` to mint a fresh set of ten backup codes (discarding the old ones), and returns the new set. It exists as the thin Express adapter that wires routing, validation, metrics, and the service layer together.
 
 ## Key elements
-
-- **`post2faBackupCodes(request, response)`** — The sole export. Parses the body against the `RegenerateBackupCodesBody` Zod schema, calls the service, and emits either a validation rejection, a domain-level refusal, or a `200` success with the new code set.
-- **Body validation** — Uses `RegenerateBackupCodesBody.safeParse`; on failure, increments the failure metric and calls `rejectValidation`.
-- **Success path** — Returns the service's `TwoFactorBackupCodesRegenerated` payload with a 200 and the i18n key `account.two-factor.backup-codes-regenerated`.
-- **Error path** — `.catch(catchAs(response, 'post2faBackupCodes'))` normalises unhandled rejections into a standard HTTP error.
+- **`post2faBackupCodes`** – The sole export. Signature accepts `(Request<unknown, unknown, TwoFactorCodeRequest>, Response)`. Flow:
+  1. Reads `request.authContext!.id` (guaranteed by upstream auth middleware).
+  2. Validates the request body via `parseBody(RegenerateBackupCodesBody, …)`.
+  3. Calls `twoFactorService.regenerateBackupCodes(id, body.code, callerContextOf(request))`.
+  4. On success → `successResponse` with `TwoFactorBackupCodesRegenerated` (200).
+  5. On validation failure, service refusal, or exception → increments the failure metric; `catchAs` serialises unexpected errors.
 
 ## Relationships
-
-- **`@infrastructure/http/controller`** — Supplies `rejectValidation`, `refused`, and `catchAs`, the standard helpers for shaping 4xx/5xx responses and normalising errors.
-- **`@infrastructure/http/request`** — `callerContextOf(request)` extracts the caller context (IP, user-agent, etc.) forwarded to the service.
-- **`@infrastructure/http/response`** — `successResponse` serialises the payload with status code and i18n message.
-- **`@infrastructure/i18n`** — `t()` resolves the human-readable success message.
-- **`../services`** — Imports `twoFactorService`; this controller is its only HTTP-facing caller for `regenerateBackupCodes`.
-- **`../metrics`** — `authTwoFactorBackupCodesRegenerateTotal` is incremented on both success and failure branches.
-- **`../routes`** — Registers this handler at the `POST /account/2fa/backup-codes` path.
-- **`@types`** — Provides the `TwoFactorBackupCodesRegenerated` and `TwoFactorCodeRequest` types used for response typing and request body shape.
+- **`src/infrastructure/http/controller.ts`** – Supplies `parseBody`, `refused`, and `catchAs` helpers used for validation, error-refusal, and exception serialisation.
+- **`src/infrastructure/http/request.ts`** – Supplies `callerContextOf`, which extracts IP/UA metadata forwarded to the service.
+- **`src/infrastructure/http/response.ts`** – Supplies `successResponse` for the happy-path JSON envelope.
+- **`src/modules/account/services/index.ts`** – Exports `twoFactorService`, whose `regenerateBackupCodes` method performs the actual domain work.
+- **`src/modules/account/metrics.ts`** – Exports the `authTwoFactorBackupCodesRegenerateTotal` counter, incremented with `{ status: 'success' | 'failure' }` on each outcome.
+- **`src/modules/account/routes.ts`** – Registers this handler at the `/account/2fa/backup-codes` POST route (implied by the controller's role).
+- **`src/types/index.ts`** – Provides the `TwoFactorCodeRequest` (body shape) and `TwoFactorBackupCodesRegenerated` (response data shape) types.
 
 ## Notes
-
-- The route requires **two** gates: the session must be critically authenticated *and* the body must carry a valid 2FA code (same pattern as `delete2fa`). A missing/expired code is a domain-level refusal, not a validation error.
-- Metrics are incremented inside the `.then` callback, meaning they fire **after** the service resolves. If the service throws, only the `catch` branch runs and no metric is recorded — the failure metric in the `refused` path covers the "valid request, rejected domain logic" case.
-- The function is synchronous in signature but returns the promise chain implicitly; callers in `routes.ts` do not need to `.catch` again.
+- The endpoint requires **both** a valid session (critical auth) **and** a correct 2FA code in the body — the doc comment explicitly cites the same reasoning as `post2faDisable`.
+- `request.authContext!` uses a non-null assertion; the controller assumes auth middleware has already run and populated it.
+- Error handling uses a `.then`/`.catch` promise chain rather than `async`/`await`, consistent with the `catchAs` helper's expected shape.
+- The body type in the Express generics is `TwoFactorCodeRequest`, but runtime validation is governed by the separate `RegenerateBackupCodesBody` Zod schema from `@api/schemas.zod` — keep them in sync when changing the contract.

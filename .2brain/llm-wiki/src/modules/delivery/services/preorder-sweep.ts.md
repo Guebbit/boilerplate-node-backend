@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/services/preorder-sweep.ts
-sha256: 66689aa2343fd2a230d943941890264e4abac362edeb2cd348ef46eaaeb391f6
-generated_at: 2026-10-14T15:31:47.315845+00:00
+sha256: 62e30ea6daa360e311d20a7b8013e71e545a9a3d75f89c3e77d0363fba8372ec
+generated_at: 2026-10-29T03:41:56.955037+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the daily sweep over waiting preorders (PRODUCT_STATES P5). In a single pass it (1) asks buyers whose expected date has passed with no stock, and (2) marks and announces waits whose 30-day silent window has expired so that `returns` can cancel and refund. Only `on_hold` orders awaiting stock are considered; already-allocated goods are out of scope (they appear in the admin Late view instead).
+Implements the daily "preorder sweep" (PRODUCT_STATES P5): finds fulfillment orders that are on hold awaiting stock, whose expected delivery date has passed, and sends the buyer a single informational email saying the date will be missed and no new one is set. The email asks nothing and cancels nothing — the buyer may still cancel, and staff handle the rest on the Late board.
 
 ## Key elements
 
-- **`runPreorderSweep(now?)`** — Exported entry point. Iterates `findDatePassed` orders (calling `askOne` + `mailNotice`), then `findWaitsExpired` orders (calling `expireOne`). Returns a `PreorderSweepResult` with `asked` / `expired` counts.
-- **`PreorderSweepResult`** — Exported interface: `{ asked: number; expired: number }`.
-- **`askOne(fulfillmentOrderId, now)`** — Internal. In a transaction, re-reads the order, verifies it is still `on_hold` / `awaiting_stock` / needs a date-passed notice, then records the notice. Returns the `SentNotice` to mail after commit.
-- **`expireOne(fulfillmentOrderId, now)`** — Internal. In a transaction, checks `hasWaitExpired`; if not yet `expired`, claims the consent to `FulfillmentConsent.expired`, then calls `announceWaitExpired`. If already expired, re-announces without a write (cancel hasn't landed yet).
+- **`PreorderSweepResult`** — exported interface; the sweep's return shape (`{ notified: number }`).
+- **`noticeOne`** (module-private) — Runs a single transaction via `runAct`. Re-reads the fulfillment order inside the session to guard against double-noticing, checks status/hold-reason/`needsDueNotice`, then calls `recordNotice` with reason `'due'`. Returns the `SentNotice` or `undefined`.
+- **`runPreorderSweep`** (exported) — Entry point. Accepts an optional `now` (defaults to `new Date()`). Iterates over `fulfillmentOrderRepository.findDatePassed(now)` sequentially, calls `noticeOne` per order, and returns the total count of buyers notified.
 
 ## Relationships
 
-- **`scripts/ops/sweep-preorders.ts`** — Operational entry script that invokes `runPreorderSweep`.
-- **`src/modules/delivery/domain/preorder.ts` / `domain/index.ts`** — Provides `hasWaitExpired` and `needsDatePassedNotice` predicates used to gate the two sub-jobs.
-- **`src/modules/delivery/repository.ts`** — `fulfillmentOrderRepository.findDatePassed`, `findWaitsExpired`, `findInSession`, and `claim` (optimistic-concurrency update).
-- **`src/modules/delivery/services/act.ts`** — `runAct` wraps each per-order operation in its own transaction; a refused act means the condition was already settled.
-- **`src/modules/delivery/services/announce.ts`** — `announceWaitExpired` records the expiry announcement inside the `expireOne` transaction.
-- **`src/modules/delivery/services/notice.ts`** — `recordNotice` (persisted in `askOne`) and `mailNotice` (sent after commit) handle the buyer-facing communication.
-- **`src/types/index.ts`** — `FulfillmentConsent`, `FulfillmentHoldReason`, `FulfillmentOrderStatus` enum values used for state checks.
-- **Integration tests** (`preorder-board.test.ts`, `preorder-late.test.ts`, `cancel-remainder.test.ts`) — Exercise sweep idempotency, late-notice timing, and the cancel-after-expiry path.
+- **`../domain` (index) / `../domain/preorder.ts`** — Imports `needsDueNotice`, the domain predicate that decides whether a given date on a fulfillment order still warrants a notice.
+- **`../repository`** — Uses `fulfillmentOrderRepository.findDatePassed(now)` to select candidates and `findInSession(id, session)` to re-read inside the transaction.
+- **`./act`** — Imports `runAct`, the transactional runner that wraps each per-order mutation in a session and surfaces refusals.
+- **`./notice`** — Imports `recordNotice` (persists the notice and produces the `SentNotice` payload) and the `SentNotice` type.
+- **`./index`** — Re-exports `runPreorderSweep` as part of the delivery services public API.
+- **`../jobs`** — Schedules `runPreorderSweep` as the recurring daily job.
+- **`@types`** — Imports `FulfillmentOrderStatus` and `FulfillmentHoldReason` for the eligibility check.
+- **`tests/unit/reship.test.ts`** — Exercises the sweep's notice path (and the `runAct` refusal branch) in unit tests.
 
 ## Notes
 
-- **Idempotent by design.** Re-running the sweep on the same day is safe: a date already noticed is skipped, and an already-expired wait is re-announced (not re-written) until the `returns` cancel lands.
-- **Sequential, per-order transactions.** Each order is handled in its own `runAct` transaction; mail is sent only after the commit succeeds. A failure on one order does not affect the rest.
-- **`now` is injectable.** `runPreorderSweep` defaults to `new Date()` but tests pass a fixed instant to control "today."
-- **Re-announce loop.** `expireOne` deliberately skips the write when consent is already `expired`, so the announcement persists daily until `returns` processes the cancellation.
+- **Idempotent by design.** Two layers prevent duplicate emails: the domain predicate `needsDueNotice` (a date already marked as noticed is skipped) and the in-transaction re-read in `noticeOne` (catches a concurrent allocation or another sweep run settling the notice between the query and the write).
+- **Scope is narrow.** Only `status === on_hold` **and** `holdReason === awaiting_stock` orders are eligible. Orders that are allocated but simply not yet shipped are deliberately excluded; they surface in the admin Late view (ADMIN_SALES A5.3) instead.
+- **Sequential, not parallel.** The `for…of` loop processes one order at a time; each is its own independent transaction, so a failure in one does not roll back the others.
+- **`now` is injectable.** Tests pass a fixed date rather than relying on the wall clock.

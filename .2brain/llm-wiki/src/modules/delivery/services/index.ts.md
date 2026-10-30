@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/services/index.ts
-sha256: b579fdc59b308f62e001c4cdd99a4ebdc67deaf9f6a04d0a7c8ebb6e6ff684d8
-generated_at: 2026-10-15T10:28:05.413354+00:00
+sha256: df442ddcf07efef9ea0809352769a29f5fcc1a4e4e50bb4a1f0a9274a65e20f7
+generated_at: 2026-10-29T03:40:38.736277+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,41 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel file that aggregates every public export from the delivery service layer and exposes a single `deliveryService` object. It exists so that controllers import one handle rather than reaching into a dozen sibling files, and so the module's public surface stays in one place. The doc comment notes the folder was split out of a single >1 000-line file (see `docs/theory/layers.md`).
+Facade (barrel) for the entire delivery service layer. It re-exports every function, type, and the `ActRefusal` error from the per-flow submodules (`./ship`, `./deliver`, `./read`, `./ensure`, etc.) and bundles them into a single `deliveryService` object. No logic lives here; its only job is to give controllers and sibling modules one import path for all fulfillment-order and shipment operations.
 
 ## Key elements
 
-- **`deliveryService`** (const) — The single service handle consumed by all delivery controllers. Exposes `listMethods`, `getForOrder`, `startFulfilment`, `shipFulfillmentOrder`, `deliverShipment`, `fulfillFulfillmentOrder`, `holdFulfillmentOrder`, `releaseFulfillmentOrder`, `editShipmentTracking`, `confirmWait`.
-- **Re-exports from `./start`** — `listMethods`, `startFulfilment`.
-- **Re-exports from `./read`** — `getForOrder`, `shippedQuantities`, `remainderOptions`, `waitHasExpired`, `findShipmentsForOrders`, `findFulfillmentOrdersForOrders`, and the `RemainderOption` type.
-- **Re-exports from `./ensure`** — `ensureFulfillmentOrders`.
-- **Re-exports from `./ship`** — `shipFulfillmentOrder`, `ShipInput` type.
-- **Re-exports from `./deliver`** — `deliverShipment`, `DeliverInput` type.
-- **Re-exports from `./fulfill`** — `fulfillFulfillmentOrder`.
-- **Re-exports from `./holds`** — `holdFulfillmentOrder`, `releaseFulfillmentOrder`, `HoldInput` type.
-- **Re-exports from `./tracking`** — `editShipmentTracking`.
-- **Re-exports from `./confirm-wait`** — `confirmWait`.
-- **Re-exports from `./cancel-remainder`** — `cancelRemainder`, `cancelAllForOrder`, `RemainderCancel` type.
-- **Re-exports from `./override-sync`** — `syncWithOverride`.
-- **Re-exports from `./act`** — `ActRefusal` (error type for transaction refusals).
-- **Re-exports from `./split`** — `splitForAllocation`, `Split` type.
-- **Re-exports from `./release-allocated`** — `releaseAllocated`.
-- **Re-exports from `./slip`** — `onReleaseDateChanged`.
-- **Re-exports from `./preorder-sweep`** — `runPreorderSweep`, `PreorderSweepResult` type.
-- **Re-exports from `./board`** — `listPreorderFulfillmentOrders`, `summarizePreorders`, `BoardQuery` type.
-- **Re-exports from `./retention`** — `scrubHoldNotes`.
+- **`deliveryService`** — the single exported object. Contains ~35 functions grouped by concern: reads (`listFulfillmentOrdersForOrder`, `getShipment`, `shippedQuantities`, …), writes/acts (`shipFulfillmentOrder`, `deliverShipment`, `fulfillFulfillmentOrder`, `markShipmentLost`, `reopenForReplacement`, `holdFulfillmentOrder`, `releaseFulfillmentOrder`, `cancelRemainder`, `cancelAllForOrder`), order processing (`processOrder`, `listMethods`, `ensureFulfillmentOrders`), allocation (`splitForAllocation`, `releaseAllocated`), preorders (`runPreorderSweep`, `listPreorderFulfillmentOrders`, `summarizePreorders`), admin ops (`syncWithOverride`, `reencryptShipments`, `scrubHoldNotes`, `scrubLostNotes`, `scrubDestinations`), date/slip handling (`onDateChanged`, `previewDateImpact`), tracking (`editShipmentTracking`), notifications (`mailShipped`, `mailDelivered`, `mailLost`, `mailDelayed`, `mailHoldNoticed`), and diagnostics (`deliveryDigest`).
+- **Re-exported types** — `RemainderOption`, `ShipInput`, `LostInput`, `HoldInput`, `RemainderCancel`, `Split`, `PreorderSweepResult`, `BoardQuery`. These are the input/shape contracts controllers pass into the service.
+- **`ActRefusal`** (from `./act`) — the shared error class thrown when a fulfillment act cannot proceed (e.g. wrong state, insufficient quantity).
 
 ## Relationships
 
-- **All delivery controllers** (`post-ship-fulfillment-order`, `post-deliver-shipment`, `post-fulfill-fulfillment-order`, `post-hold-fulfillment-order`, `post-start-order`, `get-order-fulfillment`, `get-shipping-methods`, `get-preorder-fulfillment-orders`, `patch-shipment`, `post-confirm-wait`) import `deliveryService` (or individual re-exports) from this file to perform their operations.
-- **`src/modules/delivery/index.ts`** — Module-level entry that re-exports or wires up this service surface.
-- **`src/modules/delivery/module.ts`** — Module registration; references the service layer as the implementation behind the controllers.
-- **`src/modules/delivery/services/act.ts`** — Transaction core (`ActRefusal` is re-exported here); per the doc comment every "act" runs as one transaction through this file.
-- **`src/modules/delivery/services/board.ts`** — Preorder board queries re-exported through this barrel.
-- **`src/modules/delivery/services/cancel-remainder.ts`** — Remainder cancellation logic re-exported here.
+- **Consumed by every delivery controller** — `get-date-impact`, `get-fulfillment-order`, `get-order-fulfillment-lists`, `get-preorder-fulfillment-orders`, `get-shipment`, `get-shipping-methods`, `patch-shipment`, `post-deliver-shipment`, `post-fulfill-fulfillment-order`, `post-hold-fulfillment-order`, `post-mark-shipment-lost`, `post-process-order`, and `post-ship-fulfillment-order` all import `deliveryService` (or individual re-exports) from this file and call the corresponding methods.
+- **`src/modules/delivery/index.ts`** — the module entry point that re-exports this service (and likely the router), making `deliveryService` reachable as `@modules/delivery`.
+- **`src/modules/account/tests/contract/shop.contract.test.ts`** — an account-module contract test that exercises delivery operations (order processing, fulfillment) through this service to verify cross-module invariants.
 
 ## Notes
 
-- Functions *not* in `deliveryService` (e.g. `cancelRemainder`, `ensureFulfillmentOrders`, `runPreorderSweep`, `scrubHoldNotes`, `syncWithOverride`, `splitForAllocation`, `releaseAllocated`, `onReleaseDateChanged`) are still re-exported for use by other modules or internal callers, but controllers should prefer the `deliveryService` handle for the ten listed operations.
-- The file both **imports** from `./start`, `./read`, `./ship`, `./deliver`, `./fulfill`, `./holds`, `./tracking`, `./confirm-wait` (for the `deliveryService` object) and **re-exports** from a broader set of files. If you add a new service file, you must both re-export it here *and* decide whether it belongs in `deliveryService`.
-- The doc comment states each "act" is a single transaction defined in `act.ts`; the per-action files (`ship`, `deliver`, `fulfill`, `holds`) are orchestration wrappers around that transaction, not independent writes.
+- Pure re-export file — there is no runtime logic here. If a function is missing from `deliveryService`, the fix is in the source submodule (e.g. `./ship.ts`), not here.
+- The module doc-block references `docs/theory/layers.md` for the architectural rationale behind "one file per flow."
+- Types are exported at the module level (`export type {…}`) rather than inside the `deliveryService` object, so consumers do `import type { ShipInput }` separately.
+- `ActRefusal` is the only class-level export; all other exports are plain functions.

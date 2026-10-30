@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/observability/metrics-rate-limit.ts
-sha256: e9910083aa36ab777ade597fba5f2303e764186bdfef293653409f5bc517431b
-generated_at: 2026-10-14T08:06:46.596349+00:00
+sha256: 224596fb4b49b6490302148432fefdec018a8cba41475036798481bc55637df3
+generated_at: 2026-10-29T02:10:46.755241+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the two Prometheus counters that make rate-limiting behavior alertable: how many store operations degraded to a per-process fallback and how many requests were refused with a 429. Both counters register against the shared `metricsRegistry` so they are collected alongside every other module's metrics.
+Defines two Prometheus counters that make rate-limiting behavior alertable (as opposed to log-only). One counter tracks requests served from the Redis fallback path; the other tracks requests hard-refused with 429. Both are labeled by budget namespace and registered on the shared metrics registry.
 
 ## Key elements
 
-- **`rateLimitStoreFallbackTotal`** — `Counter` (`rate_limit_store_fallback_total`, label: `namespace`). Incremented whenever a rate-limit store operation could not use the `limits` Redis and served the budget from local memory (per-process) or passed the request through unbudgeted. A sustained rate > 0 means a configured limit is effectively weaker.
-- **`rateLimitRefusalsTotal`** — `Counter` (`rate_limit_refusals_total`, label: `budget`). Incremented when a budget rejects a request with HTTP 429, including the global brake (which writes no audit entry). A sustained rate is the alert signal for scanners or credential-stuffing.
-
-Both counters use `labelNames` constrained to literal namespace/budget strings declared on the budgets, keeping the cardinality bounded by construction (no request-derived label values).
+- **`rateLimitStoreFallbackTotal`** (Counter) — incremented when a rate-limit store operation cannot reach the `limits` Redis instance and falls back to in-process or unbounded behavior. Label: budget namespace. A non-zero rate indicates a budget is weaker than configured.
+- **`rateLimitRefusalsTotal`** (Counter) — incremented when a budget returns a 429 to the caller. Label: budget namespace. A sustained rate is the primary alert signal for abuse (scanning, credential stuffing) and includes the global brake, which writes no audit entry.
 
 ## Relationships
 
-- **`./metrics-registry.ts`** — Imports `metricsRegistry` and passes it as the `registers` array on both counters, so they are exposed on the shared collector rather than a local one.
-- **`src/infrastructure/http/middlewares/rate-limit-store.ts`** — The store that increments `rateLimitStoreFallbackTotal` when it falls back to in-process or open behavior.
-- **`src/infrastructure/http/middlewares/rate-limit.ts`** — The middleware that increments `rateLimitRefusalsTotal` when it returns a 429.
-- **`tests/unit/infrastructure/http/middlewares/rate-limit-store-selection.test.ts`** — Exercises the fallback path that feeds `rateLimitStoreFallbackTotal`.
-- **`tests/unit/infrastructure/http/middlewares/rate-limit.test.ts`** — Exercises the refusal path that feeds `rateLimitRefusalsTotal`.
+- **`metrics-registry.ts`** — both counters register against `metricsRegistry` so they are exposed by the single `/metrics` endpoint.
+- **`metric-config.ts`** — supplies the shared `counterConfig()` helper (name, help, label schema) that each counter spreads into its options.
+- **`metrics.generated.ts`** — provides the `infrastructureMetricData` constants (namespace, help text, label definitions) consumed by `counterConfig`.
+- **`rate-limit-store.ts`** — the store implementation that increments `rateLimitStoreFallbackTotal` when the primary Redis is unavailable.
+- **`rate-limit.ts`** — the middleware that increments `rateLimitRefusalsTotal` when it responds 429.
+- **`tests/unit/infrastructure/http/middlewares/rate-limit.test.ts`** and **`rate-limit-store-selection.test.ts`** — unit tests that assert the correct counter is incremented in each path.
+- **`src/modules/account/tests/integration/mail-recipient-budget.test.ts`** — integration test exercising the mail-recipient budget and its metric side-effects.
 
 ## Notes
 
-- The two counters are intentionally separate: a fallback (degraded but serving) and a refusal (429) answer different operational questions. Conflating them would hide a partial outage.
-- Label values are **never** request data; they come from static budget/namespace literals, so Prometheus cardinality cannot grow with traffic.
-- The file is a `@module` (no default export); consumers import the two named counters directly.
+- **Bounded cardinality by construction:** the namespace label values are literals declared on each budget definition, never derived from request data. This keeps the label set small and avoids a Prometheus cardinality explosion.
+- **Module-level singletons:** both counters are created at import time (not per-request). Importing this module has the side effect of registering the metrics; tests that import it should be aware the registry now contains these series.
+- **Counter, not Gauge:** both metrics are monotonically increasing. Use `rate()` or `increase()` in PromQL; the raw value is only meaningful as "total since process start."

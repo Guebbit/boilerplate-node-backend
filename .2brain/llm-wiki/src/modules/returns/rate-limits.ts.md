@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/rate-limits.ts
-sha256: 562fa6a2a7d234fe6d76d4f3ebff218807c55012a720f687e48e70f1a3be0909
-generated_at: 2026-10-15T11:54:32.492423+00:00
+sha256: e7394b78553359274219ea2c3dda0f9e63e3704249a8ec89b563abe66903b7e1
+generated_at: 2026-10-29T05:40:05.738394+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the Returns module's rate-limit budget for `POST /returns` and exposes the resulting Express middleware. It exists so the module can register its budget alongside other modules through the shared `buildRateLimiter` factory, keeping per-endpoint throttling declarative and auditable.
+Defines the rate-limit budget for the Returns module's single write endpoint (`POST /returns`) and exposes it as ready-to-use Express middleware. It is the "declaration" step: it binds the numeric thresholds (sourced from the generated file) to a per-account keying strategy and hands the result to the shared `buildRateLimiter` factory, matching the pattern every other module follows.
 
 ## Key elements
 
-- **`RETURNS_WRITE_BUDGET`** (internal) — A `RateLimitBudget` constant. Namespace `returns-write`, env var `NODE_RETURNS_RATE_LIMIT_MAX`, default max 20, `windowMs: 'shared'`, keyed by authenticated account via `accountIdOf`, `audited: true`.
-- **`returnsWriteLimiter`** (export) — The Express `RequestHandler` produced by `buildRateLimiter(RETURNS_WRITE_BUDGET)`. Applied as middleware on the `POST /returns` route.
-- **`returnsRateLimits`** (export) — `readonly RateLimitBudget[]` (currently one entry) that `module.ts` lists under its `rateLimits` property for registry/discovery.
+- **`RETURNS_WRITE_BUDGET`** (module-local const, type `RateLimitBudget`) — Merges `returnsRateLimitData.returnsWrite` with `keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT` and `keyGenerator: accountIdOf`. Caps returns opened per window, per authenticated account.
+- **`returnsWriteLimiter`** (exported, `RequestHandler`) — The compiled Express middleware; attach it to the `POST /returns` route to enforce the budget.
+- **`returnsRateLimits`** (exported, `readonly RateLimitBudget[]`) — A one-element array exposing the budget so `module.ts` can register it in its `rateLimits` list.
 
 ## Relationships
 
-- **`src/infrastructure/http/middlewares/rate-limit.ts`** — Provides `buildRateLimiter`, `accountIdOf`, and `KEYED_BY_AUTHENTICATED_ACCOUNT`. This file consumes all three to turn its budget definition into a working limiter.
-- **`src/types/rate-limit-budget.ts`** (via `@types`) — Supplies the `RateLimitBudget` type that shapes `RETURNS_WRITE_BUDGET`.
-- **`src/types/index.ts`** — Barrel re-export that resolves the `@types` import specifier.
-- **`src/modules/returns/module.ts`** — Consumes `returnsRateLimits` to register this module's budgets in the global rate-limit registry.
-- **`src/modules/returns/routes.ts`** — Applies `returnsWriteLimiter` as middleware on the `POST /returns` handler.
+- **`src/infrastructure/http/middlewares/rate-limit.ts`** — Source of `buildRateLimiter`, `accountIdOf`, and `KEYED_BY_AUTHENTICATED_ACCOUNT`. This file is a *consumer* of that factory.
+- **`src/modules/returns/rate-limits.generated.ts`** — Provides `returnsRateLimitData.returnsWrite` (the numeric window/limit values). This file does not hard-code thresholds.
+- **`src/types/rate-limit-budget.ts` / `src/types/index.ts`** — Supply the `RateLimitBudget` type used to shape the budget object.
+- **`src/modules/returns/module.ts`** — Consumes `returnsRateLimits` (and presumably `returnsWriteLimiter`) to wire the budget into the module's `rateLimits` declaration.
+- **`src/modules/returns/routes.ts`** — Applies `returnsWriteLimiter` on the `POST /returns` route handler.
 
 ## Notes
 
-- `windowMs: 'shared'` means this budget participates in a common time window shared across modules rather than defining its own.
-- Keying is per **account**, not per IP or address. The `bounds` string documents the rationale: an address-keyed budget would let one signed-in account behind a shared address starve other callers.
-- The `defaultMax` of 20 is a floor for local/dev; production overrides via `NODE_RETURNS_RATE_LIMIT_MAX`.
-- The file is side-effect-free (`@module`); all exports are pure values.
+- Limits are keyed **per authenticated account**, not per IP. Unauthenticated callers are not the target of this limiter.
+- Threshold numbers live in the generated file; edit that (or its source-of-truth generator), not this file.
+- The doc comment frames the budget as "well above a real customer's handful of returns and well below the global brake" — i.e., it sits between normal usage and the system-wide safety brake. Treat it as a business rule, not a security boundary.
+- `returnsRateLimits` is a `readonly` array with exactly one element today; it exists so the module can list all its budgets in a single place for `module.ts` and tooling.

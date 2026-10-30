@@ -1,7 +1,7 @@
 ---
 source: src/modules/observability/routes.ts
-sha256: e1079f4df1dd1eef269701dd11f00c37761fb5b5efc4193803e2c990ddc00da0
-generated_at: 2026-10-15T10:56:07.728319+00:00
+sha256: 14b467c19c82556f06da619e58d020d45f1ffe86bda2e57e50d7c1e42476ebec
+generated_at: 2026-10-29T04:36:05.451102+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Express router for all five observability endpoints (mounted under `/observability`). Guards are assigned per-route rather than shared because the `/events` (SSE) and `/metrics` (Prometheus scrape) routes are called by clients that cannot present a standard admin JWT, while the remaining three routes use the usual authorization chain.
+Defines the Express route table for the operator dashboard under `/observability`. It wires five read-only endpoints to their controllers and attaches the correct authentication middleware per route. Guards are chosen individually (not shared) because two endpoints are consumed by callers that cannot carry a standard admin JWT: a browser `EventSource` (SSE) and a Prometheus scraper.
 
 ## Key elements
 
-- **`router`** (exported) — the Express `Router` instance. The sole export of this module; consumed by the observability module for mounting.
-- **`GET /events`** — SSE stream. Guarded by `requireAllowedOrigin` + `requirePermissionViaCookie(OBSERVABILITY_READ_KEY)`; handled by `getObservabilityEvents`.
-- **`GET /metrics`** — Prometheus scrape target. Guarded by `isMetricsScraper`; handled by `getObservabilityMetrics`.
-- **`GET /health`** — instance liveness/readiness. Standard `getAuth` → `isAuth` → `requirePermission(OBSERVABILITY_READ_KEY)` chain; handled by `getObservabilityHealth`.
-- **`GET /metrics/overview`** — JSON summary of key operational numbers. Same standard auth chain; handled by `getObservabilityMetricsOverview`.
-- **`GET /audit`** — paginated, filterable audit events. Same standard auth chain; handled by `getObservabilityAuditLogs`.
-- **`OBSERVABILITY_READ_KEY`** — imported from the events controller; the shared permission identifier used by every route except `/metrics`.
+- **`router`** (export) — An Express `Router` instance mounted at `/observability` by the module. All five routes are registered on it.
+- **`GET /observability/events`** — Live SSE stream. Guarded by `requireAllowedOrigin` → `requirePermissionViaCookie('read', 'ObservabilitySnapshot')` → `getObservabilityEvents`.
+- **`GET /observability/metrics`** — Prometheus scrape endpoint. Guarded by `isMetricsScraper` → `getObservabilityMetrics`.
+- **`GET /observability/health`** — Instance health/readiness. Standard JWT chain (`getAuth` → `isAuth` → `requirePermission('read', 'ObservabilitySnapshot')`) → `getObservabilityHealth`.
+- **`GET /observability/metrics/overview`** — Key operational numbers as JSON. Same standard JWT chain → `getObservabilityMetricsOverview`.
+- **`GET /observability/audit`** — Paginated, filterable audit events. Same standard JWT chain → `getObservabilityAuditLogs`.
 
 ## Relationships
 
-- **`src/kernel/middlewares/authorizations.ts`** — supplies all four auth middlewares (`getAuth`, `isAuth`, `requirePermission`, `requirePermissionViaCookie`) applied to the five routes.
-- **`src/infrastructure/http/middlewares/origin.ts`** — supplies `requireAllowedOrigin`, which blocks cross-origin `EventSource` connections to `/events`.
-- **`src/modules/observability/metrics-scraper.ts`** — supplies the `isMetricsScraper` guard that authenticates the Prometheus scrape on `/metrics` via a static credential.
-- **`src/modules/observability/controllers/*`** (health, metrics-overview, audit, metrics, events) — each provides the final handler for its respective route. `get-observability-events` also exports `OBSERVABILITY_READ_KEY`, the permission constant referenced throughout this file.
-- **`src/modules/observability/module.ts`** — mounts the exported `router` into the application.
-- **`src/modules/observability/tests/unit/routes.test.ts`** — unit-tests the route definitions, guard ordering, and handler wiring in this file.
+- **`@kernel/middlewares/authorizations`** — Supplies `getAuth`, `isAuth`, `requirePermission`, and `requirePermissionViaCookie`; all five routes consume one or more of these.
+- **`@infrastructure/http/middlewares/origin`** — Supplies `requireAllowedOrigin`, applied only to `/events` to block cross-origin SSE connections.
+- **`./metrics-scraper`** — Supplies `isMetricsScraper`, the sole guard on `/metrics`.
+- **Controllers (`get-observability-health`, `-events`, `-audit`, `-metrics`, `-metrics-overview`)** — Each is the terminal handler for its respective route.
+- **`./module.ts`** — Consumes the exported `router` to mount these endpoints in the application.
+- **`tests/unit/routes.test.ts`** — Unit-tests route registration, middleware ordering, and permissions for this file.
 
 ## Notes
 
-- Guard ordering matters and is intentional: on `/events`, `requireAllowedOrigin` runs **before** the cookie check so that a cross-origin request is rejected before any session lookup. On the standard routes, `getAuth` → `isAuth` → `requirePermission` is the canonical sequence.
-- `/events` and `/metrics` do **not** use the `getAuth`/`isAuth` pair at all — they rely entirely on their own auth mechanism (cookie / static credential). Do not add JWT guards to these routes.
-- `OBSERVABILITY_READ_KEY` lives in the events controller, not in a shared constants file. All five routes that need a permission reference that same export.
-- The file contains no POST/PUT/DELETE routes; the observability surface is read-only by design.
+- Authentication strategy is intentionally **per-route**, not a shared chain. `/events` uses a session cookie (SSE cannot set custom headers) plus an origin check; `/metrics` uses a static scraper credential; the remaining three use the standard `Authorization`-header JWT chain. Do not "simplify" by collapsing these into one guard.
+- `/metrics` is the only route without a `requirePermission(...)` call — its security boundary is `isMetricsScraper` alone.
+- All five routes are `GET`; there are no write or mutation endpoints in this module.

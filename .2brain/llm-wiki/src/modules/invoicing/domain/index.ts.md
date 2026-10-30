@@ -1,7 +1,7 @@
 ---
 source: src/modules/invoicing/domain/index.ts
-sha256: 0ae3799ee8b38cb6a38554f0653241ad3d8fa610f9f91587ffbf21b3dff99bc0
-generated_at: 2026-10-15T10:38:02.186190+00:00
+sha256: 268f422a4696ef491e50653e3be87bfc7e4e57b6f42e8cb675333782877ba5c4
+generated_at: 2026-10-29T04:11:02.461372+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel file for the invoicing domain layer. It re-exports the pure business rules (specifically credit-share logic) so that higher tiers (services, tests) can import from a single, stable entry point without reaching into individual domain files. The module docblock asserts that this layer is lint-enforced to contain no Express, Mongoose, or other tier dependencies.
+Barrel file for the invoicing **domain layer**. It re-exports the public API (functions and types) from the three sibling rule modules so that consumers can import from a single path. The domain layer is intentionally framework-free — no Express, Mongoose, or any other tier — enforced by lint rules (see `docs/theory/domain-layer.md`).
 
 ## Key elements
 
-- **`creditShares`** (re-exported function from `./credit-shares`) — the sole value export; a pure domain rule for computing credit shares.
-- **`CreditableInvoice`** (re-exported type) — domain shape describing an invoice that is eligible for credit.
-- **`RefundedGoods`** (re-exported type) — domain shape describing refunded line items.
-- **`CreditLine`** (re-exported type) — domain shape representing a single credit line item.
+- **Re-exports from `./credit-shares`** — `creditShares` (function), `CreditableInvoice`, `RefundedGoods`, `CreditLine` (types).
+- **Re-exports from `./tax-items`** — `asTaxItems` (function).
+- **Re-exports from `./retention`** — `buyerRetentionEnd`, `isBuyerRetentionOver`, `buyerRetentionScanBound` (functions).
+
+The file contains **no logic of its own**; it is a pure re-export surface.
 
 ## Relationships
 
-- **`domain/credit-shares.ts`** — sole source of everything this file re-exports; this index is its public face.
-- **`invoicing/index.ts`** — module-level barrel that likely re-exports from this domain index, exposing `creditShares` and its types to external consumers.
-- **`services/credit-breakdown.ts`** / **`services/issue-credit-note.ts`** — service-tier consumers that import `creditShares` (and/or the types) through this index to stay decoupled from the concrete domain file path.
-- **`tests/unit/credit-shares.test.ts`** — unit test that exercises `creditShares` and validates the domain types.
+- **`./credit-shares.ts`, `./tax-items.ts`, `./retention.ts`** — the three source modules whose symbols are re-exported here.
+- **`src/modules/invoicing/index.ts`** — the module-level entry point that aggregates this domain barrel (along with other sub-paths) for external consumers.
+- **`src/modules/invoicing/services/*`** (credit-breakdown, issue-credit-note, retention) — service-layer files that import domain rules through this barrel rather than reaching into individual rule files.
+- **`src/modules/invoicing/emails.ts`** — consumes domain types/functions for invoice-related email content.
+- **`src/modules/invoicing/tests/unit/*`** — unit tests that import the re-exported symbols to verify the pure rules in isolation.
 
 ## Notes
 
-- This file is intentionally minimal: it contains no logic, only re-exports. All behavior lives in `credit-shares.ts`.
-- The "lint-guaranteed free of Express, Mongoose" note in the docblock is a project convention (see `docs/theory/domain-layer.md`); if you add exports here, they must also satisfy that lint rule.
+- Treat this file as **read-only public API**. Add a new domain rule by creating a new file in `domain/` and adding its export here; do not put logic in this file.
+- The "lint-guaranteed free of every tier" constraint means you **cannot** import Express, Mongoose, or other infra symbols anywhere in the files re-exported here without breaking the lint gate.
+- Because it is a barrel, type-checkers and bundlers resolve every re-exported symbol through this path; a typo in an export name here will surface as a missing export in all downstream consumers.

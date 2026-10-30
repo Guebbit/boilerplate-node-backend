@@ -1,7 +1,7 @@
 ---
 source: shared/contracts/asyncapi.root.yaml
-sha256: d80fcdff44dc802a5f6ce7cd57c6d2ed114780ae378810fa4ee249cbe5b482b6
-generated_at: 2026-10-14T07:35:17.687770+00:00
+sha256: b4aeae2525ab7c67c5f4433701682403048020e9572882b7ba8525cc89ea82ae
+generated_at: 2026-10-29T01:47:00.442026+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The preamble section of the project's AsyncAPI contract. It holds the service-level facts that every module fragment would otherwise restate — version, identity, `info` prose, tag list, and default content type. It is the AsyncAPI twin of `openapi.root.yaml` and is merged by the bundler with module fragments to produce a complete AsyncAPI document.
+The service-level preamble for the AsyncAPI 3.0.0 contract. It declares facts about the backend as a whole — version, identity, contact, license, tags, and default content type — so that no module fragment has to restate them. It is the async twin of `openapi.root.yaml` and is merged with module sections by the bundler to produce the final AsyncAPI documents.
 
 ## Key elements
 
-- **`asyncapi: 3.0.0`** — protocol version pin.
-- **`id`** — application-level identifier (`urn:boilerplate-node-backend:asyncapi:contracts`), shared by both public and full bundles because they describe one backend.
-- **`info.title` / `info.version` / `info.contact` / `info.license` / `info.description`** — standard AsyncAPI metadata; version is `0.1.0` (alpha) and is ignored by `check:asyncapi-breaking`.
-- **`info.tags`** — a single `implemented` tag that module fragments reference.
-- **`defaultContentType`** — `application/json`, inherited by all channels unless overridden.
+- **`asyncapi: 3.0.0`** — protocol version.
+- **`id`** — application-level URN (`urn:boilerplate-node-backend:asyncapi:contracts`); carried by every bundle produced from this project.
+- **`info`** — title, SemVer `0.1.0` (initial development), contact, AGPL-3.0 license, and a short description.
+- **`tags`** — a single `implemented` tag marking contracts already present in the runtime.
+- **`defaultContentType: application/json`** — fallback media type for all message payloads unless a channel overrides it.
+- **No `channels` key** — channels live in module files (`src/modules/<name>/asyncapi.yaml`) or in `asyncapi.workers.yaml`; this file intentionally omits them.
+- **No `servers` key** — each server travels with the channels that bind to it (e.g. `sseLocal` in the observability module, `rabbitmqLocal` in `asyncapi.workers.yaml`).
 
 ## Relationships
 
-- **`shared/contracts/asyncapi.workers.yaml`** — sibling section that carries channels for queues no domain module owns, plus the `rabbitmqLocal` server. The bundler merges it with this file.
-- **`src/modules/observability/asyncapi.yaml`** — a module fragment that owns its own channels and the `sseLocal` server. The bundler merges it in; this file does not reference it directly.
-- **`asyncapi.public.yaml`** — the bundler output that combines this preamble with the public-facing channel sections, deliberately excluding internal broker servers.
-- **`shared/contracts/openapi.root.yaml`** — structural twin; mirrors the same preamble role for the OpenAPI side of the contract.
-- **`shared/contracts/spectral.asyncapi.modules.yaml`** — Spectral lint rules applied to the module fragments (not to this file, which is not a standalone valid AsyncAPI document).
+- **`openapi.root.yaml`** — synchronous counterpart; same `id` namespace pattern, same `0.1.0` version, same structural role (service preamble vs. domain fragments).
+- **`asyncapi.workers.yaml`** — a sibling section in the same directory; holds the domain-less queue channels and the `rabbitmqLocal` server. Merged with this file and module sections by the bundler.
+- **`src/modules/observability/asyncapi.yaml`** — representative module fragment that declares the `sseLocal` server and its channels; one of the sections the bundler merges into the final document.
+- **`asyncapi.public.yaml`** — bundler output: the subset of merged sections exposed to external API clients (excludes broker-only servers like `rabbitmqLocal`).
+- **`spectral.asyncapi.modules.yaml`** — Spectral rule set that lints module fragments (and, by exclusion, the shape this file leaves open).
 
 ## Notes
 
-- This file is **not** a valid standalone AsyncAPI document — it has no `channels`. A valid document requires at least one. The bundler must merge module/worker sections before the result is consumable.
-- Servers are intentionally absent here. In AsyncAPI a server is only reachable through the channels bound to it, so each server travels with its channels in the owning module or in `asyncapi.workers.yaml`.
-- Because it is not standalone, it is **not** linted as a complete AsyncAPI document the way individual module fragments are.
-- The `id` is an application identifier (not a document-specific one), so both the full and public bundles carry the same value.
+- This file is **not** a valid standalone AsyncAPI document; a conforming document requires `channels`, which only exist after the bundler merges module sections. Module files, by contrast, *are* valid on their own and are linted as such.
+- The `version` field (`0.1.0`) is informational only — the breaking-change tooling ignores it.
+- Servers are deliberately absent here so the public bundle does not advertise brokers a client cannot reach.

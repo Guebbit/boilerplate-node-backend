@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/routes.ts
-sha256: 886dedf182558c32d78b3c0bad43fb59c1e04352b381c6adb6825017505a26e4
-generated_at: 2026-10-15T11:43:46.704419+00:00
+sha256: 50d226a2bcb5b8436a606e4237175c1a74a78060ae5ce36f9787abb4b7a00930
+generated_at: 2026-10-29T05:28:20.888895+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,49 +9,41 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Express Router for all product catalogue HTTP endpoints. Splits traffic into public storefront reads (no identity required) and admin/machine writes (permission-gated), applies per-route caching and upload handling, and enforces route ordering so static segments are not swallowed by the `/:id` wildcard.
+Defines the Express router for all product catalogue endpoints. Public reads (search, single product, facets) are cacheable and anonymous-friendly; admin writes (create, update, delete, restore) require specific permission keys and invalidate the cache on mutation. The file also encodes the cache-scope policy that prevents a privileged caller's broader response from being stored under an anonymous cache key.
 
 ## Key elements
 
-- **`router`** (exported) — the single Express Router consumed by the application's top-level mount.
-- **`cacheScopeKey(request)`** — returns `true` only when the caller's scope is indistinguishable from an anonymous guest *and* they cannot see stock counters. Used to gate Redis cache reads/writes so a wider-privileged caller never poisons or reads a shared cache entry.
-- **`cacheProductsSearch`** — a `searchCache` middleware instance shared by `GET /` and `POST /search`; keyed on the query-parameter sets exported from `get-products` controller.
-- **Route table** (in declaration order):
-
-| Method & path | Guard / middleware | Handler |
-|---|---|---|
-| `POST /search` | cache → `getProducts` | `getProducts` |
-| `GET /` | cache → `getProducts` | `getProducts` |
-| `POST /` | rate-limit, auth, 2 permissions, cache-invalidate, upload | `createProduct` |
-| `DELETE /` | auth, perm, cache-invalidate | `deleteProducts` |
-| `GET /categories` | setCache (scopeKey always true) | `getCatalogueFacets` |
-| `GET /settings` | — | `getProductSettings` |
-| `GET /:id` | setCache (`browserRevalidate`) | `getProductItem` |
-| `PUT /:id` | rate-limit, auth, 2 permissions, cache-invalidate, upload | `replaceProduct` |
-| `PATCH /:id` | same as PUT | `updateProduct` |
-| `GET /:id/admin` | auth, 2 permissions (no cache) | `getProductAdmin` |
-| `DELETE /:id` | auth, perm, cache-invalidate | `deleteProducts` |
-| `POST /:id/restore` | auth, perm, cache-invalidate | `restoreProducts` |
-| `DELETE /:id/hard` | auth, perm, cache-invalidate, `routeFlag('hardDelete')` | `deleteProducts` |
+- **`router`** (exported) — The Express `Router` instance registered by the module. All product catalogue routes hang off it.
+- **`cacheScopeKey`** — Predicate that returns `true` only when the caller sees exactly what a guest sees (no stock counters, no extra translations). Used as the `scopeKey` argument to `setCache`/`searchCache` so that privileged callers bypass Redis entirely.
+- **`cacheProductsSearch`** — Pre-built `searchCache` middleware for the two search entry points, keyed on the query parameters that change the result set.
+- **Route definitions** (in declaration order):
+  - `POST /search`, `GET /` — public catalogue search (shared `cacheProductsSearch`).
+  - `POST /` — create product (requires `create:Product` + `update:Translation`).
+  - `DELETE /` — bulk delete by body IDs.
+  - `GET /facets` — filter chips; cached with a trivial `() => true` scope (always the same answer).
+  - `GET /:id` — single product; cached with `browserRevalidate: true`.
+  - `PUT /:id` / `PATCH /:id` — replace / merge; both require `update:Product` + `update:Translation`.
+  - `DELETE /:id` — soft delete (or hard if `?hardDelete=true`).
+  - `POST /:id/restore` — undo a soft delete.
+  - `DELETE /:id/hard` — hard delete; uses `routeFlag('hardDelete')` middleware.
 
 ## Relationships
 
-- **`@kernel/middlewares/authorizations`** — imports `getAuth` (global middleware), `isAuthOrCredential` (write-route guard accepting service credentials), and `requirePermission` (per-route permission checks).
-- **`@infrastructure/http/middlewares/rate-limit`** — `uploadLimiter` protects the three upload-bearing routes.
-- **`@infrastructure/http/middlewares/upload`** — `upload.image()` parses multipart bodies on create/put/patch.
-- **`@infrastructure/http/middlewares/cache`** — `searchCache`, `setCache`, and `invalidateCache` manage Redis reads/writes and tag-based invalidation.
-- **`@infrastructure/http/middlewares/route-flag`** — `routeFlag('hardDelete')` injects a pseudo-query-param for the `DELETE /:id/hard` path.
-- **`@kernel/access/query`** — `hasAnonymousReadScope` feeds into `cacheScopeKey` to decide cache eligibility.
-- **`./services`** / **`./services/stock-view`** — `callerScope` and `canSeeStock` complete the cache-scope decision.
-- **Controllers** (`get-products`, `create-product`, `update-product`, `delete-products`, `restore-products`, `get-product-item`, `get-product-admin`, `get-catalogue-facets`, `get-product-settings`) — terminal handlers for each route; this file imports only their default/named exports and composes them with middleware.
+- **`authorizations.ts`** — `getAuth` is applied globally on the router; individual write routes add `isAuthOrCredential` + `requirePermission(...)` guards.
+- **`locale-preview.ts`** — `previewDraftLanguage` runs as the first middleware on each catalogue read, before the cache middleware, because the cache key derives from `request.locale`.
+- **`cache.ts`** — `searchCache` (shared search), `setCache` (facets, single product), and `invalidateCache(['products'])` (every mutating route) come from here.
+- **`rate-limit.ts`** — `uploadLimiter` gates the three image-upload routes (create, PUT, PATCH).
+- **`upload.ts`** — `upload.image()` parses multipart image bodies on those same three routes.
+- **`route-flag.ts`** — `routeFlag('hardDelete')` normalises the hard-delete intent for `DELETE /:id/hard`.
+- **`query.ts`** — `hasAnonymousReadScope` is called inside `cacheScopeKey` to determine whether the caller's scope is equivalent to a guest's.
+- **Controllers** — Each route delegates to exactly one controller export (`getProducts`, `createProduct`, `replaceProduct`, `updateProduct`, `deleteProducts`, `restoreProducts`, `getProductItem`, `getCatalogueFacets`).
+- **`module.ts`** — Registers this `router` into the application's route table.
 
 ## Notes
 
-- **Route order is load-bearing.** `/search`, `/categories`, and `/settings` are declared before `/:id`; reordering them will silently 404.
-- **No identity guard on reads.** `getAuth` runs globally, but read routes intentionally serve anonymous browsers; the permission model is opt-in per write route.
-- **Writes require *two* permission keys.** Create/put/patch each demand both a `products.any.*` key and `translations.any.update`. Neither alone suffices — a rewording must not become a repricing.
-- **Cache bypass is by construction.** Any caller who sees inactive products or exact stock numbers (`cacheScopeKey` → `false`) skips Redis entirely rather than risk serving/storing a wider payload under a guest-keyed entry.
-- **`GET /:id` uses `browserRevalidate: true`.** The `available` field changes on stock writes; a 304 round-trip is the only way to invalidate a stale browser copy since server-side cache invalidation cannot reach the client.
-- **`GET /settings` is deliberately uncached** — a single env-var read is cheaper than the Redis lookup it would guard.
-- **Two paths to hard-delete.** `DELETE /:id?hardDelete=true` and `DELETE /:id/hard` are equivalent; the latter uses `routeFlag` to set the flag without a query string.
-- **`GET /:id/admin` is never cached** — it represents the active editing screen (same rationale as `GET /locales/:locale/entries`).
+- **Route order is load-bearing.** Static segments (`/search`, `/facets`) are declared before `/:id` so Express does not match them as an `id` parameter. Adding a new static segment below `/:id` will silently 404.
+- **Two-key write guard.** Create, PUT, and PATCH all require *both* `Product` and `Translation` permissions simultaneously. This is intentional: a key holding only one cannot complete the write, which separates rewording from repricing.
+- **`getAuth` ≠ identity check.** The router applies `getAuth` to every route (including public reads) so downstream code always has a caller context, but anonymous requests are allowed through. Only write routes add a stricter guard.
+- **`browserRevalidate` on `GET /:id`.** The server still serves from Redis, but the browser must send `If-None-Match` first (304 path) because the `available` field can change via a stock write that no server-side `invalidateCache` can reach inside a client's cache.
+- **Facets scope is `() => true`.** Unlike search and `/:id`, the facets endpoint returns the same data regardless of caller (active rows only, unconditionally), so every caller safely shares one cache entry.
+- **`DELETE /:id` vs `POST /:id/restore` vs `DELETE /:id/hard`.** Soft delete, restore, and hard delete are three distinct routes. A second `DELETE /:id` does *not* hard-delete; the caller must use the restore or hard endpoint explicitly.

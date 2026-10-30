@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/session/jwt-strategy.ts
-sha256: 49926c5581fdaa1e7fe68d0b5f2804ff25a852ee91ec9bb0a856634489abccab
-generated_at: 2026-10-15T10:07:21.234993+00:00
+sha256: be874b2fc9ccac2b576fd57907bbe6881e2fff7155f0ce86df995024ae8b1e08
+generated_at: 2026-10-29T02:49:01.522113+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,41 +9,42 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Adapter that implements the `SessionStrategy` port for the **JWT session mode**: a short-lived (≈10 min) access token the client keeps in memory, backed by a rotating refresh token in an HttpOnly cookie with one `sessions` row per refresh token. All signing, rotation, and reuse-detection logic lives in `./jwt.ts`; this file only wires that logic into the strategy interface so callers above never see tokens.
+Implements the `jwt` session strategy: a short-lived (10-minute) access token held client-side plus a rotating refresh token in an HttpOnly cookie, one `sessions` row per refresh token. This file is the adapter that places the token primitives from `./jwt.ts` behind the `SessionStrategy` port, so callers never see raw tokens.
 
 ## Key elements
 
-- **`jwtStrategy`** (exported) — the concrete `SessionStrategy` for mode `'jwt'`. Sets `cookieAuthenticates: false` (the refresh cookie only opens SSE streams; every other route authenticates via the bearer access token).
-- **`mintSession`** — shared internal: mints a refresh token (via `startSession` or `continueSession`), sets the session cookie on the response, and exchanges the refresh token for an access token.
-- **`cookieMaxAgeOf`** — resolves the cookie TTL: the continued session's remaining lifetime when re-minting, otherwise the tier's configured duration; `undefined` → browser-session cookie.
-- **`retireRefreshToken` / `retireRestOfFamily` / `retirePresentedSession`** — best-effort cleanup of replaced or superseded session rows. Failures are logged via `logger.warn`, never thrown, because the new session already exists.
-- **`snapshotOf`** — reads the current session's tier, family id, start/expiry *before* any mutation that could delete the row; returns a `SessionSnapshot` used by re-mint to continue rather than restart.
-- **`resolveBearer`** — verifies the access token **and** checks the named session family is still alive (`resolveInLiveFamily`). `TokenRejection` → `{ miss }`; other errors re-throw.
-- **`watchRefreshCookie`** — verifies the refresh token, then returns a `StreamWatch` whose `recheck` follows the token's **family** (not the individual token) so an SSE stream outlives a single rotation. Rechecks are marked `{ passive: true }`.
-- **`unlessOtherMode`** — guard: if the presented credential looks like a `ses_…` id (the other mode), returns `{ miss: 'revoked' }` instead of treating it as a signature failure.
-- **`resolveWith`** — generic helper that maps a `verify` function into the `Resolution` shape used by the authentication port.
+- **`jwtStrategy`** (exported) — The concrete `SessionStrategy` implementation for `mode: 'jwt'`. Exposes `resolveBearer`, `resolveCookie`, `watchRefreshCookie`, `list`, `reissue`, and `revoke` via the port's shape.
+- **`mintSession`** — Orchestrates a new or re-minted session: calls `startSession`/`continueSession`, sets the refresh cookie via `createSessionCookie`, and returns the access token in the body.
+- **`cookieMaxAgeOf`** — Computes cookie lifetime: uses the `RememberTier` default for fresh sessions, or the remaining TTL of the continued session.
+- **`retireRefreshToken` / `retireRestOfFamily` / `retirePresentedSession`** — Best-effort deletions of replaced session rows after re-mint, re-proof, or sign-in. Failures are logged, not thrown.
+- **`snapshotOf`** — Reads the caller's current session metadata (tier, family, start, expiry) *before* a destructive change, so a re-mint can continue rather than restart.
+- **`sessionRowOf`** — Resolves which row a change continues: refresh cookie's row first, then (if `followBearer`) the newest live row of the bearer's family. Prevents a bearer-only reauth from spawning a second family.
+- **`resolveWith` / `resolveBearer`** — Wraps `verifyAccessToken` into the port's `Resolution` shape; a `TokenRejection` becomes `{ miss }`, infra errors still reject. `resolveBearer` additionally checks family liveness.
+- **`watchRefreshCookie`** — Resolves a refresh token for SSE stream connections; the recheck closure tracks the token's *family* so the stream survives the next rotation.
+- **`unlessOtherMode`** — HIGHS a `ses_…` id (the other strategy's credential) as `{ miss: 'revoked' }` rather than letting it hit the JWT verifier and register as a security event.
 
 ## Relationships
 
-- **`./jwt.ts`** — source of all token primitives (`startSession`, `continueSession`, `createAccessToken`, `verifyAccessToken`, `verifyRefreshToken`, `verifyRefreshWithRow`, `rememberOfRefreshToken`, `TokenRejection`, `TokenData`). This file never signs or rotates tokens itself.
-- **`./strategy.ts`** — provides the `SessionStrategy` interface and the shared types (`IssuedSession`, `SessionRequest`, `SessionSnapshot`) that `jwtStrategy` implements.
-- **`./family-liveness.ts`** — `resolveInLiveFamily` is called by `resolveBearer` and `watchRefreshCookie` to ensure the session family hasn't been revoked.
-- **`./auth-context.ts`** — `resolveProof` turns raw JWT claims (`sub`, `auth_time`, `amr`) into an `AuthContext`.
-- **`./cookies.ts`** — `createSessionCookie` writes the refresh-token cookie onto the response.
-- **`./config.ts`** — `getCookieMaxAgeMilliseconds` and the `RefreshTokenExpiryTime` tier type drive cookie TTL.
-- **`../repository.ts`** — `sessionRepository` is the persistence target for all retire/find operations.
-- **`./session-id.ts`** — `looksLikeSessionId` lets `unlessOtherMode` detect cross-mode credentials.
-- **`@infrastructure/security/hash-token.ts`** — `hashToken` is applied to every refresh token before it hits the repository (never stored in plaintext).
-- **`@infrastructure/adapters/logger.ts`** — `logger.warn` for non-fatal retire failures.
-- **`@kernel/cookies.ts`** — `readSessionCookie` extracts the refresh cookie from incoming requests.
-- **`@kernel/authentication.ts`** — provides `Resolution` and `StreamWatch` types used as return shapes.
-- **`src/modules/account/tests/unit/jwt-strategy.test.ts`** — unit tests for this adapter.
-- **`src/modules/account/tests/unit/session-strategy.test.ts`** — cross-mode strategy tests that exercise `jwtStrategy` alongside the other mode.
+- **`./jwt.ts`** — Source of all token primitives: `startSession`, `continueSession`, `createAccessToken`, `verifyAccessToken`, `verifyRefreshWithRow`, `rememberOfRefreshToken`, `TokenRejection`. This file orchestrates them but performs no crypto itself.
+- **`./strategy.ts`** — Provides the `SessionStrategy`, `IssuedSession`, `SessionRequest`, `SessionSnapshot` types that define the contract this file fulfills.
+- **`./cookies.ts`** — `createSessionCookie` writes the refresh + logged-in cookies on the Express response.
+- **`./config.ts`** — `getCookieMaxAgeMilliseconds` supplies the tier-based default TTL.
+- **`./auth-context.ts`** — `resolveProof` builds the `AuthContext` (AMR proofs, auth time) returned to callers.
+- **`./family-liveness.ts`** — `resolveInLiveFamily` guards that the session family is still alive before granting access or re-checking an SSE stream.
+- **`./session-id.ts`** — `looksLikeSessionId` lets `unlessOtherMode` short-circuit foreign credentials.
+- **`./listing.ts`** — `listSessions` powers the strategy's `list` method.
+- **`../repository.ts`** — `sessionRepository` performs all row lookups and deletions (by hash, family, etc.).
+- **`@kernel/cookies`** — `bearerOf` / `readSessionCookie` extract credentials from the incoming request.
+- **`@kernel/authentication.ts`** — Provides `Resolution` and `StreamWatch` result types.
+- **`@infrastructure/security/hash-token.ts`** — `hashToken` is applied before every repository query or removal.
+- **`@infrastructure/adapters/logger.ts`** — Structured warning logs in the retirement helpers.
+- **`tests/unit/jwt-strategy.test.ts`** — Unit tests for this adapter.
+- **`tests/unit/session-strategy.test.ts`** — Strategy-level tests that exercise this file through the port.
 
 ## Notes
 
-- **Retire functions are fire-and-forget.** A failure to delete a replaced row is logged, not raised. A leftover row will expire on its own schedule; the new session is already live.
-- **`snapshotOf` reads the row *before* the mutation that ends it.** A password change, for example, deletes the row; reading first preserves the family/expiry data needed to continue the session.
-- **SSE rechecks are `passive: true`.** A stream's periodic liveness check must not be treated as user activity (e.g., for idle-timeout resets).
-- **`unlessOtherMode` classifies cross-mode credentials as `revoked`, not as a security event.** A `ses_…` id in a JWT-mode request is a stale browser artifact, not a forgery attempt.
-- **`cookieAuthenticates` is `false`.** The only routes that accept the refresh cookie directly are the two SSE endpoints; all other authentication flows go through the bearer access token.
+- All retirement helpers (`retireRefreshToken`, `retireRestOfFamily`, `retirePresentedSession`) catch and log rather than throw: the new session already exists, so a leftover old row simply expires on its own schedule.
+- `snapshotOf` must run **before** the destructive operation (e.g. password change) that deletes the row; ordering matters.
+- The `followBearer` flag in `sessionRowOf` is intentionally *not* passed by changes that invalidate all sessions (factor changes): those tokens must die with the rest.
+- SSE stream rechecks use `{ passive: true }` in `resolveInLiveFamily` to signal the liveness probe is not a user action.
+- The strategy is stateless at the adapter level; all persistence lives in `sessionRepository` and the token logic in `./jwt.ts`.

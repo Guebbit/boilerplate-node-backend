@@ -1,7 +1,7 @@
 ---
 source: scenarios/apply.ts
-sha256: dc1be20c2e406bd48b4ede106979b9d2420e64ebe436a523292db37b3cf56cf2
-generated_at: 2026-10-14T06:55:48.161776+00:00
+sha256: 9667ffd64d101c309a9b9cd2503de0d806dcdac1cd67eb9f46b5949d23e7a540
+generated_at: 2026-10-29T01:21:31.079311+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,46 +9,43 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-CLI runner for `npm run scenario:apply`. It boots the full app in-process (calling `createApp().boot()`, never `start()`), drives real HTTP endpoints to generate realistic data, and manages the lifecycle: environment guards, optional DB reset, scenario build, cache cleanup, and forced process exit. It owns **data** seeding; `db:sync` owns schema.
+CLI runner for `npm run scenario:apply`. Validates safety gates (non-production, non-public-password, non-empty-DB unless `--reset`), boots the app **in-process** via `createApp().boot()` (never `start()`), then delegates all seeding logic to `buildScenario` from the registry. It owns DATA; `db:sync` owns SCHEMA.
 
 ## Key elements
 
-- **`seed()`** — Orchestrates the entire run: validates the scenario name, boots the app, optionally empties the DB (`--reset`), calls `buildScenario`, clears caches, optionally writes a description file, and logs completion.
-- **`bootAppInProcess()`** — Dynamically imports `../src/app`, calls `createApp()` → `boot()`, stores the instance on a module-level `app` variable for cleanup, and returns the Express instance.
-- **`reset` / `scenarioArgument` / `describeTo`** — Parsed from `process.argv`: `--reset` flag, one positional scenario name, and `--describe-to=<path>` for writing a JSON description file.
-- **Environment overrides** (all set via `installEnvironment` *before* the app import):
-  - `SCRIPTED_RATE_LIMITS` — relaxes per-IP budgets so hundreds of seed requests don't hit 429.
-  - `NODE_MAIL_TRANSPORT: 'log'` — renders mail without opening a socket.
-  - `NODE_RABBITMQ_ENABLED: '0'` — forces inline job execution so mail goes through `log`, not a live consumer's SMTP.
-  - `DEMO_BANK_TRANSFER` — filled in **only where the key is undefined** in the existing env (unlike the others, which override).
-- **`deploymentRateLimitRedisUrl`** — Captured from `limitsRedisUrl()` *before* the env overrides switch the limiter to in-memory, so `--reset` can still clear the deployment's Redis counters.
-- **Production gate** — `isRelaxedEnvironment()` must be true (i.e. `development` or `test`); all other values refuse the run.
-- **Forced `process.exit()`** — Called after cleanup instead of letting `runScript` resolve, because the OpenTelemetry ESM loader hook (`module.register()`) keeps the event loop alive indefinitely.
+- **`seed()`** — Top-level orchestration: validates the scenario name, boots the app, handles `--reset` (empties DB + clears rate-limit counters) or the empty-DB gate, calls `buildScenario(scenarioName, app)`, clears the response cache, optionally writes a `--describe-to` JSON file.
+- **`bootAppInProcess()`** — Dynamically imports `../src/app`, calls `createApp()` → `boot()`, stashes the instance in the module-level `app` variable for cleanup, returns the Express instance.
+- **`app`** (module-level `let`) — Reference to the booted instance; the `finally` block calls `app.stop()` to close Mongo, Redis, intervals, etc.
+- **Top-level `installEnvironment(...)` calls** — Override `.env` *before* the dynamic `import('../src/app')` so the booted app picks them up: `SCRIPTED_RATE_LIMITS` (in-memory limiter), `NODE_MAIL_TRANSPORT='log'` (no real SMTP), `NODE_RABBITMQ_ENABLED='0'` (inline job execution), and `DEMO_BANK_TRANSFER` defaults (only if unset).
+- **`deploymentRateLimitRedisUrl`** — Captured from `limitsRedisUrl()` *before* the env overrides, used by `clearRateLimitCounters` on `--reset`.
+- **Arg parsing** — `reset` (`--reset`), `scenarioArgument` (positional), `describeTo` (`--describe-to=<path>`).
 
 ## Relationships
 
-- **`scenarios/index.ts`** — Supplies `DEFAULT_SCENARIO`, `isScenarioName`, and `buildScenario` (the scenario registry). `apply.ts` calls only the registry entry; it never names scenario internals.
-- **`scenarios/accounts.ts`** — `seedCredentials` is included in the `--describe-to` JSON output.
-- **`scenarios/rate-limits.ts`** — Provides `SCRIPTED_RATE_LIMITS` (env override) and `DEMO_BANK_TRANSFER` (bank beneficiary defaults).
-- **`scenarios/support/database-snapshot.ts`** — `isDatabaseEmpty` gates the non-reset path; `emptyDatabase` is called under `--reset`.
-- **`scenarios/support/development-doubles.ts`** — Imported for side-effects: registers the fake payment provider and mail log that seeded flows depend on.
-- **`src/app.ts`** — `createApp()` is the sole entry point; `boot()` opens Mongo/Redis/adapter connections, `stop()` closes them. Never `start()`.
-- **`src/infrastructure/adapters/cache.ts`** — `clearCache()` is called after seeding to evict module-fixture responses that went straight to Mongo.
-- **`src/infrastructure/adapters/limits-redis.ts`** — `limitsRedisUrl()` is read once at module level to target the deployment's Redis for counter cleanup.
-- **`src/infrastructure/http/middlewares/rate-limit-store.ts`** — `clearRateLimitCounters(url)` removes limiter keys under `--reset`.
-- **`src/infrastructure/config/store.ts`** — `installEnvironment` and `currentEnvironment` drive all env overrides.
-- **`src/infrastructure/config/dotenv.ts`** — Loaded first; populates `.env` values before overrides are applied.
-- **`src/infrastructure/runtime/mongoose-boot.ts`** — Imported before any model loads so Mongoose global defaults are set at schema-build time.
-- **`src/infrastructure/runtime/config.ts`** — `isRelaxedEnvironment` gates the script; `nodeEnvironment` is referenced in guards.
-- **`scripts/run-script.ts`** — `runScript` wraps the CLI; `apply.ts` diverges by calling `process.exit()` explicitly (see Notes).
-- **`src/infrastructure/adapters/logger.ts`** — `logger` for structured info/warn output throughout.
+| Neighbor | Interaction |
+|---|---|
+| `scenarios/index.ts` | Provides `DEFAULT_SCENARIO`, `isScenarioName()`, and `buildScenario()` — the registry that maps a name to the full seed routine. |
+| `scenarios/accounts.ts` | `seedCredentials` is included in the `--describe-to` JSON output. |
+| `scenarios/rate-limits.ts` | `SCRIPTED_RATE_LIMITS` overrides the limiter for this process; `DEMO_BANK_TRANSFER` fills in bank-transfer fields when unset. |
+| `scenarios/support/database-snapshot.ts` | `emptyDatabase()` (on `--reset`) and `isDatabaseEmpty()` (gate). |
+| `scenarios/support/development-doubles.ts` | Side-effect import: registers fake payment provider and mail log before the app boots. |
+| `scripts/run-script.ts` | `runScript` wraps the entry-point with shared CLI plumbing. |
+| `src/app.ts` | Dynamically imported; `createApp()` is called for `boot()` only, never `start()`. |
+| `src/infrastructure/adapters/cache.ts` | `clearCache()` after seeding (fail-open: warns if Redis unreachable). |
+| `src/infrastructure/adapters/limits-redis.ts` | `limitsRedisUrl()` read once at module top for the reset path. |
+| `src/infrastructure/adapters/logger.ts` | Structured logging throughout. |
+| `src/infrastructure/config/dotenv.ts` | Side-effect import; loads `.env` before anything else. |
+| `src/infrastructure/config/store.ts` | `installEnvironment()` (overrides) and `currentEnvironment()` (read defaults). |
+| `src/infrastructure/http/middlewares/rate-limit-store.ts` | `clearRateLimitCounters(url)` on `--reset` (SCAN + DEL under the limiter prefix, never FLUSHALL). |
+| `src/infrastructure/runtime/config.ts` | `isRelaxedEnvironment` / `nodeEnvironment` for the production and public-password gates. |
+| `src/infrastructure/runtime/mongoose-boot.ts` | Side-effect import (before any model loads); sets Mongoose defaults. |
 
 ## Notes
 
-- **Exit code contract:** A non-empty DB without `--reset` logs a message and returns **0**, not an error. This is deliberate: the compose `app` command is `npm run db:bootstrap && <server>`, and a non-zero exit would prevent an already-seeded container from starting.
-- **Env override ordering:** `installEnvironment` calls happen *before* the dynamic `import('../src/app')` because `buildRateLimiter` reads the environment once at middleware-wiring time, not per request. `dotenv/config` never overwrites a key already present.
-- **Fail-open cleanup:** Both `clearCache` and `clearRateLimitCounters` log a warning on unreachable Redis but do **not** throw. Seeding must succeed even when Redis is down.
-- **Plain-text passwords in fixtures:** Intentional. The model's pre-save hook performs hashing; writing a hash by hand would drift from that hook and make the plaintext unrecoverable.
-- **`--describe-to` writes a file, not stdout:** `npm run` prints banner lines to stdout; the paired frontend's live-profile reset needs to parse clean JSON. This is also the only way a live backend can describe its dataset, since `/__test/*` is never mounted on one.
-- **`DEMO_BANK_TRANSFER` is merge-on-missing, not override:** A deployment that names its own beneficiary keeps it; the default only fills gaps. This is the one env override that checks `currentEnvironment()[key] === undefined` before setting.
-- **OpenTelemetry hangs the process:** The `module.register()` loader hook from `@opentelemetry/instrumentation` is process-lifetime and unregistrable. Without the explicit `process.exit()`, the event loop never drains. This is safe only because `stop()` has already awaited `shutdownAnalytics()` and `shutdownTracing()`. Other `runScript` callers never import `src/app.ts` and never hit this issue.
+- **Import ordering is load-bearing.** `dotenv` → `mongoose-boot` → `development-doubles` must precede any model or adapter access. `installEnvironment` calls execute at module top-level, *before* the dynamic `import('../src/app')`, so they bind only this process's app instance.
+- **Forced `process.exit()` in `finally`.** Importing `src/app` pulls in OpenTelemetry's `module.register()` loader hook (a worker-thread-backed ESM patch). That hook is process-lifetime and cannot be unregistered by `stop()`, so the event loop never drains. The exit is safe because `stop()` has already awaited `shutdownAnalytics()` and `shutdownTracing()`. Other `runScript` callers don't import `src/app` and don't hit this.
+- **Non-empty DB → warn and return 0.** A non-zero exit would abort the Compose chain `db:bootstrap && <start server>` in a container that is already seeded. Use `--reset` to force.
+- **Cache clear is fail-open.** Seeding must succeed even when Redis is down; an unreachable Redis logs a warning but does not throw.
+- **`--describe-to` writes a file, not stdout.** `npm run` injects its own banner lines into stdout, which would break the frontend's JSON parse. It is also the only channel a live backend can expose its seeded dataset, since `/__test/*` is never mounted in production.
+- **`buildRateLimiter` reads env exactly once** (at middleware wiring during the dynamic import). Setting variables at module top therefore has no per-request cost and cannot be overridden later.
+- **`DEMO_BANK_TRANSFER` is applied conditionally** — only for keys the deployment hasn't already set in `.env` — unlike the rate-limit and mail overrides which are unconditional.

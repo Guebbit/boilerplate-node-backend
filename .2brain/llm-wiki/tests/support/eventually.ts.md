@@ -1,7 +1,7 @@
 ---
 source: tests/support/eventually.ts
-sha256: 287e2c4ea32938ef295cf493b5a7dcbfbbc11e2d48e61a5d3c32fa10db450d60
-generated_at: 2026-10-15T12:58:01.436576+00:00
+sha256: ed7e05bfcb36b0d399b1e9fce5de6c039e8a6e8ef3b514e457eb112abfa29ceb
+generated_at: 2026-10-29T07:07:43.803773+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A test-support utility for waiting on side effects that the code under test deliberately does not await (e.g. detached mail enqueues, fire-and-forget notices). It polls a condition at fixed intervals instead of sleeping a fixed duration, so fast machines return immediately while slow ones still have the full window.
+Shared test-support helpers for waiting on side effects that the code under test deliberately does not await (detached mail enqueues, fire-and-forget notices, container readiness). Rather than sleeping a fixed duration, both helpers poll, so a fast machine pays nothing extra while a slow one gets the full window.
 
 ## Key elements
 
-- **`eventually(done: () => boolean, windowMs?: number): Promise<void>`** — The sole export. Polls `done` every 20 ms until it returns `true` or `windowMs` (default 2000) elapses. Resolves silently in either case; it never throws or rejects.
+- **`pause(ms)`** — internal; wraps `setTimeout` in a `Promise<void>`. Shared by both exports.
+- **`eventually(done, windowMs?)`** — polls `done()` (sync or async boolean) every 20 ms until it returns `true` or `windowMs` (default 3000) elapses. Resolves silently on timeout; it never throws. The caller's subsequent assertion is expected to produce the meaningful failure message.
+- **`retryUntil<T>(attempt, deadlineMs, intervalMs)`** — calls `attempt()` and, on rejection, retries after `intervalMs` until `deadlineMs` has passed. Re-throws the **last** rejection. Use for one-off resource readiness (e.g. a container or socket not yet accepting connections) where the final error *is* the diagnostic.
 
 ## Relationships
 
-- Consumed by integration and contract tests that assert on asynchronous, non-awaited side effects:
-  - `src/modules/account/tests/contract/lifecycle.contract.test.ts`
-  - `src/modules/account/tests/integration/reset-request-timing.test.ts`
-  - `src/modules/api-keys/tests/integration/activity.test.ts`
-  - `tests/cross-cutting/contract-search-parity.test.ts`
+Both exports are imported by integration and contract tests across the account, api-keys, cart, delivery, invoicing, observability, and payments modules. Typical callers:
 
-  Each caller passes a predicate (or relies on the default window) and then immediately issues the real assertion, which is expected to fail with a meaningful message if the condition never became true.
+- Invoicing factories (`src/modules/invoicing/tests/factories.ts`) use `retryUntil` to wait for a database or service to become reachable before seeding.
+- Integration tests (e.g. `reset-request-timing.test.ts`, `order-status-races.test.ts`, `external-refunds.test.ts`) call `eventually` to assert that a side effect (a row was written, a status flipped) landed after the action under test returned.
+- Contract tests (e.g. `lifecycle.contract.test.ts`, `shop.contract.test.ts`, `api.contract.test.ts`) use the same pair to confirm API-visible state changes without hard-coded sleeps.
 
 ## Notes
 
-- **Never throws.** By design, the timeout path resolves the same way the success path does. The assertion written *after* the `await eventually(...)` call is the one that should fail, carrying a test-specific message. An opaque "timed out" error from this helper would be strictly less useful.
-- Poll interval is hard-coded to 20 ms; only the window is parameterised.
-- The module is annotated `@module` and has no default export—import the named `eventually` binding.
+- `eventually` **resolves** (not rejects) when the window closes. The test author must follow it with an explicit assertion; otherwise a missed condition passes silently.
+- `retryUntil` rethrows the **last** error, not the first. If the failure mode changes between attempts, only the final one surfaces in the stack trace.
+- Polling interval in `eventually` is hardcoded to 20 ms; in `retryUntil` it is caller-supplied. Don't pass `intervalMs` of 0 — the recursive `.then(run)` will starve the event loop.

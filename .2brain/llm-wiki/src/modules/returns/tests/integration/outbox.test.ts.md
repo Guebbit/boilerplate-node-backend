@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/tests/integration/outbox.test.ts
-sha256: 230041860040a9d4b17ba9e690aa2f5d99c3a23031eb57a24405a3e8e9d19e24
-generated_at: 2026-10-15T11:59:39.333718+00:00
+sha256: 169445fd1ed5267d3920e4586c377b1b3c833e7c77c0b1ade48bba684560c5fc
+generated_at: 2026-10-29T05:47:50.005125+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,41 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that verify the transactional outbox guarantees for return domain events (`RETURN_REQUESTED`, `RETURN_RECEIVED`, `RETURN_CLOSED`). Confirms each event row is committed atomically with the write it announces, is keyed on the order ID for ordering, and is delivered to `onDomainEvent` subscribers via the relay. Runs against a real MongoDB instance.
+Integration test that verifies return domain events ride the transactional outbox: each event row commits atomically with the write it announces, is keyed on the order so per-order events stay in sequence, and is delivered to the event bus (and webhook fan-out) through the relay. Runs against a real MongoDB instance.
 
 ## Key elements
 
-- **`orderIn(status)`** – Helper that creates a user, a two-shirt product, and an order in the given `OrderStatus` (advancing through `carryOrderTo` for shipped/delivered), then sets a 7-day withdrawal window.
-- **`returnRows()`** – Queries `outboxEventModel` for the three return event names, sorted by `_id`, returning lean documents.
-- **`approvedReturn()`** – Creates a delivered order, opens a defective-goods return, and approves it as admin; returns the return ID and order ID.
-- **`describe('return.requested')`** – Verifies the event is written in the same transaction as the return (row present, status `published`) and delivered to a subscriber with the correct payload and `eventId`; also verifies no return row remains when the outbox write is forced to fail.
-- **`describe('a withdrawal before dispatch')`** – Verifies a pre-dispatch withdrawal writes both `RETURN_REQUESTED` and `RETURN_CLOSED` rows, both keyed on the order.
-- **`describe('return.received and return.closed')`** – Verifies the full receive→close lifecycle produces all three rows; confirms the return stays `approved` with no `RETURN_RECEIVED` row if the event write fails; confirms a second `closeReturn` call is a no-op (only one `RETURN_CLOSED` row).
+- **`orderIn(status)`** – Creates a customer, a single "Shirt" product, and a two-item order forced to the given `OrderStatus`. If the status implies shipping (shipped/delivered), it carries the order through the delivery factory. Sets a 7-day withdrawal window.
+- **`returnRows()`** – Queries `outboxEventModel` for the three return events (`RETURN_REQUESTED`, `RETURN_RECEIVED`, `RETURN_CLOSED`), sorted by `_id`.
+- **`approvedReturn()`** – Convenience: opens a defective-goods return on a delivered order and approves it as admin; returns the IDs needed by downstream tests.
+- **`describe('return.requested')`** – Asserts the event is written atomically with the return document, carries the correct payload/aggregate key, is `published`, and reaches a live `onDomainEvent` subscriber after `settleOutboxNudges()`. Also asserts that if the outbox write fails, no return document persists.
+- **`describe('return.decided')`** – Parametrized over approve/decline; asserts a single `RETURN_DECIDED` row with the right `decision` payload. Verifies a duplicate (lost-race) decision writes no additional row.
+- **`describe('a withdrawal before dispatch')`** – A `paid`-status order that is returned and immediately closed produces exactly two outbox rows (requested, then closed), both `published`.
+- **`describe('return.received and return.closed')`** – Verifies the receive→restock→close sequence writes three rows in order; confirms stock counters change atomically with the receipt; confirms a failed outbox write rolls back both the status and the restock; confirms a second `closeReturn` call is a no-op (only one `RETURN_CLOSED` row).
+- **`customers`** – Module-level counter ensuring each test customer gets a unique email address.
 
 ## Relationships
 
-- **`src/kernel/outbox.ts`** – `outboxEventModel` is queried for assertions and spied on to simulate write failures; `settleOutboxNudges()` flushes pending relay publishes so the test can assert on delivered events.
-- **`src/kernel/events.ts`** – `onDomainEvent` registers a subscriber to verify the relay delivers the event payload and `eventId`.
-- **`src/modules/returns/services/index.ts`** – Exports `createReturn`, `approveReturn`, `receiveReturn` under test.
-- **`src/modules/returns/services/close.ts`** – `closeReturn` is called directly to test idempotent closing.
-- **`src/modules/returns/events.ts`** – Provides the three event name constants used in queries and assertions.
-- **`src/modules/returns/repository.ts`** – `returnRepository` is used to assert domain state after atomicity-failure scenarios.
-- **`src/modules/returns/module.ts`** – `returnsModule` is registered in `registerCheckoutModules` before each test.
-- **`src/modules/payments/module.ts`** – Also registered so the checkout module graph is complete.
-- **`src/modules/orders/tests/factories.ts`** – `createOrder`, `toOrderItem`, `setWithdrawUntil` build the order fixture.
-- **`src/modules/delivery/tests/factories.ts`** – `carryOrderTo` transitions the order to shipped/delivered, creating real shipment documents.
-- **`src/modules/products/tests/factories.ts`** – `createProduct` creates the shirt SKU.
-- **`src/modules/users/tests/factories.ts`** – `createUser` creates the customer.
+- **`src/kernel/outbox.ts`** – Provides `outboxEventModel` (the Mongo model the tests query/spy on) and `settleOutboxNudges` (flushes the relay so assertions can run against published rows).
+- **`src/kernel/events.ts`** – Provides `onDomainEvent`, used to register a live subscriber and verify the relay actually dispatched the payload.
+- **`src/modules/returns/events.ts`** – Source of the event-name constants (`RETURN_REQUESTED`, `RETURN_RECEIVED`, `RETURN_CLOSED`, `RETURN_DECIDED`).
+- **`src/modules/returns/services/index.ts`** – `returnService` is the primary API under test (create, approve, decline, receive).
+- **`src/modules/returns/services/close.ts`** – `closeReturn` used in the idempotency test.
+- **`src/modules/returns/repository.ts`** – `returnRepository` used to assert persistence (or absence) of the return document.
+- **`src/modules/returns/module.ts`** – The module registered in `beforeEach` so the service is wired for the test.
+- **`src/modules/payments/module.ts`** – Co-registered via `registerCheckoutModules`; required for the full checkout pipeline to resolve.
+- **`src/modules/users/tests/factories.ts`** – `createUser` for test customers.
+- **`src/modules/products/tests/factories.ts`** – `createProduct` and `countersOf` (stock assertions).
+- **`src/modules/orders/tests/factories.ts`** – `createOrder`, `setWithdrawUntil`, `toOrderItem`.
+- **`src/modules/delivery/tests/factories.ts`** – `carryOrderTo` to advance an order through shipping states.
+- **`src/types/index.ts`** – `OrderStatus` enum used in helper signatures.
+- **`tests/support/callers.ts`** – `asCustomer`, `testCallerContext`, `callerContextAs` for auth context.
+- **`tests/support/checkout-modules.ts`** – `registerCheckoutModules` to wire the module registry per test.
 
 ## Notes
 
-- Only the mailer adapter is mocked; everything else (MongoDB, outbox relay, domain services) runs for real.
-- Atomicity is tested by spying on `outboxEventModel.create` and rejecting once with a synthetic "disk full" error — the expectation is that the domain write rolls back alongside the event row.
-- The `customers` counter guarantees a unique email per test to avoid unique-index collisions across tests.
-- `settleOutboxNudges()` must be awaited after each service call that writes an event; without it the relay may not have published yet and assertions on subscriber delivery will be racy.
-- For shipped/delivered orders the helper routes through `carryOrderTo` rather than setting the status directly, ensuring shipment documents exist (the module docblock calls this "through the real doors").
+- Uses **real MongoDB** (`setupTestDb`); the mailer adapter is the only mocked infrastructure dependency.
+- `settleOutboxNudges()` must be awaited after every write before asserting on outbox rows; forgetting it leaves rows in the `pending` state.
+- Atomicity tests work by spying on `outboxEventModel.create` and rejecting once — this simulates a disk failure mid-transaction.
+- The restock (stock-counter increment) lives inside the receipt's transaction; the test explicitly verifies counters are unchanged when the outbox write fails, confirming the unit is not double-sold.
+- The `customers` counter is module-level and never reset; each test gets a globally unique email to avoid upsert collisions in `createUser`.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/services/offline.ts
-sha256: 2b0f4403c574ebfe5de25f3621b600297905f1851070273859634a8809657781
-generated_at: 2026-10-15T11:31:00.264471+00:00
+sha256: 379bfd90a1e0aab7e3d64c8dbe52ab67bd3994134fe6edd6a5c398111bd740e2
+generated_at: 2026-10-29T05:12:13.963562+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Records a payment that arrived outside any card provider (cash at the counter, phone order paid by bank transfer) and routes it through the identical `settlePayment` path used by card payments, so the order transitions `pending → paid`, stock commits, and the same domain events fire. It exists so that non-card money enters the system with exactly the same lifecycle guarantees as provider-confirmed card charges.
+Records payments that arrived outside the card provider (cash at the counter, bank transfer, phone-order payment) and settles them through the same `settlePayment` pipeline every card payment uses — moving the order `pending → paid`, committing stock, and firing the standard status/payment events.
 
 ## Key elements
 
-- **`OfflinePaymentInput`** — interface for the parsed admin request body: a non-card `PaymentMethod`, an optional `reference` string, and an optional `receivedAt` ISO date.
-- **`recordOfflinePayment(orderId, input, context)`** — the sole exported function. Validates the input, loads the order, enforces the own-money and payability rules, cancels any open provider intent on that order, upserts the payment row via the repository, hands the result to `settlePayment`, emits audit and analytics records, and returns a `ResponseSuccess` (201 on create, 200 on convert-over-existing-intent) or a `ResponseReject`.
+- **`OfflinePaymentInput`** — Parsed request body: `method` (any `PaymentMethod` except `'card'`), optional `reference`, optional `receivedAt`.
+- **`recordOfflinePayment(orderId, input, context)`** — The single export. Validates the timestamp, looks up the order, checks payability via `isPayable`, cancels any open card intent, upserts the payment row, calls `settlePayment`, records audit + analytics, and returns `201` (new row) or `200` (converted existing row). Handles the late-transfer edge case where money lands after the order was cancelled.
 
 ## Relationships
 
-- **`src/infrastructure/http/response.ts`** — provides `generateSuccess`, `generateReject`, `fieldError`, and the `ResponseSuccess` / `ResponseReject` type shapes used for every return path.
-- **`src/infrastructure/i18n/index.ts`** — supplies the `t()` translation helper for all user-facing error and success messages.
-- **`src/infrastructure/observability/audit.ts`** — `recordAudit` is called once after a successful settlement to write the `PAYMENT_RECORDED_OFFLINE` audit entry.
-- **`src/infrastructure/observability/analytics/index.ts`** — `emitAnalyticsEvent` + `buildAnalyticsBase` produce the `PAYMENT_RECORDED_OFFLINE` analytics event.
-- **`src/modules/orders/index.ts`** / **`src/modules/orders/services/index.ts`** — re-export `orderService`, `orderTotal`, and `isPayable`, all consumed here for lookup, amount calculation, and payability gating.
-- **`src/modules/orders/domain/lifecycle.ts`** — owner of `isPayable`; the payability rule lives here, not in this file.
-- **`src/modules/orders/domain/totals.ts`** — owner of `orderTotal`, used to compute the `amount` stored on the new payment row.
-- **`src/modules/payments/repository.ts`** — `paymentRepository.findByOrderId` and `paymentRepository.upsertOffline` are the only data-access calls in this file.
-- **`src/modules/payments/audit.ts`** — provides the `paymentsAuditActions.PAYMENT_RECORDED_OFFLINE` action constant.
-- **`src/modules/payments/analytics.ts`** — provides the `paymentsAnalyticsEvents.PAYMENT_RECORDED_OFFLINE` event constant.
-- **`src/modules/payments/model.ts`** — supplies the `PaymentDocument` type used as the success payload.
-- **`src/modules/payments/providers/index.ts`** / **`src/modules/payments/providers/errors.ts`** — source of `PaymentInFlightError`, caught to turn an in-flight intent cancellation failure into a 409 response.
+- **`./settlement`** (`settlePayment`, `settlementResponse`) — Delegates the actual settlement; the offline path is not a separate settlement, it feeds into the shared one.
+- **`./intent`** (`cancelOpenIntent`) — Closes any still-open provider intent before overwriting the payment row, to prevent a late provider charge from landing with no local row to reconcile.
+- **`@modules/orders`** (`orderService.getById`, `buyerIdOf`, `orderTotal`, `isPayable`) — Order lookup, payer resolution, total computation, and the lifecycle "can this order still take a payment?" rule.
+- **`@modules/access`** (`ownOrderFlag`) — Flags the audit row when the acting admin is also the order's buyer.
+- **`../repository`** (`paymentRepository.upsertOffline`, `findByOrderId`) — Persistence for the offline payment row.
+- **`@infrastructure/http/response`** (`fieldError`, `generateSuccess`, `generateReject`) — Shaped API responses (200/201/409/422/404).
+- **`@infrastructure/i18n`** (`t`) — Localized error messages (`payments.received-at-future`, `payments.in-flight`).
+- **`@infrastructure/observability/audit`** / **`../audit`** — Audit-trail entry with `paymentsAuditActions.PAYMENT_RECORDED_OFFLINE`.
+- **`@infrastructure/observability/analytics`** / **`../analytics`** — Analytics event with `paymentsAnalyticsEvents.PAYMENT_RECORDED_OFFLINE`.
 
 ## Notes
 
-- **Unscoped order lookup.** `orderService.getById` is called without a caller-scope filter by design: authorization (`payments.any.create`) is already enforced at the route, and the own-money check (`orderService.ownMoneyRefusalFor`) is the next gate. This is an operator-only path, not a customer self-service one.
-- **Mongoose spread pitfall.** The code builds the upsert payload with explicit fields rather than `{ ...order, currency }` because the order is a hydrated Mongoose document whose schema paths are prototype getters, not own enumerable properties—spreading it yields an empty object.
-- **`cancelOpenIntent` before upsert.** If a card intent is still open at the provider, it is cancelled *before* the row is overwritten. Skipping this would leave an orphan intent that can still resolve days later with no local row to reconcile the charge against.
-- **201 vs 200.** The status code is `created ? 201 : 200`. A 200 means the offline payment converted over an existing (unpaid, intent-based) row rather than creating a new one.
-- **Flat `await` style.** Each step depends on the previous resolved value; nested `.then()` chains are deliberately avoided (same convention as `@modules/orders`'s `crud.ts#create`).
+- **Unscoped order lookup** — This is an operator action (gated by `create:Payment` at the route); the caller is never restricted to their own orders.
+- **Mongoose spread pitfall** — The upsert uses explicit fields (`amount`, `currency`, etc.) rather than spreading the order document, because Mongoose schema paths are prototype getters and would be lost in a spread.
+- **201 vs 200** — `201` only when the payment row is genuinely new; recording over an existing unpaid card-intent row returns `200`.
+- **Late-transfer branch** — If a transfer lands after the order was cancelled, it is recorded onto the existing `cancelled` payment row (keeping the reference) and returned as the response rather than rejected, so the money is not left unrecorded.
+- **`isPayable` from the orders domain** — The payability check is delegated to the orders lifecycle module rather than hard-coded here, keeping a single source of truth for the status rule.

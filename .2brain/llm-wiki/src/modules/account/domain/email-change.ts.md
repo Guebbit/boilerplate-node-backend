@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/domain/email-change.ts
-sha256: 304b5ab253b2b1aa1dd99fafdec3ae7cb23062bdbbfd18126b7b9c82c0da48e3
-generated_at: 2026-10-14T08:38:44.304692+00:00
+sha256: a656d130402d7bea9880b5818108943cfb1bc37e40d8b6445d48e745ffb46b2e
+generated_at: 2026-10-29T02:33:23.726492+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure, I/O-free finite-state machine for the account email-change flow. It encodes every valid state, event, and transition as a lookup table so the *where* and *what* of an email change is defined in exactly one place. The service layer and tests consume this table; no HTTP, no database, no email is touched here.
+A pure, I/O-free state machine that models the email-change lifecycle. It encodes every valid `(state → event → next state)` edge in a single lookup table, so the service layer never re-derives "what is allowed here." The state itself is not persisted; it is derived on the fly from two optional fields on the User document.
 
 ## Key elements
 
-- **`EMAIL_CHANGE_STATES`** — The four states (`idle`, `pending`, `changed`, `changedPending`) as a const tuple; also the source of the `EmailChangeState` union type.
-- **`EMAIL_CHANGE_EVENTS`** — The six events (`request`, `resend`, `confirm`, `cancel`, `undo`, `lapse`) as a const tuple; also the source of the `EmailChangeEvent` union type.
-- **`EmailChangeFields`** — Interface for the two optional User-document fields (`pendingEmail`, `previousEmail`) from which state is derived.
-- **`emailChangeStateOf(fields)`** — Maps a `{ pendingEmail, previousEmail }` pair to one of the four states. Pure function; no I/O.
-- **`TRANSITIONS`** (module-private) — The core lookup table: `Record<EmailChangeState, Partial<Record<EmailChangeEvent, EmailChangeState>>>`. A missing key means the event is a no-op in that state.
-- **`emailChangeNext(state, event)`** — Public accessor for the transition table; returns the next state or `undefined` (no-op).
-- **`undoRestoresPreviousEmail(state)`** — Predicate: `true` only when `state === 'changed'`, i.e. there is a stored old address to restore rather than a pending one to discard.
+- **`EMAIL_CHANGE_STATES` / `EmailChangeState`** – The four states: `idle`, `pending`, `changed`, `changedPending`.
+- **`EMAIL_CHANGE_EVENTS` / `EmailChangeEvent`** – The six events: `request`, `resend`, `confirm`, `cancel`, `undo`, `lapse`.
+- **`EmailChangeFields`** – The `{ pendingEmail?, previousEmail? }` pair read from the User document to derive state.
+- **`emailChangeStateOf(fields)`** – Maps the two optional fields to the corresponding state (pure boolean logic, no I/O).
+- **`TRANSITIONS`** (module-private) – The exhaustive `(state, event) → next-state` table. A missing key means the event is a no-op in that state.
+- **`emailChangeNext(state, event)`** – Public accessor for `TRANSITIONS`; returns the next state or `undefined` for a no-op.
+- **`undoRestoresPreviousEmail(state)`** – Returns `true` only for `changed`, distinguishing "restore old address" from "drop pending address."
 
 ## Relationships
 
-- **`domain/index.ts`** — Re-exports this module's public symbols so other files can `import { … } from '…/domain'` without reaching into the file directly.
-- **`services/email-change.ts`** — The service that *does* the I/O (write User doc, send emails). It calls `emailChangeStateOf` to read current state, `emailChangeNext` to validate an incoming action, and `undoRestoresPreviousEmail` to decide whether an undo link restores or cancels.
-- **`services/verification.ts`** — Owns the proof-link / undo-link tokens. The `confirm` and `undo` events in the transition table correspond to actions that only fire after `verification.ts` validates a token; this file merely records the resulting state change.
-- **`tests/unit/email-change-domain.test.ts`** — Exercises every cell of `TRANSITIONS` (valid and no-op), all four outputs of `emailChangeStateOf`, and the `undoRestoresPreviousEmail` predicate. No network or DB mocks needed because the module is side-effect free.
+- **`domain/index.ts`** – Barrel file; re-exports the public names from this module so consumers can import from the domain root.
+- **`services/email-change.ts`** – Consumes `emailChangeStateOf`, `emailChangeNext`, and `undoRestoresPreviousEmail` to decide which I/O (sending proof/undo emails, updating the User doc) to perform for a given event.
+- **`services/verification.ts`** – Exercises the `confirm`, `cancel`, `lapse`, and `undo` transitions by calling into the service above when proof/undo links are spent.
+- **`tests/unit/email-change-domain.test.ts`** – Unit-tests `emailChangeStateOf`, `emailChangeNext`, and `undoRestoresPreviousEmail` against the full transition table.
 
 ## Notes
 
-- **No-op, not error.** A missing transition entry is intentional: the caller should treat it as a silent no-op (idempotent repeat), never throw. The service layer must honour this contract.
-- **State is never stored.** It is always re-derived from `pendingEmail` / `previousEmail` via `emailChangeStateOf`. If you see a stored `emailChangeState` column, it's a bug or a legacy artifact.
-- **`changedPending` + `lapse` → `pending`.** This is the one transition where the old address is dropped *and* the new pending address survives. It is easy to misread as "lapse resets to idle" — it does not.
-- **`as const` + index access** means the string unions are the *only* valid values; passing an arbitrary string to `emailChangeNext` is a compile error, not a runtime one.
+- A missing entry in `TRANSITIONS` is **intentionally a no-op**, not an error. Every event is safe to repeat (idempotent by design); the caller is expected to treat `undefined` from `emailChangeNext` as "nothing to do."
+- The state is never stored. If you need to know "what state is this user in?", call `emailChangeStateOf` with the two fields—there is no cached value to read.
+- `changedPending` is the only state where both `pendingEmail` and `previousEmail` are simultaneously set; all other states have at most one of the two.
+- The `lapse` event from `changedPending` drops the pending address and falls back to `pending` (the old address is already gone), not back to `idle`.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/integration/pii.test.ts
-sha256: d1f42e4b0e10d30021a50d5d7ee347e4f9e5a45c8f244df534b7d28a6b2484ce
-generated_at: 2026-10-15T11:16:03.178141+00:00
+sha256: 9bff616e634f5f0159dc6a49eb6fc8eb162b2c6fbbfb95e16c0660f1a7dc947d
+generated_at: 2026-10-29T04:55:14.855036+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests verifying that order PII (shipping address, billing address, notes) is encrypted at rest, decrypts correctly on every read path (route, search, account export), and is cryptographically bound to its owning order via AAD so it cannot be decrypted on a different order.
+Integration tests verifying that order PII fields (`shippingAddress`, `billingAddress`, `notes`) are encrypted at rest in the database and correctly decrypted on every read path (HTTP route, service-level search, account export). Also confirms that ciphertext is bound to a specific order via AAD so it cannot be replayed against another document.
 
 ## Key elements
 
-- **`SHIPPING` / `BILLING` / `NOTES`** – Fixture constants holding the plaintext values written into the encrypted fields.
-- **`seedPiiOrder(user, email?)`** – Helper that creates a product and an order with all three encrypted fields (plus optional plaintext `email`) populated.
-- **`describe('order PII at rest')`** – Suite containing five cases:
-  - *No plaintext in raw collection* – serialises the raw Mongoose document and asserts none of the fixture strings appear.
-  - *Round-trips through GET /orders/{id}* – confirms the HTTP route returns decrypted values.
-  - *Decrypts in search and account export* – exercises `orderService.search` and `findOwnOrders`.
-  - *Still filters and sorts on the plaintext email* – verifies `email` is deliberately left unencrypted for queryability.
-  - *AAD binding* – copies an encrypted `notes` blob from order A to order B at the collection level; asserts that `toJSON()` on the reloaded document **throws**.
+- **`SHIPPING`, `BILLING`, `NOTES`** — constant fixture objects containing the PII values that must never appear in plaintext at rest.
+- **`seedPiiOrder(user, email?)`** — helper that creates a product, then an order with all three encrypted fields populated (and an optional plaintext email for filter/sort tests).
+- **`describe('order PII at rest')`** — five test cases:
+  - *stores no plaintext in the raw collection* — serialises the raw Mongo doc to JSON and asserts none of the fixture strings appear.
+  - *round-trips through GET /orders/{id}* — full HTTP round-trip via the `api()` helper.
+  - *decrypts in search results and the account export* — calls `orderService.search` and `orderService.findOwnOrders` directly.
+  - *still filters and sorts on the plaintext email* — email is intentionally **not** encrypted; verifies MongoDB query/sort still works on it.
+  - *refuses an order's notes copied onto another order: the order id is in the AAD* — copies raw ciphertext from one order's row into another and asserts `toJSON()` on the reloaded doc throws.
 
 ## Relationships
 
-- **`../../model` (`orderModel`)** – used to inspect the raw collection (`collection.findOne`) and to reload a document after the AAD tampering step.
-- **`../../services` (`orderService`, `findOwnOrders`)** – exercised for the search, owner-scoped search, and export read paths.
-- **`../../tests/factories.ts` (`createOrder`, `toOrderItem`)** – builds the test order and its line-item.
-- **`../../../products/tests/factories.ts` (`createProduct`)** – supplies the product referenced by the order item.
-- **`@tests/http` (`api`, `authenticateAs`)** – provides the authenticated HTTP client and a fresh test user.
-- **`@tests/setup-test-db` (`setupTestDb`)** – initialises the in-memory / temporary database before the suite runs.
+- **`src/modules/orders/model.ts`** — imports `orderModel`; uses `.collection.findOne` / `.collection.updateOne` to inspect raw ciphertext and to perform the cross-order copy for the AAD test.
+- **`src/modules/orders/services/index.ts`** — imports `orderService`; exercises `search()` and `findOwnOrders()` as the two non-HTTP read paths that must decrypt.
+- **`src/modules/orders/tests/factories.ts`** — imports `createOrder` and `toOrderItem` for document seeding.
+- **`src/modules/products/tests/factories.ts`** — imports `createProduct` (an order needs at least one item).
+- **`tests/support/http.ts`** — imports `api` and `authenticateAs` for the HTTP round-trip test and for obtaining a valid bearer token.
+- **`tests/support/setup-test-db.ts`** — calls `setupTestDb()` at module level to isolate the test database.
 
 ## Notes
 
-- **AAD is the order's `_id`.** The final test is the only one that intentionally corrupts state at the collection level; it proves the decryption key derivation includes the order identifier, not just a shared service key.
-- **`email` is plaintext by design.** The filtering/sorting test makes this contract explicit—if a future change encrypts `email`, the `orderService.search({ email })` and `sort: ['email']` assertions will break.
-- The test reaches into `orderModel.collection` (the underlying Mongoose collection) to read raw BSON, bypassing any schema-level decryption hooks. Do not replicate this pattern in production code.
+- **Email is deliberately unencrypted.** The "still filters and sorts" test documents this as a conscious design choice: addresses and notes are encrypted, but `email` remains a queryable plaintext column.
+- **AAD binding is per-order-ID.** The last test shows that decryption uses the order's `_id` as Associated Authenticated Data; a ciphertext copied into a different document will fail to decrypt (throws on `toJSON()`), while the in-memory Mongoose doc that still holds the original `_id` context does not throw.
+- **`setupTestDb()` is called once at module scope**, not inside each `it` block — the whole suite shares a single reset database.

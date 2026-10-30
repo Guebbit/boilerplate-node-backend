@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/outbox-names.test.ts
-sha256: 19d04baa08e134157f719bb53cd6d03869dba2363924e94a8319dadb4be34bc6
-generated_at: 2026-10-15T12:39:07.334074+00:00
+sha256: 3515fc988aecce22da7866a6a5d1c3457c6e74b2b623a0dfb056ddac9da8110a
+generated_at: 2026-10-29T06:47:47.852449+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Guarantees that every mail-template name published by this backend is well-formed, unique, resolvable to a real template file, and matches the exact agreed-upon set shared with the PHP twin. Because the name is a cross-repository identifier (the frontend e2e specs use it to locate a specific mail), it must be engine-agnostic, literal, and stable. This file enforces those invariants by reading the `emails.ts` source of every deployed module rather than importing the emails themselves.
+Enforces cross-backend naming conventions for the `template:` field every module publishes in its `emails.ts`. Because the paired PHP/Laravel twin uses the same identifier to locate mails in its own outbox, this test guarantees names are extension-free, unique, resolvable to a real template file, and exactly the set both backends have agreed on.
 
 ## Key elements
 
-- **`templateFileOrUndefined(name)`** — wraps `templateFile()` to convert its "unregistered name" throw into `undefined`, so the existence check can report *why* a name failed.
-- **`listEmailFiles()`** — discovers every `src/modules/<name>/emails.ts` via `readdirSync` on `MODULES_ROOT`; no hardcoded module list.
-- **`templateAssignments(source)` / `namesIn(source)`** — regex-extract `template:` lines and literal name values from raw source text.
-- **`publishedNames()`** — flat-maps all modules into a `{ module, name }[]` the test cases consume.
-- **Canary case** (`finds the mails it means to check`) — asserts ≥ 8 names across ≥ 3 modules so a structural rename doesn't silently empty the list.
-- **Literal-only case** — rejects any `template:` assignment that isn't a plain single-quoted string, closing the blind spot of computed names.
-- **Shape case** — enforces the `<module>.<event>` two-segment kebab-case pattern via regex (deliberately avoids `path.extname`, which misreads the dot in the name).
-- **Uniqueness case** — detects two modules publishing the same name.
-- **Existence case** — resolves each name through `templateFile()` and checks `existsSync`, catching typos that would only fail at send time.
-- **Agreed-set case** — compares the sorted published names against a hardcoded `agreedByPair` array (filtered by `isDeployed`), encoding the cross-repository contract.
+- **`templateFileOrUndefined(name)`** — Wraps `templateFile()` (from `mailer.ts`) to convert the "unregistered name" exception into `undefined`, so the existence check can distinguish "never registered" from "registered but file missing."
+- **`listEmailFiles()`** — Discovers every `src/modules/<name>/emails.ts` on disk rather than maintaining a manual list.
+- **`templateAssignments(source)`** — Extracts all lines matching `template:` from a source string.
+- **`namesIn(source)`** — Pulls the literal string value from each `template: '…'` assignment.
+- **`publishedNames()`** — Flattens the above into `{ module, name }[]` for all modules.
+- **Six `it` blocks** — (1) canary: non-empty discovery; (2) every `template:` value must be a string literal; (3) names must match `^[a-z][\da-z-]*\.[a-z][\da-z-]*$` (two kebab-case segments, no dot-suffix); (4) no two modules claim the same name; (5) every name resolves via `templateFile()` to an existing file; (6) the full set equals a hardcoded `agreedByPair` list (filtered through `isDeployed`).
 
 ## Relationships
 
-- **`src/infrastructure/adapters/mailer.ts`** — imports `templateFile`, the single function that turns a suffixless name into a filesystem path. The test's existence case depends on this resolution to prove a typo is caught.
-- **`tests/support/paths.ts`** — imports `MODULES_ROOT` (the directory scanned for `emails.ts` files) and `isDeployed` (filters the agreed-set against modules that may be disabled in a given environment).
-- **`src/infrastructure/adapters/template-registry.ts`** — indirect: `templateFile` in mailer.ts resolves names against this registry; the test's existence check therefore transitively validates registry entries.
+- **`src/infrastructure/adapters/mailer.ts`** — Imports `templateFile`, the single point where a logical name becomes a filesystem path (appending the engine-specific extension). The test depends on this function's existence and its throw-on-unregistered behavior.
+- **`tests/support/paths.ts`** — Imports `MODULES_ROOT` (base directory for the `emails.ts` discovery) and `isDeployed` (filters the agreed-name list to only modules present in the current deployment).
 
 ## Notes
 
-- The test reads **source text**, not runtime values. Any name assembled via a variable, template literal, or helper is invisible to the extraction regexes and will be flagged by the literal-only case.
-- The shape regex (`^[a-z][\da-z-]*\.[a-z][\da-z-]*$`) encodes "two segments, kebab-case" rather than banning specific extensions. This is intentional: a third templating engine would slip past a denylist.
-- `path.extname` is explicitly unsuitable here — the names are dotted by design, so it would read the event half as an extension.
-- The agreed-set case uses `isDeployed(name.split('.', 1)[0])` to drop names belonging to modules that are removed in the current deploy; deleting a module (`demo:remove`) must also remove its names from the hardcoded list.
-- The canary case exists because a renamed `emails.ts` or a changed `template:` field name would make every subsequent case pass vacuously over an empty list.
+- The test performs **static source analysis** (regex over `emails.ts` text). A name built at runtime (variable, template literal, helper call) is invisible to the sweep — which is exactly what the "literals only" case prevents.
+- `path.extname` cannot validate the no-extension rule because names are dotted by design (`account.verify-request` would be misread as having extension `.verify-request`). The regex is the correct tool.
+- The "agreed set" case hardcodes the full expected list. When a module is removed via `demo:remove`, its names are filtered out automatically through `isDeployed` rather than requiring a manual edit to the array.
+- The test relies on the shared setup in `tests/support/setup.ts` having already built the template collection for the worker; `templateFile()` resolves against that pre-built state.

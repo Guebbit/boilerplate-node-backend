@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/object-guards.ts
-sha256: 77f1bc6c862e5267535d1c4fad99e3614283aa2e99a63c826f4b76fbce464477
-generated_at: 2026-10-14T08:03:45.602793+00:00
+sha256: 21f33adc6e5b1d8b7a6b95d64bd54ec5f295d867ff524be59e4b18239802842a
+generated_at: 2026-10-29T02:07:52.068839+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides two small, dependency-free value helpers — `isPlainObject` and `stripUndefined` — that multiple unrelated call sites (i18n merging, locale key trees, HTTP request parsing, test factories) would otherwise each re-implement. It exists to keep that logic in one place without pulling in a utility library.
+A small set of shared value-guard and object-shaping utilities that prevent unrelated call sites (i18n dictionary merging, locale key trees, HTTP request bodies, test factories) from each re-implementing the same one-line logic. It exists so the three helpers have a single canonical location without belonging to any one module.
 
 ## Key elements
 
-- **`isPlainObject(value: unknown): value is Record<string, unknown>`** — Type guard that returns `true` only for plain objects. Explicitly excludes `null` and arrays (both of which pass a bare `typeof === 'object'` check but are treated as leaves, not traversable nodes, by every caller).
-- **`stripUndefined<T extends Record<string, unknown>>(source: T): T`** — Returns a shallow copy of `source` with every key whose value is `undefined` removed. Used to prevent explicit `undefined` entries from leaking into Mongoose filters (via `readInput`) or from shadowing model `default:` values when spread over a factory base object.
+- **`isPlainObject(value: unknown): value is Record<string, unknown>`** — Type guard for a plain object. Unlike a bare `typeof === 'object'` check, it excludes `null` and arrays, which callers treat as leaves rather than nodes to descend into.
+- **`stripUndefined<T extends Record<string, unknown>>(source: T): T`** — Returns a copy of `source` with every key whose value is `undefined` removed. Prevents explicit `undefined`s from leaking into Mongoose filters (request path) or from shadowing model `default:` values when a factory spread is applied.
+- **`fillOmittedWithNull<TValue>(body, fields): Record<string, TValue | null>`** — Adds `null` for every entry in `fields` that is absent from `body`. Encodes the PUT semantics ("the body IS the new resource", RFC 9110 §9.3.4) so the write side can distinguish "clear" (`null`) from "leave as-is" (absent).
 
 ## Relationships
 
-- **`src/infrastructure/http/request.ts`** — `readInput` calls `stripUndefined` on `||`-merged request bodies so explicit `undefined`s don't reach a Mongoose query filter.
-- **`src/infrastructure/i18n/catalog.ts`** — Uses `isPlainObject` while merging nested i18n dictionary entries to decide whether a value is a node to descend into or a leaf to replace.
-- **`src/modules/locales/services/keys.ts` / `src/modules/locales/factories.ts`** — Use `isPlainObject` when walking locale key trees.
-- **`src/modules/*/factories.ts` (addresses, orders, products, users)** — Call `stripUndefined` before spreading a partial override onto a default document, preventing `{ stock: undefined }` from winning over the schema's `default:`.
-- **`tests/unit/infrastructure/object-guards.test.ts`** — Unit tests for both exports.
+- **`src/infrastructure/http/request.ts`** — `readInput` in that module relies on `stripUndefined` so that a `||`-merged request body does not carry explicit `undefined` values into a downstream Mongoose filter.
+- **`src/infrastructure/i18n/catalog.ts`** — Uses `isPlainObject` (and possibly `stripUndefined`) when merging or traversing i18n dictionary structures.
+- **`src/modules/locales/services/keys.ts`** — Walks locale key trees; `isPlainObject` distinguishes branch nodes from leaf values.
+- **`src/infrastructure/surfaces/create-update-controller.ts`** — Calls `fillOmittedWithNull` to normalise a PUT body before handing it to the write layer.
+- **`src/modules/products/services/translated-write.ts`** — Uses `fillOmittedWithNull` on a PUT translation entry for the same "clear vs. absent" reason.
+- **Test factories** (`src/modules/addresses/factories.ts`, `src/modules/locales/factories.ts`, `src/modules/orders/factories.ts`, `src/modules/products/factories.ts`, `src/modules/users/factories.ts`) — Call `stripUndefined` before spreading partial objects over model defaults so that `{ stock: undefined }` does not override a `default:` value.
 
 ## Notes
 
-- `stripUndefined` is deliberately **not** named `compact` to avoid implying lodash's array-only, all-falsy-dropping semantics.
-- `stripUndefined` returns a **new object**; the original is not mutated.
-- The internal `as T` cast in `stripUndefined` is required because `Object.fromEntries` types its result as `{ [k: string]: unknown }`, losing the concrete key names of `T`.
-- `isPlainObject` narrows to `Record<string, unknown>`, not `object` — callers can index with arbitrary string keys immediately after the guard without a secondary assertion.
+- `stripUndefined` is deliberately **not** named `compact` to avoid confusion with lodash's array-oriented, falsy-dropping `compact`. The two behave very differently.
+- `fillOmittedWithNull` uses `in` (not a truthiness check) to decide whether a field was omitted, so an explicit `null` already present in the body is preserved rather than overwritten.
+- `stripUndefined` is generic over `T` but the implementation path goes through `Object.fromEntries` / `Object.entries`, which widens to `{ [k: string]: unknown }`; the trailing `as T` cast is what restores the caller's key type. This is safe because the filter only *removes* keys, never adds them.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/tests/integration/repository.test.ts
-sha256: 7b9acb9748f8e3ee67541281e7d1c48dcf6215a93a47d1d295d319cdb9abcdf2
-generated_at: 2026-10-15T11:49:00.850636+00:00
+sha256: 81190ee85691f6ee5b6df230ea05706ebf7d13053eb85edde67eb83b3fde0440
+generated_at: 2026-10-29T05:33:35.432900+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite for `productRepository` that exercises CRUD operations, aggregate reads (`facets`), and image-writeback logic against a real MongoDB instance. It specifically pins down the empty-catalogue arms of `$group`/`$facet` pipelines (which return no row rather than a zeroed one) and the idempotent/stale-job behaviour of `writebackImage`. Stock-level aggregates are explicitly out of scope and live in the inventory module's own tests.
+Integration tests for `productRepository` run against a real MongoDB instance. Covers CRUD operations (`create`, `findById`, `findOne`, `findAll`, `count`, `save`, `deleteOne`), the `facets` aggregate, and the `writebackImage` image-processing callback — including the critical "empty catalogue" arms where `$group`/`$facet` pipelines return no row at all rather than a zeroed one.
 
 ## Key elements
 
-- **`describe('productRepository')`** — top-level suite covering `create`, `findById`, `findOne`, `findAll`, `count`, `save`, `deleteOne`.
-- **`describe('an empty catalogue')`** — second top-level suite that wipes the collection in `beforeEach` and asserts:
-  - `facets()` resolves to `{ categories: [], tags: [] }` (no crash on absent aggregate row).
-  - `writebackImage` returns `true` on match, `true` on duplicate (idempotent), and `false` on a stale `pendingImageKey`.
-- **`setupTestDb()`** — called at module scope to boot and reset the test MongoDB before any test runs.
-- **`makeProduct` / `createProduct`** — test factories for building and persisting fixture products.
-- **`asStub`** — utility cast used to verify `findAll` returns lean (plain-JS) objects with no Mongoose methods like `save`.
+- **`setupTestDb()`** — called at module top-level; provisions and tears down the test database for the whole suite.
+- **`describe('productRepository')`** — CRUD test block:
+  - `create` — verifies inserted document shape; asserts `imageUrl` is `undefined` (absent, not a placeholder).
+  - `findById` / `findOne` — happy path and `null` return for missing documents.
+  - `findAll` — no-filter, `limit`, `skip` pagination, `active` flag filter, and that results are lean plain-JS objects (no Mongoose `save` method).
+  - `count` — total, filtered, and empty-collection (returns `0`).
+  - `save` — persists mutations and confirms via a re-fetch.
+  - `deleteOne` — removes only the targeted document.
+- **`describe('an empty catalogue')`** — isolated block that wipes the collection in `beforeEach`:
+  - `facets()` — asserts it resolves to `{ categories: [], tags: [] }` rather than crashing on an absent aggregate row.
+  - `writebackImage` — verifies `true` for a matching `pendingImageKey`, `true` on a duplicate (idempotent) call, and `false` for a stale key.
 
 ## Relationships
 
-- **`src/modules/products/repository.ts`** — system under test; `productRepository` is the sole subject of every assertion.
-- **`src/modules/products/model.ts`** — `productModel` is imported directly to perform raw `deleteMany({})` (empty-catalogue reset) and `updateOne` (to set `pendingImageKey` before calling `writebackImage`).
-- **`src/modules/products/tests/factories.ts`** — provides `makeProduct` (in-memory object) and `createProduct` (insert + return doc) used throughout the suite.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the shared test database connection and collection cleanup.
-- **`tests/support/stub.ts`** — `asStub<T>()` cast lets the lean-object assertion type-check without adding a real dependency on Mongoose types.
-- **`src/modules/products/factories.ts`** — transitive dependency pulled in by the test factories (`tests/factories.ts`); not imported directly by this file.
+- **`src/modules/products/repository.ts`** — the module under test; all assertions call its exported `productRepository`.
+- **`src/modules/products/model.ts`** — `productModel` is imported directly (bypassing the repository) to wipe state (`deleteMany`) and to set `pendingImageKey` before `writebackImage` tests.
+- **`src/modules/products/tests/factories.ts`** — supplies `makeProduct` (plain data object for `create`) and `createProduct` (persists via the repository and returns the document).
+- **`tests/support/setup-test-db.ts`** — `setupTestDb` manages the shared Mongo test lifecycle.
+- **`tests/support/stub.ts`** — `asStub` is a type-level cast used solely to assert that lean results lack Mongoose methods.
 
 ## Notes
 
-- The empty-catalogue suite relies on `productModel.deleteMany({})` in `beforeEach`, not on the repository API, to guarantee a clean slate for the aggregate edge cases.
-- `findAll` is asserted to return **lean** documents (no `.save` method). If the repository implementation ever switches to returning hydrated Mongoose docs, the `asStub` check will catch it.
-- The `findOne` multi-match test deliberately avoids asserting which document is returned, since insertion order is not guaranteed; it only checks that a document is returned.
-- `writebackImage` idempotency (duplicate job → `true`) is a contractual guarantee for the image-pipeline caller so that twin files are not deleted on a re-run.
+- `productModel` is used directly (not through the repository) for test setup/teardown — this is intentional to manipulate fields (`pendingImageKey`) and clear state that the repository API doesn't expose.
+- The "empty catalogue" block deliberately calls `productModel.deleteMany({})` in `beforeEach` so each test starts from a guaranteed-empty collection, independent of the CRUD block above.
+- The file's doc comment explicitly notes that stock-related aggregates (`sumReserved`, `countLowAvailability`, stock board) are tested in the inventory module's `stockLevelRepository` tests, not here.
+- `asStub` is not a mock; it is a zero-runtime-cost type assertion used to check the *absence* of a property on a lean object.

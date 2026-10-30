@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/controllers/create-subscription.ts
-sha256: ee85b091137b7ee72ed97daf14311db76087d29acfc13e97ae8c4139dc727193
-generated_at: 2026-10-15T12:17:49.333248+00:00
+sha256: 06c68493a167539f66f8beb14930ec1bdb4a26e43df9d1f13cf1c2b8dac32494
+generated_at: 2026-10-29T06:25:02.676248+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express route handler for `POST /webhooks/subscriptions`. It validates the request body against the generated Zod schema, delegates creation to `webhooksService`, and returns a **201** with the created subscription plus its one-time delivery secret.
+HTTP controller for `POST /webhooks/subscriptions`. Parses and validates the request body, resolves the tenant/caller context, delegates creation to the webhooks service, and returns a `201 Created` response containing the subscription view plus its one-time delivery `secret`.
 
 ## Key elements
 
-- **`createWebhookSubscription(request, response)`** – The sole export. Parses the body with `parseBody`, calls `webhooksService.createSubscription(body, tenantContext)`, then either short-circuits on a refused result or builds a `createdResponse` containing the presented subscription spread with `result.data.secret` and the location URI `/webhooks/subscriptions/:id`.
+- **`createWebhookSubscription`** (exported) — Express handler. Pipeline: `parseBody` → `tenantCallerContextOf` → `webhooksService.createSubscription` → `viewSubscription` → `createdResponse`. On any thrown error, `catchAs` maps it to an appropriate HTTP error response.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** – Provides the `parseBody`, `refused`, and `catchAs` helpers that structure validation, domain-rejection, and error handling.
-- **`@infrastructure/http/request`** – `tenantCallerContextOf` extracts the tenant identity from the incoming request and passes it into the service call.
-- **`@infrastructure/http/response`** – `createdResponse` produces the final 201 JSON + `Location` header.
-- **`../services`** – `webhooksService.createSubscription` performs the actual domain work; the controller is a thin adapter.
-- **`../presenters`** – `presentWebhookSubscription` maps the internal subscription shape to the public API shape.
-- **`@types`** – `CreateWebhookSubscriptionRequest` and `WebhookSubscriptionCreated` constrain the request/response generics.
-- **`routes.ts`** – Registers this handler on the `POST /webhooks/subscriptions` path.
+- **`src/infrastructure/http/controller.ts`** — supplies `parseBody`, `refused`, and `catchAs` utilities used for validation, service-result handling, and error mapping.
+- **`src/infrastructure/http/request.ts`** — supplies `tenantCallerContextOf` to extract tenant and caller identity from the incoming request.
+- **`src/infrastructure/http/response.ts`** — supplies `createdResponse`, which sets the `201` status, `Location` header, and JSON body.
+- **`src/modules/webhooks/services/index.ts`** — re-exports `webhooksService`; this controller calls `webhooksService.createSubscription(body, context)`.
+- **`src/modules/webhooks/services/actions.ts`** — supplies `viewSubscription`, which shapes the stored subscription into the caller-facing representation (hides internal fields).
+- **`src/modules/webhooks/routes.ts`** — registers this handler on the `POST /webhooks/subscriptions` route.
+- **`src/types/index.ts`** — provides `CreateWebhookSubscriptionRequest` (typed request body) and `WebhookSubscriptionCreated` (response payload shape).
 
 ## Notes
 
-- The delivery `url` is checked twice: a `https://` pattern in the Zod schema at creation time, and an SSRF guard that re-resolves the IP on every delivery (see `@infrastructure/adapters/ssrf-guard.ts`). The controller itself only enforces the first check via the schema.
-- The `secret` is returned **only** in this creation response (merged via spread onto the presented subscription). Subsequent reads of the subscription will not include it.
-- The handler is asynchronous (returns a Promise from the `.then/.catch` chain); Express handles the eventual `res` call.
+- The delivery `secret` is included **only** in the `201` creation response; it is not part of `viewSubscription` and is not retrievable afterwards.
+- The `url` field is constrained to `https://` by the generated Zod schema at creation time, but is re-validated against the **resolved IP** on every subsequent delivery via the SSRF guard (`@infrastructure/adapters/ssrf-guard.ts`), since DNS can change post-creation.
+- `parseBody` writes its own error response and returns `undefined` on failure; the handler does an early `return` in that case.

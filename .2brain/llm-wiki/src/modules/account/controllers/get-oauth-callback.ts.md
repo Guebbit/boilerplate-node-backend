@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/get-oauth-callback.ts
-sha256: fc49f731c3825a8b940b0aab9b1cb9b150e958510221550228714961214cb147
-generated_at: 2026-10-15T09:53:57.176595+00:00
+sha256: 749f60becb28d73373214d018c9a6762bc39e6f1431c10ffeec880348cefdc71
+generated_at: 2026-10-29T02:27:12.767892+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Handles `GET /account/oauth/:provider/callback` — the redirect a browser receives after the OAuth provider's consent screen. Validates the CSRF `state` against its cookie, exchanges the authorization code (with PKCE verifier), resolves or creates the account, then either mints a session, routes through the 2FA challenge flow, or fails back to the frontend with a `?error=` query param. Only three response shapes ever reach the browser: 404 (unknown provider), 400 (state/verifier mismatch), or 302.
+Handler for `GET /account/oauth/:provider/callback` — the endpoint a provider's consent screen redirects the browser back to. It validates the CSRF `state` and PKCE verifier, exchanges the authorization code, then either links the identity to an already-signed-in account or finds/creates an account and mints a session. Every failure after `state` is trusted is communicated via a 302 redirect carrying `?error=<code>` because the browser is mid-navigation and cannot read a JSON body.
 
 ## Key elements
 
-- **`getOAuthCallback(request, response)`** — the sole export; full callback pipeline from state check through code exchange, account resolution, session issuance (or MFA challenge), and cookie cleanup.
-- **`clearOAuthCookies(response)`** — internal helper that destroys all four single-use cookies (`state`, `verifier`, `continue`, `locale`) at every terminal outcome, success or failure.
+- **`getOAuthCallback`** (exported) — the Express route handler. Orchestrates the full callback: provider lookup → state check → verifier check → code exchange → login-or-link → session issuance (or MFA / deletion-challenge cookie). Returns `Promise<void>` via chained `.then/.catch`.
+- **`clearOAuthCookies(response)`** (module-private) — destroys all five single-attempt OAuth cookies (`state`, `verifier`, `continue`, `locale`, `link`). Called on every terminal path (success and failure) because none survive the callback.
+- **`signedInUserId(request)`** (module-private) — resolves the current session's user ID by reading the session cookie and calling `resolveCookie`. Needed because in `jwt` mode the global middleware does not populate `req`'s caller from a refresh-token cookie.
+- **`savedLocale()`** (closure inside handler) — lazily reads and validates the `OAUTH_LOCALE_COOKIE` for use in frontend redirect URLs.
+- **`recordFailureAndClear(reason)`** (closure) — audit log + `authOauthTotal` metric increment + `clearOAuthCookies`. Shared tail for all failure branches.
+- **`failToFrontend(reason)`** (closure) — calls `recordFailureAndClear`, then issues a 302 to the frontend callback URL with `?error=<reason>`.
 
 ## Relationships
 
-- **`routes.ts`** — mounts `getOAuthCallback` at the `/account/oauth/:provider/callback` path.
-- **`oauth/providers/index.ts`** — `resolveOAuthProvider` looks up the provider config; its `exchangeCode` method performs the token exchange.
-- **`oauth/state.ts`** — supplies `stateMatches`, cookie-destroy helpers, `isSameOriginPath`, `isLocaleTag`, and the four cookie name constants.
-- **`oauth/config.ts`** — provides `oauthCallbackUrl`, `oauthFrontendCallbackUrl`, and `oauthFrontendMfaCallbackUrl` for building redirect targets.
-- **`oauth/mfa-redirect.ts`** — `createMfaChallengeCookie` stores the 2FA challenge for the frontend to pick up.
-- **`services/index.ts` / `services/oauth.ts`** — `loginOrCreateFromOAuth` resolves the account; `recordOAuthFailure` logs the audit row; `twoFactorService.buildLoginChallenge` creates the MFA step; typed error classes (`OAuthEmailUnverifiedError`, `OAuthAccountUnverifiedError`, `OAuthAccountUnavailableError`) drive catch-branch routing.
-- **`session/device-cookie.ts`** — `rememberDevice` marks the completed login so the per-account failure budget is skipped on that device.
-- **`metrics.ts`** — `authOauthTotal` Prometheus counter incremented with `{provider, status}` labels.
-- **`infrastructure/i18n/index.ts` / `context.ts`** — `t()` localizes the 404/400 error strings.
-- **`infrastructure/http/response.ts`** — `rejectResponse` emits the 404/400 JSON bodies (the only non-redirect responses).
-- **`infrastructure/http/cookies.ts`** — `cookieOf` reads the request cookies.
-- **`infrastructure/http/request.ts`** — `callerContextOf` extracts the audit context (IP, UA, etc.).
-- **`infrastructure/adapters/logger.ts`** — logs unexpected catch-branch errors (provider/exchange failures) with provider name and error.
+- **`@kernel/authentication` / `@kernel/cookies`** — `resolveCookie` + `readSessionCookie` resolve the session token to a user ID for the link path.
+- **`@infrastructure/http/cookies`** — `cookieOf` reads all OAuth cookies from the request (state, verifier, continue, locale, link).
+- **`@infrastructure/http/request`** — `callerContextOf` extracts the audit context (IP, user-agent, etc.) passed to service-layer recorders.
+- **`@infrastructure/http/response`** — `rejectResponse` produces the 404 (unknown provider) and 400 (bad state/verifier) JSON responses.
+- **`@infrastructure/i18n`** — `t()` provides localized error messages for the 400/404 responses.
+- **`@infrastructure/adapters/logger`** — `logger.error` logs unexpected failures in the link path.
+- **`../oauth/state`** — `stateMatches` (timing-safe comparison), the five `destroy*Cookie` helpers, `isSameOriginPath`, `isLocaleTag`, and the cookie-name constants.
+- **`../oauth/providers`** — `resolveOAuthProvider` maps the URL param to a provider object; the provider's `exchangeCode` performs the token exchange.
+- **`../oauth/config`** — `oauthCallbackUrl`, `oauthFrontendCallbackUrl`, `oauthFrontendMfaCallbackUrl`, `oauthFrontendDeletionCallbackUrl` build the redirect targets.
+- **`../oauth/mfa-redirect`** — `createMfaChallengeCookie` sets the cookie that carries the MFA challenge to the frontend.
+- **`../oauth/deletion-redirect`** — `createDeletionChallengeCookie` sets the cookie for the deletion-grace restore flow.
+- **`../metrics`** — `authOauthTotal` Prometheus counter incremented on success, failure, and deletion-pending outcomes.
+- **`../routes`** — registers `getOAuthCallback` as the handler for `GET /account/oauth/:provider/callback`.
 
 ## Notes
 
-- **Fail-closed PKCE:** a missing or empty verifier cookie is rejected outright (400) rather than falling through to a non-PKCE exchange — a provider that never received a challenge will happily accept a verifier-less exchange, so the two cases must never share a branch.
-- **Trusting order:** `continue` and `locale` cookies are only read *after* `state` validates. A forged callback must not be able to steer a stranger's browser; both values are also re-validated (`isSameOriginPath`, `isLocaleTag`) because cookies are client-writable.
-- **302 vs. JSON after navigation begins:** once the code-exchange step starts the browser is mid-navigation, so all subsequent failures redirect to the frontend with `?error=<code>` instead of returning a JSON body.
-- **2FA is account-scoped, not method-scoped:** if `user.twoFactorEnabledAt` is set, the OAuth login routes through `twoFactorService` just like the password path. Skipping this would let a provider alone satisfy a second factor.
-- **Audit de-duplication:** `recordLoginSuccess` fires only when `outcome === 'login'`. The `link` and `signup` paths already emit their own audit rows inside `loginOrCreateFromOAuth`; recording `AUTH_LOGIN` again would double-count.
-- **`provedAt` is captured *before* `exchangeCode`:** if the user changes their password during the async exchange, the subsequent login check can detect the stale proof and refuse.
-- **Stryker annotations** (`Stryker disable all` / `restore all`) wrap the `logger.error` call to suppress mutation tests on that single line.
+- **Fail-closed PKCE:** a missing or empty verifier cookie is a hard 400. The code explicitly avoids sharing the "no cookie" branch with "skip PKCE," because a provider that received no challenge will accept an exchange with no verifier.
+- **Re-validation of client-writable cookies:** `continue` and `locale` are re-validated (`isSameOriginPath`, `isLocaleTag`) *after* state is trusted, because cookies are trivially forged; the name alone is never sufficient.
+- **`provedAt` timing:** captured before `exchangeCode` so that a password change during the exchange window can be detected downstream and the login refused.
+- **Audit deduplication:** only a genuine `login` outcome records `AUTH_LOGIN`; the `link` and `signup` sub-paths already audit themselves inside `loginOrCreateFromOAuth`, preventing double-counting.
+- **2FA is account-level:** `twoFactorEnabledAt` is checked even on the OAuth path. Minting a session without honoring it would let a provider bypass a second factor the user deliberately armed.
+- **Link path never mints a session:** the connecting account is already signed in; the callback only attaches the new identity and redirects back.
+- **Stryker markers** (`// Stryker disable all` / `restore`) bracket the `logger.error` call in the link-path catch, indicating the mutation-testing suite suppresses mutations there (the `failToFrontend` fallback is the behavior under test).

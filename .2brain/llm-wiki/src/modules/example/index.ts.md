@@ -1,7 +1,7 @@
 ---
 source: src/modules/example/index.ts
-sha256: 42843aa603eeb71d51851571e8e264aed8679871b76e3b54302d41831460185e
-generated_at: 2026-10-15T10:30:39.402070+00:00
+sha256: 014ffcb80b42401e0f930f3664dc65b6ff005d30e06e9f7cce8f35943d67e089
+generated_at: 2026-10-29T03:53:14.813890+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Public barrel for the `example` module. It is the **only** entry point a sibling module is allowed to import from, re-exporting services, domain rules, events, emails, and the model's type surface. Everything else (repositories, model runtime values, wiring, `factories.ts`) is deliberately excluded.
+Public barrel for the `example` module — the sole import surface that sibling modules are allowed to use. It aggregates the module's services, domain rules, events, and email templates, and re-exports the model's *types* (not its runtime values). This file exists so that external code never reaches into the module's internal file layout.
 
 ## Key elements
 
-- **`export * from './services'`** – Re-exports all service-level exports (likely use-case / application-service functions).
-- **`export * from './domain'`** – Re-exports domain rules (value objects, entities, invariants).
-- **`export * from './events'`** – Re-exports domain event definitions and helpers.
-- **`export * from './emails'`** – Re-exports email template definitions and related types.
-- **`export type * from './model'`** – Re-exports **types only** (no runtime values) from the model layer, keeping the model's internal implementation private to the module.
+- **`export * from './services'`** — re-exports the example service (and any other service exports from `./services/index.ts`).
+- **`export * from './domain'`** — re-exports the module's domain rules (from `./domain/index.ts`).
+- **`export * from './events'`** — re-exports the publish event and any other domain events.
+- **`export * from './emails'`** — re-exports email template definitions/helpers.
+- **`export type * from './model'`** — re-exports *only the type-level* exports of the model (interfaces, types, literals). No runtime values are exposed.
 
 ## Relationships
 
-- **`src/modules/example/services/index.ts`** — Source of the `./services` re-export; this barrel exposes its public API to the rest of the codebase.
-- **`src/modules/example/domain/index.ts`** — Source of the `./domain` re-export.
-- **`src/modules/example/events.ts`** — Source of the `./events` re-export.
-- **`src/modules/example/emails.ts`** — Source of the `./emails` re-export.
-- **`src/modules/example/model.ts`** — Source of the type-only re-export; its runtime values are **not** exposed.
-- **`tests/cross-cutting/webhook-event-producers.test.ts`** — Consumes event exports through this barrel.
-- **`tests/unit/infrastructure/adapters/mailer-templates.test.ts`** — Consumes email exports through this barrel.
+- **`./services/index.ts`**, **`./domain/index.ts`**, **`./events.ts`**, **`./emails.ts`**, **`./model.ts`** — direct re-export sources; this barrel is their sole outward-facing alias.
+- **`tests/cross-cutting/webhook-event-producers.test.ts`** — imports events from this barrel to verify webhook emission.
+- **`tests/unit/infrastructure/adapters/mailer-templates.test.ts`** — imports email templates from this barrel for adapter unit tests.
 
 ## Notes
 
-- The distinction between `export *` and `export type *` is intentional and load-bearing: the model's runtime values (e.g. factory functions, class instances) are intentionally **not** part of the public surface. Importing a model value directly from a sibling is a boundary violation.
-- The JSDoc header references `docs/theory/strategic-ddd.md` as the canonical explanation of *why* the module is shaped this way.
-- Adding a new `export * from '…'` line to this file widens the module's public API. Do so only when the neighbor truly needs that symbol; prefer adding it to a more specific sub-barrel and re-exporting selectively.
+- `./model` is exported with `export type *`, so no runtime binding (class instances, functions, constants) from the model leaks through this surface. Importing a *value* from the model will fail at compile time via this barrel.
+- Per the module convention (see `docs/theory/strategic-ddd.md`), this barrel must **never** re-export repositories, the model's runtime exports, wiring files, or `factories.ts`.
+- Sibling modules must import *only* from this file; deep imports into `./services`, `./domain`, etc. are considered a violation of the module boundary.

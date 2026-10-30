@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/observability/metrics-outbox.ts
-sha256: ea4892b88c56c62cd3f8e726cc7148817119efcf2ca6cc7e7d49228e656c8d48
-generated_at: 2026-10-14T08:06:25.222666+00:00
+sha256: 0145deb70b0a1d870cb37436a9f099b95135ae158e79ffc2fff899ffe8f89c0e
+generated_at: 2026-10-29T02:10:22.192070+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Prometheus metrics (three counters, one gauge) for the transactional-outbox pattern. The counters are cheap, in-memory counters the relay process can increment without a DB round trip; the gauge answers "how many events are still waiting" by reading the database at scrape time.
+Defines the Prometheus metrics (three counters + one gauge) that track transactional-outbox throughput in the relay process. Counters report without a database round trip; the single gauge reads Mongo at scrape time to expose how many events are still pending publication.
 
 ## Key elements
 
-- **`outboxEventsPublishedTotal`** (Counter) – incremented each time an event is dispatched to consumers and marked published. Duplicate publishes count again.
-- **`outboxEventsRetriedTotal`** (Counter) – incremented on failed dispatch attempts that are rescheduled with backoff.
-- **`outboxEventsDeadTotal`** (Counter) – incremented when an event exhausts all attempts and is parked as `dead`. A non-zero rate is the `OutboxEventsDead` alert.
-- **`setOutboxPendingReader(reader)`** – one-time injection point. The owner of the outbox model supplies a `() => Promise<number>` that counts rows still `pending`. Stored in a module-level `readPendingCount` variable.
-- **`_outboxPendingGauge`** (Gauge, not exported) – `outbox_pending_events`. Its `collect` callback calls the injected reader at scrape time. Skips the DB call if no reader is set or if `mongoose.connection.readyState` is not `connected`, so a scrape never blocks on a dead connection.
+- **`outboxEventsPublishedTotal`** (Counter) — Incremented each time the relay dispatches an event and marks it published. Duplicate publishes count again.
+- **`outboxEventsRetriedTotal`** (Counter) — Incremented on a failed dispatch attempt that is rescheduled with backoff.
+- **`outboxEventsDeadTotal`** (Counter) — Incremented when an event is parked as `dead` after exhausting all attempts. A rate above zero is the `OutboxEventsDead` alert.
+- **`setOutboxPendingReader(reader)`** — Injects an async `() => Promise<number>` that returns the count of rows still `pending`. Called once by the owner of the outbox model.
+- **`_outboxPendingGauge`** (Gauge, module-private) — At scrape time, invokes the registered reader and sets the gauge. Silently skipped if no reader is registered or Mongo is not connected (keeps scrape latency bounded).
 
 ## Relationships
 
-- **`./metrics-registry`** – every metric in this file passes `registers: [metricsRegistry]`, so all outbox metrics are exposed on the shared registry used by the scrape endpoint.
-- **`src/kernel/outbox.ts`** – the outbox model (owner) calls `setOutboxPendingReader` with a query function that counts `pending` rows. This file deliberately does **not** import the model; the dependency direction is enforced by layering (observability sits below kernel).
+- **`metrics-registry.ts`** — All four metrics register against the shared `metricsRegistry` instance so they appear on the single `/metrics` endpoint.
+- **`metric-config.ts`** — Supplies `counterConfig` / `gaugeConfig` helpers that expand the generated name, description, and labels into the shape `prom-client` expects.
+- **`metrics.generated.ts`** — Provides the typed `infrastructureMetricData` entries (names, help text, label names) consumed by the config helpers.
+- **`src/kernel/outbox.ts`** — The gauge *cannot* import this module (observability sits below kernel in the dependency graph). Instead, the outbox model's owner calls `setOutboxPendingReader` with a closure that queries its own collection. This is the sole interaction; no import exists in this file.
 
 ## Notes
 
-- The gauge reads Mongo **at scrape time**, not at write time, because the writer, relay, and scraper may each run in a different process.
-- The gauge silently returns `undefined` (no value set) when Mongo is disconnected — a scrape must stay fast; this mirrors the job-gauge convention.
-- `_outboxPendingGauge` is intentionally non-exported; consumers get the metric via the registry, not by importing the gauge object.
-- All metrics are counters except the pending gauge; the module docblock states counters are chosen specifically because they require no DB access to report.
+- The gauge's `collect` callback is **async** (returns a Promise). `prom-client` awaits it, but if Mongo is unreachable the function returns early rather than hanging the scrape.
+- `setOutboxPendingReader` overwrites the previous reader. Call it exactly once during startup; calling it a second time replaces the first silently.
+- Counters are monotonically increasing; they are not reset between restarts unless the process is killed (Prometheus standard).
+- The file exports only the three counters and `setOutboxPendingReader`; the gauge itself is intentionally private, accessible solely through the shared registry.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/api-keys/controllers/list-api-keys.ts
-sha256: 5492ca9404df3a58f92753e2621851d333e07975788c614570fb4cbc756c973e
-generated_at: 2026-09-27T14:40:44.571391+00:00
+sha256: 4198ce15fbd6682a10cf911282ff480f58617f05d8b075507cb2ba5d4151ab14
+generated_at: 2026-10-29T03:12:36.734519+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP controller for `GET /api-keys`. Returns the calling tenant's API-key credentials in newest-first order, with pagination. Secrets are never included in the response.
+Thin HTTP controller for `GET /api-keys`. It wires request parsing, tenant-context extraction, and service delegation into a single list-endpoint handler built via the shared list-controller factory.
 
 ## Key elements
 
-- **`listApiKeys`** (exported) — The route handler, built via `createListController`. Accepts a paginated query (validated by `paginationSchema`), extracts the tenant caller context from the request, and delegates to `apiKeysService.listApiKeys`. Returns `Promise<ApiKeysResponse>`.
+- **`listApiKeys`** (export) — The only export. A list-controller produced by `createListController` that validates query params, then calls `apiKeysService.listApiKeys` with the tenant caller context and parsed params. Returns `Promise<ApiKeysResponse>`.
+- **`schema`** (inline) — Extends `ListApiKeysQueryParams` with `pageSchema` / `pageSizeSchema` and applies `.partial()`, so every query param is optional.
+- **`input: { csvLists: ['sort'] }`** — Tells the list-controller to split the `sort` query param on commas into an array before passing it to `runList`.
 
 ## Relationships
 
-- **`@infrastructure/surfaces/create-list-controller`** — Provides the `createListController` factory that wires query-parsing, validation, and response formatting around the `runList` callback.
-- **`@infrastructure/http/schemas`** — Supplies `paginationSchema`, used to validate the incoming query parameters (page, limit, etc.).
-- **`@infrastructure/http/request`** — Supplies `tenantCallerContextOf`, which derives the tenant-scoped caller context from the raw `request` object.
-- **`@types`** — Supplies the `ApiKeysResponse` type used as the return type of `runList`.
-- **`../services`** (api-keys service index) — Provides `apiKeysService`, the domain service whose `listApiKeys` method performs the actual data retrieval.
-- **`src/modules/api-keys/routes.ts`** — The routes file that registers `listApiKeys` on the `GET /api-keys` path.
+- **`@infrastructure/surfaces/create-list-controller`** — Supplies the `createListController` factory that handles HTTP plumbing (status codes, error mapping) and exposes only the `runList` callback to this file.
+- **`@infrastructure/http/schemas`** — Provides `pageSchema` and `pageSizeSchema`, substituted in place of the module-level `page`/`pageSize` fields so an absent value remains `undefined` rather than defaulting.
+- **`@infrastructure/http/request`** — Provides `tenantCallerContextOf(request)`, used to derive the tenant-scoped context passed to the service.
+- **`../services/index`** — Exports `apiKeysService`, whose `listApiKeys` method performs the actual data retrieval.
+- **`@types`** — Supplies the `ApiKeysResponse` return type.
+- **`../routes.ts`** — Registers this controller on the `GET /api-keys` route within the api-keys module.
 
 ## Notes
 
-- Ordering (newest first) and the "no secrets" guarantee are stated in the doc comment but are enforced by the service layer, not this controller.
-- The controller is intentionally thin: all domain logic lives in `apiKeysService`. Pagination and auth-context extraction are the only controller-level concerns.
+- The doc comment explicitly states the response **never includes a secret value**; that guarantee lives in the service layer, not here.
+- `page` and `pageSize` are intentionally swapped for the infrastructure schemas (not the module's own) so that omitting either leaves it absent rather than coercing to a default.
+- The file is a pure composition point: no business logic, no DB access.

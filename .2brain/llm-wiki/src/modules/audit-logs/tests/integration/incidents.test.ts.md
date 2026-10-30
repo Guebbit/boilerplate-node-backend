@@ -1,7 +1,7 @@
 ---
 source: src/modules/audit-logs/tests/integration/incidents.test.ts
-sha256: f6cb1abf6872776de6f42ca16c17105de297d91ef881668a105352509efe9b90
-generated_at: 2026-10-14T15:06:26.011831+00:00
+sha256: 060cff2306e561658b86a71bec53cf8703a883de707577e910b04228018920f6
+generated_at: 2026-10-29T03:18:52.915421+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that pin down exactly which audit-log rows the **operator's** incident read (`auditLogService.searchIncidents`) returns. They lock in the allow-list (security/auth failure rows) and the withholding (customer activity, shop-internal admin actions, successful logins), plus the HMAC-digest treatment of IP addresses — so that a future code change to the filter logic is caught immediately.
+Integration tests for the operator-facing `searchIncidents` read path. They pin the exact allow-list of actions the platform operator may see (security failures, failed sign-ins, credential-attack signals) and, equally explicitly, the actions that must be withheld (customer orders, admin actions on customers, successful sign-ins, shop-internal role-protection rows). They also verify that raw IP addresses are replaced by a keyed HMAC digest in the operator view while remaining untouched in the admin view.
 
 ## Key elements
 
-- **`row(action, outcome, extra?)`** — Factory that returns a `Partial<AuditLogDocument>` with sensible defaults (`actorUserId`, `actorRole: 'user'`, `actorScope: 'tenant'`, `level` derived from outcome). All other fields can be overridden via `extra`.
-- **`seed(pairs)`** — Creates one audit-log document per `[action, outcome]` tuple via `auditLogRepository.create`, returning all creation promises.
-- **`seenByOperator()`** — Calls `auditLogService.searchIncidents({})` and flattens the result to a sorted array of `"action:outcome"` strings for easy assertion.
-- **`describe("what it shows")`** — Verifies the nine incident actions (security refusals, failed sign-in, attack signals, webhook auto-disable) all appear.
-- **`describe("what it withholds")`** — Four sub-tests: successful logins hidden, all customer/admin-tenant actions hidden, shop-rank `security.forbidden` rows (those carrying `metadata.ownerId`) hidden while others remain, page `meta.totalItems` reflects only incidents, and operator-supplied filters are AND-ed (not OR-ed) with the allow-list.
-- **`describe("addresses")`** — Confirms `ip` is replaced by an `hmac:<12-hex>` digest (stable per IP), absent rows stay absent, and the **admin** read (`search`) still sees the raw IP.
+- **`row(action, outcome, extra?)`** — builds a `Partial<AuditLogDocument>` with standard actor/timestamp/level fields; `level` is `'warn'` for failures, `'info'` otherwise.
+- **`seed(rows: [string, 'success' | 'failure'][])`** — creates one repository row per `[action, outcome]` pair via `auditLogRepository.create`.
+- **`seenByOperator()`** — calls `auditLogService.searchIncidents({})`, flattens the page to a sorted array of `action:outcome` strings for concise assertions.
+- **`describe` "what it shows"** — seeds nine failure rows and asserts all nine appear.
+- **`describe` "what it withholds"** — covers: successful `auth.login` hidden while failed one is shown; ten customer/admin actions all filtered out; a `security.forbidden` row whose `metadata.reason === 'role_protected'` (with `ownerId`) is excluded while other `security.forbidden` rows are kept; `page.meta.totalItems` reflects only incidents; operator-supplied filters AND with the allow-list rather than widening it.
+- **`describe` "addresses"** — same IP → same 12-hex-char `hmac:` digest, different IP → different digest, raw IP never leaks; rows without an `ip` field are returned as-is; the admin `search()` path still returns the raw IP.
 
 ## Relationships
 
-- **`src/modules/audit-logs/service.ts`** — The SUT. Tests call `auditLogService.searchIncidents()` (operator view) and `auditLogService.search()` (admin view) to verify filter and redaction behavior.
-- **`src/modules/audit-logs/repository.ts`** — Used solely for seeding: `auditLogRepository.create(row(...))` persists fixture documents into the test database.
-- **`src/modules/audit-logs/model.ts`** — Provides the `AuditLogDocument` type that `row()` constructs and that assertions read from.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called once at module top-level to provision and reset the test database before any test runs.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is invoked at module top-level to provision an in-memory database before any test runs.
+- **`src/modules/audit-logs/service.ts`** — the system under test; `searchIncidents()` is the operator read, `search()` is the admin read (used once to confirm no digest side-effect).
+- **`src/modules/audit-logs/repository.ts`** — `auditLogRepository.create()` is the write path used to seed fixtures.
+- **`src/modules/audit-logs/model.ts`** — provides the `AuditLogDocument` type that shapes the `row()` helper and the `extra` parameter.
 
 ## Notes
 
-- The module doc-comment at the top is normative: it explains *why* the allow-list is an explicit set of action strings rather than a prefix match (e.g. `auth.*` would wrongly include failed logins under `auth.*` while missing `security.*`, and `system.user.*` carries customer PII).
-- The "shop-rank forbidden" test distinguishes rows by the presence of `metadata.ownerId`; rows with `reason` of `'outranked'`, `'own'`, `'own_role'`, or `undefined` are all created, but only the two without `ownerId` (`forbidden-2`, `forbidden-3`) survive the operator filter.
-- IP digests are asserted against the regex `^hmac:[\da-f]{12}$`; the test confirms determinism (same IP → same digest) and that the raw address never leaks into operator output.
-- `setupTestDb()` is called at the **module** level (outside any `describe`/`beforeAll`), so it runs once when the test file is imported by the runner.
+- Both the allowed and the withheld sets are pinned by full action string, not by prefix — the comment block explicitly warns that a prefix match would be insufficient (e.g. `auth.*` includes both shown and withheld actions).
+- The `role_protected` carve-out: a `security.forbidden:failure` row is withheld *only* when `metadata.reason` is `'role_protected'` (or `'missing_permission'`) and `metadata.ownerId` is set, i.e. it names a specific shop account. Rows with no `metadata` pass through.
+- The HMAC digest format asserted is `hmac:` followed by exactly 12 lowercase hex characters (`/^\d[a-f]{12}$/` — note the first char is a decimal digit, the remaining twelve are hex).
+- `setupTestDb()` is a side-effecting call at module scope; tests in this file do not tear down explicitly, relying on the helper's own lifecycle.

@@ -1,34 +1,49 @@
 ---
 source: src/modules/payments/tests/integration/timeline.test.ts
-sha256: 776cc00a15fb07ea368cddf903db772c19191d941174c924b13127453f94d64f
-generated_at: 2026-10-15T11:37:43.382847+00:00
+sha256: 9091cc41d97bec20751c6781a85a5252f4e62a21fdd7ace8b2c80dfc0af070f6
+generated_at: 2026-10-29T05:22:37.298533+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/payments/tests/integration/timeline.test.ts
 
 ## Purpose
-Integration tests that verify the timeline rows payment operations write onto an order: a `paid` entry, a `payment_declined` entry, and the three refund moments (`refund_issued`, `refund_settled`, `refund_failed`). They run against a real Mongo instance and exercise the payment services through their public API, asserting that rows carry structured codes (never raw provider text) and that visibility differs between buyer and staff.
+
+Integration tests that verify exactly what the payments module writes onto an order's timeline: the `paid` row (with method and optional actor), a single `payment_declined` row, and the three refund moments (`refund_issued`, `refund_settled`, `refund_failed`). Runs against a real Mongo instance through the services' public API, asserting that rows carry closed codes and structured data — never the provider's raw wording.
 
 ## Key elements
-- **`paidOrder()`** — helper that creates a user, a product (50 × 2 units), an order, a payment intent, and confirms a card payment; returns `{ user, orderId }`.
-- **`refund(orderId, amount)`** — one-liner that calls `refundByOrder` as the operator `admin-1`.
-- **`describe('the payment')`** — three tests: card payment writes `paid` with method and no actor; offline (cash) payment writes `paid` with the recording operator as actor; `recordDecline` is idempotent (second call returns `null`) and the timeline holds exactly one decline row with a `paymentId`.
-- **`describe('a refund')`** — three tests: a successful refund produces `refund_issued` (with amount, currency, reason code, actor) and `refund_settled` sharing the same `refundId`; a provider failure produces `refund_failed` with a closed `failureReason` code and never the provider's raw message; a failed refund is invisible to the buyer but visible to staff via `orderService.readTimeline`.
+
+- **`paidOrder()`** (local helper) — Creates a user, a product (50.00 × 2), an order, then drives `paymentService.createIntent` + `confirmPayment` with a card intent. Returns `{ user, orderId }`.
+- **`refund(orderId, amount)`** (local helper) — Wraps `refundOrderPayment` (from `@modules/payments/tests/factories`) with a fixed admin operator (`admin-1`).
+- **`describe('the payment')`** — Three tests:
+  - Card payment writes `paid` with `method: 'card'` and no `actor`.
+  - Offline payment (cash) writes `paid` with the operator name and method.
+  - `recordDecline` is idempotent: second call returns `null`; timeline contains exactly one decline row.
+- **`describe('a refund')`** — Four tests:
+  - Issue + settlement rows share `refundId`, carry `amount`, `currency`, `reason`, and the operator.
+  - A provider failure writes `refund_failed` with a closed `failureReason` code; asserts the raw provider text is absent from the stored JSON.
+  - Repeated retries with the same reason do **not** create duplicate failure rows; a *different* reason does. Also asserts `paymentRepository` records 4 attempts.
+  - Visibility split: buyer sees `paid → refund_issued`; staff additionally sees `refund_failed`.
 
 ## Relationships
-- **`scenarios/support/doubles/payments/fake.ts`** — `fakePaymentProvider` is spied on (`jest.spyOn`) to force `refund` rejections in failure tests.
-- **`src/kernel/events.ts`** — `resetDomainEvents()` called in `afterEach` to clear queued domain events.
-- **`src/modules/orders/index.ts`** — `orderService` used to create orders (admin flow) and to call `readTimeline` for buyer-vs-staff visibility assertions.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `toOrderItem`, and `timelineOf` provide the test fixtures and the assertion helper for reading timeline rows.
-- **`src/modules/payments/module.ts`** — `paymentsModule` registered in `beforeEach` via `registerCheckoutModules` to wire the DI container.
-- **`src/modules/payments/providers/index.ts`** — re-exports `PaymentProviderError` (used to construct the mocked failure) and `fakePaymentProvider`.
-- **`src/modules/payments/services/announce.ts`** — `recordDecline` is the public entry point tested in the decline scenarios.
-- **`src/modules/payments/services/index.ts`** — `createIntent`, `confirmPayment`, `recordOfflinePayment`, and `refundByOrder` are the service methods under test.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` creates the priced product fixture.
+
+- **`@modules/payments/services/index.ts`** — Primary subject under test (`paymentService.createIntent`, `confirmPayment`, `recordOfflinePayment`, `retryOpenRefunds`).
+- **`@modules/payments/services/announce.ts`** — `recordDecline` called directly to test the decline path and its idempotency.
+- **`@modules/orders/tests/factories.ts`** — Provides `createOrder`, `toOrderItem`, and the assertion helper `timelineOf` used to read and shape-assert timeline rows.
+- **`@modules/orders/index.ts`** — `orderService.create` (manual offline-payment scenario) and `orderService.readTimeline` (buyer/staff visibility test).
+- **`scenarios/support/doubles/payments/fake.ts`** — `fakePaymentProvider` is spied on (`jest.spyOn`) to simulate refund failures; not swapped wholesale, only specific methods are rejected.
+- **`@modules/payments/providers/index.ts`** — Source of `PaymentProviderError` used to construct mock rejections.
+- **`@modules/payments/repository.ts`** — `paymentRepository.findByOrderId` used to assert internal `attempts` counter.
+- **`@modules/payments/module.ts`** — Registered via `registerCheckoutModules` in `beforeEach`.
+- **`@kernel/events.ts`** — `resetDomainEvents` in `afterEach` to isolate domain-event state.
+- **`@tests/callers.ts`** — `asCustomer`, `asAdmin`, `testCallerContext`, `callerContextAs` supply the caller identities for every service call.
+- **`@modules/payments/tests/factories.ts`** — `refundOrderPayment` convenience wrapper for the refund path.
+- **`@modules/users/tests/factories.ts`**, **`@modules/products/tests/factories.ts`** — Entity creation helpers.
 
 ## Notes
-- The suite asserts a hard invariant: timeline rows must contain only closed enum-like codes (`'insufficient_funds'`, `'goodwill'`, `'card'`, `'cash'`) and must **never** leak free-text provider messages. One test explicitly checks `JSON.stringify(rows)` does not contain the raw string.
-- Decline is written at most once; a duplicate `recordDecline` call returns `null` rather than creating a second row.
-- Failed refunds are visible only to staff (`asAdmin()`); the buyer's timeline shows `refund_issued` but not `refund_failed`.
-- `setupTestDb()` (from `@tests/setup-test-db`) provisions a real Mongo — these are true integration tests, not unit tests with a mocked repository.
+
+- Tests run against a **real Mongo** (`setupTestDb`), not an in-memory stub. The "public door" comment means assertions go through service/repository APIs, not by poking the provider directly.
+- The timeline contract is: rows store **closed codes** (e.g. `insufficient_funds`) and structured money; the provider's free-text message must never leak into stored rows. The "raw provider text" assertion (`JSON.stringify(rows).not.toContain(...)`) is the enforcement mechanism.
+- The retry test uses `withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' })` to make `retryOpenRefunds` pick up work immediately without waiting.
+- `fakePaymentProvider` is a **shared scenario double** (lives under `scenarios/support/doubles/`), spied on with `jest.spyOn` + `mockRejectedValueOnce`. It is not a locally-constructed mock, so other test files that import it can share the same instance semantics.
+- The decline idempotency test calls `recordDecline` directly (not through a service method that would deduplicate), making the guarantee explicit at that layer.

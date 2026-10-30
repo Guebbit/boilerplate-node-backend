@@ -1,36 +1,40 @@
 ---
 source: src/modules/orders/domain/rules.ts
-sha256: 825c66fc12669273e835f367e8b65cc0b62135b4d7d63007d303fd9b2e425433
-generated_at: 2026-09-27T15:09:27.216970+00:00
+sha256: ab8af8bbcf1e688cb3b6127817f38ee01854bac30a9a2555546b09023b55a925
+generated_at: 2026-10-29T04:40:27.394372+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/orders/domain/rules.ts
 
 ## Purpose
-Pure validation and classification predicates for order lines. Takes already-joined line data in, returns a verdict or boolean out. No status codes, no i18n — the service layer (`services/place`) maps verdicts to HTTP/i18n responses. Lives in the domain layer per `docs/theory/domain-layer.md`.
+
+Pure predicate and validation functions for order data. Each export takes structured input (lines, buyer references) and returns a plain verdict or boolean — no status codes, no i18n, no I/O. The service layer (primarily `services/place`) is responsible for translating verdicts into HTTP responses or side effects. See `docs/theory/domain-layer.md` for the design rationale.
 
 ## Key elements
 
-- **`OrderLineCandidate`** — minimal shape a line must have for validation (`quantity?`, `product?`). Absent `product` signals a stale reference.
-- **`OrderLinesVerdict`** — discriminated union: `{ ok: true }` | `{ ok: false, reason: 'no-lines' | 'product-missing' }`.
-- **`checkOrderLines(lines)`** — validates a full set of candidate lines. Checks `no-lines` first, then `product-missing`. Returns the verdict.
-- **`ShippableLineCandidate`** — narrower shape for shipping checks: only `product?.requiresShipping`.
-- **`isShippedItem(line)`** — returns `true` unless `product.requiresShipping` is explicitly `false`. Absent field defaults to shipped (mirrors the product schema default).
-- **`isDigitalOnlyOrder(lines)`** — `true` only when the set is non-empty **and** every line is non-shippable. An empty set is *not* digital-only.
+- **`OrderLineCandidate`** — Minimal shape a line must satisfy for validation (`quantity`, optional `product`). Absent `product` signals a broken reference.
+- **`OrderLinesVerdict`** — Discriminated union: `{ ok: true }` or `{ ok: false, reason: 'no-lines' | 'product-missing' }`.
+- **`checkOrderLines(lines)`** — Validates a set of candidate lines. Order of checks matters: empty array → `'no-lines'`; any null/undefined `product` → `'product-missing'`; otherwise `ok`.
+- **`HasBuyer`** (internal) — Structural type for anything carrying `userId` (string, ObjectId, or null).
+- **`buyerIdOf(order)`** — Normalises the order's `userId` to `string | undefined`. The single point where an ObjectId or raw string buyer reference becomes a plain string.
+- **`isBuyer(order, caller)`** — True only when the caller has an id that matches the order's buyer. Returns `false` for erased buyers (null/undefined `userId`) or callers with no id.
+- **`ShippableLineCandidate`** — Minimal shape exposing `product?.requiresShipping`.
+- **`isShippedItem(line)`** — True unless `product.requiresShipping` is explicitly `false`. Absent field defaults to shipped (matching the product schema default).
+- **`isDigitalOnlyOrder(lines)`** — True when the order has ≥ 1 line and *every* line is non-shipped. An empty line set is never digital-only.
 
 ## Relationships
 
-- **`src/modules/orders/services/place.ts`** — consumes `checkOrderLines` and maps the `reason` string to the appropriate status code / i18n message.
-- **`src/modules/orders/domain/index.ts`** — barrel re-exports these symbols so consumers can import from the domain package root.
-- **`src/modules/orders/domain/tax.ts`** — sibling in the same domain module; shares the "pure predicate, no side-effects" convention.
-- **`src/modules/delivery/service.ts`** — likely consults `isShippedItem` / `isDigitalOnlyOrder` to decide whether to route an order through the ship/deliver pipeline or straight to `fulfill`.
-- **`src/modules/cart/services/checkout.ts`** — upstream of these rules; its `isShippedLine` (in `cart/domain/rules.ts`) is the pre-freeze twin of `isShippedItem`, applied to cart-line shapes rather than the order's embedded product snapshot.
-- **`src/modules/orders/tests/unit/domain-rules.test.ts`** — unit tests covering `checkOrderLines` verdict ordering and the `isShippedItem` / `isDigitalOnlyOrder` edge cases.
+- **`src/modules/orders/services/place.ts`** — Consumes `checkOrderLines` and maps the two refusal reasons to distinct HTTP status codes.
+- **`src/modules/orders/domain/index.ts`** — Barrel re-export; the public surface of the order domain.
+- **`src/modules/delivery/services/ensure.ts` / `notice.ts`** — Rely on `isDigitalOnlyOrder` / `isShippedItem` to decide whether delivery steps apply.
+- **`src/modules/orders/services/cancel.ts` / `override.ts` / `actions.ts`** — Use `isBuyer` / `buyerIdOf` for authorisation and account scoping.
+- **`src/modules/invoicing/services/for-caller.ts` / controllers** — Use `buyerIdOf` to bind invoices and credit notes to the correct account.
+- **`src/modules/orders/emails.ts`** — Uses `isDigitalOnlyOrder` to gate fulfillment-vs-delivery messaging.
 
 ## Notes
 
-- **Check order is significant.** `no-lines` is evaluated before `product-missing`; the two reasons map to different status codes downstream, so reordering the checks changes observable behavior.
-- **`isShippedItem` is intentionally a copy, not a shared import, of cart's `isShippedLine`.** The two modules operate on different post-freeze shapes (order's embedded snapshot vs. joined cart line), so the predicates live side-by-side rather than being extracted.
-- **Empty-set asymmetry.** `checkOrderLines([])` → refused; `isDigitalOnlyOrder([])` → `false`. Both are deliberate: an empty order is neither valid nor "digital."
-- **`product` is typed `unknown`.** The rules deliberately avoid depending on the full product type; they only check presence and the single `requiresShipping` field.
+- `checkOrderLines` is **not** commutative in its reasons: an empty list short-circuits before the product check, and the two reasons map to *different* status codes downstream. Do not reorder.
+- `isShippedItem` is the frozen, post-checkout twin of `@modules/cart`'s `isShippedLine` (`cart/domain/rules.ts`). Same predicate, different input shape (embedded product snapshot vs. joined cart line). Keep them in sync if the product schema's `requiresShipping` default changes.
+- `buyerIdOf` returns `undefined` (not `null`, not `""`) when the buyer has been erased. Callers must treat `undefined` as "no account to charge/notify."
+- All functions are pure and side-effect-free; safe to call in tests without mocking.

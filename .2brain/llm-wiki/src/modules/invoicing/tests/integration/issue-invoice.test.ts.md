@@ -1,7 +1,7 @@
 ---
 source: src/modules/invoicing/tests/integration/issue-invoice.test.ts
-sha256: ff85a3586200d4e4967559b3db7f8a3cce250e895617c338107b2ec4fe2cbc37
-generated_at: 2026-10-15T10:40:13.850472+00:00
+sha256: 319401b1497bacf1d8db6bc2cf4cb92a04d86b351a0f8a9a17abcda933c15bee
+generated_at: 2026-10-29T04:17:33.350275+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,43 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test proving that an order's `pending → paid` transition — triggered via the real `markPaid` path and the invoicing module's event subscription — freezes exactly one correct invoice. It validates the full wiring (event → listener → `issueInvoice`), PII re-encryption, VAT rounding semantics, numbering, and idempotency without calling `issueInvoice` in isolation (except in the race/idempotency block).
+Integration test suite that verifies invoice issuance end-to-end via the real event subscription path: an order's `pending → paid` transition triggers invoice freezing through `orders`' `markPaid` and the `invoicing` module's `ORDER_STATUS_CHANGED` handler. It also exercises idempotency, number allocation/rollback, PII re-encryption, VAT rounding, and timezone-aware numbering directly through `invoicingService.issueInvoice` to simulate race and failure scenarios.
 
 ## Key elements
 
-- **`waitForInvoice(orderId)`** – Polling helper (10 ms tick, 2 s timeout) that waits for the fire-and-forget `ORDER_STATUS_CHANGED` listener to persist an invoice, then returns it.
-- **`describe('issuing an invoice off ORDER_STATUS_CHANGED')`** – The single test suite; every case drives the flow through `markPaid` + `waitForInvoice` unless it explicitly exercises `issueInvoice` for race/idempotency scenarios.
-- **`beforeEach` / `afterEach`** – Registers all five modules via `registerModules` and resets domain events after each test.
-- **PII assertions** – Verifies billing address is stored encrypted under the *invoice* ID (not the order ID) and decrypts with `decryptInvoiceParty(addr, 'invoice', invoice._id)`.
-- **VAT rounding case (BR-CO-17)** – Three 0.10 lines at 22 % must produce a single `taxAmount` of 0.05, not the sum of per-line rounded values.
-- **`rateType` freezing case** – Asserts `zero-rated` vs `exempt` survive from order line onto invoice line.
-- **Numbering cases** – Same-year sequential numbering, year determined by shop timezone (not UTC), and counter rollback on failed insert.
-- **Idempotency / race cases** – Two concurrent `issueInvoice` calls yield one invoice, one timeline row, and counter `seq = 1`; a later call returns the existing invoice.
+- **`describe('issuing an invoice off ORDER_STATUS_CHANGED')`** — the sole suite; every test either goes through `orderService.markPaid` (event-path) or calls `invoicingService.issueInvoice` directly (race/failure-path).
+- **Freeze-on-paid test** — asserts invoice number format (`YYYY-NNNNNN`), line count, grand total, and that billing PII is re-encrypted under the invoice's own `_id`.
+- **Billing vs. shipping address tests** — confirm the invoice carries the billing address (or `undefined` when absent) and never the ship-to address.
+- **VAT rounding test (BR-CO-17)** — three 0.10 lines at 22 % must yield a single 0.05 tax amount, not a sum of per-line rounded values.
+- **`rateType` freeze test** — verifies `zero-rated` and `exempt` are carried from order line → invoice line.
+- **Numbering tests** — sequential sequence within a shop-timezone calendar year; two invoices one apart.
+- **Idempotency / race tests** — concurrent `issueInvoice` calls produce one invoice, one timeline row, and `counter.seq` stays at 1.
+- **Rollback test** — mocks `invoicingRepository.insertInvoice` to reject; asserts the number counter is not persisted (shared transaction) and the next attempt allocates `000001`.
+- **Calendar-year test** — freezes a date where UTC year ≠ shop-timezone year; expects the shop's year in the number.
+- **Printed-date zone test** (truncated in source) — verifies the zone is frozen at issuance so later config changes don't shift the document's date.
 
 ## Relationships
 
-- **`src/modules/orders/index.ts`** – Exports `markPaid`, `shopTimezone`, `yearInZone` used to drive the transition and assert the calendar year.
-- **`src/modules/orders/module.ts`** – Registered so its `ORDER_STATUS_CHANGED` publisher fires during `markPaid`.
-- **`src/modules/orders/services/status.ts`** – Implementation behind `markPaid`; the event source under test.
-- **`src/modules/invoicing/module.ts`** – Registered so its subscription to `ORDER_STATUS_CHANGED` is the listener being exercised.
-- **`src/modules/invoicing/services/issue-invoice.ts`** (via `services/index.ts`) – The `issueInvoice` service called directly in the race/idempotency tests.
-- **`src/modules/invoicing/repository.ts`** – `invoicingRepository.findInvoiceByOrderId` (polling) and `insertInvoice` (spied in the rollback test).
-- **`src/modules/invoicing/model.ts`** – `invoiceNumberCounterModel` used to inspect/verify the year counter after operations.
-- **`src/modules/invoicing/pii.ts`** – `decryptInvoiceParty` to assert re-encryption correctness.
-- **`src/kernel/registry.ts`** – `registerModules` in `beforeEach`.
-- **`src/kernel/events.ts`** – `resetDomainEvents` in `afterEach` to prevent cross-test event bleed.
-- **`src/modules/inventory/module.ts`** – Registered (required by the orders → invoicing chain) but not directly asserted.
+- **`src/kernel/registry.ts`** — `registerModules` in `beforeEach` wires all five modules so the real event subscription exists.
+- **`src/kernel/events.ts`** — `resetDomainEvents` in `afterEach` clears the in-memory event bus between tests.
+- **`src/kernel/outbox.ts`** — `settleOutboxNudges` imported for async outbox settling (used in helper flows).
+- **`src/modules/orders/services/index.ts`** — `orderService.markPaid` is the trigger that fires the `ORDER_STATUS_CHANGED` event.
+- **`src/modules/orders/index.ts`** — `yearInZone` and `orderService` re-exports used in assertions and calls.
+- **`src/modules/orders/domain/shop-time.ts`** — `shopTimezone()` supplies the IANA zone for the calendar-year test.
+- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `toOrderItem`, `timelineOf` build fixtures and inspect the order timeline.
+- **`src/modules/invoicing/module.ts`** — registered so its `ORDER_STATUS_CHANGED` subscription is live.
+- **`src/modules/invoicing/services/index.ts`** — `invoicingService.issueInvoice` is the unit under test in race/failure scenarios.
+- **`src/modules/invoicing/repository.ts`** — `findInvoiceByOrderId` for post-condition checks; `insertInvoice` spied in the rollback test.
+- **`src/modules/invoicing/pii.ts`** — `decryptInvoiceParty` to read encrypted billing address with the correct key context.
+- **`src/modules/invoicing/model.ts`** — `invoiceNumberCounterModel` queried directly to assert counter state.
+- **`src/modules/invoicing/tests/factories.ts`** — `waitForInvoice` polls for the asynchronously created invoice.
+- **`src/modules/inventory/module.ts`** — registered as a dependency of the orders module (product stock checks at `markPaid`).
 
 ## Notes
 
-- Most cases intentionally avoid calling `issueInvoice` directly so the test also validates the event-subscription wiring in `invoicing/module.ts`. Only the race, idempotency, and rollback cases invoke it explicitly.
-- `waitForInvoice` is necessary because the listener is fire-and-forget; there is no awaitable promise to attach to.
-- Mongoose subdocument arrays (e.g. `taxSummary`) are not plain data; `toEqual` fails on them. The VAT test reads individual fields to work around this.
-- The "gives the number back" test spies on `invoicingRepository.insertInvoice` — the counter and insert share a transaction, so a rejected insert rolls the allocation back.
-- `freezeDate` (from `@tests/clock`) is used in the timezone test to simulate 00:30 Rome on 1 Jan while UTC is still 31 Dec.
-- The `invoiceNumberCounterModel` import comes from the local `../../model` path, not from a barrel — keep that in mind when refactoring the module's exports.
+- The event-path tests intentionally avoid calling `issueInvoice` directly; they prove the `ORDER_STATUS_CHANGED` → subscription → freeze chain. The race/failure tests call `issueInvoice` directly because they need concurrent control that the event bus doesn't provide.
+- PII is re-encrypted under the **invoice's** `_id` at freeze time, not the order's. Assertions must pass `'invoice'` role and `invoice._id` to `decryptInvoiceParty`; using the order id will not decrypt.
+- Mongoose subdocument arrays (`invoice.taxSummary`, `invoice.lines`) are not plain JS objects; `toEqual` on the whole array fails. The tests assert field-by-field or use `.map()` to project plain values.
+- The rollback test relies on the counter increment and the insert sharing a single transaction — if the implementation ever decouples them, the `counter` assertion will break.
+- `setupTestDb()` and `setEnvironment` are called at module scope (outside `beforeEach`), so they run once for the whole file.
+- The calendar-year test uses `freezeDate` inside a `try/finally` with `jest.useRealTimers()` cleanup; other tests do not freeze time, so they rely on the real clock.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/tests/integration/schema-contract.test.ts
-sha256: b11629e14ff7ae25a145a5bfd121e51479385d502d352d6dceb642eeb40b984c
-generated_at: 2026-10-15T12:15:01.056652+00:00
+sha256: a862341607288435d81dd161af6c493c1c0c40cc0248cf22df1786b96a30f5a7
+generated_at: 2026-10-29T06:22:42.415286+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test that pins the **schema declarations** of the user Mongoose model — `select: false` on credentials, pre-save argon2id hashing, `toJSON` transform rules, and the `unique` index on `email`. It runs against a real MongoDB instance because these are Mongoose's own runtime behaviours (defaults, selectors, indexes) that a mocked model would only re-assert against the mock's opinion.
+Integration test that verifies the **declarations** of the user Mongoose schema — `select: false` on credentials, password hashing, serialization shape, and the `unique` email index — against a real MongoDB instance. These are Mongoose-level behaviors (not application logic), so a mocked model would only assert the mock's opinion and provide no real coverage.
 
 ## Key elements
 
-- **`describe('user schema')`** — the suite; five `it` blocks cover the contract:
-  - *hides the password from an ordinary read* — asserts `findById` returns `password === undefined` (`select: false`).
-  - *exposes credentials only through the explicit selector* — asserts `findByIdWithCredentials` returns a string password.
-  - *hashes the password rather than storing it verbatim* — asserts the stored value matches `/^\$argon2id\$/`.
-  - *serialises to id, never _id, __v or password* — asserts the `toJSON` output shape.
-  - *enforces email uniqueness at the database level* — inserts twice, expects an `e11000` duplicate-key error from the unique index.
+- **`setupTestDb()`** — boots a real Mongo instance for the suite (called once, outside the `describe`).
+- **`describe('user schema')`** — five cases:
+  - *hides password from ordinary read* — confirms `findById` never returns `password` (`select: false`).
+  - *exposes credentials only through explicit selector* — confirms `findByIdWithCredentials` returns a string password.
+  - *hashes the password* — asserts the stored value starts with `$argon2id$`, not just "differs from plaintext."
+  - *serialises to id, never `_id`/`__v`/`password`* — checks `toJSON()` output shape.
+  - *enforces email uniqueness at DB level* — second insert of same email must reject with an `E11000` / "duplicate key" error.
+
+No named exports; the file is a side-effect test module (`@module`).
 
 ## Relationships
 
-- **`src/modules/users/repository.ts`** — exercises `userRepository.findById` and `userRepository.findByIdWithCredentials`, the two read paths that expose (or withhold) the password field.
-- **`src/modules/users/tests/factories.ts`** — provides `createUser` (inserts a document through the real schema) and `PLAIN_PASSWORD` (the known input used to verify hashing).
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module load to spin up / connect to the test MongoDB instance the suite depends on.
+- **`src/modules/users/repository.ts`** — imports `userRepository` and exercises its two read paths (`findById` vs. `findByIdWithCredentials`) to prove the `select: false` contract.
+- **`src/modules/users/tests/factories.ts`** — imports `createUser` (to insert documents) and `PLAIN_PASSWORD` (the known plaintext for the hashing assertion).
+- **`tests/support/setup-test-db.ts`** — provides `setupTestDb` which provisions and tears down a real Mongo for the suite.
 
 ## Notes
 
-- **Why real Mongo, not mocks:** The doc comment states explicitly that mocking would only assert the mock's view of `default`/`select`, not Mongoose's actual pipeline.
-- **Uniqueness test is a concurrency guard:** The application-level check in `authService.signup` is a non-atomic `findOne` → `409` → insert; two racing signups can both pass the lookup. Only the DB-level `unique` index blocks the second write. This test fails fast if a schema edit silently drops that index. The companion `tests/integration/concurrency/auth-races.test.ts` drives the actual race.
-- **`setupTestDb()` runs at import time**, not inside `beforeAll` — the suite assumes the connection is ready before the first assertion fires.
+- The email-uniqueness test is intentionally a **canary**: it fails fast if a schema edit silently drops the `unique` index. The actual concurrency race (two concurrent signups both passing `findOne` before either inserts) is covered separately in `account/tests/integration/auth-races.test.ts`; this test only pins the index.
+- Because the tests target Mongoose's own behaviors, they must run against real Mongo. Do not "fix" slowness by swapping to a mock — that defeats the purpose.

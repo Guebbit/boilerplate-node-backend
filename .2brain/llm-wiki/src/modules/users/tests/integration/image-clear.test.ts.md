@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/tests/integration/image-clear.test.ts
-sha256: c73643b1817c330fc35bc22a3fe20151161186abec6a30c016f3629ec25ce919
-generated_at: 2026-10-15T12:13:43.485747+00:00
+sha256: 04f28ecce91b604801324e8d0a8ed8dc28e2edb56bfc62ae2cf80bfb0fd599dc
+generated_at: 2026-10-29T06:20:54.845687+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test verifying that `imageUrl: null` in `userService.updateById` unsets `imageUrl`/`thumbnailUrl` on the stored document **and** deletes the actual avatar file and its thumbnail from disk. It uses real files in a per-test temp directory and a real (test) store so the assertion targets *which* files disappear — something a mocked store cannot verify.
+Integration test verifying that setting `imageUrl: null` on a user unsets both `imageUrl` and `thumbnailUrl` on the stored document **and** deletes the actual avatar + thumbnail files from disk. It uses a real temp directory and a real database (not mocks) so it can assert *which* files are removed after the save lands.
 
 ## Key elements
 
-- **`AVATAR` / `THUMBNAIL`** – Constants holding the relative paths (`/images/avatar-abc.png`, `/images/thumbs/v1/avatar-abc.webp`) of the files pre-created under the temp root.
-- **`storedRow(id)`** – Helper that reads a user document with `userModel.findById(id).lean()`, bypassing Mongoose virtuals/defaults so the test sees the raw stored shape.
-- **`beforeEach`** – Creates a unique `mkdtemp` root, writes the two "on-disk" files, and points `NODE_PUBLIC_PATH` at that root via `setEnvironment`.
-- **`afterEach`** – Recursively removes the temp root.
-- **Four test cases** (all under `userService.updateById — imageUrl: null`):
-  - Field is unset on disk (neither `imageUrl` nor `thumbnailUrl` present, no placeholder written).
-  - Both the avatar and thumbnail files are deleted after the save lands.
-  - An update that doesn't mention the image leaves the file and stored path untouched.
-  - Clearing `imageUrl` on a user that never had one succeeds and changes nothing.
+- **`root`** – Temp directory (created via `mkdtemp` in `beforeEach`) that stands in for the production file root; cleaned up in `afterEach`.
+- **`AVATAR` / `THUMBNAIL`** – Fixed relative paths (`/images/avatar-abc.png`, `/images/thumbs/v1/avatar-abc.webp`) pre-written to disk so the service has real files to delete.
+- **`storedRow(id)`** – Reads the user document with Mongoose `.lean()` to bypass virtuals/defaults, so assertions on *absence* of a key are reliable.
+- **`beforeEach`** – Creates the nested directory tree, writes placeholder files, and calls `setEnvironment({ NODE_PUBLIC_PATH: root })` so the service resolves file paths against the temp dir.
+- **`afterEach`** – Recursively removes the temp dir.
+- **`describe('userService.updateById — imageUrl: null')`** – Four test cases:
+  1. Unsets `imageUrl` and `thumbnailUrl` on the document (no placeholder written).
+  2. Deletes both the avatar and thumbnail files after the save completes.
+  3. Leaves files intact when the update only touches an unrelated field (`username`).
+  4. Succeeds as a no-op for a user who never had an image.
 
 ## Relationships
 
-- **`src/modules/users/services/index.ts`** – The system under test; `userService.updateById` is called in every case.
-- **`src/modules/users/model.ts`** – Provides `userModel` for the `storedRow` helper to read the raw document.
-- **`src/modules/users/tests/factories.ts`** – `createUser` seeds users with or without an image.
-- **`tests/support/callers.ts`** – `callerContextAs('admin')` supplies the auth context required by the service.
-- **`tests/support/environment.ts`** – `setEnvironment` injects `NODE_PUBLIC_PATH` so the service resolves file paths into the temp root.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` (called at module top level) provisions the test database connection.
+- **`src/modules/users/services/index.ts`** — Source of `userService`; its `updateById` method is the system under test.
+- **`src/modules/users/model.ts`** — Source of `userModel`; used by `storedRow` to read the raw document.
+- **`src/modules/users/tests/factories.ts`** — `createUser` builds seeded user documents with or without image fields.
+- **`tests/support/callers.ts`** — `callerContextAs('admin')` supplies the authorization context required by `updateById`.
+- **`tests/support/environment.ts`** — `setEnvironment` swaps `NODE_PUBLIC_PATH` so the service's file-system operations target the temp dir.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb` boots a real MongoDB instance for the integration run.
 
 ## Notes
 
-- The tests deliberately avoid mocking the filesystem or the store. The module doc-comment states the point is *which files go*, which a mock cannot express.
-- `.lean()` is used in `storedRow` specifically so Mongoose does not apply `default` values on read; without it, a field that was truly unset could appear with a default and mask the "no placeholder" assertion.
-- Each test gets an isolated temp directory (`image-clear-users-*` prefix) to avoid cross-test file interference.
+- `storedRow` deliberately uses `.lean()` — a plain Mongoose `findById` would re-apply schema defaults and could mask a truly-absent key.
+- The tests assert file deletion *after* `await userService.updateById(...)` resolves, confirming the delete is ordered post-save (the file must not be removed before the write commits).
+- `NODE_PUBLIC_PATH` is the environment variable the service reads to locate files on disk; pointing it at the temp dir is what makes the real-file assertions meaningful.

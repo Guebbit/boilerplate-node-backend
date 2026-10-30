@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/unit/serialization-guards.test.ts
-sha256: 24b5fe016d350dc8e0e39c14aea96ecca221904c5991e32e00783b6b338d83d0
-generated_at: 2026-09-23T19:15:06.726679+00:00
+sha256: 0a516ae6402345463c5cc0e4acaf3574b53a6310a81254548b6942ebb3744f96
+generated_at: 2026-10-29T05:00:26.102812+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests that lock in the defensive guards inside `applyOrderTransform`. The transform is the single choke point every order response passes through, so a throw there converts a valid read into a 500. These tests exist to ensure the guards (which handle "cannot happen" shapes like projected documents or non-array `items`) actually prevent that failure.
+Unit tests that lock down the defensive guard branches in `applyOrderTransform`. The transform sits on the single path every order response takes; if a guard throws, a successful read becomes a 500 for the entire collection. These tests exist so that the "cannot happen" halves of guards (missing `items`, non-array `items`, absent `product`) are verified to degrade gracefully rather than crash.
 
 ## Key elements
 
-- **`describe('order serialization guards')`** — single test suite, five cases:
-    - _Happy path_ — verifies `totalItems`, `totalQuantity`, `totalPrice` are derived correctly from line items.
-    - _Projection without `items`_ — confirms a document shaped like `{ email: … }` does not throw.
-    - _Zero-total fallback_ — asserts that when `items` is absent the three totals are set to `0` (not omitted), satisfying the required-field contract in `openapi.yaml`.
-    - _Unpopulated product refs_ — `item.product` is `undefined` or a plain value; the transform must skip rather than recurse.
-    - _`items` present but not an array_ — `Array.isArray` guard prevents a throw and yields zero totals.
+- **`describe('order serialization guards')`** — the sole suite; contains five tests.
+- **"derives the three totals from the line items"** — happy-path check that `totalItems`, `totalQuantity`, `totalPrice` are computed from line items. Serves as the baseline that makes the following tests readable as exception cases.
+- **"survives a projection that never selected items"** — passes a document with only `email`; asserts `applyOrderTransform` does not throw.
+- **"reports zero totals rather than omitting them when items are absent"** — same input shape as above; asserts all three totals are `0` (required by `openapi.yaml`).
+- **"leaves a line item with no product snapshot alone"** — `items` present but individual lines lack `product` (undefined or missing); asserts no throw.
+- **"tolerates items being present but not an array"** — `items` is a string; asserts no throw and zero totals.
 
 ## Relationships
 
-- **`src/modules/orders/model.ts`** — sole import. Provides `applyOrderTransform`, the function under test. Every assertion in this file exercises that one transform (or, equivalently, its internal `applyOrderItems` / `applyOrderTotals` helpers).
+- **`src/modules/orders/model.ts`** — provides `applyOrderTransform`, the single function under test. This file is the only consumer in the test suite that exercises its guard branches rather than its arithmetic.
 
 ## Notes
 
-- Tests are ordered intentionally: the happy path comes first so the remaining four read as exception cases they guard.
-- The `openapi.yaml` contract is load-bearing context: the three total fields are _required_, so the transform must emit `0` rather than omitting them when items are missing. Changing the fallback to `undefined` would break the API contract even though no test here checks for it by name.
-- `applyOrderItems` and `applyOrderTotals` are not exported from `model.ts` for direct testing; they are exercised only through `applyOrderTransform`.
+- The tests target *guards*, not correctness of the math. The happy-path test is included purely as context so the exception tests read as "this is what breaks without the guard."
+- The `items` guard is the most critical: a Mongoose projection like `.select('email createdAt')` yields a document with no `items` key at all, so `serialized.items` is `undefined`, not an empty array. Removing `Array.isArray(serialized.items)` would surface the failure only on projected reads — the hardest case to notice.
+- Zero vs. absent matters contractually: `openapi.yaml` marks the three total fields `required`, so returning `undefined` is a spec violation while returning `0` is a valid "empty order."
+- The file uses `Record<string, unknown>` for inputs rather than a typed model, deliberately simulating the untyped document shapes that reach the transform at runtime.

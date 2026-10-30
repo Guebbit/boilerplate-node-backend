@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/controllers/list-subscriptions.ts
-sha256: b12bb5871b1ab346ad2257939ea540a6af8dc34d45c55b291af2a510196b9bff
-generated_at: 2026-09-27T15:41:16.515132+00:00
+sha256: 69cc8002cd89730a37556879c17f70d75c9644379941eb7b3eb452efc050d1ab
+generated_at: 2026-10-29T06:26:02.114735+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Controller for `GET /webhooks/subscriptions`. Returns the calling tenant's webhook subscriptions (newest first) with pagination, and guarantees no secret material is included in the response.
+HTTP controller for `GET /webhooks/subscriptions`. Returns the calling tenant's webhook subscriptions (newest first by default), with pagination and filter parameters, delegating to the webhooks service layer.
 
 ## Key elements
 
-- **`listWebhookSubscriptions`** (export) — The controller built via `createListController`. Accepts optional `page`, `pageSize`, and `enabled` query params, then delegates to `webhooksService.listSubscriptions`.
-- **Schema** — `ListWebhookSubscriptionsQueryParams` extended with infra `pageSchema`/`pageSizeSchema`, then made `.partial()` so every param is optional.
-- **`input: { booleans: ['enabled'] }`** — Tells the list-controller factory to pre-decode the `enabled` query string into a boolean before the schema parses it.
-- **`runList`** — The service callback; extracts the tenant context via `tenantCallerContextOf(request)` and passes it plus the parsed params to the service.
+- **`listWebhookSubscriptions`** (exported) — The route handler, built by the `createListController` factory. Configures:
+  - `entity: 'webhookSubscriptions'` — identifier used by the factory.
+  - `schema` — `ListWebhookSubscriptionsQueryParams` (from `@api/schemas.zod`) extended with `pageSchema` / `pageSizeSchema`, then `.partial()` so every param is optional.
+  - `input` — declares `booleans: ['enabled', 'autoDisabled']` and `csvLists: ['sort']` so the infra layer pre-decodes those before the schema sees them.
+  - `runList` — calls `webhooksService.listSubscriptions(tenantCallerContextOf(request), parsed)` and returns a `WebhookSubscriptionsResponse`.
 
 ## Relationships
 
-- **`create-list-controller.ts`** — Provides the `createListController` factory; this file is one of its consumers, supplying `entity`, `schema`, `input`, and `runList`.
-- **`request.ts`** — Provides `tenantCallerContextOf`, used inside `runList` to derive the caller's tenant identity from the incoming request.
-- **`schemas.ts`** — Provides `pageSchema` and `pageSizeSchema`, the canonical pagination primitives that replace any module-local page/pageSize definitions.
-- **`../services` (`index.ts`)** — Exposes `webhooksService`; this controller calls `webhooksService.listSubscriptions`.
-- **`types/index.ts`** — Source of the `WebhookSubscriptionsResponse` return type.
-- **`routes.ts`** — The routes file for the webhooks module; this controller is the handler wired to the `GET /webhooks/subscriptions` route.
+- **`src/infrastructure/surfaces/create-list-controller.ts`** — provides the `createListController` factory that assembles the final handler from the options object defined here.
+- **`src/infrastructure/http/schemas.ts`** — supplies `pageSchema` and `pageSizeSchema` used to extend the query-params schema.
+- **`src/infrastructure/http/request.ts`** — supplies `tenantCallerContextOf`, which extracts the tenant-scoped caller context from the incoming request for the service call.
+- **`src/modules/webhooks/services/index.ts`** — source of `webhooksService`; its `listSubscriptions` method performs the actual data retrieval.
+- **`src/types/index.ts`** — defines `WebhookSubscriptionsResponse`, the return type of `runList`.
+- **`src/modules/webhooks/routes.ts`** — registers `listWebhookSubscriptions` on the `GET /webhooks/subscriptions` route.
 
 ## Notes
 
-- All query params are optional (`.partial()`). An absent `page` or `pageSize` is intentionally left undefined so that `normalizePagination` inside `createListController` can apply its defaults — do not add `.default()` here.
-- The `enabled` filter is a string-boolean (`"true"`/`"false"`) in the raw query string; the `booleans` option handles decoding before schema validation, so the schema itself should not re-interpret it.
-- The doc comment explicitly states the endpoint **never returns a secret**; the service layer is responsible for stripping it, not this controller.
+- The schema is `.partial()`: every query param (`page`, `pageSize`, `enabled`, `autoDisabled`, `sort`, etc.) is optional. Absent `page`/`pageSize` are intentionally left undefined so the infra layer's `normalizePagination` can apply its own defaults.
+- `enabled` and `autoDisabled` arrive as already-decoded booleans (handled by `readInput`'s `booleans` config), and `sort` arrives as an already-split array (handled by `csvLists`). The Zod schema here validates the post-decoded shapes, not raw query strings.
+- The doc comment explicitly guarantees this endpoint never returns a webhook secret.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/api-keys/tests/contract/api-keys.test.ts
-sha256: aca3bb5b96d013b6850f8d36bc5463824d95759808a64ef887d21964e0650ed8
-generated_at: 2026-10-15T10:20:58.541818+00:00
+sha256: 0819a7fe05ae1fef908ede2990b24236e9de3fc5212f84b882be7964a3d9035d
+generated_at: 2026-10-29T03:15:23.557528+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the three `/api-keys` admin routes (list, mint, revoke), verifying observable behavior against the bundled `openapi.yaml`. Every route requires a human bearer session; the API keys minted here are **not** exercised against other routes — that cross-cutting coverage lives in `tests/cross-cutting/`.
+Contract tests for the `/api-keys` admin surface (list, get-by-id, mint, revoke), validating responses against the bundled `openapi.yaml`. Verifies auth requirements, response shapes, validation errors, and security invariants (one-time secret never re-exposed, `no-store` caching, expiry ceilings). Credentials minted here are *not* exercised against other routes — that happens in `tests/cross-cutting/`.
 
 ## Key elements
 
-- **`ahead(days)`** / **`IN_A_WEEK()`** — local helpers that produce ISO-8601 expiry strings (N days from now / 7 days out). Used to satisfy or violate the one-year mint ceiling.
-- **`beforeEach` → `ensureTenant(DEPLOYMENT_TENANT_SLUG, …)`** — creates the deployment's shop so that `context.caller.tenantId` resolves to a real tenant during login. Mirrors the setup the webhooks contract suite needs.
-- **`describe('GET /api-keys')`** — asserts 401 (unauthenticated), 403 (role without the `apikeys` key), and 200 listing that never exposes `secret`.
-- **`describe('POST /api-keys')`** — covers: 201 mint returning a one-time `sk_…` secret; `cache-control: no-store`; 422 for a platform-scope permission the caller lacks, empty permissions list, missing `expiresAt`, and `expiresAt` > 365 days (367 vs 360 boundary); 401 `REAUTH_REQUIRED` when the session age exceeds `reauthWindowSeconds('critical')`; 403 for a role without the key.
-- **`describe('DELETE /api-keys/:id')`** — 200 revoke of a self-created key; 404 for an id outside the caller's reach.
-- **`afterEach`** — restores real Jest timers (the reauth test freezes/advances the clock).
+- **`describe('GET /api-keys')`** — Lists credentials; asserts `secret` is absent, `status`/`actions` are present, `maxExpiresAt` is near one year, and `sort` param enforces its enum (comma-separated, 422 on unknown field).
+- **`describe('GET /api-keys/:id')`** — Reads one credential back (no secret), checks `actions.revoke` flips to `false` after DELETE, returns 404 for unknown/malformed ids, and 403 for a caller lacking `read:ApiKey`.
+- **`describe('POST /api-keys')`** — Mints a credential (201, `sk_` prefix, `no-store` header), rejects over-reaching permissions (422), empty permissions (422), stale sessions past the reauth window (401 `REAUTH_REQUIRED`), missing expiry (422), and expiry > 365 days (422 vs. 360 days accepted).
+- **`describe('DELETE /api-keys/:id')`** — Revokes a credential (204); 404 for an id outside the caller's tenant.
+- **`mintOne(bearer)`** — Helper that POSTs one credential and returns its `id` string.
+- **`ahead(days)` / `IN_A_WEEK()`** — Date helpers producing ISO strings for expiry assertions.
+- **`beforeEach`** — Calls `accessService.ensureTenant(DEPLOYMENT_TENANT_SLUG, …)` so the tenant context resolves before any request.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `tests/support/contract.ts` | Imported for side-effect (`import '@tests/contract'`); sets up the contract-test harness (likely OpenAPI schema validation middleware). |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` called at module scope to seed/verify a clean database before the suite runs. |
-| `tests/support/http.ts` | Provides `api()` (supertest-style request builder) and `authenticateAsRole()` used by every test. |
-| `tests/support/clock.ts` | `freezeDate` / `advanceDate` used in the REAUTH_REQUIRED test to simulate session age. |
-| `src/modules/access/index.ts` | Exports `ensureTenant` and `DEPLOYMENT_TENANT_SLUG`, used in `beforeEach` to create the tenant context. |
-| `src/kernel/config.ts` | Exports `reauthWindowSeconds('critical')`, the threshold the clock-advance test must exceed. |
+- **`@tests/contract`** — Side-effect import; wires OpenAPI spec assertions into the test runner.
+- **`@tests/setup-test-db`** — `setupTestDb()` seeds an isolated database for the suite.
+- **`@tests/http`** — Provides `api()` (HTTP client) and `authenticateAsRole()` (role-scoped bearer tokens).
+- **`@modules/access`** — Exports `accessService` (used in `beforeEach` to create the tenant) and `DEPLOYMENT_TENANT_SLUG` (the fixed tenant identifier for tests).
+- **`@tests/clock`** — `freezeDate()` / `advanceDate()` manipulate the clock for the reauth-window test.
+- **`@kernel/config`** — `reauthWindowSeconds('critical')` supplies the window length so the test advances time just past it.
 
 ## Notes
 
-- `setupTestDb()` runs **once at module level**, not in `beforeEach` — the suite assumes a single fresh DB per file.
-- The 422 "permission the caller does not hold" test deliberately uses a **platform-scope** key (`platform.observability.any.read`) rather than a truly missing tenant-scope key, because admin is unrestricted within tenant scope. The comment flags this subtlety.
-- The expiry ceiling is exactly **one year (365 days)**: 367 days → 422, 360 days → 201. The boundary is inclusive of 365.
-- The REAUTH_REQUIRED test depends on `reauthWindowSeconds('critical')` from kernel config — if that value changes, the clock-advance delta in the test must follow.
-- The `tenant` field on a minted credential is resolved from `context.caller.tenantId`; without the `ensureTenant` setup the login would not produce a resolvable tenant, causing spurious failures unrelated to the API-key logic under test.
+- The "over-reaching" 422 test deliberately uses `read:ObservabilitySnapshot`, a *platform*-scope permission, because admin holds tenant scope — this floors the same validation path as a genuinely missing permission.
+- `afterEach` restores real timers (`jest.useRealTimers()`) after any test that calls `freezeDate()`.
+- The expiry ceiling is asserted as "more than 364 days" for `maxExpiresAt` and "367 days → 422 / 360 days → 201" for the mint boundary; the exact server-side limit sits between those two values.
+- All routes require `bearerAuth`; there is no anonymous access tested here.

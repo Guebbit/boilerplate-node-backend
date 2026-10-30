@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/domain/hold-lines.ts
-sha256: df7e12cc40ead5dd9d7b9b439661cfd58bd3ff8453d8138461ed451943e61589
-generated_at: 2026-10-15T10:34:25.583318+00:00
+sha256: a040bb8fa8f3d537018c32a2626c8d382b39b9a8a4f02183209457dd6ec33db5
+generated_at: 2026-10-29T04:00:02.562077+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure arithmetic for removing lines from a hold: given what a hold currently sets aside and the lines being shipped or cancelled, it computes how much actually comes out and what remains. Extracted as a pure module so the partial-shipment and remainder-cancel calculations are testable in isolation, without a database.
+Pure arithmetic helpers for manipulating the line items of an inventory hold. It answers two questions without touching a database: "if I ship (or cancel) these lines, what is left and what came out?" (`takeFromHold`) and "if I add these lines on top, what does the hold name now?" (`withAdded`). Keeping the math in a standalone module makes it unit-testable in isolation.
 
 ## Key elements
 
-- **`HoldLine`** — `{ productId, quantity, kind? }`. A single product entry on a hold. `kind` distinguishes shelf units (`stock`, the default) from preorder claims (`preorder`).
-- **`HoldTake`** — The return shape of `takeFromHold`: `{ remaining: HoldLine[]; taken: HoldLine[] }`.
-- **`takeFromHold(items, lines)`** *(exported)* — Subtracts `lines` from `items` per (product, kind), clamped at zero. For a `preorder` line it first draws from the preorder bucket, then falls back to the stock bucket of the same product for the shortfall. Returns the residual hold lines and the lines actually removed.
-- **`keyOf`** *(private)* — Builds the composite map key `"{productId}|{kind}"`, defaulting kind to `stock`.
-- **`takeOf`** *(private)* — Takes up to *quantity* units from a single key in a `Map<string, number>`, recording the delta in a companion "taken" map. Returns the actual amount taken (≤ requested).
+- **`HoldLine`** (interface) — A single line on a hold: `productId`, `quantity`, and an optional `kind` (`'stock'` | `'backorder'`). Omitting `kind` means stock.
+- **`HoldTake`** (interface) — The shape returned by `takeFromHold`: `remaining` lines still set aside and `taken` lines that actually came out.
+- **`takeFromHold(items, lines)`** (exported) — Subtracts `lines` from `items` per product-and-kind, never below zero. A `backorder` line falls back to the same product's `stock` units for any shortfall. Returns the remaining and taken lines.
+- **`withAdded(items, added)`** (exported) — Merges `added` onto `items` by product-and-kind, summing quantities. Preserves first-seen order; drops lines whose total hits zero.
+- **`keyOf` / `takeOf`** (module-private) — Helpers that build the composite `productId|kind` key and perform a single bounded subtraction against a `Map`.
 
 ## Relationships
 
-- **`./transitions`** — Imports the `HoldKind` type used to tag lines as `stock` or `preorder`.
-- **`./index`** — Barrel re-export; makes `HoldLine`, `HoldTake`, and `takeFromHold` available to consumers importing from the domain module root.
-- **`src/modules/inventory/services/holds.ts`** — Service-layer consumer that invokes `takeFromHold` to compute the new hold state before persisting.
-- **`src/modules/inventory/tests/unit/hold-lines.test.ts`** — Dedicated unit tests for the pure function.
-- **`src/modules/delivery/tests/unit/fulfillment.test.ts`** — Integration-level tests in the delivery module that exercise the hold-line arithmetic as part of the fulfillment flow.
+- **`./transitions`** — Imports the `HoldKind` type used by `HoldLine.kind`.
+- **`./index.ts`** — Barrel file that re-exports this module's public API for consumers.
+- **`services/holds.ts`** — Application service that calls `takeFromHold` when a shipment is fulfilled or a remainder is cancelled, passing the hold's persisted items and the outbound lines.
+- **`services/top-up.ts`** — Application service that calls `withAdded` when re-reserving stock after a lost parcel.
+- **`repository.ts`** — The persistence layer that supplies the `items` array these pure functions operate on; the functions themselves never read or write storage.
+- **`tests/unit/hold-lines.test.ts`** — Dedicated unit tests exercising `takeFromHold` and `withAdded` edge cases.
+- **`src/modules/delivery/tests/unit/fulfillment.test.ts`** — Cross-module integration test that exercises hold-line arithmetic as part of a delivery fulfillment flow.
 
 ## Notes
 
-- **Preorder fallback is the non-obvious path.** When a line has `kind: 'preorder'`, `takeFromHold` first satisfies it from the `preorder` bucket; any shortfall is drawn from the *stock* bucket of the same product. This prevents allocated shelf units from being stranded on a hold after a remainder cancel. A plain `stock` line never triggers the fallback.
-- **`kind` is omitted rather than set to `'stock'`** in the output. `toLines` only attaches `kind` when it is `'preorder'`, keeping the serialized shape minimal.
-- **Inputs are `readonly`; no external mutation.** The function builds fresh `Map`s internally. The `takeOf` helper mutates those local maps only.
-- **A line may request more than the hold contains.** `takeOf` clamps at zero via `Math.min`; the `taken` array reflects only what was actually available, not the requested amount.
+- **Backorder fallback:** When a `backorder` line is taken, any quantity not covered by the backorder key is drawn from the same product's `stock` key. This prevents stock units from being stranded on a hold after its backorder claim is cancelled.
+- **`kind` is omitted in output when it is stock.** `toLines` only sets `kind` on the returned object when it is `'backorder'`; stock lines carry no explicit `kind` field, matching the interface's optional default.
+- **Inputs are treated as read-only.** Both exports accept `readonly HoldLine[]` and build internal `Map`s; the original arrays are never mutated.
+- **Order preservation:** `withAdded` keeps lines in first-seen order (existing items before additions, within each group).

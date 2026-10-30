@@ -1,7 +1,7 @@
 ---
 source: scripts/docs/generate-rate-limit-budgets.ts
-sha256: aa05372e0a3e095b7188601393af9bf2b0cc1aad3e906c53f6c99118d912cc5f
-generated_at: 2026-10-15T09:40:42.050114+00:00
+sha256: a1bc15a7a530a639d8a9726ca84c96ce94426085e514aaa810a6141b9e836901
+generated_at: 2026-10-29T01:35:14.539115+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Generates (or checks) the rate-limit budget table inside `docs/tools/security.md`. The table is derived directly from module manifests and the infrastructure rate-limit constants, so it stays in sync with code. In `--check` mode (used by `complete`) it reports drift instead of rewriting.
+Generates (or checks) the rate-limit budget table embedded in `docs/tools/security.md`. The table is produced from live `RateLimitBudget` data read off every enabled module's manifest plus the shared `INFRASTRUCTURE_RATE_LIMITS`, so that code-side changes to defaults, windows, or env vars are reflected in the doc automatically instead of rotting silently.
 
 ## Key elements
 
-- **`checkOnly`** — boolean; true when `--check` is in `process.argv`. Switches `applyMarkerBlocks` from write to report-drift.
-- **`START` / `END`** — HTML-comment markers (`<!-- rate-limit-budgets:start/end -->`) that delimit the generated block in the target page.
-- **`rows`** — the combined list of all `RateLimitBudget` objects, each tagged with an `owner` string (module name or `'infrastructure'`). Built from `enabledModules` → `resolveRateLimits` plus `INFRASTRUCTURE_RATE_LIMITS`.
-- **`windowCell(windowMs)`** — renders the Window column: `'shared'` → `` `NODE_RATE_LIMIT_WINDOW_MS` ``, a number → `"…ms"`.
-- **`budgetTable()`** — assembles the full markdown table (header + one row per budget).
-- **`applyMarkerBlocks(…)`** — writes the table between the markers (or checks for drift). Exits with the returned code.
+- **`checkOnly`** — boolean set by the `--check` CLI flag; when true the script reports drift and exits non-zero without rewriting the page.
+- **`PAGE`** — resolved path to `docs/tools/security.md`.
+- **`START` / `END`** — HTML-comment markers (`<!-- rate-limit-budgets:start|end -->`) that delimit the generated block.
+- **`rows`** — the flat list of all budgets (module-owned and infrastructure), each tagged with an `owner` string.
+- **`windowCell`** — renders a `windowMs` value: the literal env-var name for `'shared'`, otherwise `"<n>ms"`.
+- **`budgetTable()`** — assembles the full Markdown table (header, separator, one row per budget).
+- **`applyMarkerBlocks(...)`** — writes the table between the markers, or diffs and reports drift in `--check` mode; sets `process.exitCode`.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `scripts/docs/marker-block.ts` | Provides `applyMarkerBlocks`, the shared write/check mechanism. |
-| `scripts/modules-on-disk.ts` | Provides `REPO_ROOT` used to resolve the page path. |
-| `src/modules.ts` | Provides `enabledModules`, the list of active app modules. |
-| `src/kernel/registry.ts` | Provides `resolveRateLimits`, which extracts budget configs from a module's manifest. |
-| `src/infrastructure/http/middlewares/rate-limit.ts` | Provides `INFRASTRUCTURE_RATE_LIMITS`, the non-module budgets. |
-| `src/types/index.ts` / `src/types/rate-limit-budget.ts` | Define the `RateLimitBudget` shape used throughout. |
+- **`scripts/cli.ts`** — imports `hasFlag` to detect `--check`.
+- **`scripts/docs/marker-block.ts`** — imports `applyMarkerBlocks`, which performs the actual file read/replace or drift-report within the marker delimiters.
+- **`scripts/fail-script.ts`** — imported as the `.catch` handler to normalise uncaught errors into a consistent exit.
+- **`scripts/modules-on-disk.ts`** — imports `REPO_ROOT` as the base for resolving the doc page path.
+- **`src/modules.ts`** — imports `enabledModules` to enumerate which modules' manifests to read.
+- **`src/kernel/registry.ts`** — imports `resolveRateLimits` to extract budget entries from each module's manifest.
+- **`src/infrastructure/http/middlewares/rate-limit.ts`** — imports `INFRASTRUCTURE_RATE_LIMITS`, the set of budgets not owned by any app module.
+- **`src/types/index.ts` / `src/types/rate-limit-budget.ts`** — provides the `RateLimitBudget` type used for `rows` and `windowCell` signatures.
 
 ## Notes
 
-- The script **trusts** that `tests/cross-cutting/rate-limit-budgets.test.ts` has already validated internal consistency before it runs in `complete`; it does not re-validate budget semantics itself.
-- `onStoreError` defaults to the string `'memory'` in the table when the budget omits it (`?? 'memory'`).
-- The `windowMs: 'shared'` sentinel is not a number; it refers to the shared `NODE_RATE_LIMIT_WINDOW_MS` env var and is rendered as such.
-- The table is the **only** generated content; surrounding prose in `security.md` is never touched.
+- The script intentionally does **not** re-validate internal consistency of budgets (e.g. that a named env var is actually registered); it trusts `tests/cross-cutting/rate-limit-budgets.test.ts` to have already run as part of `complete`.
+- `onStoreError` may be `undefined` in the source; the table renders it as the fallback string `'memory'`.
+- Follows the same marker-block + `--check` pattern as `generate-role-matrix.ts`; add a new column here only if the column exists on `RateLimitBudget`.

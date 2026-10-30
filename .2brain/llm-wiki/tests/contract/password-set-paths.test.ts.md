@@ -1,7 +1,7 @@
 ---
 source: tests/contract/password-set-paths.test.ts
-sha256: a7c4b6d3fe0efd545cfe051ad22bcf9727aa01aee6696f43f1d0ff2c28c6a218
-generated_at: 2026-10-15T12:32:35.102967+00:00
+sha256: b459ac0d473e222706504deb014b57c8f3f3f27d655d0f6e4d138d5af18c6eef
+generated_at: 2026-10-29T06:39:49.954145+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract-level test that asserts **every** HTTP route which writes a password rejects a known-breach password with a 422 and leaves no trace (no new user row, no credential change). It also pins the exhaustive set of password-setting routes against the bundled OpenAPI spec so a newly added staff or admin route that sets a password cannot appear without first gaining a breach-check case here.
+System-scoped contract test that guarantees every code path writing a password performs the same breach-check, exercised over real HTTP routes. It covers the three owner-side entry points (signup, authenticated change, token-based reset/setup) and includes a canary that pins the *exact* set of password-setting routes against the bundled OpenAPI spec, so a new route that writes a password cannot appear without also gaining a breach-check case.
 
 ## Key elements
 
-- **`PasswordSetPath`** — interface describing one password-setting route: a `name` and an `attempt()` that fires the request and returns a `response` plus an `assertNoChange` callback.
-- **`signupPath`** — exercises `POST /account/signup`; asserts no user row is created after a 422.
-- **`changePath`** — exercises `POST /account/password` (authenticated); asserts the old credential still logs in after a 422.
-- **`resetPath`** — exercises `POST /account/reset-confirm` (one-time token, no session); asserts the old credential still logs in after a 422.
-- **`describe.each([signupPath, changePath, resetPath])`** — parameterized block that runs the 422 + no-mutation assertions for all three paths.
-- **`operationsThatSetAPassword()`** — reads `openapi.yaml` from disk, walks every operation's `requestBody` schema, and collects route+method pairs whose request schema references a `PasswordNew` field.
-- **`describe('the routes that can set a password')`** — canary test asserting the result of the above is *exactly* `['POST /account/password', 'POST /account/reset-confirm', 'POST /account/signup']`.
+- **`BREACHED_PASSWORD`** (`'Password1!'`) — a composition-valid password from `shared/rules/breached-passwords.txt`, shared with all other breach tests in the repo.
+- **`PasswordSetPath`** — interface describing one password-writing route: a `name` and an `attempt()` that POSTs the breached password and returns a `response` plus an `assertNoChange` closure.
+- **`signupPath` / `changePath` / `resetPath`** — the three concrete paths (`POST /account/signup`, `POST /account/password`, `POST /account/password/reset/confirm`). `change` and `reset` both funnel through the same `passwordChange` service; `signup` runs its own check.
+- **`describe.each` block** — asserts each path returns **422** and leaves no trace (no new row / old credential still valid).
+- **`operationsThatSetAPassword()`** — parses `openapi.yaml` at test time, finds every operation whose request body references a schema containing a `PasswordNew` property, and returns the sorted list of `METHOD /route` strings.
+- **Canary `describe`** — asserts that list equals exactly the three known routes, failing on any unlisted addition.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** — imported for side-effects (likely registers contract-test globals or Vitest setup).
-- **`tests/support/http.ts`** — supplies `api()` (supertest instance) and `authenticateAs()` used by all three path attempts.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called once at module level to provision a test database.
-- **`src/modules/users/tests/factories.ts`** — provides `createUser`, `PLAIN_PASSWORD`, and `userRepository` used in the reset-path setup and the signup no-mutation assertion.
-- **`src/modules/account/tests/factories.ts`** — provides `plantToken` to seed a password-reset token for the reset-path test.
-- **`src/modules/users/repository.ts`** — the `userRepository.findOne` call backs the signup "no row created" check.
-- **`package.json`** — the `npm run contracts:bundle` script produces the `openapi.yaml` file the canary reads; dev dependencies (`yaml`, `supertest`, `vitest`) power the test.
+- **`tests/support/contract.ts`** — side-effect import (`@tests/contract`) that configures the contract-test environment.
+- **`tests/support/http.ts`** — provides `api` (supertest wrapper) and `authenticateAs` used to drive real HTTP calls and obtain bearer tokens.
+- **`tests/support/paths.ts`** — provides `REPO_ROOT`, used to locate `openapi.yaml` on disk.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises a clean test database before any assertion.
+- **`src/modules/users/tests/factories.ts`** — supplies `createUser`, `PLAIN_PASSWORD`, and `userRepository` (used for the signup no-trace assertion and the change/reset relogin checks).
+- **`src/modules/users/repository.ts`** — accessed indirectly via `userRepository.findOne` from the user factories.
+- **`src/modules/account/tests/factories.ts`** — `plantToken` mints a one-time password-reset token for the reset path.
+- **`package.json`** — test-runner configuration; the `contracts:bundle` script produces the `openapi.yaml` the canary reads.
 
 ## Notes
 
-- The canary reads `openapi.yaml` at **runtime** via `readFileSync` relative to `__dirname/../../openapi.yaml`. If the spec file is missing or stale (i.e., `contracts:bundle` wasn't run), the canary will throw or give a false pass/fail.
-- The breach password constant (`'Password1!'`) must exist in `breached-passwords/list.txt`; the comment notes this is the same fixture used by every other breach test in the repo.
-- Change and reset are two *entry points* into the same `passwordChange` service function; signup is a separate implementation. The test treats them uniformly at the HTTP level, so the funneling is invisible to this file.
-- The test is intentionally **system-scoped** (not tied to one module) because the invariant spans the account contract.
+- The canary reads `openapi.yaml` from the repo root at test time; the file must exist (produced by `npm run contracts:bundle`).
+- Because `BREACHED_PASSWORD` passes all composition rules, a 422 can only originate from the breach check — not from a validation-layer rejection.
+- The test lives in `tests/contract/` (not a module's own `tests/` dir) because the invariant spans multiple modules (`account`, `users`) and is about the *system boundary*, not one service.
+- Adding a new password-setting route requires two deliberate steps: (1) add it to the OpenAPI spec, (2) add a `PasswordSetPath` entry and breach-check case here. Omitting either will fail CI.

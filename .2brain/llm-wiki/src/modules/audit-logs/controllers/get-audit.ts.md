@@ -1,7 +1,7 @@
 ---
 source: src/modules/audit-logs/controllers/get-audit.ts
-sha256: a6bae4123174530a9678bfc02b9aef00fb6df9c139ffb8eeb2db51e641c93704
-generated_at: 2026-10-15T10:21:49.947154+00:00
+sha256: ed7d761459f0af28f02d50f9d4a97cea5d51751a55870fbafe259f6a695f9070
+generated_at: 2026-10-29T03:17:14.123321+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the tenant-scoped `GET /audit` controller, returning a filtered, paged list of the shop's own action history. It is the tenant-key counterpart to the platform's `listObservabilityAuditEntries`; both ultimately read the same collection through `auditLogService`.
+Controller for `GET /audit`. Returns a paginated, filtered page of the current shop's own action history (audit entries), accessed with a tenant key rather than a platform key. It answers the same query that `observability`'s `listObservabilityAuditEntries` does, but scoped to the tenant.
 
 ## Key elements
 
-- **`getAudit`** (exported) — the controller, built with the `createListController` factory. Configures the entity name, validation schema, and a `runList` callback that calls `auditLogService.search`.
-- **Schema** — `ListAuditEntriesQueryParams` extended with `page`/`pageSize` (infra schemas), then made `.partial()` so every query param is optional. The generated `outcome` enum (`success` / `failure`) is kept strict.
-- **`runList` callback** — spreads the parsed params into `auditLogService.search` and converts `since` from a string to a `Date` (passing `undefined` when absent).
+- **`getAudit`** (export) — the route handler, built via `createListController`. Accepts the query params `page`, `pageSize`, `since`, `outcome`, `ownOrder` (all optional). Calls `auditLogService.search` with the parsed params, converting `since` from a string to a `Date`.
+- **`schema`** — `ListAuditEntriesQueryParams` extended with the infra `pageSchema`/`pageSizeSchema`, then `.partial()` so every field is optional.
+- **`input.booleans: ['ownOrder']`** — decodes the string `"true"`/`"false"` value of `ownOrder` before schema validation.
+- **`entity: 'auditEntries'`** — the entity label passed to the list-controller factory.
 
 ## Relationships
 
-- **`@infrastructure/http/schemas`** — supplies `pageSchema` and `pageSizeSchema`, the canonical pagination query-param definitions used here instead of the API-level versions.
-- **`@infrastructure/surfaces/create-list-controller`** — the `createListController` factory that wraps schema validation, pagination normalization (`normalizePagination`), and response shaping around the `runList` call.
-- **`src/modules/audit-logs/routes.ts`** — mounts `getAudit` at the `/audit` route.
-- **`src/modules/audit-logs/service.ts`** — provides `auditLogService.search`, the actual data-access call this controller delegates to.
+- **`src/infrastructure/http/schemas.ts`** — provides `pageSchema` and `pageSizeSchema`, which replace the generated pagination fields so an absent value stays absent for `normalizePagination` to apply its default.
+- **`src/infrastructure/surfaces/create-list-controller.ts`** — factory that assembles the request-parsing, validation, and response-shaping pipeline around `getAudit`'s `schema`, `input`, and `runList` options.
+- **`src/modules/audit-logs/service.ts`** — exports `auditLogService`; its `.search` method is the sole data-access call made by the controller.
+- **`src/modules/audit-logs/routes.ts`** — registers `getAudit` on the `GET /audit` endpoint.
 
 ## Notes
 
-- All query params are optional (`.partial()`). An absent `page`/`pageSize` stays absent so `normalizePagination` inside `createListController` can apply its own defaults — the controller does not supply fallback values.
-- `since` arrives as a string (Zod schema) and is cast to `Date` only at the service-call site; the schema layer never sees a `Date` object.
-- Invalid `outcome` values are rejected with **422** by the generated enum rather than silently matching every row.
+- All query params are optional (`.partial()`). Omitting `page`/`pageSize` is intentional — `normalizePagination` inside the list-controller factory supplies the defaults.
+- The `outcome` field is a generated enum limited to `success` | `failure`; any other value yields a **422** rather than silently matching every row.
+- `since` is passed through as a raw string to the schema (for validation) and only coerced to `Date` at the service-call boundary.

@@ -1,7 +1,7 @@
 ---
 source: src/app/error-handling.ts
-sha256: a66741b477ffcaf68dcb0b56a215785cba86bc5bb3e9e4be53a2850a272de809
-generated_at: 2026-10-14T07:38:11.852300+00:00
+sha256: 7c130745c265d438bd5c7ff338ea5f28a286ad73570f40c4f16fc767d6da2777
+generated_at: 2026-10-29T01:50:09.087851+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Central error-handling module for the Express application. It provides the global request-level error handler, the process-level `unhandledRejection` / `uncaughtException` handlers, and the single `installErrorHandling` entry point that wires them up. All three exist to answer "what happens to a failure nobody else handled?" at the two levels where that question can be asked: inside a request and outside one.
+Central global error handler for the Express app plus the two process-level safety nets (`unhandledRejection`, `uncaughtException`). It exists so that no failure—whether inside a request or outside one—escapes without a deterministic status, a single audit log line, and a span annotation. It is the last stop in the request pipeline and the last stop for the process.
 
 ## Key elements
 
-- **`handleUncaughtError`** (exported) — The Express 4-argument error handler. Normalises non-`Error` throws, resolves a status code, records the error on the active OTel span, logs a sanitised headline at `warn` (4xx) or `error` (5xx), then sends a fixed-copy response via `rejectResponse` or `rejectServiceUnavailable`. For `MulterError` it forwards the library's own user-facing message; for everything else the client receives only a constant code + i18n string.
-- **`handleUnhandledRejection`** (exported) — Increments the `processUnhandledRejectionsTotal` metric and writes an audit-log line. Deliberately does **not** terminate the process.
-- **`installErrorHandling`** (exported) — Mounts `handleUncaughtError` on the Express app and (outside tests) registers `process.on('unhandledRejection', …)` and `process.on('uncaughtException', …)`. The `uncaughtException` handler logs then calls `process.exit(1)`.
-- **`clientErrorStatus`** (private) — Reads the `expose: true` + 4xx `status`/`statusCode` contract used by `http-errors`-compatible libraries (body-parser, etc.) without branching on specific `.type` strings.
-- **`CLIENT_ERROR_COPY`** (private) — Map of known client statuses (400, 413, 415) to their `ERROR_CODES` value and i18n message key. Unlisted statuses fall back to `INVALID_REQUEST` / `'generic.error-unknown'`.
-- **`resolveStatus`** (private) — Priority chain: `MulterError` → 400; declared client-error status; `databaseErrorInterpreter`. Returns a final HTTP status.
-- **`loggableError`** (private) — Strips the raw `message` from client-declared and database errors before logging; passes other errors through to the logger's own `redactFormat` serializer.
-- **`DATABASE_ERROR_NAME`** (private) — Regex matching Mongo/Mongoose/BSON error `name` values, used because those packages are transitive (a second copy would break `instanceof`).
+- **`handleUncaughtError(thrown, req, res, next)`** – The 4-arg Express error handler. Normalizes any thrown value to an `Error`, short-circuits if headers are already sent, resolves a status (Multer → declared client error → database interpreter → 500), logs at `warn` or `error` level, records the error on the active OTel span, and sends a constant-body response (never `error.message`). Translates `MulterError` into a localized item list and `503` into the shared service-unavailable shape.
+- **`handleUnhandledRejection(reason)`** – Increments `processUnhandledRejectionsTotal` and writes one `auditLogger` line. Deliberately does **not** terminate the process.
+- **`installErrorHandling(app)`** – Mounts `handleUncaughtError` via `app.use`, then (unless in a test environment) registers the two `process.on` handlers. Must be called after route installation.
+- **`resolveStatus(error)`** *(internal)* – Ordered status resolution: Multer byte-limit → 413, other Multer → 400; declared `expose`+4xx → that status; `databaseErrorInterpreter` → its status; fallback 500.
+- **`clientErrorStatus(error)`** *(internal)* – Reads `expose` and `status`/`statusCode` via `in`-narrowing (no cast) to extract a 4xx the thrower declared.
+- **`loggableError(error, declared)`** *(internal)* – Returns a stripped object (`{type}` for body-parser, `{name, code}` for DB errors) or the original error, preventing user-controlled or PII-bearing messages from reaching the log.
+- **`MULTER_SIZE_LIMIT_CODES`** – Set of Multer `code` values that map to 413 vs. 400.
+- **`DATABASE_ERROR_NAME`** – Regex matched against `error.name` to identify Mongo/Mongoose/BSON errors without `instanceof` (avoids dual-package issues).
 
 ## Relationships
 
-- **`src/app.ts`** — Calls `installErrorHandling(app)` after all routes are mounted, making this the last middleware in the chain.
-- **`src/infrastructure/adapters/logger.ts`** — Source of `logger` and `auditLogger`. This module relies on the logger's `redactFormat` to serialise `Error` objects (name, message, stack) before JSON output, so it passes errors whole rather than hand-picking fields.
-- **`src/infrastructure/http/errors.ts`** — Provides `databaseErrorInterpreter` (maps DB driver errors to a `[status, code, message]` tuple) and `rejectServiceUnavailable` (503 response helper).
-- **`src/infrastructure/http/response.ts`** — Provides `rejectResponse`, the standard 4xx/5xx response sender used for all non-503, non-Multer responses.
-- **`src/infrastructure/i18n/index.ts` / `context.ts`** — Source of `t()`, used to resolve the i18n message keys in `CLIENT_ERROR_COPY` and the 500 fallback.
-- **`src/infrastructure/observability/tracer.ts`** — Provides `recordErrorOnActiveSpan` and `getActiveSpanContext` for attaching the error to the current span and extracting the `traceId` for log correlation.
-- **`src/infrastructure/observability/metrics-process.ts`** — Source of `processUnhandledRejectionsTotal`, the Prometheus counter incremented per unhandled rejection.
-- **`src/infrastructure/runtime/config.ts`** — Provides `isTestEnvironment()`; when true, process-level handlers are **not** registered so the test runner can own them.
-- **`tests/unit/app/error-handling.test.ts`** — Unit tests for `handleUncaughtError` and helpers.
-- **`tests/unit/app/process-error-handlers.test.ts`** — Unit tests for `handleUnhandledRejection` and the `uncaughtException` handler.
-- **`tests/integration/auth-hardening.test.ts`** / **`tests/integration/scenarios/demo-routes.test.ts`** — Integration tests that exercise error paths flowing through this handler.
+- **`src/app.ts`** – Calls `installErrorHandling(app)` after route registration; this module is the final `app.use` in the pipeline.
+- **`src/infrastructure/adapters/logger.ts`** – Consumes `logger` and `auditLogger`; relies on the adapter's `redactFormat` to serialize `Error` objects into `{name, message, stack}` before JSON output.
+- **`src/infrastructure/http/errors.ts`** – Uses `databaseErrorInterpreter` (status + interpretation for driver errors) and `rejectServiceUnavailable` (503 response shape).
+- **`src/infrastructure/http/response.ts`** – Uses `rejectResponse` (constant-body error response) and `fieldError` (per-field error item for Multer).
+- **`src/infrastructure/observability/tracer.ts`** – Calls `recordErrorOnActiveSpan` and `getActiveSpanContext().traceId` for span annotation and log correlation.
+- **`src/infrastructure/observability/metrics-process.ts`** – Increments `processUnhandledRejectionsTotal` Prometheus counter.
+- **`src/infrastructure/i18n/index.ts`** – Calls `t()` to translate the Multer refusal message.
+- **`src/infrastructure/runtime/config.ts`** – Reads `isTestEnvironment()` to skip process-level handler registration under test runners.
+- **`tests/unit/app/error-handling.test.ts`** – Direct unit tests for the three exports.
+- **`tests/integration/*`** – Exercises the handler indirectly through full request cycles (auth failures, session failures, demo routes).
 
 ## Notes
 
-- **Mounting order is load-bearing.** `installErrorHandling` must be called *after* `installRoutes`; an Express error handler only catches errors from middleware/routes registered before it. A test that adds a throwing route *after* installation will not reach `handleUncaughtError`.
-- **Client responses never include `error.message`.** The only exception is `MulterError`, whose messages are explicitly user-facing. All other paths use constants from `CLIENT_ERROR_COPY` or the 500 fallback, translated via `t()`.
-- **Logging severity follows the resolved status, not the exception class.** 4xx → `logger.warn`, 5xx → `logger.error`. This prevents routine client mistakes from triggering alerting.
-- **`uncaughtException` always exits the process** (`process.exit(1)`), while `unhandledRejection` does not. The distinction is intentional: an uncaught exception implies unknown process state, a lost promise does not.
-- **In test environments, no process-level handlers are registered.** This lets Jest (or the runner) pin unhandled rejections to the responsible test instead of them being swallowed into an audit log line.
-- **Database errors are matched by `name` regex, not `instanceof`.** Mongo/BSON are transitive dependencies; a second copy in `node_modules` would make `instanceof` return `false` silently.
+- **Never logs `error.message` for client errors or DB errors.** `loggableError` strips to `{type}` or `{name, code}`; the headline becomes just `error.name`. This is a deliberate leak-prevention convention.
+- **Status resolution order is load-bearing.** Multer → declared client error → database interpreter → 500. Reordering changes which interpretation wins.
+- **`installErrorHandling` must run after routes.** An Express error handler only catches errors from middleware/routes mounted before it. Calling it before `installRoutes` silently breaks error handling.
+- **Process-level handlers are skipped in test environments** (`isTestEnvironment()`). Under Jest, a registered `unhandledRejection` handler swallows rejections that Jest expects to attribute to the failing test.
+- **`uncaughtException` exits with code 1 in every environment.** The reasoning: post-exception process state is unknown. Throwing inside the handler would re-enter it.
+- **The client-facing response body is always a constant** derived from the status code. No library-supplied or user-supplied text is forwarded, even when `expose: true` is set.

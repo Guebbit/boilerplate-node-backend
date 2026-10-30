@@ -1,7 +1,7 @@
 ---
 source: src/modules/stats/domain/calendar.ts
-sha256: 8546065a6691abb0ac481a96253a3d98ad729e1aac8f4044203f1618d4d58314
-generated_at: 2026-10-15T12:03:03.488494+00:00
+sha256: 4cd72b1960be489b8234ef28bf10e3e6b6be8454e4fd7286e91a7316e282ba2f
+generated_at: 2026-10-29T05:55:09.284334+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure calendar-day arithmetic with no clocks or time zones. A day is just `{year, month, day}`; all internal math runs on UTC-midnight timestamps so DST is never a concern. This module supplies the date primitives (parsing, formatting, shifting, bucketing) that the stats range layer builds on.
+Pure-arithmetic calendar-day operations for the stats module. A day is represented as three integers (`year`, `month`, `day`) with no clock time and no timezone; all arithmetic runs on UTC-midnight timestamps. This keeps the rules trivially table-testable and defers zone/clock concerns to `services/range.ts`, which is where a day becomes an instant.
 
 ## Key elements
 
-- **`CalendarDay`** — `{year, month, day}` with `month` 1–12 (not JS's 0-based).
-- **`CalendarInterval`** — `'day' | 'week' | 'month'`, the bucket sizes a report can request.
-- **`parseDay(text)`** — parses `YYYY-MM-DD`; returns `undefined` for malformed or impossible dates (e.g. `2026-02-30`) via a UTC round-trip check.
-- **`formatDay(day)`** — writes `YYYY-MM-DD` with zero-padding.
-- **`addDays(day, amount)`** — shifts a day by N whole days (negative goes back).
-- **`inclusiveDays(from, to)`** — whole-day span inclusive at both ends; ≤ 0 if `to` precedes `from`.
-- **`bucketStart(day, interval)`** — snaps to the first day of the day/week/month bucket. Weeks are **Monday-first** (Sunday is the last day of the week).
-- **`nextBucket(start, interval)`** — advances to the start of the following bucket (handles year rollover for months).
-- Internal: `toUtc` / `fromUtc` convert between `CalendarDay` and a UTC-midnight timestamp; `DAY_MS` = 86 400 000.
+- **`CalendarDay`** – interface: `{ year, month, day }`; `month` is 1-based (1–12).
+- **`parseDay(text)`** – parses a strict `YYYY-MM-DD` string; returns `undefined` for malformed input *or* impossible dates (e.g. `2026-02-30`) via a round-trip through `Date`.
+- **`formatDay(day)`** – serializes a `CalendarDay` to zero-padded `YYYY-MM-DD`.
+- **`addDays(day, amount)`** – shifts a day by a signed number of whole days.
+- **`inclusiveDays(from, to)`** – returns the inclusive day count between two days; ≤ 0 when `to < from`.
+- **`bucketStart(day, interval)`** – snaps a day to the first day of its bucket (day / Monday-first week / month).
+- **`nextBucket(start, interval)`** – returns the first day of the *next* bucket after `start`; handles December→January rollover for months.
+
+Internal helpers `toUtc` / `fromUtc` convert between `CalendarDay` and a UTC-midnight timestamp (the single arithmetic representation). The `ISO_DAY` regex enforces the exact four-digit / two-digit / two-digit shape before parsing.
 
 ## Relationships
 
-- **`domain/index.ts`** — re-exports this module's public API (`CalendarDay`, `CalendarInterval`, the functions above) so consumers import from the domain barrel.
-- **`domain/range.ts`** — defines `CalendarRange` (from/to `CalendarDay`) and interval-related types that consume `CalendarInterval`; `bucketStart`/`nextBucket` are the primitives a range iterator would call.
-- **`services/range.ts`** — the layer where a `CalendarDay` becomes an actual instant (UTC timestamp) for API transport; the doc comment here explicitly defers zone handling to that service.
-- **`tests/unit/calendar.test.ts`** — unit tests covering every export (parsing, round-tripping, shifting, bucket boundaries, month/year rollovers).
-- **`tests/unit/range.test.ts`** — tests the range layer; depends on calendar types and bucket helpers indirectly.
+- **`@domain-primitives/time`** – provides the `DAY_MS` constant used by `addDays` and `inclusiveDays`.
+- **`@types`** – provides the `StatsInterval` union type (`'day' | 'week' | 'month'`) consumed by `bucketStart` and `nextBucket`.
+- **`src/modules/stats/domain/index.ts`** – re-exports this module's public API for consumers within the stats domain.
+- **`src/modules/stats/domain/range.ts`** – builds date ranges on top of the day primitives defined here.
+- **`src/modules/stats/services/range.ts`** – the place where a calendar day is turned into a zoned instant; this file deliberately avoids that step.
+- **`src/modules/stats/tests/unit/calendar.test.ts`** – unit tests covering parsing, formatting, arithmetic, bucketing, and edge cases (Feb 30, Dec→Jan rollover, Sunday-as-last-day).
+- **`src/modules/stats/tests/unit/range.test.ts`** – exercises range logic that depends on the day-level functions exported here.
 
 ## Notes
 
-- **Week convention:** `bucketStart` uses a Monday-first week (`getUTCDay()` shifted by +6, mod 7). Any consumer assuming Sunday-first will get off-by-one results.
-- **`month` is 1-based** in `CalendarDay` but `Date`'s `getUTCMonth`/`setUTCMonth` are 0-based; the `toUtc`/`fromUtc` helpers handle the offset — don't bypass them.
-- **`parseDay` returns `undefined`**, not a throw. Callers must null-check before using the result.
-- **All arithmetic is integer-millisecond over UTC**, so no DST drift is possible; however, this also means the module is intentionally *zone-agnostic* — attach a zone only at the service boundary.
-- **`inclusiveDays`** is +1 (both endpoints counted). Use `addDays`-based math if you need exclusive spans.
+- **Week is Monday-first.** `getUTCDay()` returns 0 for Sunday; the formula `(day + 6) % 7` shifts that to 6, so `bucketStart` snaps to the Monday on or before the given day.
+- **`inclusiveDays` is not a duration.** It is a *count of days* (both endpoints included), so a single day yields `1`, not `0`.
+- **`parseDay` is the only validation gate.** No other function checks for impossible dates; callers must use `parseDay` (or construct `CalendarDay` values by hand knowing they are valid).
+- **No timezone logic lives here by design.** The module doc comment explicitly pushes that responsibility to `services/range.ts`; don't add `Intl` / `getTimezoneOffset` calls to this file.

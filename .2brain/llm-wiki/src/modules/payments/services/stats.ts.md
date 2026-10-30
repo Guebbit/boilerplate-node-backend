@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/services/stats.ts
-sha256: 61233d3c4fbf4008846cc3d6744785a1b26cfcbaa1c66ddcb4525643e3e7b06b
-generated_at: 2026-10-15T11:32:25.256110+00:00
+sha256: ae4d5abc409eef713dc485a2bc7eb7f592257e64cc3a76ff7983cccb24e059f4
+generated_at: 2026-10-29T05:14:09.126223+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Computes the payments "mix" — a breakdown of how much money came in, grouped by payment method, provider, and currency — for a given time window. It is the service-layer wrapper that shapes raw repository aggregates into the `MixRow` contract consumed by reporting/staff-read APIs.
+Computes the "payments mix" statistic: how much money came in broken down by payment method, provider, and currency within a given reporting window. It translates raw aggregate rows from the persistence layer into a clean `MixRow` shape suitable for reporting.
 
 ## Key elements
 
-- **`MixRow`** (exported interface) — one row in the mix table: `method`, `provider`, `currency`, `payments` (count), and `amount` (`Money`, in minor units).
-- **`methodMix(window: ReportWindow): Promise<MixRow[]>`** (exported function) — calls `paymentRepository.sumMix`, then maps each raw row into a `MixRow`, converting the numeric `amount` into a `Money` value via `toMinorUnits`.
+- **`MixRow` (interface)** — One row of the mix: `method`, `provider`, `currency`, count of `payments`, and total `amount` as a `Money` value.
+- **`methodMix(window: ReportWindow): Promise<MixRow[]>`** — Fetches aggregated payment sums for a half-open time window and maps each raw row to a `MixRow`, converting the raw amount to minor units via `toMinorUnits`.
 
 ## Relationships
 
-- **`src/modules/payments/repository.ts`** — sole data source; `methodMix` delegates to `paymentRepository.sumMix(window)`.
-- **`src/shared-kernel/money.ts`** — provides `toMinorUnits` (used for the amount conversion) and the `Money` type (used in `MixRow`).
-- **`src/infrastructure/persistence/report.ts`** — provides the `ReportWindow` type that defines the half-open time-window parameter.
-- **`src/types/index.ts`** — provides the `PaymentMethod` union type used in `MixRow`.
-- **`src/modules/payments/services/index.ts`** — barrel file that re-exports this module so callers import from the services entry point.
-- **`src/modules/payments/tests/integration/staff-reads.test.ts`** — integration test that exercises the staff-reads flow, which calls `methodMix`.
+- **`src/domain-primitives/money.ts`** — Imports `toMinorUnits` (function) and `Money` (type) to normalize monetary amounts in the result.
+- **`src/infrastructure/persistence/report.ts`** — Imports `ReportWindow` as the parameter type for the time-range query.
+- **`src/modules/payments/repository.ts`** — Calls `paymentRepository.sumMix(window)` to retrieve the raw aggregated rows this service shapes.
+- **`src/modules/payments/services/index.ts`** — Barrel file that re-exports this module alongside other payment services.
+- **`src/types/index.ts`** — Source of the `PaymentMethod` type used in the `MixRow` interface.
 
 ## Notes
 
-- The repository returns rows keyed by a compound `_id` (`{ method, provider, currency }`). This file only destructures that key; callers never see `_id` directly.
-- `row.amount` from the repository is a raw number (major units). `toMinorUnits` converts it to minor units (e.g. cents). Consumers of `MixRow.amount` should treat the value as minor-unit integer, not a display-ready string.
-- The "only money that actually moved" filter (succeeded payments, regardless of refund status; unsettled payments excluded) is enforced inside `paymentRepository.sumMix`, not here. This file performs no status filtering.
+- Only payments that *took money* (succeeded, refunded or not) are counted; payments that never settled are excluded. This is an invariant enforced upstream in the repository, not here.
+- `ReportWindow` is a **half-open** interval (`[start, end)`); callers must not double-count boundary timestamps.
+- The raw row's compound key (`_id.method`, `_id.provider`, `_id.currency`) is unpacked into flat fields on `MixRow`; the repository's document structure is not leaked to callers.

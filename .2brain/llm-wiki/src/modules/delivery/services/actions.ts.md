@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/services/actions.ts
-sha256: 37ae702098fdb719241724a36e7857ec99ef89af67417388f61d09223d7b4b17
-generated_at: 2026-10-14T15:26:22.173384+00:00
+sha256: 25b7530a386d3bbe04512795eae905dff80bb1bdb8a4cff50f71b95e7d89ec07
+generated_at: 2026-10-29T03:37:37.145890+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Centralises the "what may this caller do to this order/shipment?" decision so that no client re-derives the rules. Combines caller standing (staff key, rank, ownership) with pure domain state predicates to produce per-action booleans, and exposes the final wire-ready view functions used by read paths.
+Centralises the "what can this caller do?" decision for fulfillment orders and shipments. It combines the caller's permission keys with the entity's state (the pure state predicates live in `../domain`) to produce a set of boolean action flags, and provides the wire-format "view" functions that hand those flags to the client so no consumer re-derives the rules.
 
 ## Key elements
 
-- **`Standing`** (interface) — the three caller flags: `staff` (holds `delivery.any.update`), `reaches` (rank reaches the buyer), `owner` (is the buyer).
-- **`standingOn(order, authContext)`** — resolves a `Standing` for a caller against an order; returns all-`false` when `authContext` is `undefined`.
-- **`orderIn(status, allowed)`** (internal) — simple membership check of an `OrderStatus` against an allowed set.
-- **`fulfillmentOrderActions(fulfillmentOrder, order, standing)`** — returns `{ ship, fulfill, hold, release, confirmWait }` booleans. All except `confirmWait` require `staff && reaches`; `confirmWait` requires `owner`. Each additionally gates on order status and the corresponding domain predicate.
-- **`shipmentActions(shipment, order, standing)`** — returns `{ deliver, editTracking }`; both gated on `staff && reaches`, shipment status `'shipped'`, and order status in `processing | shipped`.
-- **`viewFulfillmentOrder(fulfillmentOrder, order, authContext)`** — async; chains `standingOn` → `fulfillmentOrderActions` → `presentFulfillmentOrder` to produce the wire `FulfillmentOrder`.
-- **`viewShipment(shipment, order, authContext)`** — async; chains `standingOn` → `shipmentActions` → `presentShipment` to produce the wire `Shipment`.
+- **`Standing`** (interface) — two booleans: `staff` (holds `update:Shipment`) and `start` (holds `start:Shipment`).
+- **`standingOn(authContext)`** — resolves a caller's `Standing` from their permission subject; returns all-`false` when `authContext` is undefined.
+- **`fulfillmentOrderActions(fo, order, standing)`** — returns `{ ship, fulfill, hold, release }` for one fulfillment order. `ship`/`fulfill` additionally require `isOpenForShipment`; `hold`/`release` additionally require the order to be in `awaitingGoods`.
+- **`shipmentActions(shipment, order, standing, restorable?)`** — returns `{ deliver, update, markLost }` for one shipment. `deliver` requires `canRecordArrival` on the order and the shipment to be `shipped` (or `lost` + `restorable`). `update` is gated only on `staff` + `physical` kind. `markLost` requires `shipped` + `physical`.
+- **`viewFulfillmentOrder(fo, order, authContext)`** — resolves standing, computes actions, delegates to `presentFulfillmentOrder`; returns the wire `FulfillmentOrder`.
+- **`viewShipment(shipment, order, authContext, restorable?)`** — convenience wrapper that resolves standing then calls `presentShipmentFor`.
+- **`presentShipmentFor(shipment, order, standing, restorable?)`** — same as `viewShipment` but takes a pre-resolved `Standing`, so list reads compute standing once for every row.
 
 ## Relationships
 
-- **`@kernel/permissions`** (`callerForSubject`) — resolves the caller's permission subject for key lookups.
-- **`@kernel/ability`** (`holdsKey`) — checks whether the caller holds `delivery.any.update`.
-- **`../domain`** (re-exported from `domain/index.ts`, defined in `domain/fulfillment.ts`) — provides the pure state predicates `isShippable`, `isFulfillable`, `isHoldable`, `isReleasable`, `isAwaitingAnswer`.
-- **`../model`** — supplies the document types `FulfillmentOrderDocument`, `ShipmentDocument`.
-- **`../presenter`** — `presentFulfillmentOrder` and `presentShipment` convert document + actions into the wire shape.
-- **`@modules/orders`** (`orderService.reachesBuyer`, `OrderDocument`) — resolves rank reachability and provides the order type.
-- **`services/read.ts`**, **`services/ship.ts`**, **`services/fulfill.ts`**, **`services/holds.ts`**, **`services/confirm-wait.ts`**, **`services/tracking.ts`**, **`services/deliver.ts`** — downstream consumers that import the view and/or action helpers from this file.
+- **`src/kernel/permissions.ts`** — imports `callerForSubject` to resolve the caller's subject for permission lookups.
+- **`src/kernel/ability.ts`** — imports `holds` to check whether the caller holds a specific action/resource key.
+- **`src/modules/orders/index.ts`** (→ `domain/lifecycle.ts`) — imports `canRecordArrival`, `isAwaitingGoods`, and the `OrderDocument` type.
+- **`src/modules/delivery/domain/index.ts`** (→ `fulfillment.ts`, `tracking.ts`) — imports the pure state predicates `isShippable`, `isFulfillable`, `isHoldable`, `isReleasable`, `isAwaitingTracking`.
+- **`src/modules/delivery/services/ship-gate.ts`** — imports `isOpenForShipment` to gate the `ship`/`fulfill` actions on order lifecycle.
+- **`src/modules/delivery/model.ts`** — imports `FulfillmentOrderDocument` / `ShipmentDocument` as the input shapes.
+- **`src/modules/delivery/presenter.ts`** — imports `presentFulfillmentOrder` / `presentShipment` to build the wire objects.
+- **`src/modules/delivery/services/found.ts`** — referenced in the `restorable` parameter contract; the caller of `shipmentActions` / `viewShipment` is expected to compute that flag there.
 
 ## Notes
 
-- `confirmWait` is the sole action gated on `standing.owner` rather than `staff && reaches` — only the buyer themselves can trigger it.
-- `authContext` is intentionally optional (`AuthContext | undefined`); callers performing a read with no session context will receive all-`false` standing.
-- The file is purely computational (no I/O beyond `orderService.reachesBuyer`); all state predicates are delegated to `../domain`.
-- `shipmentActions` collapses `deliver` and `editTracking` into a single `open` guard — they are always enabled or disabled together.
+- **`restorable` is an external input.** This file never computes it; the caller (typically `./found`) determines whether every unit on a `lost` shipment is still open and passes the boolean in.
+- **`update` on a shipment has no state gate.** Any staff member can set/fix the tracking code on a physical shipment regardless of its status — the doc comment clarifies this is intentional ("once and after arrival").
+- **`hold` / `release` gate on order status, not fulfillment-order status.** Both require `isAwaitingGoods(order.status)` *and* a fulfillment-order predicate.
+- **`presentShipmentFor` exists for list performance.** It skips the `standingOn` resolution so a list read computes permissions once instead of per-row.
+- The state predicates are deliberately kept in `../domain` (pure, no caller context); this file's only added axis is *who* is asking.

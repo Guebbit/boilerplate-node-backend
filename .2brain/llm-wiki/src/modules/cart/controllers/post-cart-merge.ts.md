@@ -1,30 +1,31 @@
 ---
 source: src/modules/cart/controllers/post-cart-merge.ts
-sha256: 27bfe3b4535ea4eb2d72f45f4ad10732d0efd4fa4869845322ce4180b2797aaa
-generated_at: 2026-10-14T15:07:47.008519+00:00
+sha256: e22031bba359cc9cf8b6e5b2a949b12df3766fe9ec87a3b01cbe006a9d46f582
+generated_at: 2026-10-29T03:20:36.105366+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/cart/controllers/post-cart-merge.ts
 
 ## Purpose
-Thin HTTP adapter for the `POST /cart/merge` endpoint. It validates the request body, delegates to `cartService.cartMerge`, and formats the response. Exists solely to bridge the Express route to the cart service without business logic.
+Thin Express controller for `POST /cart/merge`. Validates the incoming body, delegates to `cartService.merge`, and shapes the HTTP response. Exists solely as the HTTP-adapter layer between the Express route and the cart service, keeping transport concerns (body parsing, response formatting, error mapping) out of the service.
 
 ## Key elements
-- **`postCartMerge`** (exported) — Express handler that:
-  1. Parses and validates the body against the `MergeCartBody` Zod schema via `parseBody`.
-  2. Calls `cartService.cartMerge(authContext.id, body.lines, callerContext)` with the caller's identity and extracted context.
-  3. Responds with `successResponse` on success or routes the error through `catchAs` on failure.
+- **`postCartMerge(request, response)`** — the sole export. Steps:
+  1. Validates `request.body` against the `MergeCartBody` Zod schema via `parseBody`; aborts (4xx) if invalid.
+  2. Calls `cartService.merge(authId, lines, callerContext)` and returns the resulting Promise.
+  3. On resolve → `successResponse<MergeCartResponse>` writes a 200 with the merge result.
+  4. On reject → `catchAs(response, 'mergeCart')` maps the error to an HTTP response.
 
 ## Relationships
-- **`src/modules/cart/services/index.ts`** — provides `cartService`; the `cartMerge` method contains all merge logic.
-- **`src/infrastructure/http/controller.ts`** — supplies `parseBody` (schema validation + early-exit) and `catchAs` (error-to-response mapping).
-- **`src/infrastructure/http/request.ts`** — supplies `callerContextOf` to derive caller metadata (e.g., client hints) from the Express request.
-- **`src/infrastructure/http/response.ts`** — supplies `successResponse` for the standard 200 envelope.
-- **`src/modules/cart/routes.ts`** — registers `postCartMerge` as the handler for `POST /cart/merge`.
-- **`src/types/index.ts`** — defines the `MergeCartRequest` and `MergeCartResponse` types used in the handler signature.
+- **`src/modules/cart/routes.ts`** — registers `postCartMerge` as the handler for the `POST /cart/merge` route.
+- **`src/modules/cart/services/index.ts`** — source of `cartService`; its `.merge` method performs the actual line-folding logic.
+- **`src/infrastructure/http/controller.ts`** — provides `parseBody` (Zod validation + 4xx short-circuit) and `catchAs` (error → response mapping).
+- **`src/infrastructure/http/request.ts`** — provides `callerContextOf`, which extracts caller metadata from the request for the service call.
+- **`src/infrastructure/http/response.ts`** — provides `successResponse` for the standard 200 envelope.
+- **`src/types/index.ts`** — defines `MergeCartRequest` and `MergeCartResponse` used for typed Express parameters and the response payload.
 
 ## Notes
-- **Partial-success contract:** Once the body passes validation the response is always 200. Individual lines the cart cannot accept are reported inside the `lines` array of the response body rather than producing a non-2xx status.
-- **Auth is assumed present:** `request.authContext!.id` uses a non-null assertion, so this controller must only be mounted behind middleware that guarantees `authContext` is set.
-- **Body typing:** The generic parameter on `Request` is `MergeCartRequest` (from `@types`), while the actual Zod schema used at runtime is `MergeCartBody` (from `@api/schemas.zod`). Keep both in sync when changing the shape.
+- **Partial-success by design.** Once the body is valid the route always returns 200. Lines the cart cannot accept are reported inside the response body (`lines` array) rather than surfaced as an HTTP error, so accepted lines still land.
+- **Non-null assertion on `request.authContext!`** — the controller assumes an upstream auth middleware has already attached the context; there is no guard here.
+- **Not declared `async`.** The function returns the Promise chain directly (`.then().catch()`) instead of using `async/await`; callers should treat it as returning `Promise<void>`.

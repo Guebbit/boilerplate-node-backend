@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/unit/notify.test.ts
-sha256: 46101434d2ce3746239d1e718333d04cc1990a43f5efac6c05438074060075f5
-generated_at: 2026-10-15T11:20:17.428145+00:00
+sha256: 093154781dad6a1225f56486c7a1ea986620d7d296235e422a19a4bace5b5b68
+generated_at: 2026-10-29T04:59:23.696350+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for `sendOrderPlacedEmail` and `mailBuyer` (both from `services/notify.ts`) focused on one invariant: **no invoice attachment is ever sent at order-placement time**, regardless of payment method. It also verifies that `mailBuyer` short-circuits entirely (no build, no enqueue) when the order email is the anonymized placeholder.
+Unit tests for the `mailBuyer` buyer-mail **policy** (the decision logic in `services/notify.ts`): whether an email is sent at all, which name is used as the greeting, and how a failed user-lookup is handled. Mail content and template rendering are intentionally **out of scope** here — the module doc notes those are pinned by listener/integration tests.
 
 ## Key elements
 
-- **`enqueueEmailMock`** – Module-level `jest.fn()` that backs a `jest.mock` of `@infrastructure/adapters/mailer`. All assertions about what gets sent go through this mock.
-- **`orderFixture(overrides?)`** – Builds a minimal `OrderDocument` (single item, card payment) via `asStub`, with a spread-override pattern for per-test variants.
-- **`describe("sendOrderPlacedEmail — no invoice attachment")`** – Two tests: card order and bank-transfer order both produce a request with `attachments === undefined`. The bank-transfer test also asserts the template name is `orders.order-transfer-instructions`.
-- **`describe("mailBuyer — anonymised order")`** – Two tests: `ANONYMIZED_EMAIL` → neither the `build` callback nor `enqueueEmail` is called; a real email → `build` is called with the recipient address.
+- **`orderFixture(overrides?)`** — builds a type-safe `OrderDocument` stub (via `asStub`) with a default card-order shape; every test case starts from this.
+- **`jest.mock('@infrastructure/adapters/mailer')`** — replaces `enqueueEmail` with a module-level `enqueueEmailMock` so the tests can assert "was an email queued?" without hitting a real transport.
+- **`describe('mailBuyer — anonymised order')`** — verifies that an order whose email is `ANONYMIZED_EMAIL` triggers **no** build and **no** enqueue, and a normal order still triggers `build` with the real address.
+- **`describe('mailBuyer — buyer lookup fails')`** — spies on `userService.getById` to reject, then asserts the fallback name equals the order email and that `logger.error` is called with a structured context (`orderId`, `error`).
+- **`build` (injected `jest.fn()`)** — passed as the second argument to `mailBuyer`; the test never imports a real builder, keeping the test focused on policy rather than template output.
 
 ## Relationships
 
-- **`services/notify.ts`** – SUT. Exports `sendOrderPlacedEmail` and `mailBuyer`; this file exercises their public contracts around attachments and anonymization.
-- **`domain/anonymization.ts`** – Source of the `ANONYMIZED_EMAIL` constant used in the `mailBuyer` guard tests.
-- **`model.ts`** – Provides the `OrderDocument` type that shapes every fixture in this file.
-- **`tests/support/stub.ts`** – `asStub` gives a type-cast shortcut so fixtures can omit fields not relevant to the assertion.
-- **`tests/support/environment.ts`** – `withEnvironmentOverrides` injects `NODE_BANK_TRANSFER_*` env vars for the bank-transfer test case.
+- **`src/modules/orders/services/notify.ts`** — the unit under test (`mailBuyer`). The test calls it directly with a fixture order and a mock builder.
+- **`src/modules/orders/domain/anonymization.ts`** — provides the `ANONYMIZED_EMAIL` sentinel used to drive the "send nothing" branch.
+- **`src/modules/orders/model.ts`** — supplies the `OrderDocument` type that `orderFixture` and `asStub` are constrained to.
+- **`src/modules/users/index.ts`** → **`src/modules/users/services/index.ts`** — source of `userService.getById`; the test spies on it to simulate a lookup failure.
+- **`src/infrastructure/adapters/logger.ts`** — `logger.error` is spied on to verify the structured log call on lookup failure.
+- **`tests/support/stub.ts`** — `asStub` gives the fixture a minimal type cast so the object satisfies `OrderDocument` without constructing a full Mongoose doc.
 
 ## Notes
 
-- **Template-building is intentionally NOT tested here.** Which email body each payment method produces is covered separately in `emails.test.ts`; this file only asserts the *absence* of attachments and the anonymization guard.
-- The mailer mock is declared at module scope with `jest.mock`, so it replaces the adapter for the entire file. `beforeEach` clears call history and resets the resolved value.
-- `asStub` bypasses real model construction; the resulting object is only as valid as the fields actually set, which is fine because the SUT under test reads only a few of them.
+- The `build` function is **injected** as a parameter to `mailBuyer`; it is not imported from any module. This means the test validates the *call contract* (arguments, invocation) but not the template output.
+- `enqueueEmail` is mocked at the **module** level (`jest.mock`), while `userService.getById` and `logger.error` are spied on per-test. Mixing the two patterns is intentional: the mailer is never touched in the anonymized path, so a module-level mock makes the absence assertion trivial.
+- The doc comment explicitly scopes this file: "The mails themselves are pinned by the listener tests beside the flows that send them." Don't add template-content assertions here.

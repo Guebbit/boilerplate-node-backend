@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/services/errors.ts
-sha256: d992f2407a813ecab01878602320e08e2222fd49168b558e28821033cb5a7021
-generated_at: 2026-10-15T11:29:30.983385+00:00
+sha256: d5d39af578f59572fef58fb33c76ba6a7a01053b422598c70279991f8bb1e1f2
+generated_at: 2026-10-29T05:10:30.020636+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides the two canonical 409 refusal responses for the payments service: an order that is no longer payable, and card payment being unavailable in this deployment. It is a deliberate leaf node (no persistence or cross-service imports) so any file under `services/` can import a standardised error response without pulling in extra dependency edges.
+Centralized factory functions and one internal error class for every "this payment action cannot proceed" response in the payments service layer. It is deliberately a **leaf module** (no persistence or cross-service imports) so any file under `services/` can reach it without creating dependency edges among the services themselves.
 
 ## Key elements
 
-- **`notPayable(): ResponseReject`** — Returns a `409` with `ERROR_CODES.PAYMENT_ORDER_NOT_PAYABLE` and an i18n message. Covers three upstream scenarios (failed `isPayable` check, race between check and write, bounce because the order vanished) under one code/message pair.
-- **`cardNotAvailable(): ResponseReject`** — Returns a `409` with `ERROR_CODES.PAYMENT_CARD_NOT_AVAILABLE` and an i18n message. Used when `NODE_PAYMENT_PROVIDER` is unset and a client attempts a card intent anyway.
+- **`notPayable()`** → 409 `ResponseReject`. Returned when an order fails the `isPayable` check, is lost in a check-then-write race, or the provider rejects because the order no longer exists. Single code (`PAYMENT_ORDER_NOT_PAYABLE`) covers all three cases.
+- **`cardNotAvailable()`** → 409 `ResponseReject`. Returned when the deployment has no card provider configured (`NODE_PAYMENT_PROVIDER` unset). Mirrors the same refusal that `GET /payments/methods` and checkout would produce.
+- **`paymentNotFound()`** → 404 `ResponseReject`. Generic "payment does not exist or is not visible to caller" answer.
+- **`orderNotFound()`** → 404 `ResponseReject`. Same shape, scoped to an order ID named in the request.
+- **`RefundLeftOpenError`** — internal `Error` subclass (not an HTTP response). Carries `refundId` and the provider's `cause`. Thrown when a provider call for an already-recorded refund is refused; the record stays `failed` for retry by the refund sweep.
 
 ## Relationships
 
-- **`src/infrastructure/http/response.ts`** — Imports `generateReject` and the `ResponseReject` type; all error responses in this file are built through that helper.
-- **`src/infrastructure/i18n/index.ts`** (and `context.ts`) — Imports the `t()` translation function used for both user-facing messages.
-- **`src/modules/payments/services/intent.ts`**, **`offline.ts`**, **`settlement.ts`** — Consumer services that call `notPayable` / `cardNotAvailable` to short-circuit a request before any write or external call.
+- **Imports** `generateReject` / `ResponseReject` from `src/infrastructure/http/response.ts` and `t` from `src/infrastructure/i18n/index.ts` (via `@infrastructure/i18n`).
+- **Re-exported** through `src/modules/payments/services/index.ts`.
+- **Consumed** by the sibling service files (`intent.ts`, `offline.ts`, `refunds.ts`, `settlement.ts`, `view.ts`), each of which calls the relevant factory or throws/catches `RefundLeftOpenError`.
 
 ## Notes
 
-- Both responses are **409 Conflict**, not 404 or 422. Clients are expected to treat the `code` field (not the HTTP status) as the discriminator.
-- The module intentionally avoids importing from any other `services/` file or from persistence layers. If you find yourself wanting to add such an import here, the leaf invariant is being broken — reconsider placement.
-- `cardNotAvailable` is a deployment-level condition, not a per-request state; in environments where a card provider *is* configured this function is never reached.
+- The module imports `ERROR_CODES` from `@api/error-codes` (not shown in the graph neighbors list). `paymentNotFound` and `orderNotFound` bypass `ERROR_CODES` entirely, passing only a translated message to `generateReject`.
+- `RefundLeftOpenError` is the **only non-HTTP** export: it is an application-level signal, not a client-facing response. Callers that can tolerate a delayed refund should catch it specifically; any other error from the refund path means the record may not exist.
+- All 409 responses are indistinguishable to the client by design — a client cannot (and need not) tell whether the order failed pre-write, was lost to a race, or bounced at the provider.

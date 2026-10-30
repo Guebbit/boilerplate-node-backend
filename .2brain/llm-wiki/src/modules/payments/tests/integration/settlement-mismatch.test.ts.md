@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/tests/integration/settlement-mismatch.test.ts
-sha256: b107b676b60b487541b986f7ac102bdcedbc3d20623999aab01438c6840e93aa
-generated_at: 2026-10-15T11:36:42.540331+00:00
+sha256: fda3a3fa1e525bdba0e79ecb005abbe3ec2aaf44d65723995af06aa22e9cd588
+generated_at: 2026-10-29T05:21:45.207912+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test proving that when the payment provider reports `succeeded` but the collected amount, currency, or payment ID does not match what was frozen, the system rejects the settlement: the order is cancelled, the money is returned via the refund path, no `PAYMENT_SUCCEEDED` outbox event is emitted, stock is not committed, and no invoice is issued. Uses real MongoDB; only the provider is faked (via its receipt lever).
+Integration test covering the "provider reports success but the figures don't match" settlement path. Verifies that when amount, currency, or payment ID differs from what was frozen, the system cancels the order, refunds the collected money through the existing refund path, emits no `payment.succeeded` event, commits no stock, and issues no invoice. Runs against a real Mongo instance; the only fake is the payment provider's receipt lever.
 
 ## Key elements
 
-- **`openIntent()`** — builds the fixture: one user, one product (2 × 25.00), one order, one confirmed-but-unpaid payment intent. Returns IDs and the `providerRef`.
-- **`MISMATCHES`** — parameterized cases (`amount`, `currency`, `paymentId`) driving `describe.each` to verify each single-field discrepancy is caught.
-- **`describe('a mismatch recorded')`** — asserts the *received* figures (not the frozen ones) are stored on the payment and mirrored in the refund amount; audit is written as `payment.amount_mismatch` by `SYSTEM_ACTOR` (not under `security.*`); the error code is `PAYMENT_ORDER_NOT_PAYABLE`, not `PAYMENT_DECLINED`.
-- **`describe('the other doors into the same settlement')`** — covers `syncPayment` (browser poll), `applyWebhookDelivery`, and a provider that returns `succeeded` with no figures at all; all must cancel + refund.
-- **`describe('a matching success')`** — regression guard: a fully honest payment is still accepted; float noise (50 + 1e-9) is tolerated.
-- **`describe('a crash after the mismatch was recorded')`** — simulates a process death between the payment write and the cancel; verifies the reservation-expiry sweep still cancels the pending order and refunds.
-- **`jest.mock('@infrastructure/observability/audit', …)`** — replaces the audit module (not spied) so `emitAuditEvent` is a mock fn; `recordAudit` is re-wired to build events via the real `buildAuditEvent`.
-- **`GOOD_METHOD`** (`'pm_card_visa'`) — the opaque payment-method handle passed to every confirm/sync call.
+- **`openIntent()`** – Shared setup: creates a user, a 2 × 25.00 product/order, opens a payment intent, and returns IDs plus the `providerRef`.
+- **`MISMATCHES`** – Tuple of three parameterized cases (`amount`, `currency`, `paymentId`) consumed by `describe.each`.
+- **`GOOD_METHOD`** – The opaque provider payment-method handle (`'pm_card_visa'`) passed to confirm/sync calls.
+- **`jest.mock('@infrastructure/observability/audit', …)`** – Replaces the audit port with `auditPortMock()` from `@tests/ports` (see Notes).
+- **`describe.each(MISMATCHES)`** – For each field, asserts 409 response, order cancelled, payment `succeeded` with one refund, zero `PAYMENT_SUCCEEDED` outbox events, exactly one `PAYMENT_AMOUNT_MISMATCH` event with correct payload, no invoice, stock restored, and the Prometheus counter labelled with the mismatched field.
+- **`describe('a mismatch recorded')`** – Asserts the recorded amount reflects what *arrived* (not the frozen amount), the order is protected from hard delete (`ORDER_HAS_MONEY_HISTORY`), the audit row uses `payment.amount_mismatch` under the system actor, and the error is *not* coded `PAYMENT_DECLINED`.
+- **`describe('the other doors into the same settlement')`** – Repeats the mismatch through `syncPayment`, `applyWebhookDelivery`, and a no-figures provider response; all must cancel the order.
+- **`describe('a matching success')`** – Happy-path: a correct receipt is accepted, order becomes `paid`. Also verifies float-noise tolerance (50.000000001 ≈ 50.00).
+- **`describe('a crash after the mismatch was recorded')`** – Simulates a process death between mismatch recording and order cancellation; the reservation-expiry job completes the cancel and refund.
 
 ## Relationships
 
-- **`scenarios/support/doubles/payments/fake.ts`** — `fakePaymentProvider.confirm` and `setFakeReceipt` are the sole fakes; they control what the provider "collects" per `providerRef`.
-- **`src/kernel/outbox.ts`** — `outboxEventModel.countDocuments` verifies zero `PAYMENT_SUCCEEDED` events; `settleOutboxNudges` flushes pending outbox work before assertions.
-- **`src/kernel/events.ts`** — `resetDomainEvents` clears in-memory domain-event buffers in `afterEach`.
-- **`src/kernel/permissions.ts`** — `SYSTEM_ACTOR` is the actor used for the crash-recovery `cancelById` call and asserted in audit metadata.
-- **`src/modules/orders/index.ts` / `src/modules/orders/services/index.ts`** — `orderService.getById` checks order status; `orderService.cancelById` is spied in the crash test.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `toOrderItem` build the order fixture.
-- **`src/modules/invoicing/index.ts` / `module.ts`** — `findInvoiceForOrder` asserts no invoice; `invoicingModule` is registered in `beforeEach`.
-- **`src/modules/payments/audit.ts`** — `paymentsAuditActions.PAYMENT_AMOUNT_MISMATCH` provides the action name asserted in the audit test.
-- **`src/infrastructure/observability/audit.ts`** — mocked module; `observePort(auditPort.emitAuditEvent)` captures audit emissions.
-- **`src/infrastructure/http/response.ts`** — `generateReject` imported (used in truncated portion for error-shape assertions).
-- **`src/infrastructure/i18n/index.ts`** — `t` imported for error-message assertions.
+- **`scenarios/support/doubles/payments/fake.ts`** – Source of `fakePaymentProvider` and `setFakeReceipt`; the sole injection point for mismatched provider data.
+- **`src/infrastructure/observability/audit.ts`** – Its `emitAuditEvent` is replaced wholesale via `jest.mock` so the test can assert audit payloads without hitting a real sink.
+- **`src/infrastructure/http/response.ts`** – `generateReject` shapes the 409 responses the test inspects.
+- **`src/infrastructure/i18n/index.ts`** – `t` is imported (likely used by error-message assertions or setup helpers).
+- **`src/kernel/events.ts`** – `resetDomainEvents` called in `afterEach` to clear the in-memory event bus between tests.
+- **`src/kernel/outbox.ts`** – `outboxEventModel` queries for `PAYMENT_SUCCEEDED` / `PAYMENT_AMOUNT_MISMATCH` docs; `settleOutboxNudges` flushes pending outbox nudges before assertions.
+- **`src/kernel/permissions.ts`** – `SYSTEM_ACTOR` is the expected `actorUserId` in the audit assertion.
+- **`src/modules/orders/services/index.ts`** – `orderService.getById` / `.removeById` used to verify order state and delete-guard behavior.
+- **`src/modules/orders/tests/factories.ts`** – `createOrder`, `toOrderItem` build the fixture order.
+- **`src/modules/invoicing/index.ts` / `module.ts` / `services/index.ts`** – `invoicingModule` registered in `beforeEach`; `invoicingService.findInvoiceForOrder` asserts no invoice was created.
+- **`src/modules/payments/audit.ts`** – `paymentsAuditActions.PAYMENT_AMOUNT_MISMATCH` provides the canonical action string the test asserts against.
 
 ## Notes
 
-- The audit port is **replaced via `jest.mock`**, not spied on, because `jest.spyOn` cannot redefine the non-configurable getter on a CommonJS namespace import (same pattern as `orders/tests/integration/create-audit.test.ts`).
-- `setFakeReceipt` takes the `providerRef` (opaque handle) as its key, not the payment ID — the fake is keyed on what the provider sees, not what the domain stores.
-- The mismatch check is **per-field**: a single differing field (amount *or* currency *or* paymentId) is sufficient for rejection; the test does not require all three to differ simultaneously.
-- The refund amount equals the **received** amount (e.g. 47.5), not the frozen amount (50.0) — the system returns what was actually collected.
-- `PAYMENT_DECLINED` is explicitly **not** the error code here; the code is `PAYMENT_ORDER_NOT_PAYABLE`. This distinction matters for client-side handling (a decline implies retry, a mismatch does not).
+- The audit port is **replaced** (`jest.mock` → `auditPortMock()`), not spied on, because `jest.spyOn` cannot redefine the non-configurable getter that a CommonJS namespace import exposes. See `orders/tests/integration/create-audit.test.ts` for the same pattern.
+- Real Mongo is used (`setupTestDb()`); there are no repository mocks. This makes the test slower but exercises actual query/transaction paths.
+- `registerCheckoutModules([paymentsModule, invoicingModule])` runs in every `beforeEach`; omitting it would leave the module wiring absent and the service calls would fail.
+- The float-tolerance test (`50 + 1e-9`) documents that the comparison is done in integer minor units, not floating-point equality—do not "fix" it to exact equality.
+- The truncated tail (reservation-expiry crash test) implies a background/cron dependency; ensure the test harness advances or triggers the expiry job before asserting.

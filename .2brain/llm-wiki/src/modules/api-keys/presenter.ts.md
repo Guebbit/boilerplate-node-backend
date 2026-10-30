@@ -1,23 +1,30 @@
 ---
 source: src/modules/api-keys/presenter.ts
-sha256: f2c2b25d6d633b274f7bb9623ee4bdc86cbf272366d00e8280660c176ed6604e
-generated_at: 2026-10-14T14:59:44.125150+00:00
+sha256: a8fd56a3f400f3d6acbdcf550c1df427f70683a94689d906632d957785e2cc62
+generated_at: 2026-10-29T03:13:50.991670+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/api-keys/presenter.ts
 
 ## Purpose
-Single-purpose mapping layer that converts a stored `ApiKeyDocument` into the `ApiKey` wire shape declared by `openapi.yaml`. It exists so that the document's schema-internal representation (with `_id`, `hash`, etc.) is isolated from the contract type, and so `mint()` in the service layer can layer a plaintext `secret` on top of the *same* shape without the secret ever being persisted on the document.
+
+Single location where a stored credential row is mapped to the wire shape declared in `openapi.yaml`. It exists so that the transformation logic (status resolution, document-to-contract casting) lives in one place rather than being scattered across controllers or serializers.
 
 ## Key elements
-- **`presentApiKey(document: ApiKeyDocument): ApiKey`** — The sole export. Calls `document.toJSON()` (the Mongoose schema's own overload) and casts the result to the `ApiKey` contract type. No logic beyond the call + cast.
+
+- **`apiKeyStatus(key, minterCanSignIn, now)`** — Pure function that resolves a credential's lifecycle status in priority order: `revoked` → `expired` → `active`/`suspended`. The minter's sign-in eligibility (not banned, soft-deleted, or erased) is the only external input; the clock is injectable for tests.
+- **`presentApiKey(document)`** — Thin wrapper around `ApiKeyDocument.toJSON()` that casts the Mongoose schema overload's return to the narrower `StoredApiKey` type. The `_id` → `id` rename and `hash` removal are already handled by the schema's transform.
 
 ## Relationships
-- **`src/modules/api-keys/model.ts`** — Provides the `ApiKeyDocument` input type. Its schema-level `toJSON` transform already handles the `_id` → `id` rename and strips `hash` before this function runs.
-- **`src/types/index.ts`** — Provides the `ApiKey` output type (the `openapi.yaml` wire contract).
-- **`src/modules/api-keys/services/api-keys.ts`** — `mint()` constructs the same `ApiKey` shape but additionally attaches a plaintext `secret` field; the secret is generated at mint time and never written back to the document.
+
+- **`./model.ts`** — Supplies the `ApiKeyDocument` type (the Mongoose document) consumed by `presentApiKey`.
+- **`./repository.ts`** — Supplies the `StoredApiKey` type that both functions target as their output domain shape.
+- **`@types` (`src/types/index.ts`)** — Supplies `ApiKey`, the OpenAPI contract type; `apiKeyStatus` returns its `status` field.
+- **`./services/api-keys.ts`** — The `mint()` function layers a plaintext `secret` onto this same shape at creation time; after minting, the presenter is the sole path from storage to the wire.
 
 ## Notes
-- The `as ApiKey` cast is necessary because `toJSON()` returns the Mongoose schema's own overload type, not the `ApiKey` contract type; they are structurally identical after the schema transform but nominally different. No runtime conversion happens here.
-- Do not add secret-related logic to this file. By design a secret is *minted*, never stored, so it can only appear in the service layer's `mint()` path.
+
+- `presentApiKey` is intentionally a one-liner cast; the real work (field rename, hash stripping) lives in the Mongoose schema's `toJSON` transform in `model.ts`. If you need to add a field, change the schema transform, not this file.
+- `apiKeyStatus` compares `expiresAt` against `now` using `<=`, meaning a key is expired the instant its deadline is reached, not after.
+- The module doc comment explicitly notes that a freshly minted secret is *not* recoverable from the document — `mint()` in the service composes the wire shape separately. Do not try to "present" a just-minted key through `presentApiKey`; it would lack the `secret`.

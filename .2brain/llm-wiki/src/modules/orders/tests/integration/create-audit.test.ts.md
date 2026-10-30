@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/integration/create-audit.test.ts
-sha256: b1a3854589549160923d8fd6d80e03433ff7fc5f1e32ae68f67651b5668212f8
-generated_at: 2026-10-15T11:13:39.287694+00:00
+sha256: e2e97e07fd66fcc0793ea78cfb3cbeb2fb9cfea3a050d50fc26ed97eaae3dabc
+generated_at: 2026-10-29T04:52:14.681050+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test enforcing a single invariant on the order-creation path: the `order_created` audit row must always record the **real** caller's role (`actorRoleName`), never a hardcoded label. It guards against any code path (e.g. checkout's own purchases) silently rewriting the actor to "customer."
+Integration test verifying that `orderService.create` writes an `order_created` audit row whose `actorRoleName` always reflects the **real** caller's role. It guards against a regression where the checkout path could silently overwrite the role label (e.g., forcing every purchase to read as "a customer action").
 
 ## Key elements
 
-- **`contextAs(role, id)`** – local helper that assembles a `CallerContext` with a named tenant role and a `callerAs` identity; simulates what a resolved HTTP request would produce.
-- **`jest.mock('@infrastructure/observability/audit', …)`** – full module replacement (not a spy). Exposes a fresh `emitAuditEvent` mock and re-implements `recordAudit` so it routes through that mock, because the real `recordAudit` closes over the original `emitAuditEvent`.
-- **`jest.mock('@infrastructure/observability/analytics', …)`** – stubs `emitAnalyticsEvent` to keep the test focused on the audit port.
-- **`setupTestDb()`** – provisions a real (temporary) database for the duration of the suite.
-- **Two `it` blocks** – one for a `moderator` caller, one for an `admin` caller; each asserts `emitAuditEvent` received `action: ordersAuditActions.ORDER_CREATED`, `outcome: 'success'`, and the correct `actorRoleName`.
+- **`contextAs(role, id?)`** — local helper that assembles a `CallerContext` with a named `actorRoleName`, a `callerAs` identity, and `analyticsConsent: false`. Simulates what a resolved HTTP request would produce.
+- **`describe` block** — *"create — the audit row records the real caller, never a forced label"*; contains two cases:
+  - Moderator places an order → audit row carries `actorRoleName: 'moderator'`.
+  - Admin places an order → audit row carries `actorRoleName: 'admin'` (not silently downgraded to "customer").
+- **`jest.mock('@infrastructure/observability/audit', …)`** — **replaces** the module with `auditPortMock()` from `@tests/ports` (not a `spyOn`, because the CJS namespace getter is non-configurable).
+- **`jest.mock('@infrastructure/observability/analytics', …)`** — stubs `emitAnalyticsEvent` to a no-op `jest.fn()` while preserving the rest of the module.
+- **`observePort(auditPort.emitAuditEvent)`** — returns a spy handle to assert on the single `emitAuditEvent` call after each `create` invocation.
+- **`setupTestDb()`** — seeds the in-memory test database before the suite runs.
 
 ## Relationships
 
-- **`src/infrastructure/observability/audit.ts`** – the audited port. The test mocks the whole module; it calls the real `buildAuditEvent` via `jest.requireActual` while intercepting `emitAuditEvent`.
-- **`src/modules/orders/audit.ts`** – supplies `ordersAuditActions.ORDER_CREATED` used in assertions.
-- **`src/modules/orders/services/index.ts`** → **`src/modules/orders/services/crud.ts`** – the `create` function under test (buyer ID, email, line items, caller context).
-- **`src/modules/users/tests/factories.ts`** – `createUser` provides a real buyer row.
-- **`src/modules/products/tests/factories.ts`** – `createProduct` provides a purchasable product row.
-- **`src/types/auth-context.ts` / `src/types/index.ts`** – `CallerContext` type and its barrel re-export.
-- **`tests/support/callers.ts`** – `callerAs` builds the `caller` sub-object inside `CallerContext`.
-- **`tests/support/ports.ts`** – `observePort` wraps a port function into a Jest spy for assertion.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb` lifecycle (create/teardown) for the real database.
+- **`src/modules/orders/services/index.ts`** — `orderService.create` is the system under test; called with buyer ID, email, line items, and a `CallerContext`.
+- **`src/modules/orders/audit.ts`** — exports `ordersAuditActions.ORDER_CREATED`, asserted in every expectation.
+- **`src/infrastructure/observability/audit.ts`** — fully mocked out; its `emitAuditEvent` is the function under observation.
+- **`tests/support/ports.ts`** — provides `auditPortMock()` (used in the `jest.mock` factory) and `observePort` (returns the call spy).
+- **`tests/support/callers.ts`** — `callerAs(role, id)` builds the identity portion of `CallerContext`.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the shared test database.
+- **`src/modules/users/tests/factories.ts`** — `createUser()` creates the buyer record.
+- **`src/modules/products/tests/factories.ts`** — `createProduct()` creates the line-item product.
+- **`src/types/auth-context.ts` / `src/types/index.ts`** — `CallerContext` type imported for the helper's return annotation.
 
 ## Notes
 
-- **Port is replaced, not spied.** The file comment (and the mock body) explain that `jest.spyOn` fails on the non-configurable getter exposed by a CommonJS namespace import; a full `jest.mock` replacement is the workaround.
-- **`recordAudit` rerouting.** Because `recordAudit` in the real module closes over its own `emitAuditEvent`, the mock explicitly re-implements `recordAudit` to call the *mocked* `emitAuditEvent` (via `buildAuditEvent`), ensuring every audit path is observable through a single spy.
-- The module-level doc comment states the invariant in plain language; the two tests are the minimal role-set to catch both "too permissive" (admin → customer) and "too restrictive" (moderator → customer) regressions.
+- The audit port is **replaced** via `jest.mock`, not wrapped with `jest.spyOn`. A comment in-file explains that `jest.spyOn` cannot redefine the non-configurable getter exposed by a CommonJS namespace import; see `cancel.test.ts` for the full rationale.
+- The analytics mock preserves all real exports (`jest.requireActual`) and only overrides `emitAnalyticsEvent`, so other analytics side-effects in the create path are not accidentally suppressed.
+- `afterEach(jest.restoreAllMocks)` is present even though the primary mocks are module-level; it covers any per-test spies introduced by `observePort`.

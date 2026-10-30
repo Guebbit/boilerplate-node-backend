@@ -1,7 +1,7 @@
 ---
 source: scenarios/rate-limits.ts
-sha256: cc4af545df4d026188932cec7dc721a9e02501a5b38d4113d131eed811af39fb
-generated_at: 2026-10-15T09:33:51.174427+00:00
+sha256: 9e152716e6d102ce7ccfca9ba44bd2e09466ecc3d46ba5fd6b3eb70b7ba19187
+generated_at: 2026-10-29T01:24:54.256408+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides elevated rate-limit environment variables and in-memory counter settings for scripted drivers (the e2e test server and the apply seeder). Without these, a burst of hundreds of requests from a single address trips every rung of the anti-automation ladder, and the resulting 429 lands on an unrelated next request, masquerading as a functional bug.
+Defines the rate-limit budget overrides needed when a **scripted driver** (not a human) hammers the API from a single address. Without these, the app's multi-rung anti-automation ladder 429s the script mid-flight, and the failure surfaces on an unrelated request. The file exists so the two scripted callers can apply one consistent set of raised limits and in-memory counters without duplicating the list.
 
 ## Key elements
 
-- **`SCRIPTED_MAX`** — constant (`'100000'`); the value every budget is raised to. Far above the suites' own `1000` because a single process accumulates counters across all specs within a 60-second window.
-- **`PRIVATE_COUNTERS`** — sets `NODE_RATE_LIMIT_REDIS_URL` to `''` (empty string, not `undefined`) so rate-limit counters live in process memory only. The blank value deliberately beats a `.env` limits URL that an unset variable could not override.
-- **`RAISED_RATE_LIMIT_ENV_VARS`** *(export)* — the exhaustive list of every rate-limit env var a scripted driver can trip. `tests/cross-cutting/rate-limit-budgets.test.ts` asserts this list stays complete. Excludes `NODE_MFA_CHALLENGE_MAX` (sized to challenge lifetime, not request volume).
-- **`SCRIPTED_RATE_LIMITS`** *(export)* — `Readonly<Record<string, string>>`; all vars in `RAISED_RATE_LIMIT_ENV_VARS` mapped to `SCRIPTED_MAX`, spread with `PRIVATE_COUNTERS`.
-- **`DEMO_BANK_TRANSFER`** *(export)* — fictional beneficiary/IBAN so `GET /payments/methods` offers bank transfer and the shop scenario's `order.awaitingTransfer` guarantee holds. Real deployments keep their own `.env` values because callers apply these only where nothing is set.
+- **`SCRIPTED_MAX`** (`'100000'`) — the value every budget is raised to. Chosen well above the suites' own `1000` because `run-server.ts` accumulates counters across all specs in one 60-second window.
+- **`PRIVATE_COUNTERS`** — sets `NODE_RATE_LIMIT_REDIS_URL` to `''` (blank, not absent) so counters live in-process memory. Blank intentionally beats a `.env` file's own limits URL.
+- **`RAISED_RATE_LIMIT_ENV_VARS`** (exported) — the complete list of every rate-limit env var the app exposes, excluding `NODE_MFA_CHALLENGE_MAX` (lifetime-based, not volume-based).
+- **`SCRIPTED_RATE_LIMITS`** (exported) — a `Readonly<Record<string, string>>` combining all raised vars mapped to `SCRIPTED_MAX` plus `PRIVATE_COUNTERS`. This is the object the callers spread into their environment.
+- **`DEMO_BANK_TRANSFER`** (exported) — fictional beneficiary/IBAN/BIC so `GET /payments/methods` can offer bank transfer in the `shop` scenario. Applied only where those vars are unset, so a real deployment's own values survive.
 
 ## Relationships
 
-- **`scenarios/run-server.ts`** — consumer. Serves the paired e2e suite end-to-end from one process; applies `SCRIPTED_RATE_LIMITS` so accumulated counters across all specs don't 429.
-- **`scenarios/apply.ts`** — consumer. Drives several hundred requests to build shop history; applies the same limits. Its first gate is `isRelaxedEnvironment()`, confirming it never runs against a real deployment.
-- **`tests/cross-cutting/rate-limit-budgets.test.ts`** — asserts that `RAISED_RATE_LIMIT_ENV_VARS` covers every rate-limit budget in the application, keeping the list exhaustive.
+- **`scenarios/run-server.ts`** — primary consumer. One long-lived process serves the paired e2e suite; it applies `SCRIPTED_RATE_LIMITS` at startup so counters never hit shared Redis.
+- **`scenarios/apply.ts`** — secondary consumer. Drives several hundred requests to build shop history before specs run. Guards against deployment via `isRelaxedEnvironment()`.
+- **`tests/cross-cutting/rate-limit-budgets.test.ts`** — asserts that `RAISED_RATE_LIMIT_ENV_VARS` remains exhaustive (i.e., no new budget is added to the app without being listed here).
 
 ## Notes
 
-- The four `NODE_PAYMENT_*` entries (confirm, decline, decline-block, intent) exist specifically because `shop-history.ts` runs a dozen `checkoutAndPay` cycles plus a declined-card case in one process; without them the flow throws on its own retry every run.
-- `NODE_RATE_LIMIT_REDIS_URL: ''` uses an empty string rather than omitting the key — a blank value set before `dotenv` runs overrides the `.env` file's URL, whereas an unset variable would not.
-- Never applied to a real deployment: `run-server.ts` binds loopback with throwaway secrets, and `apply.ts` gates on `isRelaxedEnvironment()`.
+- **Deployment guard:** Both callers refuse to run in a deployment environment; this file is *never* meant for production.
+- **Blank vs. absent Redis URL:** `NODE_RATE_LIMIT_REDIS_URL: ''` must be set before `dotenv` loads; an *unset* variable would lose to a `.env` entry, while a blank string wins and forces in-memory counters.
+- **`NODE_MFA_CHALLENGE_MAX` intentionally excluded:** It is sized to a live challenge's lifetime, not request volume, and no scripted driver holds a challenge open long enough to trip it.
+- **Payment-decline budgets** (`NODE_PAYMENT_DECLINE_*`, `NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX`) exist because `shop-history.ts` runs a dozen `checkoutAndPay` calls plus one declined card in a single process—well past the human 5-per-hour confirm budget.
+- **`DEMO_BANK_TRANSFER` is fictional** (Italian IBAN, placeholder BIC). A deployment that sets its own bank-transfer vars in `.env` is unaffected because both callers only fill in unset variables.

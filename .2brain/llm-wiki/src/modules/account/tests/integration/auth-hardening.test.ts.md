@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/integration/auth-hardening.test.ts
-sha256: 52bafbb6f98b117b68db9f62473214099c97f22627e232956ab9b938f1f74b79
-generated_at: 2026-10-15T10:10:25.243736+00:00
+sha256: aeae567ad6d42d5def4023fec0624deda476b370b933bfd7ecfa84e378ea3dc9
+generated_at: 2026-10-29T02:53:29.348762+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the credential-endpoint rate limiters and the antibot challenge gate as exported by `account/rate-limits.ts`. It verifies that per-identity and per-address budgets are independent, that only failed attempts spend budget, that the block-level budget triggers the challenge gate for credential-stuffing patterns, and that the gate engages only once the identity budget is at least half consumed (and only when an antibot provider is configured).
+Integration tests for the credential-endpoint hardening layer defined in `account/rate-limits.ts`: verifies that per-identity and per-address rate-limit buckets behave independently, that successful logins don't consume budget, that the block-level budget arms the antibot challenge gate, and that the gate engages at the correct identity-budget threshold. Scoped to this module's limiters rather than the global error handler, which is covered by the root-level suite of the same name.
 
 ## Key elements
 
-- **`limitersWithBudget(identityLimit, addressLimit?)`** — Returns freshly-constructed `credentialLimiters` with the given budgets, via a single `withReloadedRateLimits` call. Used by tests that only need the limiter middleware.
-- **`appWithBudget(identityLimit)`** — Builds an Express app whose `/login` route wires both `credentialLimiters` and `loginChallengeGate` from **one** shared module reload. Required because the gate reads the property name the limiter was configured with; a second reload would hand back a gate pointing at a limiter nobody is spending.
-- **`describe('credential endpoints are rate limited separately')`** — Four cases: 429 after budget exhaustion; successful (2xx) responses do not consume budget; per-identity budgets are independent of each other (one account at 429, another still at 401); and the limiter is actually mounted on the real `/account/login` route (checked via `ratelimit` response header).
-- **`describe('loginChallengeGate — rung 3 on the block budget too')`** — Verifies that spreading one failure across many accounts from the same IP block arms the challenge gate (`ANTIBOT_VERIFICATION_FAILED`) even though no single identity or address budget is exhausted.
-- **`describe('loginChallengeGate — rung 3 only once the identity budget is mostly spent')`** — Three cases: gate is inert when no provider is set; an honest first attempt passes through unchanged; gate fires on the failure that pushes the identity budget to ≥ 50 % spent.
+- **`limitersWithBudget(identityLimit, addressLimit?)`** — Returns freshly-constructed `credentialLimiters` via `withReloadedRateLimits`, with `NODE_AUTH_RATE_LIMIT_MAX` and `NODE_AUTH_RATE_LIMIT_ADDRESS_MAX` set to small values so individual buckets fill in a few requests.
+- **`appWithBudget(identityLimit)`** — Returns an Express app wiring `credentialLimiters` **and** `loginChallengeGate` from a *single* reload, guaranteeing the gate reads the property name the limiter was configured with.
+- **`describe('credential endpoints are rate limited separately')`** — Four cases: 429 after budget exhaustion, no spend on 2xx, independent identity budgets at a shared address, and confirmation the limiter is mounted on the real `/account/login` route (asserts the `ratelimit` response header is present).
+- **`describe('loginChallengeGate — rung 3 on the block budget too')`** — Verifies the gate fires (403 + `ANTIBOT_VERIFICATION_FAILED`) when failures are spread across many accounts from one /24 block, with per-account and per-address budgets left at 100.
+- **`describe('loginChallengeGate — rung 3 only once the identity budget is mostly spent')`** — Three cases: gate is inert with no provider selected, passes an honest first attempt through, and challenges at exactly half the identity budget spent.
 
 ## Relationships
 
-- **`src/modules/account/rate-limits.ts`** — The SUT. Its `credentialLimiters` and `loginChallengeGate` are imported via dynamic `import()` inside each test so that `withReloadedRateLimits` can inject custom `NODE_AUTH_RATE_LIMIT_*` env values per case.
-- **`tests/support/rate-limit-harness.ts`** — Provides `withReloadedRateLimits`, which sets env vars, force-reloads the target module, and returns the requested export.
-- **`tests/support/setup-test-db.ts`** — Called once at module top level (`setupTestDb()`) to provision a clean test database before any suite runs.
-- **`tests/support/http.ts`** — `api()` is used in the "mounted on the real login route" case to hit the full application (not the isolated Express app).
-- **`src/modules/users/tests/factories.ts`** — `createUser` and `PLAIN_PASSWORD` supply a real user for that same "mounted on the real route" case.
-- **`tests/support/environment.ts`** — `setEnvironment` configures `NODE_ANTIBOT_PROVIDER` (`'turnstile'` or `undefined`) before each challenge-gate test.
+- **`src/modules/account/rate-limits.ts`** — The module under test. Dynamically imported (with `jest.resetModules()` between cases) inside `withReloadedRateLimits` to obtain `credentialLimiters` and `loginChallengeGate` with specific env-var budgets.
+- **`tests/support/rate-limit-harness.ts`** — `withReloadedRateLimits` provides the reload-and-configure mechanism that makes small budgets possible without mutating global state.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the database before the suite runs.
+- **`tests/support/environment.ts`** — `setEnvironment` sets `NODE_ANTIBOT_PROVIDER` (or clears it) before each challenge-gate case.
+- **`tests/support/http.ts`** — `api()` issues a request against the real application server for the "mounted on the real login route" case.
+- **`src/modules/users/tests/factories.ts`** — `createUser` and `PLAIN_PASSWORD` supply a real credential for that same real-route test.
 
 ## Notes
 
-- Every `describe` block calls `jest.resetModules()` in `afterEach`; this is what makes the next `withReloadedRateLimits` call pick up a fresh module instance rather than a cached one. Omitting it silently reuses the previous budget.
-- The file's doc comment explicitly separates its scope from the root-level `tests/integration/auth-hardening.test.ts` (the global error-handler suite). Do not move the "uncaught throw unwinds through the root handler" assertions into this file.
-- `limitersWithBudget` and `appWithBudget` exist separately **on purpose**: reusing the former inside the latter would trigger a second module reload and break the gate's reference to the limiter's configured property name.
-- The "mounted on the real route" test is the only case that hits the full application via `api()`; all other cases use a bare `express()` app to isolate the limiter/gate behavior from routing and controller logic.
+- Every `describe` block calls `afterEach(() => jest.resetModules())`. Without this, the dynamic `import('@modules/account/rate-limits')` inside `withReloadedRateLimits` would return the cached (already-budgeted) module on the second call, silently reusing the first test's limiter.
+- `limitersWithBudget` and `appWithBudget` exist separately because the gate reads a property name set by the limiter during construction; a second reload would hand the gate a limiter nobody is spending against. Any test that needs both must go through `appWithBudget`.
+- The "mounted on the real login route" test does not assert a status code — it checks for the `ratelimit` response header, which is the limiter's observable fingerprint regardless of the downstream handler's outcome.
+- The comment block at the top explains why this file lives under `src/modules/account/tests/` rather than alongside the root-level `tests/integration/auth-hardening.test.ts`: the latter tests the global error handler, through which *every* module's uncaught throw unwinds.

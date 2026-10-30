@@ -1,7 +1,7 @@
 ---
 source: tests/support/callers.ts
-sha256: 42cba4109e0cf5cb8a1c93f68358fee33a0be87e842523892289d937423c649b
-generated_at: 2026-10-15T12:56:06.695892+00:00
+sha256: f6cf30726c89a7297055253d08497a1d5870c7ad3f7b42d47446be60e47561cd
+generated_at: 2026-10-29T07:06:31.902448+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Test-fixture factories that build `AuthContext`, `Caller`, and `CallerContext` objects by **role name** rather than raw permission flags. It centralises the "who is acting" construction so that every integration and unit test across the codebase can express caller identity in one readable line, and so that a role-name change in the shared role registry surfaces here (at compile/fill time) instead of deep inside a single route's test.
+Test-support factory that builds `AuthContext` objects keyed by **role name** (e.g. `manager`, `warehouse`, `customer`) rather than by arbitrary flags, so that tests read as "a warehouse operator" instead of a bag of booleans. Every factory returns a full `AuthContext` because that is the shape services consume; only `roles` and `tenantId` are ever consulted by authorization logic. The file exists so that 15+ integration and contract tests across `access` and `account` share one canonical definition of each persona.
 
 ## Key elements
 
-- **`TEST_TENANT_ID`** (`'shop'`) – the single tenant every fixture targets; multi-tenant scenarios are the conformance suite's job.
-- **`identity(id)`** *(private)* – fills the identity fields (`id`, `email`, `username`, `authTime`, etc.) that no authorization decision ever reads.
-- **`asRole(role, id?)`** – generic factory returning an `AuthContext` with the given tenant role and `TEST_TENANT_ID`.
-- **`asCustomer` / `asAdmin` / `asManager` / `asWarehouse` / `asSupport` / `asEditor` / `asModerator`** – one-line wrappers around `asRole` for each named preset, each with a doc comment describing the permission boundary.
-- **`asOperator`** – the one factory that sets a *platform* role (`'operator'`) with tenant role `'guest'`; the deliberate counter-part to `asAdmin` in scope tests.
-- **`testCallerContext`** – a ready-made `CallerContext` with an anonymous caller; the default for service-level unit tests that only need "some caller exists."
-- **`callerAs(role, id?)`** – returns a `TenantCaller` (the shape an authorization decision / audit row sees) by delegating to `callerInScope(asRole(role), 'tenant')`.
-- **`callerContextAs(role, id?)`** – wraps `callerAs` in a `TenantCallerContext`; for tests that need a *specific* role (e.g. the granter in an `assignRole` flow).
-- **`strangerCaller()`** – shorthand for an anonymous/guest `Caller`.
+- **`TEST_TENANT_ID`** (`'shop'`) – the single tenant every fixture belongs to; multi-tenant behaviour is deferred to the conformance suite.
+- **`asRole(role, id?)`** – generic factory: given a staff role or audience name, returns a populated `AuthContext` with correct `roles.tenant`, `verified`, and `authenticatorArmed` fields.
+- **`asCustomer` / `asAdmin` / `asManager` / `asWarehouse` / `asSupport` / `asEditor` / `asModerator`** – one-liner wrappers over `asRole` with a descriptive JSDoc comment stating what that role can and cannot do.
+- **`asOperator`** – platform-scope persona (`roles.platform: 'operator'`, `roles.tenant: null`); deliberately **not** a tenant super-admin, so it cannot read another shop's data.
+- **`testCallerContext`** – a constant `CallerContext` with an anonymous caller; the default for unit tests that call a service directly and only need a non-throwing identity.
+- **`callerAs(role, id?)`** – returns a `TenantCaller` (the shape an authorization decision or audit row sees) via `callerInScope(asRole(…), 'tenant')`.
+- **`callerContextAs(role, id?)`** – returns a `TenantCallerContext` wrapping `callerAs`; use when a test needs a specific role (e.g. the granter in an `assignRole` call) rather than the anonymous default.
+- **`strangerCaller()`** – shorthand for `anonymousCaller()`, representing an unauthenticated visitor.
+- **`identity(id)`** *(internal)* – fills the non-authorization fields (`email`, `username`, `authTime`, `amr`, consent flags) so callers don't repeat boilerplate.
 
 ## Relationships
 
-- **`src/kernel/permissions.ts`** – provides `anonymousCaller` and `callerInScope`, the two kernel primitives this file composes. Every factory ultimately delegates to one of them.
-- **Test files under `src/modules/access/tests/`, `src/modules/account/tests/`, `src/modules/addresses/tests/`** – import the role factories (`asCustomer`, `asManager`, `callerContextAs`, etc.) to set up the caller identity for their scenarios. This file is the common "who am I in this test" layer they share.
+- **`src/kernel/permissions.ts`** – imported dependency. Provides `anonymousCaller`, `callerInScope`, and `isAudienceName`, the three permission utilities this file composes to build contexts.
+- **Test consumers** (`src/modules/access/tests/…`, `src/modules/account/tests/…`) – all 14 listed test files import the role factories and `testCallerContext` to construct the `AuthContext` / `CallerContext` they pass into services and controllers under test.
 
 ## Notes
 
-- Role strings are plain `string` parameters, **not** a closed union. The doc comment asserts that a rename in `shared/authorization-roles.yaml` will "fail here" in practice (review / type-narrowing at call sites), but the compiler does not enforce it at this signature.
-- `callerAs` hard-codes `'tenant'` scope. A platform-scope caller must be built explicitly via `callerInScope(asOperator(), 'platform')` — do not assume `callerAs` can produce one.
-- `asOperator` is the only export that does **not** route through `asRole`; it constructs the `AuthContext` inline to set `roles.platform` instead of `roles.tenant`.
-- All identity fields (`email`, `username`, `amr`, `twoFactorArmed`, …) are filler. If a test begins asserting on them, it is testing the wrong layer.
+- Roles are **sourced from `shared/authorization-roles.yaml`**. If a preset is renamed in that YAML, the failure surfaces here (type-level) rather than deep inside a single route's integration test.
+- `asOperator` is **platform-scoped**, not tenant-scoped. Passing it to `callerInScope(…, 'tenant')` would produce an empty caller; construct platform scope explicitly where needed.
+- `testCallerContext` is **anonymous by design**. If a test needs a specific role (e.g. a role-granting flow), use `callerContextAs` instead—anonymous holds no key, so an elevated role can never be a valid subset of it.
+- Identity fields (`email`, `authTime`, `amr`, consent booleans) are **filler**. No authorization rule reads them; do not add assertions against them.

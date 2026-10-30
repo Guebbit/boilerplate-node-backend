@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/tests/contract/translations.contract.test.ts
-sha256: e36668f0163996c0ebe31a20c742add68a32088ed6ec973275db87c61acfcd2b
-generated_at: 2026-10-15T10:47:35.015896+00:00
+sha256: d568e5b039a6016699d2d949547d1b35d49cdd23e42869e02e4d0f31ab33662a
+generated_at: 2026-10-29T04:25:34.110238+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the `/locales/translations` endpoint (GET, PATCH, PUT) that verify an entity's translated fields are read and written correctly through registered entity types. Because `products` is the only registered entity type today, this file is kept separate from the other `/locales` contract suites so that removing the shop module removes this file without touching the language or dictionary tests.
+Contract tests for the `/locales/translations/:entityType/:id` endpoint (GET, PATCH, PUT). Validates the wire shape and validation rules for an entity's translated fields. Lives in its own file because `product` is the only entity type registered today — deleting the shop module should remove this file without touching the language or dictionary contract suites.
 
 ## Key elements
 
-- **`describe('GET & PATCH /locales/translations/:entityType/:id')`** — covers the read (empty list) and upsert paths, plus edge cases: 404 for unregistered entity types, 404 for prototype-pollution names (`constructor`, `toString`, `__proto__`), 422 for a `null` fallback locale, and 401 without auth.
-- **`describe('PUT /locales/translations/:entityType/:id')`** — covers the replace semantics: locales not named in the body are deleted, and the request is rejected (422) when the fallback locale is omitted.
-- **`FALLBACK`** (local const inside the PUT block) — the `en` locale object registered via `createLanguage` because PUT validates every slot, including the fallback, against a real `locales` row.
+- **`GET & PATCH /locales/translations/:entityType/:id`** (describe block) — covers:
+  - GET returns `{ translations: [] }` for an entity with no rows.
+  - PATCH upserts a locale entry and returns the full list.
+  - PATCH without `origin` → 422 (merge-patch has no default).
+  - GET/PATCH with an unregistered `entityType` → 404.
+  - PATCH with prototype-pollution keys (`constructor`, `toString`, `__proto__`) as `entityType` → 404.
+  - PATCH with a `null` value for the fallback locale → 422.
+- **`PUT /locales/translations/:entityType/:id`** (describe block) — covers:
+  - PUT replaces the full set; locales not named in the body are deleted.
+  - PUT stores `origin: 'human'` when the caller omits it.
+  - PUT that omits the fallback locale → 422.
+- **`FALLBACK`** — local constant (`{ tag: 'en', … }`) used to register the fallback language before PUT tests.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** — imported as a side-effect (`import '@tests/contract'`) to register the contract-test harness.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` resets the database before the suite runs.
-- **`tests/support/http.ts`** — provides `api()` (request builder) and `authenticateAs()` (bearer-token helper).
-- **`src/modules/products/tests/factories.ts`** — `createProduct()` creates the entity whose translations are exercised.
-- **`src/modules/locales/tests/contract/support.ts`** — `createLanguage(bearer, …)` registers a language row needed for upsert/replace assertions.
+- **`tests/support/contract.ts`** — imported as a side-effect (`import '@tests/contract'`); sets up contract-test infrastructure (spec matching helpers, global expectations) before the suite runs.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module top level to provision a clean database per run.
+- **`tests/support/http.ts`** — provides `api()` (supertest-style request builder) and `authenticateAs()` (returns a bearer token for the given role).
+- **`src/modules/products/tests/factories.ts`** — `createProduct()` seeds a product row used as the entity under test.
+- **`src/modules/locales/tests/contract/support.ts`** — `createLanguage(bearer, [override])` registers a language row (default `pt`; `FALLBACK` override registers `en`).
 
 ## Notes
 
-- The file is intentionally scoped to `products` as the entity type. Do not add cases for other entity types here; the separation exists so the shop removal is a single-file delete.
-- The PUT tests must register both `en` (fallback) **and** `pt` before exercising replace, because nothing earlier in the suite creates an `en` row and PUT rejects a body that omits the fallback locale.
-- The prototype-pollution `it.each` cases (`constructor`, `toString`, `__proto__`) verify that inherited property names are treated as unregistered types and return 404 rather than 400 or a crash.
+- The file is intentionally **not** colocated with the other `/locales` contract suites. The module docstring states the design intent: removing the product/shop module should take exactly this file with it.
+- PUT tests require the fallback locale (`en`) to be registered via `createLanguage` before the request; the comment in the file notes that nothing else in the suite upserts `en`.
+- The prototype-pollution cases (`it.each`) are a security guard: any key that resolves to an inherited property on the entity-type registry is treated as unregistered rather than looked up.
+- PATCH is a merge-patch (partial), so `origin` is required per entry. PUT is a full replace, so `origin` defaults to `'human'` when absent.

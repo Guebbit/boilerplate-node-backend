@@ -1,7 +1,7 @@
 ---
 source: src/modules/example/services/notify.ts
-sha256: 39e7228d040d1919eef67ec6203cab405a378ae641be7868ca37d70a0f47294b
-generated_at: 2026-10-14T15:45:37.311975+00:00
+sha256: b0182e86531e58d0c46dd88d80439fed60a136a729f42b9135088d549bf522aa
+generated_at: 2026-10-29T03:55:59.771586+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Optional event-bus listener that emails the owner of a newly published example, localized to the owner's language. It exists as a standalone capability that can be removed entirely (along with `emails.ts`, `templates/`, and the `subscribe` line in `module.ts`) without affecting the publish flow.
+Event listener that mails the owner of an example when it is published. Registered by the module's `subscribe` call; the publishing service never knows this listener exists. It handles locale-aware email composition and account-state guards, then enqueues the email through the infrastructure mailer.
 
 ## Key elements
 
-- **`mailOwnerOfPublished(payload)`** — The single export. Receives an `example.published` event (`{ userId, title }`), looks up the owner via `userService.getById`, resolves their locale (falling back to `getDefaultLocale()`), builds the email through `examplePublishedEmail`, and enqueues it with `enqueueEmail`. Returns early (no error) if the owner no longer exists.
+- **`mailOwnerOfPublished(payload)`** — sole export. Accepts `{ userId, title }` from the `example.published` event. Looks up the owner via `userService.getById`, skips silently if the owner is missing or not authenticatable (banned / pending-deletion), builds a localized email via `examplePublishedEmail`, and calls `enqueueEmail`.
 
 ## Relationships
 
-- **`src/modules/example/module.ts`** — Calls `mailOwnerOfPublished` as a handler registered on the `example.published` domain event via its `subscribe` mechanism. The service is unaware of this attachment.
-- **`src/modules/example/emails.ts`** — Supplies `examplePublishedEmail`, which produces the localized subject, template, and data for the notification.
-- **`src/infrastructure/adapters/mailer.ts`** — Provides `enqueueEmail`, the actual delivery mechanism.
-- **`src/infrastructure/i18n/index.ts`** — Provides `getDefaultLocale()` for the locale fallback.
-- **`src/modules/users/index.ts`** (→ `services/index.ts`) — Provides `userService.getById` to resolve the owner record.
+- **`src/infrastructure/adapters/mailer.ts`** — calls `enqueueEmail` to hand the rendered message to the outbound queue.
+- **`src/infrastructure/i18n/index.ts`** (barrel) / **`catalog.ts`** — imports `getDefaultLocale` as a fallback when the owner has no explicit locale.
+- **`src/modules/example/emails.ts`** — calls `examplePublishedEmail(locale, username, title)` to obtain the subject, template, and data for the mail.
+- **`src/modules/example/module.ts`** — registers `mailOwnerOfPublished` as the handler for the `example.published` domain event via its `subscribe` call.
+- **`src/modules/users/index.ts`** (barrel) / **`services/index.ts`** / **`authenticatable.ts`** — imports `userService.getById` to fetch the owner and `isAuthenticatable` to gate on account status.
 
 ## Notes
 
-- **Non-idempotent by design.** The event rides an outbox; a retry re-runs every handler, so the owner *can* receive duplicate emails. There is no deduplication logic in this file.
-- **Silent no-op on missing owner.** A deleted owner between edit and delivery is treated as "nobody to tell," not an error. Do not add logging here expecting it to surface in the publish response — rejections are caught and logged by the event bus only.
-- **Removal recipe.** To drop the feature: delete this file, `../emails.ts`, `../templates/`, and the `subscribe` line in `module.ts`. No other code depends on `mailOwnerOfPublished`.
+- **Idempotency is not guaranteed.** The event rides an outbox with retry; a retried delivery re-runs every handler, so the owner can receive the same email more than once.
+- **Failures are silent to the caller.** A rejection here is swallowed by the event bus and logged there; it never propagates back into the request that triggered the publish.
+- **Deletion check.** To remove this listener entirely, also delete `../emails.ts`, any entries under `../templates/`, and the corresponding `subscribe` line in `module.ts` — the file header documents this coupling.

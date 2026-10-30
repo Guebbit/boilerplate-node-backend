@@ -1,31 +1,45 @@
 ---
 source: src/modules/users/services/index.ts
-sha256: ff7e5f87389b915bc28014d9408e2eaeb8841e23866ff1ff5a6af104affe94e4
-generated_at: 2026-10-15T12:10:39.864097+00:00
+sha256: 4fb591564350785660cd05af55c4869197bfaf58718079e8e0d817c90a008fa0
+generated_at: 2026-10-29T06:16:37.132498+00:00
 model: ollama:qwen3.8:27b
 ---
 
-# src/modules/users/services/index.ts
+# src/modules/users/users/services/index.ts
 
 ## Purpose
 
-Barrel and service-facade for the users module. It aggregates admin CRUD, search, credential/2FA, signup, and reaper operations from the sub-files into a single `userService` object, and re-exports each function individually. Account controllers and services call through this surface; they never import the sub-files or the presenter directly.
+Barrel and public-surface file for the **users** domain service. It re-exports every sub-module (read, credentials, signup, reaper, purchase-hold, etc.) and bundles them into a single `userService` object. The `account` module's controllers and services call through this object; they never import the individual sub-files directly.
 
 ## Key elements
 
-- **`userService`** (const object) — the public API. A flat namespace of ~40 operations grouped by concern: reads (`search`, `getById`, `findByEmail`), writes (`create`, `update`, `updateById`, `remove`, `restoreById`), identity lookups (`findAuthenticatableById`, `findByOAuthIdentity`, `emailTaken`), credential/2FA mutations (`setPassword`, `persistTwoFactorMethods`, `reserveMfaAttempt`, `spendBackupCode`, …), signup (`registerSelfService`, `registerFromOAuth`, `buildSignupDecoy`, `linkOAuthAccount`, `unlinkOAuthAccount`), reaper (`findInactiveUnwarned`, `minimiseInactive`, …), and a few misc helpers (`enqueueIfPending`, `exportSignInMethods`, `touchApiKeyUse`).
-- **Presenter helpers re-exposed via the service** — `toUser` (`presentUser`), `toUserContract`, `toUserContracts`, `userActionsFor`. These exist here because the persistence wall forbids controllers from importing `../presenter` directly.
-- **Individual re-exports** — every sub-file function is also exported at module level (e.g. `export { setPassword } from './credentials'`). Test suites call these directly; the comment notes the barrel's surface must not shrink when a file moves.
-- **`isAuthenticatable`** — re-exported from `../authenticatable` (one level up), making it part of this barrel's public surface.
+- **`userService`** (const object, default public API) — flat namespace of ~65 functions covering:
+  - CRUD & search: `create`, `getById`, `updateById`, `removeById`, `restoreById`, `search`, `staffContacts`, `findByEmail`
+  - Signup / OAuth: `registerSelfService`, `registerFromOAuth`, `buildSignupDecoy`, `linkOAuthAccount`, `unlinkOAuthAccount`
+  - Credentials & 2FA: `setPassword`, `markSessionsEnded`, `persistTwoFactorMethods`, `armReauthCode`, `spendDeliveredCode`, `reserveMfaAttempt`, `claimTotpStep`, `spendBackupCode`, `bumpSessionEpoch`, etc.
+  - Email lifecycle: `markEmailVerified`, `applyEmailChange`, `restorePreviousEmail`, `cancelPendingEmail`, `clearLapsedPreviousEmail`
+  - Purchase holds: `setPurchaseHold`, `liftPurchaseHold`, `takeAutomaticPurchaseHold`, `flagPurchaseHoldReview`, `purchaseHoldOf`, `purchaseHoldCountingSince`
+  - Own-account / scheduled deletion: `updateOwnProfile`, `scheduleOwnDeletion`, `restoreOwnAccount`, `eraseScheduledDeletion`, `findDueScheduledDeletions`, `softDeleteInactive`, `eraseInactive`
+  - Reaper queries: `findInactiveUnwarned`, `minimiseInactive`, `findReaperSoftDeletedPastGrace`, etc.
+  - Auth lookups: `findAuthenticatableById`, `findForLogin`, `findByOAuthIdentity`, `emailTaken`, `emailOrPendingEmailTaken`
+  - Misc: `reencryptUserPhones`, `reencryptTwoFactorSecrets`, `exportSignInMethods`, `userAuditChanges`, `enqueueIfPending`, `toAccount` (alias for `presentAccount`)
+- **Re-exported types**: `TwoFactorSecretRing`, `ActivePurchaseHold`, `StaffContact`
+- **Re-exported predicates**: `isAuthenticatable`, `isRestorable` (from `../authenticatable`)
+- **Re-exported helper**: `personalDataSubjectOf` (from `./personal-data-subject`)
 
 ## Relationships
 
-- **Account controllers** (`get-account`, `post-signup`, `update-account`, `delete-account-request`) — call `userService.*` to perform reads, writes, and lookups; never reach into the sub-files.
-- **Account services** (`login`, `logout`, `oauth`, `password`, `email-change`, `password-reset-request`, `export`, `export-job`, `caller`, `previous-email-cleanup`) — invoke specific `userService` methods (e.g. `findForLogin`, `setPassword`, `applyEmailChange`, `exportSignInMethods`) as the users-side of the shared-kernel split documented in `docs/theory/strategic-ddd.md` §5.
-- **`account/module.ts`** — wires the controllers/services above to this module in the application's module graph.
+All graph neighbors live under `src/modules/account/` and consume `userService`:
+
+- **Controllers** (`post-signup.ts`, `update-account.ts`, `get-account.ts`, `delete-account.ts`) call `userService` methods to perform the domain mutations and reads behind each HTTP endpoint.
+- **Account services** (`login.ts`, `logout.ts`, `oauth.ts`, `password.ts`, `password-reset-request.ts`, `email-change.ts`, `account-deletion.ts`, `export.ts`, `export-job.ts`, `caller.ts`) orchestrate HTTP/session/email concerns and delegate the document-level work to `userService` (e.g. `findForLogin`, `setPassword`, `applyEmailChange`, `exportSignInMethods`).
+- **`account/module.ts`** wires the account module's providers and likely registers `userService` (or the individual account services that wrap it) into the DI container.
+
+Internally, this file imports from sibling sub-modules in `src/modules/users/services/` (`./read`, `./credentials`, `./signup`, `./reaper`, `./purchase-hold`, `./own-account`, `./lookups`, `./activation`, `./create`, `./update`, `./remove`, `./image`, `./reencrypt`, `./sign-in-methods`, `./audit-changes`) and from `../presenter` / `../authenticatable`.
 
 ## Notes
 
-- **Dual export surface.** Both the bare re-exports *and* the `userService` object exist. If you add a new operation, add it to the `userService` object *and* (if it should be callable from tests) re-export it individually.
-- **Presenter passthrough is intentional.** `toUser`, `toUserContract`, `toUserContracts`, and `userActionsFor` are thin aliases for `../presenter` functions. Do not remove them from `userService` without confirming no controller depends on them.
-- **Not an implementation file.** All logic lives in the sub-files (`./read`, `./credentials`, `./signup`, `./reaper`, etc.). This file only re-exports and assembles. Moving a function to a new sub-file requires updating the import line and the `userService` entry; the re-export line is the public contract.
+- **No raw `update` / `remove`**: the barrel deliberately withholds the bare write functions. Only the role-gated variants (`updateById`, `removeById`, `activate`, `deactivate`) or the named owner/reaper doors (`updateOwnProfile`, `softDeleteInactive`, `eraseInactive`, …) are exposed.
+- **`toAccount` is an intentional alias**: the barrel does not re-export presenter functions as standalone symbols; `presentAccount` is reachable only as `userService.toAccount`. Any sibling that needs to shape a response should go through this alias rather than importing `../presenter` directly.
+- **One file per flow** convention (see `docs/theory/layers.md`): each sub-module is a single flow; this index is purely aggregation, no logic.
+- Domain primitives vs. flows: this service enforces what the **User document** requires; transport concerns (HTTP, sessions, emails, rate limits, anti-automation) belong to the `account` module.

@@ -1,7 +1,7 @@
 ---
 source: tests/contract/system.test.ts
-sha256: 3964ab28c3fbba70270569adfdf58b91c3848d9a419ea2694359bcb15478a54d
-generated_at: 2026-10-15T12:34:03.875703+00:00
+sha256: 97ec9416e543c24f12d55c36518513eb0686324dca3aab000ba45d14fd0083fb
+generated_at: 2026-10-29T06:41:15.610819+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for system-level routes (`/`, `/livez`, `/readyz`, `/.well-known/security.txt`) and the shared error-envelope shape (404 / 422). Each assertion pins the status code, body structure, or header that the typed contract promises, so a spec drift is caught as a test failure.
+Contract tests for system-level routes (`/`, `/livez`, `/readyz`, `/.well-known/security.txt`) and the shared error-document shape. Verifies that each endpoint returns the expected status code, content type, and body structure regardless of internal implementation.
 
 ## Key elements
 
-- **`describe('GET /')`** — asserts 200 and `body.data.status === 'ok'` (the `HealthPingEnvelope` shape).
-- **`describe('GET /livez')`** — asserts a bare 200.
-- **`describe('GET /readyz')`** — two sequential tests: first expects 503 (booting), then calls `markServerListening()` and expects 200 (ready).
-- **`describe('GET /.well-known/security.txt')`** — three cases driven by `setEnvironment`: configured (200, `text/plain`, body contains Contact/Expires), expired (404 even with a contact), and unconfigured (404). Cleans up env vars in `afterEach`.
-- **`describe('error envelopes')`** — verifies the 404 body (`success: false`, `errors` array) for an unknown route, and a 422 for an invalid `/account/login` payload.
-- **Module-level `setupTestDb()`** — ensures a clean database before any test runs.
+- **`setupTestDb()`** (module-level) — initialises the test database before any test runs.
+- **`describe('GET /')`** — asserts 200 and `{ status: 'ok' }` body (the `HealthPing` contract).
+- **`describe('GET /livez')`** — asserts 200 with an empty body.
+- **`describe('GET /readyz')`** — single combined case: first asserts 503 while the process is in 'booting', then calls `markServerListening()` and asserts 200. Both responses have an empty body.
+- **`describe('GET /.well-known/security.txt')`** — three cases covering configured (200, `text/plain`), expired (`Expires` in the past → 404 even with a contact set), and unconfigured (404). Env vars are reset in `afterEach`.
+- **`describe('error envelopes')`** — asserts the 404 problem+json shape (`type`, `title`, `status`, `errors[]`) for an unmatched route, and 422 for an invalid `POST /account/login` payload.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** — imported as a side-effect (`import '@tests/contract'`); likely registers schema/contract validators used by the `api` helper or assertion layer.
-- **`tests/support/http.ts`** — provides the `api()` function used to issue all HTTP requests in this file.
-- **`tests/support/environment.ts`** — provides `setEnvironment()` to inject and clear `NODE_SECURITY_CONTACT` / `NODE_SECURITY_EXPIRES` for the security.txt cases.
-- **`src/infrastructure/runtime/readiness.ts`** — provides `markServerListening()`, called mid-suite to transition the server from "booting" to "ready" so the second readyz test sees the 200 path.
-- **`tests/support/setup-test-db.ts`** — provides `setupTestDb()`, called once at import time to prepare the test database.
+- **`tests/support/contract.ts`** — side-effect import (`import '@tests/contract'`); likely registers global matchers or contract assertion helpers used by the test bodies.
+- **`tests/support/http.ts`** — provides the `api()` helper used to issue HTTP requests against the running test server.
+- **`tests/support/environment.ts`** — provides `setEnvironment()`, used to set/clear `NODE_SECURITY_CONTACT` and `NODE_SECURITY_EXPIRES` around the security.txt cases.
+- **`tests/support/setup-test-db.ts`** — provides `setupTestDb()`, called once at module load to prepare a clean test database.
+- **`src/infrastructure/runtime/readiness.ts`** — provides `markServerListening()`, which advances the runtime readiness phase from 'booting' to 'ready' so the `/readyz` test can observe both states in a single case.
 
 ## Notes
 
-- The file header documents a real spec fix: `GET /` was originally typed as `MessageResponse` but returned `data: { status: 'ok' }`; after hardening it is now typed `HealthPingEnvelope`.
-- The readyz "booting" test relies on the fact that `src/app.ts`'s auto-start never fires under `NODE_ENV=test`, so the process stays in the booting phase until `markServerListening()` is explicitly called. Test ordering within the `describe` block is therefore load-bearing.
-- `setEnvironment` is used both to set values and to clear them (passing `undefined`); the `afterEach` in the security.txt block prevents cross-test leakage.
+- The `/readyz` test is deliberately **one** `it` block rather than two. Under `NODE_ENV=test` the auto-start in `src/app.ts` never fires, so the process begins in 'booting' and the phase only moves forward. Splitting into separate cases would create a hidden ordering dependency (the second case would 404-503-fail if run first).
+- The `import '@tests/contract'` line has no named binding — it is purely for side effects.
+- `setupTestDb()` executes at import time (top of module), not inside a `beforeAll` hook, so it is guaranteed to run before any `describe`/`it` block registers.
+- The 404 error-envelope test checks for `application/problem+json` (RFC 7807), not plain `application/json`.

@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/surfaces/create-update-controller.ts
-sha256: 309eb2d036d522a0653cc4b43db9c0de17e34808195cb906c7c9d4d94a288d06
-generated_at: 2026-10-14T08:19:41.013040+00:00
+sha256: cd56dd658d415e7c207139ddc959175752b2efbecbc51504a7d46bac04dca5d3
+generated_at: 2026-10-29T02:17:48.084507+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Shared factory that builds a PUT (replace) and PATCH (merge) Express handler pair for any resource. Both verbs run through a single pipeline — resolve id, parse body, fill omitted clearable fields (PUT only), optionally run `completeReplace`, apply optimistic-concurrency fencing, and shape the response — differing only in which Zod schema validates the body and which fields get filled with `null`.
+Shared factory that builds a module's PUT (replace) and PATCH (merge) Express handlers from a single pipeline. The verb only changes which schema validates the body, which omitted fields are filled with `null`, and whether a `completeReplace` step runs—everything else (id resolution, `If-Match` fencing, ETag emission, error mapping) is identical. Exists so that every resource's update route follows the same request-flow contract without per-module boilerplate.
 
 ## Key elements
 
-- **`createUpdateController(spec)`** — The main factory. Takes a `UpdateControllerSpec` and returns `{ replace, update }`, two named Express handlers wired to the shared `run` pipeline.
-- **`UpdateControllerSpec`** — Per-entity configuration: `entity` name, `versioned` flag, `replaceSchema` / `patchSchema`, optional `input`, the module's `update` function, `present` projection, optional `completeReplace`, optional `keptWhenOmitted`.
-- **`UpdateIdSource`** — Union type: either a path-param id (`notFoundKey` + optional `idParam`) or a computed id (`idFrom: (req) => string`).
-- **`clearableFields(schema)`** — Returns the names of fields in a Zod schema that accept `null`, i.e. the fields a PUT clears by omission.
-- **`fillOmittedWithNull(body, fields)`** — Returns a copy of `body` with every field in `fields` set to `null` if absent.
-- **`idOf`** (module-private) — Resolves the row id from the source declaration; sends the not-found response and returns `undefined` on failure.
+- **`UpdateIdSource`** – Discriminated type for how the row id is obtained: a path param (`:id` or a named param like `:addressId`) or a closure (`idFrom`) for routes whose id is not a path segment (e.g., the caller's own record, a language tag).
+- **`PatchControllerSpec<TPatch, TRow>`** – Per-entity configuration shared by both verbs: `entity`, `versioned` (enables `If-Match`/412), `patchSchema`, optional `input` (multipart), the `update` service call, and `present` (row → contract shape).
+- **`UpdateControllerSpec<TReplace, TPatch, TRow>`** – Extends the patch spec with `replaceSchema`, optional `completeReplace` (nulls keyed-map keys absent from the PUT body), and optional `keptWhenOmitted` (fields excluded from null-filling, e.g. an uploaded image).
+- **`clearableFields(schema)`** – Inspects a Zod object's shape and returns the names of fields whose schema accepts `null`; used to derive which omitted PUT fields should be filled with `null`.
+- **`createPatchController(spec)`** – Returns a single named PATCH handler (no PUT offered). Used by resources where the body cannot represent the whole record.
+- **`createUpdateController(spec)`** – Returns `{ replace, update }`: two named handlers over the shared `pipelineOf` builder. Derives `replaceFills` once (nullable fields minus `keptWhenOmitted`).
+- **`pipelineOf(spec)`** (internal) – The single Express handler factory. Steps: resolve id → `readInput` + `parseBody` → `fillOmittedWithNull` → optional `completeReplace` → `update` (wrapped in `withIfMatch` when versioned) → `refused` check → `setEtag` → `present` → `successResponse`. Catches into `catchAs`.
 
 ## Relationships
 
-- **Consumed by** every module-level update controller: `update-account`, `update-address`, `update-example`, `update-feedback-status`, `update-locale`, `update-order`, `update-product`, `update-user`, `update-subscription`. Each passes its own spec and mounts the returned `replace`/`update` handlers on its routes.
-- **Imports** core HTTP infrastructure: `successResponse` (response), `setEtag` / `withIfMatch` (preconditions), `readInput` / `RequestInputDeclaration` (request), `requireId` (ids), and `catchAs` / `namedHandler` / `operationName` / `parseBody` / `refused` / `ServiceResult` (controller).
-- **`scripts/docs/generate-role-matrix.ts`** — Reads the operation names produced by `operationName('replace'|'update', entity)` to build documentation.
+- **`@infrastructure/http/controller`** – Provides the handler primitives: `namedHandler`, `operationName`, `parseBody`, `refused`, `catchAs`, and the `ServiceResult` type that `update` returns.
+- **`@infrastructure/http/ids`** – `requireId` validates the path-param id and sends the `notFoundKey` envelope on failure.
+- **`@infrastructure/http/preconditions`** – `withIfMatch` gates the write on the request's `If-Match` header; `setEtag` stamps the response with the new row's tag.
+- **`@infrastructure/http/request`** – `readInput` decodes the body (form/multipart/JSON) per the `input` declaration; the controller passes `surface: 'create'` to avoid merging a path id into the strict body schema.
+- **`@infrastructure/http/response`** – `successResponse` emits the final 200 envelope.
+- **`@infrastructure/object-guards`** – `fillOmittedWithNull` inserts `null` for the fields in the `fills` list that are absent from the parsed body.
+- **Module controllers** (`update-account`, `update-address`, `update-example`, `update-locale`, `update-order`, `update-product`, `update-user`, `update-subscription`) – Each calls `createUpdateController` (or `createPatchController` for the locale case) with its own schemas, `update` service call, and `present` projection.
+- **`scripts/docs/generate-role-matrix.ts`** – Consumes the controller specs to generate the per-resource permission/role documentation matrix.
 
 ## Notes
 
-- `replaceFills` is computed **once** at controller-build time (not per request) by calling `clearableFields` and filtering out `keptWhenOmitted` entries.
-- `keptWhenOmitted` fields (e.g. an uploaded `imageUrl`) are **excluded** from the PUT fill: omitting them keeps the stored value, while an explicit `null` still clears them.
-- `completeReplace` runs **only on PUT**, after filling, and is the mechanism for clearing stored keys of a keyed map (e.g. product `translations`) that the body left out.
-- When `versioned` is `false`, the `If-Match` header is ignored entirely and no `412` is ever returned — the route's contract must not declare it.
-- `parseBody` is called with `readInput(..., { surface: 'create' })` so that path params merged into the input object do not trip the body's strict schema.
+- `fillOmittedWithNull` only fills fields whose *PUT* schema accepts `null`; a non-nullable omitted field is left unchanged (a 422 is the caller's responsibility via the required schema), never silently nulled.
+- `keptWhenOmitted` exists because some fields (e.g. `imageUrl`) are nullable in the schema but represent server-side artifacts a client cannot echo back; a PUT that omits them must not clear them.
+- `completeReplace` is the escape hatch for keyed sub-maps (like `translations` keyed by locale) where "absent from body" ≠ "null the key"—it lets the module explicitly set those keys to `null` so the shared `update` treats them as `$unset`.
+- The pipeline reuses the **PATCH** output type (`TPatch['_output']`) as the contract for `update()`; a filled PUT body is cast to that type because every field it adds is one the PUT schema itself accepts as nullable.
+- `versioned: false` means the `If-Match` header is silently ignored—the route will never return 412. Useful for resources whose contract does not declare optimistic concurrency.

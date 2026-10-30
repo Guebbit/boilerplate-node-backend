@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/services/notify.ts
-sha256: 64fd1f6cb6f11898c3aadbdd68b88b416c9f8ac0a8571a339e8f88598b5d47c6
-generated_at: 2026-10-15T11:08:44.696805+00:00
+sha256: 509020b6e1e912b46d01b2f3157f1083ffcdabc420524876f6c6b246c0d7118d
+generated_at: 2026-10-29T04:47:43.586349+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Outgoing buyer-facing email for the order lifecycle: sends the "order placed" mail (confirmation or bank-transfer instructions) and provides a shared `mailBuyer` helper that resolves the buyer's locale and display name before delegating to a caller-supplied `build` function. Exists so that `create`, `cancel`, and delivery all follow one consistent buyer-mail policy without duplicating lookup/fallback logic.
+Sends the buyer-facing order-placed confirmation email. It is wired as the `order.created` event listener so that admin-created orders and storefront checkouts both emit the same mail from one place, and a crash after the DB commit still triggers the send. It also exposes the shared `mailBuyer` / `mailBuyerOfOrder` helpers that other order lifecycle mails (cancellation, shipment) reuse.
 
 ## Key elements
 
-- **`sendOrderPlacedEmail(order, locale, name, recipientEmail)`** — Chooses between `bankTransferInstructionsEmail` (when `paymentMethod === 'bank_transfer'` **and** beneficiary, IBAN, `payBy`, and `transferReference` are all present) and the plain `orderConfirmEmail`. Fires via `enqueueEmail`; returns `void` (the send is enqueued, not awaited).
-- **`mailBuyer(order, build)`** — Returns a `Promise<void>` that never rejects. Looks up `order.userId` via `userService.getById`, falls back to `order.email` as the display name on lookup failure, then calls `build(locale, name)`. Silently resolves (no-op) when `order.email === ANONYMIZED_EMAIL`. All errors are logged and swallowed.
+- **`mailBuyer(order, build)`** — Core buyer-mail policy. Looks up the buyer via `userService` to resolve locale and display name, then delegates the actual send to the caller-supplied `build`. Never rejects: a failed lookup falls back to the order's own email as the name, and a throwing `build` is caught and logged. Skips anonymized orders entirely.
+- **`mailBuyerOfOrder(orderId, build)`** — Convenience wrapper for event-listener contexts: fetches the order with `getById`, then delegates to `mailBuyer`. If the order is missing or the lookup fails, it logs and resolves. Never rejects, so the event relay won't redeliver.
+- **`mailOrderPlaced({ orderId })`** — The `order.created` listener. Calls `mailBuyerOfOrder`, builds the mail via `orderConfirmEmail`, and enqueues it with `enqueueEmail`. A `bank_transfer` order's payment instructions are sent separately by the `payments` module, not here.
 
 ## Relationships
 
-- **`mailer.ts`** — `enqueueEmail` is the sole transport; both exports ultimately call it.
-- **`i18n/index.ts`** — `getDefaultLocale` is the fallback when the buyer lookup yields no locale.
-- **`logger.ts`** — Errors from the buyer lookup and from a throwing `build` are logged here.
-- **`users/index.ts`** — `userService.getById` resolves the buyer's `locale` and `username`.
-- **`orders/config.ts`** — Provides `bankTransferBeneficiary`, `bankTransferIbanFriendly`, and `transferInstructionsFor` for the bank-transfer branch.
-- **`orders/domain/anonymization.ts`** — `ANONYMIZED_EMAIL` constant gates the no-op path in `mailBuyer`.
-- **`orders/emails.ts`** — Supplies the two mail-template builders (`orderConfirmEmail`, `bankTransferInstructionsEmail`).
-- **`orders/model.ts`** — `OrderDocument` is the order shape both exports consume.
-- **`cart/services/checkout.ts`** — A documented caller context: the module comment notes checkout and `placeOrder` share this mail so the correct variant is always picked.
-- **`orders/services/cancel.ts`** — Uses `mailBuyer` for the bank-transfer-expired notice.
-- **`orders/services/crud.ts`** — Uses `mailBuyer` for the admin-confirmation mail on `create`.
-- **`orders/services/index.ts`** — Re-exports these functions for external consumers.
-- **`returns/services/notify.ts`** — Analogous pattern in the returns module (shared convention, not a direct import).
+- **`@infrastructure/adapters/mailer`** — `enqueueEmail` performs the actual send in `mailOrderPlaced`.
+- **`@infrastructure/adapters/logger`** — `logger.error` records failures in both `mailBuyer` and `mailBuyerOfOrder`.
+- **`@infrastructure/i18n`** — `getDefaultLocale` supplies the locale fallback when the buyer has no stored preference.
+- **`@kernel/events`** — `DomainEventMap` provides the `order.created` payload type for `mailOrderPlaced`.
+- **`@modules/orders/domain/anonymization`** — `ANONYMIZED_EMAIL` is the sentinel that short-circuits mailing.
+- **`@modules/orders/domain`** — `buyerIdOf` extracts the account id from the order.
+- **`@modules/orders/emails`** — `orderConfirmEmail` assembles the subject, template, and data.
+- **`@modules/orders/model`** — `OrderDocument` type used throughout.
+- **`./read`** — `getById` fetches the order by id in `mailBuyerOfOrder`.
+- **`@modules/users`** — `userService.getById` resolves buyer locale and username.
+- **`./cancel-mail.ts`** — Sibling caller of `mailBuyer` for cancellation mails (per docstring).
+- **`tests/unit/notify.test.ts`** — Unit tests for this module.
 
 ## Notes
 
-- `mailBuyer` is deliberately infallible to its caller: both the lookup rejection and a `build` throw are caught and logged, because callers (`cancelById`, delivery) are mid state-transition and a mail failure must not roll back the transition.
-- The bank-transfer branch has a five-way `&&` guard; if the deployment disables transfer **after** an order was created, the order silently falls back to the plain confirmation rather than sending an email with no payment instructions.
-- `sendOrderPlacedEmail` carries no invoice — invoicing is a separate `ORDER_STATUS_CHANGED` listener that fires later.
-- Stryker mutation-testing annotations (`Stryker disable all`) wrap both error-log blocks, exempting them from mutation coverage.
+- **Never rejects.** Both `mailBuyer` and `mailBuyerOfOrder` swallow all errors (logged, not re-thrown). This is intentional: callers sit mid-state-transition (cancel, ship) or inside an event listener where a rejection would trigger a full event redelivery.
+- **`enqueueEmail` is fire-and-forget.** It logs its own failure and never rejects, which is why `mailOrderPlaced` uses `void` + an eslint-disable rather than an await.
+- **Stryker markers.** The `// Stryker disable all` / `restore all` pairs guard the error-path branches during mutation testing; they are not dead code.
+- **Anonymized orders produce no mail.** The check on `ANONYMIZED_EMAIL` is the only guard—no further permission or status check is performed.

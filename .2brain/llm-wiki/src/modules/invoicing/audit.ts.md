@@ -1,7 +1,7 @@
 ---
 source: src/modules/invoicing/audit.ts
-sha256: 50c5b148d1bf2d42b84beb8140f7e97c53c6f57e13b47c4ab2f8a0f71ddbd438
-generated_at: 2026-10-15T10:37:33.323523+00:00
+sha256: ef5f092e40e116c3eb5521605e7398d8a08631c00dae4c7307e23f17f0f12d57
+generated_at: 2026-10-29T04:09:53.524936+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,19 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the audit action strings the invoicing module can emit and registers them into the shared `AuditActionMap` via TypeScript module augmentation. This provides compile-time safety so that only recognized action keys can be logged for this module, while keeping each module's vocabulary local rather than centralized in a shared enum.
+Declares the audit action strings the invoicing module emits and registers them in the global `AuditActionMap` via TypeScript module augmentation. Exists so that any code path that produces an invoicing audit event can reference a typed, module-scoped constant instead of a raw string literal.
 
 ## Key elements
 
-- **`invoicingAuditActions`** — `as const` object of action strings this module fires. Currently defines a single key:
-  - `ADMIN_INVOICE_VIEWED` (`'admin.invoice.viewed'`) — emitted when staff download/view another user's invoice PDF (financial + personal data egress).
-- **`declare module '@infrastructure/observability/audit'`** — Augments `AuditActionMap` with an `invoicing` field typed to the union of `invoicingAuditActions` values, making those strings the only valid audit-action keys accepted for this module at call sites.
+- **`invoicingAuditActions`** (exported const) — Maps event names to their audit action strings:
+  - `ADMIN_INVOICE_VIEWED` → `'admin.invoice.viewed'`
+  - `ADMIN_CREDIT_NOTE_VIEWED` → `'admin.credit_note.viewed'`
+- **`declare module '@infrastructure/observability/audit'`** — Augments `AuditActionMap` with an `invoicing` key typed as the union of the values above, making the strings available to the infrastructure audit layer in a type-safe way.
 
 ## Relationships
 
-- **`src/modules/invoicing/controllers/get-order-invoice.ts`** — Consumes `invoicingAuditActions` (specifically `ADMIN_INVOICE_VIEWED`) to record the audit event when a staff member retrieves another user's invoice.
+- **`src/modules/invoicing/controllers/get-order-invoice.ts`** — Consumes `ADMIN_INVOICE_VIEWED` when a staff member downloads an invoice PDF belonging to another user.
+- **`src/modules/invoicing/controllers/get-order-credit-note.ts`** — Consumes `ADMIN_CREDIT_NOTE_VIEWED` when a staff member downloads a credit-note PDF.
 
 ## Notes
 
-- The `admin.` prefix on action strings is a convention indicating the event is only produced by staff, not by end-users. Any new non-staff action should omit this prefix.
-- The augmentation pattern is deliberate: each module owns its action vocabulary locally (see `modules/account/audit.ts` for the same pattern) instead of importing from a shared enum. Add new actions to the object, not to the augmentation block.
+- The `admin.` prefix on both action strings is a convention meaning "only produced by staff actions" (as opposed to user-initiated events).
+- Actions are declared via module augmentation rather than a shared enum; the JSDoc header points to `modules/account/audit.ts` for the rationale behind that choice.
+- This file contains no runtime logic — it is purely type-level and a string registry.

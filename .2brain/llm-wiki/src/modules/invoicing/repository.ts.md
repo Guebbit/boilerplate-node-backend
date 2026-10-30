@@ -1,7 +1,7 @@
 ---
 source: src/modules/invoicing/repository.ts
-sha256: dca94faeb3cb8d8874b236ff025faa700d35f02ff95ca04177b1e9fa20ccd805
-generated_at: 2026-10-15T10:39:21.820271+00:00
+sha256: 5194b05d03d17199335f1c98052d4a0f37cb302f7fe64c9536b1ed93a7457c52
+generated_at: 2026-10-29T04:13:24.819281+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,45 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Hand-written persistence layer for invoices, credit notes, and their two per-year numbering counters. It deliberately avoids the generic `create-repository` factory because every document is written once and read back only by `orderId` — no searching, paginating, updating, or deleting ever occurs, so the generic CRUD would add nothing.
+Hand-written persistence layer for the invoicing domain: it provides the exact read and write operations that invoices, credit notes, and their two numbering counters need. It intentionally bypasses the generic `@infrastructure/persistence/create-repository` CRUD factory because neither document type is ever searched, paginated, updated, or deleted — each is written once and read back by `orderId`.
 
 ## Key elements
 
-- **`invoicingRepository`** (exported object) — the single public entry point bundling every operation below.
-- **`findInvoiceByOrderId`** / **`findCreditNotesByOrderId`** / **`findCreditNoteById`** / **`findCreditNoteByRefundId`** — read paths; credit-note lookups are scoped to their parent order or refund for safe addressing.
-- **`insertInvoice`** / **`insertCreditNote`** — write paths; accept a pre-allocated `_id` (`WithId`) and an optional `ClientSession`. Idempotency is enforced by unique indexes (one invoice per order, one credit note per refund).
-- **`incrementInvoiceNumberCounter`** / **`incrementCreditNoteNumberCounter`** — atomic `findOneAndUpdate($inc, upsert)` on the respective counter model; called inside the same transaction as the insert so an abort returns the number.
-- **`sumInvoices`** / **`sumCreditNotes`** — MongoDB aggregation that matches a `ReportWindow`, groups by currency + time bucket, and sums document count, goods-net, shipping-net, tax, and gross. Goods-net is computed as `netTotal − shippingNetAmount` in Decimal128 to avoid float drift.
-- **`reencryptInvoices`** / **`reencryptCreditNotes`** — thin delegates to `reencryptOf(model)` from the security layer.
+- **`invoicingRepository`** (exported) — the single namespace object the services consume. Bundles every operation below plus the counter and re-encrypt helpers.
+- **`findInvoiceByOrderId`** — returns the single invoice for an order (or `null`).
+- **`insertInvoice`** — inserts a new invoice inside a `ClientSession`; uses Mongoose's array-form `create` because it is the only overload that accepts `{ session }`.
+- **`findCreditNotesByOrderId`** — all credit notes for an order, oldest first.
+- **`findCreditNoteById`** — one credit note scoped to an order; a foreign-order id resolves to `null`.
+- **`findCreditNoteByRefundId`** — the credit note linked to a single refund record.
+- **`insertCreditNote`** — inserts a credit note inside a session; same concurrency guard as `insertInvoice` via the unique `refundId` index.
+- **`sumInvoices` / `sumCreditNotes`** — wrap the shared `sumDocuments` aggregation: match a half-open time window, group by currency + bucket, and sum goods-net, shipping-net, tax, and gross as stored Decimal128.
+- **`findBuyerBearingBefore` / `eraseBuyers`** — the two operations of the buyer-PII retention sweep, dispatched per `InvoiceDocumentKind`. `erase` is idempotent (re-checks `billingAddress: { $exists: true }`).
+- **`reencryptInvoices` / `reencryptCreditNotes`** — delegates to `reencryptOf` from the security module.
+- **`incrementInvoiceNumberCounter` / `incrementCreditNoteNumberCounter`** — thin wrappers over `incrementYearlyCounter`; require a `ClientSession` so the number allocation commits or aborts atomically with the document insert.
 - **`DocumentBucketRow`** (exported interface) — shape of one aggregation row.
-- **`WithId`** (internal interface) — requires a caller-supplied `_id: Types.ObjectId`.
+- **`BuyerBearingDocument`** (exported interface) — the minimal projection the retention sweep reads.
+- **`WithId`** (internal) — asserts that `_id` was pre-allocated by the caller before insert.
 
 ## Relationships
 
-- **`./model.ts`** — source of all four Mongoose models (`invoiceModel`, `creditNoteModel`, `invoiceNumberCounterModel`, `creditNoteNumberCounterModel`) and the shared types `FrozenTaxDocument`, `InvoiceDocument`, `CreditNoteDocument`.
-- **`@infrastructure/security/reencrypt`** — provides `reencryptOf`, wrapped here to expose `reencryptInvoices` / `reencryptCreditNotes`.
-- **`@infrastructure/persistence/report`** — provides `bucketOf` (used inside the aggregation `$group`) and the `ReportWindow` type that `sumInvoices`/`sumCreditNotes` accept.
-- **`services/issue-invoice.ts`** and **`services/issue-credit-note.ts`** — consume `insertInvoice`, `insertCreditNote`, the counter increments, and the read paths within their respective transactional flows.
-- **`services/numbering.ts`** — calls the counter-increment functions to allocate document numbers.
-- **`services/stats.ts`** — calls `sumInvoices` / `sumCreditNotes` to build reporting output.
-- **`services/personal-data.ts`** / **`services/reencrypt.ts`** — call the reencrypt helpers to re-encrypt stored personal data.
-- **`tests/integration/*.test.ts`** — exercise the full read/write/numbering/reencrypt paths against a live database.
+- **`./model.ts`** — source of all Mongoose models (`invoiceModel`, `creditNoteModel`, both counter models) and the `FrozenTaxDocument`, `InvoiceDocument`, `CreditNoteDocument` types used throughout.
+- **`./pii.ts`** — provides the `InvoiceDocumentKind` discriminator used to select the correct collection in buyer-sweep calls.
+- **`@infrastructure/security/reencrypt`** — supplies `reencryptOf`, which this module wraps into the two `reencrypt*` entries.
+- **`@infrastructure/persistence/report`** — supplies `bucketOf` (used inside the aggregation `$group`) and the `ReportWindow` type that callers pass in.
+- **`@infrastructure/persistence/yearly-counter`** — supplies `incrementYearlyCounter`; this module binds it to each counter model and forwards the session.
+- **`./services/issue-invoice.ts` / `issue-credit-note.ts`** — call `insertInvoice` / `insertCreditNote` and the counter increments inside the same transaction.
+- **`./services/numbering.ts`** — allocates the number (counter increment) that the service then passes as part of the frozen fields to `insert*`.
+- **`./services/retention.ts`** — calls `findBuyerBearingBefore` and `eraseBuyers` for both kinds.
+- **`./services/reencrypt.ts`** — calls `reencryptInvoices` / `reencryptCreditNotes`.
+- **`./services/stats.ts`** — calls `sumInvoices` / `sumCreditNotes` with a `ReportWindow`.
+- **`./services/personal-data.ts`** — reads `findInvoiceByOrderId`, `findCreditNotesByOrderId`, `findCreditNoteById`.
+- **`./tests/factories.ts`** — provides test fixtures consumed by the integration tests that exercise these operations.
+- **`./tests/integration/credit-note-catch-up.test.ts`** / **`download.test.ts`** — integration tests that call the repository directly against a real Mongo.
 
 ## Notes
 
-- **Mongoose `create` with an array** (`model.create([fields], { session })`) is used because it is the only `create` signature that accepts a `ClientSession`; the result is unwrapped from the array immediately.
-- **`_id` is allocated by the caller, outside the transaction.** On a retry the same id is reused, so a duplicate insert hits the unique index rather than producing a second document.
-- **Idempotency is index-backed, not check-then-insert.** A concurrent second invoice for an order (or credit note for a refund) surfaces as a duplicate-key error; the caller is expected to read the winner back after the abort.
-- **`findCreditNoteById` returns `null` for a cross-order id** indistinguishably from a non-existent id — callers cannot tell the two apart.
-- The module docblock explicitly states the reason the generic `@infrastructure/persistence/create-repository` factory was not used; do not "upgrade" to it without re-evaluating that premise.
+- **`_id` is pre-allocated by the caller** (outside the transaction) so that a retried transaction reuses the same id rather than generating a new one.
+- **Concurrency safety** relies on unique indexes (`orderId` for invoices, `refundId` for credit notes). A duplicate-key error means a concurrent writer won; the caller is expected to read the winner back after its transaction aborts. The event bus that fires `PAYMENT_REFUNDED` provides no de-duplication of its own.
+- **Mongoose quirk:** `Model.create` with an array is the only form whose options object accepts `{ session }`; the `.then(([doc]) => doc)` unwrapping is load-bearing.
+- **`buyerSweepOf` is generic** over `Model<TDocument>` rather than accepting a union of the two concrete models, because a union does not type-check in Mongoose's generics.
+- **Number-gap concern:** the counter increment and the document insert must share a single `ClientSession`; a gap in the gap-free series is a compliance issue (referenced: VAT Directive Art. 226(2)).

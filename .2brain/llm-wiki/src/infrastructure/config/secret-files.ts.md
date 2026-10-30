@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/config/secret-files.ts
-sha256: 4ddfe3d5078b0d6118e6903f03d63e41165b08d25cb00a45bd2950469d86acfc
-generated_at: 2026-10-14T07:51:57.545298+00:00
+sha256: 1acff9a3e6a80dd0c25665090d5d7b571b7ba3700ad400e91bbc53b0e4a021e3
+generated_at: 2026-10-29T01:58:19.652163+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Resolves `NODE_X_FILE` secret-file variables into their plain `NODE_X` counterparts and merges standalone password variables into their corresponding connection URLs, so downstream config consumers see fully resolved credentials without any trace of file-based mounting.
+Resolves secret-file references in the application's environment: any `NODE_X_FILE` variable is replaced by the content of the file it points to, and standalone password variables are merged into their associated connection URLs. This lets secrets live in mounted files (invisible to `docker inspect` and child processes) while downstream config code sees only plain values.
 
 ## Key elements
 
-- **`URL_PASSWORDS`** (exported, const) — Mapping of connection-URL env vars to their password env vars (e.g. `NODE_DB_URI` → `NODE_DB_PASSWORD`). The four entries cover Mongo, Redis, RabbitMQ, and rate-limit Redis.
-- **`resolveSecretFiles(environment)`** (exported) — The main entry point. Returns a new `Variables` object where every `NODE_X_FILE` value has been read from disk into `NODE_X`, and every known URL now carries its password. Never mutates the input; never writes to `process.env`.
-- **`readSecretFile(variable, filePath)`** (internal) — Synchronously reads a secret file, strips one trailing newline (`\r?\n`), and returns `undefined` for an empty file (meaning "not set"). Throws a named error (variable + path, never the value) on read failure.
-- **`mongoWithPassword(url, password)`** (internal) — Parses a `mongodb://` or `mongodb+srv://` URI via `mongodb-connection-string-url`, assigns the password (percent-encoded), returns the stringified URI or `undefined` on parse failure.
-- **`genericWithPassword(url, password)`** (internal) — Same for non-Mongo URLs using WHATWG `URL.parse`; returns `undefined` if the URL doesn't parse.
-- **`withPassword(url, password)`** (internal) — Dispatches to the Mongo or generic helper based on a scheme regex; falls back to the original URL string if the parser rejects it.
-- **`fileValues(environment)`** (internal) — Iterates the environment, reads every `NODE_*_FILE` entry, and returns a partial record of the resolved values.
-- **`MONGO_SCHEME`**, **`FILE_SUFFIX`**, **`OWNED_PREFIX`** (internal consts) — Regex `/^mongodb(?:\+srv)?:\/\//i`, `'_FILE'`, `'NODE_'` respectively.
+- **`resolveSecretFiles(environment)`** (exported) — Entry point. Reads every applicable `_FILE` variable, then merges each `NODE_*_PASSWORD` into its paired connection URL. Returns a new object; never mutates the input.
+- **`fileValues(environment)`** — Scans for `NODE_*_FILE` entries, calls `readSecretFile`, and returns a map of base variable → resolved value.
+- **`readSecretFile(variable, filePath)`** — Synchronously reads a file, strips one trailing newline, and returns `undefined` for an empty file. Throws a descriptive error (variable name + path + OS code) on failure.
+- **`withPassword(url, password)`** — Routes to the Mongo or generic parser and returns the URL with the password injected (percent-encoded). Falls back to the original URL if parsing fails.
+- **`mongoWithPassword` / `genericWithPassword`** — Parser-specific implementations using `mongodb-connection-string-url` and WHATWG `URL.parse` respectively.
+- **`URL_PASSWORDS`** — Maps connection-URL variables (`NODE_DB_URI`, `NODE_REDIS_URL`, `NODE_RABBITMQ_URL`, `NODE_RATE_LIMIT_REDIS_URL`) to their password variables.
+- **`OWNED_PREFIX` / `FILE_SUFFIX`** — Guards that only `NODE_*_FILE` variables are treated as secret references, avoiding false positives like `GIT_INDEX_FILE`.
 
 ## Relationships
 
-- **`src/infrastructure/config/store.ts`** — The config store calls `resolveSecretFiles` over its merged environment so that every downstream slice, check, and presence rule sees the final resolved values. This is the sole consumer in production code.
-- **`tests/unit/infrastructure/config/secret-files.test.ts`** — Unit tests for `resolveSecretFiles`, the password-merging helpers, and the empty-file / error paths.
+- **`src/infrastructure/config/store.ts`** — The config store calls `resolveSecretFiles` over its merged environment (including overrides) before any slice, check, or presence rule reads a value. This file is the mechanism by which the store translates file-based secrets into resolved strings.
+- **`tests/unit/infrastructure/config/secret-files.test.ts`** — Unit tests covering file resolution, URL password injection, error paths, and the empty-file / "not set" convention.
 
 ## Notes
 
-- **Synchronous by contract.** `readFileSync` is used deliberately; the config path has no async form. ESLint suppressions document this.
-- **Empty file ≠ missing value.** An empty secret file resolves to `undefined` (i.e. "not set"), which is how managed-service deployments that have no secret to mount satisfy a required file-mount without injecting an empty credential.
-- **Only `NODE_`-prefixed variables are touched.** `GIT_INDEX_FILE` or any other tool's `_FILE` variable is ignored, preventing accidental clobbering.
-- **File value always wins over inline value.** When both `NODE_X` and `NODE_X_FILE` are present, the file content replaces the inline one; there is no conflict error.
-- **No `process.env` mutation.** The function returns a new object; the caller (the store) decides where to apply it. This is the mechanism that keeps secrets out of child-process environments.
-- **Error messages never include the secret value** — only the variable name and file path.
+- **Synchronous by contract.** `readFileSync` is used deliberately; the config path has no async form. An eslint-disable documents this.
+- **Empty file ≠ missing file.** An empty file yields `undefined` (treated as "not set"), allowing managed-service deployments where compose insists on mounting a file but there is no actual secret.
+- **Never writes to `process.env`.** The resolved values are returned as a new object so child processes never see the plaintext.
+- **File wins over inline value.** If both `NODE_X` and `NODE_X_FILE` are set, the file content takes precedence unconditionally.
+- **Two different URL parsers.** Mongo URIs (including multi-host replica sets) go through `mongodb-connection-string-url`; everything else uses WHATWG `URL.parse`. The `MONGO_SCHEME` regex dispatches between them.
+- **Error messages never include the secret value**, only the variable name, file path, and OS error code.

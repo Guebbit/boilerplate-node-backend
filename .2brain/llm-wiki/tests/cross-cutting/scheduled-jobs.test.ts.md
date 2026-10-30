@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/scheduled-jobs.test.ts
-sha256: ed05849abff25166a0eccee044062dd45fc7facdca0b094c4f178ae9aef143d1
-generated_at: 2026-09-23T19:59:28.204588+00:00
+sha256: 461165f545a6e62845b938cf707563a4c4056009167c1f16d2b3e68aa5ae4606
+generated_at: 2026-10-29T06:49:49.405105+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cross-cutting integrity test that verifies `docker/crontab` and the `reap:*`/`sweep:*` scripts in `package.json` reference each other correctly in **both** directions, and that every scheduled script points to a file that still exists on disk. It exists because nothing else in the codebase enforces that the two "source of truth" locations (crontab + package.json) stay in sync, and a silent drift (dangling cron entry or unscheduled cleanup) would otherwise go unnoticed.
+Cross-cutting guard that every scheduled job in the build is declared exactly once, follows the naming/schedule/summary conventions the generators assume, and reaches the production image through a single runner. Replaces the old "two files must agree" checks now that `docker/crontab` and the ops jobs table are generated from the declarations (`npm run regenerate` / `npm run check`).
 
 ## Key elements
 
-- **`scriptsInCrontab(): string[]`** — Reads `docker/crontab`, skips comments/blank lines, extracts every `npm run <name>` via regex.
-- **`scheduledPackageScripts(): Record<string, string>`** — Reads `package.json` and filters scripts whose names match `reap:*` or `sweep:*`.
-- **`describe('docker/crontab and package.json agree…')`** — Two assertions: every crontab script name exists in `package.json`, and every `reap:*`/`sweep:*` script is present in the crontab. A third "canary" assertion guarantees both sides returned ≥ 1 entry (prevents a vacuous pass if a file path silently breaks).
-- **`describe('every scheduled script names a file that exists')`** — For each `reap:*`/`sweep:*` entry, extracts the `.ts` file path from the command (`tsx <path>`) and asserts it exists on disk. Catches the case where a module is deleted but the script name remains valid in `package.json`.
+- **`JOBS`** (module-level const) — `[...appJobs, ...resolveJobs(enabledModules)]`, the full job list in crontab order.
+- **`describe('the declared jobs')`**
+  - *Canary count* — asserts `JOBS.length >= 8` to catch a silent registry loss, not to pin an exact total.
+  - *Unique names* — all `job.name` values must be distinct.
+  - *Well-formed (per job, via `it.each`)* — name matches `^(?:reap|sweep):[\w-]+$`, `job.schedule` passes `looksLikeCron`, `job.summary` is > 10 chars.
+  - *Lease TTL (per job with a lease)* — `job.lease.ttlMs > 0`.
+- **`describe('every scheduled job ships in the production image')`**
+  - Asserts `package.json` → `scripts.job` equals `'tsx scripts/ops/run-job.ts'`.
+  - Reads `docker/crontab`, confirms no entry invokes `npm`, and that the runner is invoked as `node --import tsx scripts/ops/run-job.ts`.
 
 ## Relationships
 
-No graph neighbors are listed for this file. It interacts with the repo only by reading `docker/crontab` and `package.json` from the filesystem at test-execution time; it imports no project source modules.
+- **`src/app/jobs.ts`** — source of `appJobs`, the foundation-level job declarations that are not owned by any module.
+- **`src/kernel/registry.ts`** — `resolveJobs` pulls the job list out of each enabled module's manifest.
+- **`src/modules.ts`** — `enabledModules` determines *which* modules contribute jobs to `JOBS`.
+- **`scripts/docs/jobs-render.ts`** — provides `looksLikeCron`, the shared five-field-cron validator also used by the docs generator.
+- **`tests/support/paths.ts`** — `REPO_ROOT` is used to locate `package.json` and `docker/crontab` on disk.
 
 ## Notes
 
-- The test resolves paths relative to `tests/cross-cutting/` via `path.join(__dirname, '..', '..')` to reach repo root — not via any imported config.
-- The "canary" test (`actually reads both sides`) exists because an empty result from a broken file path would make the bidirectional assertions pass trivially.
-- The file-existence check parses the command string with `/tsx (\S+\.ts)/`; if a scheduled script changes its invocation style (e.g., drops `tsx`), the regex silently fails to extract a path and the assertion reports `undefined` rather than a clear error.
-- This test is intentionally **not** unit-level: it guards an operational contract between two text files and the filesystem, not a module's behavior.
+- The canary floor (≥ 8) is deliberately low; it exists only to fail loudly if the registry import silently returns an empty array, not to encode a real count.
+- `looksLikeCron` is imported from a docs-generation script rather than a shared utility module — a deliberate single-source-of-truth for cron validation, but it means changes to the docs script can affect this test.
+- The crontab check reads a **generated** file (`docker/crontab`), not the source declarations. If the file is missing or stale the test fails; running `npm run regenerate` restores it.
+- Lease validation only applies to jobs that actually define a `lease` property; jobs without one are skipped entirely.

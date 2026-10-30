@@ -1,7 +1,7 @@
 ---
 source: src/modules/stats/services/breakdowns.ts
-sha256: 30d91336804c7bdd67412cf8d741b4399207d911caf11b9efdcf8e18745523eb
-generated_at: 2026-10-15T12:03:55.643655+00:00
+sha256: 145a9b2fc869eeb5564f359055764af8de1cedb168d3a7e538595ad5da057bd4
+generated_at: 2026-10-29T05:55:51.244977+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides the read-only aggregation queries behind the sales dashboard: top products, category totals, a single product's time series, the payment-method mix, operations rates (cancellation / returns / refunds), customer breakdown, and the live open pipeline. Each exported function composes one or two underlying service calls into a fully shaped, serialisable response.
+Composes the sales dashboard's breakdown tables and snapshots. Each exported function orchestrates one or more domain-service reads (orders, returns, payments, invoicing), merges or aggregates the raw rows, and shapes the result into a typed dashboard response. This file contains no domain logic of its own — it is a read-only aggregation layer over the module services.
 
 ## Key elements
 
-- **`getProductStats(period, limit)`** — Top-N products by units ordered, enriched with units returned per product. Merges `orderService.productTotals` with `returnService.returnedByProduct`.
-- **`getCategoryStats(period)`** — Net sales grouped by category from `orderService.categoryTotals`.
-- **`getProductSeries(period, productId)`** — Per-bucket units ordered and units reversed for one product. Iterates `period.bucketStarts` so every bucket is present (zero-filled where no data).
-- **`getPaymentMix(period)`** — Payment counts and totals grouped by method + provider from `paymentService.methodMix`.
-- **`getOperationsStats(period)`** — Three rates in one response: cancellation (cohort-based), return rate (units), and refund rate (money, per currency). Fans out four parallel service calls.
-- **`getCustomerStats(period)`** — Total / new / returning customer counts and the returning rate from `orderService.customerCounts`.
-- **`getPipelineStats()`** — Point-in-time snapshot of paid-but-unshipped orders and transfers awaiting payment. Takes **no** period argument.
+- **`getProductStats(period, limit)`** — Top-N products by sales, each annotated with `unitsReversed` and `netUnits`. Merges `orderService.productTotals` with `returnService.returnedByProduct` via a `Map` keyed on `productId`.
+- **`getCategoryStats(period)`** — Net sales grouped by category. Single read from `orderService.categoryTotals`.
+- **`getProductSeries(period, productId)`** — Per-bucket units for one product. Merges `orderService.productSeries` and `returnService.returnedSeries`, then re-indexes both into maps keyed by bucket ISO string so that `period.bucketStarts` guarantees every bucket appears (zeros filled in).
+- **`getPaymentMix(period)`** — Payment counts and amounts by method + provider, from `paymentService.methodMix`.
+- **`getOperationsStats(period)`** — Three rates in one call: cancellation (cohort), returns (units), refunds (money). Fans out to four parallel service calls (`cancellationCohort`, `paidBuckets`, `returnedBuckets`, `moneyBuckets`) and groups refunds by currency using `addMoney`.
+- **`getCustomerStats(period)`** — Total, new, and returning customer counts plus the returning rate, from a single `orderService.customerCounts` call.
+- **`getPipelineStats()`** — Current (period-less) snapshot of paid-but-unshipped orders and awaiting transfers. The only export that takes no `Period`.
+
+All functions return `Promise<T>` where `T` is one of the `@types` stat interfaces. All monetary values pass through `toDecimalAmount` before being placed in the response.
 
 ## Relationships
 
-- **`@modules/invoicing`** — `invoicingService.moneyBuckets` supplies invoiced/credited money rows used by `getOperationsStats`.
-- **`@modules/orders`** — `orderService` is the primary data source (product totals, category totals, series, cohort, paid buckets, customer counts, pipeline).
-- **`@modules/payments`** — `paymentService.methodMix` feeds `getPaymentMix`.
-- **`@modules/returns`** — `returnService` supplies per-product and per-series return data merged into product stats and series.
-- **`@shared-kernel/money`** — `toDecimalAmount` serialises money for the API response; `addMoney` sums multi-row money values in the refunds calculation.
-- **`@types`** — All response shapes (`ProductStats`, `CategoryStats`, `ProductSeries`, `PaymentMix`, `OperationsStats`, `CustomerStats`, `PipelineStats`) are declared here.
-- **`./figures`** — `rateOf` computes the ratio used for every rate field.
-- **`./range`** — `Period` type and `period.bucketStarts` drive the time-window and bucket enumeration.
-- **`./index`** — Barrel that re-exports these functions for consumers of the stats service.
+- **`src/modules/orders/services/index.ts`** — Primary data source; every function except `getPaymentMix` and `getOperationsStats` (partially) calls `orderService` methods.
+- **`src/modules/returns/services/index.ts`** — Provides `returnedByProduct`, `returnedSeries`, `returnedBuckets` for the "reversed" columns in product, series, and operations stats.
+- **`src/modules/payments/services/index.ts`** — Sole source for `getPaymentMix` via `paymentService.methodMix`.
+- **`src/modules/invoicing/services/index.ts`** — Supplies `moneyBuckets` for the refunds rate in `getOperationsStats`.
+- **`src/domain-primitives/money.ts`** — `toDecimalAmount` (used on every monetary field) and `addMoney` (used to sum invoiced/credited gross per currency).
+- **`src/modules/stats/services/figures.ts`** — `rateOf(numerator, denominator)` is the shared rate calculator for all three operation rates and the customer returning rate.
+- **`src/modules/stats/services/range.ts`** — Provides the `Period` type (and its `window`/`echo`/`bucketStarts` fields) that every period-scoped function consumes.
+- **`src/modules/stats/services/index.ts`** — Re-exports this module's functions to the rest of the stats service surface.
+- **`src/types/index.ts`** — Defines the response interfaces (`ProductStats`, `CategoryStats`, etc.) that shape each return value.
 
 ## Notes
 
-- **`getPipelineStats` is the only function that ignores `period`.** It returns a "right now" snapshot; do not pass a period to it.
-- **Zero-filling in `getProductSeries`:** buckets with no orders *or* returns are still emitted with `unitsOrdered: 0` / `unitsReversed: 0`. Callers can rely on the array length matching `period.bucketStarts.length`.
-- **Money handling:** Raw integer amounts from services are converted to decimal strings via `toDecimalAmount` at this layer. `addMoney` is only used when summing multiple rows (refunds); single-row amounts go straight through `toDecimalAmount`.
-- **`period.echo`** is copied verbatim into every response object so the UI can display the resolved period without a round-trip.
-- **Conditional spread in `getProductSeries`:** the `title` field is only included when the underlying service returned one (i.e. non-`undefined`), keeping the response shape consistent with the type definition.
+- **Zero-filling in `getProductSeries`:** The function iterates `period.bucketStarts` (not the service response) and looks up each bucket in a map, so buckets with no activity are explicitly present with `0`. This is the one place where the period's bucket list drives output shape rather than the service rows.
+- **`getPipelineStats` is a live snapshot:** It takes no `Period` and returns "right now" data. Its `nearestPayBy` is conditionally included (omitted when absent) to keep the JSON lean.
+- **Refunds are per-currency:** `getOperationsStats` splits the invoicing `moneyBuckets` rows by currency, sums each group with `addMoney`, and emits one object per currency. Currencies are sorted via `toSorted()` for deterministic ordering.
+- **`toDecimalAmount` is applied at the boundary:** Raw service rows carry numeric amounts; this file converts them to the decimal/amount representation expected by the UI before returning. No arithmetic on amounts is done here except via `addMoney`.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/audit-logs/tests/contract/audit.test.ts
-sha256: 61eb3c048a64fff4eb04c5e8af0f65bfafa0c1e0a56cb6f52e2197b674fbe0c5
-generated_at: 2026-10-14T15:06:04.349230+00:00
+sha256: 3b9c2542041a1359bd78cd4264ad11f9a4ed8dfcb858b710b6ae264f1e23a2e1
+generated_at: 2026-10-29T03:18:38.973912+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the `GET /audit` endpoint — the single route owned by the audit-logs module. Verifies authentication, role-based authorization, query-filter semantics (actor, target, outcome, since), and input-validation errors that the endpoint must return.
+Contract tests for the `GET /audit` endpoint — the single route owned by the audit-logs module. They verify that an authorized caller (holder of `read:AuditLog`) can filter and retrieve entries, while several invalid filter inputs are rejected with `422` rather than silently returning partial or unfiltered results.
 
 ## Key elements
 
-- **`authenticateInRole(role)`** — local helper that creates a user via `createUser` in the given role and obtains a bearer token through the real `POST /account/login` route. Used because the shared `authenticateAs` helper only covers `owner`/`user`.
-- **`describe('GET /audit')` block** — seven `it` cases:
-  - 401 on missing credentials
-  - 403 for a role without `audit.any.read` (e.g. `editor`)
-  - 200 with `actor` + `target` filters returns exactly the seeded row (moderator)
-  - 422 when a scalar filter (`since`) is supplied twice
-  - 422 when `since` is not a parseable timestamp
-  - 422 when `since` is date-only (no time component)
-  - 422 when `outcome` is outside `success`/`failure`
+- **`authenticateInRole(role: string)`** — Creates a verified user in the given role via `createUser`, then authenticates through the real `POST /account/login` route. Returns `{ user, bearer }`. Exists because the shared `authenticateAs` helper only spells `owner`/`user`, not the `admin` role this endpoint requires.
+- **`describe('GET /audit')`** — Five test cases:
+  - *admin filtered by actor + target* — seeds one entry via the repository, asserts `200` and correct `actorRoleName` in the response.
+  - *repeated scalar `since` filter* — two `since` query params → expects `422`.
+  - *invalid `since` value* (`not-a-date`) → expects `422`.
+  - *date-only `since`* (no time component) → expects `422`.
+  - *invalid `outcome` value* (`bogus`) → expects `422` instead of matching every row.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** — imported for side-effect (registers contract-test globals/conventions before tests run).
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module scope to prepare the database.
-- **`tests/support/http.ts`** — provides `api` (request builder) and `loginBearer` (login + token extraction).
-- **`src/modules/users/tests/factories.ts`** — `createUser({ verifiedAt }, role)` seeds the test user with the required role.
-- **`src/modules/audit-logs/repository.ts`** — `auditLogRepository.create` is used to insert known audit rows before asserting filter results.
+- **`tests/support/contract.ts`** — Imported as a side-effect module (likely registers OpenAPI/schema assertions used by the test runner).
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module level to provision a clean test database before any test runs.
+- **`tests/support/http.ts`** — Provides the `api()` request helper and `loginBearer()` used for every HTTP call in the suite.
+- **`src/modules/users/tests/factories.ts`** — `createUser` is the factory used to seed users in the desired role.
+- **`src/modules/audit-logs/repository.ts`** — `auditLogRepository.create` is called directly to insert known audit entries so filter assertions are deterministic.
 
 ## Notes
 
-- The file deliberately avoids the shared `authenticateAs` helper; the comment at the top explains that it only spells `owner`/`user`, whereas the audit guard needs a role that *does* hold `audit.any.read` (moderator) and one that does not (editor).
-- `createUser` is called with `{ verifiedAt: new Date() }` as a positional options bag before the role string — a factory convention specific to the users test utilities.
-- The `@tests/contract` import is a bare side-effect import (no named bindings); it must execute before the `describe` block for globals like `expect` to be available.
+- The `since` filter requires a full ISO timestamp (date **and** time). A date-only string is intentionally rejected with `422`, not coerced to midnight.
+- Tests authenticate through the real login route rather than a mock token; this means the suite exercises the auth middleware as part of the contract.
+- The `authenticateAs` helper from `tests/support/contract.ts` is deliberately **not** used here — the module-level comment explains that it does not cover the `read:AuditLog` role distinction this endpoint makes.

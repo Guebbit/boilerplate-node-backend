@@ -1,7 +1,7 @@
 ---
 source: src/modules/stats/services/index.ts
-sha256: 5eb4bba7c34ed5362f81dc9211eca0c426c7f6667430a4f6bb570304f7b73f4e
-generated_at: 2026-10-15T12:04:15.996719+00:00
+sha256: c60b2cefc0b4356fb850f81bd9b15618dddf704b35e0fb419d84c6cb977c07d6
+generated_at: 2026-10-29T05:56:11.293594+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel/facade module for the stats service. It re-exports every read-only stats function from the individual service files (`sales`, `breakdowns`, `range`) and bundles them into a single `statsService` object, giving controllers and the module entry point one import location. It performs no logic of its own and stores nothing.
+Barrel module that assembles the stats service's public API. It aggregates the read-only query functions from `sales.ts` and `breakdowns.ts` into a single `statsService` object and re-exports the period-resolution utilities from `range.ts`, giving controllers one import point for all dashboard data reads.
 
 ## Key elements
 
-- **`statsService`** (object) — The public surface. Groups `getSalesStats`, `getProductStats`, `getProductSeries`, `getCategoryStats`, `getPaymentMix`, `getOperationsStats`, `getCustomerStats`, and `getPipelineStats` behind one object so callers can do `statsService.getSalesStats(...)`.
-- **Re-exports from `./sales`** — `getSalesStats`.
-- **Re-exports from `./breakdowns`** — `getCategoryStats`, `getCustomerStats`, `getOperationsStats`, `getPaymentMix`, `getPipelineStats`, `getProductSeries`, `getProductStats`.
-- **Re-exports from `./range`** — `resolvePeriod` (function) and `Period` (type). These are the *only* non-stat exports in this file.
-- **Individual named exports** — Every function above is also exported directly (not only via `statsService`), so consumers may import by name or through the object.
+- **`statsService`** (const, exported) — Plain object bundling eight read functions: `getSalesStats`, `getProductStats`, `getProductSeries`, `getCategoryStats`, `getPaymentMix`, `getOperationsStats`, `getCustomerStats`, `getPipelineStats`. Controllers call through this rather than importing individual service files.
+- **`resolvePeriod`** (re-exported from `./range`) — Resolves a requested period into the shop's timezone.
+- **`Period`** (type, re-exported from `./range`) — The period type used by `resolvePeriod`.
 
 ## Relationships
 
-- **`services/sales.ts`** and **`services/breakdowns.ts`** — Provide the stat functions this file re-exports and places into `statsService`.
-- **`services/range.ts`** — Provides `resolvePeriod` / `Period`; this file is the sole re-export point for those.
-- **`controllers/get-stats.ts`** — Consumes this module (via `statsService` or the named exports) to serve dashboard stat requests.
-- **`src/modules/stats/index.ts`** — Module-level entry that re-exports this file, making the stats service available at the module root.
-- **`tests/integration/stats.test.ts`** — Integration tests exercise the exported functions through this facade.
+- **`./sales.ts`** — Source of `getSalesStats`, pulled into `statsService`.
+- **`./breakdowns.ts`** — Source of the seven breakdown/series functions, all pulled into `statsService`.
+- **`./range.ts`** — Source of `resolvePeriod` and the `Period` type, re-exported directly (not wrapped in `statsService`).
+- **`../controllers/get-stats.ts`** — Primary consumer; imports `statsService` (and likely `resolvePeriod`) to handle incoming dashboard requests.
+- **`../index.ts`** — Module entry point; re-exports or references this file's public surface.
+- **`../../tests/integration/stats.test.ts`** — Exercises the stats service through this interface.
 
 ## Notes
 
-- Two import styles coexist: individual named imports *and* the `statsService` object. Both resolve to the same underlying functions; prefer whichever the consuming controller already uses.
-- `resolvePeriod` and `Period` are the only exports not grouped into `statsService` (they are utility/type, not stat queries).
-- This file is intentionally side-effect-free; all data is read on demand from the owning modules.
+- `resolvePeriod` is intentionally **outside** `statsService` — it's a utility, not a data query. Consumers import it directly rather than via the object.
+- No state is stored here or in any sub-service; every call is a fresh read. Treat this module as purely a read facade.

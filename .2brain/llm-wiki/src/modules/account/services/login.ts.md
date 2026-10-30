@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/login.ts
-sha256: 2ee68d5662eed74fd9bf992f70f1f94884cdd56ec8289d984e8fdc36d93a3452
-generated_at: 2026-10-15T10:00:40.452697+00:00
+sha256: 9341b46366fae5dc835873890192306b895da0fd6bdfda3b4073dd933bfeef48
+generated_at: 2026-10-29T02:41:20.675056+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides two password-verification primitives for the account module: `login` (unauthenticated email/password → user document) and `verifyOwnPassword` (authenticated caller re-confirming their password before a sensitive action). Neither function mints or touches a session token; that concern is delegated to the sibling `session` service.
+Handles password verification for two distinct flows: anonymous login (email + password) and signed-in callers confirming their own password before a sensitive action. It deliberately does **not** mint or manage sessions — that is the job of `../session/session`.
 
 ## Key elements
 
-- **`DUMMY_PASSWORD_HASH`** (module-level `const`) — An argon2id hash of random bytes computed once at import time. Used as the comparison target when no user record is found, so the hash-verification cost is constant regardless of whether the email exists (prevents timing-based account enumeration).
-- **`login(email?, password?)`** — Validates input via the `LoginBody` Zod schema, looks up the user with `userService.findForLogin`, then runs `verifyPassword` against the stored hash (or the dummy hash on a miss). Returns `ResponseSuccess<UserDocument>` or `ResponseReject` (422 for validation, 401 for auth failure).
-- **`verifyOwnPassword(userId, password, wrongKey)`** — Verifies the caller's own current password inside a `withOwnAccount` guard. Returns 422 (never 401) on mismatch or on OAuth-only accounts that store no password, to avoid triggering client-side session-expiry interceptors.
+- **`DUMMY_PASSWORD_HASH`** — module-level `argon2id` hash of a random 32-byte string, computed once at import time. Used as the comparison target when no account is found, so the CPU cost of verification is identical for "unknown email" and "wrong password," eliminating a timing oracle.
+- **`login(email?, password?)`** — validates input via `LoginBody.safeParse`, calls `userService.findForLogin`, then verifies the password (falling back to `DUMMY_PASSWORD_HASH` on a miss). Returns `ResponseSuccess<UserDocument>` or a 401/422 `ResponseReject`. An account in deletion grace (`isRestorable`) is returned successfully so the caller can offer a restore instead of a session.
+- **`verifyOwnPassword(userId, password, wrongKey)`** — wraps the check in `withOwnAccount`. Rejects with **422** (not 401) on a mismatch or missing password hash, so a client interceptor won't interpret it as a dead session. The `wrongKey` parameter lets each calling context supply its own i18n message.
 
 ## Relationships
 
-- **`@infrastructure/security/password-hash`** — Calls `hashPasswordSync` (once, at import) and `verifyPassword` (per request) for argon2id comparison.
-- **`@infrastructure/http/response`** — Uses `generateSuccess`, `generateReject`, and `validationErrors` to shape every return value; also the source of the `ResponseSuccess` / `ResponseReject` types in the signatures.
-- **`@infrastructure/http/errors`** — Calls `rejectDatabaseEnvelope('auth', error)` in the `.catch` of `login` to normalise unexpected DB failures.
-- **`@infrastructure/i18n`** — Calls `t(key)` to localise rejection messages (both the fixed `account.login.wrong-data` key and the caller-supplied `wrongKey` in `verifyOwnPassword`).
-- **`@modules/users`** — Calls `userService.findForLogin(email)` to retrieve the user document (including the `select:false` password field); consumes the `UserDocument` type in return values.
-- **`./caller`** — Wraps `verifyOwnPassword`'s body in `withOwnAccount(userId, …)` so the caller's identity is resolved and the guard handles "not signed in" / "not their own account" before any password logic runs.
+- **`@infrastructure/security/password-hash`** — imports `hashPasswordSync` (boot-time dummy hash) and `verifyPassword` (per-request check).
+- **`@infrastructure/http/response`** — builds every return value via `generateSuccess`, `generateReject`, and `validationErrors`.
+- **`@infrastructure/http/errors`** — catches database-level failures through `rejectDatabaseEnvelope`.
+- **`@infrastructure/i18n`** — resolves the `t(...)` message keys for user-facing rejection text.
+- **`@modules/users`** — uses `userService.findForLogin` (a query that selects the `password: false` field) plus the `isAuthenticatable` / `isRestorable` guards and the `UserDocument` type.
+- **`./caller`** — `verifyOwnPassword` delegates auth-context resolution to `withOwnAccount`.
+- **`@modules/account/services/index.ts`** — re-exports these functions as the public surface of the account services barrel.
 
 ## Notes
 
-- The `email` and `password` parameters in `login` are typed `string | undefined` (not the Zod-inferred types) so the function can be called from routes before validation; the Zod `safeParse` inside the function is the actual type gate. Downstream code must use `parseResult.data.email`, not the raw param.
-- `verifyOwnPassword` deliberately returns **422**, not 401, on failure. The `wrongKey` parameter lets each caller (change-password, add-2FA, etc.) supply its own i18n message while keeping the HTTP status uniform.
-- `DUMMY_PASSWORD_HASH` is a one-time import-time cost. It is **not** re-computed per request, but it does add a small constant to cold-start time.
-- `userService.findForLogin` is one of the few query paths that selects the `password` field (normally `select: false` on the user model). Avoid calling this method in non-auth flows.
+- The `email` parameter is typed `string | undefined` at the signature level; the actual type safety comes from the `LoginBody.safeParse` gate. The parsed value (`parseResult.data.email`) is what gets passed to `findForLogin`.
+- `findForLogin` is the one `userService` query that selects the `select: false` password hash — all other flows must not touch it.
+- `verifyOwnPassword` returning 422 is intentional: a 401 would trigger client-side "session expired" handlers and log out a still-valid session.
+- An OAuth-only account (no stored password) hits the same 422 path as a wrong password in `verifyOwnPassword`; there is no separate "no password on file" status.

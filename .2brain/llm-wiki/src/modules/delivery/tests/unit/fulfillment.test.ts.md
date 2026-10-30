@@ -1,40 +1,29 @@
 ---
 source: src/modules/delivery/tests/unit/fulfillment.test.ts
-sha256: 509c02f7d56915b06a98ccb306554dd742fb879eecf300adc4d826a7417c316c
-generated_at: 2026-10-14T15:39:25.987057+00:00
+sha256: 1fd4a73d3a2da0ee340ed585bdb3f302b934e3ccef1ada0e76efd88fa13f87c2
+generated_at: 2026-10-29T03:49:09.475848+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/delivery/tests/unit/fulfillment.test.ts
 
 ## Purpose
-
-Unit tests for the pure fulfillment domain rules: how an order's lines are split into fulfillment orders (grouping), how remaining quantities are computed, what status follows from a line set and hold state, which lines a shipment may carry, how the summary is assembled for the `orders` module, and which action predicates (`isShippable`, `isHoldable`, etc.) a fulfillment order exposes.
+Unit tests for the pure fulfillment domain rules: how an order's lines are grouped into fulfillment orders, how remaining quantities are computed, what status derives from a set of lines and a hold flag, and which lines a shipment may carry. It exists to lock down the grouping, remainder, status, and shipping-validation logic without any I/O.
 
 ## Key elements
-
-- **`line(productId, quantity, fields?)`** – fixture factory returning a `FulfillmentLine` with zero shipped/cancelled by default.
-- **`groupable(productId, quantity, fields?)`** – fixture factory returning a `GroupableLine` (adds `ships`, `preorder`, `releaseDate`).
-- **`describe('groupOrderLines')`** – verifies physical/digital/mixed grouping, per-release-day hold grouping with `agreedAt` set to the day's latest instant, numbering starting at 1, and edge cases (empty order, preorder with no date).
-- **`describe('remaining')`** – covers `remainingOfLine`, `remainingOf`, and `remainderLines` arithmetic and filtering.
-- **`describe('statusOfLines')`** – table-driven (`it.each`) over the full status matrix: `open`, `in_progress`, `on_hold`, `closed`, `cancelled`.
-- **`describe('checkShipLines')`** – validates ship-request acceptance/rejection: all-remaining, nothing-remains, named-line summation, unknown product, over-quantity.
-- **`describe('withShipped and withRemainderCancelled')`** – confirms immutability (input arrays untouched) and correct quantity bookkeeping; includes a getter-based "stored subdocument" case.
-- **`describe('summarize')`** – checks the summary object handed to `orders`: `shipped`, `remaining`, `onHold`, `awaitingStock`, `undelivered`, `lastDeliveredAt`.
-- **`describe('what a fulfillment order offers')`** – asserts the action predicates (`isShippable`, `isFulfillable`, `isHoldable`, `isReleasable`) for each fulfillment-order shape.
+- **`line(productId, quantity, fields?)`** — local factory returning a `FulfillmentLine` with `shippedQuantity`/`cancelledQuantity` defaulting to 0.
+- **`groupable(productId, quantity, fields?)`** — local factory returning a `GroupableLine` (the shape `groupOrderLines` reads), with `ships: true` by default.
+- **`describe('groupOrderLines', …)`** — the largest block. Covers: ordinary → single physical order; digital-only → digital order; mixed orders stay in one physical order; preorder release-day splitting (chronological, timezone-aware day grouping); backorder partial-coverage (shelf portion ships, owed portion holds); fully backordered lines (no open order); dated vs. 30-day-default backorder separation; preorder + backorder same-day isolation; made-to-order (`noWithdrawal`) lines getting their own group; edge cases (empty order, undated preorder treated as ordinary).
+- **`describe('remaining', …)`** — tests `remainingOfLine`, `remainingOf`, and `remainderLines` (excludes fully-shipped lines).
+- **`describe('statusOfLines', …)`** — parameterized table covering the full status matrix: `open`, `in_progress`, `on_hold`, `closed`, `cancelled`, and the "hold with nothing remaining" override.
+- **`describe('checkShipLines', …)`** — tests the shipping-validation gate (truncated in source; covers "ship all remaining when no lines are named" and partial-selection cases).
 
 ## Relationships
-
-- **`src/modules/delivery/domain/index.ts`** – re-exports the pure functions under test (`groupOrderLines`, `statusOfLines`, `checkShipLines`, `withShipped`, `withRemainderCancelled`, `summarize`, `isShippable`, etc.); this file imports exclusively from that barrel.
-- **`src/modules/delivery/domain/fulfillment.ts`** – the implementation that these tests verify (imported via the barrel above).
-- **`src/modules/delivery/services/cut.ts`** – calls `groupOrderLines` and `checkShipLines` at runtime; the tests here pin the contract it relies on.
-- **`src/modules/delivery/presenter.ts`** – calls `summarize` and the action predicates to shape what `orders` sees.
-- **`src/modules/delivery/services/notify.ts` / `announce.ts`** – consume `statusOfLines` to decide which notifications fire.
-- **`src/modules/cart/services/checkout.ts`** – produces the order lines that ultimately become `GroupableLine` inputs to `groupOrderLines`.
+- **Imports all tested functions from `src/modules/delivery/domain/index.ts`** (`checkShipLines`, `groupOrderLines`, `isFulfillable`, `isHoldable`, `isReleasable`, `isShippable`, `remainderLines`, `remainingOf`, `remainingOfLine`, `statusOfLines`, `summarize`, `withRemainderCancelled`, `withShipped`) plus the types `FulfillmentLine` and `GroupableLine`.
+- The functions under test are implemented across the sibling domain files: `domain/fulfillment.ts` (grouping, status, remainder), `domain/preorder.ts` (release-day logic), and `domain/reship.ts` (shipping validation). This test file is the sole unit-test consumer of that API surface.
 
 ## Notes
-
-- The suite tests **pure functions only** (no I/O, no DB, no HTTP); the "stored subdocument" test simulates a Mongoose-style object whose fields live behind getters, because a plain spread won't copy them — `withShipped`/`withRemainderCancelled` must read via property access, not spread.
-- Preorder grouping is **per release-day**, not per release-instant; the `agreedAt` of a day's group is the **latest** `releaseDate` in that group, not the earliest.
-- `statusOfLines` treats a hold on a fulfillment order where **nothing remains** as irrelevant (returns `closed`, not `on_hold`); the test name calls this out explicitly.
-- The file is self-contained: every fixture is built inline; no external test utilities or shared setup are imported.
+- Timezone is passed explicitly as the second argument to `groupOrderLines` (`'UTC'` or `'Europe/Rome'`); grouping of preorders by "shop day" is timezone-sensitive, not UTC-day-based.
+- Preorder lines *without* a `releaseDate` are treated as ordinary (open) — the tests assert this explicitly.
+- `defaulted` is an optional marker on a fulfillment-order draft; a `true` value indicates the 30-day default promise rather than an explicit date, and such groups must not merge with dated ones.
+- The `summarize`, `withRemainderCancelled`, and `withShipped` imports are present but their tests appear beyond the truncated portion of the file.

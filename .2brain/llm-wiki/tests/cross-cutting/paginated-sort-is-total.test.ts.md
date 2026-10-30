@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/paginated-sort-is-total.test.ts
-sha256: 95f67f6de9f96ab66a50b302e4e6022489bebefffaabef736b3d86d2c26c6fed
-generated_at: 2026-10-15T12:39:21.450302+00:00
+sha256: a6accbcf88e397814cbdd367e8880c49765b44a43b3f3ff6f637f14ac0f1bfb8
+generated_at: 2026-10-29T06:47:59.833239+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cross-cutting guard that asserts every `$sort` stage co-located with a `$skip` in the source tree is *total*—its final key is unique (`_id` or `id`). Without a total sort, MongoDB's lack of a guaranteed tie order between the count query and the page query can duplicate or drop documents across pages. The test is purely syntactic (regex over source text) so it also covers pipelines that no test exercises yet.
+Cross-cutting guard that every MongoDB aggregation pipeline using `$skip` (pagination) declares a `$sort` whose last key is unique, so the tie order cannot differ between the count query and the page query. It works syntactically—reading source files and matching `$sort` stages with a regex—rather than driving a database, so it covers all current and future pipelines in the tree.
 
 ## Key elements
 
-- **`UNIQUE_KEYS`** — `Set(['_id', 'id'])`; the keys that guarantee a total order.
-- **`TOTAL_SORT_CONSTANTS`** — `Set(['DEFAULT_SORT'])`; named sort constants already known to close on a unique key.
-- **`listSourceFiles(dir)`** — recursively collects `.ts` files under `src/`, skipping any `tests/` subdirectory (fixture pipelines are excluded).
-- **`SORT_STAGE`** (regex) — matches `$sort:` values as either an inline object literal `{…}` or an identifier with an optional `?? fallback`.
-- **`sortKeys(literal)`** — extracts declared key names from an inline `{…}` sort spec, in order.
-- **`isTotal(spec)`** — decides whether a sort spec ends in a unique key; resolves `??` by recursing on the right-hand side, looks up named constants, or checks the last key of an inline literal.
-- **`pagedSortStages()`** — walks all source files containing `$skip` and returns every `$sort` stage found, with the spec whitespace-collapsed for readable failure output.
-- **`describe('every paged $sort is total')`** — two assertions: (1) no non-total paged sort exists, (2) canary that the scanner actually matched ≥ 1 pipeline when the `orders` module is deployed.
+- **`SOURCE_ROOT`** — Resolved path to `src/` under the repo root; the scan boundary.
+- **`UNIQUE_KEYS`** — `Set(['_id', 'id'])`; keys that guarantee a total (tie-free) sort.
+- **`TOTAL_SORT_CONSTANTS`** — `Set(['DEFAULT_SORT'])`; named constants the repo publishes that already close on a unique key.
+- **`listSourceFiles(directory)`** — Recursively collects `.ts` files under a directory, skipping any `tests/` subdirectory (fixtures are not real queries).
+- **`SORT_STAGE`** — Regex matching `$sort:` followed by an inline object literal or an identifier (optionally with a `??` fallback expression).
+- **`sortKeys(literal)`** — Extracts the declared key names (in order) from an inline sort object literal.
+- **`isTotal(spec)`** — Returns `true` when a sort spec's final key is in `UNIQUE_KEYS`; resolves `??` fallbacks to their right-hand side; delegates named constants to `TOTAL_SORT_CONSTANTS`.
+- **`pagedSortStages()`** — Scans all source files containing `$skip` and collects their `$sort` stage specs as `{ file, spec }` pairs (whitespace collapsed).
+- **Test: "finds no pipeline paging through a sort that can tie"** — Asserts the filtered set of non-total paged sorts is empty.
+- **Test: "actually finds the pipelines it claims to scan"** — Canary: if `orders` is deployed, at least one paged sort stage must be found, preventing a silent regex failure from producing a vacuous pass.
 
 ## Relationships
 
-- **`tests/support/paths.ts`** — imports `isDeployed` to gate the canary assertion behind the presence of the `orders` module, so the test doesn't fail in deployments where that module (the only one that pages through an aggregation pipeline) is absent.
+- **`tests/support/paths.ts`** — Supplies `REPO_ROOT` (base for resolving `SOURCE_ROOT`) and `isDeployed('orders')` (gates the canary assertion to environments where the `orders` service exists).
 
 ## Notes
 
-- Deliberately **syntactic only**: it matches `$sort:` in aggregation-pipeline syntax. A `find().sort().skip()` chain (as used by the `inventory` stock board) is *not* in scope for this regex.
-- Skips `tests/` directories under `src/` because they hold fixture pipelines, not application queries.
-- The `??` branch (`chosen ?? DEFAULT_SORT`) is handled by recursing into the fallback; the left-hand side is assumed to already close on `_id` by contract.
-- The canary test (`toBeGreaterThanOrEqual(1)`) exists to catch a silent regression where the regex stops matching rather than a genuine "all sorts are total" pass.
+- Deliberately syntactic: the regex matches `$sort` in aggregation pipelines only. `inventory`'s `find().sort().skip()` chain is intentionally not scanned.
+- `src/tests/` subdirectories are excluded from the walk to skip fixture pipelines.
+- The `??` fallback in a sort expression (e.g. `resolveSort ?? DEFAULT_SORT`) is total iff its *right-hand* side is; the test resolves only the last operand.
+- The canary test is conditional on `isDeployed('orders')`; in environments without that service the lower-bound assertion is skipped entirely.

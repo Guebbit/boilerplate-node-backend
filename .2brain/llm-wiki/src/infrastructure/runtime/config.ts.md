@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/runtime/config.ts
-sha256: e9a44691ec7b4dc06b481fe137dfaac31c69d5f3f4ccd7646fa95bb97b11b0ca
-generated_at: 2026-10-14T08:12:58.566849+00:00
+sha256: 625d61aef6ceec0927e53a841e116020ca19d6b5ec61794cadf29e2f629cd6ea
+generated_at: 2026-10-29T02:14:38.088630+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares every environment-variable the process reads, grouped into named config bundles (environment, logging, server, cluster, database, currency, stock, tracing). It is the single source of truth for "what kind of process am I?" and exposes the `isRelaxedEnvironment` guard that every safety mechanism keys off. It lives in `runtime/` rather than in individual modules so that cross-module shared values (currency, stock threshold) have one canonical declaration.
+Central declaration of every environment-driven setting this process reads: runtime environment, logging, HTTP server, clustering, database, stock threshold, and tracing. Each group is a `defineConfig` object that validates and defaults its fields at read time. The file also exposes the three boolean predicates (`nodeEnvironment`, `isTestEnvironment`, `isRelaxedEnvironment`) that gate safety behaviours across the codebase.
 
 ## Key elements
 
-- **`nodeEnvironmentConfig`** – `NODE_ENV` (text, `verbatim: true` so stray whitespace is rejected).
-- **`loggingConfig`** – service name, log level (`LOG_LEVELS`), and personal-field mode (`PERSONAL_FIELD_MODES`: `hash` | `redact` | `plain`).
-- **`serverConfig`** – port, host, graceful-shutdown timeout.
-- **`clusterConfig`** – enable flag, worker count, crash-window/backoff/shutdown-tuning knobs.
-- **`databaseConfig`** – MongoDB URI, password (marked `sensitive`), host/port/name, max-time.
-- **`currencyConfig`** – `NODE_DEFAULT_CURRENCY` (default `'EUR'`). Shared by `orders` and `products` to avoid a module import cycle.
-- **`stockConfig`** – `NODE_LOW_STOCK_THRESHOLD` (default `5`). Shared by `inventory` and `products` for the same cycle-avoidance reason.
-- **`tracingConfig`** – OTLP endpoints, `NODE_TRUSTED_INGRESS` flag, `npm_package_version`.
+- **`nodeEnvironmentConfig`** – validates `NODE_ENV` (verbatim text; no trimming).
+- **`loggingConfig`** – `NODE_SERVICE_NAME`, `NODE_LOG_LEVEL` (constrained to `LOG_LEVELS`), `NODE_LOG_PERSONAL_FIELDS` (constrained to `PERSONAL_FIELD_MODES`).
+- **`serverConfig`** – `NODE_PORT`, `NODE_HOST`, `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS`.
+- **`clusterConfig`** – worker count, crash window/back-off, shutdown timeout, crash limit.
+- **`databaseConfig`** – MongoDB URI, host/port/name, max-time; `NODE_DB_PASSWORD` is marked `sensitive`.
+- **`stockConfig`** – `NODE_LOW_STOCK_THRESHOLD`; declared here so both `inventory` and `products` read the same value without circular imports.
+- **`tracingConfig`** – OTLP endpoint fields and `NODE_TRUSTED_INGRESS` flag.
+- **`PERSONAL_FIELD_MODES`** – `['hash', 'redact', 'plain']`; consumed by `adapters/logger.ts` to format a field in log lines.
 - **`nodeEnvironment()`** – returns the raw `NODE_ENV` string or `undefined`.
-- **`isTestEnvironment()`** – `true` when `NODE_ENV === 'test'`; the gate that prevents suites from opening sockets or installing signal handlers.
-- **`isRelaxedEnvironment()`** – the single definition of "not a deployment". Returns `true` only for `development` or `test`. Delegates to `isRelaxedIn` from `define.ts`. Fail-closed: any other value (unset, `staging`, a typo) yields strict behaviour.
-- **`PERSONAL_FIELD_MODES`** – exported const tuple consumed by `adapters/logger.ts`.
+- **`isTestEnvironment()`** – `true` only when `NODE_ENV === 'test'`; gates socket/signal-handler installation in test suites.
+- **`isRelaxedEnvironment()`** – `true` only for exactly `development` or `test`. Single definition of "not a deployment"; keys off `isRelaxedIn` from `../config/define`.
 
 ## Relationships
 
-- **`src/infrastructure/config/define.ts`** – provides `defineConfig` and `isRelaxedIn`; the building blocks every config object in this file uses.
-- **`src/infrastructure/config/fields.ts`** – provides `text`, `int`, `flag`, `choice` field descriptors.
-- **`src/infrastructure/adapters/logger.ts`** – imports `loggingConfig` and `PERSONAL_FIELD_MODES` to configure winston output.
-- **`src/infrastructure/runtime/database.ts`** – reads `databaseConfig` to connect MongoDB.
-- **`src/infrastructure/runtime/otel-sdk.ts`** – reads `tracingConfig` to initialise the OTel SDK.
-- **`src/cluster.ts`** – reads `clusterConfig` to decide whether to fork workers and to tune crash-restart behaviour.
-- **`src/app.ts`** – entry point; reads `serverConfig` for port/host and `isRelaxedEnvironment` for boot-time safety checks.
-- **`src/app/error-handling.ts`** – calls `isRelaxedEnvironment()` to decide whether to expose stack traces in error responses.
-- **`src/app/config.ts`** – app-level config layer that sits on top of / alongside these runtime configs.
-- **`scenarios/apply.ts`** – scenario/seed entry; consults `isTestEnvironment()` and `isRelaxedEnvironment()` before performing side-effects.
+- **`src/infrastructure/config/define.ts`** – source of `defineConfig` and `isRelaxedIn` used throughout this file.
+- **`src/infrastructure/config/fields.ts`** – source of the `choice`, `flag`, `int`, `text` field constructors.
+- **`src/infrastructure/adapters/logger.ts`** – reads `PERSONAL_FIELD_MODES` and `loggingConfig`; must use a relative import because it sits on jest's `globalSetup` chain where path aliases are unavailable.
+- **Graph neighbors** (`src/app.ts`, `src/cluster.ts`, `src/infrastructure/runtime/database.ts`, `src/infrastructure/runtime/otel-sdk.ts`, `src/app/config.ts`, `src/app/error-handling.ts`, `src/app/request-context.ts`, `scenarios/apply.ts`, middleware files, `src/infrastructure/observability/tracer.ts`) – consume the exported config objects and predicates to obtain validated values at runtime.
 
 ## Notes
 
-- **Relative imports only.** The file deliberately avoids the `@infrastructure` path alias because `adapters/logger.ts` sits on jest's `globalSetup` import chain, where that alias is not resolvable. Adding an aliased import here would break test runs.
-- **Fail-closed `NODE_ENV`.** `isRelaxedEnvironment` is the one switch for "is this a developer/CI machine vs. a real server?" Any value other than exactly `development` or `test` (including `undefined`, `staging`, or a typo with a trailing space — caught by `verbatim: true`) falls to the strict path. Do not add new "relaxed" values here; add a new guard instead.
-- **Cycle-avoidance placement.** `currencyConfig` and `stockConfig` live here (infrastructure) rather than in `orders`/`products`/`inventory` because the module dependency graph makes a cross-import impossible without creating a cycle.
-- **`npm_package_version`** in `tracingConfig` is read as an env-var-style field (set by the npm toolchain at `npm run` time) rather than imported from `package.json` directly, keeping the file's dependency surface uniform.
+- All imports are **relative** by design; the `@infrastructure` alias is deliberately avoided so `adapters/logger.ts` (on the jest `globalSetup` import path) can resolve this file.
+- `NODE_ENV` is validated as `verbatim` text—whitespace is not trimmed. A typo like `" development"` is intentionally treated as a distinct (strict) value.
+- `isRelaxedEnvironment` is the **only** place that decides "is this a safe-to-be-loose environment." Every other gate (secure cookies, seeder refusal, stack-trace suppression, production-only secrets) should call this rather than re-checking `NODE_ENV` itself.
+- `stockConfig` lives here (infrastructure) rather than in a domain module to break the circular dependency between `inventory` and `products`.

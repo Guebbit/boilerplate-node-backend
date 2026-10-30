@@ -1,7 +1,7 @@
 ---
 source: src/modules/invoicing/domain/credit-shares.ts
-sha256: 7a9b9ef9b869ba3da2b1cfd8068f15fb00e3160154fa0fcbc12397d591a6d6cd
-generated_at: 2026-10-15T10:37:54.997814+00:00
+sha256: 1c2b0210573d2e5e0a3fe93a75f98a2c12816f98646abd8a0c28d8302315fff0
+generated_at: 2026-10-29T04:10:54.318633+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure arithmetic that splits a **partial** credit-note refund across the VAT rates of the original invoice, producing one credit line per rate. It distinguishes two refund modes — goods-specific (weighs only the returned lines plus delivery) and goodwill (pro-rata by gross amount) — so the downstream tax extraction mirrors what the invoice itself did.
+Pure arithmetic module that splits a partial refund across an invoice's VAT rates, producing one credit-note line per rate. It isolates the apportionment logic from persistence, models, and the tax-extraction step so the math can be unit-tested in isolation.
 
 ## Key elements
 
-- **`CreditableInvoice`** — plain-data snapshot of the invoice (lines with `productId`, `unitPrice`, `taxRate`; `shippingByRate`; `taxSummary`). Decouples this domain layer from any invoice model.
-- **`RefundedGoods`** — describes what the refund pays back: matched product lines with quantities and a decimal shipping amount.
-- **`CreditLine`** — one output row of the credit note (`title`, `quantity: 1`, gross `unitPrice`, `taxRate`).
-- **`creditShares`** *(exported)* — the main entry point. Accepts invoice data, a gross decimal amount, a line title, and optional `RefundedGoods`; returns an array of `CreditLine`s (one per rate that received a non-zero share).
-- **`goodsWeights`** *(internal)* — computes per-rate weights in minor units by matching returned product IDs to invoice lines and apportioning delivery via the invoice's own `shippingByRate` proportions.
+- **`creditShares(invoice, amount, lineTitle, goods?)`** — Main export. Takes the refunded gross amount and (optionally) the specific goods it pays back, then returns one `CreditLine` per VAT rate that receives a non-zero share.
+- **`goodsWeights(invoice, goods)`** *(private)* — Computes per-rate weights for a goods-based refund: matches each returned product to its invoice line's rate, and apportions the refunded delivery cost across the rates the invoice charged it at.
+- **`CreditableInvoice`** — Read-only data shape the split expects (lines, `shippingByRate`, `taxSummary`). Decouples this module from the invoice document/model.
+- **`RefundedGoods`** — The refunded lines (`productId` + `quantity`) and the delivery portion, as passed by the `PAYMENT_REFUNDED` event.
+- **`CreditLine`** — One output line: `title`, fixed `quantity: 1`, gross `unitPrice`, and `taxRate`.
 
 ## Relationships
 
-- **Imports** `addMoney`, `apportion`, `scaleMoney`, `toDecimalAmount`, `toMinorUnits`, `NO_MONEY`, `Money` from [`@shared-kernel/money`](../../shared-kernel/money.ts) — all currency arithmetic lives there.
-- **Re-exported** through [`domain/index.ts`](index.ts) so services can import from the domain barrel.
-- **Consumed by** [`services/credit-breakdown.ts`](../services/credit-breakdown.ts), which takes the `CreditLine[]` output and extracts the VAT portion per rate.
-- **Consumed by** [`services/issue-credit-note.ts`](../services/issue-credit-note.ts), which orchestrates the full credit-note write using `creditShares` for the line split.
-- **Tested by** [`tests/unit/credit-shares.test.ts`](../tests/unit/credit-shares.test.ts) and referenced in [`tests/unit/credit-breakdown.test.ts`](../tests/unit/credit-breakdown.test.ts).
-- **Cross-module reference** in [`delivery/tests/unit/fulfillment.test.ts`](../../delivery/tests/unit/fulfillment.test.ts) (delivery-side tests that exercise the split via the invoicing domain).
+- **`src/domain-primitives/money.ts`** — Source of all monetary primitives used here: `Money`, `NO_MONEY`, `addMoney`, `apportion`, `scaleMoney`, `toMinorUnits`, `toDecimalAmount`.
+- **`src/modules/invoicing/domain/index.ts`** — Barrel file; re-exports `creditShares` and the three interfaces for consumers within the domain layer.
+- **`src/modules/invoicing/services/credit-breakdown.ts`** — Downstream consumer: takes the `CreditLine[]` produced here and extracts the VAT from each line to build the tax summary (the same approach the original invoice used).
+- **`src/modules/invoicing/services/issue-credit-note.ts`** — Orchestrator that calls `creditShares` and hands the resulting lines to the credit-note document builder.
+- **`src/modules/invoicing/tests/unit/credit-shares.test.ts`** — Unit tests exercising `creditShares` directly (goods-based, goodwill, zero-match fallback, mixed-rate scenarios).
 
 ## Notes
 
-- **Pure by design** — no database, no ORM model, no tax-function import. The doc block explicitly states this so the arithmetic stays unit-testable in isolation.
-- **Fallback guard:** if `goods` is provided but no product ID matches any invoice line, `goodsWeights` returns all-zero weights; `creditShares` detects this (`addMoney(...) === NO_MONEY`) and silently falls back to the pro-rata rule. No error is thrown.
-- **Delivery split is authoritative on the invoice side:** `shippingByRate` on `CreditableInvoice` already encodes how the invoice apportioned delivery across rates; this file re-apportions the *refund's* shipping using those same proportions rather than recalculating.
-- `quantity` is always the literal `1`; the entire value lives in `unitPrice`. Consumers should not expect multi-unit lines.
+- **Fallback to pro-rata:** If the refunded goods match *no* invoice line (all weights sum to `NO_MONEY`), the function silently falls back to apportioning by `taxSummary` gross amounts — the same rule as a goodwill refund.
+- **Delivery is always rate-split:** Even in a goods refund, the refunded shipping is distributed across rates in the same proportions the invoice charged it (`shippingByRate`), not by the goods' rates.
+- **`quantity` is always `1`:** The gross amount lives entirely in `unitPrice`; callers must not multiply.
+- **Minor-units internally:** All arithmetic happens in integer minor units via `toMinorUnits`; conversion back to decimal (`toDecimalAmount`) is the last step before returning.
+- **Pure / no side effects:** No I/O, no DB access, no tax function call. The VAT extraction is deliberately deferred to `credit-breakdown.ts`.

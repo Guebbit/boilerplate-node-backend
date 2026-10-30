@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/services/decide.ts
-sha256: 939f7741612f083bc7f152a8525a183c4ef7ee9807cb5c8077ca3641caf15597
-generated_at: 2026-10-15T11:56:29.155536+00:00
+sha256: 2330f688b3914d034a279cb8a94291dd012bb318a1a5b5b209565d3575dcb6ee
+generated_at: 2026-10-29T05:42:39.276213+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the staff-facing decision path for a return request: **approve** or **decline** (with a mandatory reason). Each decision is a single conditional write from `requested` (guarded by `DECIDABLE_RETURN_STATUSES`), so concurrent staff members racing on the same request cannot both succeed—the loser receives a 409. Withdrawals never reach this module; they are opened already approved.
+Handles a staff member's decision on a return request: approve or decline with a reason. Each decision is a conditional write from `requested` status, so concurrent decisions on the same request are mutually exclusive — the loser receives a 409. After the write commits, the file records an audit row, nudges the outbox, and syncs the order's return-status projection.
 
 ## Key elements
 
-- **`approveReturn(id, context)`** *(exported)* — Approves a return. Delegates to the internal `decide` with `to: 'approved'` and an empty stamp.
-- **`declineReturn(id, reason, context)`** *(exported)* — Declines a return with a required `reason` string. Delegates to `decide` with `to: 'declined'` and `{ declineReason: reason }`.
-- **`decide(id, to, stamp, context)`** *(internal)* — Shared decision pipeline: guard → conditional status claim (in a DB transaction, alongside the order-timeline row) → post-commit settlement. Returns 200 on success, 404/409 on a lost race.
-- **`refusalForDecision(id, to, context)`** *(internal)* — Authorization guard. For **approval**: the decider must outrank the buyer *and* must not be the buyer (`ownMoneyOrderRefusal`). For **decline**: outranking alone suffices (`outrankedOrderRefusal`). Returns `undefined` (proceed) or a pre-built `ResponseReject`.
-- **`settleDecision(decided, to, id, context)`** *(internal)* — Post-commit side-effects: records an audit row, syncs the order's return-status projection, sends the customer email, then builds the 200 response.
-- **`notifyDecision(decided, kind)`** *(internal)* — Reads the order (number, shipping address) solely for the mail body. A missing order skips the mail but does not undo the decision.
-- **`notDecidable(id)`** *(internal)* — Maps a lost race to the correct error: 404 if the return no longer exists, 409 (`RETURN_NOT_DECIDABLE`) if it does.
+- **`approveReturn(id, context)`** *(exported)* — Approves a return request. Delegates to `decide` with an empty stamp.
+- **`declineReturn(id, decline, context)`** *(exported)* — Declines a return request. Validates that `reason === 'other'` carries a non-empty message (422 if not), then delegates to `decide` with `declineReason`/`declineMessage` in the stamp.
+- **`decide(id, to, stamp, context)`** *(internal)* — Core shared path: within a `withTransaction`, calls `returnRepository.claimStatus` (conditional write gated on `DECIDABLE_RETURN_STATUSES`), appends an order timeline entry, and enqueues the `RETURN_DECIDED` outbox event. On success delegates to `settleDecision`; on a lost race calls `notDecidable`.
+- **`settleDecision(decided, to, id, context)`** *(internal)* — Post-commit steps: nudges the outbox, reads the order (best-effort) to compute `ownOrderFlag`, records the audit row, calls `syncReturnStatus`, and returns the 200 response.
+- **`notDecidable(id)`** *(internal)* — Reads the return to distinguish 404 (not found) from 409 (already decided) for the error response.
+- **`messageRequired()`** *(internal)* — Builds the 422 `fieldError` response for a missing decline message.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `@infrastructure/http/response` | Builds all HTTP responses via `generateSuccess` / `generateReject`. |
-| `@infrastructure/i18n` | Calls `t()` for localized error and success messages. |
-| `@infrastructure/observability/audit` | Calls `recordAudit` in `settleDecision` (post-commit). |
-| `@infrastructure/runtime/database` | Wraps the status claim + timeline append in `withTransaction`. |
-| `@modules/orders` (`orderService`) | Reads order for mail (`getById`), appends timeline row (`appendTimeline`), and enforces rank/self-approval guards (`ownMoneyOrderRefusal`, `outrankedOrderRefusal`). |
-| `@modules/returns/repository` | `returnRepository.findById` (read for guards / 404 check) and `returnRepository.claimStatus` (conditional write). |
-| `@modules/returns/model` | `ReturnDocument` type used throughout. |
-| `@modules/returns/audit` | `returnsAuditActions` enum for audit action names. |
-| `@modules/returns/domain` | `DECIDABLE_RETURN_STATUSES` — the allowed "from" statuses for the conditional claim. |
-| `@modules/returns/services/notify` | `mailReturnNotice` sends the customer email in `settleDecision`. |
-| `@modules/returns/services/projection` | `syncReturnStatus` updates the order's return-status projection post-commit. |
-| `@modules/returns/services/index` | Barrel that re-exports `approveReturn` / `declineReturn`. |
+- **`@infrastructure/runtime/database`** — `withTransaction` wraps the claim + timeline + outbox so they commit atomically.
+- **`@kernel/outbox`** — `enqueueOutboxEvent` persists the `RETURN_DECIDED` event inside the transaction; `nudgeOutbox` triggers dispatch after commit.
+- **`@modules/orders`** — `orderService.appendTimeline` (in-transaction) and `orderService.getById` (post-commit, for the audit flag); `buyerIdOf` extracts the buyer ID for that flag.
+- **`@modules/access`** — `ownOrderFlag` determines whether the deciding staff member is also the buyer, written into the audit metadata.
+- **`@infrastructure/observability/audit`** — `recordAudit` writes the audit row (action from `returnsAuditActions`).
+- **`@modules/returns/audit`** — Supplies the audit action constants `ADMIN_RETURN_APPROVED` / `ADMIN_RETURN_DECLINED`.
+- **`@modules/returns/domain`** — `DECIDABLE_RETURN_STATUSES` defines which statuses can transition to a decision (i.e., only `requested`).
+- **`@infrastructure/http/response`** — `generateSuccess`, `generateReject`, `fieldError` shape all HTTP responses.
+- **`@infrastructure/i18n`** — `t()` localizes error and validation messages.
+- **`@infrastructure/adapters/logger`** — Logs an error if the post-commit order read fails (non-fatal).
+- **`./projection`** — `syncReturnStatus` refreshes the order's denormalized return-status field after a decision commits.
 
 ## Notes
 
-- **Two authorization tiers.** Approval is stricter: the decider must outrank the buyer *and* not be the buyer. Decline only requires outranking. This asymmetry is intentional—approval opens a refund path, decline does not.
-- **Transaction boundary.** The status claim (`claimStatus`) and the order-timeline append (`appendTimeline`) commit atomically. Audit, projection sync, and email run **after** commit, so a failure there does not roll back the decision.
-- **Post-commit mail is best-effort.** `notifyDecision` returns `undefined` if the order is missing; the decision itself is already durable.
-- **`returnAddress`** is imported from `@modules/shop` (not listed in the immediate graph neighbors) and is passed only on approval, where the customer is asked to ship goods back.
-- **`decidedAt`** is stamped with `new Date()` inside the `decide` call and written in the same statement as the status change; `notifyDecision` falls back to `new Date()` if the document's `decidedAt` is somehow unset.
+- The conditional write (`claimStatus` filtered on `DECIDABLE_RETURN_STATUSES`) is the concurrency guard. A lost race writes nothing and returns 409; no rollback logic is needed.
+- The `ownOrderFlag` read in `settleDecision` is intentionally best-effort: if the order fetch fails the flag is simply omitted from the audit metadata, and the decision itself is already committed.
+- Customer-facing notification is *not* sent here; it rides the `RETURN_DECIDED` outbox event consumed downstream.
+- A decline's `declineMessage` is stored on the return document. The file's comment notes that `reap:returns` owns the clock for expiring that reason, not this module.
+- The `Stryker disable/restore` comments around the logger call indicate that branch is deliberately excluded from mutation-testing (it is an unreachable-in-practice error path).

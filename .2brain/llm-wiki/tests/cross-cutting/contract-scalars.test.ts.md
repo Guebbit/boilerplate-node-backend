@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/contract-scalars.test.ts
-sha256: ac853faefbbb5364a269b788c338b13ad4b7efc9b2d19001e1860ad5d2b6a6b5
-generated_at: 2026-10-15T12:37:09.933334+00:00
+sha256: 0eb32fe82cd469f04b71442dbfbf0b7b466aab1f6b04b070e2dd3a41f1035db2
+generated_at: 2026-10-29T06:45:01.963273+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Guarantees that the shared scalar bounds declared in `infrastructure/http` (page-size max, page max, hard-delete default, ID pattern) stay in sync with the per-operation constants orval emits into the generated schemas module. Because orval duplicates each shared `openapi.yaml` component into one constant per operation, `infrastructure` cannot import a single shared value; this test replaces that missing import with a dynamic sweep that fails if the contract and core disagree.
+Verifies that shared scalar bounds declared in `infrastructure/http/schemas.ts` (page-size max, page max, hard-delete default) and the ID pattern in `infrastructure/http/ids.ts` still match every per-operation constant emitted by orval into the generated Zod module. It exists because orval flattens a single shared component into one constant per operation (~40+ identical numbers), so there is no single importable constant; this test replaces the guarantee an import would otherwise provide for free, and catches contract drift (e.g. a raised `maximum` in `openapi.yaml`) that would otherwise cause silent 422s.
 
 ## Key elements
 
-- **`constantsEndingIn(suffix)`** — Filters the flat namespace of `@api/schemas.zod` for constant names ending in a given suffix, returning `[name, value]` pairs. This is how the test stays endpoint-agnostic and auto-covers new operations.
-- **Canary test** (`finds the generated constants…`) — Asserts that more than 5 `PageSizeMax`/`PageMax` constants and at least 1 `HardDeleteDefault` exist, catching a silent rename in orval's output.
-- **PageSizeMax / PageMax pair** — Two-directional check: every generated constant must be accepted by the corresponding schema, and `constant + 1` must be rejected. Catches both a raised bound in the contract and a permissively widened schema.
-- **HardDeleteDefault** — Asserts every generated `HardDeleteDefault` equals the result of `hardDeleteSchema.parse(undefined)`.
-- **Id RegExp pattern** — Sweeps all `RegExp`-valued constants and asserts more than 50 have `source` equal to `CONTRACT_ID_PATTERN`, ensuring `ids.ts` can still discover id fields by pattern.
+- **`constantsEndingIn(suffix)`** — Sweeps the entire `@api/schemas.zod` module by name suffix; returns `[name, value]` pairs. This is the mechanism that makes new endpoints automatically covered without updating a list.
+- **Canary test** (`finds the generated constants…`) — Asserts the sweep actually returns >5 entries for `PageSizeMax`/`PageMax` and >0 for `HardDeleteDefault`, so an orval naming change can't produce a vacuously-passing empty sweep.
+- **PageSizeMax tests** (two) — Every generated `*PageSizeMax` value must parse via `pageSizeSchema` *and* `value + 1` must be rejected, covering both directions of a bound change.
+- **PageMax tests** (two) — Same dual-direction check against `pageSchema` for the `*PageMax` constants.
+- **HardDeleteDefault test** — Every generated `*HardDeleteDefault` must equal `hardDeleteSchema.parse(undefined)`.
+- **Id pattern test** — Confirms ≥ 50 generated `RegExp` constants carry `source === CONTRACT_ID_PATTERN`, which is the mechanism `ids.ts` uses to locate ID fields in a request schema.
 
 ## Relationships
 
-- **`src/infrastructure/http/schemas.ts`** — Source of `pageSchema`, `pageSizeSchema`, `hardDeleteSchema`. The test validates that these Zod schemas accept exactly the numeric bounds orval baked into the generated constants (and reject one step above).
-- **`src/infrastructure/http/ids.ts`** — Source of `CONTRACT_ID_PATTERN`. The test verifies the generated module still emits RegExps matching that pattern, which is the mechanism `ids.ts` uses to locate id fields in request schemas.
+- **`src/infrastructure/http/schemas.ts`** — Source of `pageSchema`, `pageSizeSchema`, and `hardDeleteSchema`. The test parses every generated scalar against these schemas to assert they agree.
+- **`src/infrastructure/http/ids.ts`** — Source of `CONTRACT_ID_PATTERN`. The test checks that enough generated RegExp constants still carry this exact `source`, guarding the pattern-matching that `ids.ts` relies on to find ID fields.
 
 ## Notes
 
-- The sweep is dynamic (suffix match over the generated namespace), so a new endpoint adds coverage automatically—no list to maintain.
-- The "reject one above" tests are intentional: without them, a *lowered* `maximum` in the contract would pass the "agrees" test silently.
-- The `> 50` threshold on the RegExp test accounts for the `demo:remove` script stripping shop schemas (the count was 87 before removal); it is intentionally well below the real count to survive further domain removals while still catching a pattern change.
-- This test imports `* as generated` from `@api/schemas.zod`, the orval-generated module. It does not import individual per-operation constants, which is the whole point.
+- The sweep is suffix-based, not an explicit constant list, so adding a new endpoint to the contract requires no test changes.
+- Each bound is tested in **both directions** (value must pass; value+1 must fail) so a *lowered* `maximum` in the contract is caught just as clearly as a raised one.
+- The Id-pattern test compares `RegExp.source` (a string) against the exported constant, not regex identity—this is deliberate because orval re-instantiates the regex per operation.
+- The `> 50` threshold on the Id pattern count reflects the post-`demo:remove` state (87 fields); adjust if the contract shrinks further.

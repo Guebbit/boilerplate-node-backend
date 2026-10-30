@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/tests/integration/preorder-late.test.ts
-sha256: 0380f71d3c7ccf9eac97539de7c640bfb61531aca30bdd65a8a04ef4a593cd3d
-generated_at: 2026-10-14T15:37:20.383775+00:00
+sha256: 0f3965ffe74266356b78a89485ea79f9a35970fcf4ba6fc83207da69849e490a
+generated_at: 2026-10-29T03:47:23.131224+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test for the "release date slips" scenario (PRODUCT_STATES P5) on a paid preorder. It exercises the full lifecycle through real infrastructure: an admin moves the product's release date, the delivery module decides whether to merely notify or ask the buyer to confirm, the buyer answers, and the daily sweep handles a date that has already passed. Real Mongo and real outbox are used; only the mailer is mocked at the queue boundary.
+Integration test for the "preorder date slips" scenario (PRODUCT_STATES P5): an admin moves a paid preorder's release date and the delivery module notifies the buyer. Verifies that the shop only informs—never asks, cancels, or requires buyer action—and that the notice, the fulfillment-order state mutation, and the emitted event land atomically, with email following via the outbox. Uses real Mongo and the real outbox; the mailer is mocked at its queue boundary.
 
 ## Key elements
 
-- **`preorder(days, quantity)`** – Creates a paid preorder order and its fulfillment orders via `paidPreorderOrder` + `fulfillmentOrdersOf` factories.
-- **`moveDate(productId, to)`** – Calls `productService.updateById` to change (or clear) the release date, then flushes the outbox with `settleOutboxNudges`.
-- **`waitingOf` / `waitingIdOf` / `consentOf`** – Query helpers that fetch the single fulfillment order in `awaiting_stock` hold for an order.
-- **`delayedEvents` / `expiredEvents`** – Read `fulfillment_order.delayed` / `wait_expired` rows from `outboxEventModel` for assertions.
-- **`describe('a release date that moves')`** – Covers: short slip (notify only, no consent needed), long slip > 28 days (opens 30-day consent window), second slip (asks again), date moved earlier (silent), date cleared (asks with no `expectedAt`), idempotent redelivery, and a fulfillment order that is no longer waiting.
-- **`describe('the buyer saying keep waiting')`** – Tests `confirmWait`: success path, refusal when not awaiting, authorization (stranger → 404, staff → 403), and UI action visibility via `getForOrder` before/after answering.
-- **`describe('the daily sweep')`** – Tests `runPreorderSweep`: asks once for a passed date, is idempotent on re-run, skips future dates, skips already-allocated goods, and does not re-ask after the buyer confirmed.
+- **`preorder(days, quantity)`** — Factory helper: creates a paid preorder and its fulfillment orders (simulating the paid-listener side effect).
+- **`moveDate(productId, to)`** — Simulates an admin changing a product's `releaseDate` via `productService.updateById`, then calls `settleOutboxNudges` to flush the outbox.
+- **`waitingOf(orderId)`** / **`statusOf`** / **`promisedAtOf`** / **`expectedAtOf`** — Accessors for the single `awaiting_stock` fulfillment order on an order.
+- **`delayedEvents()`** — Reads `fulfillment_order.delayed` events from the outbox collection in insertion order.
+- **`viewsOf(orderId, userId)`** — Fetches the buyer API view, export presenter output, and board presenter output for the waiting fulfillment order.
+- **`describe('a release date that moves')`** — Main suite: later dates, cleared dates, multiple moves, earlier dates (silent), multi-product groups, idempotent redelivery, and non-waiting orders.
+- **`describe('what the buyer, the export and the board see of a late preorder')`** — Asserts that all three presenter views carry the new date and last-notice timestamp without introducing any buyer-action field.
+- **`beforeEach` / `afterEach`** — Wires `deliveryModule.subscribe()` and `markDomainEventsWired()`; resets domain events and mocks after each test.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/mailer.ts`** – `enqueueEmail` is the sole mock; tests assert call count as a proxy for "email was sent."
-- **`src/kernel/events.ts`** – `resetDomainEvents` / `markDomainEventsWired` manage the event-bus lifecycle in `beforeEach` / `afterEach`.
-- **`src/kernel/outbox.ts`** – `outboxEventModel` is queried directly for event assertions; `settleOutboxNudges` flushes pending outbox writes after state-changing calls.
-- **`src/modules/delivery/module.ts`** – `deliveryModule.subscribe()` wires domain-event handlers so the product-date-change event reaches delivery services.
-- **`src/modules/delivery/services/index.ts`** – Exports `getForOrder`, `runPreorderSweep`, `cancelAllForOrder`, and (dynamically) `onReleaseDateChanged` under test.
-- **`src/modules/delivery/services/confirm-wait.ts`** – The `confirmWait` handler is the primary SUT for the buyer-consent block.
-- **`src/modules/delivery/tests/factories.ts`** – `paidPreorderOrder` and `fulfillmentOrdersOf` seed the test fixture.
-- **`src/modules/orders/tests/factories.ts`** – `timelineOf` is imported (used by the preorder factory internally).
-- **`src/modules/products/index.ts`** – `productService.updateById` is the admin action that triggers the date-change event.
-- **`tests/support/callers.ts`** – `asAdmin`, `asCustomer`, `testCallerContext` build auth contexts for each call.
-- **`tests/support/response.ts`** – `asReject` narrows failure responses for status/code assertions.
+- **`src/infrastructure/adapters/mailer.ts`** — `enqueueEmail` is the sole external side-effect; mocked via `jest.mock` so the test asserts *that* email was enqueued without exercising SMTP.
+- **`src/kernel/outbox.ts`** — `settleOutboxNudges` processes outbox entries after each domain action; `outboxEventModel` is queried directly to assert emitted event payloads.
+- **`src/kernel/events.ts`** — `markDomainEventsWired` / `resetDomainEvents` manage the in-memory event-bus lifecycle per test.
+- **`src/modules/delivery/module.ts`** — `deliveryModule.subscribe()` registers the delivery domain-event handlers so that product date-change events reach the delivery service.
+- **`src/modules/delivery/services/index.ts`** — `deliveryService.onDateChanged` is called directly to test idempotent redelivery; `deliveryService.listFulfillmentOrdersForOrder` powers the buyer-view assertion.
+- **`src/modules/delivery/presenter.ts`** — `presentExportFulfillmentOrder` and `presentPreorderFulfillmentOrder` produce the export and board views asserted in the "what the buyer sees" suite.
+- **`src/modules/delivery/tests/factories.ts`** — `paidPreorderOrder` and `fulfillmentOrdersOf` build the pre-condition data.
+- **`src/modules/products/index.ts`** — `productService.updateById` is the "admin moves the date" entry point.
+- **`tests/support/callers.ts`** — `testCallerContext` (admin) and `asCustomer` (buyer) supply auth context for service calls.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb` provisions a real MongoDB instance for the integration test.
 
 ## Notes
 
-- The mailer mock is at the **queue** level (`enqueueEmail`), not HTTP; the outbox still runs for real.
-- `settleOutboxNudges()` must be called after any action that writes outbox events before asserting on `outboxEventModel`; forgetting it makes event assertions flaky.
-- Domain events are **not** auto-wired by the test DB setup—`deliveryModule.subscribe()` + `markDomainEventsWired()` in `beforeEach` is required, or date-change events will silently drop.
-- The idempotency test imports `onReleaseDateChanged` dynamically to simulate a redelivered event without re-triggering the product service.
-- `inDays` is relative to `Date.now()` at call time; the 28/30-day consent-window assertion uses a 0.1-day tolerance to absorb clock drift within the test run.
+- The mailer mock is at the **queue** level (`enqueueEmail`), not at a transport level—assertions check call count and that the outbox was settled, not email body.
+- `settleOutboxNudges` must be awaited after every domain action that enqueues work; forgetting it leaves the outbox unprocessed and subsequent assertions will fail silently.
+- An earlier release date (a "good news" move) must produce **zero** delayed events and **zero** email calls; this is a deliberate invariant, not an oversight.
+- A date that is set to `null` (cleared) *does* notify the buyer, but a date set *after* a cleared one is treated as silence (the buyer holds no promised date to update).
+- Redelivery of the same move (e.g., a duplicate event) must be idempotent: exactly one event, one email.
+- The test file imports `timelineOf` from `src/modules/orders/tests/factories`—used in the truncated portion for timeline assertions.

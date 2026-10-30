@@ -1,43 +1,42 @@
 ---
 source: src/modules/account/routes.ts
-sha256: 18dda5ff6c332c81f182cc8f431281a360270942b366ad4b20069c25addd2298
-generated_at: 2026-10-15T09:59:03.684672+00:00
+sha256: 928e090ce85ec8b8b3a6ec00cd440a2f7c3cc3441b6aad07762b7cdf367898f1
+generated_at: 2026-10-29T02:39:13.530773+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/account/routes.ts
 
 ## Purpose
-
-Express router that wires every account-related endpoint (auth, profile, password, 2FA, OAuth, sessions, email verification, account deletion) under the `/account` prefix. It centralises cross-cutting middleware (auth parsing, cache suppression, rate-limiting, human-challenge, idempotency, upload) so individual controllers stay thin and a future route cannot accidentally omit a guard.
+Express router that wires every account-domain endpoint (auth, profile, email verification, password, 2FA, sessions, OAuth links, export, deletion/restore) under the `/account` prefix. It composes per-route middleware—rate limiters, human-challenge gates, idempotency, upload, and authorization predicates—around thin controller handlers so that policy is declared once at the route level.
 
 ## Key elements
-
-- **`router`** (exported) — the `express.Router` instance; the single public export of this file.
-- **`isChangingEmail`** (private) — predicate for `requireFreshAuthWhen`; compares the incoming `email` body field against `request.authContext.email` using `normalizeEmail` so case differences don't trigger a step-up. Must run after `upload.image()` so `request.body` is populated.
-- **`callerHasTwoFactor`** (private) — true when `request.authContext.twoFactorArmed === true`; used to conditionally demand OTP proof on identity routes.
-- **`isChangingEmailWithTwoFactor`** (private) — conjunction of the two predicates above; gates the OTP-proof requirement on email change.
-- **`OTP_PROOF`** (private const) — `{ methods: ['otp'] }`, passed to `requireFreshAuthWhen` as the required AMR.
-- Router-level middleware: `getAuth` (populates `authContext`) and `noStore` (prevents any downstream `setCache` from caching responses).
-- Route definitions covering: `GET/PUT/PATCH/DELETE /`, login, signup, reset, password change/check, re-auth, 2FA (setup, confirm, send, backup codes, delete), sessions (list, touch, delete, logout-all), email verification, account export, OAuth links/start/callback, and account deletion request/confirm.
+- **`router`** (exported) — the Express `Router` instance; mounted by `./module.ts`. All routes share `getAuth` (populates `request.authContext`) and `noStore` (prevents caching of auth-state responses).
+- **`isChangingEmail`** (local) — predicate used by `requireFreshAuthWhen` on `PUT/PATCH /`; returns `true` when the body's `email` differs (case-insensitively, via `normalizeEmail`) from `request.authContext.email`. Must run after `upload.image()` so `request.body` is populated.
+- **`callerHasTwoFactor`** (local) — checks `request.authContext.twoFactorArmed`; used to gate identity-critical routes behind an OTP proof.
+- **`isChangingEmailWithTwoFactor`** (local) — conjunction of the two above; triggers the stricter `OTP_PROOF` step-up before the plain recency guard.
+- **`OTP_PROOF`** (local const) — `{ methods: ['otp'] }` passed to `requireFreshAuthWhen` so armed accounts must have proven a code in the fresh session.
+- Route table (selected patterns):
+  - `POST /login`, `POST /signup`, `POST /password/reset` — public credential routes with tiered rate limiters and optional human-challenge gates.
+  - `GET/PUT/PATCH /` — profile read/write; write paths mount `upload.image()` before `requireFreshAuthWhen`.
+  - `DELETE /` — account lock + scheduled erasure; requires `'critical'` fresh auth, plus OTP proof when 2FA is armed.
+  - `POST /restore` — token-based un-delete; public, bounded by `credentialLimiters`.
+  - 2FA, sessions, OAuth-link, and export sub-routes follow the same controller-per-handler pattern.
 
 ## Relationships
-
-- **`@kernel/middlewares/authorizations`** — `getAuth` is mounted router-wide; `isAuth` guards most authenticated routes; `requireFreshAuth` / `requireFreshAuthWhen` gate destructive or identity-sensitive routes (delete account, email change, password change, logout-all, session deletion).
-- **`@infrastructure/http/middlewares/cache`** — `noStore` is applied router-wide so no account response can be cached; documented to interlock with `setCache`'s refusal to override a marked response.
-- **`@infrastructure/http/middlewares/rate-limit`** — `uploadLimiter` guards `PUT /` and `PATCH /` (avatar upload path). Module-local limiters in `./rate-limits` and `./mail-budget` provide the per-action budgets.
-- **`@infrastructure/http/middlewares/human-challenge`** — `humanChallengeGate` (rung 3, off by default) on `POST /signup` and `POST /reset`.
-- **`@infrastructure/http/middlewares/idempotency`** — `idempotencyKey` on `POST /signup` to deduplicate double-submissions.
-- **`@infrastructure/http/middlewares/origin`** — `requireAllowedOrigin` is imported for routes that need origin checking (OAuth flows).
-- **`@infrastructure/http/middlewares/upload`** — `upload.image()` parses `multipart/form-data` on `PUT /` and `PATCH /` before the fresh-auth predicate runs.
-- **`@infrastructure/persistence/normalize-email`** — used inside `isChangingEmail` to make the email-change comparison case-insensitive, matching the service-layer comparison.
-- **Controllers (all under `./controllers/`)** — each route delegates to exactly one controller function (e.g. `deleteAccountRequest`, `deleteAccountConfirm`, `delete2fa`, `delete2faMethod`, `cancelPendingEmail`, `deleteSession`, `deleteOAuthLink`). This file only composes middleware around them.
+- **`@infrastructure/http/middlewares/cache`** — `noStore` is applied router-wide; the comment in `cache.ts` documents that `setCache` refuses to run on `noStore`-marked responses, preventing a per-route `setCache` from accidentally caching a profile `GET`.
+- **`@infrastructure/http/middlewares/human-challenge`** — `humanChallengeGate` is mounted on `POST /signup` and `POST /password/reset` as a rung-3 gate (disabled by default).
+- **`@infrastructure/http/middlewares/idempotency`** — `idempotencyKey` is mounted on `POST /signup` to deduplicate concurrent registration attempts.
+- **`@infrastructure/http/middlewares/origin`** — `requireAllowedOrigin` is imported for cross-origin-sensitive routes.
+- **`@infrastructure/http/middlewares/rate-limit`** — `uploadLimiter` (imported from here) is mounted on `PUT/PATCH /`; module-local limiters (`credentialLimiters`, `signupLimiters`, etc.) from `./rate-limits` cover the rest.
+- **`@infrastructure/http/middlewares/upload`** — `upload.image()` is mounted before the fresh-auth predicates on profile write routes; ordering is load-bearing (see `isChangingEmail` docs).
+- **`@infrastructure/persistence/normalize-email`** — `normalizeEmail` is called inside `isChangingEmail` so the route-level guard and the service-level email comparison never disagree.
+- **`@kernel/middlewares/authorizations`** — `getAuth`, `isAuth`, `requireFreshAuth`, `requireFreshAuthWhen` are the authorization primitives applied per route.
+- **Controllers** (e.g. `get-account`, `delete-account`, `delete-session`, `get-2fa`, `get-account-export`, `cancel-pending-email`, `delete-oauth-link`, …) — each is a terminal handler in a route chain; this file is their sole wiring point.
 
 ## Notes
-
-- **Middleware order on `PUT/PATCH /` is load-bearing.** `upload.image()` must precede `requireFreshAuthWhen(isChangingEmail, …)` because the predicate reads `request.body`, which is empty until multer finishes parsing. Swapping the order silently disables the email-change gate.
-- **OTP guard runs before the plain fresh-auth guard.** A stale *armed* session is challenged once with `details.methods: ['otp']`; the second `requireFreshAuthWhen` then only sees accounts *without* a second factor, avoiding a redundant challenge.
-- **`noStore` at router level vs. per-route `setCache`.** If a future route mounts both, `setCache` will refuse to set `Cache-Control` on a `noStore`-marked response. Do not remove the router-level `noStore` to "optimise" a single GET.
-- **Signup uses `signupLimiters`, not `credentialLimiters`.** A successful signup returns 201, which `credentialLimiters`' `skipSuccessfulRequests` would not count against the budget.
-- **`isChangingEmail` is intentionally not exported.** The wiring is validated by hitting `PUT /account` end-to-end (stale session → challenged or not), not by unit-calling the predicate.
-- The address-book module reuses the `/account` prefix under its own router (`@modules/addresses/routes`); path conflicts are avoided there, not here.
+- **Middleware order is a contract.** `upload.image()` must precede `requireFreshAuthWhen(isChangingEmail…)` because the predicate reads `request.body`, which only exists after multer parses `multipart/form-data`. Swapping them silently disables the guard.
+- **`noStore` vs. `setCache`.** `noStore` is applied at the router level *before* any route. If a controller later calls `setCache`, the cache middleware will detect the existing `noStore` marker and skip—preventing a profile response from being cached for an hour.
+- **`isChangingEmail` is intentionally not exported.** Integration tests assert its effect through `PUT /account` (stale session → 401/428) rather than by calling the predicate directly.
+- **Rate-limiter choice is semantic.** `credentialLimiters` skips successful requests (useful for login where success means the budget is irrelevant); `signupLimiters` and `resetRequestLimiters` do *not*, because those routes always answer 200/201, so only a success-bounded budget throttles them.
+- **The address-book module** shares the `/account` prefix from its own router (`@modules/addresses/routes`); they are sibling mounts, not nested.

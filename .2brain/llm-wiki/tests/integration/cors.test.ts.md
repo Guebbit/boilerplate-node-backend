@@ -1,7 +1,7 @@
 ---
 source: tests/integration/cors.test.ts
-sha256: cece19dfc46625ebe2c307391b9b3049086909777f6fc3a3fdebca34ec9f9929
-generated_at: 2026-10-15T12:46:51.802865+00:00
+sha256: 8b1dfe69cf48c481ebb3d0bcd70ee58c43eba019d6157512d75e4c5b4c57d78a
+generated_at: 2026-10-29T06:54:21.323555+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that pin the app's CORS contract end-to-end through the real middleware stack. The core property under test: a disallowed origin is handled by **omitting** the `Access-Control-Allow-Origin` header, never by throwing into Express's error chain (which would turn a valid request into a 500 and let an attacker drive 5xx rates). Also verifies `Vary` correctness, preflight behavior, and that specific custom headers (`x-antibot-challenge-token`, `x-analytics-consent`, `If-Match`, `ETag`) pass through preflight and exposure as the browser requires.
+Integration test that pins the CORS security property: a disallowed origin is rejected by **omitting** the `Access-Control-Allow-Origin` header, never by failing the request (which would turn a valid call into a generic 500 and let anyone drive 5xx rate). Drives the real app through the shared HTTP harness so assertions cover the actual middleware order.
 
 ## Key elements
 
-- **`ALLOWED_ORIGIN`** — first entry of `NODE_CORS_ORIGIN` (comma-split) or the fallback `http://localhost:8080`. Read from the environment so the test asserts the configured allowlist, not the hardcoded default.
-- **`DISALLOWED_ORIGIN`** — `'https://evil.example.com'`, an origin no deployment would allow.
-- **`describe('CORS')`** — single suite, 8 tests covering:
-  - Allowed origin is reflected; disallowed origin gets 200 + no allow header.
-  - `Vary: Origin` is present for allowed, disallowed, and no-origin requests, and appears exactly once (deduplication between the app and the `cors` package).
-  - `POST /account/login` with wrong credentials still returns its own rejection status (not 500) regardless of origin.
-  - No-origin requests (curl, healthcheck, server-to-server) are untouched.
-  - Disallowed preflight (`OPTIONS`) returns non-5xx without the allow header.
-  - Preflight allows `x-antibot-challenge-token` and `x-analytics-consent`.
-  - Preflight allows `If-Match`; response exposes `ETag`.
+- **`ALLOWED_ORIGIN`** — First entry of `process.env.NODE_CORS_ORIGIN` (comma-split), falling back to `http://localhost:8080`. Read from the environment to stay in sync with whatever the app is actually configured with.
+- **`DISALLOWED_ORIGIN`** — Hardcoded `https://evil.example.com`, an origin no deployment could plausibly have allowed.
+- **`describe('CORS', …)`** — Suite of tests covering:
+  - Allowed origin reflected back with 200.
+  - Disallowed origin still gets 200 + `status: 'ok'` but **no** `access-control-allow-origin` header.
+  - `Vary: Origin` present for allowed, disallowed, and no-origin requests; and exactly **once** (not duplicated by `cors` + app).
+  - Disallowed origin on `POST /account/login` returns a real rejection (< 500), not a server fault.
+  - No-origin requests (curl, healthcheck) pass through with no allow header.
+  - Disallowed preflight (`OPTIONS`) answers without error and without the allow header.
+  - Preflight pre-clears `antibot-challenge-token`, `analytics-consent`, and `session-passive` headers.
+  - Preflight allows `if-match`; read responses expose `etag` via `access-control-expose-headers`.
+  - Credentialed expose-headers include `location`, `content-disposition`, `idempotent-replay`, `ratelimit`, `ratelimit-policy`; explicitly **excludes** `cache-status`.
 
 ## Relationships
 
-- **`tests/support/http.ts`** — provides `api()`, the supertest wrapper that drives the real, fully-assembled Express app (correct middleware order, real routes).
-- **`tests/support/setup-test-db.ts`** — provides `setupTestDb()`, called once at module top to provision the test database before any test runs.
-- References (not imports): `src/app/security.ts` (the allowlist `ALLOWED_ORIGIN` mirrors), `src/infrastructure/http/middlewares/human-challenge.ts` (reads `x-antibot-challenge-token`), `docs/tools/security.md`.
+- **`tests/support/http.ts`** — Provides `api()`, the shared harness that builds supertest-style requests against the running app. Every assertion in this file goes through it.
+- **`tests/support/setup-test-db.ts`** — Provides `setupTestDb()`, called once at module top to initialize the test database before any test runs.
 
 ## Notes
 
-- The file header documents the **reason** the test exists: the `cors` package's callback, when called with an `Error`, signals request failure to Express rather than "origin not allowed," which would short-circuit before the route and produce a generic 500. This test guards against that regression.
-- `ALLOWED_ORIGIN` is deliberately derived from the env var. Hardcoding the fallback would make the test silently pass for the wrong reason in any checkout that sets `NODE_CORS_ORIGIN`.
-- The `Vary: Origin` deduplication test exists because both the app and the `cors` package add it; a double entry would break cache-key discrimination.
-- The preflight tests note that `cors` short-circuits `OPTIONS` before the router, so a throw in the callback never reaches a route — which is why the original bug went unnoticed.
-- The no-origin test explicitly states that the absence of `Access-Control-Allow-Origin` is **correct** (nothing to reflect), not a second bug, and that a literal `*` must never appear (incompatible with `credentials: true`).
+- `ALLOWED_ORIGIN` intentionally reads the environment rather than hardcoding a value; a hardcoded origin would silently pass against the env-configured fallback, asserting the wrong thing.
+- The "exactly one `Vary: Origin`" test exists because the `cors` package adds it on reflection while the app adds it unconditionally — a regression that duplicates the value would break proxy caching.
+- `Cache-Status` is deliberately absent from `access-control-expose-headers`; it is a devtools/curl diagnostic (RFC 9211 §6) and must stay invisible to cross-origin JS.
+- The preflight header tests reference concrete consumers: `humanChallengeGate` (`src/infrastructure/http/middlewares/human-challenge.ts`), `callerContextOf`, and the session guard. Removing any of those headers from the allowlist silently breaks the browser without surfacing a 4xx.

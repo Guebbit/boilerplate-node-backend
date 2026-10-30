@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/raw-body-paths.test.ts
-sha256: f89cf5e578f1401ff8b3e32c718b46e15200ae819eaa4689369cfe1ab626ab26
-generated_at: 2026-10-15T12:40:04.186394+00:00
+sha256: 6572195f37cbba5ca5406fd4ba20422013271ab8a032df201ac24aebe53576b3
+generated_at: 2026-10-29T06:49:05.841966+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Validates that every entry in a module's `rawBodyPaths` array matches a route actually mounted on that module's own router. This is a safety net for `app/security.ts`, which string-concatenates `basePath` + each `rawBodyPath` into the `express.json()` raw-body allowlist; a typo there would silently cause the body to be re-encoded before the module's handler runs, breaking signature verification with no visible error.
+Cross-cutting invariant test: every module's `rawBodyPaths` entry must correspond to a route actually mounted on that module's own router. This guards against a silent failure mode where `app/security.ts` concatenates these paths into the `express.json()` raw-body allowlist — a typo simply means the path never matches, the body gets re-encoded before the module sees it, and all downstream signature checks fail with no error raised.
 
 ## Key elements
 
-- **`describe('rawBodyPaths')`** — the suite containing two tests.
-- **Canary test** (`'finds at least one module declaring a raw-body path'`) — asserts that at least one enabled module has a non-empty `rawBodyPaths` array (conditional on `payments` being deployed) so the second test doesn't pass vacuously.
-- **Resolution test** (`'resolves every declared path to a route mounted on the same module's router'`) — for each module with `rawBodyPaths`, builds a `Set` of path strings extracted from `routeSignatures(appModule.routes)` and asserts no declared path is missing from that set. Reports all dangling paths in a single `expect` for readable failure output.
+- **`describe('rawBodyPaths')`** — top-level suite containing two tests.
+- **Canary test** (`finds at least one module declaring a raw-body path`) — asserts the sweep isn't vacuously passing. If `payments` is deployed, at least one module must declare a raw-body path; otherwise only asserts `enabledModules` is non-empty.
+- **Resolution test** (`resolves every declared path to a route mounted on the same module's router`) — for each module with `rawBodyPaths`, builds a `Set` of mounted route paths (via `routeSignatures`) and checks that each declared path either equals a mounted route or is a segment-boundary prefix of one. Collects all dangling paths into a `dangling` array and asserts it is empty.
 
 ## Relationships
 
-- **`src/modules.ts`** — provides `enabledModules`, the array of module descriptors that supply `name`, `rawBodyPaths`, and `routes` for iteration.
-- **`tests/support/paths.ts`** — provides `isDeployed(moduleName)` used by the canary test to conditionally gate the "at least one declares" assertion on whether `payments` is in the deployment set.
-- **`tests/support/routes.ts`** — provides `routeSignatures(routes)`, which yields `"METHOD /path"` strings from a module's route array; the test splits each on the first space to extract the path for the membership check.
+- **`src/modules.ts`** — imports `enabledModules`; the test iterates over this list to walk every active module and its `rawBodyPaths` / `mounts` declarations.
+- **`tests/support/paths.ts`** — imports `isDeployed` to conditionally gate the canary assertion on whether the `payments` module is present in the current deployment.
+- **`tests/support/routes.ts`** — imports `routeSignatures` to extract the `"METHOD /path"` strings from a module's router, from which the test builds its set of actually-mounted route paths.
 
 ## Notes
 
-- The canary test is deployment-aware: when `payments` is not deployed, it only checks that *some* module exists, since an empty `rawBodyPaths` set is a valid state without `payments`.
-- Route signature parsing assumes the `"METHOD path"` format (split on first space, take index 1). If a signature ever gains extra whitespace or a different shape, this test will silently mis-parse.
-- The failure message in the resolution test is pre-formatted per module (`"moduleName: rawBodyPaths declares …"`) so a single `expect(dangling).toEqual([])` surfaces all offenders at once rather than failing on the first.
+- Prefix matching is intentional: a declared path like `/webhook` covers child routes such as `/webhook/:provider` because the JSON-parser allowlist matches at a segment boundary. The test encodes this with `route === path || route.startsWith(path + '/')`.
+- Only `appModule.mounts[0].routes` is inspected. If a module declares multiple mounts, only the first is considered — this reflects how `security.ts` composes the allowlist using the first mount's `basePath`.
+- The test is deliberately cross-cutting: it does not test any single module's logic but the *consistency* across the module registry.

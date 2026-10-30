@@ -1,7 +1,7 @@
 ---
 source: tests/integration/persistence/money-field.test.ts
-sha256: e403cf3b55fee20cf351f3f8d285b801347cecc8ecb157f0df67c112021f804e
-generated_at: 2026-10-15T12:50:09.077817+00:00
+sha256: edc89a8e40cf6a5e773fb864070365cca98f3d18c17a6501e9cbb6f7a8b5f626
+generated_at: 2026-10-29T07:00:25.616252+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test that exercises the `money-field` persistence plugin against a real (MongoDB) database. It verifies concerns a unit mock cannot cover: that values are physically stored as `Decimal128`, that all read paths (hydrated, lean, `findOneAndUpdate`, `toJSON`) return plain numbers, that `$sum` aggregation avoids float drift, that queries match regardless of stored scale, and that validation (`nonNegative`, finiteness) is enforced by the plugin.
+Integration tests that verify the `money-field` persistence plugin against a real MongoDB instance. They confirm what unit-level mocks cannot: the on-disk type is `Decimal128`, every read path (hydrated, lean, `toJSON`, `findOneAndUpdate`) returns plain numbers, a database `$sum` produces exact cent arithmetic, and validation (non-negative, non-finite) rejects bad writes while permitting legitimate negatives in nested discount lines.
 
 ## Key elements
 
-- **`Probe` interface** — test-only shape with a top-level required money field, an optional defaulted one, and a subdocument array of money fields; exists solely to drive every read path.
-- **`probeSchema` / `probeModel`** — a scratch Mongoose model (`MoneyProbe`) wired with `moneyPath` per-field and `moneyPlugin` on the schema, so the assertions target the plugin rather than any domain model.
-- **`serialize`** — the result of `applySerialization(probeSchema)`, used to confirm the serialization layer also yields plain numbers.
-- **`stored(id)`** — helper that reads directly from `probeModel.collection.findOne`, bypassing all Mongoose getters, to inspect the raw BSON type.
-- **`describe('a money field')`** — five specs covering: Decimal128-at-rest + number-on-read; lean / update / `toJSON` / `serialize` consistency; exact `$sum` + `toMinorUnits`; query-by-value; and rejection of negative/non-finite amounts where configured.
+- **`Probe` interface** — test document shape with a top-level `amount`, an optional `refunded`, and a nested `lines[].price`, each declared via `moneyPath`.
+- **`probeSchema` / `probeModel`** — a scratch Mongoose schema and model (`MoneyProbe`) that carries `moneyPlugin` and `applySerialization`, isolating the plugin's contract from any domain model.
+- **`stored(id)`** — raw `collection.findOne` helper that bypasses Mongoose to inspect the actual BSON type (`_bsontype === 'Decimal128'`).
+- **`serialize`** — the output of `applySerialization(probeSchema)`, used to assert that the serialization layer also yields numbers.
+- **Four `it` blocks** — storage type + hydrated read; lean / `findOneAndUpdate` / `toJSON` reads; `$sum` precision via `toMinorUnits`; validation rejection of negative and non-finite values.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/money-field.ts`** — the system under test; provides `moneyPath` (field factory) and `moneyPlugin` (schema-level plugin) that this file wires into the probe schema.
-- **`src/infrastructure/persistence/serialize.ts`** — provides `applySerialization`, invoked once on the probe schema; one spec asserts its output matches plain-number expectations.
-- **`src/shared-kernel/money.ts`** — provides `toMinorUnits`, used in the `$sum` spec to confirm the aggregated `Decimal128` converts to an integer minor-unit count without float intermediates.
-- **`tests/support/setup-test-db.ts`** — provides `setupTestDb`, called at module load to start/connect the test database instance.
+- **`src/infrastructure/persistence/money-field.ts`** — the system under test; the test imports `moneyPath` (schema path helper) and `moneyPlugin` (validator/serializer plugin).
+- **`src/domain-primitives/money.ts`** — imports `toMinorUnits` to assert that a DB-returned `Decimal128` converts to exact integer cents without float drift.
+- **`src/infrastructure/persistence/serialize.ts`** — imports `applySerialization` to verify the generic serialization wrapper works on top of the money plugin.
+- **`tests/support/setup-test-db.ts`** — provides `setupTestDb()` which connects to (and cleans) a real MongoDB before the suite runs.
 
 ## Notes
 
-- The model is intentionally a **scratch** model (`MoneyProbe`), not a real domain model. This keeps the test scoped to the plugin's contract and avoids coupling to any single entity's schema.
-- `stored()` reads via the raw Mongoose **collection**, so it sees BSON `Decimal128` objects with a `_bsontype` property — no getters or transforms are applied.
-- The nested `lines` subdocuments are declared with `_id: false`; the negative-price spec on `lines` **resolves** (is allowed) because that `moneyPath` call omits `nonNegative`, contrasting with the top-level field where it is set.
-- `setupTestDb()` is called once at the top level (not per-test), relying on the test runner's lifecycle for teardown.
+- Tests require a reachable MongoDB; they are **not** runnable in a pure-CI unit step without a database container.
+- The nested `lines[].price` field intentionally omits `nonNegative`, so negative discounts are valid there while top-level `amount` rejects them. The validation test asserts this asymmetry explicitly.
+- The `stored()` helper exists solely to assert the raw BSON type; all other assertions go through Mongoose read paths.
+- The scratch model name `MoneyProbe` is registered globally via `model()`; if other test files in the same process use the same name, Mongoose will reuse the existing model rather than creating a new one.

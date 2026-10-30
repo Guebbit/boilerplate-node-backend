@@ -1,7 +1,7 @@
 ---
 source: scripts/contracts/generate-request-content-types.ts
-sha256: d922f2ba35274d5c7a9c26daa6a4e0ef1d015b9bdf385552449bc8f6395770e2
-generated_at: 2026-10-15T09:38:10.199949+00:00
+sha256: 3336d5b69c00a472d54ec858fdfc61c311aea37c3e91225ceceb8bfec8cc1e61
+generated_at: 2026-10-29T01:30:48.253330+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Generates a request media-type lookup table (`REQUEST_CONTENT_TYPES`) from `openapi.yaml`. For every operation that declares a `requestBody`, it records the accepted content types alongside a pre-compiled regex path matcher. The output is consumed by the 415 content-type guard (`src/infrastructure/http/middlewares/content-type.ts`), which rejects bodies in undeclared types. The script is part of the `npm run gen:api` pipeline and writes a committed file under `api/`.
+Reads the bundled `openapi.yaml` and emits two generated TypeScript files: a request content-type table (consumed by the 415 `Content-Type` middleware) and an operation-routes table (consumed by the 405 `Method Not Allowed` middleware). It exists so that the HTTP guard can reject unsupported media types and wrong methods at boot-time-compiled patterns rather than building matchers per-request, and so that writes with no declared body are explicitly refused instead of silently accepting an empty `{}`.
 
 ## Key elements
 
-- **`BODY_METHODS`** — tuple of the four methods that may carry a body (`post`, `put`, `patch`, `delete`); `get`/`head` are excluded.
-- **`compileTemplate(template)`** — converts an OpenAPI path template (e.g. `/products/{id}/restore`) into a regex literal string (`/^\/products\/[^/]+\/restore$/`) and returns the parameter count. Literal is embedded in the generated file so the guard never compiles a matcher at boot.
-- **`renderRows()`** — iterates all paths × body-carrying methods, collects declared content-type keys, and emits one row object per operation. Rows are sorted by fewest path parameters first (more specific paths matched before less specific), ties broken by key for stable diffs.
-- **`output`** — the full generated-file text: a `RequestContentType` interface plus the `REQUEST_CONTENT_TYPES` readonly array literal.
-- **`OperationObject` / `OpenApiDocument`** — narrow structural interfaces for the subset of the OpenAPI spec this script reads.
-- **`writeOrCheck(OUTPUT, output, 'openapi.yaml')`** — final call; writes the file or, under `--check`, diffs it against disk and exits 1 on mismatch.
+- **`compileTemplate(template)`** – Converts an OpenAPI path template (e.g. `/products/{id}/restore`) into a case-insensitive regex literal (`/^\/products\/[^/]+\/restore$/i`) plus a `parameterCount`. Regex metacharacters in static segments are escaped.
+- **`renderRows()`** – Produces one row per `(BODY_METHODS, path)` pair that has an operation. Rows carry `method`, `pattern`, `parameterCount`, and the declared `content` keys. Operations with no `requestBody` still emit a row with `types: []`.
+- **`renderRouteRows()`** – Produces one row per path listing all declared methods and the `x-module` owner (or `null` for system routes).
+- **`output` / `routesOutput`** – Pre-assembled full-file source text (header comments + interface + `export const` array) for the two generated artifacts.
+- **`writeOrCheck(…, 'openapi.yaml')`** – Two calls at the bottom: one writes the content-types file to `--out`, the other writes `operation-routes.ts` into the same directory. Under `--check` neither writes; a mismatch exits 1.
+- **`PATH_METHODS` / `BODY_METHODS`** – Constants defining all seven path-item methods and the four methods (POST, PUT, PATCH, DELETE) whose bodies the guard checks.
+- **`OperationObject` / `OpenApiDocument`** – Narrow structural interfaces describing the slice of the YAML document this script actually reads.
 
 ## Relationships
 
-- **`scripts/cli.ts`** — provides `requiredPath`, which parses the mandatory `--out` CLI argument and resolves it to an absolute path relative to the repo root.
-- **`scripts/contracts/generated-file.ts`** — provides `writeOrCheck`, the shared helper that either writes the generated content or compares it against the existing file in `--check` mode.
+- **`scripts/contracts/generated-file.ts`** – Imports `writeOrCheck`, the shared helper that either writes the rendered text to disk or diffs it against the existing file under `--check`.
+- **`scripts/cli.ts`** – Imports `requiredPath`, a CLI-argument parser that resolves the `--out` flag relative to the repo root.
+- **`openapi.yaml` (repo root)** – The sole input; parsed with the `yaml` package's `parse` (YAML 1.2 loader) and cast to `OpenApiDocument`.
+- **Generated outputs (sibling files under `api/`)** – Consumed at runtime by `src/infrastructure/http/middlewares/content-type.ts` (415 guard) and `src/infrastructure/http/middlewares/method-not-allowed.ts` (405 handler). Both are rebuilt from scratch by `npm run gen:api`.
 
 ## Notes
 
-- The script is **backend-only**; there is no frontend equivalent.
-- Runs as ESM (uses `import.meta.url` rather than `__dirname`) via the `tsx` shebang.
-- Generated rows are sorted fewest-parameters-first so that static segments (e.g. `/products/search`) are matched before parameterised ones (`/products/{id}`) at runtime.
-- The `--check` mode writes nothing; it is intended for CI to detect stale generated output.
-- The generated file carries a `DO NOT EDIT` header; it is rebuilt from scratch by `npm run gen:api`.
+- Runs as **ESM** (`import.meta.url` instead of `__dirname`); invoked via `tsx`.
+- Rows are sorted fewest `parameterCount` first, then lexicographically, so static segments match before parameterized ones and regeneration produces a **stable diff**.
+- The regex is intentionally **case-insensitive** (`/i`) to mirror Express's routing behavior.
+- A write method that exists in the document but has **no `requestBody`** still gets a row with an empty `types` array—this is how the 415 guard refuses *any* body for that operation.
+- The `x-module` extension is stamped by the API bundler, not by the OpenAPI spec author; it is absent on system routes (ping, probes), which render as `module: null`.
+- `--out` names only the content-types file; `operation-routes.ts` is always placed in the same directory automatically.

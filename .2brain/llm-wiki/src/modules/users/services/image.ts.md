@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/services/image.ts
-sha256: 135340e5d56b39e166536ba76c7766aad8a7e870e863f396b69718ed6215553e
-generated_at: 2026-10-15T12:10:26.043459+00:00
+sha256: 67835f8433854ea66daf9bc5bd6027aa7186a97b567f1afeef17f40e1eb7b065
+generated_at: 2026-10-29T06:16:21.100050+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin service wrapper that queues a background image-digest job for a user document immediately after it has been persisted, but only when that write carried a pending image upload (`pendingImageKey`). It exists so that `create` and `update` flows can trigger the digest in one call without duplicating the queue-logic.
+Provides the post-persistence hand-off that enqueues the image-digest job for a user whose write carried a pending upload. It exists so that the digest work is deferred until the transaction has committed, guaranteeing the account is saved regardless of whether the enqueue succeeds.
 
 ## Key elements
 
-- **`enqueueIfPending(user: UserDocument): Promise<UserDocument>`** — The sole export. Delegates to `enqueueIfImagePending` with the user, the bucket name `'users'`, and `userRepository.writebackImage` as the write-back callback. Returns the (potentially updated) user document once the enqueue step resolves.
+- **`enqueueIfPending(user: UserDocument): Promise<UserDocument>`** — The sole export. Wraps the digest enqueue in an `afterCommit` hook:
+  - Delegates to `enqueueIfImagePending` (from `image.worker`) with the collection name `'users'` and `userRepository.writebackImage` as the writeback callback.
+  - On failure, the error is logged and the original `user` document is returned unchanged; the placeholder image is left for the quarantine reaper to reclaim.
 
 ## Relationships
 
-- **`@infrastructure/adapters/image.worker`** — Provides `enqueueIfImagePending`, the actual adapter that checks whether `pendingImageKey` is set, enqueues the digest job, and clears the key.
-- **`src/modules/users/repository.ts`** — Supplies `userRepository.writebackImage`, the function the adapter calls to persist the digested image key back onto the user document.
-- **`src/modules/users/model.ts`** — Defines the `UserDocument` type used as both the input and return type of `enqueueIfPending`.
-- **`src/modules/users/services/create.ts` / `update.ts`** — Call `enqueueIfPending` after a successful user write to kick off the digest pipeline.
-- **`src/modules/users/services/index.ts`** — Re-exports `enqueueIfPending` as part of the users service public API.
+- **`src/infrastructure/adapters/image.worker.ts`** — Source of `enqueueIfImagePending`, the actual queue-dispatch function that inspects `pendingImageKey` and performs the writeback.
+- **`src/infrastructure/runtime/after-commit.ts`** — Supplies the `afterCommit` runtime hook that defers the enqueue until the surrounding DB transaction commits.
+- **`src/modules/users/model.ts`** — Provides the `UserDocument` type used as the function's parameter and return type.
+- **`src/modules/users/repository.ts`** — Provides `userRepository.writebackImage`, the callback `enqueueIfImagePending` invokes to persist the final image reference back to the user document.
+- **`src/modules/users/services/create.ts` / `update.ts`** — Callers that invoke `enqueueIfPending` after persisting a new or modified user (per dependency graph).
+- **`src/modules/users/services/index.ts`** — Re-exports `enqueueIfPending` as part of the public user-services surface.
 
 ## Notes
 
-- `pendingImageKey` is only ever present on a user document that went through `quarantineUploadedImages` at upload time; for all other documents `enqueueIfPending` is effectively a no-op (the adapter sees no key to process).
-- The bucket/partition name is hardcoded as the string `'users'`; if this file is ever copied to another module, that literal must change.
+- `pendingImageKey` is only ever set while the upload queue looked ready (see `quarantineUploadedImages` in the worker); by the time this function runs the key either exists (enqueue proceeds) or is absent (no-op).
+- The function always resolves (never rejects to the caller) because `afterCommit` swallows enqueue errors into a log entry. Callers can treat it as fire-and-forget after the main write.
+- The `userId` in the options object is passed as a `String` for structured logging, not for any functional routing.

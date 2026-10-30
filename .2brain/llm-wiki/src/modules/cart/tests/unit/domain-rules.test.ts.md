@@ -1,33 +1,30 @@
 ---
 source: src/modules/cart/tests/unit/domain-rules.test.ts
-sha256: eb587cc11c22b8ae37effa53ec62b36f705e4e9a1dcf2e71e12fb4c6cded9cbb
-generated_at: 2026-10-15T10:25:20.699886+00:00
+sha256: a8e03f174dd758f6acd1c19a32ba1af73cd8547567d73e302dd4d6a8c6e9c71f
+generated_at: 2026-10-29T03:30:36.533836+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/cart/tests/unit/domain-rules.test.ts
 
 ## Purpose
-
-Unit tests for the three pure cart domain functions in `rules.ts` (`evaluateCheckout`, `basketWeight`, `evaluateShippingRequirement`). No mocks, no database — the input lines are constructed inline to exercise every branch of the decision logic. The verdict-to-HTTP-status mapping is explicitly out of scope (covered in `service.test.ts`).
+Unit tests for the three pure domain-rule functions in the cart module — `evaluateCheckout`, `basketWeight`, and `evaluateShippingRequirement`. No mocks, no database; the tests exercise the rules exactly as a caller would invoke them, with pre-resolved product data. The verdict-to-HTTP-status mapping is intentionally excluded (covered in `service.test.ts`).
 
 ## Key elements
-
-- **`line(quantity, available?)`** — helper that builds a minimal `CartLineCandidate`; `available` is optional (its absence is itself a test target).
-- **`preorder(quantity, available)`** — helper for a preorder line carrying `productId`, `title`, and `preorder: true`.
-- **`shipped(requiresShipping?)`** — helper for `evaluateShippingRequirement` tests; defaults to a physical product.
-- **`describe('evaluateCheckout')`** — covers: empty cart, fully-resolved cart, preorder allowance, hard-deleted (`null`) vs hidden/soft-deleted products, insufficient stock, off-sale (`purchasable: false`), sold-out vs short (distinct `availability` strings), hidden outranking off-sale, exact-stock acceptance, fully-reserved units, absent `available` as refusal, and resolution-priority over availability-priority.
-- **`describe('basketWeight')`** — sums `weight × quantity`, treats missing weight / `null` product as zero, returns 0 for empty basket.
-- **`describe('evaluateShippingRequirement')`** — digital-only basket needs nothing; physical basket requires a method; address is required only when the chosen method demands one; one physical line among digital lines still triggers the requirement.
+- **`line(quantity, available?)`** — Helper that builds a `CartLineCandidate` with an optional pre-resolved `available` count. Omitting `available` simulates an unknown count (tests the "absent → refuse" path).
+- **`preorder(quantity, available)`** — Builds a candidate representing a preorder line; `available` is the remaining allowance, not shelf stock.
+- **`shipped(requiresShipping?)`** — Builds a minimal joined line for the shipping-requirement tests; defaults to physical.
+- **`describe('evaluateCheckout')`** — Covers: empty cart, stock sufficiency/shortfalls, preorder allowance, deleted/inactive/soft-deleted/off-sale/sold-out products, reserved-units case, absent `available` count, and priority ordering (unresolved product outranks stock shortfall).
+- **`describe('basketWeight')`** — Verifies weight summation, missing-weight → 0, and empty-basket → 0.
+- **`describe('evaluateShippingRequirement')** — Covers digital-only baskets, physical baskets missing a method, address requirement gating, and the "any one physical line triggers the rule" case.
 
 ## Relationships
-
-- **`src/modules/cart/domain/rules.ts`** — the sole import target. Provides the three functions under test and the `CartLineCandidate` type. No other module is touched.
+- **`src/modules/cart/domain/rules.ts`** — Sole import target. This file tests `evaluateCheckout`, `basketWeight`, `evaluateShippingRequirement`, and the `CartLineCandidate` type exactly as they are exported from that module. No other dependencies.
 
 ## Notes
-
-- **Absent `available` means refuse, not allow.** The tests pin down that `undefined` stock is read as "nothing to sell" (insufficient-stock), not "unconstrained." This is a deliberate safety choice documented in the test comments.
-- **Priority is fixed:** `product-unavailable` (404-shaped) is reported before `insufficient-stock` (409-shaped) before `empty`. The "reports an unresolved product before an unavailable one" test guards this ordering.
-- **`availability` strings are distinct:** `out_of_stock` (available = 0), `insufficient_stock` (0 < available < requested), `unavailable` (off-sale). A mixed-basket test asserts both can appear in one `shortfalls` array.
-- **Hidden/inactive outranks off-sale:** a product with both `active: false` and `purchasable: false` is reported as `product-unavailable`, not `insufficient-stock`.
-- **Reservation model:** `available` represents what remains *after* holds, not the raw warehouse count. The "refuses a line whose units are all reserved" test exists specifically to distinguish this from the old single-count model.
+- `available` on a candidate is **already resolved** by the caller (via `@modules/products`'s `availableStock`); the rule itself does not fetch stock. Tests pass it in directly.
+- A missing `available` field is treated as **refuse** (0 sellable), not as unconstrained. This is a deliberate safety default called out in a comment.
+- The catalogue join is unscoped: inactive and soft-deleted products still join and can be *named* in refusals (`product-unavailable` with a title), unlike hard-deleted ones (title is `undefined`).
+- `availability` in shortfalls distinguishes `out_of_stock` (zero left) from `insufficient_stock` (some left, not enough) from `unavailable` (off-sale), so the client can word the error differently.
+- "Hidden" (`active: false`) takes priority over "off-sale" (`purchasable: false`) — the line is reported as `product-unavailable` (404-shaped), not `insufficient-stock`.
+- The reservation model means `available` can be 0 even when warehouse stock exists; tests explicitly cover this ("units all promised" case).

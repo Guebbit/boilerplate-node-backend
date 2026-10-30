@@ -1,7 +1,7 @@
 ---
 source: src/modules/wishlist/controllers/get-wishlist.ts
-sha256: af85424dace6c774ee8bd645ae8b243f7c0f679ff8aebc56c02a7d1cce8320de
-generated_at: 2026-09-23T19:46:35.988637+00:00
+sha256: 5769f4c25c89ca9f69f727965a82505c161370283734b2b3d0b97ba65a6d59f7
+generated_at: 2026-10-29T06:33:40.815992+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter for the `GET /wishlist` endpoint. It extracts the authenticated user's ID from the request, delegates to `wishlistService.wishlistGet`, and formats the result as a standard success/error response. Contains no business logic.
+Thin HTTP adapter that handles the `GET /wishlist` route. It extracts the authenticated user's ID from the request, delegates to `wishlistService.get`, and formats the result as a standard success response. Exists to keep routing, service logic, and HTTP concerns separated.
 
 ## Key elements
 
-- **`getWishlist`** (exported) — Express handler that calls `wishlistService.wishlistGet(request.authContext!.id)`, sends the view via `successResponse<WishlistResponse>`, and routes failures through `catchAs(response, 'getWishlist')`.
-- **`WishlistResponse`** (type import) — shapes the payload; the file's doc comment notes it carries product _ids only_, mirroring the cart pattern.
+- **`getWishlist(request, response)`** — The sole export. Reads `request.authContext!.id`, calls `wishlistService.get(id)`, then sends the view via `successResponse<WishlistResponse>`. Errors are funneled through `catchAs(response, 'getWishlist')`.
+- The returned payload contains **product IDs only** (same shape as the cart); the client is responsible for joining against its own product store.
 
 ## Relationships
 
-- **`src/modules/wishlist/service.ts`** — Primary dependency. `getWishlist` calls `wishlistService.wishlistGet(userId)` to fetch the saved-product list.
-- **`src/modules/wishlist/routes.ts`** — Registers `getWishlist` as the handler for the `GET /wishlist` route.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse`, the standard envelope wrapper for successful JSON replies.
-- **`src/infrastructure/http/controller.ts`** — Provides `catchAs`, the shared error-serialization helper used in the `.catch` branch.
-- **`src/types/index.ts`** — Source of the `WishlistResponse` type that parameterizes the response envelope.
+- **`src/modules/wishlist/routes.ts`** — Imports and mounts `getWishlist` as the handler for the `GET /wishlist` route.
+- **`src/modules/wishlist/service.ts`** — Source of `wishlistService.get`, which performs the actual data retrieval.
+- **`src/infrastructure/http/response.ts`** — Supplies `successResponse`, the standard envelope used to serialize the view.
+- **`src/infrastructure/http/controller.ts`** — Supplies `catchAs`, the shared error-catcher wrapper.
+- **`src/types/index.ts`** — Defines the `WishlistResponse` type that constrains the success payload.
 
 ## Notes
 
-- `request.authContext!` uses a non-null assertion; the controller assumes an upstream auth middleware has already populated it. Calling this route without that middleware will throw at the `!` dereference.
-- The response contains product IDs only — the client is expected to join them against its own product store. Do not add product fields to the view model here.
-- The error tag passed to `catchAs` (`'getWishlist'`) is used for logging/tracing; keep it consistent if you rename the function.
+- `request.authContext!` uses a non-null assertion — the route is expected to be behind an auth middleware; calling it without an auth context will throw at runtime rather than at compile time.
+- The controller is intentionally fire-and-forget on the Express side: it returns the promise chain but never calls `res` synchronously, so middleware downstream should not rely on the response being already sent.

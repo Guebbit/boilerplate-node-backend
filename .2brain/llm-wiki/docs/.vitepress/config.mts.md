@@ -1,7 +1,7 @@
 ---
 source: docs/.vitepress/config.mts
-sha256: b370465bb2ffa781263828d87435c9e9778fa1763c6335fc884c4dccb828809e
-generated_at: 2026-10-14T06:52:20.110206+00:00
+sha256: ca4a20e2c8bae85ce800344fbeb2a20b64a55fb52fb9f567b32fb153ec7df655
+generated_at: 2026-10-29T01:19:22.535354+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-VitePress configuration that defines the site title, top-level navigation, per-section sidebars, local full-text search, and Mermaid diagram support for the project documentation. It also delegates the `/modules/` sidebar to a generator so adding a new module requires no manual config edit.
+VitePress site configuration for the project's documentation. It defines the site identity, navigation bar, sidebar structure, and enables local search and Mermaid diagram rendering. All content routing for the docs site flows through this single file.
 
 ## Key elements
 
-- **`withMermaid(defineConfig({ … }))`** – Wraps the entire VitePress config with the Mermaid plugin so diagrams render in Markdown pages.
-- **`title` / `description`** – Site identity: "Boilerplate Node Backend", tagged as ADHD-friendly docs for the Express + MongoDB + Mongoose REST boilerplate.
-- **`themeConfig.search.provider: 'local'`** – Enables VitePress's built-in client-side search (no external service).
-- **`themeConfig.nav`** – Top-level navigation bar with ten entries (Home, Start, Start (Production), Start a New Project, Demo Shop, Theory, Modules, Tools, API, Files).
-- **`themeConfig.sidebar['/demo-ecommerce/']`** – Static sidebar listing the demo-shop personas and scope pages.
-- **`themeConfig.sidebar['/theory/']`** – Static sidebar covering architecture, DDD, request flow, security defences (a collapsed group of ~20 sub-pages), and more.
-- **`themeConfig.sidebar['/modules/']`** – Dynamically built by calling `moduleSidebar(readCatalogue(srcDir, docsDir))` (see Relationships).
-- **`themeConfig.sidebar['/tools/']`** – Static sidebar with Overview, Setup (20+ items), and Database (truncated) groups.
-- **`fileURLToPath(new URL(…))`** – Resolves `src/modules` and `docs/modules` paths relative to this file's location for the catalogue call.
+- **`defineConfig({...})`** — the core VitePress config object: sets `title` ("Boilerplate Node Backend"), `description`, `themeConfig.search.provider` (local), `themeConfig.nav` (top-level links), and `themeConfig.sidebar` (per-section page trees).
+- **`withMermaid(...)`** — wraps the config to activate the `vitepress-plugin-mermaid` integration so Mermaid blocks render in doc pages.
+- **`moduleSidebar(readCatalogue(...))`** — imported from `scripts/docs/module-catalogue.ts`; builds the `/modules/` sidebar dynamically from each module's `module.yaml` and adjacent pages. No manual sidebar editing needed when a module is added or removed.
+- **Sidebar sections** — hard-coded trees for `/demo-ecommerce/`, `/theory/` (including a large collapsible "Web Attacks & Defences" subtree), `/tools/` (Setup, Database, and further groups), plus the generated `/modules/` section. Remaining sections (`/api/`, `/reference/`) are present in the truncated portion.
+- **`fileURLToPath(new URL(...))`** — used to resolve the source and docs module directories relative to this file, avoiding fragile `path.join` strings.
 
 ## Relationships
 
-- **`scripts/docs/module-catalogue.ts`** – Exports `readCatalogue` (scans `src/modules/*/module.yaml` and sibling doc pages) and `moduleSidebar` (maps the catalogue data into a VitePress sidebar array). This file calls both to produce the `/modules/` sidebar at build time, so the config stays in sync with the module tree without manual edits.
+- **`scripts/docs/module-catalogue.ts`** — provides `readCatalogue` (scans `src/modules/*/module.yaml` + docs pages) and `moduleSidebar` (shapes the result into a VitePress sidebar array). This config file calls both at import time, so the `/modules/` sidebar is always in sync with the module tree.
 
 ## Notes
 
-- The `/modules/` sidebar is **generated**, not hand-maintained. The inline comment explicitly says "Nothing to edit when a module is added."
-- The file uses ESM (`import.meta.url`) and is typed as `.mts` (TypeScript + ESM), consistent with the rest of the repo's tooling.
-- Sidebar groups can carry a `collapsed: true` flag (used on "Web Attacks & Defences" and several `/tools/` sections) to keep the nav compact by default.
-- The nav order is the canonical reading order for new contributors; keep it aligned with the `getting-started` pages.
+- The `/modules/` sidebar entry is **generated at build time**; do not add or remove module sidebar items here. Edit the module's `module.yaml` instead.
+- The file is `.mts` (native Node ESM), which is why it uses `import.meta.url` rather than `__dirname`.
+- Sidebar `collapsed` defaults to `true`; only groups explicitly set to `false` (e.g. Tools → Setup, Tools → Database) start expanded.
+- The site description is intentionally informal ("ADHD-friendly docs"); this is the value shown in `<meta>` and search results.

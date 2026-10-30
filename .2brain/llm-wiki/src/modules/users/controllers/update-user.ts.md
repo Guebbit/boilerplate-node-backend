@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/controllers/update-user.ts
-sha256: 30054aeacaf82d271bab8bde248d78509b4b202238b848a7d77d87a2dad6f294
-generated_at: 2026-10-15T12:07:29.849465+00:00
+sha256: 633aad1f52a0d0e2469a3b618b61cdd0ecf638672f27e0bb4b3e20bfbc3de65f
+generated_at: 2026-10-29T06:12:06.182563+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Builds the `PUT /users/:id` (full replace) and `PATCH /users/:id` (partial merge) HTTP handlers for the users module by calling the shared `createUpdateController` factory. All domain logic is delegated to `userService`; this file only wires schemas, input coercion, avatar-upload handling, and response shaping.
+Thin controller layer for `PUT /users/:id` (full replace) and `PATCH /users/:id` (partial merge). It delegates all business logic to `userService.updateById` and only handles HTTP concerns: schema validation, avatar upload, and response shaping.
 
 ## Key elements
 
-- **`replaceUser`** – Destructured export for the `PUT` handler. Validates the body against `ReplaceUserByIdBody`, merges the supplied fields, and persists via `userService.updateById`.
-- **`updateUser`** – Destructured export for the `PATCH` handler. Validates against `UpdateUserByIdBody` and applies a partial update through the same service method.
-- **`createUpdateController({ … })`** – Configuration object passed to the shared factory:
-  - `versioned: true` – includes a version stamp in the response.
-  - `notFoundKey: 'users.not-found'` – i18n key used when the user doesn't exist.
-  - `input: { booleans: ['active'] }` – coerces the `active` field from a multipart string to a real boolean.
-  - `keptWhenOmitted: ['imageUrl']` – preserves the existing avatar on a `PUT` that doesn't supply one (the client cannot read the current URL back).
-  - `update(id, changes, request)` – delegates to `userService.updateById`, wrapping the call in `writeWithUploadedImage` so a multipart avatar is streamed to storage and its resulting metadata merged into the changes object.
-  - `present(user, request)` – shapes the stored entity into the public contract via `userService.toUserContract`.
+- **`replaceUser`** — handler for `PUT /users/:id`. Validates the body against `ReplaceUserByIdBody`, then calls the shared update pipeline.
+- **`updateUser`** — handler for `PATCH /users/:id`. Validates against `UpdateUserByIdBody`; only supplied fields are merged.
+- **`createUpdateController({...})`** call — the single factory invocation that produces both handlers above. Notable config:
+  - `versioned: true` — response includes an ETag/version stamp.
+  - `keptWhenOmitted: ['imageUrl']` — a PUT that omits the avatar field preserves the existing one (clients can't "send back" a file they don't have).
+  - `notFoundKey: 'users.not-found'` — i18n key for 404 responses.
+  - `update` — wraps the write in `writeWithUploadedImage` so an incoming `imageUrl` part is persisted before `userService.updateById` is called.
+  - `present` — serializes the domain user via `userService.toUserContract` scoped to the caller.
 
 ## Relationships
 
-- **`src/infrastructure/surfaces/create-update-controller.ts`** – Provides the `createUpdateController` factory that generates the two handler functions from the config object defined here.
-- **`src/modules/users/services/index.ts`** – Supplies `userService.updateById` (persistence + audit) and `userService.toUserContract` (response shaping).
-- **`src/infrastructure/http/uploads.ts`** – `writeWithUploadedImage` streams an uploaded avatar to object storage and returns metadata merged into the update payload.
-- **`src/infrastructure/http/request.ts`** – `callerContextOf(request)` extracts the authenticated caller's context, passed into `updateById` for audit logging.
-- **`src/modules/users/routes.ts`** – Imports `replaceUser` / `updateUser` and mounts them on the `PUT` and `PATCH` routes for `/users/:id`.
+- **`src/infrastructure/surfaces/create-update-controller.ts`** — supplies the `createUpdateController` factory that wires validation, 404 handling, and the replace/patch dispatch into a ready-to-export handler pair.
+- **`src/infrastructure/http/uploads.ts`** — `writeWithUploadedImage` handles multipart avatar extraction and storage; the controller calls it inside the `update` callback.
+- **`src/infrastructure/http/request.ts`** — `callerContextOf(request)` extracts the authenticated caller, passed both to the service write and to the response presenter.
+- **`src/modules/users/services/index.ts`** — `userService.updateById` performs the actual merge + audit; `userService.toUserContract` shapes the response DTO.
+- **`src/modules/users/routes.ts`** — imports `replaceUser` / `updateUser` and binds them to the `PUT` and `PATCH` routes respectively.
 
 ## Notes
 
-- `imageUrl` appears in **both** schemas but is treated specially: on a `PUT` (replace) it is kept if omitted; on a `PATCH` (merge) it is naturally optional. The factory's `keptWhenOmitted` array encodes this asymmetry.
-- The `active` field arrives as a string when the request is multipart (avatar upload); the `booleans` coercion list handles only that one field—other booleans are expected to already be typed correctly by the schema.
-- Both handlers funnel through the **same** service method (`updateById`); the replace-vs-merge distinction is enforced entirely by the Zod schema (`ReplaceUserByIdBody` vs. `UpdateUserByIdBody`) before the handler runs.
+- The `active` boolean is **excluded** from both replace and patch bodies; activation/deactivation are separate endpoints (`POST /users/:id/activate`, `/deactivate`) and must not be attempted through this controller.
+- `imageUrl` in the request body is not a URL string from the client — it is a multipart file part consumed by `writeWithUploadedImage`, which resolves it to a stored URL before passing `{ ...changes, ...image }` to the service.
+- Both handlers are the result of a single `createUpdateController` call destructured as `{ replace, update }`; there is no standalone class or function to test in isolation.

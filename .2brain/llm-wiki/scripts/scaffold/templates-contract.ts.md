@@ -1,7 +1,7 @@
 ---
 source: scripts/scaffold/templates-contract.ts
-sha256: 9251888ca4e90b89eb9522485ecfe44c98fc65ee81a2736d25dba9adc0af2553
-generated_at: 2026-10-15T09:47:50.999333+00:00
+sha256: 348aa22070c657ef035c885000f4e5c2152910c8cbaf681d871e89834f553d7d
+generated_at: 2026-10-29T01:44:30.241047+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Generates the per-module `openapi.yaml` fragment for a scaffolded entity module. It produces a self-contained OpenAPI 3.1.0 document (paths + local component schemas) that a root assembler can merge into the top-level bundle without further modification. The file exists so that each generated module ships a valid, spec-complete contract out of the box.
+Generates the per-module `openapi.yaml` fragment (paths, tags, and module-local schemas) that the scaffold drops into a new module folder. The root assembler later stitches these fragments into the root OpenAPI bundle; this file is responsible only for the module's own contract text, with shared components (errors, pagination, headers, ID) referenced via `$ref` to a central root document.
 
 ## Key elements
 
-- **`openapiFragment(names: ModuleNames): string`** — The sole export. Takes the module's naming spellings and returns the full YAML text for the module's `openapi.yaml`.
-- **`ROOT`** (const) — Relative path (`../../../shared/contracts/openapi.root.yaml`) used in every `$ref` that points to shared components (parameters, responses, headers, base schemas).
-- **`errorResponse(status, component)`** (const helper) — Produces a single indented `$ref` line for an error response entry.
-- **`KEYED_ERRORS`** — 401 / 403 / 422 / 500 response block, used by list, create, replace, and update.
-- **`KEYED_ERRORS_WITH_NOT_FOUND`** — Same plus 404; used by replace and update (routes with an `{id}` parameter).
-- **`PATH_ONLY_ERRORS`** — 401 / 403 / 404 / 500 (no 422, no body to validate); used by delete.
-- **Generated paths** — `GET {basePath}` (list), `POST {basePath}` (create), `PUT {basePath}/{id}` (replace), `PATCH {basePath}/{id}` (update), `DELETE {basePath}/{id}` (delete).
-- **Generated component schemas** — `{Entity}Envelope`, `{Plural}ResponseEnvelope`, `{Plural}Response`, `{Entity}`, `Create{Entity}Request`, `Replace{Entity}Request`, `Update{Entity}Request`.
+- **`ROOT`** — Relative path (`../../../shared/contracts/openapi.root.yaml`) to the shared OpenAPI root document; every cross-module `$ref` uses this prefix.
+- **`errorResponse(status, component)`** — Helper that produces a single indented `$ref` line for an error response entry in the YAML responses map.
+- **`KEYED_ERRORS`** — Pre-joined YAML block for 401 / 403 / 422, used by list, create, and replace/patch routes.
+- **`KEYED_ERRORS_WITH_NOT_FOUND`** — Same set plus 404; used by `PUT /{id}` and `PATCH /{id}` where a missing entity is a valid outcome.
+- **`PATH_ONLY_ERRORS`** — 401 / 403 / 404 only (no 422); used by `GET /{id}` and `DELETE /{id}` which accept no body/query.
+- **`openapiFragment(names: ModuleNames): string`** — The sole export. Interpolates the `ModuleNames` fields (kebab, entity, entityCamel, plural, words, basePath) into a full OpenAPI 3.1.0 document covering six operations (list, create, get, replace, update, delete) and all module-local component schemas (entity, entityActions, list response, sort enum, create/replace/update request bodies).
 
 ## Relationships
 
-- **`scripts/scaffold/names.ts`** — Provides the `ModuleNames` type (imported via `import type`). All name interpolations (`names.kebab`, `names.entity`, `names.plural`, `names.basePath`, etc.) come from that module.
-- **`scripts/scaffold/plan.ts`** — Consumes the string returned by `openapiFragment` and writes it to disk as the module's `openapi.yaml` during the scaffold run.
+- **`scripts/scaffold/names.ts`** — Imports the `ModuleNames` type. Every interpolated name (entity, plural, words, basePath, kebab, entityCamel) comes from that type; the template is a pure function of a `ModuleNames` value.
+- **`scripts/scaffold/plan.ts`** — Upstream orchestrator that calls `openapiFragment` with the resolved names and writes the resulting string to the module's `openapi.yaml`.
 
 ## Notes
 
-- The PATCH route declares **two** `requestBody` content types: `application/json` and `application/merge-patch+json`, both pointing to the same `Update{Entity}Request` schema.
-- PUT semantics are documented as RFC 9110 §9.3.4 (omitted optional field is cleared); PATCH semantics as RFC 7396 (omitted = unchanged, `null` clears `notes`). The request schemas encode this: `Replace*Request` requires `name` and allows `null` for `notes`; `Update*Request` requires nothing and also allows `null` for `notes`.
-- All `$ref`s to shared components use a **relative** path (`ROOT`), not an absolute or workspace URL. The fragment is expected to be placed two levels below the `shared/contracts/` directory.
-- The `notes` field in `Update{Entity}Request` and `Replace{Entity}Request` uses the YAML type union `[string, 'null']`; the create request does not allow `null` (field is simply omitted or a string).
-- Every schema sets `additionalProperties: false`, making the generated contract strict.
+- The generated YAML is **indented with 4 spaces** (not the standard 2-space YAML style); this is intentional and matches the rest of the codebase's generated files.
+- `PUT` vs `PATCH` semantics are encoded in the schemas: `Replace…Request` requires `name` (full representation, RFC 9110 §9.3.4); `Update…Request` makes every field optional and allows `notes: null` to clear it (RFC 7396 merge-patch).
+- The `PATCH` operation advertises **both** `application/json` and `application/merge-patch+json` content types, both pointing to the same schema.
+- The `actions` object on the entity is a server-computed permission hint (update/delete booleans) so clients can render controls without re-implementing authz logic.
+- The sort parameter is constrained to a fixed enum (`createdAt, -createdAt, name, -name`, max 3 items) — adding a new sortable field requires editing the template here.
+- The file is `@module`-scoped; it has no side effects and no runtime imports beyond the type.

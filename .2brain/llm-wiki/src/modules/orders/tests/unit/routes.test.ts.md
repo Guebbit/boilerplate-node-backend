@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/unit/routes.test.ts
-sha256: 74d0651a4dc2e2e5c2c83c0702d9ff1392429ee5abbf26b5bcc1e1f9edcfba1e
-generated_at: 2026-10-15T11:20:39.086309+00:00
+sha256: a9b93d4952b2fd2ad379ad03e76efc34df6e094d71715a4b89acf6e21b71763c
+generated_at: 2026-10-29T05:00:04.051943+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit test that pins the orders router's observable contract: the exact set and order of mounted endpoints, the authorization guard on each, the middleware chain ordering (permission → rate-limit → controller), and the caching / invalidation policy. It exists so that a refactored or extended router is caught the moment it silently drops, reorders, or re-permissions a route.
+Structural unit test for the orders router. It verifies that the exact set of endpoints is mounted in the correct order, that authorization guards cover the right routes (and only the right routes), and that the middleware chain (cache headers, rate limits, route flags, product invalidation) is composed in the intended sequence.
 
 ## Key elements
 
-- **`describe('order routes — what is mounted')`** — asserts the full signature list via `routeSignatures`, and that `/search` and `/export` are declared before `/:id` (they would otherwise be shadowed).
-- **`describe('order routes — authorization')`** — verifies `isAuth` is on every route (router-level guard), `requirePermissionGuard` is on admin-only routes, `POST /:id/cancel` is *not* admin-guarded (customer self-service), and `POST /:id/status-override` carries its own distinct permission key.
-- **`describe('order routes — the export budget')`** — checks that `orders-export` (rate-limit) sits after `requirePermissionGuard` in the middleware chain for `GET /export`.
-- **`describe('order routes — caching')`** — confirms GET reads use `privateNoCache` (no Redis), POSTs use `noStore`, `POST /` and `POST /:id/cancel` both trigger `invalidateCache([products])`, and `DELETE /:id/hard` is the only route behind `routeFlag(hardDelete)`.
-- **Mocks** — `@infrastructure/http/middlewares/cache`, `…/route-flag`, and `…/rate-limit` are replaced with the shared fakes from `@tests/routes` so middleware order is observable without a live server.
-- **Helpers imported from `@tests/routes`** — `routeTable`, `routeSignatures`, `guardsOn`, `chainOf` (and the mock factories `cacheMock`, `routeFlagMock`, `securityMock`).
+- **`routeSignatures(router)`** – returns the ordered `METHOD /path` strings; used to assert the full endpoint list and to enforce that `/search` and `/export` precede `/:id` (preventing path shadowing).
+- **`guardsOn(router, signature)`** – extracts the guard/middleware names attached to a specific route; used to assert presence or absence of `isAuth` and `requirePermissionGuard` per endpoint.
+- **`chainOf(router, signature)`** – returns the full ordered middleware chain for a route; used to verify relative ordering (e.g. permission check before export budget), cache directives (`privateNoCache`, `noStore`), `invalidateCache([products])`, and `routeFlag(hardDelete)`.
+- **Jest mocks** – `cache`, `route-flag`, and `rate-limit` middlewares are replaced via factories (`cacheMock()`, `routeFlagMock()`, `securityMock()`) supplied by the shared test-support module, so assertions inspect symbolic names rather than live infra.
+- **`router`** (from `@modules/orders/routes`) – the SUT; all tests read its configuration statically without issuing HTTP requests.
 
 ## Relationships
 
-- **`src/modules/orders/routes.ts`** — the file under test; provides the `router` instance whose routes, guards, and middleware chains are all the assertions here.
-- **`tests/support/routes.ts`** — supplies the inspection helpers (`routeTable`, `routeSignatures`, `guardsOn`, `chainOf`) and the middleware mock factories used in the three `jest.mock` calls.
+- **`src/modules/orders/routes.ts`** – exports `router`, the object under test. This file never mocks it; it reads the real route table and middleware composition.
+- **`tests/support/routes.ts`** – provides all four test helpers (`routeTable`, `routeSignatures`, `guardsOn`, `chainOf`) and the three mock factories consumed by the `jest.mock` calls.
 
 ## Notes
 
-- The module docblock (the `/** … */` at the top) is *documentation of the router's design decisions*, not of this test file. Key points: `requirePermission` omission on a write means "any authenticated user" (intentionally unsafe); `POST /:id/cancel` is the one customer-facing write and its safety lives in `orderService.cancelById`'s scoped check, not in a router guard; invoice / credit-note routes are mounted by the `invoicing` module at the same `/orders` base path and are absent here.
-- Route-ordering tests (`/search` before `/:id`, `/export` before `/:id`) are a guard against Express's first-match semantics; removing either line without updating the test will mask a 404 or wrong-handler regression.
-- Caching assertions cite RFC 9111 §3.5: responses that vary by caller identity must not be stored in a shared cache.
-- `POST /:id/restore` appears in the signature list but is *not* in the admin-only `it.each` list — verify intentionally before adding it to the guard expectations.
+- **Intentional gaps are assertions, not omissions.** `POST /:id/cancel` is asserted to lack `requirePermissionGuard` (customer self-service); `GET /:id/invoice` and `/credit-note` are explicitly absent from this router (owned by the invoicing module).
+- **Ordering matters.** `/search` and `/export` must appear before `/:id` in the route table or Express will match them as a parameterized `:id` route.
+- **Cache rules are per-route and directional.** No shared Redis cache on any order read (user-scoped data, RFC 9111 §3.5); `privateNoCache` on GETs, `noStore` on POST /search. Product catalogue cache is invalidated on order creation and cancellation.
+- **Hard delete is flag-gated.** Only `DELETE /:id/hard` carries `routeFlag(hardDelete)`; the softer `DELETE /:id` and bulk `DELETE /` must not.
+- **`POST /:id/status-override` uses a distinct permission key** (`override:Order`), not the ordinary write key, so holding `update:Order` alone is insufficient.

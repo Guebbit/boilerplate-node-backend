@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/services/index.ts
-sha256: e3aa5b820886c2eaf445c0b6b89668861a3b6677c5737f1a6ddde6beb1437675
-generated_at: 2026-10-15T11:29:45.323978+00:00
+sha256: 73b90dc65b3be5aa9b97f56dd0b4260b44add0ba9365cae96ad4d705cbb28b9b
+generated_at: 2026-10-29T05:11:00.042685+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel file that publishes the public API of the payments service folder. It re-exports every operation callers may use from a single import path so that controllers, event modules, and tests never reach into individual sub-files (`intent.ts`, `settlement.ts`, `refunds.ts`, etc.). It also assembles the `paymentService` object handle for callers that prefer a single named reference.
+Barrel module that aggregates every payment-flow function (intent, settlement, refunds, effects, offline, transfer, notifications, scope, view, retention, listing, stats) into a single `paymentService` object. It exists so that the rest of the codebase has exactly one import path for all payment operations, and so the module-level docblock can document the invariants (order-gate, at-most-once refunds, provider authority) in one place.
 
 ## Key elements
 
-- **Named re-exports** — every public operation is exported by name from its sub-module: `createIntent`, `cancelOpenIntentForOrder` (intent); `confirmPayment`, `syncPayment`, `applyWebhookDelivery`, `applyWebhookSettlement` (settlement); `refundByOrder`, `refundForOrder`, `refundForReturn` (refunds); `retryOpenRefunds`, `reconcileStalePayments` (effects); `recordOfflinePayment` (offline); `getForOrder`, `withActions` (view); `detachUserId`, `findOwnPayments`, `findOwnPaymentsForExport`, `reapAbandonedPayments` (retention); `callerScope`, `payerScope`, `buyerOrderScope`, `readsAllPayments` (scope); `getOrderByReference` (lookup); `listPayments`, `listRefunds`, `listAttention` (list); `methodMix` (stats); `mailPaymentReceived`, `mailRefundIssued` (notify); `listPaymentMethods` (config).
-- **`paymentService`** — a plain object bundling the most commonly used operations under one name, described as "the module's one service handle."
-- **Deliberately *not* exported:** `settlePayment` and `performRefund` are internal choreography behind the guarded "door" functions (`confirmPayment`, `syncPayment`, `applyWebhookSettlement`, `refundByOrder`, etc.). Bypassing the doors would skip scope checks, the own-money rule, and the order-state gate.
+- **`paymentService`** — the sole service handle. A flat object whose keys are the public doors: `createIntent`, `confirmPayment`, `syncPayment`, `applyWebhookDelivery`, `applyWebhookSettlement`, `refundPayment`, `openReturnRefund`, `sendOpenedRefund`, `settleRefundByHand`, `cancelRefund`, `retryOpenRefunds`, `reconcileStalePayments`, `recordOfflinePayment`, `openTransferPayment`, view helpers (`getById`, `getForOrder`, `listForOrder`, `getRefund`, `refundOf`, `withActions`, `presentWithActions`), scope helpers (`callerScope`, `payerScope`, `buyerOrderScope`, `readsAllPayments`), retention (`detachUserId`, `findOwnPayments`, `findOwnPaymentsForExport`, `reapAbandonedPayments`), listing (`listPayments`, `listRefunds`, `listAttention`), stats (`methodMix`), mail (`mailPaymentReceived`, `mailRefundIssued`, `mailRefundUndeliverable`), config (`listPaymentMethods`), and deadline (`refundDueAt`).
+- **Re-exported types** — `OfflinePaymentInput`, `OpenedReturnRefund`, `MixRow`, `PaymentMethodInfo`.
+- **Re-exported error** — `RefundLeftOpenError`.
+- **Re-exported config constant** — `paymentAttentionMinutes`.
+- **Deliberately omitted internals** — `settlePayment`, `performRefund`, `refundForOrder`, `cancelOpenIntentForOrder` are *not* on the object; they are choreography beneath guarded doors and must not be called directly.
 
 ## Relationships
 
-- **Controllers** (`post-payment-confirm`, `post-payment-intent`, `post-payment-offline`, `post-payment-refund`, `post-payment-sync`, `get-payments`, `get-refunds`, `get-payment-attention`, `get-payment-by-order`, `get-order-by-reference`) import their operations from this file.
-- **`src/modules/cart/services/checkout.ts`** consumes the intent/confirm path (e.g. `createIntent`, `confirmPayment`) to drive the buyer-side payment flow.
-- **`scripts/ops/reap-payments.ts`** calls `reapAbandonedPayments` for periodic cleanup of stale pending payments.
-- **`scripts/ops/sweep-payment-effects.ts`** calls `retryOpenRefunds` / `reconcileStalePayments` to re-attempt settlements that died mid-flight.
-- **`src/modules/payments/config.ts`** is re-exported through this file (`listPaymentMethods`, `PaymentMethodInfo`) so callers get it from the same entry point.
-- **`src/modules/invoicing/tests/integration/issue-credit-note.test.ts`** drives the refund operations directly (named-export style), per the module's stated convention that suites call operations by name.
-- An events/`module.ts` wiring (referenced in comments) imports `refundForOrder` and `detachUserId` by name to attach them to `ORDER_REFUND_OWED` and similar triggers.
+- **`src/modules/payments/config.ts`** — source of `listPaymentMethods` and `paymentAttentionMinutes`, both re-exported here.
+- **`src/modules/payments/controllers/get-payment.ts`, `get-payments.ts`, `get-order-payments.ts`, `get-payment-attention.ts`, `get-refund.ts`** — controllers that import `paymentService` from this file to read or list payment records.
+- **`src/modules/cart/services/checkout.ts`** — calls into `paymentService` (intent/settlement doors) during the checkout flow.
+- **`src/modules/invoicing/services/issue-credit-note.ts`** — interacts with the refund side of `paymentService` when issuing credit notes.
+- **`src/modules/notifications/services/digest.ts`** — consumes payment/refund notification data surfaced by this module.
+- **`scenarios/support/doubles/payments/levers.ts`** — test doubles that mirror or stub the `paymentService` surface.
+- **Test files** (`shop.contract.test.ts`, `checkout-interleavings.test.ts`, `product-removal-protects-orders.test.ts`, `credit-note-catch-up.test.ts`, `issue-credit-note.test.ts`) — exercise `paymentService` through the flows above.
 
 ## Notes
 
-- **Dual export pattern is load-bearing.** Both the named exports *and* the `paymentService` object exist because two distinct call sites need each shape: the event-wiring module and the integration suites use named imports; other callers prefer the object. Removing either breaks one of those call sites.
-- **Scope/permission guards live in the "door" functions**, not in the re-export layer. This file performs no validation; it only surfaces the API.
-- The file is a folder-level barrel, not a single implementation. The doc comment links to `docs/theory/layers.md` for the rationale on why the service was split into sub-files at ~700 lines.
+- The object is intentionally flat (no namespacing by flow); discoverability relies on the module docblock and `docs/modules/payments.md`.
+- The "door" pattern means the guard logic (scope, own-money rule, order gate) lives in the published functions, not in the internal choreography. Calling an internal directly would bypass those guards — hence the explicit comment forbidding it.
+- Adding a new payment flow means creating a sibling file (one-file-per-flow convention) and then adding its exports here.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/addresses/service.ts
-sha256: 1df4be44890c409d71e654c1a0665afeb4d4645d01ff8e948fcd8667d993c1ee
-generated_at: 2026-10-14T14:53:46.126705+00:00
+sha256: c50a239332bd1cb1ec9c91a1b58adb2e3a698310241d134176dda6fb4c778ac7
+generated_at: 2026-10-29T03:09:51.389298+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Service layer for the address-book module. It wraps repository calls in HTTP-shaped results (success/reject), applies presenters, and exposes the six domain operations (get, add, update, set-default, remove, checkout-lookup) plus two lifecycle hooks that controllers and the module manifest invoke.
+Service layer for the address-book module. It is the single point through which every controller and sibling module reads and writes the address book, translating repository results into shaped HTTP responses (`generateSuccess` / `generateReject`) and localised error messages.
 
 ## Key elements
 
-- **`addressesGet`** – Returns the user's full book as an `AddressesView`; absence and emptiness both yield an empty view (never 404).
-- **`addressAdd`** – Calls `addEntry`; on the `ADDRESS_BOOK_FULL` sentinel returns 409, otherwise returns 201 with the last item in the array as the newly created entry.
-- **`addressUpdate`** – Calls `updateEntry`; 404 if the entry isn't found, 200 with the updated entry otherwise.
-- **`addressSetDefault`** – Calls `setDefault`; 404 or 200 with the now-default entry. The demoted sibling is a different row, so clients should refetch the book.
-- **`addressRemove`** – Calls `removeEntry`; returns the **whole book** (not just the removed entry) because the one-default invariant may have shifted to another row.
-- **`addressForCheckout`** – Resolves the shipping address for a given `addressId` or the default. Tri-state return: `AddressItem` (found), `null` (id supplied but not found / not owned → checkout must refuse), `undefined` (no id supplied, no default → shipping optional). Collapsing `null`/`undefined` would let a stale id silently downgrade to "no address".
-- **`addressesDeleteByUserId`** – Hard-delete hook (`personalData.erase`); joins the caller's Mongoose `ClientSession` transaction.
-- **`addressesMinimise`** – Inactive-account hook (`personalData.minimise`); same repository call without a transaction. Idempotent.
-- **`reencryptAddressBooks`** – Re-exported from `./reencrypt` so callers can import it from the service barrel.
+- **`addressService`** — The sole export. An object bundling all operations below so callers import one name.
+- **`list(userId)`** — Returns the user's full book as an `AddressesView`. Absence and emptiness are the same state: always an empty view, never a 404.
+- **`get(userId, addressId)`** — Returns one entry or a 404. A foreign id is indistinguishable from a bogus one.
+- **`create(userId, entry)`** — Adds an entry (201) or rejects with 409 `ADDRESS_BOOK_LIMIT_REACHED`. Relies on the repository appending, so the new entry is `book.items.at(-1)`.
+- **`update(userId, addressId, changes)`** — Partially updates one entry; returns the entry as it now stands (200) or 404.
+- **`setDefault(userId, addressId)`** — Promotes one entry to default, demoting the previous holder. Returns the promoted entry; the demoted row is a different entry, so list-viewing clients should refetch.
+- **`remove(userId, addressId)`** — Deletes one entry (204) or 404. The repository maintains the one-default invariant.
+- **`forCheckout(userId, addressId?)`** — Resolves the shipping address. Returns `AddressItem | null | undefined` (see Notes).
+- **`removeByUserId(userId, session)`** — Hard-deletes all of a user's addresses inside a Mongoose `ClientSession` transaction (GDPR `personalData.erase` hook).
+- **`minimise(userId)`** — Same delete without a transaction (GDPR `personalData.minimise` hook for inactive accounts). Idempotent; safe to retry.
+- **`reencrypt`** — Re-exports `reencryptAddressBooks` from `./reencrypt`.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `repository.ts` | All persistence goes through `addressBookRepository`; the `ADDRESS_BOOK_FULL` sentinel is the only non-data return the service checks. |
-| `presenter.ts` | Transforms raw repository items into `Address` / `AddressesView` DTOs before they reach the response helpers. |
-| `model.ts` | Supplies the `AddressItem` type used in `addressForCheckout`. |
-| `@infrastructure/http/response` | `generateSuccess` / `generateReject` shape every return value; `ResponseSuccess` / `ResponseReject` types annotate signatures. |
-| `@infrastructure/i18n` | `t('addresses.*')` provides the human-readable message strings in each response. |
-| Controllers (`post-address`, `update-address`, `put-address-default`, `get-addresses`, `delete-address`) | Each controller delegates to exactly one exported service function; the service owns the response construction. |
-| `module.ts` | Registers `addressesDeleteByUserId` and `addressesMinimise` in the `personalData` hook manifest. |
-| `reencrypt.ts` | Re-exported through this file so external importers can reach `reencryptAddressBooks` via the service barrel. |
-| `index.ts` | Barrel that re-exports everything from this file for module-level consumers. |
-| `tests/factories.ts` | Provides test fixtures for exercising the service functions in unit/integration tests. |
+- **`./repository`** — All data access. Imports `addressBookRepository` (CRUD + `deleteByUserId`) and the `ADDRESS_BOOK_LIMIT_REACHED` sentinel.
+- **`./presenter`** — Transforms repository shapes into wire shapes via `presentAddress`, `presentAddressOf`, `presentAddresses`.
+- **`./model`** — Imports the `AddressItem` type used by `forCheckout`.
+- **`./reencrypt`** — Imports and re-exports `reencryptAddressBooks` into `addressService`.
+- **`./module`** — Registers `removeByUserId` and `minimise` as lifecycle hooks in the module manifest (per their doc comments).
+- **`./index`** — Re-exports `addressService` for external consumers.
+- **Controllers** (`get-addresses`, `get-address`, `post-address`, `update-address`, `delete-address`, `put-address-default`) — Each calls the corresponding `addressService` method and returns the promise directly.
+- **`@infrastructure/http/response`** — Provides `generateSuccess`, `generateReject`, and the `ResponseSuccess` / `ResponseReject` union types that every method returns.
+- **`@infrastructure/i18n`** — `t()` localises user-facing error messages (`addresses.not-found`, `addresses.book-full`).
 
 ## Notes
 
-- **Response contract (module doc):** single-entry writes (add, update, set-default) return *the entry*; list-level writes (remove) return *the whole book* because "exactly one default" is a list property. Clients showing the book should refetch after `addressSetDefault` or `addressRemove`.
-- **`addressAdd` last-item assumption:** the 201 path grabs `book.items.at(-1)!` on the basis that `addEntry` appends. If the repository ever reorders, this breaks silently.
-- **Tri-state in `addressForCheckout`:** `null` ≠ `undefined`. Callers (e.g. checkout) must distinguish "explicitly chosen but invalid" from "nothing chosen" and must not conflate them.
-- **No direct DB access:** the service never imports Mongoose models or performs queries itself; `ClientSession` is only threaded through to the repository for the erase hook.
+- **`forCheckout` triple-state is deliberate.** `undefined` = the user has no addresses and named none (checkout may proceed without one). `null` = the caller named an id that does not resolve to their book (checkout must refuse). Collapsing the two would let a stale id silently downgrade to "no address."
+- **`removeByUserId` vs `minimise`.** Both call `repository.deleteByUserId`. The former passes a Mongoose `ClientSession` to join the caller's hard-delete transaction; the latter omits it. The latter is safe to retry because deleting an already-empty set is a no-op.
+- **Controllers never touch the repository directly.** The service is the single door; it also owns the 404 / 409 / 201 / 204 status decisions and the i18n messages.
+- **`create` trusts the append invariant.** It reads `book.items.at(-1)!` without searching, relying on `addEntry` appending the new entry last.

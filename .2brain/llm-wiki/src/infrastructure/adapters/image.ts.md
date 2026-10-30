@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/adapters/image.ts
-sha256: 379cbce73392aec56d52b425bcc4742897b58a00cbfdccc08c661eaf987f4bc5
-generated_at: 2026-10-14T07:44:25.066049+00:00
+sha256: 5e6c4566cd389fc6a2833d94d50e97908aae2819f2062c8a45ca488bb68e1e30
+generated_at: 2026-10-29T01:54:46.992923+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Wraps `sharp` behind two pure `Buffer → Buffer` transforms (`digestImage`, `thumbnailImage`) so that no other file in the codebase touches the sharp API directly. Swapping the image library later means rewriting only this file. All sharp-specific configuration (concurrency, cache) is also set here at module load.
+Thin wrapper around **sharp** that exposes exactly two public transforms — `digestImage` (re-encode a quarantined upload to a size-capped version in the *same* format) and `thumbnailImage` (produce a small WebP derivative). All sharp-specific configuration, safety limits, and encoding logic is confined to this file so the image library can be swapped by rewriting two functions rather than searching the codebase.
 
 ## Key elements
 
-- **`ReencodableImageMime`** (exported type) — Closed union of the three accepted formats: `'image/png' | 'image/jpeg' | 'image/webp'`.
-- **`sharp.concurrency(1)` / `sharp.cache(false)`** (module-level side effects) — Cap libvips to one thread per process (matters under cluster forks) and disable the repeated-operation cache (useless for one-shot transforms).
-- **`decode(input: Buffer): Sharp`** (internal) — Decodes a buffer with a `limitInputPixels` cap (read from `imageConfig()` at call time) and auto-orients via `rotate()`.
-- **`reencode(pipeline: Sharp, mime: ReencodableImageMime): Sharp`** (internal) — `switch` over the closed MIME union; guarantees TypeScript flags a missing branch if a fourth format is added.
-- **`digestImage(input, mime): Promise<Buffer>`** (exported) — Decode → resize (longest edge ≤ `NODE_IMAGE_MAX_DIMENSION`, `fit: 'inside'`, no upscaling) → re-encode to the *same* MIME type. Strips EXIF/ICC/XMP as a side effect of the encode.
-- **`thumbnailImage(input): Promise<Buffer>`** (exported) — Decode → resize (longest edge ≤ `NODE_IMAGE_THUMBNAIL_DIMENSION`) → always WebP. Always WebP because the thumbnail is stored at its own key, never under the original's URL.
+- **`ReencodableImageMime`** (type export) — a closed union of MIME strings (`image/png`, `image/jpeg`, `image/webp`) derived at compile time from the `reencodable: true` entries in `images.generated.ts`.
+- **`sharp.concurrency(1)` / `sharp.cache(false)`** — module-level side effects. Cap libvips to one thread per process and disable its operation cache, both appropriate for a one-shot decode pipeline that runs inside cluster forks.
+- **`decode(input)`** (internal) — sharp constructor with a `limitInputPixels` guard (read from `imageConfig()` at call time) followed by `.rotate()` to bake EXIF orientation into pixels *before* metadata is stripped.
+- **`reencode(pipeline, mime)`** (internal) — exhaustive `switch` over the three accepted MIME types; adds a fourth to the union without a branch here is a compile error.
+- **`digestImage(input, mime)`** (export) — decode → `resize` (longest-edge cap, `fit: 'inside'`, no upscaling) → re-encode into the *same* MIME → `toBuffer()`.
+- **`thumbnailImage(input)`** (export) — decode → `resize` (thumbnail cap) → always `.webp()` → `toBuffer()`. Output is stored at its own URL key, so format mismatch is not a concern.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/config.ts`** — Imports `imageConfig`; reads `NODE_IMAGE_MAX_INPUT_PIXELS`, `NODE_IMAGE_MAX_DIMENSION`, and `NODE_IMAGE_THUMBNAIL_DIMENSION` at call time (not import time).
-- **`src/infrastructure/adapters/image.worker.ts`** — Consumes `digestImage` / `thumbnailImage` to run the transforms inside a worker thread, keeping the event loop free.
-- **`src/infrastructure/adapters/image-store.ts`** — Receives the `Buffer` returned by `digestImage` / `thumbnailImage` and persists it to the public or thumbnail store.
-- **`scenarios/tools/generate-seed-images.ts`** — Calls `digestImage` / `thumbnailImage` to produce seed assets.
-- **`tests/unit/infrastructure/adapters/image.test.ts`** — Unit-tests the two transforms and edge cases.
-- **`tests/unit/infrastructure/adapters/image.worker.test.ts`** — Tests the worker wrapper's use of these functions.
-- **`package.json`** — Declares `sharp` as a dependency.
+- **`src/infrastructure/adapters/config.ts`** — imports `imageConfig` to read `NODE_IMAGE_MAX_INPUT_PIXELS`, `NODE_IMAGE_MAX_DIMENSION`, and `NODE_IMAGE_THUMBNAIL_DIMENSION` at call time.
+- **`src/infrastructure/adapters/images.generated.ts`** — imports `imageRuleData.formats` to derive the `ReencodableImageMime` type; the set of accepted formats is therefore controlled by the shared rules file, not hardcoded here.
+- **`src/infrastructure/adapters/image.worker.ts`** — consumes the two exports to perform digesting inside a worker thread.
+- **`src/infrastructure/adapters/image-store.ts`** — consumes the `Buffer` results to persist them.
+- **`scenarios/tools/generate-seed-images.ts`** — calls the exports to produce seed fixtures.
+- **`package.json`** — declares the `sharp` (and `libvips`) runtime dependency this module imports.
+- **`tests/unit/infrastructure/adapters/image.test.ts` / `image.worker.test.ts`** — unit-test the two exports and their worker context.
 
 ## Notes
 
-- `digestImage` re-encodes into the **same** MIME type it receives. It never converts between formats. The on-disk extension already determines the `Content-Type` that `express.static` will send, so changing the bytes' format without changing the extension would recreate the exact mismatch the upload gates prevent.
-- `thumbnailImage` always outputs WebP, regardless of the source format. This is intentional and safe because the thumbnail is stored at a separate key (`.webp` extension), never at the original's URL.
-- The pixel-count cap (`limitInputPixels`) is read from `imageConfig()` **at call time**, matching the convention used by every other adapter for env-sensitive values.
-- `rotate()` is applied *before* any metadata stripping; without it the orientation tag would be gone and a portrait phone photo would render sideways.
+- **Import-time side effect.** `sharp.concurrency(1)` and `sharp.cache(false)` execute the moment this module is loaded. Any test or script that imports this file inherits those settings globally for that process.
+- **Same-format re-encode, never convert.** `digestImage` encodes into the *input* MIME. This is intentional: the file extension on disk determines the `Content-Type` that `express.static` will send, and changing the byte format without changing the extension recreates the exact mismatch the upload gate is meant to prevent.
+- **`rotate()` precedes metadata strip.** If the EXIF orientation tag were stripped first, there would be nothing for `.rotate()` to read and portrait photos would render sideways.
+- **`limitInputPixels` is read at call time**, matching the convention used by every other adapter for env-dependent values; it is not frozen at import.
+- **`reencode` uses a `switch`, not a lookup table.** This gives TypeScript's exhaustiveness check a role: an unhandled format is a compile error, not a silent fallthrough to sharp's default encoder.

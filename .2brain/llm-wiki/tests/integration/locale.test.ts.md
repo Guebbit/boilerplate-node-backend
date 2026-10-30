@@ -1,7 +1,7 @@
 ---
 source: tests/integration/locale.test.ts
-sha256: 67a5f595e356603a08329b0ba5756393efe706d83f2e8c8e2ffe8352f78a3bcf
-generated_at: 2026-10-15T12:48:16.560190+00:00
+sha256: 9e9f7485535c6dfa07b96161f0e90ffc860a8bdf65a7227b461dac1c3ec31fd3
+generated_at: 2026-10-29T06:58:55.445819+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that verify per-request locale negotiation end-to-end. They drive the real middleware stack (`attachLocale`, routes, Zod validation thunks, error shaping) against `POST /account/signup` and `POST /feedback/contact` — two endpoints that reject before any repository call — to confirm that validation messages, `Content-Language`, and `Vary` headers reflect the negotiated language. The most critical tests guard against locale leaking across concurrent requests and against `AsyncLocalStorage` being lost after a multipart stream is consumed.
+Integration tests that verify per-request locale negotiation end-to-end through the real Express middleware stack. They assert that validation errors, generated-schema rejections, multipart rejections, and framework-level failures (404/400/413) are all answered in the language the client requested, including under 20-way concurrency. The file exists as a regression guard for the `AsyncLocalStorage`-based i18n design — in particular, the concurrency test prevents someone from "simplifying" it to a single mutable global.
 
 ## Key elements
 
-- **`emailRefusal(locale)`** — renders the "not an email" validation message in the given locale using the same `translator` the app uses, so assertions compare against the live dictionary.
-- **`signupWith(acceptLanguage?)`** — builds a `POST /account/signup` request via `api()`, optionally setting `Accept-Language`.
-- **`contactWith(acceptLanguage?)`** — same pattern for `POST /feedback/contact` (controller-parsed, orval-generated schema).
-- **`messagesOf(body)`** — extracts the `message` strings from a `422` error body for assertion.
-- **`describe('Accept-Language negotiation')`** — seven tests covering: Italian, English default, unsupported-language fallback, q-weight ordering, region-tag matching (`it-CH` → `it`), `Vary: Accept-Language` header, multipart locale preservation, and a 20-request concurrency isolation test.
-- **`describe('generated-schema validation …')`** — three tests for the orval-schema path, including "never leaves a Zod default on the wire," which asserts every message differs between IT and EN without naming specific copy, and that no raw dictionary key escapes.
+- **`emailRefusal(locale)`** — renders the "not an email" message via the same `translator` the app uses, so assertions stay in lock-step with the dictionary.
+- **`setupTestDb()`** — called once at module scope; only the multipart case (`PATCH /account`) needs a signed-in user.
+- **`signupWith(acceptLanguage?)`** / **`contactWith(acceptLanguage?)`** — thin supertest builders that attach an optional `Accept-Language` header to `POST /account/signup` and `POST /tickets` respectively.
+- **`messagesOf(body)`** — normalises the `body.errors[].message` array for assertions.
+- **`describe('Accept-Language negotiation')`** — Italian, English default, unsupported-language fallback, q-weight ordering, region-tag matching (`it-CH` → `it`), `Vary: Accept-Language`, multipart locale survival, and the 20-request concurrency guard.
+- **`describe('generated-schema validation …')`** — same assertions against the orval-generated `/tickets` schema; includes a "no Zod default on the wire" test that checks every message differs between `en` and `it` without hard-coding copy.
+- **`describe('a failure with no message of its own')`** — 404, 400 (malformed JSON), 413 (oversized body), and the `title` / `detail` / `errors[]` envelope shape, all in Italian.
 
 ## Relationships
 
-- **`src/infrastructure/i18n/index.ts`** — barrel re-export; the test imports `translator` from here.
-- **`src/infrastructure/i18n/context.ts`** — provides the `AsyncLocalStorage`-backed context that `attachLocale` populates; the concurrency and multipart tests are regression guards for its correctness.
-- **`tests/support/http.ts`** — supplies `api()` (supertest wrapper) and `authenticateAs()` (bearer-token helper) used by every request in the file.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called once at module level so the single multipart test can sign a user in; all other tests reject before touching the DB.
+- **`src/infrastructure/i18n/index.ts`** — source of the `translator` import; the public entry point of the i18n module under test.
+- **`src/infrastructure/i18n/context.ts`** — implements the `AsyncLocalStorage` store and the `translator(locale)` factory that these tests exercise; the concurrency test is the guard against replacing this mechanism.
+- **`tests/support/http.ts`** — provides `api()` (supertest instance bound to the real app) and `authenticateAs()` (used only by the multipart case).
+- **`tests/support/setup-test-db.ts`** — provides `setupTestDb()` to create the in-memory database the multipart test needs for the bearer token.
 
 ## Notes
 
-- The concurrency test (20 interleaved requests, alternating `en`/`it`) is the primary guard against "simplifying" the i18n layer to a single `i18next.changeLanguage()` global. Removing it would allow that regression.
-- The multipart test uses `PATCH /account` (not signup) because signup no longer declares a multipart body. It exercises the re-entry fix in `src/infrastructure/http/middlewares/upload.ts` where the `AsyncLocalStorage` store is re-set after multer consumes the stream.
-- `setupTestDb()` runs unconditionally at import time even though only one test needs it; the other tests reject at the validation layer and never hit the database.
-- The "no Zod default" test intentionally avoids hardcoding translated strings, so it survives dictionary edits; it only asserts structural inequality and absence of raw `dotted.key` keys.
+- The multipart test targets `PATCH /account` rather than `POST /account/signup` because signup no longer accepts a multipart body. The concern it guards: multer consumes the request stream, and the async-context continuation after that read predates `attachLocale`, so the ALS store is gone unless `upload.ts` re-enters it. JSON-body tests cannot reproduce this because `express.json()` buffers before `attachLocale`.
+- The concurrency test (20 interleaved requests, alternating `en`/`it`) is explicitly called out as *the* test that justifies the `AsyncLocalStorage` design over a global `i18next.changeLanguage()`.
+- The "no Zod default" test asserts that every Italian message differs from its English counterpart positionally, and that no message matches a raw `key.path` pattern — both checks survive dictionary edits without test maintenance.
+- The 404/400/413 tests implicitly verify that `attachLocale` is mounted **before** body-parsing middleware in `createApp`; the test comments note that the global rate-limiter's 429 sits in the same middleware group and is covered by the same ordering.

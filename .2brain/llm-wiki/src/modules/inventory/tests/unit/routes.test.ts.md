@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/tests/unit/routes.test.ts
-sha256: 03477bf5c091687325dc01e82291b8561a1725f3b38ea694d0412904b3edbe4a
-generated_at: 2026-10-15T10:37:25.532142+00:00
+sha256: 9cbd4531a16a190cbb20af8e488080a1a080ad767d0500a5f2f052663d9a3aa8
+generated_at: 2026-10-29T04:09:08.355726+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit test that pins the inventory route table to its documented contract: the exact set and order of endpoints, and the per-route guard chain that keeps every route staff-only. It exists so that a mis-ordered mount or a missing `requirePermission` is caught immediately rather than leaking counters and the ledger to unauthenticated callers.
+Locks in the inventory route table's security contract: every endpoint must sit behind `getAuth` + `requirePermissionGuard`, appear in a fixed order, and no unguarded route may exist. It exists so that accidentally mounting a route above the auth gate, or dropping a `requirePermission` from a mount, is caught immediately rather than leaking stock counters and the ledger to the public.
 
 ## Key elements
 
-- **`routeSignatures(router)`** – imported from `@tests/routes`; returns the flat list of `"METHOD /path"` strings in mount order.
-- **`guardsOn(router, signature)`** – imported from `@tests/routes`; returns the ordered array of guard names applied to a given route.
-- **`identityGuardIndex(guards)`** – imported from `@tests/routes`; returns the index of the identity/credential guard in the chain (−1 if absent).
-- **`router`** – the Express-style router exported from `@modules/inventory/routes`, the object under test.
-- **Test 1** (`mounts exactly the documented endpoints…`) – asserts the full signature list matches the seven expected routes in order.
-- **Test 2** (`%s is reachable only by an authenticated admin`) – parameterised over all seven signatures; asserts `getAuth` is present, an identity guard exists at index ≥ 0, `requirePermissionGuard` is present, and the identity guard appears *before* `requirePermissionGuard`.
-- **Test 3** (`has no public endpoint at all`) – filters for any route whose guard list lacks `requirePermissionGuard` and expects the result to be empty.
+- **`describe('inventory routes')`** — single suite, three specs:
+  - *exact signatures & order* — asserts `routeSignatures(router)` equals the eight documented endpoints in that precise sequence.
+  - *per-route guard check* (`it.each`) — for every signature, asserts the guard chain contains `getAuth`, that an identity guard exists, and that it precedes `requirePermissionGuard`.
+  - *no public endpoint* — filters signatures whose guard chain lacks `requirePermissionGuard` and asserts the result is empty.
+- **Import: `router`** from `@modules/inventory/routes` — the sole production object under test.
+- **Import: `routeSignatures`, `guardsOn`, `identityGuardIndex`** from `@tests/routes` — test-support helpers that extract ordered route metadata and per-route guard chains from an Express router.
 
 ## Relationships
 
-- **`src/modules/inventory/routes.ts`** – sole production dependency; exports the `router` that all three tests inspect.
-- **`tests/support/routes.ts`** – provides the three test utilities (`routeSignatures`, `guardsOn`, `identityGuardIndex`) shared across route-table tests in the repo.
+- **`src/modules/inventory/routes.ts`** — the file under test. This suite imports its exported `router` and makes structural assertions on the route table it builds; no runtime side-effects are triggered.
+- **`tests/support/routes.ts`** — provides the three introspection helpers (`routeSignatures`, `guardsOn`, `identityGuardIndex`) used to read route paths and their middleware chains without hitting the HTTP layer.
 
 ## Notes
 
-- The guard-order assertion (identity < `requirePermissionGuard`) is intentional: the permission check must see a resolved identity, so swapping the two would break authorisation.
-- Test 3 is deliberately a *positional* check on the full signature list, not just a count — it fails the moment a new route is inserted above the `getAuth`/`isAuthOrCredential` gate.
-- The module docstring makes explicit that the customer-facing stock view is **not** a route in this module (it lives on the product page via an `available` field), so the "no public endpoint" invariant is structural, not just a matter of permission logic.
+- The module doc-comment states a deliberate design choice: the customer-facing stock view is **not** a route (it lives as `available` on the product page), so this test suite intentionally covers *only* staff endpoints.
+- The "no public endpoint" spec is written positionally (filter + empty-array assertion) so a new route added above the guard fails with a clear diff of the offending signatures.
+- Guard-order assertion (`identityGuardIndex < indexOf('requirePermissionGuard')`) encodes the requirement that identity resolution runs before the permission check on every route.

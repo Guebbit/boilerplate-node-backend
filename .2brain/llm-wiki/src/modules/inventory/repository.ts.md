@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/repository.ts
-sha256: e870957204f700f46832fa149c92df780da13c45dbfee726b263651edcbe452a
-generated_at: 2026-10-15T10:35:24.614838+00:00
+sha256: 08629c22fb89491031ecb661e3dcc46845f997725160e64c37e36a61d8c372ab
+generated_at: 2026-10-29T04:02:21.485028+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Persistence boundary for the inventory module. It owns the three MongoDB collections (stock levels, stock movement ledger, reservations), defines the Mongo-level conditional write guards for every stock transition, and exposes repository methods that the service layer calls. By keeping `QueryFilter` and `ObjectId` inside this file, services are limited to asking for counter mutations and can never pass a raw Mongo condition downstream.
+The data-access layer for the inventory module. It owns reads and writes against the three Mongo collections (`stockLevel`, `stockMovement`, `reservation`) and translates domain-level transitions (reserve, ship, release, backorder, allocate, etc.) into conditional counter updates. Business rules live in `./services`; this file only enforces the atomic "guard-then-write" step and keeps `available` in sync with `onHand`/`reserved`.
 
 ## Key elements
 
-- **`conditionFor(reason, quantity, kind)`** — Maps each `StockMovementReason` to a `QueryFilter<StockLevelDocument>` that `applyDelta` must match before a write succeeds. Encodes the invariant per transition (e.g. `ship` requires both `onHand` and `reserved` ≥ quantity; `preorder` checks `preorderLimit` via `$expr`; `adjust` ensures `onHand + delta ≥ reserved`).
-- **`stockLevelRepository`** — The main exported repository. Extends the generic `Repository` (CRUD via `createRepository`) with domain-specific methods: `insertIfAbsent`, `findByProductId`, `applyDelta`, `setPreorderLimit`, `stockBoard`, `preorderBoard`, `lowAvailabilityProductIds`, `sumReserved`, `deleteByProductId`, `findManyByProductIds`.
-- **`StockLevelRow` / `PreorderLevelRow`** — Row shapes returned by the board queries. Contain counters only; product metadata (title, dates) is resolved by `services/levels.ts` calling `productService.findManyByIds` (API composition, not a DB join).
-- **`toReservationItems(lines)`** — Converts service-level `{ productId: string }` lines to storage shape with real `Types.ObjectId`s.
-- **`orderedByProduct(productIds)`** — Aggregates the stock-movement ledger for lifetime `preorder` units per product.
-- **`outstandingByProduct(productIds)`** — Aggregates open reservations (`held` / `committed`) split by payment state for the preorder board.
+- **`conditionFor`** (private) – Maps a `StockMovementReason` + `HoldKind` + `uncapped` flag to a Mongo `QueryFilter`. Each reason gets a different guard: `reserve` checks `available`, `ship` checks both `onHand` and `reserved`, `backorder` respects `backorderLimit` (with `$type: 'null'` vs absent-field subtlety), `adjust` ensures the post-change `onHand` stays ≥ `reserved`. This is the single place raw Mongo filter syntax appears.
+- **`stockLevelRepository`** (exported) – The primary repository object. Extends the generic `Repository` from `createRepository` with domain-specific methods:
+  - `insertIfAbsent` – Idempotent zero-row upsert (safe under concurrent `PRODUCT_CREATED` redelivery).
+  - `applyDelta` – Conditional counter write: applies a `CounterDelta` only if `conditionFor` matches; returns `true`/`false` for success/failure.
+  - `setBackorderLimit` – Updates the per-product backorder ceiling.
+  - `preorderBoard` / `stockBoard` – Paginated read queries returning counters only (`StockLevelRow` / `PreorderLevelRow`); product titles are joined by the caller via `products` service.
+  - `lowAvailabilityProductIds` – Returns product IDs whose `available` is at or below a threshold.
+  - `sumReserved` – Global reserved total.
+- **`StockLevelRow`** / **`PreorderLevelRow`** (exported interfaces) – Row shapes for the two admin boards; deliberately contain no product-name fields.
+- **`toReservationItems`** (private) – Converts string product IDs to `Types.ObjectId` for storage.
+- **`orderedByProduct`** (private) – Aggregates lifetime backorder claims from the `stockMovement` ledger.
+- **`outstandingByProduct`** (private) – Aggregates outstanding hold units from `reservation`, split by `held` (unpaid) vs `committed` (paid).
 
 ## Relationships
 
-- **`src/infrastructure/persistence/create-repository.ts`** — Supplies `createRepository`, `toObjectId`, and the `Repository`, `AppendOnlyLedger`, `Wire`, `Lean` types that define the base CRUD surface and the wire/lean document split.
-- **`src/infrastructure/persistence/mongo-errors.ts`** — Provides `isDuplicateKey`, used to detect races on the unique `productId` index.
-- **`src/modules/inventory/model.ts`** — Source of the Mongoose models (`stockLevelModel`, `stockMovementModel`, `reservationModel`), document types, and `apply*Transform` functions passed to `createRepository`.
-- **`src/modules/inventory/domain/index.ts`** — Provides the `CounterDelta` and `HoldKind` types used in `conditionFor` and `applyDelta` signatures.
-- **`src/modules/inventory/domain/transitions.ts`** — `counterDeltaFor` is the reason→deltas table that `conditionFor` must stay consistent with (manual invariant; no shared test).
-- **`src/modules/inventory/services/allocate.ts`, `reserve.ts`, `holds.ts`, `levels.ts`, `sweep.ts`, `transition.ts`, `admin.ts`** — Consumers of `stockLevelRepository`; they pick a transition reason, compute the delta, and call `applyDelta` without ever constructing a Mongo filter.
-- **`src/modules/inventory/metrics.ts`** — Reads counters via the repository for operational metrics.
-- **`src/modules/inventory/tests/integration/hold-crash-window.test.ts`** — Exercises the reservation and level writes through this repository under simulated crash/retry conditions.
+- **`./model.ts`** – Source of the three Mongoose models, their document types, and the `apply*Transform` functions used by `createRepository`.
+- **`./domain/index.ts`** – Supplies `withAdded`, `CounterDelta`, and `HoldKind` types consumed by `applyDelta` and `conditionFor`.
+- **`./domain/transitions.ts`** – Defines `counterDeltaFor` (reason → delta table) that `conditionFor` stays manually in sync with; both must agree on which counters a transition touches.
+- **`./services/admin.ts`** – Primary caller; composes `applyDelta`, board queries, and `insertIfAbsent` into service-level operations.
+- **`@infrastructure/persistence/create-repository.ts`** – Provides the generic `Repository` base, `toObjectId` helper, and the `Wire`/`Lean`/`AppendOnlyLedger` type utilities.
+- **`@infrastructure/persistence/conditional-status.ts`** – Imported as `conditionalStatus` (`updateStatusIfIn`); used for status-guarded updates on the reservation collection.
+- **`@infrastructure/persistence/mongo-errors.ts`** – `isDuplicateKey` is used to detect unique-index violations (e.g., double-booking a reservation).
+- **`./hold-lines.ts`** – Domain logic for hold line manipulation; feeds the line arrays that `toReservationItems` persists.
+- **`./metrics.ts`** – Reads repository data (or is called by services that do) to emit inventory gauges.
+- **Cart & delivery integration tests** (e.g., `checkout-stock-divergence.test.ts`, `lost-parcel.test.ts`) – Exercise `applyDelta` under concurrent/edge-case scenarios (stock race, lost-parcel release against `backordered`).
 
 ## Notes
 
-- **`conditionFor` is a manual invariant.** It must stay in lockstep with `counterDeltaFor` in `domain/transitions.ts` by hand. There is no automated test that checks the two agree; `tests/unit/transitions.test.ts` covers `counterDeltaFor` only.
-- **`ship` and `adjust` guard on `onHand`/`reserved` directly**, not on `available`, because their invariants are about the underlying physical and promised quantities, not the derived difference.
-- **`insertIfAbsent` is idempotent** via the unique index on `productId`; the boolean return tells the caller whether *this* call created the row (used to book opening stock exactly once on redelivered `PRODUCT_CREATED`).
-- **`deleteByProductId` removes only the stock-level row.** The stock-movement ledger is intentionally left intact — it is history and must remain true even after a product is gone.
-- **Preorder fields (`preordered`, `preorderLimit`) may be absent** on documents written before the feature existed; `conditionFor` guards against this with `$ifNull`.
-- All exported types are written out explicitly (not inferred) because Mongoose generics are too large for TS to serialize at an export boundary (TS7056).
+- **Explicit type exports are intentional.** Mongoose's inferred generics are too large for TS to serialize at an export boundary (TS7056), so every public type is written out by hand. Do not "simplify" these to inferred forms.
+- **`conditionFor` stays in the repository, not in `services/`.** This keeps `QueryFilter` a repository-only import, so a service can never pass a raw Mongo condition directly to the data layer.
+- **`conditionFor` and `counterDeltaFor` are kept in sync by hand.** There is no automated test that asserts they agree; `tests/unit/transitions.test.ts` covers `counterDeltaFor` only. Adding a new reason requires updating both.
+- **`backorderLimit` null vs. absent:** `$type: 'null'` matches only an explicitly stored `null`; a missing field is treated as `0` (capped) via `$ifNull`. An explicit `null` means "no cap." Do not collapse these two cases.
+- **Boards return counters only.** Product names, dates, etc. are resolved by the calling service via the `products` module—there is no cross-module DB join in this file.

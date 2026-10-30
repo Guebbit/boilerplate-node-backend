@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/controllers/create-user.ts
-sha256: c5b91c11493e40170da111c2738d9b745fa9d3fd03ae87b0e12af5534eac9d50
-generated_at: 2026-10-15T12:06:43.192103+00:00
+sha256: 5e8e5b70e0489f4b526a2a08f8b4e9050b09f37bbfb3fbb69fe98d597e1a3258
+generated_at: 2026-10-29T06:11:14.999036+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Request handler for `POST /users` (staff-initiated user creation). Validates the incoming body against a strict Zod schema, resolves server-side image-upload fields, delegates persistence to `userService`, and serialises the response. It is the "create" half of the user write surface; the counterpart lives in `update-user.ts`.
+HTTP handler for `POST /users` (staff create). Validates the incoming body against a strict Zod schema, resolves an optional image upload, delegates persistence to `userService.create`, and serialises the result through `userService.toUserContract` before sending a `201` response. It exists to keep the controller thin: all business logic lives in the service, all HTTP plumbing in `@infrastructure/http/*`.
 
 ## Key elements
 
-- **`createUser`** *(exported const)* — The sole export. An Express handler that:
-  1. Extracts `imageUrl`, `thumbnailUrl`, `pendingImageKey` from the upload via `readUploadedImage`.
-  2. Validates the body with `parseBody(CreateUserBody, …)` (Zod); returns a 422 on failure.
-  3. Builds a `validated` object (`role`, `active`, `thumbnailUrl`, `pendingImageKey`) that is always server-derived.
-  4. Calls `userService.create(…, callerContextOf(request))`.
-  5. On success: claims the upload, maps the document through `userService.toUserContract`, and sends `201 Created` with a `Location` header.
-  6. On service failure or unexpected throw: sends the appropriate error via `rejectResponse` / `rejectDatabaseError`.
+- **`createUser`** — the sole export; Express handler for `POST /users`.
+  - Calls `parseBody(CreateUserBody, …)` to validate the body; on failure a `422` is already sent and the function returns early.
+  - Calls `readInput(request, { surface: 'create', booleans: ['active'] })` to normalise multipart string booleans before validation.
+  - Passes the validated body plus an optional upload image to `writeWithUploadedImage`, which invokes `userService.create({ …body, …image }, callerContextOf(request))`.
+  - On success, fetches the public contract via `userService.toUserContract(result.data, caller)` and responds with `createdResponse` (201 + `Location` header).
+  - On database failure, delegates to `rejectDatabaseError`.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/users/routes.ts` | Registers `createUser` on the `POST /users` route. |
-| `src/modules/users/services/index.ts` | Calls `userService.create(…)` and `userService.toUserContract(…)`. |
-| `src/infrastructure/http/response.ts` | Imports `rejectResponse`, `createdResponse`. |
-| `src/infrastructure/http/errors.ts` | Imports `rejectDatabaseError`. |
-| `src/infrastructure/http/controller.ts` | Imports `parseBody` (Zod schema → validated body or 422). |
-| `src/infrastructure/http/request.ts` | Imports `readInput` (body/multipart decoding, boolean coercion) and `callerContextOf` (audit context). |
-| `src/infrastructure/http/uploads.ts` | Imports `claimUpload` (confirm upload after success) and `readUploadedImage` (resolve upload URLs/keys). |
-| `src/types/index.ts` | Imports `CreateUserRequest`, `CreateUserRequestMultipart`, `User` as type-only dependencies. |
+- **`src/modules/users/routes.ts`** — registers `createUser` as the handler for `POST /users`.
+- **`src/modules/users/services/index.ts`** — provides `userService` (`create`, `toUserContract`).
+- **`src/infrastructure/http/controller.ts`** — provides `parseBody` (Zod validation + 422 short-circuit).
+- **`src/infrastructure/http/request.ts`** — provides `readInput` (multipart/boolean normalisation) and `callerContextOf` (extracts caller identity for audit/service context).
+- **`src/infrastructure/http/response.ts`** — provides `createdResponse` and `rejectResponse`.
+- **`src/infrastructure/http/errors.ts`** — provides `rejectDatabaseError` for uniform DB-failure responses.
+- **`src/infrastructure/http/uploads.ts`** — provides `writeWithUploadedImage` (handles the file part, claims the upload on success, deletes it on the close hook if the request is rejected).
+- **`src/types/index.ts`** — supplies the `CreateUserRequest`, `CreateUserRequestMultipart`, and `User` type aliases used in the handler signature.
 
 ## Notes
 
-- **Body type includes `| undefined`.** Express 5 leaves `request.body` undefined when no parser matched, and multer does not populate it for non-multipart requests. The union is intentional; don't "fix" it.
-- **No `''` default for `imageUrl`.** `undefined` already signals "no change"; `''` would be invalid per `ImageUrl`'s `minLength: 1`.
-- **Strict-schema guard.** The comment in the source explicitly warns that `userService.create` writes exactly what it receives; feeding a raw body would let an operator set `verifiedAt`, `analyticsConsent`, or an unencrypted `phone` directly on the document.
-- **Upload lifecycle.** `claimUpload(request)` is called only *after* the service reports success. If `parseBody` rejects (422), the framework's close hook deletes the upload—no manual cleanup needed in this handler.
-- **Response safety.** `toUserContract` selects only contract-visible fields, so hashed passwords and tokens on the stored document never appear in `res.json`. The `role` is read from the freshly-written membership record, not from the user document (which does not store it).
-- **Multipart booleans.** `readInput` with `booleans: ['active']` coerces the string `"true"`/`"false"` that a multipart form sends into a real boolean before Zod sees it.
+- **Security invariant:** the Zod schema (`CreateUserBody`) is the *only* gate. Because `userService.create` writes exactly what it receives, an undeclared key (e.g. `verifiedAt`, `analyticsConsent`, a plaintext `phone`) would land directly on the document if the raw body bypassed validation. Always route through `parseBody`.
+- **Express 5 quirk:** `request.body` is `undefined` when no body parser matched the content-type, and multer does not populate it for non-multipart requests. The handler signature includes `| undefined` to reflect this.
+- **Multipart booleans:** `active` arrives as the string `"true"`/`"false"` in multipart requests; `readInput` decodes it. Do not assume it is a real boolean before `parseBody` runs.
+- **Upload lifecycle:** if `parseBody` rejects (422), the upload file is cleaned up by the close hook — the handler does not delete it explicitly. On the success path `writeWithUploadedImage` claims (persists) the upload.
+- **Role source:** the `role` in the response contract is read fresh from the membership record just written, *not* from the user document (which does not store role). Do not refactor to read it off the document.
+- **Sensitive fields:** `toUserContract` selects only public `User` contract fields, so the hashed password and any tokens never reach `res.json`.

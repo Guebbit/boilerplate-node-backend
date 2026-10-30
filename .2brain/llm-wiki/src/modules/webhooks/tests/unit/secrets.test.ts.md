@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/tests/unit/secrets.test.ts
-sha256: 20e29109ce5f16c91d14bad91b1a674579b717eb630c562cdd210fbf4c0e0149
-generated_at: 2026-10-15T12:25:16.083941+00:00
+sha256: 51d06ed54c8e50697e9c6d87e9342f6c2e62a5eef5871872c66aaa6b1b190df4
+generated_at: 2026-10-29T06:33:24.479018+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the webhook secret-ring layer: encrypt/decrypt, minting, active-secret selection with the 24-hour overlap window, and removal. It verifies the ring-level wiring on top of the underlying versioned-secret crypto (which is covered separately in `tests/unit/infrastructure/security/versioned-secret.test.ts`).
+Unit tests for the webhook secret-ring operations in `secrets.ts`: encryption/decryption round-trips, secret minting, the 24-hour overlap (supersession) window, retirement reporting, and entry removal. The underlying versioned-crypto and version-mismatch logic is tested once in `tests/unit/infrastructure/security/versioned-secret.test.ts`; this file exercises the ring-level wiring around it.
 
 ## Key elements
 
-- **`describe('encryptRingSecret / decryptRingSecret')`** — round-trip under the configured key, and rejection when a ciphertext is presented against a different ring-entry ID.
-- **`describe('mintRingSecret')`** — asserts the returned plaintext starts with `whsec_`, the entry ID is a valid v4 UUID, and consecutive mints produce distinct secrets and IDs.
-- **`describe('activeRingSecrets')`** — order preservation (oldest-first) and empty-ring edge case.
-- **`mintedAt(at: Date)`** — local helper that mints a secret and stamps `createdAt` to a chosen instant so expiry tests don't need real-time waits.
-- **`describe('the overlap window')`** — with a fixed `t0` baseline: superseded secrets remain active for 24 h after their successor, drop out after that, and the newest secret never expires regardless of age.
-- **`describe('removeRingSecret')`** — removes the entry matching the given ID; no-op for an unknown ID.
+- **`describe('encryptRingSecret / decryptRingSecret')`** – Verifies round-trip under the configured key and that a ciphertext is rejected when presented to a different entry id.
+- **`describe('mintRingSecret')`** – Asserts the plaintext has the `whsec_` prefix, the entry id is a v4 UUID, `createdAt` is a `Date`, and successive mints are unique.
+- **`describe('activeRingSecrets')`** – Confirms all entries decrypt in ring (oldest-first) order and that an empty ring yields `[]`.
+- **`mintedAt(at: Date)`** – Local helper that mints a secret then overwrites `entry.createdAt` so time-window tests can use fixed instants without real waiting.
+- **`describe('the overlap window')`** – Pins the 24-hour supersession rule: a superseded secret stays active until its successor has been live for 24 h; the newest entry never expires.
+- **`describe('retiringRingSecrets')`** – Returns `{ id, retiresAt }` for each superseded entry where `retiresAt` = successor's mint time + 24 h; empty for a single-entry ring or after the window closes.
+- **`describe('removeRingSecret')`** – Removes the entry matching the given id; is a no-op (returns the ring unchanged) when the id is absent.
 
 ## Relationships
 
-- **`src/modules/webhooks/secrets.ts`** — the module under test; all six exported functions are imported and exercised here.
-- **`src/modules/webhooks/model.ts`** — provides the `WebhookSecretRingEntry` type used to construct ring arrays in test fixtures.
-- **`tests/support/setup-environment.ts`** (referenced in the file header, not imported here) — sets `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY` for every suite, which these tests rely on implicitly.
-- **`tests/unit/infrastructure/security/versioned-secret.test.ts`** — owns the low-level crypto and version-mismatch assertions; this file deliberately avoids duplicating them.
+- **`src/modules/webhooks/secrets.ts`** – Source of every function under test (`encryptRingSecret`, `decryptRingSecret`, `mintRingSecret`, `activeRingSecrets`, `liveRingEntries`, `retiringRingSecrets`, `removeRingSecret`).
+- **`src/modules/webhooks/model.ts`** – Provides the `WebhookSecretRingEntry` type used to construct ring fixtures.
+- **`tests/support/setup-environment.ts`** (referenced in header comment) – Sets `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY` for every suite, making the encryption key available without per-test setup.
+- **`tests/unit/infrastructure/security/versioned-secret.test.ts`** (referenced in header comment) – Owns the crypto/version-mismatch tests; this file deliberately does not duplicate them.
 
 ## Notes
 
-- The env key `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY` must be present for the suite to pass; it is injected globally by the test setup file rather than set locally.
-- The overlap-window tests use a hard-coded 24-hour constant (`24 * hour`). If the production default changes, these assertions will need updating in tandem.
-- The helper `mintedAt` spreads the mint result and overrides `createdAt`; it is not exported and is scoped to the overlap-window `describe` block.
+- The 24-hour overlap window is the central behavioural contract: a secret remains "active" for exactly 24 h after its successor is minted. The `retiringRingSecrets` return value's `retiresAt` is computed as *successor's* `createdAt` + 24 h, not the retiring secret's own timestamp.
+- The newest entry in a ring is exempt from expiry regardless of age — verified explicitly with a 1000-hour-old single entry.
+- All time-sensitive tests use the `mintedAt` helper with a fixed `t0` of `2026-10-06T00:00:00Z`; no test relies on `Date.now()`.

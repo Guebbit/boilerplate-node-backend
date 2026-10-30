@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/contract-search-parity.test.ts
-sha256: 94ebcbbb9d4f85143cac256d6638870eceb70a55ceb0566b9a058f863db83a1f
-generated_at: 2026-10-15T12:37:22.117499+00:00
+sha256: 0862e1590a8a707bfb78030d76055631a24827944228306707bc02e3e8e8ecbe
+generated_at: 2026-10-29T06:45:14.980450+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract test that verifies the two spellings of each resource's search endpoint (`GET /{resource}?…` and `POST /{resource}/search`) declare identical validation constraints in the OpenAPI spec. It exists because query parameters and body properties live in different parts of the document, so a constraint added to one spelling is silently missing from the other — a drift the response-parity test (`contract-aliases.test.ts`) cannot catch.
+Guarantees that the two spellings of a search operation — `GET /{resource}` (query parameters) and `POST /{resource}/search` (JSON body) — declare **identical validation constraints** on every filter. It exists to catch structural drift where a constraint added to one spelling is missing or differs in the other, a class of bug that contract-alias tests (which only verify that both routes *answer* alike) cannot detect.
 
 ## Key elements
 
-- **`resolve(node)`** — follows local `#/…` JSON pointers within the inlined OpenAPI bundle; no I/O needed.
-- **`constraints(schema)`** — extracts the validation shape (`type`, `format`, `enum`, `minimum`, `maximum`, `minLength`, `maxLength`, `pattern`) and serializes it to a string so failures print both sides. Returns the literal string `'ABSENT'` when the schema is missing.
-- **`searchPairs`** (IIFE) — discovers every `POST …/search` operation, resolves its `x-alias-of` `operationId` to the sibling `GET` route, and returns `{ searchRoute, listRoute, post }` tuples. Pairs whose alias target is not found are filtered out.
-- **`describe › 'found every search pair'`** — asserts the discovered set matches the expected six modules (`example`, `feedback`, `orders`, `payments`, `products`, `users`) filtered by `isDeployed`. Acts as a tripwire: if the discovery regex stops matching, every subsequent case would be vacuous.
-- **`it.each(searchPairs)`** — for each pair, builds a `Map` of query-parameter schemas (from `GET` `parameters`) and a `Map` of body-property schemas (from `POST` `requestBody`), then asserts the union of keys yields zero divergent constraint strings.
+- **`resolve`** — Resolves local `#/…` JSON-pointer `$ref` values against the inlined OpenAPI bundle; no I/O needed.
+- **`constraints`** — Projects a schema object onto its validation-relevant properties (`type`, `enum`, `format`, `minimum`, `maximum`, `minLength`, `maxLength`, `pattern`) and returns a stable JSON string. Returns the literal string `'ABSENT'` for a missing schema so a one-sided filter is a visible diff.
+- **`searchPairs`** (module-level IIFE) — Walks `spec.paths`, finds every route ending in `/search` with a `post` operation that carries `x-alias-of`, and maps it back to its `GET` list route via `operationId`.
+- **`it('found every search pair')`** — Asserts the discovered set matches the expected modules (filtered by `isDeployed`), so a new module or a broken `x-alias-of` fails loudly rather than silently skipping.
+- **`it.each(searchPairs)(…)`** — For each pair, builds a `Map` of query-parameter schemas and a `Map` of body-property schemas, then asserts the union of filter names has identical constraint strings on both sides.
 
 ## Relationships
 
-- **`tests/support/paths.ts`** — provides `isDeployed(module)`, used to filter the expected-pair list to modules that are actually deployed in the current environment.
-- **`openapi.yaml`** (project root, resolved relative to the test file) — the sole data source; the entire test reads and cross-references this single bundle. No other test or source file is imported.
+- **`tests/support/paths.ts`** — Imports `isDeployed` to determine which resource modules should appear in the expected-pair list.
+- **`../../openapi.yaml`** (not a graph neighbor, but the sole data dependency) — Read once at module scope; all `resolve` calls operate on this in-memory object.
 
 ## Notes
 
-- The test intentionally excludes `description` and `default` from comparison: prose differs legitimately between spellings, and `normalizePagination` owns defaults for both.
-- A filter present in one spelling but absent in the other is a hard failure (`'ABSENT'` on one side), not just a constraint mismatch.
-- Discovery is annotation-driven (`x-alias-of`); adding a new search pair to the spec is automatically covered without editing this file, but removing the annotation or renaming the route pattern will silently drop the pair from the `it.each` set (caught only by the first "found every search pair" assertion).
-- The spec is parsed once at module-load time via `readFileSync`; the test has no network, broker, or cluster dependencies despite appearing alongside integration suites in the graph.
+- Compares **validation shape only**. `description` and `default` are deliberately excluded: prose legitimately differs between spellings, and `normalizePagination` owns defaults for both.
+- A filter **present in one spelling but absent in the other** is a failure (rendered as `'ABSENT'` vs. a real schema), matching the original `GET /products` bug described in the header comment.
+- Discovery is fully dynamic via `x-alias-of`; the only manual list is the `owners` array in the first `it` block. Adding a new searchable module requires updating **both** the OpenAPI spec and that array.
+- The OpenAPI file is parsed with the `yaml` package and resolved locally; there is no shared spec-loading utility, so path assumptions (`../../openapi.yaml`) are specific to this file's location.

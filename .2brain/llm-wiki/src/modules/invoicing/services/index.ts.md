@@ -1,7 +1,7 @@
 ---
 source: src/modules/invoicing/services/index.ts
-sha256: 89f429f11a3fdc60b80b5d8a03abc179a0c277c0c6f5adea145d6e35fb62a9c8
-generated_at: 2026-10-15T10:39:33.639797+00:00
+sha256: 20c980121995a4f31763ffea36cbc319f4c9e0706f0caa39c540dc230c8a9dc2
+generated_at: 2026-10-29T04:14:16.812079+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel / entry-point module for the invoicing service layer. It re-exports every public function, type, and the `invoicingService` convenience object from sibling service files, giving controllers, event listeners, and external modules a single import path (`@/modules/invoicing/services`) for all invoicing operations.
+Facade (barrel) file that re-exports every invoicing operation into a single `invoicingService` object. It exists so that controllers, event listeners, tests, and sibling modules have one import site instead of reaching into individual service files.
 
 ## Key elements
 
-- **Re-exports** — pulls in and re-exports from:
-  - `./issue-invoice` → `issueInvoice`, `findInvoiceForOrder`
-  - `./issue-credit-note` → `issueCreditNote`, `findCreditNotesForOrder`, `findCreditNoteForOrderById`, `type RefundedInput`
-  - `./render` → `renderInvoicePdf`, `renderCreditNotePdf`
-  - `./stats` → `moneyBuckets`, `type DocumentTotals`, `type MoneyBucket`
-  - `./reencrypt` → `reencryptInvoices`
-  - `./numbering` → `allocateInvoiceNumber`, `allocateCreditNoteNumber`
-- **`invoicingService`** (const object) — bundles a subset of the above (`issueInvoice`, `findInvoiceForOrder`, `issueCreditNote`, `findCreditNotesForOrder`, `findCreditNoteForOrderById`, `renderInvoicePdf`, `renderCreditNotePdf`, `moneyBuckets`) into one namespace for callers that prefer method-style access.
+- **`invoicingService`** — the sole runtime export. A plain object bundling all service operations:
+  - `issueInvoice` / `findInvoiceForOrder` — create (freeze) and retrieve an invoice, triggered by `ORDER_STATUS_CHANGED`.
+  - `findCreditNotesForOrder` / `findCreditNoteForOrderById` — look up credit notes, created per refund on `PAYMENT_REFUNDED`.
+  - `invoiceForCaller` / `creditNotesForCaller` / `creditNoteForCaller` — permission-checked reads (from `for-caller.ts`).
+  - `renderInvoicePdf` / `renderCreditNotePdf` — convert a stored document to PDF bytes via the e-invoicing port (from `render.ts`).
+  - `moneyBuckets` — aggregate financial statistics (from `stats.ts`).
+  - `reencryptInvoices` — bulk re-encryption of stored documents (from `reencrypt.ts`).
+  - `eraseDueBuyers` — GDPR/retention erasure (from `retention.ts`).
+- **Type re-exports** — `RefundedInput`, `BuyerErasureReport`, `DocumentTotals`, `MoneyBucket` so consumers don't need to import from leaf files.
 
 ## Relationships
 
-- **Consumed by controllers** — `get-order-invoice.ts`, `get-order-credit-note.ts`, and `get-order-credit-notes.ts` import from this module rather than reaching into individual service files.
-- **Re-exported upward** — `src/modules/invoicing/index.ts` and `module.ts` surface this barrel to the rest of the app.
-- **Wraps service implementations** — `issue-invoice.ts`, `issue-credit-note.ts`, `render.ts`, `stats.ts`, `reencrypt.ts`, and `numbering.ts` are the source-of-truth modules whose symbols flow through this file.
-- **Exercised by tests** — `tests/integration/issue-invoice.test.ts`, `tests/integration/issue-credit-note.test.ts`, and the cross-module `returns/tests/integration/withdrawal-before-dispatch.test.ts` drive the service through this entry point.
-- **Feeds stats** — `src/modules/stats/services/breakdowns.ts` consumes the `moneyBuckets` / `MoneyBucket` exports defined here.
+- **Consumed by** `src/modules/invoicing/controllers/get-order-invoice.ts`, `get-order-credit-note.ts`, and `get-order-credit-notes.ts`, which call into `invoicingService` to fetch and render documents.
+- **Re-exported through** `src/modules/invoicing/index.ts` and wired into the module via `src/modules/invoicing/module.ts`.
+- **Aggregates** the sibling service files (`for-caller.ts`, `issue-invoice.ts`, `issue-credit-note.ts`, `render.ts`, `reencrypt.ts`, `retention.ts`, `stats.ts`)—this file is the only point at which they are grouped.
+- **Tested indirectly** by `src/modules/invoicing/tests/integration/issue-invoice.test.ts`, `retention.test.ts`, and cross-module `src/modules/account/tests/contract/shop.contract.test.ts`, all of which import `invoicingService` rather than individual services.
 
 ## Notes
 
-- `invoicingService` does **not** include `reencryptInvoices`, `allocateInvoiceNumber`, `allocateCreditNoteNumber`, or any type exports. Callers needing those must import them by name from this module (or the underlying file) rather than through the object.
-- Type-only exports (`RefundedInput`, `DocumentTotals`, `MoneyBucket`) are erased at runtime; they exist purely for consumer-side type annotations.
-- The module docblock documents the triggering events (`ORDER_STATUS_CHANGED` for invoices, `PAYMENT_REFUNDED` for credit notes) — a useful orientation if you are tracing *when* these functions execute without reading each service file.
+- All runtime exports go through the single `invoicingService` object; there are no named function exports from this file. Tests and controllers should import `invoicingService` (or the type re-exports), not the underlying `./issue-invoice` or `./render` files directly.
+- The module doc comment states the event triggers explicitly (`ORDER_STATUS_CHANGED`, `PAYMENT_REFUNDED`); these are not visible in the code of this file itself.
+- `renderInvoicePdf` / `renderCreditNotePdf` delegate to an "e-invoicing port" (an abstraction boundary) defined in `render.ts`; the facade does not add logic.

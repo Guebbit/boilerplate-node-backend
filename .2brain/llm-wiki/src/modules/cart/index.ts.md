@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/index.ts
-sha256: 25703149c29a7ffd872196176ff579d60c5ff36dd4c36cf238d93ce43fc9bd31
-generated_at: 2026-10-15T10:23:34.157915+00:00
+sha256: 86d0c0ac8641b26ed35ef0d1bf5472300b858ade3e0b7b2fa1cfb7b0815cc287
+generated_at: 2026-10-29T03:22:04.323228+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Public barrel for the cart module. It is the **only** import surface a sibling module is allowed to use (per `docs/theory/strategic-ddd.md` §5). It re-exports the module's services, events, and domain types while deliberately keeping `cartRepository` and the model's runtime values internal, so siblings cannot bypass service-layer rules.
+Public barrel for the cart module. It is the **only** import surface available to sibling modules (enforced per `docs/theory/strategic-ddd.md` §5). Internals such as `cartRepository` and the model's runtime values are deliberately kept private so siblings cannot bypass the service layer's rules.
 
 ## Key elements
 
-- `export * from './services'` — exposes the cart service API (the intended entry point for all cart mutations/queries).
-- `export * from './events'` — exposes cart domain events for cross-module consumers (e.g. notifications).
-- `export * from './domain'` — exposes the cart domain layer (entities, value objects, domain logic).
-- `export type * from './model'` — exposes **types only** from the model file; no runtime values (such as `cartRepository`) leak to consumers.
+- `export * from './services'` — re-exports all runtime values (services, functions) from the cart service layer.
+- `export * from './events'` — re-exports event definitions/creators from `events.ts`.
+- `export * from './domain'` — re-exports domain logic from `domain/index.ts`.
+- `export type * from './model'` — re-exports **type-only** symbols (interfaces, type aliases) from `model.ts`; no runtime values leak.
+- `export type * from './presenter'` — re-exports **type-only** symbols from `presenter.ts`; no runtime values leak.
 
 ## Relationships
 
-- **Imports (re-exports):** `./services/index.ts`, `./events.ts`, `./domain/index.ts`, `./model.ts` — the four internal files whose public API is surfaced here.
-- **Imported by sibling modules:** `src/modules/notifications/module.ts` and `src/modules/wishlist/service.ts` consume cart types/services through this barrel.
-- **Consumed in cross-module integration tests:** `src/modules/addresses/tests/integration/checkout.test.ts`, `src/modules/notifications/tests/integration/events.test.ts`, `src/modules/wishlist/tests/integration/service.test.ts`, and `tests/integration/order-snapshot-locale.test.ts` import cart symbols via this barrel.
+- **Re-exports** `src/modules/cart/services/index.ts`, `src/modules/cart/events.ts`, `src/modules/cart/domain/index.ts`, `src/modules/cart/model.ts` (types), and `src/modules/cart/presenter.ts` (types). This file is the sole aggregation point for those.
+- **Consumed by** sibling modules and integration tests (`src/modules/addresses/tests/integration/checkout.test.ts`, `src/modules/notifications/tests/integration/events.test.ts`, `src/modules/wishlist/service.ts`, `src/modules/wishlist/tests/integration/service.test.ts`, `tests/integration/order-snapshot-locale.test.ts`). These import cart services, events, or types exclusively through this barrel rather than reaching into sub-paths.
 
 ## Notes
 
-- This is a **boundary enforcement point**: the model's runtime (e.g. `cartRepository`) is intentionally *not* re-exported. Adding a `export *` (without `type`) from `./model` would break the architectural rule that siblings go through the service layer.
-- Use `export type *` from `./model` to keep the type-only guarantee if you extend the barrel.
-- The `@module` docblock and the pointer to `docs/modules/cart.md` are the canonical references for *why* this file is shaped the way it is.
+- The `export type *` (type-only) syntax for `model` and `presenter` is intentional: it prevents accidental runtime imports of internal model state or presenter logic. If a sibling needs a cart value at runtime, it must go through `services` or `domain`.
+- Adding a new public sub-module to cart requires a corresponding `export` line here; there is no other legitimate entry point.
+- `cartRepository` is intentionally **not** re-exported. Do not add it to this barrel.

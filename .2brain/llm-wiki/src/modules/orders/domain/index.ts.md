@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/domain/index.ts
-sha256: a19dd98e2864ac9f9e9d9d16282a0f7e21fc82d5bf20573ded6ebbb6ba28894c
-generated_at: 2026-10-15T11:01:35.944564+00:00
+sha256: 0f1fdccd0e2c54d043635901af04541068c9ce8871c3d8dd6371751bb456be02
+generated_at: 2026-10-29T04:39:44.809509+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel re-export for the orders domain layer. It aggregates the public surface of all pure, framework-free order rules (totals, lifecycle, tax, withdrawal, fulfillment, etc.) into a single import path. The file itself contains no logic; its role is to define the boundary: everything exported here must be testable without a database, Express, or Mongoose.
+Barrel re-export for the orders domain layer. It exposes a single public surface for all pure business rules (totals, lifecycle, withdrawal, tax, etc.) so that consumers import from one path instead of reaching into individual domain files. The header contract states the layer is lint-guaranteed free of Express, Mongoose, and database concerns—anything testable without a DB lives behind this entry point.
 
 ## Key elements
 
-- **`totals`** – `sumLineItems`, `orderTotal`: arithmetic on line items.
-- **`rules`** – `checkOrderLines`, `isShippedItem`, `isDigitalOnlyOrder`, type `ShippableLineCandidate`: validation and classification of order lines.
-- **`lifecycle`** – `ORDER_EVENTS` (the canonical transition table), plus derived helpers `canTransition`, `isPayable`, `paymentSettled`, `statusesReachableFrom`, `statusesLeadingTo`, `orderActionsFor`, `canOverrideTo`, `overridableTargetsFrom`; types `OrderActor`, `OrderEvent`, `OrderEventName`.
-- **`tax`** – `orderTaxBreakdown`, `lineTaxFromRateTotals`; types `OrderTaxBreakdown`, `LineTaxBreakdown`, `TaxableLineItem`, `TaxRateSummary`.
-- **`transfer-reference`** – `buildReference`, `parseReference`: mint/parse the RF creditor reference for `bank_transfer` orders.
-- **`withdrawal`** – `canWithdraw`, `isBeforeDispatch`, `isExcludedFromWithdrawal`, `withdrawUntilFrom`, `withdrawalStartFor`; types `WithdrawalCandidate`, `WithdrawableLine`, `WithdrawalClockCandidate`.
-- **`projections`** – `paymentStatusOf`, `returnStatusOf`, `paymentStatusFilter`, `returnStatusFilter`; types `StampedPaymentStatus`, `StampedReturnStatus`.
-- **`fulfillment`** – `NO_FULFILLMENT`, `fulfillmentStatusOf`, `fulfillmentStatusFilter`, `shipsAwaitedStock`; types `FulfillmentSummary`, `FulfillmentFilter`.
-- **`status-traits`** – `ORDER_STATUS_TRAITS`, `statusesWhere`; type `OrderStatusTraits`.
-- **`shop-time`** – `yearInZone`, `zonedStartOfDay`: shop-calendar helpers for numbered series.
-- **`timeline`** – `TIMELINE_AUDIENCE`, `isBuyerVisible`; types `TimelineAudience`, `TimelineEntryInput`.
-- **`export`** – `ORDER_CSV_COLUMNS`, `toOrderCsvRow`; types `OrderCsvColumn`, `OrderCsvSource`.
+- **Re-exports only** — no local definitions, types, or logic. Every symbol is forwarded from a sibling file in `./`.
+- **Grouped by concern** with a one-line JSDoc per group (e.g. tax, withdrawal, fulfillment, lifecycle, timeline, CSV export, shop-time, status traits, projections, backorder, purchase-hold, deletion, rules, totals).
+- **`ORDER_EVENTS` / lifecycle predicates** (`canTransition`, `isPayable`, `canProcessOrder`, `canShip`, `canRecordArrival`, `hasShopStarted`, `paymentSettled`, `statusesReachableFrom`, `statusesLeadingTo`, `orderActionsFor`, `canOverrideTo`, `overridableTargetsFrom`) — the full state-machine vocabulary, re-exported alongside the `OrderActor`/`OrderEvent`/`OrderEventName` types.
+- **`ORDER_STATUS_TRAITS` / `statusesWhere`** — a total map of per-status traits and a query helper over it.
+- **Type exports** (`DeletionCandidate`, `OwedLine`, `ShippableLineCandidate`, `OrderTaxBreakdown`, `WithdrawalCandidate`, `FulfillmentSummary`, `StampedPaymentStatus`, `StampedReturnStatus`, `TimelineEntryInput`, `OrderCsvColumn`, `OrderCsvSource`, etc.) — re-exported with `export type` semantics so downstream `verbatimModuleSyntax` users stay clean.
 
 ## Relationships
 
-- **Re-exports from (all domain siblings):** `totals.ts`, `rules.ts`, `lifecycle.ts`, `tax.ts`, `transfer-reference.ts`, `withdrawal.ts`, `projections.ts`, `fulfillment.ts`, `status-traits.ts`, `shop-time.ts`, `timeline.ts`, `export.ts`. This file is the sole public surface; consumers import through it rather than reaching into individual modules.
-- **Consumed by (orders module entry points):** `src/modules/orders/index.ts` and `src/modules/orders/presenter.ts` import domain symbols from here. `src/modules/orders/emails.ts` also pulls domain types/values through this barrel.
+- **All fourteen sibling domain files** (`totals`, `deletion`, `purchase-hold`, `backorder`, `rules`, `lifecycle`, `tax`, `withdrawal`, `projections`, `fulfillment`, `status-traits`, `shop-time`, `timeline`, `export`) are the sole sources of every symbol re-exported here. This file adds no behavior; it only flattens their public APIs into one import path.
+- **`src/modules/orders/controllers/get-order-item.ts`** — the one known controller-level consumer that reaches into the orders module; it imports domain predicates (e.g. from `lifecycle` or `rules`) through this barrel rather than directly from the individual files.
 
 ## Notes
 
-- The module docstring states the contract: anything exported must be free of Express, Mongoose, and "every tier" beyond domain. A lint rule enforces this.
-- `ORDER_EVENTS` is declared the single source of truth for state transitions; all `canTransition` / `statusesLeadingTo` / `statusesReachableFrom` helpers are derived from it. Treat it as the canonical transition table when adding a new status or event.
-- Tax breakdown is described as deriving from an order's *frozen* lines—i.e., the line items captured at order time, not mutable post-hoc values.
-- The file is a pure re-export; there is no local state, no side effects, and no logic to unit-test here. Tests target the individual sibling modules.
-- See `docs/theory/domain-layer.md` (referenced in the module docstring) for the broader architectural rationale.
+- **No implementation here.** If you need to change a rule, edit the specific sibling file (e.g. `./lifecycle.ts`), not this barrel.
+- **`ORDER_EVENTS` is intentionally "published for reading."** The JSDoc comment next to the lifecycle block clarifies that callers are expected to ask a named predicate (`isPayable`, `canProcessOrder`, …) rather than enumerate statuses or read the event table directly.
+- **`AUTOMATIC_PURCHASE_HOLD_MAX_DAYS`** is a constant (not a function) exported from `./purchase-hold`; it is the only non-callable value in the entire barrel.
+- The `NO_FULFILLMENT` sentinel from `./fulfillment` is likewise a value, not a function.
+- Because this is the single entry point, adding a new domain concern requires a new sibling file **and** a re-export line here; omitting the re-export makes the symbol invisible to external consumers.

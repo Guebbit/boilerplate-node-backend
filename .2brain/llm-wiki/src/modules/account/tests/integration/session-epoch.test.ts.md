@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/integration/session-epoch.test.ts
-sha256: 33ccf193aa6277c16729649b1aeb3401ac3e88c96bc2704e808c89c686e9e037
-generated_at: 2026-10-14T14:41:21.655450+00:00
+sha256: 08049a1d6aede8107c50870eea7e040c480ca7e35de4b465e35169720e2978d7
+generated_at: 2026-10-29T03:00:58.806525+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the **session epoch** (`tokensValidAfter`) mechanism: once the epoch advances, every access token and refresh token minted before that instant is refused, regardless of how the epoch moved (password change, logout-all, 2FA arming, password reset, re-authentication, email-change-undo, etc.). The tests run against a real HTTP stack and a real clock, using short sleeps to guarantee whole-second separation between token mints and the epoch bump.
+Integration tests for the **session epoch** (`tokensValidAfter`): the mechanism by which a user's "I may be compromised" events invalidate every previously minted access token and refresh cookie. The suite verifies that tokens stamped in an earlier whole second are refused after a bump, that each privileged action (password change, logout-all, 2FA arming, password reset, re-auth, email-change undo) moves the epoch correctly, and that failure paths (datastore outage, bump rejection) behave as specified.
 
 ## Key elements
 
-- **`loginAs(email)`** — posts `/account/login` and returns a `{ bearer, cookie }` pair for subsequent requests.
-- **`statusWith(bearer)`** — issues `GET /account` with a bearer token; resolves to the HTTP status (200 live, 401 expired).
-- **`nextSecond()`** — sleeps ~1 100 ms so the next token's `auth_time` falls in a later whole second than any prior token.
-- **`changedAccount()`** — creates a user whose email was changed, sets `previousEmail`, and plants an `email-change-undo` token; returns the user.
-- **`describe("a token minted before the epoch")`** — verifies access-token and refresh-token refusal after `bumpSessionEpoch`, and that a later (older) bump does not undo a newer one.
-- **`describe("the events that move the epoch")`** — covers password change, logout-all (success, failure, plain logout), 2FA arming, password reset (token/challenge purge), and re-authentication.
-- **`describe('"this wasn\'t me" …')`** — email-change-undo: session revocation fires even on a 409 conflict; outbox event `account.sessions-revoked` carries `reason: 'email-change-undo'`.
-- **`describe("a credential change moves the epoch in its own write")`** — mocks `bumpSessionEpoch` to reject, proving the endpoint's own write path is the epoch mover (partial — file is truncated).
+- **`loginAs(email)`** – performs `POST /account/login`, returns `{ bearer, cookie }` for use in subsequent requests.
+- **`statusWith(bearer)`** – shorthand for `GET /account` with a Bearer header; returns the HTTP status (200 = live, 401 = revoked).
+- **`nextSecond()`** – sleeps 1 100 ms so the *next* token's `auth_time` falls in a later whole second than the previous one (real-clock strategy).
+- **`changedAccount()`** – creates a user with `previousEmail` set and a planted `email-change-undo` one-time token.
+- **`PAST_THE_SECOND_MS` (1 100)** – the minimum delay used both by `nextSecond` and as the "future" epoch value in direct `bumpSessionEpoch` calls.
+- **Test suites:**
+  - *a token minted before the epoch* – refusal of access + refresh; monotonic bump (late older bump is a no-op).
+  - *the events that move the epoch* – password change, logout-all (success + failure), plain logout (no epoch move), 2FA arming, password reset (purges tokens *and* sessions), re-auth (retires old refresh cookie).
+  - *"this wasn't me"…* – email-change undo revokes sessions even when address restore 409s; asserts the outbox `account.sessions-revoked` event carries `reason: 'email-change-undo'`.
+  - *a credential change moves the epoch in its own write* – mocks `bumpSessionEpoch` to reject, verifying the flow still completes (truncated in listing).
 
 ## Relationships
 
-- **`@tests/http`** (`api`) — all HTTP calls in the file go through this supertest-style wrapper.
-- **`@tests/setup-test-db`** (`setupTestDb`) — provisions a fresh database before the suite.
-- **`@tests/environment`** (`setEnvironment`) — sets `NODE_MAIL_TRANSPORT: 'outbox'` so no real mail is sent.
-- **`@tests/cookies`** (`cookieHeader`) — extracts the `__Host-session` cookie from a response into a `Cookie` header string.
-- **`@tests/totp`** (`codeFor`) — generates a valid TOTP code for the 2FA-arming test.
-- **`@modules/users`** (`userService`) — calls `bumpSessionEpoch` and `findAuthenticatableById` (the latter spied in the logout-all failure test).
-- **`@kernel/outbox`** (`outboxEventModel`, `settleOutboxNudges`) — queries the outbox collection to assert the `account.sessions-revoked` event and flushes pending nudges.
-- **`@modules/users/tests/factories`** (`createUser`, `userRepository`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD`) — user fixtures and direct repository reads (`findByIdWithCredentials`, `updateMany`).
-- **`../factories`** (`plantToken`, `sessionRowsOf`, `tokenRowsOf`) — low-level helpers to insert token rows and inspect session/token collections after a test action.
+- **`@tests/http` → `api()`** – every HTTP call goes through this helper (supertest wrapper).
+- **`@tests/setup-test-db` → `setupTestDb()`** – initialises and tears down the test database once per run.
+- **`@tests/environment` → `setEnvironment`** – sets `NODE_MAIL_TRANSPORT: 'outbox'` so no real SMTP is attempted.
+- **`@tests/totp` → `codeFor`** – generates a TOTP code for the 2FA-arming test.
+- **`@tests/cookies` → `cookieHeader`** – extracts the `__Host-session` cookie value from a response into a `Cookie` header string.
+- **`@modules/users` → `userService`** – called directly in tests to invoke `bumpSessionEpoch` and to mock `findAuthenticatableById` for the failure-path test.
+- **`@kernel/outbox` → `outboxEventModel`, `settleOutboxNudges`** – used to flush pending outbox writes and then assert on the emitted `account.sessions-revoked` event.
+- **`@modules/users/tests/factories`** – provides `createUser`, `userRepository`, and the well-known `PLAIN_PASSWORD` / `REPLACEMENT_PASSWORD` constants.
+- **`../factories` (account test factories)** – `plantToken`, `sessionRowsOf`, `tokenRowsOf` for inspecting/manipulating one-time token and session rows directly in the DB.
 
 ## Notes
 
-- The whole suite relies on **real wall-clock time**. The `PAST_THE_SECOND_MS` constant (1 100 ms) exists because `auth_time` and `tokensValidAfter` are compared in **whole seconds**; any test that needs "before the bump" must sleep past that boundary.
-- `loginAs` is called **twice** in multi-device tests to obtain two independent sessions; the first call's token is always "the other device."
-- The logout-all failure test spies on `userService.findAuthenticatableById` with `mockImplementationOnce` / `mockRejectedValueOnce` to simulate a datastore outage *after* the guard's own read succeeds — ordering matters.
-- The `email-change-undo` 409 test pre-creates a **second** user claiming the old address to trigger the conflict, verifying that session revocation still happens before the address restore fails.
-- `settleOutboxNudges()` must be awaited before querying `outboxEventModel`, or the event may not yet be persisted.
+- **Real clock, whole-second granularity.** Both `auth_time` (token claim) and `tokensValidAfter` are compared in *whole* seconds. The 1 100 ms sleep guarantees the next minted token lands in a strictly later second. There is no `jest.useFakeTimers` in this file.
+- **Monotonic bump.** The "older bump arriving late" test asserts that a second, earlier-timestamped `bumpSessionEpoch` call does *not* lower the stored epoch—the later value wins.
+- **Failure-path mocking.** The logout-all failure test mocks `userService.findAuthenticatableById` with `mockImplementationOnce` / `mockRejectedValueOnce` to simulate a datastore read failing *after* the route guard has already read the user. Restore all mocks in `afterEach`.
+- **`settleOutboxNudges()`** must be awaited before querying `outboxEventModel`; the outbox flush is asynchronous and not tied to the HTTP response lifecycle.
+- The file is truncated in the listing; the final suite ("credential change moves the epoch in its own write") contains at least an email-change-confirm case that verifies the epoch bump is performed in the same write as the credential update, independent of the service-level `bumpSessionEpoch` call.

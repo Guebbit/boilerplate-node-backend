@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/integration/service-crud.test.ts
-sha256: 650cd3fdc76a11b9bd6c289f38ea6c50f8445bb77553883c0ad2915ee87c88b5
-generated_at: 2026-10-15T11:17:25.262265+00:00
+sha256: 541ae95adb50024f711a43397d04291aac0f9acbda859de4cfe40002b3646d12
+generated_at: 2026-10-29T04:56:39.098351+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,47 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite for the **write half** of the orders service (`create`, `update`, `updateById`, `remove`, `removeById`, `getById`, `getForCaller`). It verifies the two invariants that carry real business weight: (1) `create` embeds a full product snapshot so later repricing cannot silently rewrite what a customer was charged, and (2) `getById`'s `scope` argument is an authorization boundary—a mismatched scope must return `undefined`, not the order. The read/aggregation half (`search`) is covered separately in `service-search.test.ts`.
+Integration test for the write-half of the Order service (`create`, `update`, `updateById`, `remove`, `removeById`). It exercises the real service layer against a test database to verify business rules that unit tests cannot: product-snapshot semantics at creation, the `scope` authorization boundary on reads, permission-gated product visibility, stock holds, sequential order-number minting, and the atomicity of multi-line creation failures. The read/aggregation half (`search`) is covered by a sibling `service-search.test.ts`.
 
 ## Key elements
 
-- **`flush`** – `setImmediate`-based helper that waits out `create`'s fire-and-forget placed-order email (same convention as the cart checkout suite).
-- **`refusedLines(caller)`** – Helper that places an over-quantity order against a 1-unit product and extracts the `details.lines` array from the 409 error envelope.
-- **`seedOrder`** – Creates a realistic 2-line order (Keyboard ×2, Mouse ×1) via the service as an admin caller; returns the user, products, and persisted order doc.
-- **`seedCancelledOrder`** – Wraps `seedOrder` then forces status to `cancelled` via `forceOrderStatus`.
-- **`createWithLines(quantities)`** – Creates a fresh user (unique UUID email) and one well-stocked product per line, then calls `create`; used by the admin-line-limit tests.
-- **`describe('create', …)`** – The bulk of the visible suite: 201 response shape, rank-rule (`OUTRANKED` 403), open-order-cap skip for admin-raised orders, sequential `orderNumber` (year-seq), currency frozen at creation, product snapshot fidelity, line preservation, empty-list 422, and `NODE_ADMIN_ORDER_MAX_LINES` enforcement.
-- **`jest.mock` of `@infrastructure/adapters/mailer`** – Replaces `enqueueEmail` with a `jest.fn()` so tests assert on the queue, not the rendered copy (copy pinned in `mail-copy.test.ts`).
-- **`afterEach`** – Restores all mocks and un-freezes timers defensively (no-op unless a case called `freezeDate`).
+- **`refusedLines(caller)`** – Helper that attempts a 5-unit order against a 1-unit product and extracts the `details.lines` array from the 409 response, typed loosely because the envelope widens `details`.
+- **`seedOrder()`** – Creates a two-line order (Keyboard ×2, Mouse ×1) via `orderService.create` and returns the persisted document plus its user and products.
+- **`seedCancelledOrder()`** – `seedOrder` + a forced status flip to `cancelled`, mirroring what `removeById` expects to read.
+- **`createWithLines(quantities)`** – Generic helper: one fresh well-stocked product per quantity, all in a single `create` call. Useful for multi-line atomicity assertions.
+- **`describe('create', …)`** – The main block, covering:
+  - 201 happy-path with admin caller.
+  - Operator creating for a peer, an equal, and themselves (no buyer rank in the body).
+  - Selling hidden / off-sale products by hand (staff override), verifying stock hold.
+  - Refusal of soft-deleted products (409 `ORDER_PRODUCT_UNAVAILABLE`, listing only the bad IDs, zero writes, zero holds on good lines).
+  - 404 (not 409) for hidden/deleted products when the caller lacks `display:Product`, preventing information disclosure.
+  - Off-sale products remain purchasable by a customer (public attribute).
+  - Open-order cap (`NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT`) is **not** applied to operator-raised orders.
+  - Sequential order-number assignment within a frozen UTC date (year-seq format).
+- **`afterEach`** – Restores all mocks and resets any frozen clock so a failed assertion cannot leak state.
+- **Mailer mock** – `@infrastructure/adapters/mailer` is replaced with a no-op `enqueueEmail`; tests assert on the queue, not a copy.
 
 ## Relationships
 
-- **`src/modules/orders/services/crud.ts`** – Primary unit under test; all service functions are imported through the barrel.
-- **`src/modules/orders/services/index.ts`** – Barrel re-export from which `getById`, `create`, `update`, `removeById`, `restoreById`, `callerScope`, etc. are destructured.
-- **`src/modules/orders/repository.ts`** – `orderRepository.findById` is used to read back persisted documents and verify snapshot/currency persistence independent of the service layer.
-- **`src/modules/orders/services/scope.ts`** – The authorization-boundary logic exercised by the `getById` scope-mismatch tests.
-- **`src/modules/orders/tests/factories.ts`** – Provides `createOrder`, `forceOrderStatus`, `toOrderItem`, `countOrders` helpers.
-- **`src/modules/products/tests/factories.ts`** – `createProduct`, `saveProduct`, `countersOf` for seeding and repricing products.
-- **`src/modules/users/tests/factories.ts`** – `createUser` for seeding callers at various ranks.
-- **`src/modules/users/index.ts`** – `userService` imported (likely for rank/identity lookups in authorization assertions).
-- **`src/infrastructure/adapters/mailer.ts`** – Mocked; `enqueueEmail` replaced to isolate email side-effects.
-- **`src/infrastructure/adapters/logger.ts`** – Imported for log-output assertions or spy setup.
-- **`src/modules/orders/services/read.ts` / `remove.ts`** – Sibling service modules; `remove`/`removeById`/`restoreById` are part of the write half tested here, `read` is the separate search suite.
+- **`src/modules/orders/services/index.ts`** – Source of `orderService`, the primary object under test.
+- **`src/modules/orders/services/crud.ts`** – Direct import of `update` (and, by extension, `create`, `updateById`, `getById`) for targeted assertions.
+- **`src/modules/orders/services/remove.ts`** – Direct import of `remove` / `removeById`.
+- **`src/modules/orders/repository.ts`** – `orderRepository` used for direct state verification (e.g., confirming no document was written).
+- **`src/modules/orders/tests/factories.ts`** – `countOrders`, `createOrder`, `forceOrderStatus`, `toOrderItem`.
+- **`src/modules/products/tests/factories.ts`** – `createProduct`, `saveProduct`, `countersOf` (stock reservation checks).
+- **`src/modules/users/tests/factories.ts`** – `createUser` (with optional role).
+- **`src/modules/users/index.ts`** – `userService` for user-state assertions.
+- **`src/types/index.ts` / `src/types/auth-context.ts`** – `OrderStatus`, `CallerContext` types.
+- **`tests/support/callers.ts`** – `asCustomer`, `asAdmin`, `callerAs`, `callerContextAs`, `testCallerContext` for constructing permissioned request contexts.
+- **`tests/support/clock.ts`** – `freezeDate` to pin UTC for order-number sequence tests.
+- **`tests/support/environment.ts`** – `withEnvironmentOverrides` to temporarily set `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT`.
 
 ## Notes
 
-- The mailer is **mocked at the module level**, not via dependency injection. Tests that need to assert on the queued email call `flush()` first, then inspect `mockEnqueueEmail.mock.calls`.
-- `freezeDate` is used to pin `orderNumber` generation to a single UTC year so the "one-apart" sequence assertion is deterministic; `afterEach` un-freezes defensively to prevent timer leakage across tests.
-- The open-order cap (`NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT`) is a **checkout** rule, not a service rule—admin-raised orders intentionally bypass it. The test confirms this by setting the cap to 1 and still creating two orders.
-- The rank rule is asymmetric: an admin may create an order for *themselves* but not for an *equal-rank* account (403 `OUTRANKED`). The "for oneself" case succeeds because the money-step services refuse downstream.
-- Product snapshot assertions check both `title` and `price` on the embedded `item.product` object—catching a regression to a bare reference would be silent in production (historical orders would restate at current prices).
+- **Product snapshot, not reference.** A later repricing of a product must not alter the price stored in an existing order; the test asserts the snapshot is captured at creation time.
+- **Scope is authorization, not filtering.** A mismatched `scope` on `getById` must return `undefined` (as if the order doesn't exist), not a 403—this is a deliberate design choice to avoid leaking existence.
+- **404 vs 409 for unavailable products.** A caller without `display:Product` gets 404 for hidden/deleted products so the response cannot confirm the product's existence or leak its title/price. A caller *with* the permission gets a 409 with the specific `productIds` in `details`.
+- **Off-sale ≠ hidden.** `purchasable: false` is a public attribute; even a plain customer can still buy. `active: false` (hidden) is not.
+- **Open-order cap is checkout-scoped.** Operator-raised orders bypass `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT`; the cap lives in the checkout service, not here.
+- **Order numbers are year-partitioned sequences.** The test freezes the clock to a fixed UTC date to guarantee two orders fall in the same yearly sequence and are exactly one apart.
+- **Mailer is mocked at the queue level.** Assertions target `enqueueEmail` calls (the queue), not any email-copy side-effect.

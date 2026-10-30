@@ -1,7 +1,7 @@
 ---
 source: scripts/scaffold/plan.ts
-sha256: f3118f600eb477bfd4b0559e2fd73b1ef0949adb54c4fbff7535d8da0bcde3ba
-generated_at: 2026-10-01T12:39:32.455205+00:00
+sha256: 0e8ac101aa70b976c8fac3df272677a1ca84798dfc942fa6b147b5a64f616523
+generated_at: 2026-10-29T01:43:36.934767+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Computes, as pure data, the complete list of files (path + content) that scaffolding a module will create. Being pure means unit tests can assert the plan without touching the filesystem, and the CLI layer is reduced to the collision check, the actual writes, and any follow-up process calls.
+Pure, side-effect-free planner that describes—entirely as data—every file a scaffolded module would create (repo-relative path + unformatted content). By separating "what to write" from "write it," unit tests can assert the full file list without touching disk, and the CLI (`apply.ts`) is left with only the refusal check, Prettier, and actual writes.
 
 ## Key elements
 
-- **`PlannedFile`** (interface) — a single file entry: repo-relative `path` (forward slashes) and unformatted `content`.
-- **`ScaffoldPlan`** (interface) — the full plan: `names: ModuleNames` plus `files: PlannedFile[]`.
-- **`runtimeFiles`** (private) — returns the 14 standard module files under `src/modules/<kebab>/` (manifest, barrel, model, repository, service, presenter, routes, factories, four HTTP controllers, module.yaml).
-- **`declarationFiles`** (private) — returns `openapi.yaml`, `authorization.yaml`, and conditionally `audit.ts` (only when `options.audit` is set).
-- **`testAndDocumentFiles`** (private) — returns three test files (`routes.test.ts`, `factories.test.ts`, `service.test.ts`) and the `docs/modules/<kebab>.md` page.
-- **`planModule`** (exported) — derives names via `deriveNames`, then concatenates the three groups above into a `ScaffoldPlan`. This is the main entry point.
-- **`collidingSchemas`** (exported) — given a set of already-declared schema names, returns the subset of the plan's schema names (entity, envelope, request/response variants) that would collide. Empty array means the plan is safe.
+- **`PlannedFile`** (interface) — a single entry: `path` (forward-slash, repo-relative) and `content` (unformatted string; Prettier is applied later by the CLI).
+- **`ScaffoldPlan`** (interface) — the full output: derived `ModuleNames` plus an ordered `files: PlannedFile[]`.
+- **`planModule(options: ScaffoldOptions): ScaffoldPlan`** — the main entry point. Calls `deriveNames` to get all spellings, then concatenates `runtimeFiles`, `declarationFiles`, and `testAndDocumentFiles`.
+- **`runtimeFiles`** (internal) — the 18 files every module gets regardless of options: `module.yaml`, `module.ts`, `index.ts`, `model.ts`, `repository.ts`, `presenter.ts`, services (`index`, `crud`, `actions`), domain (`index`, `rules`), `routes.ts`, `factories.ts`, and five REST controllers (`get`, `get-item`, `post`, `update`, `delete`).
+- **`declarationFiles`** (internal) — `openapi.yaml`, `authorization.yaml`, and conditionally the audit quartet (via `auditFiles`) when `options.audit` is set.
+- **`auditFiles`** (internal) — `rules.yaml`, `rules.schema.ts`, `rules.generated.ts` (rendered through `renderGenerated`), and `audit.ts`. Written at scaffold time so the module compiles before the first `regenerate`.
+- **`testAndDocumentFiles`** (internal) — five test files (unit: routes, factories, domain; integration: service; contract: api) and one `docs/modules/<kebab>.md` page.
+- **`collidingNames(names, taken)`** (exported, actually named `collidingSchemas`) — given the plan's names and a `ReadonlySet` of schema names already declared in existing contract fragments, returns the subset that would be redeclared (entity, `Actions`, `Sort`, `Response`, `Create…Request`, `Replace…Request`, `Update…Request`). Empty array means the scaffold is safe.
 
 ## Relationships
 
-- **`scripts/scaffold/names.ts`** — imports `deriveNames` and the `ModuleNames` type to translate the raw option string into all spellings.
-- **`scripts/scaffold/options.ts`** — imports the `ScaffoldOptions` type that parameterises every template call.
-- **`scripts/scaffold/templates-code.ts`** — supplies all code-file template functions (controllers, service, repository, barrel, etc.).
-- **`scripts/scaffold/templates-contract.ts`** — supplies `openapiFragment` for the contract file.
-- **`scripts/scaffold/templates-documentation-tests.ts`** — supplies the test-file and docs-page template functions.
-- **`scripts/scaffold/apply.ts`** — the CLI consumer that takes a `ScaffoldPlan`, runs the refusal check (`collidingSchemas`), formats content with Prettier, writes files, and invokes `registerModule`.
-- **`tests/unit/scripts/scaffold/plan.test.ts`** — unit-tests the pure plan output.
-- **`tests/unit/scripts/scaffold/apply.test.ts`** — exercises the write path that depends on the plan shape.
+- **`scripts/scaffold/names.ts`** — supplies `deriveNames` (single source of all spellings) and the `ModuleNames` type used throughout.
+- **`scripts/scaffold/options.ts`** — supplies the `ScaffoldOptions` type (drives conditional files like audit, and content parameters like CRUD scope).
+- **`scripts/scaffold/templates-code.ts`** — all code/template render functions (`moduleYaml`, `moduleManifest`, `crudFile`, `getController`, `auditEntries`, etc.) are imported from here; `plan.ts` never builds file strings inline.
+- **`scripts/scaffold/templates-contract.ts`** — provides `openapiFragment` for the module's OpenAPI YAML.
+- **`scripts/scaffold/templates-documentation-tests.ts`** — provides all test-file and documentation-page renderers.
+- **`scripts/contracts/shared-rules-render.ts`** — `renderGenerated` is used to produce `rules.generated.ts` content from the rules schema definition, keeping the generated-file format consistent with the contract pipeline.
+- **`scripts/scaffold/apply.ts`** — the consumer: takes the `ScaffoldPlan`, runs `collidingSchemas` as a refusal gate, pipes each `PlannedFile.content` through Prettier, then writes to disk.
+- **`tests/unit/scripts/scaffold/plan.test.ts`** — unit-tests `planModule` and `collidingSchemas` in isolation (no disk).
+- **`tests/unit/scripts/scaffold/apply.test.ts`** — exercises the apply step that consumes this plan.
+- **`tests/unit/scripts/scaffold/twin-headers.test.ts`** — asserts header conventions across the generated files listed in the plan.
 
 ## Notes
 
-- `content` is intentionally **unformatted**; Prettier is applied downstream in the CLI (`apply.ts`), not here.
-- `planModule` deliberately excludes central-repo edits (e.g. `registerModule` registrations). Those are handled separately by the apply step.
-- `audit.ts` is the only conditional file in the plan; all others are always present.
-- `collidingSchemas` performs no I/O — it is a pure set-membership filter, so it can be called repeatedly in tests without mocking the filesystem.
+- `content` is deliberately **unformatted**. The CLI runs Prettier before writing; tests must not expect formatted output.
+- File order in the returned array is fixed (runtime → declarations → tests/docs) but carries no semantic meaning for the writer; `apply.ts` treats it as a set.
+- `auditFiles` is gated on `options.audit` *inside* `declarationFiles`, so a non-audit scaffold simply omits those four files rather than receiving empty placeholders.
+- `rules.generated.ts` is written at scaffold time (not generated by a later codegen pass) so the module type-checks immediately; a subsequent `regenerate` overwrites it from the same `rules.yaml`.
+- `collidingSchemas` is a pure predicate—no file I/O. The caller is responsible for building the `taken` set from existing contract fragments.

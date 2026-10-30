@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/tests/integration/sweep.test.ts
-sha256: b5cb047b06e8b296d7cb253048e6adf85610ae079b6427c29d200312791b10b3
-generated_at: 2026-10-15T12:24:36.300242+00:00
+sha256: 4a050de768ae2d7d80e78fb5200038c91ebf5292fb688592ff4a65854973ff10
+generated_at: 2026-10-29T06:33:02.375263+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test for `sweepDueWebhookDeliveries` run against a **real database** with the queue publisher and the HTTP transport mocked. It verifies the sweep's selection criteria (which rows it picks up) and its two delivery paths: publishing to the worker queue, and falling back to inline delivery when the broker is unavailable. It covers the code path that `delivery.test.ts` never reaches, since that suite calls `processDeliveryJob` directly against a fixture.
+Integration test for `sweepDueWebhookDeliveries` against a real database, with the queue publisher and the HTTP delivery transport mocked. It exercises the one path `delivery.test.ts` never reaches: delivery jobs enqueued (or sent inline) *through* the sweep rather than invoked directly.
 
 ## Key elements
 
-- **`publishToQueueMock`** — jest mock replacing `@infrastructure/adapters/queue`; its resolved value (`true` / `false`) selects the queue-publish path vs. the inline-delivery fallback.
-- **`deliverWebhookMock`** — jest mock replacing `deliverWebhook` from the transport layer; captures inline-delivery calls and lets tests simulate send failures.
-- **`createSubscription()`** — helper that writes a real `WebhookSubscriptionDocument` (one ring secret, `enabled: true`) via `webhookSubscriptionRepository.create`.
-- **`createDue(subscription, eventId)`** — helper that writes a real pending delivery row with `nextAttemptAt` in the past.
-- **Queue-path tests** (top-level `it` blocks) — assert the sweep publishes exactly one message to `WORKER_CHANNELS.WEBHOOK_DELIVER` with a `{ deliveryId }` payload, and that the row's status stays `pending` (no claim).
-- **`describe('with no broker to take the message')`** — sets `publishToQueue` to resolve `false`, then verifies the sweep calls `deliverWebhook` inline, records the outcome (`succeeded`), handles multiple rows, skips live-leased rows, and survives a per-row send error.
+- **`publishToQueueMock` / `deliverWebhookMock`** — jest mocks for `@infrastructure/adapters/queue` and `@modules/webhooks/transport/webhook-delivery`. Cleared/reset in every `beforeEach`.
+- **`createSubscription()`** — helper that mints a ring secret and persists a subscription document via `webhookSubscriptionRepository`.
+- **`createDue(subscription, eventId)`** — helper that persists a pending, already-due delivery row.
+- **Top-level `it` blocks** — verify that a due pending row is published (not claimed), a stranded expired-lease row is republished, a live-lease row is skipped, and a not-yet-due row is skipped.
+- **`describe('with no broker to take the message')`** — sets `publishToQueueMock` to resolve `false`, forcing the sweep's inline-delivery fallback. Covers: inline send + outcome recording, batch (7 rows) delivery, live-lease skip, and per-row error isolation (one throw does not abort the sweep).
 
 ## Relationships
 
-- **`src/modules/webhooks/services/sweep.ts`** — the unit under test; `sweepDueWebhookDeliveries` is the only exported function called.
-- **`src/modules/webhooks/repository.ts`** — `webhookSubscriptionRepository` and `webhookDeliveryRepository` are used to seed rows and to read back state for assertions.
-- **`src/modules/webhooks/secrets.ts`** — `mintRingSecret` produces the secret entry attached to each test subscription.
-- **`src/modules/webhooks/model.ts`** — provides the `WebhookSubscriptionDocument` type used in helper signatures.
-- **`src/types/index.ts`** — supplies `WORKER_CHANNELS.WEBHOOK_DELIVER` for the queue-name assertion.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` provisions a real database connection for the suite.
-- **`tests/support/callers.ts`** — `TEST_TENANT_ID` is the fixed tenant identifier used in every row.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/webhooks/services/sweep.ts` | Module under test — calls `sweepDueWebhookDeliveries()`. |
+| `src/modules/webhooks/repository.ts` | Creates fixture rows (`webhookSubscriptionRepository.create`, `webhookDeliveryRepository.create`) and reads them back (`findById`) to assert state. |
+| `src/modules/webhooks/secrets.ts` | `mintRingSecret()` supplies a valid ring-secret entry for the subscription fixture. |
+| `src/modules/webhooks/model.ts` | `WebhookSubscriptionDocument` type used in helper signatures. |
+| `src/types/index.ts` | `WORKER_CHANNELS.WEBHOOK_DELIVER` asserted as the queue channel in publish calls. |
+| `tests/support/setup-test-db.ts` | `setupTestDb()` bootstraps the real database before the suite runs. |
+| `tests/support/callers.ts` | `TEST_TENANT_ID` used as the tenant field in every fixture. |
 
 ## Notes
 
-- The sweep intentionally does **not** claim rows (no `in-flight` transition). The test explicitly asserts the status remains `pending` after a successful publish; the design relies on the worker-side lease for deduplication.
-- The "no broker" fallback is triggered purely by `publishToQueue` resolving `false`; there is no separate error-branch — a rejected promise would also fall through.
-- Inline delivery records the outcome on the row (e.g. `succeeded`), whereas the queue path leaves the row untouched.
-- A single row whose inline send throws does **not** abort the sweep; the test confirms the second row is still delivered.
+- The sweep intentionally does **not** set a row to `in-flight`; it only publishes. The test asserts the DB row remains `pending` after a successful publish. The file's header and the `sweep.ts` docblock both note that a duplicate publish is safe without a claim step (see `asyncapi.internal.yaml` "Claim Check (EIP)").
+- In the "no broker" block, `deliverWebhookMock` doubles as the outcome recorder: after an inline send the test reads the row back and expects `status: 'succeeded'`.
+- The `mockRejectedValueOnce` case confirms the sweep catches per-row errors internally and continues to the next row, resolving without throwing.
+- The publish payload is asserted as exactly `{ deliveryId: String(id) }` — no lease token, no attempt count.

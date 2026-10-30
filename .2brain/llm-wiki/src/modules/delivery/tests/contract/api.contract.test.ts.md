@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/tests/contract/api.contract.test.ts
-sha256: 11444459596400bfc4d0bc4d7802328185921a789dd8cb3516569b8fad1001a2
-generated_at: 2026-10-15T10:28:37.636613+00:00
+sha256: 6443bf9eec97c1d432528937fd50905a1ed824d0a0078d9fc15ea862afdb89ef
+generated_at: 2026-10-29T03:45:07.665926+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the `/delivery` API surface over real HTTP. Every response is automatically validated against the API spec via the `@tests/contract` side-effect import. The file pins that each contract branch (status codes, body shape, error codes, audience-specific fields) is actually reached over the wire, for three audiences: public (methods catalogue), the order owner (fulfilment read), and staff (all write operations).
+Contract tests that exercise every `/delivery` route (and related order routes) over real HTTP, with responses automatically validated against the shared spec via `@tests/contract`. They pin that each authorization branch (public, owner, staff) and each status transition is reachable and shaped correctly at the wire level, complementing the unit and integration suites that test internal logic.
 
 ## Key elements
 
-- **`setupTestDb()`** — bootstraps a clean test database before the suite runs.
-- **`authenticateWithShipment()`** — helper that logs in a user, creates a product + order, ships it, and returns the bearer token and order. Used for owner-reading scenarios.
-- **`adminWithOrder(quantity, extras)`** — helper that logs in an admin, creates a product, a processing order (optionally with a specific `shippingMethod`), and returns bearer, `orderId`, `fulfillmentOrderId`, `productId`. Used for staff write scenarios.
-- **`describe('GET /delivery/methods')`** — four tests: unauthenticated 200, ignored `?weight=` query param, `shipToCountries` reflects `NODE_SHOP_COUNTRY`, every method carries the shop currency.
-- **`describe('GET /delivery/order/{orderId}')`** — four tests: owner sees both lists with restricted actions; unpaid order returns empty lists; staff sees `hold`/`release` actions and `holdNote`; another customer's order returns 404.
-- **`describe('POST /delivery/order/{orderId}/start')`** — three tests: admin starts a paid order (200, fulfillment orders created); non-paid order → 409; customer without `delivery.any.start` → 403.
-- **`describe('POST /delivery/fulfillment-orders/{id}/shipments')`** — five visible tests: full ship (201 + `Location` header, order → shipped); partial ship (order stays processing, `partially_fulfilled`); missing tracking code on express → 422 `DELIVERY_TRACKING_CODE_REQUIRED`; over-quantity lines → 422 `DELIVERY_LINES_INVALID`; digital fulfillment order rejection (truncated).
+- **`authenticateWithShipment`** – Helper that logs in a customer, creates a product + paid order, ships all 1 unit (tracking `TRK-CONTRACT1`), and returns the bearer token and order.
+- **`adminWithOrder(quantity, extras)`** – Helper that logs in an admin, creates a processing order with the given quantity, and returns bearer, `orderId`, `fulfillmentOrderId`, and `productId`.
+- **`GET /delivery/methods`** – Asserts the endpoint is public, ignores a leftover `?weight=` filter, and stamps every method with the shop currency (`EUR`).
+- **`GET /orders/{id}/fulfillment-orders` & `/shipments`** – Verifies owner sees items with `actions` all `false`; staff see actionable flags and the `holdNote`; buyer never sees `holdNote`; another customer gets 404; no token gets 401; malformed id gets 404.
+- **`POST /orders/{orderId}/process`** – Confirms 200 + `status: 'processing'` for a paid order and 409 `ORDER_NOT_PAID` otherwise.
+- **`POST /delivery/fulfillment-orders/{id}/shipments`** – Checks 201 + `Location` header on full ship, partial-ship leaves order `processing` with `fulfillmentStatus: 'partially_fulfilled'`, and a tracked method without a code reports "waiting for one".
 
 ## Relationships
 
-- **`@tests/contract` (tests/support/contract.ts)** — side-effect import that registers a global response interceptor to validate every `api()` call against the OpenAPI/contract spec. The backbone of this file.
-- **`@tests/setup-test-db.ts`** — resets and seeds a test database before each run.
-- **`@tests/http.ts`** — provides `api()`, `authenticateAs`, `authenticateAsRole`, `bearerForCookie`; the actual HTTP client used for every request.
-- **`@tests/cookies.ts`** — `setCookie` for session-based auth where applicable.
-- **`@tests/clock.ts`** — `freezeDate` / `advanceDate` for time-dependent assertions (e.g., reauth windows).
-- **`@tests/ids.ts`** — `MISSING_ID` for negative-path tests.
-- **`@modules/users/tests/factories.ts`** — `createAdminUser`, `PLAIN_PASSWORD` for provisioning admin accounts.
-- **`@modules/products/tests/factories.ts`** — `createProduct` for seeding purchasable items.
-- **`@modules/orders/tests/factories.ts`** — `createOrder`, `readOrder`, `toOrderItem` for order fixtures.
-- **`@modules/delivery/tests/factories.ts`** — `fulfillmentOrdersOf`, `paidPreorderOrder`, `shipEverything`, `shipmentsOf` for delivery-domain fixtures.
-- **`@kernel/config.ts`** — `reauthWindowSeconds` (imported, likely used in a truncated section).
-- **`@types/index.ts`** — `OrderStatus` enum for order-state assertions.
+- **`tests/support/contract.ts`** – Imported as a side-effect (`import '@tests/contract'`); installs the global contract-validation matcher that every `expect(response.body)` is checked against.
+- **`tests/support/http.ts`** – Source of `api`, `authenticateAs`, `authenticateAsRole`, `bearerForCookie`, `loginCompleting`; the HTTP client and auth helpers used by every test.
+- **`tests/support/setup-test-db.ts`** – `setupTestDb()` is called at module scope to provision the test database.
+- **`tests/support/ids.ts`** – Provides `MISSING_ID` for negative-path assertions.
+- **`tests/support/cookies.ts`** – `setCookie` is used to simulate session cookies where needed.
+- **`tests/support/clock.ts`** – `freezeDate` / `advanceDate` are imported for time-sensitive assertions (e.g. reauth windows).
+- **`src/modules/delivery/tests/factories.ts`** – `shipEverything`, `fulfillmentOrdersOf`, `paidBackorderOrder`, `paidPreorderOrder`, `shipmentsOf` seed delivery-domain state.
+- **`src/modules/orders/tests/factories.ts`** – `createOrder`, `forceOrderStatus`, `readOrder`, `toOrderItem` build and inspect orders.
+- **`src/modules/products/tests/factories.ts`** – `createProduct` creates a minimal product for order lines.
+- **`src/modules/users/tests/factories.ts`** – `createAdminUser`, `PLAIN_PASSWORD` used for admin fixture setup.
+- **`src/kernel/config.ts`** – `reauthWindowSeconds` imported for time-window-related assertions.
+- **`src/types/index.ts`** – `OrderStatus` enum used in order creation and status assertions.
 
 ## Notes
 
-- The `@tests/contract` import is a **side-effect** module: it wraps the HTTP client so every response is auto-asserted against the spec. No explicit `expect(response).toMatchContract(...)` calls appear; the interceptor handles it.
-- The `?weight=` test documents a **deliberate API change**: weight-based filtering was removed from the methods endpoint. The test guards against silently re-introducing a filter.
-- `shipToCountries` and per-method `currency` are asserted from environment variables (`NODE_SHOP_COUNTRY=IT`, currency `EUR`) set in `tests/support/setup-environment.ts` — these are deployment-level config, not per-request values.
-- The 404-for-foreign-order test (not 403) is a contract choice: the owner endpoint hides existence of other users' orders.
-- File is truncated in the source; the digital-fulfillment-order test and any remaining routes are not visible.
+- The `?weight=` test is intentional: the parameter was removed from the API (methods list is now an unfiltered catalogue), and this test guards against it silently reappearing.
+- Hold-note visibility is a security boundary: the buyer's response must **not** contain the `holdNote` property at all (checked with `not.toHaveProperty`), not merely have it as `null`.
+- `setupTestDb()` runs once at import time, not inside `beforeAll`; the test file relies on side-effect ordering.

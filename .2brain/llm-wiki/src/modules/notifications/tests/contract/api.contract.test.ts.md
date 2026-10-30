@@ -1,7 +1,7 @@
 ---
 source: src/modules/notifications/tests/contract/api.contract.test.ts
-sha256: 396f89651543899811b7e54cb12b91126620ca422ab910d67161d30aeae6db78
-generated_at: 2026-10-15T10:52:23.246390+00:00
+sha256: 98ed25730fd9b84f986bbb0e7cafb15751ca2f600533b51980b64d85ee262e8f
+generated_at: 2026-10-29T04:32:09.684318+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the `/notifications` HTTP surface. Each route must answer with one of two shapes — the inbox list or the plain success envelope — and the refusal paths (401, 404) must also match. Ownership and cap rules are deliberately excluded (they live in the integration suite). The SSE endpoint is tested only as far as the first event frame each test needs.
+Contract tests that verify each `/notifications` HTTP route returns one of exactly two shapes — a 200 inbox payload or a 204 with no body — plus the expected refusal codes (401, 404). The file also exercises the SSE stream endpoint by reading a single frame. Ownership and cap rules are deliberately excluded (they live in the integration suite); this suite only confirms that every contract branch is reachable over HTTP.
 
 ## Key elements
 
-- **`describe('GET /notifications')`** — empty inbox, inbox with read/unread items, union-variant codes with distinct params, and the 401 no-session refusal.
-- **`describe('POST /notifications/read-all')`** — verifies `readAt` is populated after the call; 401 without session.
-- **`describe('POST /notifications/dismiss-all')`** — verifies the inbox is emptied after the call; 401 without session.
-- **`describe('DELETE /notifications/{id}')`** — own row (200), another user's row (404), missing id via `MISSING_ID` (404), malformed id (`MALFORMED_ID`) (404), no session (401).
-- **`untilEvent(event, onOpen)`** — supertest `.parse()` callback that reads the raw `IncomingMessage` stream until a `event: <name>` frame (terminated by `\n\n`) appears, then destroys the stream. `onOpen` fires once headers arrive (i.e. the stream is registered).
-- **`sessionCookie(identity)`** — creates a user, POSTs `/account/login`, and extracts the `__Host-session` value via `setCookie`. Returns the user record plus the `Cookie` header string.
-- **`describe('GET /notifications/stream')`** — SSE happy path (asserts `content-type: text/event-stream` and the first frame's JSON code) and 401 without session.
-- **`MALFORMED_ID`** — `'not-an-object-id'`; exercised to confirm malformed ids are treated identically to unknown ones (404).
-- **`setupTestDb()`** — called once at module scope to guarantee a clean database before the suite runs.
+- **`describe('GET /notifications')`** — asserts empty inbox, populated inbox (read + unread), and one test per notification-code variant with their distinct param shapes.
+- **`describe('GET /notifications for a work notice')`** — verifies staff-audience notifications are visible only to callers holding the required permission sets; a caller who has lost those sets gets an empty inbox / 404.
+- **`describe('POST /notifications/read-all')`** — confirms 204 and that a subsequent GET shows `readAt` populated.
+- **`describe('DELETE /notifications')`** — confirms 204 and an empty inbox afterwards.
+- **`describe('GET /notifications/{id}')`** — happy path, 404 for another user's row (never 403), 404 for unknown and malformed ids, 401 for anonymous.
+- **`describe('DELETE /notifications/{id}')`** — happy path plus 404 for foreign, unknown, and malformed ids.
+- **`describe('GET /notifications/stream')`** — opens an SSE connection using a `__Host-session` cookie, waits for a single `notifications.created` frame, then destroys the stream.
+- **`untilEvent(event, onOpen)`** — helper that adapts a supertest `IncomingMessage` into a promise-like callback, resolving once the named SSE frame has been received and the double-newline terminator is present.
+- **`sessionCookie(identity)`** — creates a user, performs a real login via `POST /account/login`, and extracts the `__Host-session` cookie (the only credential `EventSource` can carry).
+- **`MALFORMED_ID`** — a string that cannot parse as an ObjectId; used to assert malformed-id handling matches unknown-id handling (404).
 
 ## Relationships
 
-- **`tests/support/contract.ts`** — side-effect import; registers global contract matchers that the assertions in this file rely on.
-- **`tests/support/http.ts`** — provides `api()` (supertest wrapper) and `authenticateAs()` (bearer-token helper) used by every non-SSE request.
-- **`tests/support/cookies.ts`** — `setCookie` extracts the `__Host-session` value from a login response inside `sessionCookie`.
-- **`tests/support/ids.ts`** — supplies `MISSING_ID` for the "id does not exist" DELETE case.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the in-memory test database.
-- **`src/modules/users/tests/factories.ts`** — `createUser` and `PLAIN_PASSWORD` seed identities for both bearer-token and cookie-based auth.
-- **`src/modules/notifications/tests/factories.ts`** — `createNotification` seeds inbox rows for every non-stream test.
-- **`src/modules/notifications/services/index.ts`** — `notificationsService.notificationsCreate` is invoked inside the SSE test's `onOpen` callback to emit a real event on the registered stream.
+- **`tests/support/contract.ts`** — imported for side effects (`@tests/contract`); registers shared contract assertions or matchers used across the suite.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called once at module load to prepare a clean database.
+- **`tests/support/http.ts`** — provides `api()` (supertest instance) and `authenticateAs()` (bearer-token auth helper).
+- **`tests/support/cookies.ts`** — `setCookie()` parses the `Set-Cookie` header from the login response to extract the session token.
+- **`tests/support/ids.ts`** — `MISSING_ID` supplies a canonical non-existent ObjectId for negative tests.
+- **`src/kernel/access/tenant.ts`** — `DEPLOYMENT_TENANT_ID` identifies the tenant context for staff-scoped notifications.
+- **`src/modules/users/tests/factories.ts`** — `createUser()` and `PLAIN_PASSWORD` seed user accounts for auth.
+- **`src/modules/notifications/tests/factories.ts`** — `createNotification()` seeds rows directly in the DB.
+- **`src/modules/notifications/services/index.ts`** — `notificationsService.create()` is called inside the SSE `onOpen` callback to push a live event into the open stream.
 
 ## Notes
 
-- The SSE test authenticates via **cookie** rather than bearer token because `EventSource` (and the supertest equivalent here) can only carry cookies. The `sessionCookie` helper performs a full login to obtain the `__Host-session` value.
-- `buffer(true)` on the SSE request lets supertest accumulate a body even though the stream is infinite; `untilEvent` destroys the stream after the first matching frame so the response resolves.
-- Malformed id and missing id both assert **404**, not 400 — the API treats unparseable ids as not-found.
-- Ownership (deleting another user's notification) and notification-count caps are intentionally absent; they are covered by the integration test suite.
+- The file is a **contract** suite, not an integration suite: it deliberately skips ownership/cap logic to keep the surface small and stable.
+- `untilEvent` treats the supertest response as a raw `IncomingMessage`; it relies on the SSE terminator `\n\n` to know a frame is complete. A rejected `onOpen` rejects the callback with the error, simulating a dropped connection.
+- The SSE test uses `buffer(true).parse(untilEvent(...))` on supertest — the custom parser intercepts the stream before supertest buffers it, which is the only way to read a non-terminating response.
+- `__Host-session` is the sole credential for the stream because `EventSource` cannot set custom headers; the test performs a real login to obtain the cookie.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/services/read.ts
-sha256: 1f57951cae9639ac2102aaa5cd8164fd528b2c2f00c86a55b7ffde2ac075d9e8
-generated_at: 2026-10-15T11:45:02.094847+00:00
+sha256: da36007e11a4b4f74caaca963a8bba491b3a6e1c9008d9f2ee0351d99db23119
+generated_at: 2026-10-29T05:29:30.245237+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides the single-product read operations for the products module: scoping a caller's visible products, fetching one product resolved to their locale, applying stock-visibility redaction, and returning the all-locales admin view. It centralises the read-path ordering (present → translate → redact) so callers never duplicate it.
+Single-product read service: determines what a caller may see, fetches one product by ID within that scope, resolves its display fields to the request's locale, and conditionally enriches the result with full translations and stock counters based on the caller's permissions.
 
 ## Key elements
 
-- **`callerScope(caller?)`** — Returns the MongoDB filter that limits which products the given `Caller` may read. Delegates to `accessibleFilterFor(caller, 'Product')`; returns `{}` for unrestricted callers, the published-catalogue filter otherwise.
-- **`getById(id?, scope?)`** — Fetches one product by ID within the caller's scope, presents it via `presentProduct`, then applies locale translations. Three-state return: `undefined` (falsy id, no DB call), `null` (no document), `Product` (success).
-- **`getByIdForCaller(id?, scope?, context)`** — Route-level wrapper around `getById` that additionally redacts stock counters unless the caller holds `inventory.any.read`. Exists as a separate function because most internal callers (tests, other services) lack a `CallerContext`.
-- **`getAdmin(id, caller?)`** — Unscoped, all-translations view for the editor form. Returns a `ProductAdmin` with a `translations` array (every language that has a row) plus a fallback built from the product's own `title`/`description` when no translation row exists. Stock is still redacted based on caller permissions.
+- **`callerScope(caller?)`** — Builds the Mongo query filter for a caller via `accessibleFilterFor(caller, 'Product')`. Returns `{}` for unrestricted callers; the published-catalogue filter otherwise.
+- **`getById(id, scope?)`** — Fetches one product by ID (early-returns `undefined` for a falsy id). Presents via `presentProduct`, then resolves to the request's locale. Returns `null` if no document matches.
+- **`getByIdForCaller(id, scope, context)`** — The `GET /products/:id` handler. Same fetch as `getById`, then attaches `translations` (if `read:Translation` is held) and redacts stock counters (unless `read:StockLevel` is held).
+- **`resolveToLocale(product)`** *(private)* — Runs `presentProduct` then `applyTranslations('product', …)` to produce the wire shape in the request's language.
+- **`withTranslations(product, resolved, caller)`** *(private)* — If the caller may see translations, fetches all language rows via `translationsWithFallback` and stamps the result with `carryVersion`; otherwise passes the resolved product through unchanged.
 
 ## Relationships
 
-- **`@kernel/access/query`** — `callerScope` delegates filtering logic to `accessibleFilterFor`.
-- **`@kernel/translation`** — `getById` and `getAdmin` use `applyTranslations` to resolve per-locale content.
-- **`@infrastructure/persistence/versioning`** — `getAdmin` calls `carryVersion` to stamp the optimistic-lock version onto the response.
-- **`../presenter`** — `presentProduct` shapes the raw document into the wire format; called before translation in both `getById` and `getAdmin`.
-- **`../repository`** — All DB access goes through `productRepository` (`findByIdScoped` for scoped reads, `findById` for the unscoped admin read).
-- **`./stock-view`** — `canSeeStock` / `redactStock` gate inventory counters in both caller-facing and admin responses.
-- **`./lookups`** — `translationsWithFallback` supplies the multi-locale rows for `getAdmin`.
-- **`@types`** — Imports `Product`, `ProductAdmin`, `Caller`, `CallerContext` for signatures.
+- **`@kernel/access/query`** — `callerScope` delegates entirely to `accessibleFilterFor` for the permission-to-filter mapping.
+- **`@kernel/translation`** — `resolveToLocale` uses `applyTranslations` to overlay the request's locale onto the presented product.
+- **`@infrastructure/persistence/versioning`** — `withTranslations` calls `carryVersion` to propagate the product's version stamp when the translations field is added.
+- **`../repository`** — Both public getters call `productRepository.findByIdScoped(id, scope)` to perform the scope-filtered lookup.
+- **`../presenter`** — `resolveToLocale` invokes `presentProduct` to convert the stored document into the wire shape.
+- **`./lookups`** — `withTranslations` calls `translationsWithFallback(product)` to collect every language row.
+- **`./stock-view`** — `getByIdForCaller` uses `canSeeStock` / `redactStock` to gate and strip stock counters.
+- **`./translation-view`** — `withTranslations` calls `canSeeTranslations(caller)` as its guard.
+- **`../model`** — Imports the `ProductDocument` type for the stored-document shape.
+- **`@types`** — Imports `Product`, `Caller`, and `CallerContext` for signatures.
+- **`./index`** — Re-exports this module's public API for the services barrel.
 
 ## Notes
 
-- **Presentation order is load-bearing.** `presentProduct` must run *before* `applyTranslations`; the translation overlay is a plain-object merge that would clobber presenter-computed fields (`available`, `id`, ISO dates). Do not reorder.
-- **Three-state `getById` return.** Callers must distinguish `undefined` (no id supplied) from `null` (id supplied, not found). Tests and routes rely on this.
-- **`getAdmin` has no scope parameter.** The admin route is gated at the router layer; this function trusts the caller.
-- **Fallback translation.** When the product has no translation row in its fallback language, `getAdmin` synthesises one from the document's own `title`/`description` columns rather than returning an empty array.
+- **Presentation before translation.** `presentProduct` runs *before* `applyTranslations`; the doc comments call out that translation resolution is a plain-object overlay that would clobber presenter-computed fields (`available`, `id` rename, ISO date strings) if applied first.
+- **Wrap, don't fold.** `getByIdForCaller` is a separate function rather than an option on `getById` because most callers (unit tests, cross-service lookups) have no `CallerContext` and should not pay for the permission checks.
+- **Translations vs. top-level fields.** When `translations` is attached, the top-level `title`/`description` remain in the *request's* resolved language — they are not left at the document's fallback language.
+- **No view reporting.** This service does not emit an analytics view event; the response cache suppresses most reads, and browser-side reporting (`modules/analytics`) covers what the server misses.
+- **Return-value triad.** `getById` / `getByIdForCaller` return `undefined` for a missing id, `null` for "not found", and `Product` for a hit. Callers must check all three.

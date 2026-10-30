@@ -1,31 +1,34 @@
 ---
 source: src/modules/invoicing/tests/unit/emails.test.ts
-sha256: 09afb90d9bc9bc52d6b7d5c3fd156263661a20817a35b3f99a353e146f3532a4
-generated_at: 2026-10-15T10:40:42.766100+00:00
+sha256: 1bbdc32270601ab7c09a33be65aa9281e87c8ef11bb2bef72f4131b6d70793a0
+generated_at: 2026-10-29T04:18:35.603006+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/invoicing/tests/unit/emails.test.ts
 
 ## Purpose
-Unit tests for `buildDocumentView` and `taxCategoryCode` in the invoicing email module. Verifies that rendered invoice/credit-note documents have correct line items, VAT tables, currency formatting, locale-aware labels, EN 16931 tax-category codes, and structural guards (no float re-multiplication, no i18n leakage into user-supplied titles).
+
+Unit tests for `buildDocumentView` and `taxCategoryCode` from the invoicing email module. They verify that the rendered document view — the thing a customer actually reads — produces correct line items, VAT arithmetic, i18n strings, and regulatory labels (EN 16931 category codes, Art. 226(8) net unit prices) without re-deriving values that were already frozen at order time.
 
 ## Key elements
-- **`DOCUMENT`** (fixture) — single-line, single-rate EUR invoice with frozen totals; the baseline for most `buildDocumentView` assertions.
-- **`MIXED`** (fixture) — two-line, two-rate document with per-rate shipping; used for unit-price-excl.-VAT and per-rate VAT-share tests.
-- **`describe('buildDocumentView')`** — row count/titles, document number in `pageMetaTitle`, locale propagation, title-collision safety (line titles never run through `t()`), invoice vs. credit-note titling, reversal notice, optional billing address block.
-- **`describe('buildDocumentView — the VAT block')`** — gross re-derived from frozen `unitPrice × quantity` (guards IEEE 754 drift), all amounts are `Intl.NumberFormat` strings, shipping table present/absent per `shippingByRate`, currency-aware symbols (EUR → €, GBP → £), VAT-number line or "not configured" fallback.
-- **`describe('taxCategoryCode — EN 16931 category, C4')`** — `S` for any non-zero rate, `Z` for 0 % with no/explicit-zero `rateType`, `E` for 0 % marked `exempt`.
-- **`describe('…category column, C4')`** — distinct `Z` and `E` codes on separate rows; column header translated per document locale.
-- **`describe('…net unit price and once-per-rate VAT, worked example')`** — unit price printed VAT-exclusive (Art. 226(8)) to 4 decimal places, column labelled "Unit price (excl. VAT)", per-line tax shares sum to frozen per-rate goods VAT, JPY (no minor unit) renders whole-yen prices.
+
+- **`DOCUMENT` fixture** — a single-line, single-rate (22 % EUR) invoice used as the baseline for most assertions.
+- **`MIXED` fixture** — two lines at two rates plus shipping, used for the net-unit-price and per-rate VAT-allocation tests.
+- **`describe('buildDocumentView', …)`** — row-per-item rendering, document-number in `pageMetaTitle`, locale propagation, title-collision guard (line titles must not be passed through `t()`), invoice vs. credit-note `title`, `reversalNotice` only on credit notes, optional `billing` block, `buyerErasedNotice`.
+- **`describe('…VAT block', …)`** — gross/net/tax must come from frozen values (no float re-multiply), all amounts are `Intl.NumberFormat` strings, `shipping` sub-table present only when `shippingByRate` is non-empty, currency respects the document's frozen code, supplier VAT-number line or "not configured" fallback.
+- **`describe('taxCategoryCode', …)`** — pure-function checks: non-zero rate → `S`, 0 % no-type or `zero-rated` → `Z`, 0 % `exempt` → `E`.
+- **`describe('…category column', …)`** — `Z` and `E` must appear as distinct codes on separate rows; column header is locale-translated.
+- **`describe('…net unit price and once-per-rate VAT', …)`** — unit price printed exclusive of VAT with 4-decimal precision, column labelled "Unit price (excl. VAT)", per-line tax share sums to the frozen goods-VAT total for that rate.
 
 ## Relationships
-- **`src/modules/invoicing/emails.ts`** — source of `buildDocumentView` (the renderer under test) and `taxCategoryCode` (EN 16931 C4 mapper). All assertions target their returned shapes.
-- **`src/modules/invoicing/providers/index.ts`** — source of the `EInvoicingDocument` type that shapes both fixtures and the expected document structure.
+
+- **`src/modules/invoicing/emails.ts`** — the module under test; provides `buildDocumentView` (the view renderer) and `taxCategoryCode` (EN 16931 C4 code resolver).
+- **`src/modules/invoicing/providers/index.ts`** — supplies the `EInvoicingDocument` type that shapes every fixture in this file.
 
 ## Notes
-- The module comment states this suite was **adapted from the retired `invoiceDocument` tests in `orders/tests/unit/emails.test.ts`**; look there for historical context if behavior seems inherited.
-- Fixtures store **frozen** monetary totals (never recomputed from rates). Tests explicitly assert that `buildDocumentView` does *not* re-multiply — e.g. 19.99 × 5 must render as `€99.95`, not `€99.9499…`.
-- Line `title` values are user-supplied strings and must **never** be passed through the i18n `t()` function; the "colliding title" test (`'invoicing.document.title'`) guards against a regression where a translation key overwrites the visible text.
-- Unit-price rendering is VAT-exclusive and may carry **up to 4 decimal places** beyond the minor unit (e.g. `€16.3115`); whole-yen (JPY) prices must omit the fractional part.
-- `taxCategoryCode` ignores `rateType` when the rate is non-zero (always `S`); the distinction between `Z` and `E` only applies at 0 %.
+
+- The comment block at the top credits an earlier `orders/tests/unit/emails.test.ts` suite; this file is a port, not a fresh test.
+- The 19.99 × 5 case is deliberately chosen because IEEE-754 multiplication yields `99.94999999999999`; the test asserts the frozen `99.95` survives, guarding against a "convenient" re-multiply in the renderer.
+- The title-collision test (`'invoicing.document.title'` as a line title) is a regression guard: line titles are user data and must never be resolved through the i18n `t()` helper.
+- `MIXED`'s worked-example numbers are cross-referenced to `orders/tests/unit/tax.test.ts` for the tax-split arithmetic.

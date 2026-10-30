@@ -1,32 +1,27 @@
 ---
 source: src/modules/addresses/controllers/delete-address.ts
-sha256: e5be4a057ae1992822b79a49f20d90fee00e093951f28541e00d7bad423e7c2e
-generated_at: 2026-10-14T14:50:56.102781+00:00
+sha256: bb6191a8293bddb7dca01ab5a0486b69b3efa6f56b587aeacfcc5956e7cc4ef5
+generated_at: 2026-10-29T03:07:31.495108+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/addresses/controllers/delete-address.ts
 
 ## Purpose
-
-Thin HTTP adapter for the `DELETE /account/addresses/:addressId` endpoint. It validates the URL parameter, delegates the actual removal to the domain service (`addressRemove`), and translates the service result into a well-formed HTTP response. It contains no business logic of its own.
+Thin HTTP adapter that handles `DELETE /account/addresses/:addressId`. It validates the path parameter, delegates the actual deletion to `addressService.remove`, and returns a 204 with no body on success. It exists so the route layer stays a one-line registration while all HTTP concerns (param extraction, error shaping, response codes) live here.
 
 ## Key elements
-
-- **`deleteAddress(request, response)`** — The sole export. Reads the authenticated user's `id` from `request.authContext`, extracts and validates the `addressId` path param, calls `addressRemove`, then sends a `200` success (or short-circuits on refusal) with the full updated address list.
+- **`deleteAddress`** *(exported function)* — Express handler accepting `Request<{ addressId: string }>` / `Response`. Reads `id` from `request.authContext`, validates `:addressId` via `requireId`, calls `addressService.remove(id, addressId)`, short-circuits on a rejected result (`refused`), and otherwise sends a 204 via `noContentResponse`. Errors are funneled through `catchAs`.
 
 ## Relationships
-
-- **`src/modules/addresses/routes.ts`** — Registers this handler on the `DELETE /account/addresses/:addressId` route (implied by the JSDoc contract).
-- **`src/modules/addresses/service.ts`** — Source of the `addressRemove(id, addressId)` domain call this controller delegates to.
-- **`src/infrastructure/http/ids.ts`** — Provides `requireId`, which parses and validates the `addressId` route param, short-circuiting with a 404 if absent.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse`, used to emit the final `200` with the `AddressesResponse` body.
-- **`src/infrastructure/http/controller.ts`** — Provides `refused` (checks whether the service result is a refusal and sends the appropriate error) and `catchAs` (catches unexpected errors and maps them to a 500).
-- **`src/types/index.ts`** — Supplies the `AddressesResponse` type that constrains the response payload.
+- **`../service`** (`addressService.remove`) — the sole business-logic call; the controller has no other domain access.
+- **`@infrastructure/http/ids`** — `requireId` extracts and validates the `:addressId` param, returning `undefined` (and a 404) when absent.
+- **`@infrastructure/http/response`** — `noContentResponse` produces the 204 reply.
+- **`@infrastructure/http/controller`** — `refused` inspects a result and sends the appropriate rejection status if the service refused the operation; `catchAs` maps thrown errors to an HTTP error response tagged with the controller name `'deleteAddress'`.
+- **`routes.ts`** — registers `deleteAddress` as the handler for the `DELETE /account/addresses/:addressId` route (implied by the module doc comment and the handler signature).
 
 ## Notes
-
-- Auth is **not** checked here; it is guaranteed by an upstream `isAuth` middleware. The non-null assertion on `request.authContext!` relies on that invariant.
-- The response always returns the **full** address list (not just the deleted entry), so the client can see which entry, if any, received the `default` flag after removal.
-- The service owns the "promote oldest to default" rule; this controller never touches that logic.
-- Error handling is split: domain-level refusals go through `refused`, and unexpected throws fall into `catchAs(response, 'deleteAddress')`, which logs under that tag.
+- `request.authContext!` uses a non-null assertion; correctness depends on the `isAuth` middleware running upstream. No guard is present in this file.
+- The 204 carries **no body**. A client that needs to see which address is now "default" must refetch the address book.
+- The "promote oldest remaining entry to default" logic is **not** here — it lives in the repository layer (referenced in the block comment as `repository.ts`). The controller is deliberately unaware of that side-effect.
+- The `result` returned by `addressService.remove` is inspected by `refused` before the 204 is sent; if the service signals a rejection (e.g. "cannot remove last address"), a different status code is returned and no 204 goes out.

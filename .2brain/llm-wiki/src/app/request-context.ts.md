@@ -1,7 +1,7 @@
 ---
 source: src/app/request-context.ts
-sha256: 4adf6cd19ef036d3e485de60f886f3e61493e30ae111ea5a07fa5ec1469da493
-generated_at: 2026-10-14T07:38:28.648734+00:00
+sha256: 9940c9bfb484590b4ff7a5f6441fffe7c870993a5dbfe01303315845f0d00286
+generated_at: 2026-10-29T01:50:41.643962+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Sets up per-request context that the rest of the request pipeline reads: the access log, the observability trace handle, the negotiated locale, and the canonical request ID. It must be mounted before the routes (and, for the request ID, before security/rate-limiting middleware) so that every downstream handler—including rejected ones—can log and correlate against these values.
+Centralises per-request context setup: the request-ID middleware and the access-logging / observability handle. It exists as a single group because everything it attaches is read downstream by routes, audit entries, and the access log, so it must be mounted before them.
 
 ## Key elements
 
-- **`REQUEST_ID_PATTERN`** — Regex that matches a canonical RFC 4122 UUID (any version/variant). Used to validate a client-supplied `x-request-id` before it is allowed into logs and audit entries, preventing log-injection.
-- **`requestIdMiddleware: RequestHandler`** — Assigns `request.requestId` (always a service-chosen UUID unless a trusted ingress vouches for the header) and `request.clientRequestId` (the validated caller-supplied UUID, if any). Sets the `x-request-id` response header. Designed to be mounted before rate-limiting so even refused requests carry the header.
-- **`installRequestContext(app: Express): void`** — Registers `requestLogger` (Winston access log + OpenTelemetry trace injection) and then `attachLocale` (Accept-Language negotiation) on the Express app. Must run before route registration.
+- **`requestIdMiddleware`** (`RequestHandler`) — Validates the incoming `x-request-id` against a strict RFC 4122 UUID pattern. Sets `request.requestId` (always a service-chosen UUID, or the client's value when `NODE_TRUSTED_INGRESS` is set) and `request.clientRequestId` (the validated client-supplied id, if any). Echoes the chosen id back in the `x-request-id` response header.
+- **`REQUEST_ID_PATTERN`** (module-private) — Regex matching a canonical lowercase/uppercase UUID; the only shape accepted from a client header. Prevents log-injection via newlines, control chars, or arbitrary-length strings.
+- **`installRequestContext(app)`** — Mounts `requestLogger` (Winston access log + OpenTelemetry trace injection) on the Express app. Thin one-liner wrapper.
 
 ## Relationships
 
-- **`src/app.ts`** — Consumes `requestIdMiddleware` and `installRequestContext` to wire them into the Express app in the correct mount order (request ID first, then security, then `installRequestContext`, then routes).
-- **`src/infrastructure/http/middlewares/request-logger.ts`** — Provides the `requestLogger` middleware that `installRequestContext` registers.
-- **`src/infrastructure/http/middlewares/locale.ts`** — Provides `attachLocale`, registered by `installRequestContext` for locale negotiation.
-- **`src/infrastructure/runtime/config.ts`** — Exposes `tracingConfig()`, from which `requestIdMiddleware` reads the `NODE_TRUSTED_INGRESS` flag to decide whether to trust the caller's `x-request-id`.
-- **`tests/integration/refusal-request-id.test.ts`** — Verifies that refused (rate-limited) responses still carry a valid `x-request-id` header, exercising `requestIdMiddleware`'s early-mount guarantee.
-- **`tests/integration/scenarios/demo-routes.test.ts`** — Integration tests that exercise routes after the request context (logging, locale, request ID) is installed.
+- **`src/infrastructure/http/middlewares/request-logger.ts`** — Imported and mounted inside `installRequestContext`; this file is the sole caller of `requestLogger`.
+- **`src/infrastructure/runtime/config.ts`** — Provides `tracingConfig()`, from which `NODE_TRUSTED_INGRESS` is read to decide whether the client-supplied id is trusted as the request id.
+- **`src/app.ts`** — The mounting site: calls `requestIdMiddleware` (before security/rate-limiting) and `installRequestContext` (after the limiter but before routes).
+- **`tests/integration/refusal-request-id.test.ts`** — Verifies that refused (rate-limited) requests still carry `x-request-id`, confirming the middleware is mounted ahead of the limiter.
+- **`tests/cross-cutting/request-headers-conformance.test.ts`** — Exercises the UUID validation and header round-trip behaviour.
+- **`tests/integration/scenarios/demo-routes.test.ts`** — End-to-end scenario that exercises the full request-context chain.
 
 ## Notes
 
-- Mount order matters: `requestIdMiddleware` is intentionally mounted **before** `installSecurity` (the global rate limiter) so that a 429 response still includes `x-request-id` in the response header and in the access log. `installRequestContext` is mounted after security but before routes.
-- A client-supplied `x-request-id` is **never** used as `request.requestId` unless `NODE_TRUSTED_INGRESS` is set. In the untrusted case it is stored only as `request.clientRequestId` (logged as `clientRequestId`, mirroring AWS ALB convention), and a fresh `crypto.randomUUID()` is assigned.
-- The UUID regex is strict (lowercase hex, fixed 8-4-4-4-12 shape). Any header that fails the check is treated as absent—no partial validation.
+- `requestIdMiddleware` is deliberately **not** inside `installRequestContext`; it is mounted separately and earlier (before `installSecurity`), so that even globally rate-limited requests get an `x-request-id` header. The access log (inside `installRequestContext`) runs *after* the limiter and therefore never logs refused requests.
+- When `NODE_TRUSTED_INGRESS` is absent, a valid client UUID is recorded only as `request.clientRequestId`, never as `request.requestId`. The service always generates its own id.
+- The UUID pattern enforces `[da-f]` hex digits with the standard 8-4-4-4-12 shape; any deviation (uppercase beyond `a-f`, version/variant nibbles outside `0-9a-f`) is rejected and treated as absent.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/password.ts
-sha256: d6a3147723129ff112174ac93d11b498b7d33c7d944c7a8b231c302da2bdc594
-generated_at: 2026-10-15T10:01:39.655241+00:00
+sha256: 692cb6cf61ff0e62ba6bcbf43cc31aff49e7cbf1c4ccf4c8c49c3c74941d9edb
+generated_at: 2026-10-29T02:42:49.926995+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The shared password-write funnel for the account module. Both `completePasswordReset` (in `./password-reset`) and the signed-in change (`passwordChangeWithCurrent`) end at `passwordChange` here, so a new password always gets the breach check, the session-epoch bump, and the session revocation in one place.
+The shared write path for every password change on an account. It validates the new-password pair, rejects breached passwords, writes the new hash and session epoch atomically, revokes old sessions, and (for the signed-in flow) verifies the current password first and sends a post-change notification email. Both the "change while logged in" and "confirm reset link" flows funnel through here so that session revocation is never missed.
 
 ## Key elements
 
-- **`validatePasswordChange(password, passwordConfirm)`** — Zod shape check (reusing `SignupBody.shape.password` bounds) plus a match check. Returns `ResponseErrorItem[]`; empty means the pair is acceptable. Exposed so `reset-confirm` can validate *before* spending the one-time token.
-- **`passwordChange(user, password, passwordConfirm, beforeSave?, cause?)`** — Main funnel: runs `validatePasswordChange`, then `assertPasswordNotBreached`, then delegates to `writePassword`. Returns `ResponseSuccess | ResponseReject`.
-- **`writePassword(user, password, beforeSave?, cause?)`** — The write half, callable when the caller already ran the breach check. Executes `beforeSave` hook, then (in one transaction) sets the password and bumps the session epoch. If `announces(cause)` is true, writes the `account.sessions-revoked` outbox row in that same transaction. After the transaction commits, calls `revokeFor` (failure is logged, not rejected).
-- **`passwordAndEpochWrite(user, password)`** — Internal helper that composes `userService.setPassword` + `userService.bumpSessionEpoch` into a single `ClientSession` callback for the transaction.
-- **`passwordChangeWithCurrent(userId, currentPassword, password, passwordConfirm, context)`** — Signed-in flow. Validates the new pair first (pure read), then `verifyOwnPassword` (bcrypt), then calls `passwordChange`. Records an audit entry for the outcome.
-- **`PasswordCause`** — Type alias: `'password-change' | 'password-reset'`, extracted from `RevocationCause`.
+- **`validatePasswordChange(password, passwordConfirm)`** — Validates the pair (length/complexity via the shared `SignupBody` schema + match check) using zod. Returns UI error items or an empty array. Pure read; no DB access. Exported so `reset-confirm` can validate *before* spending its one-time token.
+- **`PasswordCause`** — Type narrowing of `RevocationCause` to `'password-change' | 'password-reset'`, the only two causes that trigger session revocation.
+- **`passwordChange(user, password, passwordConfirm, beforeSave?, cause?)`** — Internal funnel: runs `validatePasswordChange`, then `assertPasswordNotBreached`, then delegates to `writePassword`. Marked `@internal`; only the two public flows should reach it.
+- **`writePassword(user, password, beforeSave, cause)`** — The transactional write. Applies the optional `beforeSave` mutation, writes the new hash + bumps the session epoch (via `passwordAndEpochWrite`), optionally announces `account.sessions-revoked` through the outbox in the same transaction, then calls `revokeFor` as post-commit housekeeping. Exported for callers that have already performed their own breach check.
+- **`passwordAndEpochWrite(user, password)`** — Private helper that builds the Mongoose transaction callback: `setPassword` → `bumpSessionEpoch`.
+- **`notifyPasswordChanged(user, context)`** — Fire-and-forget email via `sendAccountMail`; failure is logged at `warn`, never surfaced to the caller.
+- **`passwordChangeWithCurrent(userId, currentPassword, password, passwordConfirm, context)`** — Public entry point for a signed-in user. Validates the new pair *before* the bcrypt compare (cheaper failure path), verifies the current password via `verifyOwnPassword`, delegates to `passwordChange`, records an audit event, and triggers the notification email.
 
 ## Relationships
 
-- **`@modules/account/services/login.ts`** — imports `verifyOwnPassword` to gate the signed-in flow on the current password.
-- **`@modules/account/services/revocation.ts`** — imports `revokeFor` (purges refresh tokens) and `sessionsRevokedAnnouncement` (builds the outbox payload).
-- **`@modules/account/domain/revocation.ts`** — imports `announces` (boolean gate) and the `RevocationCause` type.
-- **`@kernel/outbox.ts`** — imports `announceInTransaction` to write the sessions-revoked event inside the password transaction.
-- **`@infrastructure/runtime/database.ts`** — imports `withTransaction` for the non-announcing path.
-- **`@infrastructure/security/breached-passwords`** — imports `assertPasswordNotBreached` (Have-I-Been-Pwned lookup).
-- **`@infrastructure/http/response.ts` / `errors.ts`** — response helpers (`generateSuccess`, `generateReject`, `validationErrors`) and `rejectDatabaseEnvelope` for the catch path.
-- **`@infrastructure/i18n`** — `t()` for the "passwords don't match" message.
-- **`@infrastructure/observability/audit.ts` + `../audit`** — `recordAudit` + `accountAuditActions.AUTH_PASSWORD_CHANGED` in the signed-in flow.
-- **`./password-reset.ts`** (graph neighbor) — calls `writePassword` directly (skipping the breach re-check) or `passwordChange`; this file is its terminal write.
-- **`./index.ts`** — re-exports this module's public API.
+- **`@infrastructure/i18n`** (`t`, context) — Provides translated error messages for validation and wrong-password rejections.
+- **`@kernel/outbox`** (`announceInTransaction`) — When the cause announces, the `sessions-revoked` event row is written inside the same DB transaction as the password write.
+- **`@infrastructure/runtime/database`** (`withTransaction`) — Wraps the password + epoch write in a Mongoose transaction.
+- **`@modules/account/domain/revocation`** (`announces`, `RevocationCause`) — Determines whether the cause requires an outbox announcement; contributes the `PasswordCause` type.
+- **`@infrastructure/http/response`** — Supplies `generateSuccess`, `generateReject`, `validationErrors`, and the `Response*` types used throughout.
+- **`@infrastructure/adapters/logger`** — Logs a `warn` when the post-change email fails to queue.
+- **`@infrastructure/http/errors`** (`rejectDatabaseEnvelope`) — Maps unexpected DB/reject errors into a uniform HTTP envelope.
+- **`@infrastructure/security/breached-passwords`** (`assertPasswordNotBreached`) — HIBP-style check run inside `passwordChange` so both callers get it for free.
+- **`@infrastructure/observability/audit`** (`recordAudit`) — Records the auth event after `passwordChangeWithCurrent` resolves.
+- **`@modules/account/audit`** (`accountAuditActions`) — Provides the `AUTH_PASSWORD_CHANGED` action identifier.
+- **`@modules/account/emails`** (`greetableName`, `passwordChangedEmail`, `recipientLocale`) — Builds the notification email content.
+- **`@modules/account/services/login`** (`verifyOwnPassword`) — Called by `passwordChangeWithCurrent` to gate on the current password.
+- **`@modules/account/services/mail`** (`sendAccountMail`) — Queues the post-change email.
+- **`@modules/account/services/index`** — Barrel that re-exports the public surface of this module.
 
 ## Notes
 
-- **422, not 401, for a wrong current password.** A 401 would be interpreted by client interceptors as "session expired" and log out a valid session. The response is intentionally a validation error.
-- **Validation order in `passwordChangeWithCurrent`:** new-pair shape/match is checked *before* the bcrypt compare. Both are pure reads, so a mistyped confirmation costs one round-trip instead of a round-trip + bcrypt.
-- **`beforeSave` is async-capable and runs inside the transaction, after all refusals.** This guarantees a rejected password never leaves a half-applied mutation on the document. Example use: `markVerified` role promotion (a membership write, not a field mutation).
-- **`revokeFor` failure is swallowed (logged).** The password write already committed; a lost revoke is tolerable defense-in-depth, not a caller-facing error.
-- **Two export levels for the write:** `passwordChange` (includes breach check) vs. `writePassword` (skips it). `reset-confirm` already ran the breach check before spending the token, so it calls `writePassword` to avoid a redundant HIBP lookup.
-- **Session epoch bump and password set share one transaction.** A caller cannot observe the epoch bumped with the old password still in place, or vice-versa.
+- A wrong *current* password returns **422**, not 401. A 401 would be interpreted by client-side auth interceptors as "session expired" and would log the user out unnecessarily.
+- The `beforeSave` callback on `passwordChange`/`writePassword` exists so that a caller's extra mutation (e.g., clearing a pending flag) is applied in the *same* write that saves the new password. A rejected password therefore never leaves a half-applied change on the document.
+- `revokeFor` failure after a successful write is **swallowed** (logged, not thrown). The session-epoch bump already invalidates old tokens; the purge is defense-in-depth, and failing the whole response over it would be misleading.
+- `validatePasswordChange` is deliberately split from `passwordChange` so that `reset-confirm` can validate the pair *before* consuming the one-time reset token — only a well-formed request should get the chance to spend it.

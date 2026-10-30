@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/domain/tax.ts
-sha256: 25968b0f04305ece234827dd6942f21861c8aba5071dfb193db1e2afadb745ab
-generated_at: 2026-10-15T11:02:50.807648+00:00
+sha256: 324f198b49fb4ae992930cf485c898ad1110dce01f11f7c172b34b16090b706c
+generated_at: 2026-10-29T04:40:50.672383+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Derives VAT figures (tax, net, gross) for an order from its **frozen** line prices, quantities, and tax rates at serialization time. The central invariant is that a past order's tax is never re-resolved against a product's current tax class — a config rate change must not restate what was actually charged. Shipping is treated as ancillary to the goods it delivers and is apportioned pro-rata, taxed at each line's own rate.
+Computes all VAT figures for an order from its frozen (already-priced) lines and shipping cost. It derives per-line tax/net, per-rate summaries, and shipping's apportioned tax share at serialization time, guaranteeing that a later config rate change never restates what a past order was actually charged.
 
 ## Key elements
 
-- **`orderTaxBreakdown(order: OrderTaxInput): OrderTaxBreakdown`** — Primary entry point. Takes an order's items, optional `shippingCost`, and `currency`; returns per-line tax, order-level totals, a per-rate summary (`taxSummary`), and a per-rate shipping breakdown (`shippingByRate`).
-- **`lineTaxFromRateTotals(items, currency, goodsTaxByRate): LineTaxBreakdown[]`** — Re-derives per-line tax for an already-issued document (e.g. a credit note) from frozen per-rate goods totals, without re-apportioning shipping.
-- **`extractTax(gross, rate)`** (internal) — Extracts VAT from a gross (inclusive) amount via `gross × rate / (1 + rate)`, rounding once through `scaleMoneyByRate`.
-- **`frozenRate(item)`** (internal) — Coerces `item.product?.taxRate` to a finite number, defaulting to `0`.
-- **`groupByRate(grossByLine, shippingByLine, rates)`** (internal) — Aggregates goods + shipping gross per distinct rate, extracts each rate's VAT **once** (EN 16931 BR-CO-17), then splits the rounded tax between goods and shipping via `apportion`.
-- **`allocateLineTax(grossByLine, rates, goodsTaxByRate)`** (internal) — Spreads each rate's goods VAT across its lines pro-rata by gross value, so a rate's lines sum exactly to that rate's single rounded figure.
-- **Types:** `TaxableLineItem`, `LineTaxBreakdown`, `TaxRateSummary`, `OrderTaxBreakdown`, `OrderTaxInput` — the public shape of the breakdown and its inputs.
+- **`TaxableLineItem`** — minimal shape each order line must satisfy (quantity, product price, taxRate, requiresShipping). Uses `unknown`/nullable fields because it reads raw aggregate output.
+- **`LineTaxBreakdown`** — per-line `{ taxAmount, netAmount, grossAmount }` in decimal units; `grossAmount` is computed here, not re-derived by callers.
+- **`TaxRateSummary`** — one row per distinct VAT rate: `{ rate, netAmount, taxAmount, grossAmount }`.
+- **`OrderTaxBreakdown`** — full result: `lines`, `netTotal`, `taxTotal`, `shippingNetAmount`, `shippingTaxAmount`, `taxSummary` (per-rate rows, sorted ascending), and `shippingByRate` (per-rate shipping detail for invoices).
+- **`OrderTaxInput`** — input: `items`, optional `shippingCost`, and `currency`.
+- **`lineTaxFromRateTotals`** — re-derives per-line tax for an already-issued document given frozen per-rate goods tax totals (no shipping apportionment).
+- **`orderTaxBreakdown`** — the main entry point: apportions shipping pro-rata across shipped lines, groups by rate, extracts tax once per rate (EN 16931 BR-CO-17), splits between goods/shipping, and assembles the full breakdown.
+- **`extractTax`** (internal) — `gross × rate / (1 + rate)` via `scaleMoneyByRate`; returns `NO_MONEY` for rate ≤ 0.
+- **`frozenRate`** (internal) — coerces raw `taxRate` to a finite number, defaulting to 0.
+- **`groupByRate`** (internal) — aggregates gross by rate, computes one rounded tax per rate, then apportions it to goods vs shipping.
+- **`allocateLineTax`** (internal) — spreads each rate's goods VAT across its lines pro-rata by gross so line taxes sum exactly to the rate's single rounded figure.
 
 ## Relationships
 
-- **`src/shared-kernel/money.ts`** — Provides `Money`, `addMoney`, `subtractMoney`, `apportion`, `scaleMoney`, `scaleMoneyByRate`, `toDecimalAmount`, `toMinorUnits`, `wholeCount`, `NO_MONEY`. All arithmetic in this file routes through these to guarantee minor-unit precision.
-- **`src/modules/orders/domain/rules.ts`** — Supplies `isShippedItem`, which determines whether a line carries any shipping weight in the apportionment (digital lines get zero weight).
-- **`src/modules/orders/model.ts`** — Consumes the `OrderTaxBreakdown` via `applyOrderTax` to stamp `taxAmount`/`netAmount` onto serialized order items; does **not** copy `grossAmount` or `shippingByRate` onto the serialized order.
-- **`src/modules/invoicing/emails.ts`** — Reads `OrderTaxBreakdown` (including `shippingByRate`) directly to render invoice email lines such as "shipping, taxed at 22%: €4.10 net, €0.90 tax."
-- **`src/modules/invoicing/services/credit-breakdown.ts`** — Uses `lineTaxFromRateTotals` to re-derive per-line tax for credit-note line items from frozen per-rate totals.
-- **`src/modules/orders/domain/index.ts`** — Barrel re-export for the domain module.
-- **`src/modules/orders/tests/unit/tax.test.ts`** — Unit tests covering the breakdown logic.
+- **`src/domain-primitives/money.ts`** — provides all arithmetic (`addMoney`, `subtractMoney`, `scaleMoneyByRate`, `apportion`, `toDecimalAmount`, `toMinorUnits`, `Money`, `NO_MONEY`). Every computation in this file routes through these to guarantee minor-unit exactness.
+- **`src/modules/orders/domain/rules.ts`** — supplies `isShippedItem`, which determines whether a line carries a shipping apportionment weight (digital/free-shipping lines get zero weight).
+- **`src/modules/orders/domain/totals.ts`** — supplies `lineGross`, the per-line gross (price × quantity) used as the apportionment base.
+- **`src/modules/orders/domain/index.ts`** — barrel re-exports this module's public API.
+- **`src/modules/orders/model.ts`** — calls `orderTaxBreakdown` (via `applyOrderTax`) to attach frozen tax figures to serialized order items; consumes only the order-level sums, not `shippingByRate`.
+- **`src/modules/invoicing/emails.ts`** — reads `shippingByRate` from the breakdown to render per-rate shipping tax rows on invoice emails.
+- **`src/modules/invoicing/services/credit-breakdown.ts`** — calls `lineTaxFromRateTotals` to re-derive per-line tax on credit notes from frozen rate totals.
+- **`src/modules/orders/tests/unit/tax.test.ts`** — unit tests for the functions above.
 
 ## Notes
 
-- **Rounding discipline:** VAT for a given rate is computed **once** on that rate's combined taxable total (goods + shipping), then split. Per-line taxes are allocations of that single rounded figure, never independently rounded. Re-deriving `gross` as `netAmount + taxAmount` from the two already-decimals would introduce drift; this file always computes `grossAmount` from the `Money` values *before* decimal conversion.
-- **Shipping is not its own tax line.** It has no rate of its own; it is apportioned onto lines by gross value and taxed at each line's frozen rate. `shippingByRate` exists solely so an invoice can print it as a visible row.
-- **`TaxableLineItem` fields are `unknown`/nullable** because they arrive as raw aggregate output; `frozenRate` and the `toMinorUnits`/`wholeCount` calls are the defensive coercion layer.
-- **`shippingByRate` omits rates with zero shipping weight** (absent `shippingCost`, or all lines at that rate priced at zero) rather than emitting an empty row.
-- **Not stored, not re-resolved:** the module docblock makes explicit that these figures are derived at serialization time, mirroring how `totals.ts` derives `totalPrice`. A config rate change must not restate a past order.
+- **Round-once invariant:** VAT is rounded exactly once per rate (not per line). `apportion` then splits that single figure, so per-line taxes sum exactly to the rate's row. Callers must never re-derive `grossAmount` from the already-rounded `netAmount + taxAmount`.
+- **Shipping is ancillary:** it carries no rate of its own; it is apportioned pro-rata by gross value onto the lines that are actually shipped (`isShippedItem`), then taxed at each line's own rate. Digital lines receive zero shipping weight.
+- **`shippingByRate` is invoice-only:** it is not copied onto the serialized order model. The order response only carries the aggregate `shippingNetAmount`/`shippingTaxAmount`.
+- **`unknown` fields are intentional:** `TaxableLineItem` and `OrderTaxInput.shippingCost` use `unknown` because they arrive as raw aggregate output; all access goes through defensive coercion (`frozenRate`, `toMinorUnits`).
+- **Frozen semantics:** rates and prices are never re-resolved against a product's current tax class. A config change must not restate a past order.

@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/adapters/antibot-providers/index.ts
-sha256: c14f68a45e2b36378ab2ad28317dcf0be4f4076aaadc9ed60ecd2b846e652d50
-generated_at: 2026-10-14T07:41:18.221954+00:00
+sha256: 631aec00add7cef48ac59ed4b5733f04877ab9e2f7c265ba7486ae5bec07718f
+generated_at: 2026-10-29T01:52:35.581419+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the **human-challenge port** (rung 3 of the anti-automation ladder): the interface a deployment must satisfy to answer "is this a real person?" It also owns the provider registry and the resolver that maps the `NODE_ANTIBOT_PROVIDER` env var to a concrete implementation. Ship `none` by default; a live project registers a real provider (Turnstile, Altcha, or a custom one) via `registerHumanChallengeProvider` without editing this file.
+Defines the **human-challenge port** (Rung 3 of the anti-automation ladder) and the provider registry that binds concrete adapters (`none`, `turnstile`, `altcha`) to the `NODE_ANTIBOT_PROVIDER` environment variable. The file exists so that deployment selects an implementation by name at runtime without any code-path branching in the rest of the system.
 
 ## Key elements
 
-- **`HumanChallengeProvider` (interface)** — the port contract: `name`, `publicParameters(challengeUrl)`, optional `issueChallenge()`, `verify(token, remoteAddress?) → RungVerdict`.
-- **`IssuedChallenge` / `ChallengeParameters` (interfaces)** — the shape of a self-hosted challenge handed to the client verbatim (parameters + HMAC signature). Declared here to keep infrastructure free of `@types` imports; structurally identical to the module's `AntibotChallenge`.
-- **`registry`** (module-private) — a `createProviderRegistry<HumanChallengeProvider>` pre-seeded with `none`, `turnstile`, `altcha`.
-- **`registerHumanChallengeProvider(name, provider)`** — add or override a provider at runtime (used by live deployments and tests).
-- **`resolveHumanChallengeProvider()`** — reads `NODE_ANTIBOT_PROVIDER` via `antibotConfig()` and `requireProvider`; **throws** on an unknown name rather than silently falling back to `none`.
-- **`isHumanChallengeEnabled()`** — convenience boolean: provider name ≠ `'none'`.
-- **`humanChallengeProviderProbe`** — `defineConfig` boot probe that calls `resolveHumanChallengeProvider` inside `probe`, so a typo in the env var fails at boot, not in production.
+- **`HumanChallengeProvider`** — the interface every adapter must satisfy: `name`, `publicParameters(challengeUrl)`, optional `issueChallenge()`, and `verify(token, remoteAddress?) → RungVerdict`.
+- **`IssuedChallenge`** / **`ChallengeParameters`** — self-contained types for the challenge payload a self-hosted provider hands to the client (structurally mirrors `modules/antibot`'s `AntibotChallenge` schema without importing it).
+- **`registry`** — a `createProviderRegistry` instance mapping `none`, `turnstile`, `altcha` to their adapter exports.
+- **`resolveHumanChallengeProvider()`** — reads `NODE_ANTIBOT_PROVIDER` from `antibotConfig()` fresh per call; throws on unknown name (no silent fallback to `none`).
+- **`isHumanChallengeEnabled()`** — convenience check that the resolved provider is not `none`.
+- **`humanChallengeProviderProbe`** — a `defineProbe` boot-time validation slice; calls the resolver at startup to surface typos before traffic arrives.
 
 ## Relationships
 
-- **`./none.ts`, `./turnstile.ts`, `./altcha.ts`** — concrete implementations registered at module load time.
-- **`../antibot-verdict.ts`** — source of the `RungVerdict` type returned by `verify`.
-- **`../antibot-providers/config.ts`** — supplies the `antibotConfig()` env slice (notably `NODE_ANTIBOT_PROVIDER`).
-- **`@infrastructure/runtime/provider-registry`** — provides `createProviderRegistry` / `requireProvider` used by the registry and resolver.
-- **`@infrastructure/config/define`** — provides `defineConfig` / `probe` for the boot probe.
-- **`src/infrastructure/http/middlewares/human-challenge.ts`** — consumes `isHumanChallengeEnabled` and `resolveHumanChallengeProvider` to gate or run the challenge on each request.
-- **`src/modules/antibot/controllers/get-antibot-challenge.ts`** — calls `issueChallenge()` and `publicParameters()` to serve a challenge to the client.
-- **`src/modules/antibot/controllers/get-antibot-config.ts`** — exposes `name` and `publicParameters` so the frontend knows which widget to render.
-- **`tests/unit/…/index.test.ts`** — unit-tests registry resolution, the enabled check, and the probe.
-- **`tests/unit/scenarios/no-human-challenge.test.ts`** — scenario test confirming the `none` path short-circuits.
+- **`provider-registry.ts`** — supplies `createProviderRegistry` and `requireProvider`, the generic machinery this index builds on.
+- **`config/define.ts`** — supplies `defineProbe`, used to register the boot-time validation probe.
+- **`adapters/config.ts`** — supplies `antibotConfig()` which reads `NODE_ANTIBOT_PROVIDER` (and related env vars) from `src/app/config.ts`.
+- **`./none.ts`, `./turnstile.ts`, `./altcha.ts`** — concrete adapter exports registered in the local `registry`.
+- **`antibot-verdict.ts`** — provides the `RungVerdict` type returned by `verify()`.
+- **`modules/antibot/controllers/get-antibot-challenge.ts`** — calls `issueChallenge()` and passes the result to `successResponse<AntibotChallenge>` (no cast needed; shapes agree field-for-field).
+- **`modules/antibot/controllers/get-antibot-config.ts`** — reads `publicParameters()` and `name` to build the client-facing config.
+- **`http/middlewares/human-challenge.ts`** — calls `isHumanChallengeEnabled()` to gate the middleware and `verify()` to check submitted tokens.
+- **`src/app/config.ts`** — upstream source of the env value; the probe registered here is consumed during app boot.
 
 ## Notes
 
-- `resolveHumanChallengeProvider` reads the env **fresh on every call** (no memoisation). This mirrors the other rungs and keeps the cost negligible versus the branch a cache would need.
-- A typo in `NODE_ANTIBOT_PROVIDER` **throws** rather than falling back to `none`. The rationale: a silent fallback would silently disable protection, the same failure mode as `NODE_ANTIBOT_EMAIL_POLICY`.
-- `issueChallenge` is **optional**. Vendor-hosted providers (Turnstile, Cloudflare) omit it because their widget fetches the challenge from the vendor, not from this server.
-- `publicParameters` receives `challengeUrl` explicitly so a self-hosted provider knows which route its widget should hit; the provider never guesses the URL.
-- The interface doc block spells out that a real `verify` must call the vendor's endpoint over the network, send the secret from the environment, and treat a network failure as `refused` — not as a pass and not as a local decode.
+- **No memoisation by design.** `resolveHumanChallengeProvider()` re-reads config each call. The JSDoc explicitly contrasts this with `PaymentProvider`'s cached lookup and justifies it by the negligible cost of a registry lookup.
+- **No fallback to `none`.** An unrecognised `NODE_ANTIBOT_PROVIDER` value throws. This mirrors the `NODE_ANTIBOT_EMAIL_POLICY` guard: a typo must not silently disable protection.
+- **Type independence.** `IssuedChallenge`/`ChallengeParameters` are declared here rather than imported from `@types` so infrastructure never type-checks against a module-owned schema. The module controller passes the value through without a cast.
+- **Adding a provider** = one adapter file + one registry entry. No other file in the dependency graph needs modification.

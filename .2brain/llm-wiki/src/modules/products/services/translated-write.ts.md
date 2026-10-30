@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/services/translated-write.ts
-sha256: e5f84a15a9e613651eea0f650339588187bb7321dbaa252b9355cc74ec423e94
-generated_at: 2026-10-15T11:46:04.884032+00:00
+sha256: 3f6ae1ac71e5928eb0d2ca916e93262ed39a9b9c7f270dc9564ef73624bb778d
+generated_at: 2026-10-29T05:30:32.183246+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The multilingual write door for products: it persists a product row and its per-locale translation rows in a single database transaction, serving both the create and the PUT/PATCH update paths. It exists so that the product and its translations always commit or roll back atomically, and so that the derived (fallback-locale) column stays in sync without the caller managing it.
+Implements the two write operations (`create`, `updateById`) for multilingual products. Each call writes the product row and all its translation rows inside a single database transaction, guaranteeing that the derived fallback-locale title/description columns always stay in sync with the translation rows. A third export, `clearOmittedLocales`, normalizes a PUT body so every stored locale is explicitly addressed before `updateById` runs.
 
 ## Key elements
 
-- **`writeCreate(data, context, imageExtras?)`** — Validates the translation batch via `planTranslations`, then inside one `withTransaction`: inserts the product (merging `imageExtras` and the fallback-locale title/description), writes all translation rows, and returns a `201` success via `finishCreate`.
-- **`writeUpdate(id, data, context, imageExtras?)`** — Same pattern for PUT/PATCH. If a `translations` batch is present it plans and writes rows alongside the update; if the fallback locale is touched it also refreshes the derived `title`/`description` columns. Returns the `finishUpdateById` success or a rejection (e.g. 404) unchanged.
-- **`clearOmittedLocales(id, changes)`** — PUT-only helper. Reads all stored translation locales, nulls any locale the body omits, and nulls any omitted `description` inside a stated locale (via `clearOmittedFields`). The fallback locale is guaranteed present by the schema and is never deleted.
-- **`toUpsertTranslationsRequest(translations)`** — Adapter that reshapes this module's flat `{ title?, description? } | null` per-locale shape into the kernel's `TranslationBatch` (`{ fields, origin? }`), omitting `undefined` keys.
-- **`prefixTranslationErrors(rejection)`** — Rewrites error `details.field` paths by prepending `translations.` so pointers reflect the nested body shape.
-- **`ProductImageExtras`** — Server-derived image fields (`imageUrl`, `thumbnailUrl`, `pendingImageKey`) that join the write *after* schema validation; never part of the client contract body.
-- **`TRANSLATED_FIELDS`** — `['description']`; the set of fields eligible for `clearOmittedFields` null-ing (title is the row's own key, not "translated" in the same sense).
+- **`create`** – Validates the translation plan (no DB write yet), then inside `withTransaction` calls `insertProduct` → `writeTranslations`. Post-commit side effects (relay, audit, image queue) are delegated to `finishCreate`. Returns `201` on success.
+- **`updateById`** – Plans translations only if the body carries a `translations` key. Inside `withTransaction` calls `updateByIdInTransaction` (which handles the 404 check and row update) and, when the row was actually updated and a plan exists, `writeTranslations`. Delegates post-commit cleanup to `finishUpdateById`. Serves both PUT and PATCH (PUT is pre-normalized by `clearOmittedLocales`).
+- **`clearOmittedLocales`** – Reads all stored translation locales for a product, then fills the `translations` map so that (a) omitted locales become `null` (delete signal) and (a) stated locales get `description: null` when the field is absent. Returns the widened `changes` object.
+- **`toUpsertTranslationsRequest`** *(internal)* – Converts the module's flat `{ title?, description? } | null` per-locale shape into the kernel's `TranslationBatch` (`{ fields, origin? }` per locale).
+- **`prefixTranslationErrors`** *(internal)* – Rewrites error field pointers from `it.title` to `translations.it.title` so rejections align with this module's nested body shape.
+- **`TRANSLATED_FIELDS`** – `['description']`; passed to `fillOmittedWithNull` so only `description` is treated as a clearable field (title is the row's own column, not a "translated" field).
 
 ## Relationships
 
-- **`@kernel/translation`** — Core dependency: `planTranslations`, `isTranslationPlan`, `writeTranslations`, `readAllTranslations`, `clearOmittedFields`, and the `TranslationBatch` type all come from here. This file is a thin product-domain consumer of the generic translation port.
-- **`@infrastructure/i18n`** — `getFallbackLocale()` supplies the canonical fallback locale key used to extract the derived-column values and to guard against its absence.
-- **`../model`** (`src/modules/products/model.ts`) — Provides `zodProductCreateSchema`, `zodProductUpdateSchema` (used for type-level inference of `data`) and the `ProductDocument` return shape.
-- **`./crud`** (`src/modules/products/services/crud.ts`) — `insertProduct`, `updateByIdInTransaction` perform the raw row writes; `finishCreate` / `finishUpdateById` handle post-commit side effects (outbox, audit, image enqueue) and shape the final response.
-- **`@infrastructure/runtime/database`** — `withTransaction` wraps the product + translations writes in a single session.
-- **`@infrastructure/http/response`** — `generateSuccess` and the `ResponseSuccess` / `ResponseReject` union types structure every return value.
-- **`@types`** — `CallerContext`, `ProductTranslationFieldsPatch`, `ProductTranslationFieldsWrite` define the auth/translation field contracts.
-- **`src/modules/products/services/index.ts`** — Re-exports this module so controllers import from the barrel.
+| Neighbor | Interaction |
+|---|---|
+| `src/kernel/translation.ts` | Core port: `planTranslations`, `isTranslationPlan`, `writeTranslations`, `readAllTranslations`, `TranslationBatch` type. All translation I/O flows through this module. |
+| `src/modules/products/services/crud.ts` | `insertProduct`, `updateByIdInTransaction` perform the raw row writes; `finishCreate` / `finishUpdateById` run post-commit side effects (outbox, audit, image queue). |
+| `src/modules/products/model.ts` | Zod schemas (`zodProductCreateSchema`, `zodProductUpdateSchema`) gate what reaches these functions; `ProductDocument` is the return shape. |
+| `src/infrastructure/runtime/database.ts` | `withTransaction` wraps the row + translation writes into one atomic unit. |
+| `src/infrastructure/http/response.ts` | `generateSuccess` builds the 201 envelope; `ResponseReject` / `ResponseSuccess` are the union return types. |
+| `src/infrastructure/i18n/index.ts` (→ `catalog.ts`) | `getFallbackLocale()` identifies which locale's entry feeds the derived columns. |
+| `src/infrastructure/object-guards.ts` | `fillOmittedWithNull` powers the PUT "omitted = null" semantics in `clearOmittedLocales`. |
+| `src/types/index.ts` (→ `auth-context.ts`, `server-image.ts`) | `CallerContext`, `ProductTranslationFieldsPatch`, `ServerImageFields` type the function parameters. |
+| `src/modules/products/services/index.ts` | Re-exports this module's public API to the rest of the product service layer. |
 
 ## Notes
 
-- **PUT ≡ PATCH here.** The controller calls `clearOmittedLocales` before invoking `writeUpdate` for PUT, so by the time `writeUpdate` runs, every omitted locale is already `null`. A single code path therefore serves both verbs.
-- **`imageExtras` is post-validation.** It is merged into the insert/update payload *after* Zod validation passes. On create, `imageUrl: null` explicitly means "no image" (bypassing the schema's `undefined`-only default); on update it follows the same rule.
-- **`origin` is always implicit.** `toUpsertTranslationsRequest` never sets `origin`; the kernel port defaults it to `'human'`. There is no machine-import path through this door.
-- **Error paths are nested.** Because `translations` is a field *inside* the product body (unlike the generic translation endpoint where it *is* the body), `prefixTranslationErrors` rewrites every field pointer so clients see `translations.it.title`, not `it.title`.
-- **`touch` flag.** In `writeUpdate`, `touch: plan !== undefined` is passed to `updateByIdInTransaction` to signal that the derived column must be refreshed even if no other mutable column changed.
-- **Fallback locale is load-bearing.** Both `writeCreate` and `writeUpdate` index into `data.translations[getFallbackLocale()]` to populate the product row's `title`/`description`. The schema refinements guarantee its presence, but the code still uses a `as` cast in `writeCreate` — if the schema ever changes, that cast is the first thing to break.
+- **PUT vs PATCH unification.** `updateById` is a single code path. The controller calls `clearOmittedLocales` *before* invoking it for PUT, so omitted locales arrive as explicit `null`. PATCH skips that step and sends only the changed locales.
+- **`imageExtras` is server-derived.** It is never part of the client contract; it is merged in only after Zod validation has passed, keeping the schema surface clean.
+- **Derived columns.** The product row's `title` and `description` columns mirror the *fallback locale's* translation. On create they come from `fallbackEntry`; on update only if the fallback locale entry is present in the body. `touch: plan !== undefined` signals `updateByIdInTransaction` to refresh the derived column even when no translation rows changed.
+- **Error-pointer nesting.** Because this module nests translations under a `translations` key (unlike the generic kernel door), `prefixTranslationErrors` rewrites field pointers so the 422 body matches the request shape.
+- **No standalone row write exists.** There is intentionally no public function that writes only the product row without its translations; the "door" is always the paired operation.

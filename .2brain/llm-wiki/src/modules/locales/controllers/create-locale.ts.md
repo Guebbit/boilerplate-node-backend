@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/controllers/create-locale.ts
-sha256: 52e5b41ef130d42956f4c04ab4d7537e993a109a6cfa7109f7af8ebfcd8a3547
-generated_at: 2026-10-15T10:41:45.201989+00:00
+sha256: 5a6b43109717b1d31ae591fd215b11559e1968c185e6ee8626ef66bc6a964598
+generated_at: 2026-10-29T04:19:29.253005+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Handles the `POST /locales` admin endpoint: registers a new language entry in the dynamic tier. It validates the request body against a Zod schema, delegates to the locale service, and returns a `201 Created` with a `Location` header. It is the "create" half of the locale CRUD trio (edit lives in `./update-locale.ts`, removal in `./delete-locale.ts`).
+Admin controller for `POST /locales`. Registers a new language in the dynamic tier; once created, the language is immediately available for content negotiation, product text, and search. API error messages fall back to the default language until a dictionary file is deployed for the new locale.
 
 ## Key elements
 
-- **`createLocale`** — exported async handler function. Parses the body via `parseBody` (schema: `CreateLocaleBody` extended with `localeDisplayName` for both `name` and `nativeName`), calls `localeService.createLanguage`, shapes the result through `presentLocale`, and responds with `createdResponse` (201, body, `Location: /locales/<tag>`). Errors are funneled through `refused` (business-level) and `catchAs` (unexpected).
+- **`createLocale`** (exported) — Express handler for `POST /locales`. Validates the request body, delegates to `localeService.createLanguage`, then re-fetches the stored record via `localeService.describeStoredLanguage` to build a `Language` response body. Returns `201` with a `Location` header of `/locales/<tag>`.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** — supplies the `parseBody`, `refused`, and `catchAs` helpers that structure the request/response flow and error handling.
-- **`@infrastructure/http/request`** — `callerContextOf(request)` extracts the authenticated caller's identity and passes it into the service call.
-- **`@infrastructure/http/response`** — `createdResponse` emits the 201 status, JSON body, and `Location` header.
-- **`@types`** — `CreateLocaleRequest` types the parsed body; `Language` types the response payload.
-- **`../services` (`localeService`)** — the domain layer that persists the new language and returns a result (data or refusal).
-- **`../presenters` (`presentLocale`)** — maps the service's domain result into the API response shape.
-- **`../routes`** — registers `createLocale` as the handler for the `POST /locales` route.
+- **`src/modules/locales/routes.ts`** — Registers `createLocale` as the handler for the `POST /locales` admin route.
+- **`src/modules/locales/services/index.ts`** — Supplies `localeService`, from which this file calls `createLanguage`, `describeStoredLanguage`, `localeDisplayName`, and `standingOn`.
+- **`src/infrastructure/http/controller.ts`** — Provides the `parseBody`, `refused`, and `catchAs` helpers used for validation, rejection, and error handling.
+- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf`, which extracts the caller's identity/context from the Express request.
+- **`src/infrastructure/http/response.ts`** — Provides `createdResponse`, the 201 response helper that sets the body and `Location` header.
+- **`src/types/index.ts`** — Source of the `CreateLocaleRequest` and `Language` types used in the handler signature and response.
+- **`src/modules/locales/tests/unit/service.test.ts`** — Unit-tests the service layer (`localeService`) that this controller delegates to.
 
 ## Notes
 
-- Registering a locale here does **not** immediately make the API answer in that language. `listSupportedLocales()` is read once per worker at boot and i18next registers its resources from that snapshot; a newly created locale only becomes resolvable on the next worker restart. The file header comment calls this out explicitly to prevent the misconception that `POST /locales` is a live toggle.
-- The Zod schema is extended inline with `localeDisplayName` pulled from the service, so the *validation* of display-name format is owned by the service, not hardcoded in the schema.
-- The handler uses a promise chain (`.then/.catch`) rather than `async/await`, consistent with the project's controller style.
+- The Zod schema is **extended at call time**: `CreateLocaleBody.extend({ name: localeService.localeDisplayName, nativeName: localeService.localeDisplayName })`. The `name` and `nativeName` fields are computed dynamically via the service, not static string fields.
+- The controller performs **two sequential service calls** (create → describe) rather than returning the create result directly, so the response shape comes from the stored record, not the input.
+- Sibling controllers: `./update-locale.ts` (edit) and `./delete-locale.ts` (removal), per the module doc comment.

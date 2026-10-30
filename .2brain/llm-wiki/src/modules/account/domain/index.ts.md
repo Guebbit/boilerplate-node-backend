@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/domain/index.ts
-sha256: 79bd5cc5f1fde63818a1992989a9463717facb265c704d860057a1b821fffd06
-generated_at: 2026-10-14T08:38:55.745314+00:00
+sha256: 81dbcf51a80eb9174d7312aebca0f00983a93b28eba07a8ce6bf37e1916e1b98
+generated_at: 2026-10-29T02:33:40.369242+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel (re-export) module for the **account domain layer**. It exposes the pure business rules—email-change state transitions, session-proof validation, and session revocation—as a single import surface. The file contains no logic of its own; it exists so consumers (services, tests) can import from one path rather than reaching into individual domain files.
+Barrel file for the account **domain layer**. It re-exports the pure business rules (email-change transition table, session-proof helpers, revocation constants) so that upper tiers (services, controllers) import a single entry point. The file itself contains no logic—only `export` statements. A lint rule guarantees the domain layer has zero imports of Express, Mongoose, or any other tier.
 
 ## Key elements
 
-- **Email-change exports** (from `./email-change`):
-  - `EMAIL_CHANGE_STATES`, `EMAIL_CHANGE_EVENTS` — the state/event constants of the transition table.
-  - `emailChangeNext`, `emailChangeStateOf` — transition-table helpers (next-state lookup / state derivation).
-  - `undoRestoresPreviousEmail` — rule for the undo action.
-  - Types: `EmailChangeEvent`, `EmailChangeFields`, `EmailChangeState`.
-- **Session-proof exports** (from `./session-proof`):
-  - `AMR` — assertion metadata reference constant.
-  - `firstSessionRefused`, `withProofs` — rules governing session-proof acceptance.
-- **Revocation exports** (from `./revocation`):
-  - `REVOCATION`, `announces` — revocation constants / announcement helper.
-  - Types: `RevocationCause`, `RevocationRow`, `SessionsRevokedReason`.
+- **Email-change exports** (from `./email-change`): `EMAIL_CHANGE_STATES`, `EMAIL_CHANGE_EVENTS`, `emailChangeNext` (transition function), `emailChangeStateOf`, `undoRestoresPreviousEmail`; types `EmailChangeEvent`, `EmailChangeFields`, `EmailChangeState`.
+- **Session-proof exports** (from `./session-proof`): `AMR`, `firstSessionRefused`, `withProofs`.
+- **Revocation exports** (from `./revocation`): `REVOCATION`, `announces`; types `RevocationCause`, `RevocationRow`, `SessionsRevokedReason`.
+- **Intentionally absent**: `epoch.ts` (session-epoch rule) is **not** re-exported here. The `session/` module imports it directly because this barrel must not expose `session/`'s token surface.
 
 ## Relationships
 
-- **Re-exports from** `email-change.ts`, `session-proof.ts`, and `revocation.ts` (same directory)—those files hold the actual logic.
-- **Consumed by** `services/email-change.ts` and `services/verification.ts`, which import the domain rules to implement their respective application flows.
-- **Exercised by** `tests/unit/email-change-domain.test.ts`, which imports the email-change exports to assert transition-table behaviour.
+- **Re-exports** `email-change.ts`, `session-proof.ts`, and `revocation.ts`—the three sibling domain files.
+- **Consumed by** `src/modules/account/index.ts` (parent barrel) and by service-layer files (`services/email-change.ts`, `services/verification.ts`) that import domain rules through this entry point.
+- **Tested indirectly** via `tests/unit/email-change-domain.test.ts`, which exercises the re-exported email-change transition logic.
 
 ## Notes
 
-- The module header explicitly states this tier is lint-guaranteed free of Express, Mongoose, and all other framework dependencies. Do not add framework imports here or in the re-exported files without updating the lint rules.
-- See `docs/theory/domain-layer.md` for the layering contract this file enforces.
-- Because this is a pure re-export barrel, there is no runtime code to test directly; unit tests target the underlying files (`email-change.ts`, etc.) via these re-exports.
+- The docblock explicitly warns that `epoch.ts` is excluded. If you need the session-epoch rule, import it from `session/` directly—not from this barrel.
+- All exports are pure data/functions with no side effects; safe to import in any tier that respects the dependency rule.
+- Refer to `docs/theory/domain-layer.md` for the layering contract that makes this file lint-protected.

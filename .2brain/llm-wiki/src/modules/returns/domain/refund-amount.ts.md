@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/domain/refund-amount.ts
-sha256: 5d9e09483fd82493738c81d957a16052ca5dc5d313b21ecf49019417c4bcdc01
-generated_at: 2026-10-15T11:53:01.167238+00:00
+sha256: b1af068a005a405c96eef2f8d472318ba3356b716ce497e2d8b2541d4325bb7e
+generated_at: 2026-10-29T05:38:05.958519+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure-arithmetic module that computes what a received return (or a remainder cancellation) owes the customer, working exclusively in integer minor units so the quoted figure and the payment wire can never diverge by float drift. It encodes the shipping-refund rule (only the last unit of an order refunds delivery; withdrawal is capped at cheapest standard, defective/wrong-item refunds full shipping, cancellation refunds all shipping) and the handling-deduction guard.
+Pure arithmetic for computing how much a customer is owed when a return or cancellation is processed. All calculations use integer minor units (via the `Money` primitive) to eliminate float drift between the quoted figure and the payment sent. Encodes the shipping-refund rule: only the return/cancel that takes the last unit of an order refunds delivery, with the amount depending on reason (full refund for defects, cheapest-standard cap for withdrawals).
 
 ## Key elements
 
-- **`RefundInputs`** — input shape for a received return: currency, reason, line items, `takesLastUnit`, `shippingPaid`, `cheapestStandardShipping`, `handlingDeduction`.
-- **`RefundBreakdown`** — output shape: `goods`, `shipping`, `deduction`, `total` (all in decimal units for wire/ledger).
-- **`RefundVerdict`** — discriminated union: `{ ok: true; breakdown }` or `{ ok: false; reason: 'deduction-too-high' }`.
-- **`refundAmountFor(inputs): RefundVerdict`** — main entry for a received return. Sums line goods, computes refundable shipping, subtracts handling deduction; rejects if the deduction would drive the total negative.
-- **`refundableShipping(inputs): Money`** *(module-private)* — returns 0 unless `takesLastUnit`; for defective/wrong-item returns full `shippingPaid`; for withdrawal caps at `cheapestStandardShipping`.
-- **`CancellationInputs`** — input shape for a remainder cancellation (no reason, no cheapest-shipping, no deduction).
-- **`cancellationRefundFor(inputs): RefundBreakdown`** — computes cancellation refund: line goods + full shipping when `takesLastUnit` (no cap, no deduction, since nothing was delivered).
-- **`shippingStillOwed(currency, shippingPaid, alreadyRefunded): number`** — helper that returns `max(0, paid − refunded)` in decimal units; the guard preventing double-refunding of delivery.
+- **`refundAmountFor(inputs: RefundInputs): RefundVerdict`** — Main entry point. Sums returned-line goods, adds refundable shipping (if this is the last unit), subtracts the handling deduction. Returns a `RefundBreakdown` or rejects with `'deduction-too-high'` when the deduction would exceed goods + shipping (a refund cannot be negative).
+- **`cancellationRefundFor(inputs: CancellationInputs): RefundBreakdown`** — Computes the refund for cancelling a fulfillment order's remainder. No handling deduction applies. If the cancel takes the last unit, the full remaining `shippingPaid` is refunded (no cheapest-standard cap, since nothing was delivered).
+- **`shippingStillOwed(currency, shippingPaid, alreadyRefunded): number`** — Helper that computes the delivery still owed back (paid minus already refunded), floored at zero. Prevents double-refunding shipping across multiple partial returns/cancels.
+- **`RefundInputs`** — Input contract: currency, reason, line items (quantity + frozen unit price), `takesLastUnit` flag, `shippingPaid`, `cheapestStandardShipping`, `handlingDeduction`.
+- **`RefundVerdict`** — Discriminated union: `{ ok: true; breakdown }` | `{ ok: false; reason: 'deduction-too-high' }`.
+- **`RefundBreakdown`** — `{ goods, shipping, deduction, total }` in decimal (wire/ledger) units.
+- **`CancellationInputs`** — Subset of `RefundInputs` without reason or deduction fields.
+- Internal `goodsOf` — multiplies each line's unit price by quantity and sums.
+- Internal `refundableShipping` — applies the last-unit gate and reason-based cap.
 
 ## Relationships
 
-- **`./lifecycle.ts`** — provides the `ReturnReason` type consumed by `RefundInputs.reason`.
-- **`@shared-kernel/money.ts`** — supplies `toMinorUnits`, `toDecimalAmount`, and the `Money` branded type; all arithmetic in this file goes through these helpers.
-- **`./index.ts`** — barrel file that re-exports the public API of this module (`refundAmountFor`, `cancellationRefundFor`, `shippingStillOwed`, and the interfaces/types) to the rest of the returns module.
-- **`services/receive.ts`** — the receive-return service that calls `refundAmountFor` and `shippingStillOwed` when processing an incoming return.
-- **`services/cancellation-refund.ts`** — the cancellation service that calls `cancellationRefundFor` and `shippingStillOwed` when cancelling the remainder of an order.
-- **`tests/unit/refund-amount.test.ts`** — unit tests covering the arithmetic, shipping-cap logic, and the `deduction-too-high` rejection path.
+- **`src/domain-primitives/money.ts`** — Consumes `addMoney`, `subtractMoney`, `scaleMoney`, `minMoney`, `NO_MONEY`, `toMinorUnits`, `toDecimalAmount`, and the `Money` type. All arithmetic flows through these to stay in integer minor units.
+- **`src/modules/returns/domain/lifecycle.ts`** — Imports `ReturnReason` (used to select the shipping-refund strategy: full vs. cheapest-standard cap).
+- **`src/modules/returns/domain/index.ts`** — Re-exports the public API of this module.
+- **`src/modules/returns/services/cancellation-refund.ts`** — Calls `cancellationRefundFor` and `shippingStillOwed` to build the refund payload for a cancellation.
+- **`src/modules/returns/services/receive.ts`** — Calls `refundAmountFor` and `shippingStillOwed` when processing a received return.
+- **`src/modules/returns/tests/unit/refund-amount.test.ts`** — Unit tests for both public functions and the `shippingStillOwed` helper.
+- **`src/modules/delivery/tests/unit/fulfillment.test.ts`** — Integration-level test that exercises refund calculation through the fulfillment domain (touches this module's output via service calls).
 
 ## Notes
 
-- **`takesLastUnit` is a caller-supplied flag**, not something this module derives. The services are responsible for determining whether all other units are already gone; a mis-set flag silently changes the shipping component.
-- **Cancellation always refunds full shipping** (when last unit) with no cheapest-standard cap, because the legal rationale for the cap (delivery actually occurred) does not apply to a pre-dispatch cancel.
-- **The only failure mode is `deduction-too-high`.** Callers must branch on `RefundVerdict.ok`; there is no thrown error.
-- **All public return values are in decimal units** (e.g., 19.99), while internal arithmetic stays in minor units (1999). The `Money` type is a branded number used only at the `toMinorUnits`/`toDecimalAmount` boundary.
-- **Line prices are "gross unit price the order froze"** — this module does no tax, discount, or currency conversion; it trusts the caller to pass the final per-unit figure.
+- All public return values (`RefundBreakdown`) are in **decimal** units (e.g. `12.34`), not minor units. Internal arithmetic stays in minor units via `Money`; conversion to decimal happens only at the boundary via `toDecimalAmount`.
+- `takesLastUnit` is the single gate for shipping. Callers (the services) are responsible for determining and passing this flag correctly; this module does not query order state.
+- The `as Money` cast in `shippingStillOwed` is safe because both operands of `Math.max` are `Money` values, but it exists solely to satisfy the type system around `Math.max`.
+- `cancellationRefundFor` always sets `deduction: 0` — there is no path for a handling deduction on a cancel.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/controllers/post-deliver-shipment.ts
-sha256: ca516fb1b9377d0c169730f99ff60b68e4a1c26a8a741118a8925aa47df339a8
-generated_at: 2026-10-14T15:20:58.923294+00:00
+sha256: f3198b90814e991e5a97c2b0a79cb2ebd82187dfc4cb5e94a1aaaee0cea58bcb
+generated_at: 2026-10-29T03:31:59.490399+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Route handler for `POST /delivery/shipments/:id/deliver`. Accepts a staff's delivery confirmation for a shipment, validates the input, and delegates to the delivery service to record the arrival — which, when it is the final shipment, transitions the order from `shipped` to `delivered`.
+Thin HTTP controller for `POST /delivery/shipments/:id/deliver`. Staff uses this endpoint to record that a shipment has arrived; when it is the last outstanding shipment on an order, the underlying service transitions the order from `shipped` to `delivered`. All business logic is delegated to `deliveryService.deliverShipment`—this file only wires the HTTP layer to the service.
 
 ## Key elements
 
-- **`postDeliverShipment(request, response)`** (exported) — The Express handler. Resolves the shipment `id` from the route param, parses/validates the request body against `DeliverShipmentBody`, calls `deliveryService.deliverShipment(id, body, request.authContext, callerContextOf(request))`, then either signals refusal or sends the resulting `Shipment` via `successResponse`.
+- **`postDeliverShipment`** (exported const, `Request<{ id?: string }> → Promise<void>`): Validates the `:id` route param via `requireId`, calls `deliveryService.deliverShipment(id, request.authContext, callerContextOf(request))`, then either short-circuits on a refusal (`refused`) or sends a `Shipment` success response. Errors are funneled through `catchAs(response, 'postDeliverShipment')`.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** (`src/infrastructure/http/controller.ts`) — Provides the shared controller utilities: `parseBody` (Zod validation), `refused` (domain-rejection → HTTP mapping), and `catchAs` (error → HTTP mapping with a context tag).
-- **`@infrastructure/http/ids`** (`src/infrastructure/http/ids.ts`) — `requireId` extracts and validates the `:id` route parameter, returning `null` (and a 404) if missing.
-- **`@infrastructure/http/request`** (`src/infrastructure/http/request.ts`) — `callerContextOf` derives the caller's audit context from the request.
-- **`@infrastructure/http/response`** (`src/infrastructure/http/response.ts`) — `successResponse` formats the 200 reply.
-- **`../services`** (`src/modules/delivery/services/index.ts`) — `deliveryService.deliverShipment` performs the actual domain work; this controller is a thin HTTP wrapper around it.
-- **`src/modules/delivery/routes.ts`** — Registers `postDeliverShipment` on the `POST /delivery/shipments/:id/deliver` route.
-- **`@types`** (`src/types/index.ts`) — Provides the `Shipment` type used to type the success response payload.
+- **`src/modules/delivery/routes.ts`** — Registers this handler on the `POST /delivery/shipments/:id/deliver` route.
+- **`src/modules/delivery/services/index.ts`** — Imports `deliveryService`; the sole business-logic dependency.
+- **`src/infrastructure/http/controller.ts`** — Provides `catchAs` (standard error → HTTP mapping) and `refused` (detects service-level refusal to short-circuit before success).
+- **`src/infrastructure/http/ids.ts`** — Provides `requireId` to extract and validate the `:id` parameter, returning early with a 404 (`delivery.shipment-not-found`) if absent.
+- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf` to derive a caller/context object passed into the service.
+- **`src/infrastructure/http/response.ts`** — Provides `successResponse` for the standard success envelope.
+- **`src/types/index.ts`** — Supplies the `Shipment` type used as the response payload type parameter.
 
 ## Notes
 
-- The Express generic types the route param as optional (`id?: string`); actual enforcement is done at runtime by `requireId`.
-- `request.authContext` is read directly (not via a helper) and forwarded to the service — the service, not the controller, decides how that context is used for authorization.
-- On both early-exit paths (missing id, invalid body) the handler returns `Promise.resolve()` rather than throwing, keeping the error-response responsibility with the infrastructure helpers.
+- `request.authContext` is passed straight through to the service; it is expected to be populated by an upstream middleware (not visible in this file).
+- The controller follows the project's `refused` / `catchAs` idiom rather than `try/catch`, so new error cases should be handled in the service or in the shared `controller.ts` helpers, not here.
+- The state transition (`shipped → delivered`) is the responsibility of `deliveryService.deliverShipment`; this file contains no order-state logic.

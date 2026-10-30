@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/observability/metrics-process.ts
-sha256: 0daa434fbac3895dd85852db2af4c745204abdc23c8d50f6ce7b1b045229d86b
-generated_at: 2026-10-14T08:06:34.503868+00:00
+sha256: aa5c93e93b65a9c9ee0c55041b18a95b844325f1666fdb120ebfcf6211f35096
+generated_at: 2026-10-29T02:10:29.009732+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines a single process-level Prometheus counter that tracks unhandled promise rejections. The counter exists because the application deliberately survives unhandled rejections (via `handleUnhandledRejection`), and without a metric, those survived failures would be invisible to monitoring.
+Defines a single Prometheus counter for unhandled Promise rejections. The counter exists because the app deliberately survives unhandled rejections (see `handleUnhandledRejection` in `error-handling.ts`); without a metric, those silent failures would be invisible in production. It registers the counter on the shared `metricsRegistry`.
 
 ## Key elements
 
-- **`processUnhandledRejectionsTotal`** (exported `Counter`) — Prometheus counter named `process_unhandled_rejections_total`. Increments each time a promise rejection reaches the process-level `unhandledRejection` handler. Registered against the shared `metricsRegistry`.
+- **`processUnhandledRejectionsTotal`** (exported `Counter`) — A monotonically-increasing counter; any non-zero rate indicates a bug (a lost error and its unfinished work). Built from `counterConfig(infrastructureMetricData.processUnhandledRejectionsTotal)` and explicitly registered against `metricsRegistry`.
 
 ## Relationships
 
-- **`src/infrastructure/observability/metrics-registry.ts`** — Provides the `metricsRegistry` instance that this counter registers with, ensuring it is served alongside all other application metrics.
-- **`src/app/error-handling.ts`** — Contains `handleUnhandledRejection`, the handler that increments this counter. This file is the sole *writer* of the metric.
-- **`tests/unit/app/error-handling.test.ts`** — Unit tests for the error-handling module, which exercise the path that increments this counter.
+- **`metrics-registry.ts`** — Supplies the shared `metricsRegistry` instance that this counter registers into.
+- **`metric-config.ts`** — Supplies `counterConfig`, which maps a generated data entry to the options object passed to the `prom-client` `Counter` constructor.
+- **`metrics.generated.ts`** — Supplies `infrastructureMetricData.processUnhandledRejectionsTotal`, the generated name/help/labels for this metric.
+- **`src/app/error-handling.ts`** — The runtime caller: `handleUnhandledRejection` increments this counter when a rejection goes unhandled.
+- **`tests/unit/app/error-handling.test.ts`** — Exercises the error-handling path that drives this counter.
 
 ## Notes
 
-- The metric is intentionally a **counter**, not a gauge: the doc comment states "Any rate above zero is a bug." Alert on `rate(...) > 0`, not on a threshold.
-- This module exports exactly one symbol and has no other logic. All wiring (incrementing the counter) lives in `error-handling.ts`.
-- See `docs/tools/prometheus.md` for the broader metrics schema and alerting conventions.
+- The file exports exactly one symbol. If you need to add a second process-level metric, keep the same pattern (generated data → `counterConfig` → explicit `registers` array) so it picks up the shared registry automatically.
+- The `registers` option is required here; omitting it would register against `prom-client`'s default registry instead of the app's shared one, making the metric invisible to the scrape endpoint.

@@ -1,7 +1,7 @@
 ---
 source: tests/support/rate-limit-budgets.ts
-sha256: 513dc4106b4fd7f9c8ab0655e1fc4c8e3d78170b8222988dd5a00e1af84597fd
-generated_at: 2026-09-23T20:12:53.406410+00:00
+sha256: 32ab6b2a94b6d7dd9c21dd75e9c3af571649e815fa4f430f1aa10552090104f6
+generated_at: 2026-10-29T07:09:50.353472+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A small test-support helper that lets unit-test suites retrieve a named `RateLimitBudget` from a module's declared budget array. It exists so the three rate-limit relationship tests (account, feedback, payments) can reference budgets by `namespace` without repeating a find-and-check pattern, and so a missing budget fails loudly instead of propagating `undefined`.
+Test-support helper that retrieves a single `RateLimitBudget` from a module's budget array by its `namespace` string. It exists so the three rate-limit unit suites (account, payments, tickets) can pin the numeric relationship between two named budgets without repeating lookup-and-assert boilerplate.
 
 ## Key elements
 
-- **`budgetIn(budgets, namespace)`** — The sole export. Takes a readonly array of `RateLimitBudget` and a `namespace` string, returns the matching budget, or throws an `Error` with a descriptive message naming the missing namespace.
+- **`budgetIn(budgets, namespace)`** (exported function) — Finds the first entry in `budgets` whose `namespace` matches the given string and returns it. Throws `Error` with a descriptive message if no match is found, rather than returning `undefined`. This makes a wrong namespace name fail loudly in the test output instead of producing a silent `undefined` downstream.
 
 ## Relationships
 
-- **`src/modules/account/tests/unit/rate-limits.test.ts`**, **`src/modules/feedback/tests/unit/rate-limits.test.ts`**, **`src/modules/payments/tests/unit/rate-limits.test.ts`** — Direct consumers. Each suite calls `budgetIn` to pull two budgets by name and assert a numeric relationship (ratio, ordering, etc.) between their limits.
-- **`src/types/rate-limit-budget.ts`** — Defines the `RateLimitBudget` interface that `budgetIn` operates on.
-- **`src/types/index.ts`** — Barrel re-export; the import path `@types` resolves through this file to reach `RateLimitBudget`.
+- **`src/types/rate-limit-budget.ts`** — Defines the `RateLimitBudget` interface that `budgetIn` operates on (imported via `@types`).
+- **`src/types/index.ts`** — Barrel re-export; the file imports the type through this alias.
+- **`src/modules/account/tests/unit/rate-limits.test.ts`** — Primary consumer; calls `budgetIn` to select two named budgets and assert their numeric relationship.
+- **`src/modules/payments/tests/unit/rate-limits.test.ts`** — Same usage pattern (the "payments twin").
+- **`src/modules/tickets/tests/unit/rate-limits.test.ts`** — Same usage pattern (the "tickets twin").
 
 ## Notes
 
-- The function is intentionally _not_ generic over the budget array type; it accepts `readonly RateLimitBudget[]` and returns `RateLimitBudget`. If a module ever needs a budget shape that extends `RateLimitBudget`, the array will need to be typed as the base interface before passing it here.
-- The thrown error message includes the offending `namespace` string in quotes, making test-failure output directly actionable.
-- This file is test-support only (lives under `tests/`); it is not part of the shipped application.
+- The function is deliberately *infallible-by-convention*: it never returns `undefined`. If you need a soft lookup (e.g., "assert budget X is absent"), use `budgets.find(...)` directly instead.
+- `budgets` is typed `readonly RateLimitBudget[]`, so callers pass frozen/tuple-allocated arrays without casting.

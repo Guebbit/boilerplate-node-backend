@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/tests/integration/delete-titles.test.ts
-sha256: 35f3aa7f5339bf0cd8aecad761e3a60d5b2566af2f0e7d290a2fa9a86c59ae5f
-generated_at: 2026-10-15T11:47:51.661406+00:00
+sha256: b3d323ca1f1ab703e59b1da2fe4a12d6845f0357deb1ef6dbe4443ba79f8820f
+generated_at: 2026-10-29T05:32:23.019783+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that verify the `product.deleted` domain event carries the product's titles (by locale) captured **before** a hard delete removes the translation rows. The guarantee matters because a `notifications` message outliving the product can only display titles that travelled with the event. A secondary block covers `productService.titlesById` behaviour for live, soft-deleted, and hard-deleted products.
+Integration test verifying that the `product.deleted` domain event carries the product's translated titles (read before a hard delete drops the translation rows), and that `productService.titlesById` resolves correctly for live, soft-deleted, and hard-deleted products. Exists because a message that outlives the product can only display what travelled with the event.
 
 ## Key elements
 
-- **`describe('product.deleted titles')`** — asserts that `productService.removeById` emits `PRODUCT_DELETED` with the correct `titles` map, for both hard and soft deletes, that translations are read *before* they are removed, and that a repeated soft delete does not re-emit.
-- **`describe('productService.titlesById')`** — asserts that `titlesById` returns the locale map for an existing (or soft-deleted) product, an empty object after a hard delete, and lets a translated row override the product column for its own language.
-- **`jest.mock('@kernel/translation', …)`** — replaces `readAllTranslations` and `removeTranslations` with `jest.fn` wrappers around the real implementations (recording wrappers, not plain spies) so call order can be inspected.
-- **`afterEach` reset** — restores both translation methods to their real implementations so a stub left by one test cannot answer the next test's reads.
-- **`setupTestDb()`** — provisions a clean database for the integration run.
-- **`createProduct` (factory)** — seeds a product row with a given title.
-- **`markDomainEventsWired` / `onDomainEvent(PRODUCT_DELETED, deleted)` / `resetDomainEvents`** — wires a one-shot listener so the test can capture the emitted event payload.
-- **`settleOutboxNudges`** — awaits pending outbox flushes so async event dispatch is observable.
+- **`jest.mock('@kernel/translation', …)`** – Replaces the module with `jest.fn` wrappers around the real implementations (not spies), so individual tests can stub `readServedTranslations` / `removeTranslations` to control return values or record call order.
+- **`afterEach` block** – Resets and re-implements all three mocked translation functions with their real versions, preventing a stub left by one case from answering the next case's reads.
+- **`describe('product.deleted titles')`** – Four tests:
+  - Event payload includes the fallback-language title for a hard delete.
+  - Event payload includes the title for a soft delete.
+  - Translations are read *before* `removeTranslations` is called (order assertion), and all languages appear in the event.
+  - A repeated soft-delete on an already-deleted product does **not** re-emit.
+- **`describe('productService.titlesById')`** – Three tests:
+  - Returns titles for a soft-deleted product.
+  - Returns an empty object for a hard-deleted (gone) product.
+  - A translated title in the translation store wins over the product column title for the same locale.
+- **`setupTestDb()`** – Initialises an in-memory/test database for the suite.
 
 ## Relationships
 
-- **`src/kernel/translation.ts`** — mocked; the test intercepts `readAllTranslations` and `removeTranslations` to verify call ordering and supply controlled locale maps.
-- **`src/kernel/events.ts`** — provides the domain-event bus (`onDomainEvent`, `markDomainEventsWired`, `resetDomainEvents`) used to subscribe to and assert on `PRODUCT_DELETED`.
-- **`src/kernel/outbox.ts`** — `settleOutboxNudges` is awaited after every `removeById` call to ensure the outbox has flushed the event.
-- **`src/modules/products/events.ts`** — supplies the `PRODUCT_DELETED` constant used as the subscription key.
-- **`src/modules/products/services/index.ts`** — source of `productService`, whose `removeById` and `titlesById` are the units under test.
-- **`src/modules/products/tests/factories.ts`** — provides `createProduct` to seed fixture data.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the shared test database at module scope.
+- **`@tests/setup-test-db`** – Provides `setupTestDb` to create the test database the suite runs against.
+- **`@modules/products/tests/factories`** – Provides `createProduct` to seed a product with a known title.
+- **`@kernel/translation`** – Mocked at module level; tests stub `readServedTranslations` and `removeTranslations` to control return values and assert call ordering.
+- **`@kernel/events`** – `resetDomainEvents` / `markDomainEventsWired` / `onDomainEvent` set up the in-process event relay and subscribe a spy to `PRODUCT_DELETED`.
+- **`@kernel/outbox`** – `settleOutboxNudges` flushes the async outbox so that event emission (and thus the spy) has completed before assertions run.
+- **`@modules/products/events`** – Exports the `PRODUCT_DELETED` constant used to subscribe.
+- **`@modules/products/services`** – Exports `productService`; tests call `removeById` and `titlesById`.
 
 ## Notes
 
-- The translation mock intentionally wraps the real functions rather than using `jest.spyOn`. The comment in the file explains that under the swc transform used by the mutation runner, the CommonJS namespace import exposes a non-configurable property that `jest.spyOn` cannot redefine.
-- Every test that mutates a product's translations must `await settleOutboxNudges()` before asserting on the captured event; without it the assertion races the async outbox flush.
-- `titlesById` is a read path that works for soft-deleted products (rows still present) but returns `{}` after a hard delete (translation rows gone). The "translated wins over column" test is the only place that overrides `readAllTranslations` to return a different title than the seeded one.
+- **Mock strategy:** `jest.spyOn` is deliberately avoided because the swc transform (used by the mutation runner) exposes CommonJS namespace properties as non-configurable, making spies impossible. The `jest.mock` + `jest.fn(actual)` pattern is the workaround.
+- **`markDomainEventsWired()`** must be called in `beforeEach`; without it the event relay refuses to dispatch because no modules have subscribed in that process.
+- **`settleOutboxNudges()`** is required after every `removeById` call before asserting on the event spy; the outbox processes asynchronously.
+- The ordering test (`read` → `remove`) is the core invariant: if `removeTranslations` ran first, the event would carry empty titles and no downstream notification could ever display the product name.

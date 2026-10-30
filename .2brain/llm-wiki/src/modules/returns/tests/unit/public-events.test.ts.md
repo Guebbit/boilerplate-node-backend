@@ -1,30 +1,26 @@
 ---
 source: src/modules/returns/tests/unit/public-events.test.ts
-sha256: 758110bd59f9fe60e4b7c3b2227fe5d6d5c0864b4c24a56652ff42125cc6b8b4
-generated_at: 2026-10-15T12:01:44.860639+00:00
+sha256: 9d15fbf5352dabb61ef7887cb652b8b3abd23f80ca16aceb857edb452ad08eec
+generated_at: 2026-10-29T05:50:59.494096+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/returns/tests/unit/public-events.test.ts
 
 ## Purpose
-
-Unit tests verifying that the returns module's public-event projections (the shape webhook subscribers receive) are correct, well-named, and free of PII. The file exists to guard the public contract between the module's internal domain events and the externally-visible `eventType` / `data` payload.
+Unit tests that verify the returns module's public event projections — the exact shape and content of the payloads webhook subscribers receive for `RETURN_REQUESTED` and `RETURN_RECEIVED`, as well as the exclusion of customer-supplied free-text fields.
 
 ## Key elements
-
-- **`describe('the returns module's public events')`** — single suite containing three assertions against `returnsModule.publicEvents`.
-- **`toPublicEvent` (tested, not defined here)** — the projection function on each entry of the module's `publicEvents` registry; maps a domain-event payload to `{ eventType, data }`.
-- **PII-stripping test** — feeds a `note` field into the `RETURN_REQUESTED` projection and asserts the string `'555-0100'` and the `note` key are absent from the output.
-- **`as never` casts** — every call to `toPublicEvent` uses `as never`; see the inline comment explaining why.
+- **`describe('the returns module's public events')`** – top-level suite; no local helpers or mocks, just three assertions against the live module export.
+- **Test 1 – "tells subscribers a return was requested…"** – asserts `toPublicEvent` for `RETURN_REQUESTED` yields `{ eventType: 'return.requested', data: { returnId, orderId, reason } }` via exact `toEqual`.
+- **Test 2 – "never carries the customer's own words…"** – feeds a `note` field into the domain event and asserts it is absent both from the serialized JSON and from `projected.data` (PII-leak guard).
+- **Test 3 – "tells subscribers the goods were received…"** – asserts `toPublicEvent` for `RETURN_RECEIVED` yields `{ eventType: 'return.received', data: { returnId, orderId } }`.
 
 ## Relationships
-
-- **`src/modules/returns/events.ts`** — supplies the `RETURN_REQUESTED` and `RETURN_RECEIVED` string constants used as keys into the `publicEvents` registry and to identify which projection is under test.
-- **`src/modules/returns/module.ts`** — exports the `returnsModule` object whose `publicEvents` map is the sole subject of every assertion in this file.
+- **`src/modules/returns/module.ts`** – imports `returnsModule` (default export) and reads `returnsModule.publicEvents` to obtain the projection functions keyed by event name. This is the sole production code under test.
+- **`src/modules/returns/events.ts`** – imports `RETURN_REQUESTED` and `RETURN_RECEIVED` constants, used as the keys that index into `publicEvents`.
 
 ## Notes
-
-- The `as never` cast is **not** a test shortcut: the registry signature intentionally types its value slot as `never` so a single generic registry can hold projections for every module. When adding a new event, the cast is expected.
-- Public event names use a **dotted namespace** (`return.requested`, `return.received`), not the raw constant values — the projection is responsible for the rename.
-- The PII test checks the serialized JSON (`JSON.stringify`) *and* the `data` object, so a leaked field in either location fails the suite.
+- Every call to `toPublicEvent` casts its argument `as never`. This is required by the shared registry signature (one slot typed `never` so a single map can hold projections from all modules); the cast is not a test workaround but a type-system necessity.
+- The PII test checks both string absence in the full JSON **and** property absence on `data` — it guards against the field being renamed or moved but still serialized.
+- `toEqual` (deep equality) is used on the happy-path tests, so any extra fields in the public payload would fail the assertion.

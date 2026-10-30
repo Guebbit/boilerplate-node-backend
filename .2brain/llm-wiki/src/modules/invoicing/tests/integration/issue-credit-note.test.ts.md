@@ -1,7 +1,7 @@
 ---
 source: src/modules/invoicing/tests/integration/issue-credit-note.test.ts
-sha256: 7ed2585f251ee0a899088f33ce4cfe4cef1fece8479468e3857b94b07153e3d5
-generated_at: 2026-10-14T16:11:18.670834+00:00
+sha256: 2ddd52a31d4b53ac51fd5d2f8f9b9226b7c3ff439bcfca7caaf4c892428a4a53
+generated_at: 2026-10-29T04:17:13.500290+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,43 +9,44 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test that verifies credit-note issuance as a full pipeline: a refund on a `succeeded` payment fires `PAYMENT_REFUNDED`, which the invoicing module's subscription handles to freeze a credit note. It covers numbering, PII re-encryption, line mirroring, partial refunds, idempotency, timezone-aware series, concurrent-writer safety, number-counter rollback, and the no-invoice no-op path.
+Integration test suite that verifies credit-note issuance end-to-end: a refund settling on a `succeeded` payment is the *only* trigger that freezes a credit note. The happy path is exercised through the real `payments` module's `refundForOrder` and the real `invoicing/module.ts` subscription to `PAYMENT_REFUNDED`—never by calling `issueCreditNote` directly. Direct calls are reserved for edge-case tests (idempotency, races, timezone, missing invoice).
 
 ## Key elements
 
-- **`FAKE_SUCCESS_METHOD`** – constant (`'pm_card_visa'`) matching the fake PSP's "always succeeds" card reference.
-- **`waitUntil(read, timeoutMs?)`** – polling helper that repeatedly invokes an async reader until it returns a truthy value or times out (default 2 s). Used because the `PAYMENT_REFUNDED` listener writes fire-and-forget.
-- **`paidAndInvoiced(overrides?)`** – fixture that creates a user, a 25.00 product, an order, a payment intent, confirms it, and waits for the invoice to appear. Returns `{ orderId, invoice }`.
-- **`waitForNotes(orderId, count)`** – convenience wrapper around `waitUntil` that resolves once the repository reports `count` or more credit notes for the order.
-- **`describe('issuing a credit note off PAYMENT_REFUNDED')`** – the single describe block containing nine `it` cases:
-  - Number format (`YYYY-NNNNNN`) and linkage to the parent invoice.
-  - PII re-encryption under the credit-note's own document id (verified via `decryptInvoiceParty`).
-  - Full-refund mirroring of lines, net, tax, and grand totals.
-  - Two partial refunds producing two notes with distinct numbers, `refundId`s, and correct sub-totals.
-  - Idempotency: re-calling `issueCreditNote` with the same `refundId` returns the existing note and creates no duplicate.
-  - Shop-timezone year boundary (frozen clock at 23:30 UTC on 31 Dec → number starts `2027`).
-  - Concurrent-writer race: two simultaneous `issueCreditNote` calls yield one document and the counter is not over-incremented.
-  - Counter rollback when `invoicingRepository.insertCreditNote` rejects (spied).
-  - No credit note when no `succeeded` payment exists to refund.
+- **`FAKE_SUCCESS_METHOD`** – constant (`pm_card_visa`) matching the fake PSP's "always succeeds" payment-method reference.
+- **`paidAndInvoiced(overrides?)`** – helper that creates a user → product (€25) → order, confirms a payment via `paymentService`, waits for the invoice, and returns `{ orderId, invoice }`.
+- **`waitForNotes(orderId, count)`** – polls `invoicingRepository.findCreditNotesByOrderId` until the expected count is reached.
+- **`describe('issuing a credit note off PAYMENT_REFUNDED')`** – the test block containing:
+  - number-series independence (credit note and invoice each start at `1` per year)
+  - PII re-encryption under the note's own `_id`
+  - full-refund mirroring of lines, `grandTotal`, `netTotal`, `taxTotal`
+  - one note per partial refund, each with its own `refundId` and number
+  - idempotency on redelivered refund events
+  - shop-timezone year numbering (not UTC)
+  - seller carried from the original invoice even after a shop rename
+  - concurrent-writer race producing exactly one document and one counter increment
+  - counter rollback on a failed insert (`insertCreditNote` mocked to reject)
+  - no note and no number burned when the order has no invoice
 
 ## Relationships
 
-- **`src/modules/invoicing/services/issue-credit-note.ts`** (via `services/index.ts` export) – the service under test; called directly in the idempotency, timezone, race, and rollback cases.
-- **`src/modules/invoicing/module.ts`** – registered in `beforeEach`; its `PAYMENT_REFUNDED` subscription is the primary code path exercised by the event-driven cases.
-- **`src/modules/invoicing/repository.ts`** – read side (`findInvoiceByOrderId`, `findCreditNotesByOrderId`) and spy target (`insertCreditNote`).
-- **`src/modules/invoicing/model.ts`** – `creditNoteNumberCounterModel` queried directly to assert counter state after race/rollback scenarios.
-- **`src/modules/invoicing/pii.ts`** – `decryptInvoiceParty` used to verify that the buyer address is re-encrypted under the credit-note document id.
-- **`src/kernel/events.ts`** – `resetDomainEvents` in `afterEach` to prevent event leakage between tests.
-- **`src/kernel/registry.ts`** – `registerModules` in `beforeEach` to wire all module subscriptions.
-- **`src/modules/payments/index.ts`** – `createIntent`, `confirmPayment`, `refundForOrder`, `paymentService` drive the payment lifecycle that triggers the event.
-- **`src/modules/orders/index.ts` / `config.ts` / `domain/shop-time.ts`** – `shopTimezone` and `yearInZone` used in the timezone and counter assertions.
-- **`src/modules/orders/tests/factories.ts`** – `createOrder`, `toOrderItem` for order fixture creation.
-- **`src/modules/inventory/module.ts`** – registered (required by the orders module's dependency chain).
+- **`src/kernel/registry.ts`** – `registerModules()` in `beforeEach` wires all six modules so the real event pipeline is active.
+- **`src/kernel/events.ts`** – `resetDomainEvents()` in `afterEach` clears the event bus between tests.
+- **`src/modules/invoicing/module.ts`** – registered in setup; hosts the `PAYMENT_REFUNDED` subscription that is the actual trigger for every happy-path test.
+- **`src/modules/invoicing/services/issue-credit-note.ts`** – `issueCreditNote` imported for direct-invocation edge-case tests (idempotency, race, timezone, seller, no-invoice).
+- **`src/modules/invoicing/repository.ts`** – `invoicingRepository` used for all credit-note queries, for spying on `insertCreditNote`, and for asserting counter state.
+- **`src/modules/invoicing/model.ts`** – `creditNoteNumberCounterModel` queried to verify counter rollback and race-safety.
+- **`src/modules/invoicing/pii.ts`** – `decryptInvoiceParty` round-trips the re-encrypted billing address to confirm it was encrypted under the note's `_id`.
+- **`src/modules/invoicing/tests/factories.ts`** – `waitForInvoice` polls until the invoice document appears after payment confirmation.
+- **`src/modules/payments/index.ts`** – `paymentService` used to create intents and confirm payments in the happy path.
+- **`src/modules/orders/index.ts`** – `yearInZone` used to compute the expected year key for counter assertions.
+- **`src/modules/orders/tests/factories.ts`** – `createOrder`, `toOrderItem`, `timelineOf` build the order fixture and inspect the order timeline for `credit_note_issued` entries.
+- **`src/modules/inventory/module.ts`**, **`src/modules/orders/module.ts`**, **`src/modules/payments/module.ts`** – registered so their subscriptions (e.g. stock deduction, invoice creation on payment) fire during the test.
 
 ## Notes
 
-- The event-driven cases intentionally go through `refundForOrder` / `paymentService.refundByOrder` to exercise the real subscription; they never call `issueCreditNote` directly. The service is invoked directly only in cases that test its contract (idempotency, race, rollback, timezone).
-- `waitUntil` exists because the module's listener is asynchronous and fire-and-forget; a simple `await` on the refund is insufficient to guarantee the listener's write has landed.
-- The "burns no number" and "gives the number back" tests assume a transactional counter: the sequence increment is part of the same unit of work as the insert and rolls back with it.
-- The timezone test uses `freezeDate` from `@tests/clock` and restores real timers in a `finally` block; without this, the number would reflect UTC year rather than the shop's local year.
-- Same printed number on an invoice and its credit note is expected (independent series); the link is proven by `invoiceId`/`invoiceNumber` matching.
+- PII ciphertext on the credit note **differs** from the invoice's even for the same address, because encryption is keyed to the note's own `_id`. Tests must decrypt rather than compare raw strings.
+- `toEqual` cannot walk Mongoose subdocuments; the seller-mirroring test uses `.toObject()` before asserting.
+- The number format is `YYYY-NNNNNN`; `YYYY` is derived from the shop's IANA timezone (`shopTimezone()`), so a note issued at 23:30 UTC on 31 Dec in a CET shop gets a `2027` prefix.
+- The test file references Italian tax obligations (AdE 427/2023, VAT Directive Art. 226(3)) to explain *why* the credit note must carry the original invoice's seller rather than current shop settings.
+- The "no invoice" test expects `issueCreditNote` to return `undefined` and leave the counter at `null` for that year—no gap is burned.

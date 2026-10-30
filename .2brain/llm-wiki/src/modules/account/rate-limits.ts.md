@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/rate-limits.ts
-sha256: 0a04560cfcbe2266a13fa172ea304dcd3b9991a1cba2b9481eaea8028eba02bb
-generated_at: 2026-10-15T09:58:24.900661+00:00
+sha256: 5b5235ed42f6efea091eb514576886b8cbb83041e45cbf69f99cd0a8647bbf59
+generated_at: 2026-10-29T02:38:25.119504+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the account module's rate-limit budgets as `RateLimitBudget` data objects and turns them into Express middleware via `buildRateLimiter`. Covers credential-guess protection (per-account, per-address, per-address-block, per-session, per-device-cookie), a password-strength check limiter, signup/reset/MFA budgets (truncated in view), and the `loginChallengeGate` that escalates to a human challenge once a budget is half-spent.
+Defines the account module's rate-limit budgets and the Express middleware arrays that enforce them. Covers four credential-guess dimensions (per-account, per-device, per-address, per-address-block), two success-spent Sybil budgets (signup, password-reset-request), a password-strength advisory budget, and two MFA challenge budgets. Each budget is a `RateLimitBudget` object built from generated data in `rate-limits.generated.ts` and turned into a limiter via `buildRateLimiter`.
 
 ## Key elements
 
-- **`credentialLimiters`** (exported `RequestHandler[]`) — the full chain for public auth routes: per-account identity budget + shared address/device/block limiters. Only failures spend the budget (`skipSuccessfulRequests`); requests naming no account skip the identity bucket.
-- **`sessionCredentialLimiters`** (exported `RequestHandler[]`) — same shared limiters but with `SESSION_CREDENTIAL_BUDGET` keyed on the authenticated account ID instead of a body field, for routes that re-prove an already-signed-in caller.
-- **`loginChallengeGate`** (exported `RequestHandler`) — sits between `credentialLimiters` and the login handler; delegates to `humanChallengeGate` when the identity or address-block budget is ≥ 50 % spent.
-- **`passwordCheckLimiter`** (exported `RequestHandler`) — limiter for `POST /account/password/check`; counts *every* request (not just failures) because a 200 response is itself the amplifier.
-- **`CREDENTIAL_WINDOW_MS`** — 15-minute window shared by all credential budgets (distinct from the shared 1-minute browsing window).
-- **`SHARED_CREDENTIAL_LIMITERS`** — the device-cookie, address, and address-block limiters, built once and spread into both credential arrays so a single address/block spends one counter across all credential routes.
-- **`namesAnAccount`** — predicate: returns true if the request body contains an `email` or `username` field; gates whether the per-account identity budget counts the request.
-- **`budgetMostlySpent`** — reads `rateLimitInfoOf` for a given property name and compares `priorHits` against 50 % of the limit; used by `loginChallengeGate`.
-- **`IDENTITY_RATE_LIMIT_PROPERTY` / `BLOCK_RATE_LIMIT_PROPERTY`** — distinct `requestPropertyName` values so the chained limiters don't overwrite each other's info on `req`.
+- **`credentialLimiters`** — Four-limiters array (identity → device → address → block) for public login/token/OAuth routes. Only failures spend the budget (`skipSuccessfulRequests`).
+- **`sessionCredentialLimiters`** — Same shared limiters plus a session-keyed identity budget (`accountIdOf`) for re-auth routes that run `isAuth` first and re-prove the caller.
+- **`loginChallengeGate`** — Middleware that checks whether the identity or block budget is ≥ 50 % spent and, if so, delegates to `humanChallengeGate`; otherwise passes through.
+- **`passwordCheckLimiters`** — Per-address and per-block limiters for `POST /account/password/check`. No `skipSuccessfulRequests` because a 200 response *is* the abuse vector (free HIBP lookups).
+- **`signupLimiters`** — Identity (submitted email), address, and block budgets. Counts successes, not failures, because Sybil account creation is the abuse.
+- **`resetRequestLimiters`** — Same three dimensions as signup; the route always returns 200, so abuse is entirely on the success path.
+- **`mfaChallengeLimiter` / `mfaSendLimiter`** — Two MFA challenge budgets (file truncated before full definitions).
+- **`namesAnAccount`** (internal) — Predicate: does the request body carry an `email` or `username`? Controls whether the per-account identity budget applies.
+- **`SHARED_CREDENTIAL_LIMITERS`** (internal) — Device, address, and block limiters shared between `credentialLimiters` and `sessionCredentialLimiters` so a caller spends one counter across all credential routes.
 
 ## Relationships
 
-- **`@infrastructure/http/middlewares/rate-limit`** — supplies `buildRateLimiter`, `identityOf`, `addressBlockOf`, `readBodyField`, `rateLimitInfoOf`, `priorHits`, the `KEYED_BY_*` label constants, and `accountIdOf`. Every budget in this file is materialised through `buildRateLimiter`.
-- **`@infrastructure/http/middlewares/human-challenge`** — `loginChallengeGate` calls `humanChallengeGate` when a budget threshold is crossed.
-- **`@infrastructure/security/pseudonymise`** — `CREDENTIAL_DEVICE_BUDGET`'s `skip` predicate calls `presentsFailingDeviceCookie`; the identity budget's key uses `identityOf` which normalises/pseudonymises the submitted account name.
-- **`./services/two-factor-challenge`** — provides `MFA_CHALLENGE_DELIVERED_TTL_MS`, used by the MFA challenge budget (truncated).
-- **`./mail-budget`** — provides `MAIL_RECIPIENT_BUDGET`, referenced by the reset-request limiter (truncated).
-- **`./oauth/mfa-redirect`** — provides `readMfaChallengeCookie`, used by the MFA limiter (truncated).
-- **`./session/device-cookie`** — provides `holdsDeviceCookie` and `presentsFailingDeviceCookie`; the former exempts the identity budget (a valid cookie means the owner is not a guesser), the latter is the *only* trigger for `CREDENTIAL_DEVICE_BUDGET`.
-- **`./module.ts`** — declares `rateLimits` on the account module where the `RateLimitBudget` objects are registered for runtime resolution.
-- **`./routes.ts`** — consumes `credentialLimiters`, `sessionCredentialLimiters`, `loginChallengeGate`, and `passwordCheckLimiter` as Express middleware on the relevant route handlers.
-- **`src/types/rate-limit-budget.ts`** — defines the `RateLimitBudget` interface that every constant in this file implements.
-- **Tests** — `rate-limits.test.ts` (unit), `identity-rate-limit.test.ts`, `auth-hardening.test.ts`, and `device-cookie-budget.test.ts` (integration) exercise the budgets and the challenge gate.
+- **`src/infrastructure/http/middlewares/rate-limit.ts`** — Provides `buildRateLimiter`, key generators (`identityOf`, `addressBlockOf`, `accountIdOf`), `readBodyField`, `rateLimitInfoOf`, `priorHits`, and the `KEYED_BY_*` label constants used by every budget here.
+- **`src/infrastructure/http/middlewares/human-challenge.ts`** — `loginChallengeGate` delegates to `humanChallengeGate` once a budget threshold is met.
+- **`src/infrastructure/security/pseudonymise.ts`** — `pseudonymise` is imported (used by `identityOf` upstream; available for key generation).
+- **`src/modules/account/rate-limits.generated.ts`** — Supplies the numeric limit/doubling data (`accountRateLimitData.*`) that each budget spreads into its `RateLimitBudget` object.
+- **`src/modules/account/mail-budget.ts`** — Exports `MAIL_RECIPIENT_BUDGET`, imported here (likely referenced in signup or reset context).
+- **`src/modules/account/session/device-cookie.ts`** — `holdsDeviceCookie` / `presentsFailingDeviceCookie` gate the identity and device credential budgets.
+- **`src/modules/account/oauth/mfa-redirect.ts`** — `readMfaChallengeCookie` imported for MFA limiter keying.
+- **`src/modules/account/routes.ts`** — Consumes the exported limiter arrays on the relevant route definitions.
+- **`src/types/rate-limit-budget.ts`** — Declares the `RateLimitBudget` interface used throughout.
+- **`src/modules/account/tests/unit/rate-limits.test.ts`** and integration tests (`identity-rate-limit.test.ts`, `auth-hardening.test.ts`, `device-cookie-budget.test.ts`) — Cover the budgets' skip logic, challenge escalation, and device-cookie interaction.
 
 ## Notes
 
-- The three credential limiters are **chained, not combined**: a single address or block burns one counter on whichever route fails, but the *identity* budget is independent. Keying on a tuple of (address, account) would be weaker because refreshing one leg refreshes the bucket.
-- `skipSuccessfulRequests: true` on every credential budget means a shared CI/office IP is never locked out by people getting the password right. The password-check budget is the exception — it counts successes because a 200 *is* the DoS vector.
-- The per-account identity budget has `escalation: { doublings: 3 }`, so repeated lockouts of the same account last up to 8× the base window.
-- `CREDENTIAL_DEVICE_BUDGET` only counts requests that **present a failing device cookie** (cookie exists but does not vouch for the named account). A request with no cookie, or a valid cookie, is invisible to this budget.
-- `loginChallengeGate` reads two distinct `requestPropertyName` values because the default express-rate-limit behaviour would let the last limiter in the chain overwrite the first's info on `req`.
-- The file's module doc-comment references `docs/tools/security.md#the-rate-limit-budgets` as the design rationale.
+- **Identity budget skip logic**: `CREDENTIAL_IDENTITY_BUDGET` skips requests that do not name an account in the body *or* that carry a valid device cookie. A blank email/username files under the address-block budget instead, avoiding shared /24 collisions for token-only confirms.
+- **Session routes never key on body fields**: `SESSION_CREDENTIAL_BUDGET` uses `accountIdOf` exclusively because those routes validate *after* the limiter; a body-injected `email` would otherwise rotate the bucket.
+- **`requestPropertyName` disambiguation**: `credentialLimiters` chains four limiters; without distinct property names each limiter's info overwrites the last. `IDENTITY_RATE_LIMIT_PROPERTY` and `BLOCK_RATE_LIMIT_PROPERTY` exist solely so `loginChallengeGate` can read the correct counter.
+- **Challenge threshold is 50 %**: `loginChallengeGate` triggers at half the budget, not on the first or second mistyped password, but before a script can spend the remainder unchallenged.
+- **Redis failover**: During a Redis outage the budget counts in memory (`failoverStore`); `budgetMostlySpent` reads whatever store is active, so the gate does not go blind.
+- **`+tag` emails**: The signup identity budget keys on the raw submitted string, so `user+tag@example.com` gets a fresh bucket. The address, block, and canonical-mailbox budgets (`mail-budget.ts`) still bound the caller.

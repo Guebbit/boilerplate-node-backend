@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/services/receive.ts
-sha256: ec0ff28d12fb10d18c1b2cb4b004ccf8ff0a0e3734177fa3c9482d28f420469d
-generated_at: 2026-10-15T11:58:30.242357+00:00
+sha256: 386d8efaa3fe030df16f509145d46530a503e45bc9477cc1eccb0dcc83ae6270
+generated_at: 2026-10-29T05:44:59.606505+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Handles the "goods arrived" workflow for a return: atomically transitions the status from `approved` to `received`, restocks the returned units, enqueues the domain event, then refunds the customer and closes the return. The two facts — parcel received and money returned — are deliberately kept on separate clocks: the status move and restock are one idempotent transaction, while the refund is an independent, retryable operation on the payment.
+Handles the "goods arrived" step of a return: transitions a return from `approved → received`, restocks the units that go back on sale, resolves the remedy (refund, replace, or repair), and opens the refund record — all in a single transaction guarded by an order-level lock. The file keeps the receipt fact (parcel + restock) atomic while deliberately deferring the money fact (provider refund call) to an outbox-driven sweep, so a received return can never be stuck without a retry.
 
 ## Key elements
 
-- **`ReceiveReturnInput`** — Input interface; carries an optional `handlingDeduction` (Art. 14(2) deduction) in the return's currency.
-- **`receiveReturn(id, input, context)`** — Main exported entry point. Loads the return, validates its status is receivable, then delegates to `receiveFor`. Returns `ResponseSuccess<ReturnDocument>` or a typed `ResponseReject`.
-- **`claimAndRestock(returned, order, handlingDeduction, actor)`** — Runs inside `withTransaction`: locks the order row, reads all sibling returns, quotes the refund, performs a conditional `claimStatus` (only from `RECEIVABLE_RETURN_STATUSES`), restocks via `inventoryService`, enqueues `RETURN_RECEIVED` outbox event, appends to the order timeline. Returns a `Claimed` discriminated union (`deduction-too-high` | `lost` | `received`).
-- **`quote(returned, order, earlier, handlingDeduction)`** — Computes the refund breakdown using the frozen return lines, the order's items, and every other return already settled on the order. Determines whether this return "takes the last unit" (affects shipping refund) via `cheapestStandardShipping`.
-- **`refundAndClose(received, shipping, context)`** — Calls `paymentService.refundForReturn`; on success (or nothing-owed) invokes `closeReturn`. On provider refusal, logs the error and leaves the return in `received` state for the payment sweep to retry.
-- **`receiveFor(id, returned, order, input, context)`** — Orchestrates the post-transaction steps: refreshes stock cache, syncs the return status projection, records audit, then calls `refundAndClose`.
-- **`notReceivable()`** — Returns a 409 `ResponseReject` with `RETURN_NOT_RECEIVABLE`.
+- **`ReceiveReturnInput`** — Staff-facing input: optional `handlingDeduction` (Art. 14(2) charge), optional per-line `restock` counts, and optional `remedy` (defaults to refund).
+- **`Claimed`** — Discriminated union returned by the core transaction: `deduction-too-high`, `refused` (409/422 reject), `lost` (lost the conditional race), or `received` with the document, refund breakdown, and the opened refund record (or `null`).
+- **`quote()`** — Computes the refund breakdown from the return's frozen lines, the order's shipping, earlier settlements on the same order, and the handling deduction. Decides whether this return is the one that "brings the order whole" (and thus claims the delivery).
+- **`claimAndRestock()`** — The main transaction (wrapped in `announceInTransaction`): locks the order row, re-reads all returns, quotes, performs the conditional `approved → received` claim, calls `inventoryService.restockReturnedLines`, invokes `handOverRemedy`, appends an order timeline entry, and opens the refund record. Emits `RETURN_RECEIVED` via the outbox.
+- **`handOverRemedy()`** — For `replace`: delegates to `deliveryService.reopenForReplacement`. For `repair`: calls `orderService.extendGuarantee`. For `refund`: no-op (money is handled by the opened refund record + sweep).
+- **`restockedLines()` / `stampRestocked()`** — Helpers to derive the sellable sub-list and the dotted-field `lines.<i>.restocked` stamp written onto the return document.
+- **Response helpers** (`notReceivable`, `badRestock`, `badRemedyFor`, `deductionOnGuarantee`) — Build the specific 409/422 `ResponseReject` objects with i18n messages and error codes.
 
 ## Relationships
 
-- **`@infrastructure/runtime/database`** — `withTransaction` wraps the claim + restock as a single atomic unit.
-- **`@kernel/outbox`** — `enqueueOutboxEvent` publishes `RETURN_RECEIVED` inside the transaction; `nudgeOutbox` is called after the transaction commits.
-- **`@modules/inventory`** — `inventoryService.restockReturnedLines` (in-transaction) and `inventoryService.refreshStockCacheForProducts` (post-transaction).
-- **`@modules/orders`** — `orderService.appendTimeline` adds a `return_received` entry; `sumLineItems` feeds the shipping-calculation in `quote`; `OrderDocument` type.
-- **`@modules/delivery`** — `cheapestStandardShipping` determines the maximum shipping credit when this return is the last on the order.
-- **`@infrastructure/http/response`** — `generateSuccess`, `generateReject`, `fieldError` shape all return values.
-- **`@infrastructure/i18n`** — `t()` localizes user-facing error/success messages.
-- **`@infrastructure/observability/audit`** — `recordAudit` logs the admin action with outcome and refund amount.
-- **`@infrastructure/adapters/logger`** — Logs (at `error` level) when a refund provider call fails, noting the sweep will retry.
+- **`@infrastructure/http/response`** — `generateReject`, `generateSuccess`, `fieldError` shape every HTTP response this service returns.
+- **`@infrastructure/i18n`** — `t()` provides all user-facing error messages.
+- **`@infrastructure/observability/audit`** — `recordAudit` logs the receipt action (imported; used in the truncated portion).
+- **`@kernel/outbox`** — `announceInTransaction` wraps the whole receipt in a transaction that also enqueues outbox events.
+- **`@modules/inventory`** — `inventoryService.restockReturnedLines` puts units back on sale inside the same transaction.
+- **`@modules/delivery` / `delivery/services/act`** — `deliveryService.reopenForReplacement` re-sends replaced units; `ActRefusal` is the error type that aborts the transaction when the order cannot ship again.
+- **`@modules/delivery/domain/rates`** — `cheapestStandardShipping` feeds the shipping portion of the refund quote.
+- **`@modules/access`** — `ownOrderFlag` (imported) used for caller-scoping checks in the truncated portion.
+- **`@modules/payments`** — `paymentService` opens the `OpenedReturnRefund` record in-transaction; the provider call and `PAYMENT_REFUNDED` listener (in `closeReturn`) settle it later.
 
 ## Notes
 
-- **Idempotency via conditional update:** `claimStatus` only fires when the current status is in `RECEIVABLE_RETURN_STATUSES`, so repeated staff clicks are safe.
-- **Order-lock serialization:** The transaction acquires `returnRepository.lockOrder` before reading siblings, preventing two concurrent receipts from both claiming the delivery.
-- **Refund is not in the transaction:** The provider call happens *after* commit. A provider refusal leaves the refund as `failed` on the payment; the periodic payment sweep retries it, and a `PAYMENT_REFUNDED` listener (elsewhere) closes the return. The return is therefore never permanently stuck in `received`.
-- **Zero-owed short-circuit:** If `refundAmount ≤ 0` (deduction consumed everything), `refundAndClose` skips the provider call and closes immediately.
-- **`Stryker disable/restore`** comments suppress mutation testing on the refund-failure log path — the catch branch is intentionally inert (log + return existing state).
+- The status claim is **conditional** (`approved` only) — two staff members clicking simultaneously will have exactly one win; the other gets a 409 (`RETURN_NOT_RECEIVABLE`). This is what guarantees single-execution of restock and refund-record creation.
+- `restock` per line is optional: an absent entry means "restock the full returned quantity." A value of `0` means the unit is damaged and writes **no** inventory movement at all.
+- For `replace` and `repair`, the refund breakdown is always `NO_REFUND` (zero); money is never moved, and the return closes immediately in the same transaction (via `closeReturn`, imported but called in the truncated section).
+- The refund **record** is opened in-transaction (durable), but the actual **provider refund call** happens after commit. If the provider refuses, the record stays open and the payment sweep retries until `PAYMENT_REFUNDED` fires and `closeReturn` finalises the state.
+- `cheapestStandardShipping` is computed from the order's total goods price (not a stored field), so the shipping portion of the refund is capped at what a standard shipment would have cost.

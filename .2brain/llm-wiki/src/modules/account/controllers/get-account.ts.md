@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/get-account.ts
-sha256: 594da0927d87cf30986ae0f8ea7c96dc4bdebdcc7daabb721011c82a234d37b1
-generated_at: 2026-10-14T08:30:32.592222+00:00
+sha256: a1eb675f7b91eda3eed6528372499c5fe638367d656cae44aa416e76fff7dd03
+generated_at: 2026-10-29T02:26:39.612938+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter that serves `GET /account`: returns the authenticated user's **full** profile read fresh from the users collection, rather than echoing the (narrower) JWT claims. This exists because the JWT only carries `id`, `email`, `username`, and `admin`, which would silently drop fields the client depends on (`verifiedAt`, `locale`).
+HTTP controller for `GET /account`. It is a thin adapter that resolves the authenticated caller's full profile row from the users collection (via `accountService.getOwnProfile`), shapes it into the `Account` wire type, and returns it with an ETag. It exists separately from the service layer so that the HTTP concerns (auth check, status codes, ETag, response envelope) stay isolated from the data-access logic.
 
 ## Key elements
 
-- **`getAccount(request, response): void`** — the sole export. The Express controller for `GET /account`.
-  1. Short-circuits with `401` if `request.authContext` is absent.
-  2. Calls `accountService.getOwnProfile(authContext.id, callerContextOf(request))`.
-  3. If the returned user is `null` (row deleted), responds `401` (dead session, not a server error).
-  4. Sets an ETag on the raw user (`setEtag`) so the client can echo it as `If-Match` on subsequent profile edits.
-  5. Maps the internal user to the API shape via `userService.toUser(user, authContext.roles.tenant)` and sends `200` with `successResponse<User>`.
-  6. Catches any thrown error through `catchAs(response, 'getAccount')`.
+- **`getAccount(request, response)`** — the sole export. Resolves the caller's profile, sets a 401 on missing auth context or a deleted user row, sets an ETag on the response, and sends the shaped account via `successResponse<Account>`.
+- **Auth guard** — reads `request.authContext`; rejects with 401 if absent. On a valid token whose user row no longer exists, also rejects with 401 (treated as a dead session, not a 500).
+- **ETag** — `setEtag(response, user)` stamps the profile version that a subsequent profile edit will send back as `If-Match`.
+- **Error handling** — the promise chain is terminated by `.catch(catchAs(response, 'getAccount'))`, delegating to the shared controller error handler.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/infrastructure/http/response.ts` | Uses `successResponse` and `rejectResponse` for all responses. |
-| `src/infrastructure/http/request.ts` | Calls `callerContextOf(request)` to extract tenant/audit context for the service call. |
-| `src/infrastructure/http/controller.ts` | Wraps the error path with `catchAs(response, 'getAccount')`. |
-| `src/infrastructure/http/preconditions.ts` | Calls `setEtag(response, user)` to set the `ETag` header. |
-| `src/modules/account/services/index.ts` | Imports `accountService`; calls its `getOwnProfile` method. |
-| `src/modules/users/index.ts` | Imports `userService`; calls `toUser` to shape the response payload. |
-| `src/modules/users/services/index.ts` | Indirect dependency — `userService` is re-exported through the `@modules/users` barrel. |
-| `src/types/index.ts` | Imports the `User` type used as the generic on `successResponse<User>`. |
-| `src/modules/account/routes.ts` | Consumes `getAccount` as the handler registered for the `GET /account` route. |
+- **`@infrastructure/http/response`** — uses `successResponse` / `rejectResponse` to emit the JSON envelope and status codes.
+- **`@infrastructure/http/request`** — calls `callerContextOf(request)` to forward request-scoped metadata (e.g. IP) into the service call.
+- **`@infrastructure/http/controller`** — calls `catchAs` to normalise unexpected rejections into a structured error response.
+- **`@infrastructure/http/preconditions`** — calls `setEtag` to attach the profile version header.
+- **`../services` (`src/modules/account/services/index.ts`)** — calls `accountService.getOwnProfile(id, callerCtx)` to fetch the fresh row.
+- **`@modules/users` (`src/modules/users/index.ts`)** — calls `userService.toAccount(user, role)` to project the internal user shape into the public `Account` type.
+- **`@types` (`src/types/index.ts`)** — references the `Account` type as the response payload generic.
+- **`src/modules/account/routes.ts`** — registers `getAccount` as the handler for the `GET /account` route (implied by module layout).
 
 ## Notes
 
-- **401 vs. 404:** A valid token whose database row has been deleted returns `401`, not `404`. The code comment frames this as a "dead session, not a server fault." Avoid changing this to `404` without confirming client expectations.
-- **ETag is set on the raw user, before `toUser` mapping.** The version string is derived from the internal representation; the response body uses the mapped shape.
-- **`authContext.roles.tenant`** is passed to `toUser`, meaning the role/tenant information resolved at token-verification time is reused here — no second membership lookup is made.
-- **`callerContextOf(request)`** is forwarded to the service; it likely carries request-level metadata (IP, tenant, etc.) for auditing inside `getOwnProfile`.
+- The controller deliberately reads the user row rather than echoing JWT claims. The token only carries `id`, `email`, `username`, `admin`; fields like `verifiedAt` and `locale` (needed by the client's verification banner and saved-language flow) would be silently dropped if the token payload were returned.
+- The role (`authContext.roles.tenant`) is read from the already-resolved auth context — it was populated once at token-verification time against the membership store, so no additional DB lookup occurs here.
+- A 401 is returned (not 404 or 500) when the token is valid but the user row is missing; this signals to the client that the session is dead and credentials should be refreshed.

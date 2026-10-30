@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/services/sweep.ts
-sha256: 83dd3cc634035e0e65b0bc74f0b5e34d277fe80d91994763c189741f93c2dc51
-generated_at: 2026-10-15T12:22:39.896204+00:00
+sha256: 64d32e4ee70330515f557ca9b842da42675cd7c250476b127af59b9c9a1dd3ce
+generated_at: 2026-10-29T06:31:03.339716+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the webhook delivery retry sweep: finds every delivery row that is due for another attempt (including stranded `in-flight` rows whose lease expired) and dispatches them—either by publishing to a message broker or by sending inline when no broker is available. It exists as the "degrade, don't drop" fallback so that no delivery is lost when the broker is down, and it runs outside the request path so a slow subscriber never blocks the API.
+Implements the periodic retry sweep for webhook deliveries. On each scheduled run it finds every delivery due for another attempt (including stranded `in-flight` rows whose lease has expired) and dispatches them — either via a message broker or inline through the same `processDeliveryJob` path a worker would use. It exists so that a failed or missed delivery is retried automatically without depending on the originating request or an external worker.
 
 ## Key elements
 
-- **`SWEEP_BATCH_LIMIT`** (200) — upper bound on rows a single sweep run processes, preventing an unbounded batch if the sweep runs very late.
-- **`INLINE_CONCURRENCY`** (5) — group size for inline sends; matches the queue consumer's `prefetch` so serial hard-timeouts don't stack past the sweep's one-minute window.
-- **`publishOrSend`** *(private)* — Tries `enqueueDeliveryAttempt`; if the broker accepts the message the work is done, otherwise falls through to `processDeliveryJob` for an inline claim-and-send.
-- **`handleInGroups`** *(private, recursive)* — Processes a list of due rows in chunks of `INLINE_CONCURRENCY` via `Promise.allSettled`, logs a summary if any chunk has failures, then recurses on the remainder. Failed rows are left for the next sweep (their lease-based claim expires naturally).
-- **`sweepDueWebhookDeliveries`** *(exported)* — The single public entry point. Calls `webhookDeliveryRepository.findDue(SWEEP_BATCH_LIMIT)`, logs the count, and delegates to `handleInGroups`.
+- **`sweepDueWebhookDeliveries`** (exported) — entry point. Calls `webhookDeliveryRepository.findDue(SWEEP_BATCH_LIMIT)`, logs the batch size, then delegates to `handleInGroups`.
+- **`handleInGroups`** (internal) — processes rows in batches of `INLINE_CONCURRENCY` (5) using `Promise.allSettled`, recursing over the remainder. Failed rows are logged and left for the next sweep (their lease-based claim expires naturally).
+- **`publishOrSend`** (internal) — attempts broker publish via `enqueueDeliveryAttempt`; if the broker is unavailable or refuses the message, falls back to an inline `processDeliveryJob` call.
+- **`SWEEP_BATCH_LIMIT`** (200) — caps a single sweep run so a very late sweep cannot burst an unbounded batch.
+- **`INLINE_CONCURRENCY`** (5) — inline concurrency ceiling, matched to the consumer's `prefetch` so a dead endpoint's timeout does not stack past the sweep's one-minute window.
 
 ## Relationships
 
-- **`scripts/ops/sweep-webhook-retries.ts`** — Scheduled caller; invokes `sweepDueWebhookDeliveries` per-minute (distinct from the nightly `reap:*` jobs).
-- **`src/modules/webhooks/repository.ts`** — Provides `findDue(limit)`, which returns rows due for retry plus stranded in-flight leases.
-- **`src/modules/webhooks/services/enqueue.ts`** — `enqueueDeliveryAttempt` is the broker-publish path; its return value determines whether inline fallback is needed.
-- **`src/modules/webhooks/services/attempt.ts`** — `processDeliveryJob` is the inline claim-and-send path (same lease/claim logic a broker worker would execute).
-- **`src/modules/webhooks/model.ts`** — Supplies the `WebhookDeliveryDocument` type used throughout.
-- **`src/infrastructure/adapters/logger.ts`** — Structured logging for sweep start and per-chunk failure summaries.
-- **`src/modules/webhooks/services/index.ts`** — Barrel re-export (consumers import `sweepDueWebhookDeliveries` from here).
-- **`src/modules/webhooks/tests/integration/sweep.test.ts`** — Integration tests for the sweep behavior.
+- **`src/modules/webhooks/repository.ts`** — calls `findDue(limit)` to fetch due and stranded rows; the lease design here makes double-publishing safe.
+- **`src/modules/webhooks/services/enqueue.ts`** — calls `enqueueDeliveryAttempt` to attempt broker publish before falling back to inline.
+- **`src/modules/webhooks/services/attempt.ts`** — calls `processDeliveryJob` for the inline-send path (same claim → lease → HTTP attempt a worker would perform).
+- **`src/modules/webhooks/model.ts`** — imports the `WebhookDeliveryDocument` type used throughout.
+- **`src/infrastructure/adapters/logger.ts`** — logs sweep start (info) and per-group failures (error).
+- **`src/modules/webhooks/jobs.ts`** — the `sweep:webhook-retries` script (per-minute schedule) invokes this function; distinct from the nightly `reap:*` jobs.
+- **`src/modules/webhooks/services/index.ts`** — barrel re-export of `sweepDueWebhookDeliveries`.
+- **`src/modules/webhooks/tests/integration/sweep.test.ts`** — integration tests for this module.
+- **`tests/unit/infrastructure/adapters/queue.test.ts`** — unit tests for the queue adapter that `enqueueDeliveryAttempt` relies on.
 
 ## Notes
 
-- **Idempotent by design:** If the same row is published twice (overlapping sweep runs, or a fast-path race), only the first successful lease-claim performs the actual HTTP attempt; all subsequent claims find the row already under a live lease.
-- **Runs outside the request:** The sweep deliberately performs I/O in its own context so a dead endpoint's timeout never propagates into an API response.
-- **Stryker mutation-testing annotation:** The `logger.info` line carries `// Stryker disable next-line all` to suppress mutation coverage on a pure log call.
+- **Degrade, don't drop.** The broker-publish → inline-send fallback ensures a row is never silently lost if the broker is down; the cost is that the sweep process itself does I/O.
+- **Idempotency via lease.** A row published twice (overlapping sweeps, or a fast-path race) results in at most one real HTTP attempt: whichever `processDeliveryJob` call claims the lease first wins; subsequent claims are no-ops.
+- **Recursion, not a loop.** `handleInGroups` is tail-recursive over `INLINE_CONCURRENCY`-sized slices rather than a `for` loop. With `SWEEP_BATCH_LIMIT = 200` and concurrency 5, that is at most 4 recursive frames.
+- **Stryker mutation-testing suppression** is applied to the `logger.info` line (mutation would have no behavioral effect).

@@ -1,39 +1,36 @@
 ---
 source: src/modules/example/services/cover.ts
-sha256: 9f6b8772d3285aaf83234e6f4d39a209e7f35498de2a38f32b4f065f60ff404d
-generated_at: 2026-10-14T15:44:50.870219+00:00
+sha256: d66791036b969a9aa6f706868958709e506d6a2583672208f2e4ef94193b41f4
+generated_at: 2026-10-29T03:55:21.078669+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/example/services/cover.ts
 
 ## Purpose
-
-Implements the optional cover-image capability for the `example` module. After upload middleware has quarantined the bytes, this service writes the new image fields onto the document, enqueues a pending image to the digest pipeline, deletes the previously-replaced image, records an audit row, and shapes the success response.
+Implements the cover-image upload flow for the Example module: applies the image fields produced by the upload middleware to an already-loaded example row, persists the change, hands a pending image to the digest pipeline, deletes the replaced cover, and records an audit entry.
 
 ## Key elements
-
-- **`EXAMPLE_IMAGE_COLLECTION`** (`'examples'`) — the collection key `ImageDigestJobPayload` carries for this module; must match the `imageTargets` registration in `module.ts`.
-- **`setCover(id, image, context)`** (exported) — public entry point. Loads the example with an `update`-scoped access filter, returns **404** if not found, checks `outrankedRefusalFor` (returns **403 OUTRANKED** for a higher-ranked owner), then delegates to `applyCover`.
-- **`applyCover(example, image, context)`** (private) — applies the image writeback via `applyImageWriteback`, saves through `exampleRepository`, enqueues a pending digest job (`enqueueIfImagePending`), removes the replaced image (`imageStore.remove`), records an audit entry (`EXAMPLE_COVER_CHANGED`), and returns a `200` success response with the localized `example.cover-changed` message.
+- **`EXAMPLE_IMAGE_COLLECTION`** (exported const) — The string (`'examples'`) used as `ImageDigestJobPayload.collection`; must match the key under which `module.ts` registers its `imageTargets` entry.
+- **`setCover`** (exported) — Public entry point. Looks up the example with a scoped `update` access filter; on miss returns a 404 with an i18n message. On hit delegates to the internal `applyCover`.
+- **`applyCover`** (internal) — Runs the write-back, save, after-commit enqueue, old-image removal, audit recording, caller-facing shaping, and 200 response as a chained Promise.
 
 ## Relationships
-
-- **`image-store.ts`** — `applyImageWriteback` mutates the document's image fields; `imageStore.remove` deletes the superseded cover.
-- **`image.worker.ts`** — `enqueueIfImagePending` hands a not-yet-processed image to the digest pipeline so `module.ts`'s `imageTargets` can write back later.
-- **`http/response.ts`** — `generateSuccess` / `generateReject` build the typed HTTP envelopes.
-- **`http/uploads.ts`** — `ImageChanges` is the shape the upload middleware passes in.
-- **`i18n/index.ts`** / **`i18n/context.ts`** — `t()` localises the user-facing strings (`example.cover-changed`, `example.not-found`).
-- **`observability/audit.ts`** — `recordAudit` writes the audit row.
-- **`kernel/access/query.ts`** — `accessibleFilterFor` builds the scoped query so only `update`-eligible documents are loaded.
-- **`../model.ts`** — `ExampleDocument` is the document type the service mutates.
-- **`../repository.ts`** — `exampleRepository.save` / `.findScoped` and `exampleRepository.writebackImage` (the digest writeback callback).
-- **`../audit.ts`** — `exampleAuditActions.EXAMPLE_COVER_CHANGED` enum value.
-- **`./owner.ts`** — `outrankedRefusalFor` (rank check) and `presentWithOwner` (response shaping with owner info).
-- **`./services/index.ts`** — barrel re-export of `setCover`.
+- **`src/modules/example/repository.ts`** — Calls `exampleRepository.save` and `exampleRepository.findScoped`; also passes `exampleRepository.writebackImage` as the callback to the digest worker.
+- **`src/modules/example/module.ts`** — Not imported here, but `EXAMPLE_IMAGE_COLLECTION` must match the `imageTargets` key registered in that module.
+- **`src/infrastructure/adapters/image-store.ts`** — `applyImageWriteback` mutates the document; `imageStore.remove` deletes the replaced image after the commit.
+- **`src/infrastructure/adapters/image.worker.ts`** — `enqueueIfImagePending` submits the pending digest job (invoked inside `afterCommit`).
+- **`src/infrastructure/runtime/after-commit.ts`** — Wraps the enqueue and old-image removal so they run only after the DB transaction has committed.
+- **`src/infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` shape the HTTP envelope.
+- **`src/infrastructure/http/uploads.ts`** — Provides the `ImageChanges` type describing the middleware-produced image fields.
+- **`src/infrastructure/i18n/index.ts`** — `t` for the 404 message.
+- **`src/infrastructure/observability/audit.ts`** — `recordAudit` writes the `EXAMPLE_COVER_CHANGED` audit row.
+- **`src/kernel/access/query.ts`** — `accessibleFilterFor` builds the ownership/role filter passed to `findScoped`.
+- **`src/modules/example/audit.ts`** — Supplies the `exampleAuditActions.EXAMPLE_COVER_CHANGED` action identifier.
+- **`src/modules/example/model.ts`** — `ExampleDocument` type for the loaded row.
+- **`src/modules/example/services/index.ts`** — Re-exports this service to the module's public surface.
 
 ## Notes
-
-- **Order matters in `applyCover`:** the replaced image is deleted *after* the save lands, never before, to avoid orphaning a reference if the write fails.
-- **Self-contained capability:** the module docstring lists the exact set of artifacts to remove to drop this feature — this file, `../controllers/put-example-cover.ts`, the route, the contract path, and the manifest entry. There are no hidden side-effects elsewhere.
-- `EXAMPLE_IMAGE_COLLECTION` must stay in sync with the `imageTargets` key registered in `module.ts`; a mismatch silently breaks digest writeback.
+- Image removal and digest enqueue are deliberately deferred behind `afterCommit`; a failure in either step is logged but does **not** roll back the saved cover (the saved row still answers the request).
+- The 404 path is indistinguishable from a genuine missing document: the scoped filter hides examples the caller cannot `update`, so no information is leaked about existence.
+- Deleting this file is the documented way to remove the cover-upload capability from the module (along with its controller route, contract path, and manifest entry).

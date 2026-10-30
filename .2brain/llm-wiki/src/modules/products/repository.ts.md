@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/repository.ts
-sha256: eed5fbb17a9c3b6a91b395c59010e621bd49b88ced7e8b2cb646216515861921
-generated_at: 2026-10-15T11:43:26.838699+00:00
+sha256: bf5286c02f05328fedb4678d6abfaa6d2412cc70b5027d658890ac91722e2dcc
+generated_at: 2026-10-29T05:28:04.379096+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the product catalogue's data-access layer: a `createRepository`-based CRUD object extended with scoping helpers, a single-pass facet aggregation, and three "derived-write" ports (stock mirror, translation writeback, image digest writeback) that other modules call to copy pre-decided values onto the product document without triggering admin-edit semantics.
+Defines the product catalogue's data-access layer: standard CRUD inherited from the shared repository factory, plus the catalogue's own query rules (public scoping, facet counts, sitemap-style listing) and the stock-cache mirror that `@modules/inventory` writes through. It exists so every product read and write in the module goes through one object with a consistent visibility contract.
 
 ## Key elements
 
-- **`PUBLIC_SCOPE`** (module-private const) — `{ active: true, deletedAt: { $exists: false } }`; the canonical "visible to non-admin" filter. Spread into any query that must exclude hidden/draft products.
-- **`productRepository`** (exported const) — the single public entry point. Combines:
-  - Base CRUD from `createRepository(productModel, …)` with a `searchable` config (text, regex, boolean, presence, range, sortable) used by the search service.
-  - `publicScope()` — returns a defensive copy of `PUBLIC_SCOPE` for callers outside this file.
-  - `findByIdScoped(id, scope?)` — single query combining `_id` lookup with an optional caller-supplied filter; `undefined` scope = unrestricted (admin).
-  - `findPublicById(id)` — convenience wrapper: `findByIdScoped` bound to `PUBLIC_SCOPE`.
-  - `facets()` — one `$facet` aggregation returning category and tag counts, filtered to public scope, sorted by count desc then name.
-  - `syncStockCache(id, counters)` — unconditional `$set` of `onHand`/`reserved`; `timestamps: false` (not an admin edit).
-  - `writeTranslatedFields(id, fields, session?)` — copies fallback-locale translation fields onto the document; `null` values become `''`; participates in the caller's Mongoose session.
-  - `markEdited(id, session?)` — stamps `updatedAt` so the revision/ETag counter advances after a translation write, even when no other column changed.
-  - `existsById(id)` — unscoped existence check (used before translation writes).
-  - `writebackImage(documentId, key, urls)` — conditional on `pendingImageKey` still matching; on a miss, re-checks whether the URLs are already stored (duplicate job delivery).
+- **`productRepository`** (exported const) — the single entry point. Spreads `createRepository(productModel, { transform, searchable })` and adds the domain methods below. Its type is written out explicitly (not inferred) because Mongoose generics exceed TypeScript's ability to serialize at an export boundary (TS7056).
+- **`PUBLIC_SCOPE`** (module-local const) — `{ active: true, deletedAt: { $exists: false } }`. Spread into every "public" query so a hidden or soft-deleted product never leaks.
+- **`publicScope()`** — returns a fresh copy of `PUBLIC_SCOPE` for callers outside this file.
+- **`findByIdScoped(id, scope?)`** / **`findByIdRawScoped(id, scope)`** / **`findPublicById(id)`** — scoped single-document finds. Scope is merged into the same Mongoose query (not checked after the read). `findPublicById` is `findByIdScoped` bound to `PUBLIC_SCOPE`.
+- **`facets()`** — one `$facet` aggregation pipeline producing category and tag counts restricted to `PUBLIC_SCOPE`. Single pipeline guarantees both lists count against the same snapshot.
+- **`listedPage(skip, limit)`** — paginated public catalogue returning only `{ id, updatedAt }`. Sorts by `_id` (stable as catalogue grows at the tail) and projects one field to keep 50 k-row pages small.
+- **`syncStockCache(id, counters, session?)`** — unconditional `$set` of `StockCounters` onto the product document. `timestamps: false`; returns the pre-write doc. Joins a caller-supplied `ClientSession` when present.
+- **`translatable`** — wired via `translatableColumnsOf(productModel)` for the i18n column registry.
+- **`writebackImage`** — wired via `imageWritebackFor(productModel)`; conditional on `pendingImageKey` still matching so a stale job can't clobber a later upload. `timestamps: false`.
+- **`ListedProduct`** (exported interface) — `{ id: string; updatedAt?: Date }`, the minimal shape `listedPage` returns.
+- **`StockCounters`** (exported interface) — the four numeric fields (`onHand`, `reserved`, `backorderLimit`, `backordered`) that `inventory` copies onto a product.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/create-repository.ts`** — supplies `createRepository`, `toObjectId`, and the `Repository` base type that `productRepository` extends.
-- **`src/modules/products/model.ts`** — supplies `productModel`, `applyProductTransform` (used as the `transform` option), and the `ProductDocument` type.
-- **`src/infrastructure/adapters/image.worker.ts`** — supplies the `ImageWriteback` type that `writebackImage` implements.
-- **`src/modules/products/services/crud.ts` / `read.ts` / `remove.ts` / `search.ts` / `lookups.ts` / `image.ts`** — consume `productRepository` methods (CRUD, scoping, facets, search config, image writeback).
-- **`src/modules/products/module.ts`** — wires the repository into the module's dependency graph.
-- **`src/modules/products/tests/…`** — contract, integration, and factory tests exercise the repository directly (especially `facets`, `delete-outbox`, and `api.contract`).
-- **`scenarios/products.ts`** — end-to-end product scenarios that flow through this repository.
+- **`src/modules/products/model.ts`** — supplies `productModel` (Mongoose model) and `applyProductTransform` (the document→DTO mapper passed to the factory).
+- **`src/infrastructure/persistence/create-repository.ts`** — supplies the `createRepository` factory, `toObjectId`, and the `Repository` base type that `productRepository` extends.
+- **`src/infrastructure/persistence/translatable-columns.ts`** — supplies `translatableColumnsOf`, which builds the `translatable` member.
+- **`src/infrastructure/persistence/image-writeback.ts`** — supplies `imageWritebackFor`, which builds the `writebackImage` member.
+- **`src/infrastructure/adapters/image.worker.ts`** — provides the `ImageWriteback` type for the `writebackImage` field.
+- **`src/modules/products/services/*`** (`crud`, `lookups`, `read`, `remove`, `search`) — consume `productRepository` for all their data access.
+- **`src/modules/products/module.ts`** — registers the repository in the module's DI / composition graph.
+- **`src/modules/cart/tests/integration/*`** — exercise scoped finds and stock-cache sync through the repository.
+- **`src/modules/products/tests/contract/api.contract.test.ts`** — validates the repository's public surface against a contract.
+- **`scenarios/products.ts`** — integration scenarios that drive the repository end-to-end.
 
 ## Notes
 
-- The exported type annotation is **written out explicitly** (not `as const` / inferred) because Mongoose's generic resolution produces a type too large for TypeScript to serialize at an export boundary (TS7056). Do not "simplify" it back to inference.
-- `toObjectId` **throws** on malformed ids; every method that calls it is therefore `async` even if the underlying Mongoose call is synchronous. Callers must handle the rejection.
-- `timestamps: false` on `syncStockCache`, `writeTranslatedFields`, `markEdited`, and `writebackImage` is intentional: these are derived/mirror writes, not admin edits, and must not bump the document's Mongoose-managed `updatedAt`. `markEdited` compensates by stamping `updatedAt` by hand so the revision counter still advances.
-- `writebackImage` guards on `pendingImageKey: key` to prevent a stale or duplicate job from overwriting a newer upload. A `matchedCount === 0` result does **not** mean failure if the URLs are already present (duplicate delivery); the fallback `exists` check returns `true` in that case.
-- `facets()` reuses `PUBLIC_SCOPE` in its `$match`, so categories/tags held only by hidden products are excluded — a chip in the UI will always have matching results.
+- `PUBLIC_SCOPE` is a `const` declared above the object literal so three members (`findPublicById`, `facets`, `listedPage`) can reference it; reading it back off `productRepository` at runtime would require lazy property resolution and is intentionally avoided.
+- `syncStockCache` is deliberately unguarded (no `if` on existence, no conditional `$set`). The invariant is: `@modules/inventory` has already decided the stock state; this method only copies it.
+- Both `syncStockCache` and `writebackImage` pass `timestamps: false` so Mongoose does not bump `updatedAt` on what are system writes, not admin edits.
+- The `searchable` config in `createRepository` maps every filter/sort knob (`active`, `purchasable`, `deleted`, price range, text, regex, array, booleans, presence) to the concrete Mongo columns. The `title` regex and sort entries target the fallback-locale column — the same one the public catalogue exposes.
+- `findByIdScoped` is `async` (not just returning a promise) because `toObjectId` can *throw* on a malformed id; wrapping in `async` turns that into a rejected promise.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/wishlist/tests/integration/items-removed.test.ts
-sha256: edb912fe64be5807bed5187cba109515bf6c0150fec619330b3165dcf6eb7b83
-generated_at: 2026-10-15T12:28:10.558822+00:00
+sha256: c2157ea8d65d483f683bde65f360a65a395c3ae2ca7ee89ce1a94f53bfb38a2f
+generated_at: 2026-10-29T06:35:35.786547+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test verifying that `productRemoveFromWishlistsById` emits a `WISHLIST_ITEMS_REMOVED` domain event carrying the affected user IDs and the product's localized titles, and that it emits **no** event when the product was absent from all wishlists — ensuring downstream consumers (e.g. notifications) never receive an empty announcement.
+Integration test that verifies `wishlistService.removeByProductId` publishes a `WISHLIST_ITEMS_REMOVED` domain event containing the affected user IDs, product ID, and localized titles — and publishes **nothing** when no wishlist referenced the product (preventing empty notifications).
 
 ## Key elements
 
-- **`describe('productRemoveFromWishlistsById')`** — the single test block in the file.
-- **`announced`** (`jest.fn()`) — mock listener registered on `WISHLIST_ITEMS_REMOVED` to capture the event payload.
-- **`beforeEach`** — calls `resetDomainEvents()`, resets the mock, and re-registers `announced` via `onDomainEvent(WISHLIST_ITEMS_REMOVED, announced)`.
-- **Test: "announces whose wishlists held the product, with its names"** — creates a user and a product, adds the product to the user's wishlist, removes the product by ID, then asserts the event fired once with `{ userIds, productId, titles }`.
-- **Test: "announces nothing when no wishlist held it"** — removes a product that was never wishlisted; asserts `announced` was never called.
+- **`describe('productRemoveFromWishlistsById')`** — Top-level suite. Registers a spy (`announced`) on the `WISHLIST_ITEMS_REMOVED` event via `onDomainEvent`, resets it in `beforeEach`.
+- **"announces whose wishlists held the product, with its names"** — Creates a user and a product, adds the product to the user's wishlist, then calls `removeByProductId`. Asserts the event fired exactly once with `{ userIds: [saver.id], productId, titles }`.
+- **"announces nothing when no wishlist held it"** — Calls `removeByProductId` on a product never added to any wishlist. Asserts the event spy was **not** called.
 
 ## Relationships
 
-- **`src/modules/wishlist/service.ts`** — source under test; provides `productRemoveFromWishlistsById` and `wishlistService.wishlistAdd`.
-- **`src/modules/wishlist/events.ts`** — exports the `WISHLIST_ITEMS_REMOVED` event identifier used to subscribe the mock listener.
-- **`src/kernel/events.ts`** — provides the event-bus primitives `onDomainEvent` and `resetDomainEvents` for subscribe-and-spy testing.
-- **`src/modules/users/tests/factories.ts`** — `createUser` builds a persistent user fixture.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` builds a persistent product fixture.
-- **`tests/support/callers.ts`** — `testCallerContext` supplies the caller argument required by `wishlistAdd`.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb` initializes the in-memory/test database before the suite runs.
+| Neighbor | Role |
+|---|---|
+| `src/modules/wishlist/service.ts` | SUT — `wishlistService.add` and `wishlistService.removeByProductId` under test |
+| `src/modules/wishlist/events.ts` | Exports the `WISHLIST_ITEMS_REMOVED` event constant used to register the spy |
+| `src/kernel/events.ts` | Provides `onDomainEvent` / `resetDomainEvents` for event-spy plumbing |
+| `src/modules/users/tests/factories.ts` | `createUser` — creates a test user to own a wishlist entry |
+| `src/modules/products/tests/factories.ts` | `createProduct` — creates the product being added/removed |
+| `tests/support/setup-test-db.ts` | `setupTestDb()` — initializes the in-memory/test database before the suite |
+| `tests/support/callers.ts` | `testCallerContext` — standard caller identity passed to service methods |
 
 ## Notes
 
-- The event name is `WISHLIST_ITEMS_REMOVED`, but the trigger is **product deletion**, not a user removing an item from their own wishlist. The payload reflects the product-centric perspective (`productId`, `titles`, `userIds`).
-- Product IDs are passed as `String(product._id)`, indicating an ObjectId is stringified at the service boundary.
-- Event subscription is done via the in-process bus (`onDomainEvent`), not by intercepting a message broker — this is a unit-of-work-level assertion, not a cross-process integration check.
+- The `describe` block is named `productRemoveFromWishlistsById`, but the service method actually tested is `removeByProductId`. The name appears to be a historical or alternate label for the same operation.
+- The event payload's `titles` field is a localized map (e.g. `{ en: 'Blue mug' }`); the test asserts exact shape, so adding a new locale key or renaming the field will break it.
+- The "announces nothing" case is the contract that downstream `notifications` listeners can safely ignore the absence of an event rather than handling an empty `userIds` array.

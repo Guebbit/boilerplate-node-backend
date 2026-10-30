@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/controllers/update-product.ts
-sha256: 7118a60d1db7a0d79080abaec0fcdaae2a3544e306002e973e9afc6539935995
-generated_at: 2026-10-15T11:41:12.393224+00:00
+sha256: ae16b210abe60a687d0e203d7c42fb36062adafdfb2177a5d7575c88b5113db3
+generated_at: 2026-10-29T05:25:21.980307+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the `PUT /products/:id` (full replace) and `PATCH /products/:id` (partial merge) handlers for the products module. Both verbs are built on the shared `createUpdateController` factory and delegate the actual write to `productService.writeUpdate`. The only verb-specific behavior is what an *omitted* field means: PUT clears clearable fields and deletes omitted locales; PATCH leaves them untouched.
+Defines the `PUT /products/:id` (full replace) and `PATCH /products/:id` (partial merge) handlers. Both verbs funnel into `productService.updateById`; the only difference is what an *omitted* field means — PUT clears clearable fields and deletes omitted locales, PATCH leaves them untouched.
 
 ## Key elements
 
-- **`replaceProduct` / `updateProduct`** (named exports) — destructured from a single `createUpdateController` call. `replaceProduct` handles PUT; `updateProduct` handles PATCH.
-- **`input` mapping** — declares multipart type-coercion (`booleans`, `numbers`, `stringArrays`, `jsonFields`) so the same zod schema validates both JSON and multipart bodies.
-- **`update` callback** — wraps `productService.writeUpdate` inside `writeWithUploadedImage`, threading the request's optional image upload and the caller context into the service call.
-- **`keptWhenOmitted: ['imageUrl']`** — explicitly prevents PUT from clearing the image; the upload pipeline owns image lifecycle.
-- **`completeReplace`** — PUT-only hook that calls `productService.clearOmittedLocales` to delete stored locale rows absent from the body.
-- **`present`** — serializes the stored product via `productService.toProduct(product, request.caller)` for the response.
+- **`replaceProduct` / `updateProduct`** — the two exported handlers, produced by a single `createUpdateController(…)` call.
+- **`createUpdateController` config** — wires in:
+  - `replaceSchema` / `patchSchema` (`productService.zodProductReplaceSchema` / `zodProductUpdateSchema`) — validated once here, not inside `updateById`.
+  - `input` — declares which fields need type-decoding for multipart bodies (booleans, numbers, string-arrays, JSON).
+  - `update` callback — calls `writeWithUploadedImage`, which in turn calls `productService.updateById(id, changes, callerContext, image)`.
+  - `keptWhenOmitted: ['imageUrl']` — a PUT that omits `imageUrl` does **not** clear it.
+  - `completeReplace` — PUT-only hook that calls `productService.clearOmittedLocales(id, changes)`.
+  - `present` — maps the stored row to the response via `productService.toProduct`.
 
 ## Relationships
 
-- **`create-update-controller.ts`** — supplies the `createUpdateController` factory; this file is purely its configuration + callbacks.
-- **`request.ts`** — `callerContextOf(request)` extracts the authenticated caller identity, forwarded to `writeUpdate` for audit.
-- **`uploads.ts`** — `writeWithUploadedImage(request, changes.imageUrl, cb)` reads an optional multipart image upload and passes the resolved image (or `null`) into the callback.
-- **`routes.ts`** — registers `replaceProduct` / `updateProduct` on the `PUT` and `PATCH` routes for `/products/:id`.
-- **`services/index.ts`** — source of `productService.writeUpdate`, `.clearOmittedLocales`, `.toProduct`, and the two zod schemas used for validation.
+- **`create-update-controller.ts`** — provides the `createUpdateController` factory that builds both handlers and owns the verb-specific omission logic.
+- **`request.ts`** — provides `callerContextOf(request)` to extract the authenticated caller's identity for the service call.
+- **`uploads.ts`** — provides `writeWithUploadedImage`, which reads a multipart image (if present) and passes the resolved image to the inner update call.
+- **`services/index.ts`** — the `productService` is the sole write target (`updateById`, `clearOmittedLocales`, `toProduct`) and also the source of the two Zod schemas.
+- **`routes.ts`** — imports `replaceProduct` / `updateProduct` to attach them to the `PUT`/`PATCH` route definitions.
 
 ## Notes
 
-- Validation uses `zodProductReplaceSchema` / `zodProductUpdateSchema` (custom, extended with a fallback-locale guard and a release-date rule) rather than raw generated schemas. A bad body 422s here with a field-named message; the service does not re-validate.
-- `imageUrl` in the request body may only be `null` (explicit clear) or absent; the server always sets the actual URL. The multipart `imageUpload` part is **outside** the zod schema and is read separately by `writeWithUploadedImage`.
-- PUT's "clear on omit" applies to `taxClass`, `rateType`, `sku`, `weight`, and omitted locales — **not** to `imageUrl`.
+- Validation is **single-pass**: the Zod schemas run in the controller (via the factory), so `updateById` never re-validates the body. A bad write 422s with a field-named message here.
+- `imageUpload` lives **outside** the Zod schema; it is read inside `writeWithUploadedImage` → `readUploadedImage`. The schema only sees `imageUrl: null | undefined`.
+- Multipart bodies arrive as strings; the `input` block tells the factory's `readInput` step which fields to cast before schema validation, so one JSON-shaped schema covers both `application/json` and `multipart/form-data`.
+- The set of clearable-on-PUT fields (`taxClass`, `rateType`, `sku`, `weight`) is implicit in the schema/factory, not enumerated in this file. `imageUrl` is explicitly excluded via `keptWhenOmitted`.

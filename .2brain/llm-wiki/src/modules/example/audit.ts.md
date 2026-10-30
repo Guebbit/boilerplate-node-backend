@@ -1,7 +1,7 @@
 ---
 source: src/modules/example/audit.ts
-sha256: 3103452f467ec0744ced4a380f9208734ab181040fab49d07b89b2060c79cbd7
-generated_at: 2026-10-15T10:29:52.400308+00:00
+sha256: 4621e89ab73ab3ade54bd9e3eded8cfdebc48fb48345b46fdb1e288e26379f55
+generated_at: 2026-10-29T03:51:05.737574+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the audit-action vocabulary owned by the `example` module and registers it into the app-wide `AuditActionMap` union via TypeScript module augmentation. This lets the observability infrastructure (`@infrastructure/observability/audit`) understand every valid action the module can emit, while keeping the union open for extension by other modules.
+Declares the audit-action vocabulary for the `example` module and registers it into the app-wide `AuditActionMap` union. The actions themselves (create, update, status change, delete, cover change) are generated from `rules.yaml` and re-exported here so that downstream services and tests can reference them through a single, typed entry point.
 
 ## Key elements
 
-- **`exampleAuditActions`** (exported const) — The four action strings this module may emit: `example.created`, `example.updated`, `example.deleted`, `example.cover_changed`. Typed as a const assertion so each key maps to a literal type.
-- **`declare module '@infrastructure/observability/audit'`** — Module augmentation that adds an `example` entry to the `AuditActionMap` interface, whose value is the union of all literal action strings above. No runtime code; purely a type-level registration.
+- **`exampleAuditActions`** — Re-exported from `./rules.generated`. A readonly object whose keys are the action names listed in `rules.yaml` and whose values are the canonical action identifiers.
+- **Module augmentation (`@infrastructure/observability/audit`)** — Adds an `example` entry to the `AuditActionMap` interface, typed as a union of `exampleAuditActions`'s values. This is what makes the app-wide `AuditAction` union grow automatically when this module is enabled.
 
 ## Relationships
 
-- **`services/crud.ts`** and **`services/cover.ts`** — Downstream consumers. They import `exampleAuditActions` to tag the specific events they emit (CRUD operations → `created`/`updated`/`deleted`; cover changes → `cover_changed`).
-- **`tests/integration/service.test.ts`** and **`tests/integration/capabilities.test.ts`** — Integration tests that assert the correct audit action is recorded after exercising the example services, relying on the augmented `AuditActionMap` for type-safe assertions.
+- **`src/modules/example/rules.generated.ts`** — Sole import source; provides the `exampleAuditActions` object that this file re-exports and types against.
+- **`src/modules/example/services/crud.ts`, `services/transition.ts`, `services/cover.ts`** — The services whose operations (create/update/delete, status change, cover change) correspond one-to-one with the actions defined here. They consume the `AuditActionMap['example']` type when emitting audit events.
+- **`src/modules/example/tests/integration/capabilities.test.ts`, `tests/integration/service.test.ts`** — Integration tests that assert the audit trail produced by those services matches this module's action vocabulary.
 
 ## Notes
 
-- This file contains **no runtime logic** beyond the `const` object; its primary effect is type-level (the `declare module` block).
-- The pattern is deliberately per-module: each module augments the shared `AuditActionMap` independently. See `modules/account/audit.ts` as the canonical reference for why this augmentation approach was chosen.
-- Action string values follow the `example.<past_tense_or_event>` convention. The `EXAMPLE_COVER_CHANGED` value uses `snake_case` for the compound suffix rather than the `CREATED`/`UPDATED`/`DELETED` pattern — a minor inconsistency worth noting if you are adding new actions.
-- Audit-logging mechanics (winston transport, structured fields) live in `docs/tools/winston.md`, not here.
+- This file contains **no runtime logic** beyond the re-export and the `declare module` block. It exists purely for type-level composition.
+- The action list is derived from `rules.yaml`; adding or removing an action there and regenerating `rules.generated.ts` is the only way to change the vocabulary. Editing this file directly will not take effect.
+- The doc comment points to `docs/tools/winston.md` for the broader audit-logging pipeline this module plugs into.

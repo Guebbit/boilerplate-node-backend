@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/controllers/get-locale-messages.ts
-sha256: de23d687e41754c03bde948132383ca9d2e1bf8c7b7355882a6a78d6316214b6
-generated_at: 2026-10-15T10:42:31.174562+00:00
+sha256: d8ae7eeb286119f9b36c9502f081768f779ca44ac9fd2cc54f77dd81b4d91b62
+generated_at: 2026-10-29T04:20:08.892709+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP controller (Express handler) for `GET /locales/:locale/messages`. It validates query parameters, delegates to `localeService.readMessages`, and shapes the response. All business logic lives in the service layer; this file is purely an adapter between the HTTP boundary and the locale service.
+Thin HTTP adapter for the `GET /locales/:locale/messages` endpoint. It validates the query string, delegates to `localeService.readMessages`, and shapes the result into a standard success or refusal response. It exists to keep route wiring and business logic separated from Express request/response handling.
 
 ## Key elements
 
-- **`getLocaleMessages`** (exported) — The Express route handler. Parses `request.query` through the `GetLocaleMessagesQueryParams` Zod schema, calls `localeService.readMessages(locale, query.app)`, then returns `successResponse` or a `refused` status depending on the result. Errors are funneled through `catchAs`.
-- **`parseBody(GetLocaleMessagesQueryParams, …)`** — Validates the query string before any service call; if validation fails the function returns early after `parseBody` writes the error response.
-- **`refused(response, result)`** — Short-circuits on a domain "refused" outcome (e.g. unknown locale), writing an appropriate HTTP error.
+- **`getLocaleMessages`** (exported) — Express handler that:
+  - Parses `request.query` against the `GetLocaleMessagesQueryParams` Zod schema (rejects blank `?app=` with 422).
+  - Calls `localeService.readMessages(locale, app?, includeInactive?)` where `includeInactive` is `true` when the caller's scope differs from anonymous.
+  - Responds via `successResponse<LocaleMessages>` or `refused`; unexpected errors are funnelled through `catchAs`.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — Provides the `parseBody`, `refused`, and `catchAs` utilities used for input validation, domain-error mapping, and error serialization.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse`, which wraps service data in the standard success envelope.
-- **`src/modules/locales/routes.ts`** — Registers `getLocaleMessages` as the handler for the `GET /locales/:locale/messages` route.
-- **`src/modules/locales/services/index.ts`** — Exports `localeService`; this controller calls `readMessages(locale, app?)` on it.
-- **`src/types/index.ts`** — Supplies the `LocaleMessages` type used as the generic parameter of `successResponse`.
+- **`src/infrastructure/http/controller.ts`** — provides `parseBody`, `refused`, and `catchAs` utilities used for validation, refusal handling, and error catching.
+- **`src/infrastructure/http/response.ts`** — provides `successResponse` for formatting the happy-path payload.
+- **`src/kernel/access/query.ts`** — provides `hasAnonymousReadScope`, used to decide whether the caller is entitled to see inactive (draft) locale entries.
+- **`src/modules/locales/services/index.ts`** — exports `localeService`, whose `readMessages` method is the single business call this controller makes.
+- **`src/modules/locales/routes.ts`** — registers `getLocaleMessages` on the `GET /locales/:locale/messages` route.
+- **`src/types/index.ts`** — supplies the `LocaleMessages` type used as the generic parameter for `successResponse`.
 
 ## Notes
 
-- `?app=` with an empty value is **refused (422)** by design, not treated as "default." Omitting the `app` parameter entirely is the way to request the deployment's default frontend copy.
-- The endpoint is public and intended to be cacheable. Cache freshness relies on a `locales` tag being invalidated on every admin write (that invalidation lives elsewhere, not in this file).
-- The handler is intentionally free of business logic; any change to message assembly belongs in `localeService.readMessages`.
+- **`?app=` semantics are deliberate:** an *omitted* parameter means "use the deployment default"; a *blank* value (`?app=`) is rejected with 422 rather than coerced. Do not "fix" this to treat empty string as default.
+- **Inactive-language visibility** is gated on scope: any caller whose read scope is *not* anonymous gets inactive entries included. There is no per-language permission check here — the service handles that internally.
+- **Cache invalidation** is external to this file: admin writes invalidate the `locales` response tag, so a subsequent request reflects the latest data without the controller doing anything special.

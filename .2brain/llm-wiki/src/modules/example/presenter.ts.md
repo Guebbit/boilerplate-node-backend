@@ -1,7 +1,7 @@
 ---
 source: src/modules/example/presenter.ts
-sha256: 11c50d9e3dccdf540515a37b8339d3106756dbf8dc9d8369c2a8f5029e4cbeaa
-generated_at: 2026-10-14T15:43:20.606598+00:00
+sha256: 693dbeb545f2786671b14f5b63e162259de1f54cc56b0b3d14f0290f71c1f46a
+generated_at: 2026-10-29T03:53:45.378074+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The single place where a stored `Example` document or search row is shaped into the `Example` wire type declared in `openapi.yaml`. It exists so every read and write path returns the identical contract shape, and it supplies the one field the document cannot provide on its own: `ownerName` (owned by `users`, passed in by the caller).
+The single place a stored row (Mongoose document or search row) is shaped into the `Example` wire contract declared in `openapi.yaml`, so every read and write path returns the same shape. It exists to keep that mapping out of the service layer.
 
 ## Key elements
 
-- **`presentExample(document, ownerName) → Example`** — Accepts a Mongoose `ExampleDocument`, calls the model's `.toJSON()` transform (renames `_id`→`id`, formats owner as hex), casts the result to `ExampleRow`, injects `ownerName`, and wraps everything through `carryVersion`.
-- **`presentExampleRow(row, ownerName) → Example`** — Accepts an `ExampleRow` that is already in wire shape (e.g. from a repository search), injects `ownerName`, and wraps through `carryVersion`. No document transform is needed.
-
-Both functions return the `Example` type from `@types`, guaranteeing the OpenAPI contract at every call site.
+- **`presentExample(document, ownerName, actions)`** — Takes a live Mongoose `ExampleDocument`, calls `.toJSON()` (applying the model's `_id → id` and owner-hex transform), spreads the result, adds `ownerName` and `actions`, and wraps with `carryVersion`. Returns `Example`.
+- **`presentExampleRow(row, ownerName, actions)`** — Same shaping but for a row that is *already* in wire shape (`ExampleRow`, e.g. from a repository search). Adds `ownerName`, `actions`, applies `carryVersion`. Returns `Example`.
+- **`presentExampleExport(row, ownerName)`** — Shapes a row for the account-data export: spreads the row, adds `ownerName`, and intentionally omits `actions`. Returns `ExportExample`.
 
 ## Relationships
 
-- **`src/modules/example/model.ts`** — Source of the `ExampleDocument` and `ExampleRow` types that the presenters accept.
-- **`src/infrastructure/persistence/versioning.ts`** — Provides `carryVersion`, which both presenters apply to stamp version metadata onto the response shape.
-- **`src/types/index.ts`** — Source of the `Example` type (the wire contract) that both presenters return.
-- **`src/modules/example/services/crud.ts`, `services/owner.ts`, `services/personal-data.ts`** — Callers that invoke `presentExample` / `presentExampleRow` and supply the `ownerName` argument (read from `users` before calling the presenter).
+- **`src/modules/example/model.ts`** — Source of the `ExampleDocument` and `ExampleRow` types consumed here.
+- **`src/infrastructure/persistence/versioning.ts`** — Provides `carryVersion`, applied to every presenter output to attach the document's version metadata.
+- **`src/types/index.ts`** — Source of the `Example`, `ExampleActions`, and `ExportExample` types that form the return-contract.
+- **`src/modules/example/services/crud.ts`, `services/owner.ts`, `services/personal-data.ts`** — Callers that resolve `ownerName` (from the `users` collection) and decide `actions` before invoking these presenters.
 
 ## Notes
 
-- The cast `document.toJSON() as ExampleRow` is the **only** type assertion in the file; it compensates for Mongoose typing `.toJSON()` as `any`. Do not add further casts — the model's `transform` option is what guarantees the shape.
-- Dates remain `Date` objects through the presenter; they become ISO strings only at JSON-serialization time (framework-level), not here.
-- The two presenters exist to avoid duplicating the transform logic: use `presentExample` for Mongoose docs and `presentExampleRow` for pre-shaped rows (e.g. aggregated search results). Mixing them up will either miss the `_id`→`id` rename or double-apply it.
+- The one `as ExampleRow` cast after `document.toJSON()` is load-bearing: Mongoose types `.toJSON()` as `any`, so this is the only place the result is pinned to `ExampleRow`.
+- Dates are left as `Date` objects throughout; they become ISO strings only when the HTTP response is serialized. Don't "helpfully" call `.toISOString()` here.
+- `ownerName` and `actions` are *always* caller-supplied. This file never queries `users` or computes permissions.
+- `presentExampleExport` deliberately has no `actions` parameter — it exists for the bulk export path where per-caller permissions are irrelevant.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/controllers/post-fulfill-fulfillment-order.ts
-sha256: 33f314a674f542e660d50fe51b1f8dc06512b9aec9ff9d30e43e70d452895867
-generated_at: 2026-10-14T15:21:13.795806+00:00
+sha256: 55cba83dc44b644625d68e930a3c1b58e67444e50aa0852fe5dbbc049c3cd37f
+generated_at: 2026-10-29T03:32:08.315635+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Controller handler for `POST /delivery/fulfillment-orders/:id/fulfill`. It validates the order ID, delegates to the delivery service to fulfill a digital fulfillment order (a shipment with no parcel, "born delivered"), and writes the resulting `Shipment` to the HTTP response.
+Handles `POST /delivery/fulfillment-orders/:id/fulfill`. A staff user marks a digital fulfillment order (a shipment with no physical parcel) as fulfilled, which creates a new `Shipment` record. The controller extracts the order ID, delegates to the delivery service, and returns the created shipment with a `201` response.
 
 ## Key elements
 
-- **`postFulfillFulfillmentOrder(request, response)`** — The sole export. Reads `:id` from the route params, calls `deliveryService.fulfillFulfillmentOrder`, then either short-circuits via `refused` or sends a `successResponse` containing the `Shipment`. Errors are funnelled through `catchAs`.
+- **`postFulfillFulfillmentOrder(request, response)`** — Exported route handler. Extracts `:id` via `requireId`, calls `deliveryService.fulfillFulfillmentOrder(id, authContext, callerContext)`, then either short-circuits on refusal or emits `201 Created` with a `Location` header pointing to `/delivery/shipments/:shipmentId`.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — Provides `catchAs` (error-to-HTTP translation) and `refused` (service-level refusal check used to skip the success path).
-- **`src/infrastructure/http/ids.ts`** — Provides `requireId`, which extracts and validates the `:id` param, returning `null` and a 404 on failure.
-- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf`, which builds caller context passed into the service call.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse`, the standard 200 JSON envelope.
-- **`src/modules/delivery/services/index.ts`** — Source of `deliveryService`; this controller calls its `fulfillFulfillmentOrder(id, authContext, callerContext)` method.
-- **`src/modules/delivery/routes.ts`** — Presumed registration point that maps the `POST /delivery/fulfillment-orders/:id/fulfill` route to this handler.
-- **`src/types/index.ts`** — Source of the `Shipment` type used as the generic parameter of the success response.
+- **`src/modules/delivery/routes.ts`** — Registers this handler on the `POST /delivery/fulfillment-orders/:id/fulfill` route.
+- **`src/modules/delivery/services/index.ts`** — Exports `deliveryService`, whose `fulfillFulfillmentOrder` method performs the actual state transition and returns the new shipment.
+- **`src/infrastructure/http/ids.ts`** — Supplies `requireId` to pull and validate the `:id` route param (404 if absent).
+- **`src/infrastructure/http/request.ts`** — Supplies `callerContextOf` to derive the caller context passed into the service.
+- **`src/infrastructure/http/response.ts`** — Supplies `createdResponse` to build the `201` response with a `Location` header.
+- **`src/infrastructure/http/controller.ts`** — Supplies `refused` (early-return guard for rejected results) and `catchAs` (unified error serialization).
+- **`src/types/index.ts`** — Provides the `Shipment` type used as the generic parameter of `createdResponse`.
 
 ## Notes
 
-- The `:id` route param is typed as optional (`id?: string`) on the `Request` generic; `requireId` performs the runtime validation and returns `null` on absence, which the handler treats as an early exit (the 404 is already sent by `requireId`).
-- `request.authContext` is accessed directly (not imported from the listed neighbors); it is expected to be attached upstream by auth middleware.
-- The domain term "fulfillment order" is distinct from a regular shipment: it has no parcel and is considered delivered at the moment of fulfillment.
+- The doc block explicitly calls this a *digital* fulfillment — the resulting shipment has no parcel. Consumers should not expect tracking or carrier fields.
+- `request.authContext` is read directly (not through a helper), implying upstream middleware has already resolved it.
+- Errors are funneled through `catchAs(response, 'postFulfillFulfillmentOrder')`, which tags the error log with that string — useful for grepping traces.

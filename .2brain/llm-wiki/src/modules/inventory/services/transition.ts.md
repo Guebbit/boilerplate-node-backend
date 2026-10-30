@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/services/transition.ts
-sha256: 01c8fa26faef9d94afedc4d524b182b07bb2679edad0f81f00d68c06a0258424
-generated_at: 2026-10-15T10:36:42.383127+00:00
+sha256: 42b509ba9e59498bba43137492308c527808be387040791f6a6cc679be721d3e
+generated_at: 2026-10-29T04:05:19.406773+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The single chokepoint for every stock-counter change in the application. All named transitions (receive, adjust, reserve, hold, release, expire, commit, ship, restock) funnel through `applyTransition`, which atomically updates the counter row, writes the ledger record, and (outside a transaction) refreshes the catalogue's cached copy. It exists so that counter semantics, guard rules, and the audit trail stay in one place rather than scattering across each service.
+The single chokepoint through which every stock counter movement and its corresponding ledger row pass. Named transitions (receive, adjust, hold, release, expire, commit, ship, backorder) all delegate here, making it the one place that knows how to compute deltas, apply them conditionally, write the movement record, and keep the catalogue's stock cache in step.
 
 ## Key elements
 
-- **`applyTransition`** *(exported, `@internal`)* — Reads-or-inserts the product's level row, computes deltas via `counterDeltaFor`, performs a conditional write (`applyDelta`), records a `stockMovement` ledger row, then syncs the catalogue cache (skipped when a `ClientSession` is present). Returns `true` only if the counters actually moved. Special-cases a missing row per reason: `reserve`/`preorder` refuse; `release`/`expire`/`commit` report success (trivially, nothing to move); `receive`/`adjust` insert the row first.
-- **`applyToEveryLine`** — Iterates an order's lines, calling `applyTransition` per line. Throws on the first refusal so the caller's transaction rolls back. Also pre-rejects `ship` on a `preorder`-kind line (units still claimed, not yet on-hand).
-- **`syncStockCache`** — Re-reads the level row, pushes `{onHand, reserved}` to `productService.syncStockCache`, then invalidates the `products` cache tag. Swallows and logs errors; never rejects the caller.
-- **`refreshStockCacheForProducts`** — Deduplicates a list of product IDs and calls `syncStockCache` for each. Intended to be called *after* a transaction commits, since the cross-module cache write cannot roll back.
+- **`applyTransition(reason, productId, quantity, context?, session?)`** — Core writer. Reads (or `insertIfAbsent`) the stock-level row, computes the delta via `counterDeltaFor`, applies it conditionally, writes a `stockMovement` row on success, and (when no session is given) refreshes the product cache. Returns `false` if the counters refuse the move. Marked `@internal`; other services in the module call it through the barrel.
+- **`refreshStockCache(productId)`** — Reads the product's current level, pushes `onHand / reserved / backorderLimit / backordered` into the products catalogue via `productService.syncStockCache`, then invalidates the `products` cache tag. Never rejects: on failure it logs and resolves, because the underlying transition has already committed.
+- **`refreshStockCacheForProducts(productIds)`** — Deduplicates the ID list and calls `refreshStockCache` sequentially. Intended for callers that hold a transaction and must sync the cache only after commit.
+- **`applyToEveryLine(reason, lines, context, session?)`** — Loops over an order's lines calling `applyTransition`; throws an `Error` on the first refusal so the caller's transaction rolls back all lines. Includes a guard that prevents shipping units still marked as a backorder claim.
 
 ## Relationships
 
-- **`src/modules/inventory/repository.ts`** — Reads/writes via `stockLevelRepository` (findByProductId, insertIfAbsent, applyDelta) and `stockMovementRepository` (create).
-- **`src/modules/inventory/domain/index.ts`** — Imports `counterDeltaFor` (maps reason + quantity + kind → signed deltas) and the `HoldKind` type.
-- **`src/infrastructure/adapters/cache.ts`** — Calls `invalidateCacheTagsLogged(['products'])` after a successful catalogue sync to bust `GET /products/:id` and list responses.
-- **`src/infrastructure/adapters/logger.ts`** — Logs non-fatal cache-sync failures; the transition itself already committed.
-- **`src/modules/inventory/services/index.ts`** — Barrel through which sibling services (`reserve.ts`, `holds.ts`, `allocate.ts`, `returns.ts`, `levels.ts`, `admin.ts`) import `applyTransition`; the function is marked `@internal` and is not meant to be reached outside the barrel.
-- **`src/modules/inventory/tests/integration/service.test.ts` / `cache-invalidation.test.ts`** — Integration tests exercising transition flows and verifying the `products` cache tag is invalidated.
-- **`src/modules/delivery/tests/unit/fulfillment.test.ts`** — Exercises the `ship` reason path through `applyToEveryLine`.
+- **`src/modules/inventory/domain/index.ts`** — Imports `counterDeltaFor` (computes which counters shift and by how much) and the `HoldKind` type.
+- **`src/modules/inventory/repository.ts`** — Uses `stockLevelRepository` (find, insertIfAbsent, applyDelta) and `stockMovementRepository` (create) for all persistence.
+- **`src/modules/products/index.ts`** — Calls `productService.syncStockCache` to keep the catalogue's denormalised stock copy consistent.
+- **`src/infrastructure/adapters/cache.ts`** — Calls `invalidateCacheTagsLogged(['products'])` after a successful sync.
+- **`src/infrastructure/adapters/logger.ts`** — Logs an error if the cache refresh fails.
+- **`src/modules/inventory/services/index.ts`** — Barrel through which sibling services (`allocate`, `holds`, `reserve`, `returns`, `top-up`, `admin`) reach `applyTransition`; the function is documented as never leaving the barrel.
+- **`src/modules/inventory/module.ts`** — Referenced in comments: its `PRODUCT_DELETED` listener deletes the stock-level row, which is why `applyTransition` treats a missing row on release/expire/commit as "nothing to move" rather than a failure.
 
 ## Notes
 
-- `applyTransition` is `@internal`: consume it only via the services barrel, never import the file directly from other modules.
-- When a `ClientSession` is passed, the catalogue cache sync is **deliberately skipped**. The caller is responsible for running `refreshStockCacheForProducts` (or an equivalent) after commit, because the cross-module write cannot participate in the transaction.
-- A missing level row is not an error: `reserve`/`preorder` refuse (nothing to set aside), while `release`/`expire`/`commit` return `true` so batch sweeps over a deleted product's remaining lines can proceed.
-- `context.kind` is **not** persisted on the ledger row; it only influences which counter a `release`/`expire` credits (`preordered` vs `onHand`). The rest of `context` (`reference`, `note`) is spread onto the movement record.
-- The `Stryker` disable/restore comments around the `syncStockCache` catch block suppress mutation testing of the error-handling path.
+- **Session vs. no-session cache rule.** When a `ClientSession` is passed, `applyTransition` skips the cache refresh entirely; the caller is responsible for calling `refreshStockCacheForProducts` after the transaction commits, because the catalogue write crosses a module boundary and cannot be rolled back.
+- **`kind` and `uncapped` are not persisted.** They influence *which* counter a release/expire returns or whether the backorder cap is bypassed, but they are stripped before the movement row is written (`recorded` spread excludes them).
+- **Missing-row semantics are reason-dependent.** `reserve`/`backorder` → `false` (nothing to claim); `release`/`expire`/`commit` → `true` (nothing to return, but the caller's sweep must continue); `receive`/`adjust` → row is inserted first, then the normal path runs.
+- **`refreshStockCache` swallows all errors.** This is intentional: the ledger is the source of truth, and a subsequent transition on the same product will correct the cache. A failure here must not block the caller's post-commit obligations (returning a hold, issuing a refund).

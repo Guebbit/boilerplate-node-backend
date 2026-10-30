@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/tests/contract/api.contract.test.ts
-sha256: 8e832eba6c1d9c07f9976f3ff9d4fe3643cd610b1bdbb9073d8990e73485b4e1
-generated_at: 2026-10-15T10:24:47.063956+00:00
+sha256: 361787791b899fda493d9c58a689b20761eed4cffd70ad13d554a59431df8bbc
+generated_at: 2026-10-29T03:26:26.063399+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for every `/cart` route. Because all six endpoints share one `CartResponseEnvelope` shape, a serialization change in one endpoint silently breaks the others; these tests assert the exact wire format each branch produces. Carts are built through the live API (not fixture builders) because `CartResponse` is a computed view, not a document dump — a hand-written fixture would assert a shape the app never serializes. Behavioural logic lives in the service suites; this file only verifies that each contract branch is reachable and shaped correctly.
+Contract tests for every `/cart` route (GET, POST items, POST merge, etc.). All six endpoints share one `CartResponseEnvelope`, making them a natural hiding place for serialization drift. Carts are built exclusively through the live API rather than fixture builders, because `CartResponse` is a computed view—not a serialization of the stored document—so a hand-written fixture would assert a shape the app never produces. Behavioral assertions live in the service suites; this file exists to confirm each contract branch is reachable and correctly shaped.
 
 ## Key elements
 
-- **`authenticateWithCart(quantity?)`** — Helper that logs in a user, seeds one address and one product, and adds the product to the cart via `POST /cart`. Returns `{ bearer, product }`. Used as setup across most test blocks.
-- **`mergeOnce(bearer, key, quantity, id)`** — Thin wrapper around `POST /cart/merge` that conditionally sets the `Idempotency-Key` header.
-- **`heldOf(bearer, id)`** — Reads `GET /cart` and extracts the quantity for a given product (returns `0` if absent). Used to assert post-merge state.
-- **`describe('GET /cart')`** — Verifies 200, empty items array, and the `availability: 'insufficient_stock'` flag when quantity exceeds stock.
-- **`describe('POST /cart')`** — Covers: new line (201 + `Location` header), growing an existing line (200, no `Location`), per-line ceiling enforcement via `NODE_CART_LINE_MAX` (422 `CART_QUANTITY_LIMIT`), 404 for missing product id, and 404 for an inactive (non-public) product.
-- **`describe('POST /cart — who may shop')`** — Parameterized: six staff/admin roles get 403 `FORBIDDEN`; `customer` and `unverified` get 201.
-- **`describe('POST /cart/merge')`** — Asserts per-line result objects (`requested`, `resulting`, `reason`, `availability`) in request order; covers summed, insufficient-stock, and removed (missing id) outcomes; tests idempotency-key replay.
+- **`authenticateWithCart(quantity?)`** – Logs in a user, seeds an address, creates a product, and POSTs one cart line. Returns `{ bearer, product }` for subsequent assertions.
+- **`describe('GET /cart')`** – Covers empty cart, populated cart, `insufficient_stock` availability flag with `canIncrease: true`, per-line ceiling (`canIncrease: false`), and `summary.expectedTotal` expressed in minor units.
+- **`describe('POST /cart/items')`** – Verifies 200 (not 201, no `Location` header), line growth on re-add, 422 `CART_QUANTITY_LIMIT` for ceiling violations, and 404 for both missing-id and inactive-product cases.
+- **`describe('POST /cart/items — who may shop')`** – Parameterized across all eight roles; asserts each can successfully add a line.
+- **`mergeOnce(bearer, key, quantity, id)`** – Thin wrapper around `POST /cart/merge` that optionally sets `Idempotency-Key`.
+- **`heldOf(bearer, id)`** – Reads back a single line's quantity via `GET /cart`; returns `0` if absent.
+- **`describe('POST /cart/merge')`** – Covers successful merge with per-line `availability` reasons, the 100-line acceptance / 101-line 422 boundary, and per-line result ordering.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `tests/support/contract.ts` | Imported for side effects; registers the contract-test runner/harness. |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` is called at module top to prepare a clean database. |
-| `tests/support/http.ts` | `api()`, `authenticateAs()`, `authenticateAsRole()` provide the supertest client and auth helpers. |
-| `tests/support/environment.ts` | `withEnvironment` / `withoutEnvironment` scope `NODE_CART_LINE_MAX` to individual test cases. |
-| `tests/support/checkout-as.ts` | `checkoutAs`, `shownTotal` imported (used in truncated portion of the file for post-merge checkout assertions). |
-| `tests/support/ids.ts` | `MISSING_ID` is a valid-but-nonexistent id used to exercise the 404/removed branches. |
-| `src/modules/products/tests/factories.ts` | `createProduct` (with optional `{ onHand, active }` overrides) seeds catalogue rows. |
-| `src/modules/addresses/tests/factories.ts` | `giveAddress` attaches a billing address to the user before checkout-related assertions. |
-| `src/modules/users/tests/factories.ts` | `createUser` seeds role-specific accounts for the access-control block. |
-| `src/modules/orders/tests/factories.ts` | `createOrder`, `toOrderItem` imported (used in truncated portion for order-related merge assertions). |
-| `src/infrastructure/i18n/index.ts` | `t` is imported; the i18n context must be active for error-message and availability-label assertions. |
+- **`tests/support/http.ts`** – Source of `api()` (supertest client), `authenticateAs`, `authenticateAsRole`, and `staleBearerFor`; the primary HTTP mechanism for every assertion.
+- **`tests/support/contract.ts`** – Imported for shared contract-test setup/helpers (likely response-envelope validation utilities).
+- **`tests/support/environment.ts`** – `withEnvironmentOverrides` is used to temporarily set `NODE_CART_LINE_MAX` and exercise ceiling enforcement.
+- **`tests/support/checkout-as.ts`** – Provides `checkoutAs` and `shownTotal` (used in truncated portion for post-merge checkout assertions).
+- **`tests/support/callers.ts`** – `testCallerContext` supplies the caller identity for API calls.
+- **`tests/support/ids.ts`** – `MISSING_ID` constant used to simulate a nonexistent product id.
+- **`src/modules/products/tests/factories.ts`** – `createProduct` seeds catalog entries (with optional `onHand`, `price`, `active` overrides).
+- **`src/modules/products/index.ts`** – Exports `productService`, imported here (used in truncated section).
+- **`src/modules/addresses/tests/factories.ts`** – `giveAddress` ensures the user has a billing address required at checkout.
+- **`src/modules/orders/tests/factories.ts`** – `createOrder`, `toOrderItem` used in truncated section for post-checkout assertions.
+- **`src/modules/users/tests/factories.ts`** – `createUser` for role-specific test accounts.
+- **`src/infrastructure/i18n/index.ts`** – `t` for internationalized error-message assertions.
+- **`src/kernel/outbox.ts`** – `settleOutboxNudges` to flush async outbox side-effects before asserting.
 
 ## Notes
 
-- **200 vs 201 on `POST /cart`:** A *new* line returns 201 with a `Location` header; *growing* an existing line returns 200 with no `Location`. The test explicitly asserts both to pin the Shopify/commercetools convention.
-- **Inactive product ≠ missing id:** Both yield 404, but the comments distinguish them — the inactive case is a scope/permission refusal, not a lookup miss. The test creates a real row with `active: false` to hit that branch.
-- **`heldOf` cast:** The response body is untyped (supertest); the single `as` cast is the only place the test names the expected shape. If the contract changes, this cast will not flag the drift — the `expect` calls do.
-- **`withEnvironment` scoping:** `NODE_CART_LINE_MAX` is set per-test and restored after; tests that depend on the default limit must run outside a `withEnvironment` block.
-- **Merge result order is contractual:** The test asserts the `lines` array is in *request* order, not sorted. A regression that sorts by product id will fail this suite even if every field is correct.
+- **200, not 201, on `POST /cart/items`.** A cart line is a child of the cart resource; the response is always the full cart with no `Location` header. Tests explicitly assert `headers.location` is undefined.
+- **Add-to-cart grows, not replaces.** Re-POSTing the same product increments the existing line (Shopify/commercetools convention). A test posts 2, then 3, and expects a total of 5.
+- **Two distinct 404s.** A `MISSING_ID` and a real-but-inactive product both return 404, but the latter is a scope refusal, not a lookup miss. Both are tested separately to prevent a blanket "id not found" handler from masking the scope check.
+- **Per-line ceiling is env-driven.** Defaults to 10; tests use `withEnvironmentOverrides({ NODE_CART_LINE_MAX: '2' })` to trigger the 422 path at a lower threshold.
+- **`CartResponse` is a computed view.** The module docstring explicitly warns against fixture-based assertions because the shape depends on live product/inventory state at response time.

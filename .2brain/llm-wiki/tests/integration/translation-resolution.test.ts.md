@@ -1,7 +1,7 @@
 ---
 source: tests/integration/translation-resolution.test.ts
-sha256: af0cdd68395210012012f59a4c0a651247f3eee31168e26a5d172b16fddf5153
-generated_at: 2026-10-15T12:55:02.066609+00:00
+sha256: 5fc3be15d9337e6dbb1d3b118f124f62a9584b242200c85aae5d617fa2ed8fbe
+generated_at: 2026-10-29T07:04:28.175218+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests verifying that product reads (single fetch, paginated list, and free-text/title search) resolve titles in the caller's negotiated language, fall back to the source title when no translation exists, and batch all translations in one query. Because the assertion spans the product read path *and* the `locales` module's translation row, the file lives at the top level `tests/integration/` rather than under either module's `tests/` directory.
+Integration tests that verify the product read path resolves titles (and search terms) in the caller's negotiated language, including fallback behavior, region-tag normalization, batched page translation, and locale-aware free-text search. The file lives at the top-level `tests/integration/` directory (not under either module) because it crosses the `products` read path and the `locales` data domain.
 
 ## Key elements
 
-- **`FALLBACK`** — constant `'en'`, the default fallback locale in every environment this suite targets.
-- **`givenTranslation(productId, locale, title)`** — thin wrapper around `translationRepository.upsertEntityLocale` that upserts a product title translation; passes `'digest'` as the source hint for non-fallback locales.
-- **`describe('GET /products/:id resolves to the caller's language')`** — single-product resolution: correct locale match, fallback to source title, and region-tag → base-language resolution (`it-CH` → `it`).
-- **`describe('GET /products resolves a whole page in one batched query')`** — page-level tests: every item translated in one batch; mixed translated/untranslated items coexist without blanking.
-- **`describe('free-text search follows the caller's locale')`** — `text` and `title` query params match against both the product's own column and its translation row (union, not intersection); non-matching products are excluded.
+- **`givenTranslation(productId, locale, title)`** — local helper that calls `translationRepository.upsertEntityLocale` to insert a `product` entity-locale row. Passes `'digest'` as the strategy for non-fallback locales.
+- **`FALLBACK`** (`'en'`) — the locale treated as the default/source; its rows are written with `undefined` strategy.
+- **`describe('GET /products/:id resolves to the caller's language')`** — single-product lookups: correct locale match, fallback to source title when no translation row exists, and region-tag (`it-CH` → `it`) resolution.
+- **`describe('GET /products resolves a whole page in one batched query')`** — list endpoint: all items on a page translated in one pass; mixed translated/untranslated items coexist without blanking.
+- **`describe('free-text search follows the caller's locale')`** — `?text=` and `?title=` filters match against the negotiated locale's translation *or* the source column (union, not intersection), and do not produce false positives.
 
 ## Relationships
 
-- **`src/modules/locales/repository.ts`** — imports `translationRepository`; the `givenTranslation` helper calls `upsertEntityLocale` to seed translation rows.
-- **`src/modules/locales/tests/factories.ts`** — imports `givenLocale` to register a locale (e.g. `'it'`) in the test database before seeding translations.
-- **`src/modules/products/tests/factories.ts`** — imports `createProduct` to seed product documents with a source title/description.
-- **`tests/support/contract.ts`** — imported as a side-effect to install the shared API response-shape contract (validates `body.data` envelope, status codes, etc.).
-- **`tests/support/http.ts`** — imports `api` to issue real HTTP requests against the running test server (`.get`, `.set`, `.query`).
-- **`tests/support/setup-test-db.ts`** — imports `setupTestDb`, called once at module scope to provision and reset the test database before any test runs.
+- **`src/modules/locales/repository.ts`** — calls `translationRepository.upsertEntityLocale` to seed translation rows.
+- **`src/modules/locales/tests/factories.ts`** — calls `givenLocale` to register a locale in the test DB.
+- **`src/modules/products/tests/factories.ts`** — calls `createProduct` to create fixture products.
+- **`tests/support/contract.ts`** — imported for side effects (test contract/assertions setup).
+- **`tests/support/http.ts`** — provides the `api()` helper for making HTTP requests in tests.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises a clean test database before the suite runs.
 
 ## Notes
 
-- The file is intentionally **not** under `src/modules/products/tests/` or `src/modules/locales/tests/`; the header comment explains this is a cross-module concern.
-- `en` is hard-coded as the fallback — if a future environment changes the fallback, this constant and the tests relying on it must be updated in tandem (the comment points to `.env-example`).
-- The search tests assert a **union** (own-column OR translated) rather than an intersection. A product whose source title happens to be in Italian *and* another whose translation is Italian both match on the same query term.
-- Assertions use `toSorted()` (non-mutating) to keep order-independent comparisons deterministic.
-- `setupTestDb()` is called at the top level of the module (not inside `beforeAll`), ensuring the DB is ready before any `describe` block evaluates.
+- The file is intentionally **not** placed under `src/modules/products/tests/` or `src/modules/locales/tests/` — the header comment explains it is cross-module by nature.
+- `FALLBACK` is assumed to be `'en'` in every environment; the comment points to `.env-example` as the source of truth.
+- Search tests assert **union** semantics (source-column match *and* translation match both return), not intersection — a product whose source title happens to match the search term is returned even without a translation row.
+- The `givenTranslation` helper always uses entity type `'product'` and field `{ title }`; it is not a general-purpose helper.

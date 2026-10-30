@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/config/fields.ts
-sha256: 52adbcb11041359fdd01648805c1d9cd9cd419ca7edc559a1eb300c2ba44426d
-generated_at: 2026-10-14T07:51:37.688429+00:00
+sha256: efa58e2b8bf6a04413905efafafe02063bb0aa29f0579e57fe96e8f1d9a8e6e0
+generated_at: 2026-10-29T01:58:07.745865+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the typed field builders (`int`, `decimal`, `flag`, `choice`, `text`, `email`, `timeZone`, `secret`, `csv`, `keyRing`, `versionedKeyRing`) used to declare configuration slices. Every builder enforces a single contract: blank strings are unset, a set-but-invalid value is an error (never a silent fallback), and presence requirements (min length, placeholder rejection, key strength) are boot-time checks separate from shape validation.
+Defines the typed field builders (`int`, `decimal`, `flag`, `choice`, `text`, `email`, `timeZone`, `currency`, `secret`, `csv`, `keyRing`, `versionedKeyRing`) that configuration slices use to declare each environment variable. Every field enforces a uniform contract—trim, blank-as-unset, reject (never silently default) a wrong value—and carries optional boot-time presence rules so a developer machine can legitimately leave a secret unset.
 
 ## Key elements
 
-- **`Field<T>`** — interface pairing a Zod `schema` with an optional `presence` rule and a `sensitive` flag (controls whether the value is masked in error output).
-- **`Presence`** — boot-time rule: `minLength`, `placeholder`, `minBytes` (decoded key-size floor for HS256/HKDF keys), `productionOnly`, `skipWhen(env)`.
-- **`build<T>()`** — internal wrapper that composes `z.preprocess(blankAsUnset, …)` with an optional default, producing a `Field`.
-- **`int(options)`** — whole-string base-10 integer; rejects hex, unit suffixes, and `1e3`. Supports `min`/`max` bounds.
-- **`decimal(options)`** — whole-string decimal; rejects `.5` and `1e-1`. Supports `min`/`max`/`lessThan`.
-- **`flag(options)`** — maps `TRUTHY_WORDS`/`FALSY_WORDS` (case-insensitive) to `boolean`.
-- **`choice<T>(allowed, options)`** — closed-set membership (lower-cased); `allowed` may be a lazy function for late-registered providers.
-- **`text(options)`** — free text with optional `case: 'lower' | 'upper'` normalisation and a `verbatim` escape hatch that skips trimming.
-- **`blankAsUnset`** — the shared preprocess: trims, maps `""` → `undefined`.
-- **`rangeLabel` / `boundedNumber`** — helpers that turn `min`/`max`/`lessThan` into a human-readable label and a chained Zod number rule.
+- **`Field<T>`** — the interface every builder returns: a Zod `schema`, an optional `Presence` rule, and a `sensitive` flag (value is never echoed in error output).
+- **`Presence`** — boot-time-only checks: `minLength`, `placeholder` (must not still equal the `.env-example` stand-in), `minBytes` (minimum decoded key size for cryptographic material), `productionOnly`, and `skipWhen(env)`.
+- **`build<T>(inner, options)`** — internal helper that wraps a Zod schema with `blankAsUnset` preprocessing, optional default, and presence/sensitive metadata.
+- **`parseBooleanWord(word)`** — decodes a raw string to `true`/`false`/`undefined` using a `Set` lookup (avoids prototype-chain pitfalls of object-key access).
+- **`int(options)`** — whole-string base-10 integer; rejects hex, exponents, unit suffixes. Accepts `min`/`max`/`lessThan` bounds and an optional `default`.
+- **`decimal(options)`** — whole-string decimal; rejects leading-dot, scientific notation. Same range options as `int`.
+- **`flag(options)`** — boolean via `z.stringbool` with `1/true/yes/on` and `0/false/no/off` (case-insensitive).
+- **`choice<T>(allowed, options)`** — closed-set string; lower-cases input, rejects anything outside the set. `allowed` may be a function for lazy registries.
+- **`TRUTHY_WORDS` / `FALSY_WORDS`** — exported readonly arrays; the canonical vocabulary for boolean env values.
+- **`blankAsUnset`** (internal) — trims a string and returns `undefined` for blank; runs before every field's schema.
+- **`RangeOptions` / `CommonOptions` / `BuildOptions`** — option interfaces shared across builders (`required`, `sensitive`, `default`, `verbatim`, numeric bounds).
 
 ## Relationships
 
-- **`src/infrastructure/runtime/environment.ts`** — imports `FALSY_WORDS` and `TRUTHY_WORDS`, the canonical word lists consumed by `flag()`.
-- **`src/infrastructure/security/versioned-secret.ts`** — imports `parseVersionedKeyRing` and the `VersionedKey` type, used by the `versionedKeyRing` builder (and likely `keyRing`).
-- **`src/infrastructure/config/store.ts`** — imports the `Environment` type, which is the argument type of `Presence.skipWhen`.
-- **`src/infrastructure/config/define.ts`** — the slice-definition layer that calls these builders to compose a full config object.
-- **Domain config slices** (`src/infrastructure/{adapters,http,i18n,observability,persistence,runtime,security}/config.ts`, `src/app/config.ts`, `scenarios/config.ts`) — each declares its variables using the builders exported here.
-- **`src/infrastructure/adapters/export-store.ts`**, **`src/infrastructure/http/read-capped-body.ts`**, **`scenarios/flows/shop-history.ts`** — downstream consumers that read config values produced by the slices built on these fields.
+- **`src/infrastructure/config/store.ts`** — this file imports the `Environment` type from `store.ts` (used as the parameter to `Presence.skipWhen`).
+- **`src/infrastructure/config/define.ts`** — composes these field builders into a concrete configuration slice definition; each field declared there is one of the builders exported here.
+- **`src/infrastructure/security/config.ts`** — consumes the `secret`, `keyRing`, and `versionedKeyRing` builders; the `minBytes` presence rule and `sensitive` flag exist primarily for its credential fields. This file in turn imports `parseVersionedKeyRing` and `VersionedKey` from `../security/versioned-secret`.
+- **`src/app/config.ts`** — top-level composition that instantiates slices (each built from fields in this file) and wires them to the runtime store.
+- **`src/infrastructure/http/config.ts`**, **`src/infrastructure/observability/config.ts`**, **`src/infrastructure/i18n/config.ts`**, **`src/infrastructure/persistence/config.ts`**, **`src/infrastructure/runtime/config.ts`**, **`src/infrastructure/adapters/config.ts`** — each domain's config module uses the field builders here to declare its variables (e.g., `int` for timeouts, `flag` for feature toggles, `choice` for mode selection).
+- **`scenarios/config.ts`** — test scenarios assert on the `Field` objects and `Presence` rules produced by these builders.
+- **`scripts/contracts/generate-shared-rule-schemas.ts`** — consumes the field metadata (presence, sensitivity) to emit contract documents.
 
 ## Notes
 
-- A value that is *set and wrong* is always an ISSUE; the old `environmentNumber(key, fallback)` silent-fallback pattern is deliberately gone.
-- `Presence` rules run only at boot and are skipped when `NODE_ENV=test`; they are *not* per-read validation. An unset secret on a dev machine is valid.
-- `verbatim: true` on a builder disables both trimming and the blank-as-unset transform, for values where exact bytes matter.
-- `choice` lower-cases before membership testing; the `allowed` array must already be lower-case.
-- `minBytes` on `Presence` is a *decoded* size (after hex/base64 decode) and applies to every member of a key ring minus its `vN:` prefix; omit it for third-party-issued secrets.
-- The file is truncated in this view; `email`, `timeZone`, `secret`, `csv`, `keyRing`, and `versionedKeyRing` follow the same builder pattern as those shown.
+- **`verbatim` option** (on `BuildOptions`): skips the `blankAsUnset` preprocessing step entirely. Intended for values whose exact bytes matter (e.g., raw key material). If you add a new builder, decide explicitly whether it should be verbatim.
+- **`Set` vs. object for lookups**: `parseBooleanWord` deliberately uses `Set.has` rather than `Object` property access. Do not "simplify" this to a plain object—`'constructor' in {}` is `true` and would produce a false positive for caller-controlled input.
+- **`minBytes` is for self-generated keys only**: do not set it on values issued by a third party (e.g., a provider's `whsec_` secret). The comment in `Presence` calls this out explicitly.
+- **Presence is boot-time only**: it is never evaluated during per-request reads. A field can be `undefined` at runtime on a dev machine even when `presence` demands a value in production.
+- **`default` vs. Zod `.default()`**: the `build` helper uses `.optional().transform(v => v ?? fallback)` rather than Zod's `.default()` because the latter's typing refuses a generic `T`.
+- **`skipWhen` must mirror the selector's own field**: the callback receives the raw `Environment` object, so it must parse the controlling variable the same way that variable's own `Field` does—no shortcuts.

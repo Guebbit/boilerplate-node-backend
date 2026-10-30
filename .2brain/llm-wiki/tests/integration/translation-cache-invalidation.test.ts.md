@@ -1,7 +1,7 @@
 ---
 source: tests/integration/translation-cache-invalidation.test.ts
-sha256: 41f838e47e1cf7d41cd8152d88c8ba768db2cbbbbfca92ddfa49cb498cbc11e2
-generated_at: 2026-09-23T20:07:47.499129+00:00
+sha256: e44aad0607c3ff429b75e7f68d261de1dddf0570469bd0a44941a4df738caee6
+generated_at: 2026-10-29T07:04:18.642077+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-End-to-end integration test proving that a successful `PATCH /locales/translations/product/:id` invalidates the `products` cache tag so the next anonymous `GET /products/:id` re-renders. It exists because the locales module and the products module each declare their cache tag independently; nothing type-checks the two strings against each other, so a silent typo would let stale products serve indefinitely. The test drives the real app over HTTP and asserts on `x-cache` response headers rather than on mock call counts.
+End-to-end integration test that a translation write (via the `locales` module) correctly invalidates the `products` cache tag so the next anonymous reader sees fresh data. It exists because the two modules share a bare cache-tag string with no type-level link; a typo in either module would pass all unit tests silently. Only driving the real HTTP stack and asserting on the `cache-status` response header can catch that.
 
 ## Key elements
 
-- **`jest.mock('@infrastructure/adapters/cache', …)`** — in-memory cache double that tracks keys by tag. Implements `getCacheValue`, `setCacheValue` (tag-aware), `invalidateCacheTags`, and a separate `invalidateCacheTagsLogged` binding (see Notes).
-- **`setupTestDb()`** — initialises the test database before any test runs.
-- **`FALLBACK`** — constant `'en'`; the fallback locale assumed present in every test environment.
-- **Test: "serves a second identical read from cache, then re-renders it after a PATCH"** — asserts the MISS → HIT → (PATCH) → MISS → new-title sequence.
-- **Test: "does not clear the cache when the write was refused"** — sends a PATCH with an unknown locale tag (`xx`), expects a 422, then confirms the product is still served from cache (`HIT`).
+- **`jest.mock('@infrastructure/adapters/cache', …)`** — Replaces the Redis-backed cache with an in-memory map keyed by tag. Critically, it re-declares `invalidateCacheTagsLogged` against the same double (see Notes).
+- **`readInItalian(id)`** — Helper that GETs a product with `Accept-Language: it` and returns `{ title, cache: 'HIT' | 'MISS' }` parsed from the `cache-status` header.
+- **`describe('a translation write invalidates the cached product it translated')`**
+  - *Serves a second identical read from cache, then re-renders it after a PATCH* — Verifies miss → hit → (PATCH) → miss → new title.
+  - *Does not clear the cache when the write was refused* — Sends a PATCH with an unknown locale code (`xx`), expects 422, then asserts the cache entry is still a HIT.
+- **`describe('switching a language off or on re-renders the cached products')`**
+  - *Keeps a draft language out of the cache, serves it once on, and drops it again off* — Cycles `it` through inactive → active → inactive and asserts the served title and cache state at each step.
 
 ## Relationships
 
-- **`src/modules/locales/factories.ts`** — supplies `makeLocale` to seed the fallback locale row.
-- **`src/modules/locales/repository.ts`** — supplies `localeRepository.create` to persist that locale before the test begins.
-- **`src/modules/products/tests/factories.ts`** — supplies `createProduct` to seed a product with a known title.
-- **`tests/support/http.ts`** — supplies `api()` (unauthenticated HTTP client) and `authenticateAs` (returns a bearer token) for all requests.
-- **`tests/support/setup-test-db.ts`** — supplies `setupTestDb` to point the app at a disposable database.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the in-memory test database before the suite runs.
+- **`tests/support/http.ts`** — `api()` builds the Supertest request chain; `authenticateAs('admin')` returns a bearer token for authenticated writes.
+- **`src/modules/products/tests/factories.ts`** — `createProduct({ title })` seeds a product row.
+- **`src/modules/locales/tests/factories.ts`** — `givenLocale(code, opts?)` seeds a locale (optionally inactive).
 
 ## Notes
 
-- **`invalidateCacheTagsLogged` must be re-mocked explicitly.** `jest.requireActual` captures the real module's local binding _before_ the mock factory runs, so the real `invalidateCacheTagsLogged` still calls the real Redis. The mock re-declares it against the same in-memory double; omitting this makes every write hit unreachable Redis and the test appears to pass.
-- The `x-cache` header (`MISS` / `HIT`) is the primary assertion target, not the response body alone. This mirrors the convention in `locale-cache-invalidation.test.ts` for the tier-1 dictionary.
-- `en` is treated as the universal fallback locale (documented in `.env-example`); tests will fail in an environment where that is not the case.
-- The refused-write test (422) is intentionally included to guard against a regression where the handler invalidates the tag _before_ validation, clearing the cache even though no data changed.
+- **`invalidateCacheTagsLogged` mock pitfall:** The real implementation calls `invalidateCacheTags` through a module-local binding captured at import time, *before* the jest factory runs. Overriding only `invalidateCacheTags` in the mock is insufficient; the mock must explicitly re-declare `invalidateCacheTagsLogged` to route through the in-memory double. Without this, writes "succeed" against unreachable real Redis and the test passes vacuously.
+- **Cache-state assertions use the `cache-status` header** (RFC 9211 style: `fwd=miss` for misses, `; hit; ttl=N` for hits) rather than inspecting internal store state, keeping the test black-box.
+- **`FALLBACK = 'en'`** is hard-coded and depends on `.env-example` documenting `en` as the fallback locale in every environment this suite targets.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/audit-logs/tests/unit/service.test.ts
-sha256: 5c7661c59556a075fd4a46af465c39fc1149e363a4e2d9d392c9abccdcd262ac
-generated_at: 2026-10-14T15:07:18.501969+00:00
+sha256: 2c6716ec7729dec5c91ee5ab23e7cf9633b7ee9265c09ce53dd78a4a33b7105d
+generated_at: 2026-10-29T03:19:24.829647+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for `auditLogService`'s two functions, focused on their deliberately asymmetric failure semantics: `record` must never throw (fail-open, fire-and-forget) while `search` must propagate errors (fail-closed, admin-facing read). The repository and logger are mocked so failures can be triggered on demand.
+Unit tests for `auditLogService.record` and `auditLogService.search`, focused exclusively on their deliberate failure asymmetry: `record` is fail-open (swallows write failures into a log line + metric, never throws) while `search` is fail-closed (propagates read failures to the caller). The repository and logger are mocked because a real repository cannot be made to fail on demand.
 
 ## Key elements
 
-- **`readCounter()`** — helper that reads `auditSinkFailuresTotal` back through prom-client's `.get()` to verify the metric actually lands in the scrape registry.
-- **`jest.mock('@modules/audit-logs/repository', …)`** — replaces the repository with `jest.fn()` stubs for `create`/`search`, but keeps a **real** `sinceScope` implementation so tests can assert the service passes `since` into scope (not into the filter object). Also exports `AUDIT_SORT`.
-- **`jest.mock('@infrastructure/adapters/logger', …)`** — replaces `logger.warn/error/info` with spies.
-- **`makeEntry(overrides?)`** — factory returning a fully-populated `AuditEntry` for consistent test fixtures.
-- **`describe('auditLogService.record')`** — seven tests covering: pass-through of the entry, `void` return (no awaitable promise), error swallowed into `logger.warn` with the original `Error` object, counter increment on failure, counter stability on success, no unhandled-rejection event, and action name in the warning.
-- **`describe('auditLogService.search')`** — three tests covering: filter/page pass-through and sort projection, `since` routed to the scope object (keeping it a `Date`), and error propagation (no `logger.warn` call).
+- **`readCounter`** — reads the current value of `auditSinkFailuresTotal` back through the prom-client registry (`.get()`), so the test asserts the counter actually reached the scrape endpoint rather than a local variable.
+- **`jest.mock('@modules/audit-logs/repository', …)`** — stubs `create` and `search` as `jest.fn()`, but keeps the **real** `sinceScope` and `ownOrderScope` fragment builders so the test can verify the service hands `since` to the scope.
+- **`jest.mock('@infrastructure/adapters/logger', …)`** — replaces `logger` with `warn`/`error`/`info` spies.
+- **`mockedRepository` / `mockedLogger`** — `jest.Mocked`-typed handles used throughout the suites.
+- **`makeEntry(overrides?)`** — factory returning a populated `AuditEntry` with sensible defaults; tests override individual fields.
+- **`describe('auditLogService.record')`** — asserts: entry passed to `repository.create` unchanged; return value is `undefined` (void, no awaitable); failed write → `logger.warn` with the original `Error` object; failure increments `auditSinkFailuresTotal`; success does not; no `unhandledRejection` fires; the failing `action` name appears in the warning payload.
+- **`describe('auditLogService.search')`** — asserts: filters and pagination passed through to `repository.search` with the sort spec; `since` is routed to the second (scope) argument as `{ timestamp: { $gt: since } }`; a failed read is re-thrown to the caller and does **not** trigger `logger.warn`.
 
 ## Relationships
 
-- **`src/modules/audit-logs/service.ts`** — the unit under test; `auditLogService.record` and `auditLogService.search` are exercised directly.
-- **`src/modules/audit-logs/repository.ts`** — fully mocked; tests assert how the service calls `create`, `search`, and `sinceScope`.
-- **`src/infrastructure/adapters/logger.ts`** — mocked; tests assert `logger.warn` is called with specific fields on record-failure and *not* called on search-failure.
-- **`src/modules/audit-logs/metrics.ts`** — `auditSinkFailuresTotal` is not mocked; the test reads its live value via prom-client to confirm the counter increments in the same code path that swallows the error.
-- **`src/infrastructure/observability/audit.ts`** — provides the `AuditEntry` type used by `makeEntry`.
-- **`src/modules/audit-logs/model.ts`** — provides `AuditLogDocument` for typing the mocked `create` return.
-- **`src/types/index.ts`** — provides `AuditEntryItem` used in the `emptyPage` fixture for search tests.
+- **`src/modules/audit-logs/service.ts`** — the unit under test; imports `auditLogService`.
+- **`src/modules/audit-logs/repository.ts`** — mocked; provides `auditLogRepository` (create, search, sinceScope, ownOrderScope) and the `AUDIT_SORT` constant.
+- **`src/infrastructure/adapters/logger.ts`** — mocked; provides the `logger` whose `warn` is asserted on.
+- **`src/infrastructure/observability/audit.ts`** — type-only import of `AuditEntry` for the fixture factory.
+- **`src/modules/audit-logs/model.ts`** — type-only import of `AuditLogDocument` for mock return values.
+- **`src/modules/audit-logs/metrics.ts`** — imports `auditSinkFailuresTotal` so tests can read the counter via the shared prom-client registry.
+- **`src/types/index.ts`** — type-only import of `AuditEntryItem` used in the `emptyPage` fixture for `search` tests.
 
 ## Notes
 
-- The microtask-flush pattern (`await Promise.resolve()` twice) is repeated because `record` is fire-and-forget; assertions on side effects (logger calls, counter) must wait for the `.catch` handler to run.
-- The unhandled-rejection test uses `setImmediate` (a macrotask) rather than microtask flushes to ensure the event loop has a chance to fire the handler.
-- `sinceScope` is intentionally **not** stubbed — it runs the real fragment-builder logic so the test verifies the service routes `since` into scope (preserving `Date` type) rather than into the `buildWhere` filter path.
-- The `record` return-type test (`toBeUndefined`) carries an `eslint-disable` for `no-confusing-void-expression` because the assertion *is* the contract check.
+- The repository mock intentionally uses the **real** `sinceScope` implementation rather than a stub. A stub would pass regardless of whether the service actually calls it; the real fragment builder lets the test confirm the `since` → scope routing.
+- `record`'s `void` return is asserted explicitly (`toBeUndefined()`). The contract is fire-and-forget: no caller should be able to `await` the audit write and thereby block the request.
+- The `record` failure path is asynchronous (floating promise with `.catch()`), so assertions must wait two microtask ticks (`await Promise.resolve(); await Promise.resolve()`) before checking `logger.warn` or the counter.
+- The unhandled-rejection test attaches a `process.on('unhandledRejection')` listener and uses `setImmediate` (a macrotask, not a microtask) to let the event loop settle before asserting.
+- `since` is passed as a second argument to `repository.search` (the scope), not folded into the filter object. This keeps it a `Date` in the MongoDB query rather than being coerced to a number by whatever serialization `buildWhere` might apply.

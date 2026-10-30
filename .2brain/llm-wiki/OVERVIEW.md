@@ -1,5 +1,5 @@
 ---
-generated_at: 2026-10-15T13:33:53.309991+00:00
+generated_at: 2026-10-29T19:18:39.394674+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -7,53 +7,38 @@ model: ollama:qwen3.8:27b
 
 ## What This Is
 
-A Node.js / TypeScript backend application with a REST API (OpenAPI) and an event/webhook layer (AsyncAPI). It manages users, accounts, addresses, and application/flow workflows. The codebase follows a modular, DDD-influenced structure (see `docs/theory/strategic-ddd.md`) and ships with a full Docker Compose stack including MongoDB (replica set), a proxy, and a complete observability suite.
+A TypeScript/Node.js application with a dual API surface (REST via OpenAPI, events via AsyncAPI), MongoDB persistence, and a Docker-based deployment model. It follows Domain-Driven Design (see `docs/theory/strategic-ddd.md`) and is organized around domain modules (users, products, webhooks) with a shared infrastructure layer. The presence of separate `jest.config.broker.js` and `jest.config.cluster.js` suggests a distributed topology with at least a broker and a cluster component.
 
-## Main Areas
+## Main Areas and How They Relate
 
-| Area | Where | Notes |
-|---|---|---|
-| **Domain modules** | `src/modules/` | Bounded contexts (e.g. `users`). Each owns its entities, services, and tests. |
-| **Infrastructure** | `src/infrastructure/` | Cross-cutting: HTTP controllers/responses, logging, i18n, adapters. |
-| **Shared types** | `src/types/` | Central type definitions consumed by ~465 files (auth context, domain types, etc.). |
-| **API contracts** | `openapi.yaml`, `asyncapi.yaml` / `asyncapi.public.yaml` | REST + event schemas. Client code generated via `orval.config.ts`. |
-| **Web / docs site** | `docs/` (VitePress) | Internal developer docs: API contract guides, webhooks module, DDD theory, test references. |
-| **Scenarios (load/E2E)** | `scenarios/` | Scripted flows for accounts, addresses, apply, and action sequences. |
-| **Docker & ops** | `docker/`, `docker-compose*.yml` | App, proxy, test, and production compose stacks; MongoDB init; backup/restore/drill scripts; observability (Prometheus, Grafana, Loki, Tempo, OTel, Alertmanager, Umami). |
-| **Testing** | `tests/`, `jest.config.*.js` | Unit/integration (Jest), mutation testing, broker- and cluster-scoped suites. |
-| **Security** | `SECURITY.md` | Vulnerability reporting and security policies. |
+| Area | Role |
+|---|---|
+| `src/types/` | Shared type definitions; the most-connected file in the repo (608 imports) |
+| `src/infrastructure/` | Cross-cutting concerns: HTTP response/controller, logging adapter, i18n |
+| `src/modules/` | Domain logic (users, products, webhooks) with per-module test factories |
+| `scenarios/` | Feature-level acceptance tests (accounts, addresses, apply, check, blank) |
+| `tests/` | Unit/integration tests + shared support (test DB setup, environment, callers) |
+| `docker/` | Container entrypoints, backup/restore/DR drills, and a full observability stack (Prometheus, Grafana, Loki, Tempo, OTel Collector, Alertmanager, Umami) |
+| `docs/` | VitePress site: API contracts, DDD theory, webhooks, testing strategy |
+| Root configs | `openapi.yaml`, `asyncapi.yaml` (external contracts), `orval.config.ts` (client generation), multiple `jest.config.*.js`, `knip.config.ts`, `eslint.config.ts` |
+| `docker-compose*.yml` | Local, test, production, and proxy deployment topologies |
 
-## How the Pieces Relate
-
-```
-scenarios / tests
-        │
-        ▼
-  src/modules/*  (domain logic, factories, services)
-        │
-        ▼
-  src/infrastructure/*  (HTTP layer, logger, i18n, adapters)
-        │
-        ▼
-  src/types/*  (shared types, auth context)
-        │
-        ▼
-  openapi.yaml / asyncapi.yaml  (external contracts)
-        │
-        ▼
-  docker/  (containers, DB, observability, backup)
-```
-
-The type layer and infrastructure adapters sit at the top of the dependency graph, confirming they are the shared foundation every module builds on.
+**Relationship:** `src/types` → `src/infrastructure` → `src/modules` forms the application core. `scenarios` and `tests` exercise that core. `docker/` packages and monitors the running system. `openapi.yaml` / `asyncapi.yaml` are the external contract; `orval` generates clients from them.
 
 ## Where to Start Reading
 
-1. **`README.md`** – project purpose, quick-start, and link map.
-2. **`CLAUDE.md`** – conventions and context for AI-assisted work.
-3. **`docs/theory/strategic-ddd.md`** – the architectural vocabulary used across modules.
-4. **`src/types/index.ts`** – the single largest type hub; read this before diving into any module.
-5. **`src/infrastructure/http/controller.ts` → `response.ts`** – the request/response pattern every route follows.
-6. **`openapi.yaml` / `asyncapi.yaml`** – the external surface of the API; useful for understanding module boundaries without reading code.
-7. **`docker-compose.yml`** – the concrete list of running services and how they wire together.
+1. **`CLAUDE.md`** – project conventions and AI-assistant context.
+2. **`README.md`** / **`INSTALL.md`** – setup and quick start.
+3. **`docs/theory/strategic-ddd.md`** – architectural intent and module boundaries.
+4. **`openapi.yaml`** / **`asyncapi.yaml`** – the full external API surface.
+5. **`docker-compose.yml`** – how services are wired together at runtime.
+6. **`src/modules/`** – pick a module (e.g. `users`) to see domain logic, its tests, and its factories.
+7. **`scenarios/`** – end-to-end behaviour in human-readable steps.
+8. **`docker/observability/`** – monitoring and alerting configuration (only if you need operational detail).
 
-> **Tip:** The `jest.config.broker.js` and `jest.config.cluster.js` files indicate the test suite is split by concern. Run the base `jest.config.js` first; consult the others when touching broker or cluster-specific logic.
+## Conventions Worth Noting
+
+- Tests are split across four Jest projects (root, broker, cluster, mutation).
+- API clients are generated, not hand-written (`orval.config.ts`).
+- Backup and disaster-recovery drills are first-class (`docker/backup/`, `docker/deploy-drill.sh`).
+- A `knip.config.ts` is present, suggesting dead-code hygiene is enforced.

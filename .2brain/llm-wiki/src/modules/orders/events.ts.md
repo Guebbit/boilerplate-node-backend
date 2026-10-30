@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/events.ts
-sha256: fd10d6d423b091d1a9ba6e2baa4e6342e2085c19d365a74dc788cee04d652b8e
-generated_at: 2026-10-15T11:04:07.158601+00:00
+sha256: 6c6e90824e8fb2c67b39778469c8ad54a9ee8af4ba91fead83e430b433c6a6f0
+generated_at: 2026-10-29T04:42:05.815348+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the domain-event payload types that the orders module emits and exports the corresponding string-name constants. It augments the kernel's `DomainEventMap` (via `declare module '@kernel/events'`) so each module grows the event catalogue without editing a central file. Because `orders` sits low in the dependency graph—payments and delivery depend on it, never the reverse—emitting these events is the only way the module communicates outward.
+Declares the order module's domain events by augmenting the kernel's `DomainEventMap` (via `declare module '@kernel/events'`), and exports string constants so emitters and listeners share one spelling. Because `orders` sits low in the dependency graph, these events are the only mechanism for announcing state changes to upstream modules (payments, delivery, notifications, webhooks).
 
 ## Key elements
 
-- **`DomainEventMap` augmentation** – Adds five payload types:
-  - `order.cancelled` – `{ orderId, refund }`. `refund` encodes the policy (customer vs. operator cancellation) so listeners don't infer it.
-  - `order.refund_owed` – `{ orderId }`. Internal-only retry-nudge for `payments`; split from `order.cancelled` so a retry sweep doesn't re-fire the customer-facing webhook.
-  - `order.status_changed` – `{ orderId, from, to }`. Fires for *any* status move (system or admin override); listeners filter on `to`.
-  - `order.created` – `{ orderId }`. Emitted exactly once by `placeOrder`; the `webhooks` listener uses it.
-  - `order.status_overridden` – `{ orderId, from, to, at, mode }`. Internal-only; lets `delivery` align fulfillment/shipments with a manual forward.
-- **Exported constants** – `ORDER_CANCELLED`, `ORDER_REFUND_OWED`, `ORDER_STATUS_CHANGED`, `ORDER_CREATED`, `ORDER_STATUS_OVERRIDDEN`. Single-source spelling so emitters and listeners share one literal instead of duplicating strings.
+- **`declare module '@kernel/events'`** — Augments `DomainEventMap` with six event payloads rather than editing the kernel directly:
+  - `order.cancelled` — cancel confirmed; carries `refund` (policy) and `cause` (drives buyer mail and downstream resolution).
+  - `order.status_changed` — any status transition, regardless of origin.
+  - `order.created` — a new order row was committed.
+  - `order.status_overridden` — admin forced a forward status move (internal only).
+  - `order.redacted` — personal data scrubbed in a `reap:orders` transaction.
+  - `order.purchase_hold_placed` — checkout paused by the shop's cancellation rule (internal only).
+- **Exported constants** (`ORDER_CANCELLED`, `ORDER_STATUS_CHANGED`, `ORDER_CREATED`, `ORDER_STATUS_OVERRIDDEN`, `ORDER_REDACTED`, `ORDER_PURCHASE_HOLD_PLACED`) — One canonical string per event name; used by emitters and listeners in place of bare literals.
 
 ## Relationships
 
-- **`src/types/index.ts`** – Supplies the `OrderStatus` type used in `order.status_changed` and `order.status_overridden` payloads.
-- **`src/modules/orders/services/announce.ts`** – Writes `order.status_changed` to the transactional outbox inside the status-write transaction.
-- **`src/modules/orders/services/cancel.ts`** – Writes `order.cancelled` to the outbox in the cancel's own transaction (at-most-once write, at-least-once delivery).
-- **`src/modules/orders/services/status.ts`** – Participates in status transitions that produce `order.status_changed`.
-- **`asyncapi.public.yaml`** – Defines the public AsyncAPI channels for externally visible events (`order.cancelled`, `order.status_changed`, `order.created`); `order.refund_owed` and `order.status_overridden` are internal-only and have no channel.
-- **`src/modules/orders/index.ts` / `module.ts`** – Re-export or register the events/constants for consumption by other modules.
-- **Integration tests** (`cancel`, `outbox`, `pending-effects`, `service-override`, `service-status`) – Verify the outbox-write and delivery guarantees documented in the type-level comments.
+- **`services/cancel.ts`** — Emits `order.cancelled` in its own transaction (transactional outbox, at-most-once write; at-least-once delivery).
+- **`services/announce.ts`** — Writes `order.status_changed` to the outbox alongside the status write.
+- **`services/purchase-hold.ts`** — Emits `order.purchase_hold_placed` once per hold taken.
+- **`services/status.ts`** — Status transitions that produce `order.status_changed`.
+- **`asyncapi.public.yaml`** — Public event contract; `order.status_overridden` and `order.purchase_hold_placed` are explicitly *not* exposed there.
+- **`module.ts` / `index.ts`** — Module registration and barrel re-exports that surface these constants to consumers.
+- **`repository.ts`** — The data layer whose writes trigger the outbox event emissions above.
+- **Integration tests** (`cancel`, `purchase-hold`, `service-status`, `outbox`, `mail-listeners`, `hierarchy`, `service-override`) — Assert event payloads, outbox invariants, and listener behavior for the events defined here.
 
 ## Notes
 
-- **Delivery semantics are split by concern:** the outbox write is at-most-once (guarded by a `$in` check on the order ID); the relay delivers at-least-once. Listeners must dedupe on `meta.eventId`.
-- **Internal vs. public events:** `order.refund_owed` and `order.status_overridden` are deliberately excluded from the AsyncAPI spec—nothing outside this application needs them.
-- **No runtime logic:** the file contains only type declarations and `const` string exports. All emission and outbox-write code lives in the service files.
-- **`refund` on `order.cancelled`** is a design choice to carry policy alongside the fact, preventing listeners from re-deriving refund eligibility from context.
+- **Backward status move:** `shipped → processing` (lost-shipment reopen) is the only backward transition a listener will see on `order.status_changed`. Code that assumes monotonic status progression must special-case it.
+- **Deduplication contract:** All outbox-delivered events are at-least-once; listeners are expected to dedupe on `meta.eventId`.
+- **Internal vs. public:** `order.status_overridden` and `order.purchase_hold_placed` have no AsyncAPI channel and (for the latter) no webhook — they are in-process notifications only.
+- **`refund` in `order.cancelled`** is the sole durable record of the refund obligation; `payments` opens its refund record from this field and the relay retries until it persists.

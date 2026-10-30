@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/security/reencrypt.ts
-sha256: f3a32a6207e1393bf31789ed36da48ccf1b9f22141be9458c5bd803a9ae26819
-generated_at: 2026-10-14T08:17:34.236397+00:00
+sha256: d778012164ca463e0c8ae64f2cd891d877d6dc3c4162b7e242e6d56c52f4d281
+generated_at: 2026-10-29T02:16:19.845107+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A generic engine that re-encrypts stored secrets onto the newest key in a versioned ring, enabling safe key rotation. It handles batching, the rewrap call, and the write for any collection; each owning module only describes *where* its encrypted fields live. Designed to be idempotent (a second run writes nothing), concurrency-safe (writes are filtered on the ciphertext read), and silent (bypasses Mongoose hooks via `collection.bulkWrite`).
+The re-encryption engine that moves every stored secret onto the newest key of its versioned ring, enabling safe key retirement. It is generic: each owning module describes *where* its encrypted fields live (via `fieldsOf`), and this file handles batched reading, rewrapping, and conflict-safe writing. Triggered by the `reencrypt` ops script, never called ad hoc.
 
 ## Key elements
 
-- **`EncryptedField`** — describes one encrypted value: its dotted `path`, current `stored` ciphertext, `binding`, and human-readable `label`.
-- **`ReencryptReport`** — per-field, per-key-version counts (`found`) and total `rewritten` value.
-- **`ReencryptJob<T>`** — the full job description: `model`, optional `filter`/`select`, `fieldsOf(document)`, and the `ring` of keys.
-- **`ReencryptSpec<T>`** — a `ReencryptJob` minus `model`; what a module's service provides before the repository binds the model.
-- **`reencryptOf(model)`** — curried factory that binds a model and returns `(spec, dryRun?) => Promise<ReencryptReport>`; the shape a repository exposes as its `reencrypt` method.
-- **`reencryptCollection(job, dryRun?)`** — the core loop: pages documents by `_id` (200/page), tallies each field via `versionOf`, rewraps stale values via `rewrapVersionedSecret`, and applies writes with `bulkWrite`. Recurses internally until a short page.
-- **`emptyReport()` / `mergeReports(a, b)`** — report utilities for the ops script to aggregate results across modules.
-- **`BATCH_SIZE`** (200) — pages per round-trip to keep memory flat.
+- **`EncryptedField`** — describes one ciphertext in a document: dotted `path`, stored value, `SecretBinding`, and a human-readable `label` for reports.
+- **`ReencryptJob<TDocument>`** — the full input to one collection run: `model`, optional `filter`/`select`, `fieldsOf`, and the `ring` (first entry = target key).
+- **`ReencryptSpec<TDocument>`** — `ReencryptJob` minus `model`; what a module's service provides before the repository binds the model.
+- **`ReencryptReport`** — per-field, per-key-version counts (`found`) and total `rewritten`.
+- **`reencryptOf(model)`** — factory that closes over a Mongoose model and returns `(spec, dryRun?) → Promise<ReencryptReport>`. Exposed as a repository's `reencrypt` method so the model never leaves the repository layer.
+- **`emptyReport()` / `mergeReports(a, b)`** — helpers for accumulating and combining reports across collections.
+- **`reencryptCollection`** (internal) — recursive cursor over pages of `BATCH_SIZE` (200); reads lean, calls `planPage`, then applies writes via `model.collection.bulkWrite` (bypasses Mongoose middleware).
+- **`planPage`** (internal) — tallies every field, rewraps stale ones with `rewrapVersionedSecret`, and returns the `updateOne` ops to apply.
+- **`writeOf`** (internal) — builds a single `updateOne` whose filter matches the *old* ciphertext (optimistic concurrency guard).
 
 ## Relationships
 
-- **`./versioned-secret`** — imported for `rewrapVersionedSecret` (the actual re-encryption), `versionOf` (reading the key version from a ciphertext), and the `SecretBinding` / `VersionedKey` types.
-- **`scripts/ops/reencrypt.ts`** — the entry point that invokes each module's reencrypt service in turn, collecting and reporting results.
-- **Per-module `services/reencrypt.ts`** (addresses, invoicing, orders, users, webhooks) — each exports a `ReencryptSpec` describing that module's encrypted fields, filter, select, and key ring.
-- **Per-module `repository.ts`** (addresses, invoicing, orders, users, webhooks) — calls `reencryptOf(model)` to bind the spec to the model, exposing the bound function to the service layer.
+- **`./versioned-secret`** — source of `rewrapVersionedSecret`, `keyVersionOf`, and the `SecretBinding` / `VersionedKey` types used throughout.
+- **`scripts/ops/reencrypt.ts`** — the ops entry point; iterates the module registry and calls each module's `reencrypt` (which is `reencryptOf(model)` + the module service's `ReencryptSpec`), then merges the per-module `ReencryptReport`s.
+- **`src/kernel/registry.ts`** — provides the list of registered modules so the ops script can discover every collection that needs re-encrypting.
+- **Module repositories** (e.g. `addresses/repository.ts`, `orders/repository.ts`, …) — each binds `reencryptOf` to its own model and pairs it with the module service's spec, exposing a single `reencrypt(spec, dryRun?)` method.
+- **Module re-encrypt services** (e.g. `addresses/services/reencrypt.ts`, `invoicing/services/reencrypt.ts`, …) — supply the `ReencryptSpec`: `fieldsOf` closure that maps a document to its `EncryptedField[]`, the `ring`, and any `filter`/`select`.
 
 ## Notes
 
-- Writes go through `job.model.collection.bulkWrite`, deliberately bypassing Mongoose middleware (no `pre`/`post` hooks, no `updatedAt`, no ETag changes). The rationale: re-encryption changes only the envelope, not the content.
-- The write filter includes the *original* ciphertext (`[field.path]: field.stored`), so a concurrent edit to the same field is not overwritten; the row is simply picked up on the next run.
-- `dryRun` still tallies `found` counts but never calls `rewrapVersionedSecret` for the write path — the report's `rewritten` stays 0.
-- Paging uses `_id > cursor` with `sort({ _id: 1 })` and `.lean()`, so it works on any collection with an ObjectId `_id` without requiring a Mongoose document instantiation.
-- The `fieldsOf` callback is the only per-collection logic; the engine itself is fully generic.
+- **Bypasses Mongoose intentionally.** Writes go through `model.collection.bulkWrite`, so no `pre/post` hooks fire, `updatedAt` is not bumped, and no ETag is regenerated. The doc comment calls this out explicitly: re-encrypting changes the envelope, not the content.
+- **Idempotency is structural.** `rewrapVersionedSecret` returns the input unchanged if it is already on the newest key, so a second run produces zero writes.
+- **Concurrent-edit safety.** Each `updateOne` filter includes the *old* ciphertext at `field.path`. If another writer changed the field between read and write, the filter matches 0 documents and the row is simply skipped (picked up on the next run).
+- **Paging is `_id`-cursor based** (`$gt` on last seen `_id`), not skip/limit, so a concurrent insert cannot shift rows between pages.
+- **`dryRun`** tallies `found` identically to a real run but sets `next = field.stored`, so `planPage` never emits a write and `rewritten` stays 0.
+- **`BATCH_SIZE = 200`** is a module-level constant, not configurable at call time.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/invoicing/providers/pdf.ts
-sha256: 27a4468190b6543dedea085b9ba3484a3988a8fbf674a01f4f59e1c9cc530996
-generated_at: 2026-10-15T10:39:04.430152+00:00
+sha256: 0313832cc08f8d3e16f569b73b7e1ce05192eb61c9e3ad562a25ad411e3f4cc9
+generated_at: 2026-10-29T04:12:50.274707+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The sole shipped implementation of the `EInvoicingProvider` port. It renders an invoice or credit note to PDF by piping an EJS template through Puppeteer (A4), returning a byte buffer with a `application/pdf` content type. It exists so that consumers of the port in `./index.ts` get a concrete, self-contained rendering path without depending on any other provider.
+The default (and only shipped) implementation of the `EInvoicingProvider` port. It renders an invoice or credit note to a PDF by running the document's view through an EJS template and then printing the resulting HTML with Puppeteer, reusing the same `renderHtmlToPdf` pipeline the `orders` module uses for receipts.
 
 ## Key elements
 
-- **`DOCUMENT_TEMPLATE`** (module-level const) — Resolves the EJS file at `templates/documents/invoicing.document.ejs` relative to the module. This template is owned by the invoicing module (not `shared/templates`) and is intentionally one directory level deeper so that `mailer.ts#registerTemplateDirectories` (non-recursive) never picks it up by name.
-- **`pdfEInvoicingProvider`** (export, satisfies `EInvoicingProvider`) — Exposes:
-  - `name: 'pdf'`
-  - `issue(document)` — Calls `buildDocumentView(document.locale, document)` to build the EJS context, renders `DOCUMENT_TEMPLATE` with `root: process.cwd()` (so the template's root-relative `include` of a shared layout resolves correctly), then passes the HTML to `renderHtmlToPdf(html, { format: 'A4' })`, and finally wraps the result as `{ contentType: 'application/pdf', bytes: Buffer }`.
+- **`DOCUMENT_TEMPLATE`** – Resolved path to `templates/documents/invoicing.document.ejs`, the single EJS template every render passes through. Owned by this module (not by `shared/templates`); deleting the invoicing module removes it.
+- **`pdfEInvoicingProvider: EInvoicingProvider`** – The exported provider object. Its `issue(document)` method:
+  1. Calls `buildDocumentView(document.locale, document)` to produce the EJS context.
+  2. Renders `DOCUMENT_TEMPLATE` with EJS (`root: process.cwd()` so root-relative `include`s resolve).
+  3. Pipes the HTML string through `renderHtmlToPdf(html, { format: 'A4' })`.
+  4. Returns the PDF as a `Buffer`.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/pdf.ts`** — Provides `renderHtmlToPdf`, the Puppeteer-based HTML→PDF step. This file is a thin consumer of that adapter; no other module in this directory calls it.
-- **`src/modules/invoicing/emails.ts`** — Provides `buildDocumentView`, which assembles the EJS rendering context (fields, line items, etc.) for a given document and locale. This file calls it with the document's *own* frozen locale, not a viewer's request locale.
-- **`src/modules/invoicing/providers/index.ts`** — Defines the `EInvoicingProvider` port type. This file is the only implementation currently shipped against that port.
+- **`src/infrastructure/adapters/pdf.ts`** – Supplies `renderHtmlToPdf`, the Puppeteer-based HTML→PDF function used as the final rendering step.
+- **`src/modules/invoicing/emails.ts`** – Supplies `buildDocumentView`, which shapes the document data into the view-model consumed by the EJS template.
+- **`src/modules/invoicing/providers/index.ts`** – Defines the `EInvoicingProvider` type that `pdfEInvoicingProvider` satisfies; this file is the only concrete implementation of that port.
 
 ## Notes
 
-- **Locale is fixed at render time.** The locale passed to `buildDocumentView` is `document.locale` (the language in which the document was issued). A viewer's request locale is never consulted; the PDF is a historical record.
-- **EJS `root` option.** `root: process.cwd()` is required so the template's `/shared/templates/layouts/...` include resolves correctly regardless of how deep this module sits under `src/modules`. Without it the include 404s.
-- **Template placement is deliberate.** `templates/documents/` is one level below the module's other templates so the mailer's non-recursive directory walker never resolves this file by bare name. The only entry point is the direct `path.join` here.
-- **No streaming / async iterator.** `issue` returns a single `{ bytes }` buffer. Callers must handle size themselves.
+- **Template placement is deliberate.** The file lives under `templates/documents/` (one level deeper than the module's other templates) so that `mailer.ts#registerTemplateDirectories`, which collects templates non-recursively, never picks it up by name. It is resolved only by this module's absolute `path.join`.
+- **Locale is frozen, not request-driven.** The render always uses `document.locale`—the language the document was issued in—never the viewer's current locale.
+- **EJS `root` option.** `root: process.cwd()` is required because the template includes a root-relative path (`/shared/templates/layouts/…`). Without it, EJS would resolve relative to the template's own directory and the include would break as the module's nesting depth changes.

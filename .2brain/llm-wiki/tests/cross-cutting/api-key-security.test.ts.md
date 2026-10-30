@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/api-key-security.test.ts
-sha256: 5f7fb95f3724b63aa70a73e684d2669bb3e8d09f057adf72441fd8833411bda8
-generated_at: 2026-10-15T12:35:19.872107+00:00
+sha256: f208b33f4fc6e6f2b540a2b7be71ee878c7356ec86ced34615828c2b1fdd0657
+generated_at: 2026-10-29T06:42:46.721015+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cross-cutting test that asserts the OpenAPI contract's `apiKeyAuth` security declarations are in sync with the route guards actually mounted in the server. An operation must list `apiKeyAuth` exactly when its route uses `isAuthOrCredential` without a step-up permission, or when it is one of the hand-listed anonymous-readable product endpoints. A route that gains or loses the guard fails this test until the spec is updated to match.
+Cross-cutting consistency test that verifies the OpenAPI spec's `security` declarations for `apiKeyAuth` match the actual route guards. For every mounted route present in the spec, it asserts that `apiKeyAuth` appears in the operation's security list **if and only if** the route mounts `isAuthOrCredential` and none of its permissions require step-up (which an API key cannot satisfy). This catches drift in either direction: a guard added/removed without updating the spec, or a spec listing `apiKeyAuth` on a route that no longer admits it.
 
 ## Key elements
 
-- **`KEY_AWARE_OPTIONAL_READS`** — `Set` of operations (e.g. `GET /products`) that are anonymous-readable but grant an API key a wider view. Populated only when the `products` feature is deployed; otherwise empty.
-- **`specSecurity()`** — Reads and parses `openapi.yaml` at repo root; returns a `Map<string, Security | undefined>` keyed by `METHOD /path` (spec spelling).
-- **`listsApiKey(security)`** — Returns `true` if any requirement in the operation's security array contains the `apiKeyAuth` scheme name.
-- **`mounted`** — Derives the set of mounted routes that also appear in the spec, normalising `:param` → `{param}` and stripping trailing slashes to match spec path spelling.
-- **`describe("apiKeyAuth in the contract matches the routes that admit a key")`** — Three assertions:
-  1. Sanity check that both the route table and the spec contain a non-trivial number of entries.
-  2. `it.each` over every mounted operation: `listsApiKey` must equal the computed `admitsKey` guard/permission check (guard present **and** no `stepUp`), OR the operation is in `KEY_AWARE_OPTIONAL_READS`.
-  3. Verifies the hand-listed optional reads are actually present in the spec as optional (zero-key security requirement) and that no other optional operation lists `apiKeyAuth`.
+- **`Security`** — type alias for `Record<string, string[]>[]`, the shape of an OpenAPI `security` field.
+- **`KEY_AWARE_OPTIONAL_READS`** — a `Set` of operations (`GET /products`, `POST /products/search`, `GET /products/{id}`) that are anonymous-readable (guard is `getAuth` only) but grant a wider view to key holders. Conditionally empty when `products` is not deployed. Hand-maintained because the guard-based check cannot detect them.
+- **`specSecurity()`** — reads and parses `openapi.yaml` at repo root, flattens all path/method entries into a `Map<string, Security | undefined>` keyed by `"METHOD /spec/{path}"`.
+- **`listsApiKey(security)`** — returns `true` if any requirement in the security list contains the `apiKeyAuth` scheme.
+- **`mounted`** — the intersection of every mounted route (from `everyMountedRoute()`) with the spec, with Express-style `:param` paths rewritten to OpenAPI `{param}` form.
+- **Test: "reads a route table and a spec…"** — sanity guard that both data sources are non-trivially populated (>100 mounted routes, >20 `apiKeyAuth` entries).
+- **Test: `it.each(mounted…)`** — the core assertion: for each operation, `listsApiKey` in the spec equals `(route admits key) OR (operation ∈ KEY_AWARE_OPTIONAL_READS)`. "Admits key" means the route's guards include `isAuthOrCredential` **and** every permission's rule has no `stepUp`.
+- **Test: "keeps the hand-listed optional reads real…"** — verifies that the spec's truly-optional operations (empty requirement object) are exactly `KEY_AWARE_OPTIONAL_READS` (when `products` is deployed) and that each of those operations is actually mounted.
 
 ## Relationships
 
-- **`tests/support/contract-routes.ts`** — Provides `everyMountedRoute()`, the source of truth for which routes are mounted, their guards, and their permission keys.
-- **`src/kernel/permissions.ts`** — Provides `findKey(permissionKey)` so the test can inspect whether a route's permission carries a `stepUp` flag (a step-up means a key cannot complete the operation, so `apiKeyAuth` must be absent).
-- **`tests/support/paths.ts`** — Provides `REPO_ROOT` (to locate `openapi.yaml`) and `isDeployed('products')` (to conditionally populate `KEY_AWARE_OPTIONAL_READS`).
+- **`src/kernel/permissions.ts`** — provides `findRule` and `ruleId` to resolve a permission's rule and check for a `stepUp` field. A step-up requirement disqualifies API-key access even if `isAuthOrCredential` is mounted.
+- **`tests/support/contract-routes.ts`** — provides `everyMountedRoute()`, the canonical list of routes with their `guards` and `permissions` arrays, used as the source of truth for runtime behavior.
+- **`tests/support/paths.ts`** — provides `REPO_ROOT` (to locate `openapi.yaml`) and `isDeployed('products')` (to conditionally include the product read operations in `KEY_AWARE_OPTIONAL_READS`).
 
 ## Notes
 
-- The test is a *canary*: it pins the hand-listed `KEY_AWARE_OPTIONAL_READS` to the spec in **both** directions (they must appear as optional in the spec, and no other optional operation may list `apiKeyAuth`). Remove or add a product endpoint without updating this set and the test fails.
-- "Optional" in the spec is identified structurally: a security requirement whose `Object.keys(requirement).length === 0` (i.e. an empty object meaning "no auth required").
-- Path normalisation (`:param` → `{param}`, trailing-slash strip) is a local concern of this test; the spec uses the latter convention while the router uses the former.
-- The sanity-check test (`mounted.length > 100`, `> 20` apiKey entries) exists to guard against a broken `openapi.yaml` path or a stubbed router silently producing empty lists and making the `it.each` block vacuously pass.
+- `KEY_AWARE_OPTIONAL_READS` is the **only** hand-maintained list in the file. If `products` gains or loses an anonymous-readable operation, this set must be updated manually; the test will fail in both directions (missing entry or extra optional operation).
+- The path rewrite `route.path.replaceAll(/:(\w+)/g, '{$1}')` assumes a simple one-to-one parameter mapping; nested or optional route segments may not survive the rewrite correctly.
+- The test only asserts over the **intersection** of mounted routes and spec operations. A route that is mounted but absent from the spec (or vice-versa) is silently skipped, not flagged.
+- The `stepUp` check uses `findRule(ruleId(ask.action, ask.subject))?.stepUp === undefined`, so a rule that is *missing* (returns `undefined`) is treated the same as a rule with no step-up — both allow key auth.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/openapi.yaml
-sha256: 9dd1abaa8febc6736cfc0a3893b7a7d296e6d61a90f95eeee70efeac6b249a5c
-generated_at: 2026-10-15T10:27:39.402206+00:00
+sha256: e7e5eeff58c9bdbc1b329f75a2a8759c8df15a4659259c6b25728c95ba44e57b
+generated_at: 2026-10-29T03:35:50.877701+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.1.0 contract for the delivery module. It defines the REST endpoints for shipping-method catalogue, order fulfilment lifecycle (start, ship, deliver, hold, release), and the admin preorder board. It also declares the module's error-code vocabulary and the sections it contributes to the account data export, so that the module can be added or removed without touching the shared root spec.
+OpenAPI 3.1.0 contract for the delivery module. It defines the API surface for fulfillment orders, shipments, and shipping methods, plus the module's custom error codes and its contribution to the account data export. The spec is the single source of truth for what the delivery endpoints accept, return, and how they fail.
 
 ## Key elements
 
-- **`x-error-codes`** — Extension block listing every delivery-specific error (409 state-conflicts like `DELIVERY_NOT_SHIPPABLE`, 422 validation errors like `DELIVERY_LINES_INVALID`). Consumed by the bundler to register codes globally.
-- **`x-personal-data`** — Extension block defining the `shipments` and `fulfillmentOrders` arrays that the bundler injects into `POST /account/export`. Removing this module removes those sections.
-- **`GET /delivery/methods`** — Public catalogue of shipping methods (flat rates, free-above thresholds). Not a quote; authoritative pricing lives in cart and checkout.
-- **`GET /delivery/order/{orderId}`** — Returns the fulfillment orders and shipments for one order, with per-caller `actions`. Unpaid orders return empty lists rather than 404.
-- **`POST /delivery/order/{orderId}/start`** — Transitions an order `paid → processing`. Uses a narrower `delivery.any.start` scope so warehouse staff don't need `orders.any.update`.
-- **`GET /delivery/fulfillment-orders`** — The admin "preorder board": paginated list with filters for `preorder`, `state`, `productId`, `late`, `dueWithin`. Staff with `orders.any.read` see all rows; others see only their own.
-- **`GET /delivery/fulfillment-orders/summary`** — Per-product unit breakdown across fulfillment states (paid, waiting-for-stock, allocated, shipped, cancelled, late) for the Products tab.
+- **`x-error-codes`** — Module-specific error codes (`DELIVERY_LINES_INVALID` 422; `DELIVERY_NOT_SHIPPABLE`, `DELIVERY_NOT_PHYSICAL`, `DELIVERY_NOT_DIGITAL`, `DELIVERY_NOT_HOLDABLE`, `DELIVERY_NOT_RELEASABLE`, `DELIVERY_NOT_DELIVERABLE`, `DELIVERY_NOT_LOSABLE`, `DELIVERY_NOT_REOPENABLE`, `DELIVERY_LOST_SUPERSEDED`, `ORDER_NOT_PAID`, `ORDER_NOT_PROCESSING` — all 409). Each encodes a distinct business-rule violation the server can refuse.
+- **`x-personal-data`** — Declares the `shipments` and `fulfillmentOrders` sections the bundler injects into `POST /account/export` (response schema `AccountExportResponse`). Removing this module removes those sections from the export.
+- **`GET /delivery/methods`** — Public catalogue of all shipping methods (flat rates, free-above thresholds). Explicitly *not* a quote; authoritative pricing lives at `PUT /cart/shipping-method`.
+- **`GET /orders/{id}/fulfillment-orders`** — List the fulfillment orders (groups of lines that leave together) for one order. Unpaged. Hold fields are scoped: buyer sees `holdNotice`, staff see `holdMessage`; `holdReason`/`holdNote` are staff-only.
+- **`GET /orders/{id}/shipments`** — List shipments for one order, oldest first, with tracking code and delivered date. Unpaged.
+- **`POST /orders/{id}/process`** — Transition an order `paid → processing`. Narrower than `update:Order`; grants `start:Shipment` without the full order-run permission.
+- **`GET /delivery/fulfillment-orders`** — Admin "preorder board": paged, filterable by `cause` (preorder/backorder/any), `state`, `productId`, `late`, `dueWithin`. Returns rows sorted by earliest expected date.
+- **`tags`** — Single `Delivery` tag covering all operations in this file.
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — All shared response objects (`Unauthorized`, `NotFound`, `Forbidden`, `Conflict`, `ValidationError`, `InternalError`), common parameters (`PageParam`, `PageSizeParam`), and base schemas (`Id`) are `$ref`'d from this file. This module spec is composed into that root by the OpenAPI bundler.
-- **`src/modules/cart/openapi.yaml`** — The `/delivery/methods` description cross-references `PUT /cart/shipping-method` as the authoritative pricing/weight-fit endpoint, signalling that cart is the downstream consumer of the method list.
-- **`src/modules/delivery/module.ts`** — Registers this OpenAPI spec (and its routes/schemas) with the application at bootstrap, wiring the declared paths into the router.
-- **`../orders/openapi.yaml`** (referenced inline) — `OrderIdPathParam` and `OrderEnvelope` are imported from the orders module for the per-order endpoints.
+- **`shared/contracts/openapi.root.yaml`** — Supplies shared parameters (`IdPathParam`, `PageParam`, `PageSizeParam`), shared response objects (`Unauthorized`, `Forbidden`, `NotFound`, `Conflict`), and the `Id` schema referenced throughout this file.
+- **`src/modules/cart/openapi.yaml`** — The delivery shipping-methods endpoint explicitly defers to `PUT /cart/shipping-method` (defined in the cart module) as the authoritative server-side pricing and weight-fit check.
+- **`src/modules/delivery/module.ts`** — The TypeScript module implementation that registers and serves the paths, schemas, and error-handling behaviour described in this spec.
 
 ## Notes
 
-- The file is the *contract* only; the truncated portion almost certainly contains the shipment-creation, deliver, hold/release, and per-fulfillment-order action endpoints implied by the `x-error-codes` list.
-- `x-personal-data` keys (`shipments`, `fulfillmentOrders`) are the exact names the bundler looks up when assembling `AccountExportResponse`. Renaming them here without updating the bundler will silently drop export sections.
-- The `listShippingMethods` endpoint is explicitly `security: []` (public). Do not add auth here; the design intent is that shipping costs are pre-purchase information.
-- `holdNote` is a staff-only field; it is omitted from the response for non-staff callers. This filtering is server-side, not a schema change.
-- Error codes use 409 for state-machine conflicts (order not in the right state) and 422 for payload validation (missing tracking code, invalid lines). Do not introduce 400s for these cases.
+- Unpaged list endpoints (`/orders/{id}/fulfillment-orders`, `/orders/{id}/shipments`) return `items: []` for an empty set rather than a 404; absence is the answer.
+- The `processOrder` endpoint is intentionally narrower than a generic order update: it exists so a warehouse caller with only `start:Shipment` can begin work without holding `update:Order`.
+- `x-personal-data` schemas (`ExportShipment`, `ExportFulfillmentOrder`) are defined in this file's `components/schemas` but consumed by the account module's export endpoint via the bundler.
+- The preorder board endpoint (`GET /delivery/fulfillment-orders`) is paged and has no `sort` parameter — the queue is always ordered by earliest expected date.

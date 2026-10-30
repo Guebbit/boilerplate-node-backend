@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/audit.ts
-sha256: c866cee262344697c369bd7f8d85fa066a6620b1b5de7f7274dbe437ae7da155
-generated_at: 2026-10-14T08:28:19.676630+00:00
+sha256: 7a98fd732b68c1b75a741e7814c1411f450b6df5e195cc11c891ea5e70093a51
+generated_at: 2026-10-29T02:25:17.860285+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,19 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Centralizes the audit-action vocabulary for the account/auth domain. It defines the canonical wire-format strings (e.g. `auth.login`, `auth.email_change.completed`) that every account service fires through the shared audit logger, and registers them on the infrastructure `AuditActionMap` via a type-only module augmentation so log tooling and alert rules get a single typed union without a runtime import cycle.
+Declares the full vocabulary of audit action strings emitted by the account module and injects them into the shared `AuditActionMap` type via a declaration merge. It exists so that every account service can fire typed, self-documenting audit events without the infrastructure layer needing to know which module owns which string.
 
 ## Key elements
 
-- **`accountAuditActions`** (`as const`) — the sole runtime export. A flat object mapping ~35 semantic event names to their dotted wire strings. Covers login/signup, profile, password (reset + change), email verification and change (requested / completed / cancelled / undone / resent), token refresh + reuse detection, re-authentication, one-time-token rejection, logout (single / everywhere / revoked), data export (requested / downloaded), two-factor (enrolled, disabled, code sent, challenge failed, backup codes regenerated), and OAuth (linked, unlinked, failed).
-- **`declare module '@infrastructure/observability/audit'`** — augments `AuditActionMap` with the `account` key typed as the value union of `accountAuditActions`. Purely a compile-time declaration; no runtime side-effect.
+- **`accountAuditActions`** (`as const` object) — The canonical map from symbolic keys (e.g. `AUTH_LOGIN`, `AUTH_2FA_CODE_SENT`) to the wire-format strings actually written to logs (e.g. `'auth.login'`, `'auth.two_factor.code_sent'`). Covers ~35 events spanning login, signup, password, email change, token lifecycle, 2FA, OAuth linking, data export, reauth, and account deletion.
+- **`declare module '@infrastructure/observability/audit'`** — Augments the `AuditActionMap` interface with an `account` key typed as the union of all values in `accountAuditActions`. This is type-only; no runtime code is emitted, and the infrastructure layer never imports this file.
 
 ## Relationships
 
-All listed neighbor services (deletion-request, email-change, export, logout, oauth, password, password-reset, password-reset-request, profile, reauth, refresh, self-delete, signup, tokens, two-factor-challenge) **import** `accountAuditActions` from this file to pass a typed action string to the infrastructure audit emitter. This file imports nothing from them; it is a leaf dependency in the graph.
+Every file under `src/modules/account/services/` (account-deletion, email-change, export, logout, oauth, password-reset, password-reset-request, password, profile, purge-deletions, reauth, refresh, signup, tokens, two-factor-challenge) imports `accountAuditActions` to supply the action string when recording an audit event, and benefits from the augmented `AuditActionMap` type so the audit infrastructure can narrow on the `account` key. This file itself imports none of them.
 
 ## Notes
 
-- The `auth.` prefix (rather than `account.`) is a deliberate wire-format constraint: existing log queries and alert rules key off those strings, so the folder name may change but the emitted value must not.
-- `AUTH_ONE_TIME_TOKEN_REJECTED` intentionally makes "unknown" and "expired" indistinguishable on the wire; the `metadata.flow` field names which token type it was.
-- `AUTH_REFRESH_TOKEN_REUSE_DETECTED` fires only when a rotated token is replayed **outside** the grace window for a benign two-tab race — it signals a likely token leak, and `rotateRefreshToken` revokes the entire refresh set in the same call.
-- `AUTH_2FA_CODE_SENT` is the only two-factor action an **unauthenticated** caller can trigger an outbound message with, making it the key series for detecting mail-bombing.
-- Several email-change actions are easy to confuse at a glance (requested vs. completed vs. cancelled vs. undone vs. resent); the JSDoc on each one states which HTTP route fires it.
+- **`auth.` prefix, not `account.`** — The wire strings deliberately use the `auth.` namespace because external log tooling and alert rules were written before the current module layout. Renaming the folder or the prefix would break those queries.
+- **Type-only coupling** — The `declare module` block is a one-directional, compile-time augmentation. The infrastructure package gains the `account` key without importing this file; deleting this file would simply drop the key from the union.
+- **Intentional ambiguity in a few strings** — `AUTH_ONE_TIME_TOKEN_REJECTED` covers unknown, expired, and already-used tokens as one event (the comment states this is on purpose). `AUTH_2FA_CODE_SENT` is called out specifically because it is the only 2FA action an unauthenticated caller can trigger, making its failure series the canary for mail-bombing.

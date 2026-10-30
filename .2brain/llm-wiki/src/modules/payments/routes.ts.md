@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/routes.ts
-sha256: bbdde545983067a195e60c99ad817bdf1176210b8558ee89bb1008876afaf130
-generated_at: 2026-10-15T11:28:58.230816+00:00
+sha256: 153fbf2dc7dd4f05bc6d4837689f35dc0557a523f364f1891d638760e49bdf6c
+generated_at: 2026-10-29T05:09:35.158492+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express router that wires every payment endpoint to its controller, applying the correct sequence of auth, permission, rate-limit, and idempotency middleware per route. It encodes the layered security policy (public → session → role → fresh-auth → cart-verification → velocity → idempotency) so individual controllers stay purely about business logic.
+Express router that wires every payment HTTP endpoint to its controller and enforces the cross-cutting concerns (authentication, authorization, rate limiting, idempotency, cache-control) at the router level before any controller runs. It exists as a single, ordered declaration of routes so that public endpoints stay above the auth wall and sensitive money-movement routes carry the strongest guards.
 
 ## Key elements
 
-- **`router`** (default export) — `express.Router()` instance mounted at the payments path.
-- **`POST /webhook`** — Provider callback; uses `webhookLimiter` only (no session auth, body-signed by the provider). Must remain above the auth wall.
-- **`GET /methods`** — Public; lists available payment methods (same rationale as `GET /delivery/methods`).
-- **`GET /` and `POST /search`** — Staff payment list; `payments.any.read` (exact) + `privateNoCache` / `noStore`.
-- **`GET /refunds`**, **`GET /attention`** — Staff read views; same permission and cache guards.
-- **`POST /intent`** — Freezes an order price. Requires `requireFreshAuth('critical')`, `cart.self.update`, `cart.self.checkout`, `paymentIntentLimiter`. No idempotency key (re-request refreshes the same intent; key would store `clientSecret`).
-- **`GET /order/:orderId`** — Payment behind a specific order.
-- **`GET /order-by-reference`** — Admin RF-code lookup; `payments.any.create`.
-- **`POST /order/:orderId/refund`** — Operator-initiated refund. `payments.any.update` (carries `stepUp: critical` in the YAML key table) + **required** idempotency key.
-- **`POST /order/:orderId/offline`** — Manual offline record. `payments.any.create` (same `stepUp` pattern) + optional idempotency key.
-- **`POST /:id/confirm`** — Card validation / charge. `requireFreshAuth('critical')`, both `cart` permissions, three velocity limiters (`Attempt`, `Decline`, `DeclineBlock`), `paymentDeclineChallengeGate`, optional idempotency key.
-- **`POST /:id/sync`** — Browser reports provider-side completion. Same auth stack as `/intent`; no idempotency key (idempotent by provider reference).
+- **`router`** (exported) — the sole export; an Express `Router` instance containing all payment routes.
+- **Public routes** (above the auth wall): `POST /webhook/:provider` (provider callback, signed-body auth via `webhookLimiter`) and `GET /methods` (pre-purchase info). Both must remain above `router.use(getAuth, isAuth)`.
+- **Staff routes** — `GET /`, `POST /search`, `GET /refunds`, `GET /attention`: gated by `requirePermission('display', 'Payment')` and marked `privateNoCache` / `noStore`.
+- **Customer money-movement routes** — `POST /` (intent), `POST /:id/confirm`, `POST /:id/sync`: all require `requirePermission('checkout', 'Cart')` + `requireFreshAuth('critical')` + `paymentIntentLimiter` (shared between intent and sync). Confirm additionally stacks three velocity limiters and `paymentDeclineChallengeGate` before `idempotencyKey`.
+- **Refund routes** — `POST /:id/refunds` (required `requireIdempotencyKey`), `POST /:id/refunds/:refundId/settle` and `/:refundId/cancel` (optional `idempotencyKey`; 409 prevents double-action). All use `requirePermission('create', 'Refund')`; the fresh-auth guard is supplied by the key's `stepUp: critical` rather than an explicit call.
+- **Read routes** — `GET /:id`, `GET /:id/refunds/:refundId`: no permission guard; scoping is done in the service layer (stranger's ID → 404).
 
 ## Relationships
 
-- **`@kernel/middlewares/authorizations`** — Supplies `getAuth`, `isAuth` (the auth wall), `requirePermission`, and `requireFreshAuth`.
-- **`@infrastructure/http/middlewares/idempotency`** — Supplies `idempotencyKey` (optional) and `requireIdempotencyKey` (mandatory) for refund and confirm.
-- **`@infrastructure/http/middlewares/cache`** — Supplies `noStore` and `privateNoCache` for staff-facing GETs.
-- **`./rate-limits`** — Supplies `webhookLimiter`, `paymentIntentLimiter`, `paymentConfirmAttemptLimiter`, `paymentConfirmDeclineLimiter`, `paymentConfirmDeclineBlockLimiter`, `paymentDeclineChallengeGate`.
-- **Twelve controllers** under `./controllers/` — Each route delegates its handler to exactly one controller function (e.g. `postPaymentConfirm`, `getPaymentMethods`).
+- **`@kernel/middlewares/authorizations`** — provides `getAuth`, `isAuth`, `requirePermission`, `requireFreshAuth`; applied as middleware on individual routes or as `router.use` for the auth wall.
+- **`@infrastructure/http/middlewares/idempotency`** — `requireIdempotencyKey` (refund creation) and `idempotencyKey` (settle/cancel/confirm) enforce or optionally accept a client-supplied replay key.
+- **`@infrastructure/http/middlewares/cache`** — `noStore` and `privateNoCache` set `Cache-Control` on staff list/search responses so payment data is never shared-cached.
+- **Controllers** (all listed neighbors under `src/modules/payments/controllers/`) — each is the terminal handler for exactly one route; this file never contains business logic, only guard ordering and route matching.
 
 ## Notes
 
-- **Route ordering matters.** `/webhook` and `/methods` must precede `router.use(getAuth, isAuth)`; all other routes must follow it. Moving them breaks the public/authenticated split.
-- **`/order-by-reference` is a literal segment**, deliberately not matched by `/order/:orderId`. The `:orderId` param routes are all POSTs on a longer path, so there is no collision, but the naming is intentional.
-- **`stepUp` is defined in `shared/authorization-keys.yaml`, not here.** `payments.any.update` and `payments.any.create` carry `stepUp: critical`, so the router does *not* also call `requireFreshAuth` on refund/offline; the key table enforces it. Adding a new route that uses those keys inherits the fresh-session requirement for free.
-- **`/intent` has no idempotency key by design** — a second call refreshes the same intent, and storing the response would persist the `clientSecret` in the idempotency ledger.
-- **`/sync` has no idempotency key** because it is idempotent by construction (keyed on the provider's payment reference).
-- **`/confirm` stacks three separate limiters plus a challenge gate** between identity guards and idempotency, mirroring the `credentialLimiters` + `loginChallengeGate` pattern on `POST /account/login`.
-- **Staff GETs use `privateNoCache` / `noStore`** (RFC 9111 §3.5 POST rule extended to sensitive GETs) because the responses contain the shop's entire payment state.
+- **Route order is load-bearing.** Literal GETs (`/refunds`, `/attention`) are declared before the parametric `GET /:id`; a bare `/:id` would swallow them. Webhook and `/methods` must stay above the `router.use(getAuth, isAuth)` line.
+- **`checkout:Cart` is owned by the `cart` module**, not `payments`. This file mounts it the same way `products/routes.ts` mounts a `locales`-owned key — the key definition lives elsewhere.
+- **Idempotency key is deliberately absent** on `POST /` (re-calling refreshes the same intent; the ledger would store `clientSecret`), on `/:id/sync` (idempotent by provider reference), and on `/:id/confirm` (replay is bounded by the velocity limiters instead).
+- **`paymentIntentLimiter` is shared** between `POST /` and `POST /:id/sync`; both end in a provider call and spend the same per-account budget.
+- **Fresh-auth on refund routes** is not spelled out here; it is inherited from the `create:Refund` key's `stepUp: critical` in `shared/authorization-keys.yaml`, keeping the tier tied to the action rather than to one route.

@@ -1,7 +1,7 @@
 ---
 source: tests/support/response.ts
-sha256: bb5e96c9edb9b336c7800a4dacddca229afd2a5425f14100fec3d36ff1e65072
-generated_at: 2026-09-23T20:13:14.440642+00:00
+sha256: c58a0c14381ef8f80f601387a459b44a9e83ac9caeaf2ea43172c127c2f7d280
+generated_at: 2026-10-29T07:10:26.306330+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Test helper that narrows a service's `ResponseSuccess<T> | ResponseReject` union at runtime. Each helper asserts the expected arm via `expect` _before_ casting, so a response that took the wrong branch fails on the assertion line itself rather than surfacing later as a confusing `undefined` read.
+Provides test helpers that narrow a service's `ResponseSuccess<T> | ResponseReject` union into a single arm via an explicit assertion. This replaces inline `as` casts at assertion sites, so a response that took the wrong branch fails loudly on its own line (with "expected `success` to be `false`") rather than silently reading a property as `undefined`.
 
 ## Key elements
 
-- **`asReject<T>(response)`** — Asserts `response.success === false`, then returns the value as `ResponseReject`.
-- **`asSuccess<T>(response)`** — Asserts `response.success === true`, then returns the value as `ResponseSuccess<T>`.
+- **`asReject<T>(response)`** — Asserts `response.success === false`, then returns the value typed as `ResponseReject`. Fails the test if the response was actually a success.
+- **`asSuccess<T>(response)`** — Asserts `response.success === true`, then returns the value typed as `ResponseSuccess<T>`. Fails the test if the response was actually a reject.
+
+Both are generic over the payload type `T` and accept the full union, returning only the confirmed arm.
 
 ## Relationships
 
-- **`src/infrastructure/http/response.ts`** — Source of the `ResponseSuccess` and `ResponseReject` types imported here; defines the union this file narrows.
-- **Integration test files** (`account`, `cart`, `delivery`, `feedback`, `orders`, `payments`, `order-snapshot-locale`) — All import `asReject`/`asSuccess` to narrow service responses before asserting on `.data` or other arm-specific properties.
+- **`src/infrastructure/http/response.ts`** — Source of the `ResponseSuccess` and `ResponseReject` types that these helpers narrow. This file is the *consumer* of that module's type definitions.
+- **All integration test files** (e.g. `src/modules/account/tests/integration/*.test.ts`, `src/modules/orders/tests/integration/*.test.ts`, etc.) — Import `asReject` / `asSuccess` to assert which branch a service call took before inspecting the payload, replacing repeated `as` casts.
 
 ## Notes
 
-- Both helpers call `expect` internally, so they are bound to the test runner (Jest/Vitest) and will throw outside a test context.
-- The final `as` cast is only safe because the preceding assertion guards it; removing the assertion silently degrades the helper to a plain unsafe cast.
-- `asSuccess` does not assert on `data` being present because the type system already requires it on `ResponseSuccess`.
+- The narrowing is *runtime-assertion-based*, not type-system-based. The `as` cast at the end of each function is only safe because the `expect(...)` line before it would have already thrown. Removing or reordering those lines would reintroduce the silent-`undefined` failure mode the file exists to prevent.
+- The helpers are intentionally minimal (two one-liner assertions + a return). If you find yourself wanting to log the full response body in the failure message, that is a deliberate scope decision against — keep the assertion atomic so the failure line points at the wrong-branch fact, not a payload diff.

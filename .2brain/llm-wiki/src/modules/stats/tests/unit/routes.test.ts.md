@@ -1,7 +1,7 @@
 ---
 source: src/modules/stats/tests/unit/routes.test.ts
-sha256: 484eca36ec460be80f9b323bb0a6c8fbc499f0bcf2238f7db03a2fc89490ab66
-generated_at: 2026-10-15T12:05:56.444068+00:00
+sha256: 8e9460f5b525454a86dbdd8043fedccc7bec3a514aadcdae74a17e7b31a6f2a0
+generated_at: 2026-10-29T05:57:25.496004+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit test that pins down the contract of the stats router: exactly eight read-only `GET` endpoints, every route requires an authenticated session, and every route is guarded by the single permission `stats.any.read`. It exists to catch accidental scope creep — a new public route, a missing auth guard, an inconsistent permission key, or a non-GET method — at test time rather than in production.
+Validates the stats router's contract: it exposes exactly nine documented `GET` endpoints, every one requires an authenticated session, and every one is gated by the single `read:Stats` permission. The file exists to make any unauthorised addition, method change, or permission drift fail immediately.
 
 ## Key elements
 
-- **`jest.mock('@infrastructure/http/middlewares/rate-limit', …)`** — Replaces the rate-limit middleware with `securityMock()` (sourced from `@tests/routes` via `jest.requireActual`) so that tests exercise the router without real rate-limiting side effects.
-- **`import { router } from '@modules/stats/routes'`** — The subject under test; the stats Express router.
-- **`describe('stats routes')`** — Three assertions:
-  - *Exact route list*: `routeSignatures(router)` must equal the eight documented `GET` paths (`/sales`, `/products`, `/products/:productId`, `/categories`, `/payments`, `/operations`, `/customers`, `/pipeline`).
-  - *Session auth per route*: `it.each` iterates every signature and asserts `guardsOn(router, signature)` includes `'isAuth'`.
-  - *Single permission key*: `routeTable(router)` maps every entry's `permissionKey` to `'stats.any.read'` (8 entries).
-- **`routeSignatures`, `routeTable`, `guardsOn`** — Test-support helpers (imported from `@tests/routes`) that introspect an Express router to extract method+path signatures, the permission-key table, and the attached guard middleware names.
+- **`jest.mock` for `rate-limit`** — replaces the rate-limit middleware with `securityMock()` (from the test-support module) so that guard extraction isn't obscured by a real rate-limiter.
+- **`routeSignatures(router)`** — helper (imported from `@tests/routes`) that flattens the router into an array of `"METHOD /path"` strings; used to assert the exact endpoint list and to drive the per-route auth check.
+- **`guardsOn(router, signature)`** — returns the list of guard names attached to a given route; asserted to always include `isAuth`.
+- **`routeTable(router)`** — returns a structured table of routes with their permission rules; the test maps each to `action:subject` strings and asserts all nine are `'read:Stats'`.
+- **`router`** (from `@modules/stats/routes`) — the system under test.
 
 ## Relationships
 
-- **`src/modules/stats/routes.ts`** — The module under test. This file imports its `router` export and asserts on its route table, guards, and permissions.
-- **`tests/support/routes.ts`** — Provides the introspection utilities (`routeSignatures`, `routeTable`, `guardsOn`) and the `securityMock` factory used to stub the rate-limit middleware. All helper imports and the mock's return value flow through this file (aliased as `@tests/routes`).
+- **`src/modules/stats/routes.ts`** — the module under test; exports the `router` whose routes, guards, and permissions this file inspects.
+- **`tests/support/routes.ts`** — provides the three helpers (`routeSignatures`, `routeTable`, `guardsOn`) and the `securityMock()` function used to neutralise the rate-limit middleware.
 
 ## Notes
 
-- The file-level doc comment encodes a **design invariant**, not just a description: stats is strictly read-only, no route is public, and promoting a read to a write is an explicit decision. When adding a new route, the first check is whether this test's list still matches intent.
-- The `jest.mock` factory calls `jest.requireActual('@tests/routes').securityMock()` rather than importing `securityMock` at the top level. This keeps the mock self-contained and avoids a circular import with the module under test.
-- `it.each(routeSignatures(router))` means the auth assertion is data-driven: adding a new route automatically adds a new sub-test, but the *exact list* test above it will still fail if the new route isn't also added to the expected array. Both must be updated together.
+- The mock of the rate-limit middleware is essential: without it, `guardsOn` would surface the rate-limiter and the `isAuth` assertion could be hidden or the guard list would include an unrelated entry.
+- The "exactly nine" count and the all-GET constraint are intentional: the file's comment states that promoting any route to a write is a product decision that must be made explicitly, so the test blocks silent scope creep.
+- `it.each(routeSignatures(router))` derives its test matrix from the live router, meaning the per-route auth check automatically covers whatever endpoints are currently mounted—no list to maintain.

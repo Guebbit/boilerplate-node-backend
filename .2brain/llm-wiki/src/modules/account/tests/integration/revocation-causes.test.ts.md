@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/integration/revocation-causes.test.ts
-sha256: d590be88701fcbdc224d27a477d213486ae7beb241e64feb3023d0c0250223bf
-generated_at: 2026-10-14T09:13:23.009274+00:00
+sha256: 6a338072e1b59ce65ee620606268167ce991fb522294e4d270287747f3e0b840
+generated_at: 2026-10-29T02:59:46.708691+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test that drives every revocation cause through its real HTTP (or session-rotation) door against a live database, then asserts the three observable side-effects the cause's row in the `REVOCATION` table promises: victim sessions are dead, pending tokens are purged (or kept), and the outbox announcement was (or wasn't) written. The `Record<RevocationCause, Trigger>` map makes the suite exhaustive—adding a new cause to the domain table without a trigger here is a compile error.
+Integration test that fires every revocation cause through its real HTTP endpoint (or, for refresh-reuse, the real token-rotation path) and asserts the full contract the `REVOCATION` row claims: the victim device is revoked, the caller's session state matches `callerKeeps`, pending links are purged iff `pending` is true, and the outbox announcement matches `announce`. The `Record<RevocationCause, Trigger>` type means a cause added to the domain table without a corresponding trigger here is a compile error.
 
 ## Key elements
 
-- **`TRIGGERS: Record<RevocationCause, Trigger>`** — Exhaustive map from each cause string to a builder that returns a `Scenario`. The `describe.each` loop iterates over `Object.keys(REVOCATION)`, so every cause gets exactly one test case.
-- **`Trigger` / `Scenario`** — A `Trigger` is `() => Promise<Scenario>`; a `Scenario` carries `userId`, a `victim` bearer token from a second device, and a `fire()` that hits the real endpoint.
-- **`accountWithVictim(email)`** — Creates a verified user, plants a `verify`-type pending token, and logs in a "victim" device. All triggers start from this fixture.
-- **Individual trigger builders** (`viaPasswordChange`, `viaPasswordReset`, `viaLogoutAll`, `viaEmailConfirm`, `viaEmailUndo`, `viaTwoFactorConfirm`, `viaRefreshReuse`) — Each sets up its pre-conditions (planted tokens, pending email, 2FA secret, stolen session) and returns the `fire` call that hits the real endpoint or session function.
-- **`viaRefreshReuse`** — The only trigger that does not call an HTTP endpoint; it calls `startSession` + `rotateRefreshToken` directly and expects a `TokenReuseError` as the "fire" event.
-- **`works(bearer)`** — Thin check that `GET /account` still returns 200 with the given bearer.
-- **`loginAs(email)`** — POSTs `/account/login` and returns `{ bearer, cookie }`.
-- **The single `it` block** — After `fire()` + `settleOutboxNudges()`, asserts: victim token is dead, caller session count matches `row.callerKeeps`, `verify` token presence matches `!row.pending`, and outbox payload matches `row.announce`.
+- **`TRIGGERS`** — `Record<RevocationCause, Trigger>` mapping each cause to a function that sets up a scenario and exposes a `fire()` that hits the real endpoint. Exhaustive by type.
+- **`viaPasswordChange`, `viaPasswordReset`, `viaLogoutAll`, `viaEmailConfirm`, `viaEmailUndo`, `viaTwoFactorConfirm`, `viaBan`, `viaDeletion`, `viaRefreshReuse`** — one trigger builder per cause; each returns a `Scenario` (`userId`, `victim` bearer, `fire` closure).
+- **`accountWithVictim`** — creates a verified user, plants a pending verification token, and signs in a victim device.
+- **`loginAs`** — mode-aware login (`jwt` vs `cookie`); in cookie mode sends `transport: 'bearer'` to get a bearer client.
+- **`works(bearer)`** — `GET /account` probe; returns `true` if the token still authenticates.
+- **`JWT_ONLY`** — set of causes (`refresh-reuse`) excluded from cookie-mode runs.
+- **`describe.each(MODES)` / `describe.each(causes)`** — nested parameterized loop; the inner test ("ends the other device, as its row says") asserts all four row claims.
 
 ## Relationships
 
-- **`src/modules/account/domain/revocation.ts`** — Source of the `REVOCATION` table and `RevocationCause` type. The test reads each row's `callerKeeps`, `pending`, and `announce` flags as its expected values; the `Record<RevocationCause, Trigger>` type enforces one trigger per cause.
-- **`src/modules/account/session/jwt.ts`** — Provides `startSession`, `rotateRefreshToken`, and `TokenReuseError` used exclusively by the `viaRefreshReuse` trigger to simulate a stolen-token replay.
-- **`src/modules/account/tests/factories.ts`** — Supplies `plantToken` (to seed pending verify/password/email tokens), `sessionRowsOf` (to count live sessions), and `tokenTypesOf` (to check which token types remain).
-- **`src/modules/users/tests/factories.ts`** — Provides `createUser`, `PLAIN_PASSWORD`, and `REPLACEMENT_PASSWORD` used by every trigger.
-- **`src/modules/users/repository.ts`** — `userRepository.updateMany` is called directly in `viaEmailConfirm` and `viaEmailUndo` to set `pendingEmail` / `previousEmail` before planting the confirm/undo token.
-- **`src/kernel/outbox.ts`** — `outboxEventModel` is queried to verify the `account.sessions-revoked` event; `settleOutboxNudges` is awaited before assertions.
-- **`tests/support/http.ts`** — `api()` is the supertest-style client used for every HTTP call.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module top-level to provision a fresh database.
-- **`tests/support/environment.ts`** — `setEnvironment` in `beforeEach` configures `NODE_MAIL_TRANSPORT: 'outbox'`, a 1 ms token-rotation grace, and a 600 s reuse window.
-- **`tests/support/cookies.ts`** — `cookieHeader` extracts the `__Host-session` cookie from the login response.
-- **`tests/support/totp.ts`** — `codeFor` generates a valid TOTP code for the two-factor-change trigger.
+- **`src/modules/account/domain/revocation.ts`** — source of the `REVOCATION` table and `RevocationCause` type; the test iterates its keys and reads each row's `pending`, `announce`, `callerKeeps` fields as the expected assertions.
+- **`src/kernel/outbox.ts`** — `outboxEventModel` queried to verify the `account.sessions-revoked` announcement; `settleOutboxNudges` called after `fire()` to flush queued events.
+- **`src/modules/account/session/jwt.ts`** — `startSession`, `rotateRefreshToken`, `TokenReuseError` used directly by the `viaRefreshReuse` trigger to replay a superseded refresh token.
+- **`src/modules/account/tests/factories.ts`** — `plantToken` (seed pending/one-time tokens), `sessionRowsOf` (count live sessions), `tokenTypesOf` (list surviving token types).
+- **`src/modules/users/tests/factories.ts`** — `createUser`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD` for account setup and password-change payloads.
+- **`src/modules/users/repository.ts`** — `userRepository.updateMany` used in email-change triggers to set `pendingEmail`/`previousEmail` directly.
+- **`tests/support/http.ts`** — `api()` for all HTTP calls; `authenticateAs('admin')` for the deactivation trigger.
+- **`tests/support/environment.ts`** — `setEnvironment` to toggle `NODE_MAIL_TRANSPORT`, token rotation/grace windows, and `NODE_SESSION_MODE` per test.
+- **`tests/support/cookies.ts`** — `cookieHeader` to extract the `__Host-session` cookie for jwt-mode assertions.
+- **`tests/support/totp.ts`** — `codeFor` to generate a valid TOTP code for the two-factor-change trigger.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` called once at module scope to provision a fresh database.
 
 ## Notes
 
-- **Exhaustiveness is compile-time.** The `Record<RevocationCause, Trigger>` type means a new key in `REVOCATION` breaks the build until a trigger is added—there is no runtime "missing case" guard needed.
-- **`PAST_THE_SECOND_MS = 1100`** is slept *before* `fire()` so that tokens already minted fall before the epoch the cause stamps, ensuring the "kill sessions after epoch T" logic actually catches them.
-- **`settleOutboxNudges()`** must be awaited after `fire()` and before the outbox query; skipping it makes the announcement assertion flaky.
-- **The single `it` block is shared across all causes.** Each cause's row in `REVOCATION` is the sole source of expected values—there are no per-cause hardcoded expectations, so the table *is* the spec.
-- **`viaRefreshReuse` expects a rejection** (`TokenReuseError`) as part of `fire()`, not a successful response. The `expect(...).rejects` inside the trigger means a non-rejection would fail the test setup rather than the assertion.
+- **Compile-time exhaustiveness**: `TRIGGERS` is typed as `Record<RevocationCause, Trigger>`, so the compiler enforces one trigger per cause. There is no runtime registry to forget.
+- **`PAST_THE_SECOND_MS` (1100 ms)**: a sleep inserted before `fire()` so any pre-existing token's epoch falls behind the revocation epoch; without it, token-expiry checks could race.
+- **Mode split**: the test runs the entire suite under both `jwt` and `cookie` session modes. `refresh-reuse` is excluded from cookie mode because a refresh-token replay has no cookie-mode equivalent.
+- **Single assertion per cause**: despite multiple checks, each cause is validated by one `it` block, keeping failure output scoped to a single cause.
+- **`viaRefreshReuse` fires differently**: it calls `rotateRefreshToken` directly (not through HTTP) and asserts a rejection, because replay detection lives in the token-rotation module, not behind an endpoint.

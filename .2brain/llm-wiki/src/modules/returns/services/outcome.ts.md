@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/services/outcome.ts
-sha256: c7a0b3a2e5333e5cf9f8bfd56dee3169beb303a99c89741f9d4101ef50f70c7f
-generated_at: 2026-10-15T11:57:20.032747+00:00
+sha256: 613c48798315b9a5ac46658cf80ee5c71ed3e793308c46e7a5cc52acf7f29213
+generated_at: 2026-10-29T05:43:51.390504+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,50 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the shared outcome type, refusal helpers, and write helpers (outbox event, audit) that both return-opening flows — `create.ts` (goods coming back) and `cancel-remainder.ts` (cancelling an unshipped remainder) — return and record. Centralizing these here lets each service import this file instead of the other.
+Shared vocabulary for what "opening a return" answers with: the input types both writers accept, the success/refusal HTTP responses they return, the outbox events they enqueue in the creating transaction, and the audit row they leave. It exists as a single home so `create.ts` (goods coming back) and `cancel-remainder.ts` (unshipped remainder cancelled) never import each other.
 
 ## Key elements
 
-- **`CreateReturnInput`** — interface for the customer-facing payload: `orderId`, `reason`, optional `kind` (`'return'` | `'cancellation'`), `fulfillmentOrderId`, `note`, and `lines`.
-- **`CreateReturnOutcome`** — discriminated union (`refused` | `created`) that every opening flow returns to its caller.
-- **`refused(reject)`** — wraps a `ResponseReject` into a `CreateReturnOutcome`.
-- **`notReturnable()`** — 409 `RETURN_ORDER_NOT_RETURNABLE`.
-- **`windowClosed()`** — 409 `RETURN_WINDOW_CLOSED`.
-- **`badLines(reason)`** — 422 `RETURN_LINES_INVALID`; the `reason` param (`'nothing-returnable'` | `'unknown-product'` | `'too-many'` | `'excluded'`) selects the i18n message.
-- **`badCancellation()`** — 422 `RETURN_CANCELLATION_INVALID`.
-- **`nothingToCancel()`** — 409 `RETURN_NOTHING_TO_CANCEL`.
-- **`enqueueRequested(created, session)`** — writes a `RETURN_REQUESTED` outbox event inside the creating transaction, keyed on `orderId` for per-order ordering.
-- **`recordOpened(order, created, context)`** — writes the audit row (`returnsAuditActions.RETURN_REQUESTED`, outcome `success`) for a just-created return.
+- **`CreateReturnInput`** – the request body shape for opening a return or withdrawal (order, reason, kind, lines, remedy, staff statement fields).
+- **`Opener`** – the shared `{ statement, staffId }` pair both write-paths pass to record who/when/where a buyer stated their intent.
+- **`CreateReturnOutcome`** – the union `ResponseSuccess<ReturnDocument> | ResponseReject` every factory returns.
+- **`opened(created)`** – builds the 201 success response for a newly written return.
+- **Refusal factories** – each returns a typed `ResponseReject`:
+  - `badRemedy(field)` – 422, remedy without guarantee.
+  - `notReturnable()` – 409, order not eligible.
+  - `windowClosed(guarantee?)` – 409, time window expired (picks message by reason type).
+  - `badLines(reason)` – 422, one of four line-validation failures.
+  - `badCancellation()` – 422, cancellation shape mismatch.
+  - `withdrawalIsTheBuyers()` – 422, staff cannot write a withdrawal on buyer's behalf.
+  - `badStatement(verdict)` – 422, statement date/channel invalid; emitted as a field error.
+  - `forbidden(order, permission, context)` – 403, staff lacks a required key; also calls `auditForbidden`.
+  - `nothingToCancel()` – 409, no remainder left.
+- **`enqueueRequested(created, session)`** – writes `RETURN_REQUESTED` to the outbox inside the creating transaction.
+- **`enqueueApproved(created, session)`** – writes `RETURN_DECIDED` (decision: approved) immediately after `requested` for staff-opened returns.
+- **`returnClosedEvent(closed)`** – builds the `OutboxAnnouncement` for `RETURN_CLOSED` (one payload for all three close reasons).
+- **`enqueueClosed(created, session)`** – writes that `RETURN_CLOSED` announcement in the creating transaction.
+- **`recordOpened(order, created, context)`** – writes the audit row for a new return; flags `onBehalfOfBuyer` when staff opened it.
 
 ## Relationships
 
-- **`src/infrastructure/http/response.ts`** — provides `generateReject` and the `ResponseReject` type used by every refusal helper.
-- **`src/infrastructure/i18n/index.ts`** (via `t`) — all customer-facing messages are i18n keys.
-- **`src/infrastructure/observability/audit.ts`** — `recordAudit` is called by `recordOpened`.
-- **`src/kernel/outbox.ts`** — `enqueueOutboxEvent` is called by `enqueueRequested`.
-- **`src/modules/orders/index.ts`** — source of the `OrderDocument` type passed to `recordOpened`.
-- **`src/modules/returns/model.ts`** — source of the `ReturnDocument` type used throughout.
-- **`src/modules/returns/audit.ts`** — provides `returnsAuditActions` enum values for the audit record.
-- **`src/modules/returns/events.ts`** — provides the `RETURN_REQUESTED` event name.
-- **`src/modules/returns/domain/index.ts`** — provides `ReturnReason` and `ProductQuantity` types used in `CreateReturnInput`.
-- **`src/types/auth-context.ts`** — provides `CallerContext` for audit and `ReturnKind` for the input shape.
-- **`src/modules/returns/services/create.ts`** / **`cancel-remainder.ts`** — the two consumers that import these helpers and return `CreateReturnOutcome` to their handlers.
+| Neighbor | Interaction |
+|---|---|
+| `@infrastructure/http/response` | Imports `fieldError`, `generateReject`, `generateSuccess`, and the `ResponseReject`/`ResponseSuccess` types to build every response. |
+| `@infrastructure/i18n` | Calls `t()` for all user-facing messages. |
+| `@infrastructure/observability/audit` | Calls `recordAudit` in `recordOpened`. |
+| `@infrastructure/observability/forbidden` | Calls `auditForbidden` inside `forbidden`. |
+| `@kernel/outbox` | Calls `enqueueOutboxEvent` and uses the `OutboxAnnouncement` type for all event writes. |
+| `@modules/orders` | Imports the `OrderDocument` type used in `forbidden` and `recordOpened`. |
+| `../model` | Imports `ReturnDocument` as the success payload type. |
+| `../audit` | Imports `returnsAuditActions` for the audit action constant. |
+| `../events` | Imports `RETURN_REQUESTED`, `RETURN_DECIDED`, `RETURN_CLOSED` event name constants. |
+| `../domain` | Imports `ReturnReason`, `ProductQuantity`, `Statement`, `StatementVerdict` for type signatures. |
+| `../services/cancel-remainder.ts` | Sibling consumer: uses the refusal factories and event enqueuers defined here (does not import this file's success path directly, but shares the module). |
 
 ## Notes
 
-- The file exists explicitly so `create.ts` and `cancel-remainder.ts` never import each other.
-- `enqueueRequested` keys the outbox entry on `orderId` (not `returnId`) to guarantee ordering of all events for a single order.
-- `lines` in `CreateReturnInput` is mutually exclusive with `kind: 'cancellation'`; the `badCancellation()` helper covers the violation.
+- **No mutual imports by design.** The module doc states the file is "one home, so neither imports the other." If you add a new refusal or event, add it here rather than in one of the two service files.
+- **Field errors vs. body errors.** `badRemedy` and `badStatement` use `fieldError` (tied to a request field for form display); all other 422s and every 409/403 use the flat `{ code, message }` shape.
+- **`windowClosed` defaults `guarantee` to `false`.** The caller must pass `true` only for defect/wrong-item reasons; forgetting it changes the message but not the code.
+- **`forbidden` is the only factory that writes a side-effect (audit) before returning a response.** No route-level guard can detect this case because the required permission depends on the order's state, so the audit call lives here.
+- **Events are keyed on `orderId` (aggregateId)** to keep per-order event ordering, not on `returnId`.

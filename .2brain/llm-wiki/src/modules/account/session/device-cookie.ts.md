@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/session/device-cookie.ts
-sha256: 15d290378fe09d5f998451be55f68868ff0c4e0f67261aa31ffd5c3f05c4b58f
-generated_at: 2026-10-15T10:06:29.173150+00:00
+sha256: 426f95c011d91c051a91c41f8011cd94a82c29799769a3687f1e0732baf21980
+generated_at: 2026-10-29T02:48:16.469247+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the OWASP "familiar-device" cookie: after a fully successful login, the browser stores up to five HMAC-SHA256 tokens (one per account) in an httpOnly cookie. On subsequent logins, a valid token lets the browser skip the **per-account** failure budget, so an attacker who exhausts that budget cannot lock out the legitimate owner. The cookie never bypasses per-address or per-IP budgets.
+Implements the OWASP "familiar device" cookie: after a fully successful login it marks the browser as trusted for that account so the account's per-login-attempt failure budget is skipped on subsequent logins from the same browser. This prevents an attacker who exhausts the budget from also locking out the legitimate owner. One cookie carries up to five HMAC tokens (one per account), so a multi-account browser keeps all its familiarities.
 
 ## Key elements
 
-- **`DEVICE_COOKIE`** (`'device'`) – the cookie name.
-- **`tokenFor(email)`** (internal) – returns a base64url HMAC-SHA256 of `"device:" + normalizeEmail(email)` keyed by `NODE_DEVICE_COOKIE_SECRET`; returns `''` when the secret is unset.
-- **`presentedTokens(request)`** (internal) – splits the cookie value on `.` and returns the token array; returns `[]` if `request.cookies` is absent (e.g. `cookie-parser` not mounted).
-- **`subjectOf(request)`** (internal) – extracts the `email` field from the request **body** via `readBodyField`; deliberately ignores any signed-in session identity.
-- **`holdsDeviceCookie(request)`** – `true` when the presented tokens include one that constant-time-matches `tokenFor(subjectOf(request))`.
-- **`presentsFailingDeviceCookie(request)`** – `true` when the request names an account, presents one or more tokens, but none verify; used to feed a separate rate-limit bucket for token-guessing.
-- **`rememberDevice(request, response, email)`** – prepends the new token, deduplicates, caps at 5, and writes the cookie with `secureCookieOptions()` and a 180-day `maxAge`.
+- **`DEVICE_COOKIE`** (export) – The cookie name: `__Host-device`. The `__Host-` prefix enforces host-only + httpOnly + Secure.
+- **`tokenFor(email)`** (private) – Computes `base64url(HMAC-SHA256(secret, "device:" + normalizedEmail))`. Returns `''` when no secret is configured, which makes verification fail-closed.
+- **`presentedTokens(request)`** (private) – Splits the cookie value on `.` and returns the token list. Never throws; a missing `request.cookies` object yields `[]` (fail-closed) because this runs inside a rate-limiter `skip` callback.
+- **`subjectOf(request)`** (private) – Reads `email` from the request **body** via `readBodyField`. Deliberately ignores any authenticated session identity so one account's cookie can't excuse guesses at another.
+- **`holdsDeviceCookie(request)`** (export) – Returns `true` when the presented tokens contain a valid token for the account named in the body. Uses `constantTimeEqual` to compare.
+- **`presentsFailingDeviceCookie(request)`** (export) – Returns `true` when a cookie is present but does **not** verify for the named account (forged/stale). Intended so the rate limiter can meter token-guessing in a separate budget.
+- **`rememberDevice(request, response, email)`** (export) – After a successful login, prepends the new token to the existing set (dedup, cap at 5) and sets the cookie with a 180-day max-age using `hostCookieOptions()`.
 
 ## Relationships
 
-- **`./cookies`** – imports `secureCookieOptions` for the cookie's security flags.
-- **`./config`** – imports `sessionConfig` to read `NODE_DEVICE_COOKIE_SECRET`.
-- **`@infrastructure/security/constant-time`** – imports `constantTimeEqual` for timing-safe token comparison in `holdsDeviceCookie`.
-- **`@infrastructure/persistence/normalize-email`** – imports `normalizeEmail` so casing/whitespace variants of an address produce the same token.
-- **`@infrastructure/http/middlewares/rate-limit`** – imports `readBodyField` to extract the email field; the module is designed to run inside a rate-limiter's `skip` predicate (throwing there would 500 every login).
-- **`src/modules/account/rate-limits.ts`** – consumes `holdsDeviceCookie` / `presentsFailingDeviceCookie` to decide whether to skip or bucket a login attempt.
-- **`src/modules/account/controllers/post-login.ts`**, **`post-login-2fa.ts`**, **`get-oauth-callback.ts`** – call `rememberDevice` after their respective successful authentication flows.
-- **`src/modules/account/tests/unit/device-cookie.test.ts`** – unit tests for the module's exported and internal helpers.
+- **`src/infrastructure/security/constant-time.ts`** – Imports `constantTimeEqual` for timing-safe token comparison in `holdsDeviceCookie`.
+- **`src/infrastructure/persistence/normalize-email.ts`** – Imports `normalizeEmail` so `Ada@X.com` and `ada@x.com` produce the same token.
+- **`src/infrastructure/http/middlewares/rate-limit.ts`** – Imports `readBodyField` (used by `subjectOf`). The file's own docs note it executes inside a rate-limiter `skip` predicate, which is why `presentedTokens` must never throw.
+- **`src/modules/account/session/config.ts`** – Imports `sessionConfig()` to read `NODE_DEVICE_COOKIE_SECRET`.
+- **`src/modules/account/session/cookies.ts`** – Imports `hostCookieOptions()` for the shared `__Host-`/httpOnly/Secure cookie attribute set.
+- **`src/domain-primitives/time.ts`** – Imports `DAY_MS` to compute the 180-day max-age constant.
+- **`src/modules/account/rate-limits.ts`** – Consumes `holdsDeviceCookie` / `presentsFailingDeviceCookie` to decide whether to skip or meter an attempt.
+- **Controllers (`post-login`, `post-login-2fa`, `post-login-restore`, `get-oauth-callback`)** – Call `rememberDevice` after their respective successful-login paths.
+- **`src/modules/account/tests/unit/device-cookie.test.ts`** – Unit tests for the module's exported functions.
 
 ## Notes
 
-- **Body email, not session email.** `subjectOf` reads the email from the request body, not from an authenticated session. This prevents a logged-in user's own device cookie from excusing guesses against a *different* account they name in the body.
-- **Fail-closed on missing secret.** If `NODE_DEVICE_COOKIE_SECRET` is unset, `tokenFor` returns `''`, `holdsDeviceCookie` always returns `false`, and the per-account budget applies in full.
-- **Separator choice.** `.` is outside the base64url alphabet, so a single token can never be ambiguous with the separator.
-- **`presentsFailingDeviceCookie` exists to isolate token-guessing** into its own rate-limit bucket, separate from the password-guessing budget it would otherwise excuse.
-- **Token cap & ordering.** `rememberDevice` keeps the newest token first and drops the oldest beyond 5; signing into a second account does not evict the first.
+- **Fail-closed everywhere:** absent secret → empty token → `holdsDeviceCookie` is always `false`; missing `request.cookies` → empty list → same. No code path grants a pass without a valid HMAC.
+- **Scope of the exemption is narrow:** the cookie only skips the *per-account* failure budget. Per-address and per-IP/UA block budgets still apply, so it is not a blanket rate-limit bypass.
+- **Body-only subject:** `subjectOf` reads only the request body. A signed-in caller cannot leverage their own familiar cookie to skip the budget on a *different* account they name in the body.
+- **Separator choice:** `.` was selected because it does not appear in the base64url alphabet, guaranteeing tokens can't be ambiguous when split.
+- **`__Host-` prefix** means the browser rejects the cookie if it lacks `Secure` or `Path: /`; the server must never set `domain`.

@@ -1,7 +1,7 @@
 ---
 source: tests/integration/payment-succeeded-outbox.test.ts
-sha256: 81437cbbb8f4393c8cf402eb0bd8e213a4eed7e34320f30aa665be518704df7a
-generated_at: 2026-10-15T12:49:33.717031+00:00
+sha256: b75ebed15cc581ab7c78358f071b68dd2d8cd4e119de622f863846f61f15dc88
+generated_at: 2026-10-29T06:59:53.069634+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test that exercises the full `payment.succeeded` webhook path through the outbox with the real `payments` and `webhooks` modules registered. It verifies four invariants: exactly one delivery per subscription after settlement, idempotency under duplicate relay, preservation of the outbox row's ID as the webhook event ID, and that a failed fan-out is retried rather than silently dropped.
+Integration test that exercises the full lifecycle of a `payment.succeeded` webhook event through the outbox, with the real `payments` and `webhooks` modules registered. It verifies that a settlement produces exactly one delivery per subscription, that idempotency is preserved on re-publish, that the outbox row ID is propagated as the webhook event ID, and that transient fan-out failures are retried rather than lost.
 
 ## Key elements
 
-- **`settledOrder()`** – Helper that creates a user, product, order, and payment intent, then confirms the payment. Returns the order. All four test cases call this to produce a settled order with a pending outbox row.
-- **`beforeEach`** – Registers `paymentsModule` and `webhooksModule` via `registerCheckoutModules`, mints a ring secret, and creates an enabled webhook subscription for `payment.succeeded`.
-- **`afterEach`** – Calls `resetDomainEvents()` and `jest.restoreAllMocks()` to isolate tests.
-- **"reaches the subscriber once the relay publishes the settlement's row"** – Asserts a single delivery with the correct `eventType` and `orderId` after `settleOutboxNudges()` + `relayOutbox()`.
-- **"a duplicate publish … creates no second delivery"** – Manually resets the outbox row to `pending` (simulating a crash after publish, before mark) and re-runs `relayOutbox()`. Asserts delivery count stays at 1 and `eventId` is unchanged.
-- **"an outbox event keeps its id as the webhook event id"** – Compares `delivery.eventId` against the outbox row's `_id`.
-- **"a fan-out that fails is retried by the relay, not swallowed"** – Spies on `webhookDeliveryRepository.create` to reject once, asserts the row is `pending` with `attempts: 1` and no delivery, then forces `nextAttemptAt` back and confirms the relay retries successfully.
+- **`settledOrder()`** (local helper) — Creates a user, product, and order via `orderService.create`, then pays by card with `payByCard`, returning the paid order. Used as the precondition for every test case.
+- **`beforeEach`** — Registers `paymentsModule` and `webhooksModule` via `registerCheckoutModules`, and seeds a webhook subscription for `payment.succeeded` with a fresh Ring secret.
+- **`afterEach`** — Calls `resetDomainEvents()` and `jest.restoreAllMocks()` to clean state between tests.
+- **"reaches the subscriber once the relay publishes the settlement's row"** — Asserts exactly one delivery row exists with the correct `eventType` and `payload.orderId`.
+- **"a duplicate publish of the same event creates no second delivery"** — Manually re-sets the outbox row to `pending` (simulating a crash after publish), re-runs `relayOutbox()`, and confirms the delivery count stays at 1 with the same `eventId`.
+- **"an outbox event keeps its id as the webhook event id"** — Confirms `delivery.eventId` equals the outbox row's `_id`.
+- **"a fan-out that fails is retried by the relay, not swallowed"** — Mocks `webhookDeliveryRepository.create` to reject once, verifies the outbox row stays `pending` with `attempts: 1` and no delivery is created, then forces `nextAttemptAt` to the past and confirms a second `relayOutbox()` call succeeds.
 
 ## Relationships
 
-- **`src/kernel/outbox.ts`** – Source of `outboxEventModel` (Mongo model for outbox rows), `relayOutbox` (publishes due rows), and `settleOutboxNudges` (triggers nudge-based relay). The test drives the relay lifecycle and inspects/mutates rows directly.
-- **`src/kernel/events.ts`** – `resetDomainEvents` clears the in-memory domain-event bus between tests.
-- **`src/modules/payments/services/index.ts`** – Provides `createIntent` and `confirmPayment`, which together trigger the settlement that enqueues the outbox row.
-- **`src/modules/payments/module.ts`** – Registered so the settlement pipeline (and its event emission) is active during the test.
-- **`src/modules/webhooks/module.ts`** – Registered so the fan-out/delivery logic executes when the relay publishes.
-- **`src/modules/webhooks/repository.ts`** – `webhookSubscriptionRepository` (seeded in `beforeEach`) and `webhookDeliveryRepository` (asserted and spied-on) are the persistence layer the test inspects.
-- **`src/modules/webhooks/secrets.ts`** – `mintRingSecret` generates the HMAC secret attached to the subscription.
-- **`src/modules/orders/index.ts`** – `orderService.create` is used to produce the order that the payment intent references.
-- **`tests/support/checkout-modules.ts`** – `registerCheckoutModules` wires the chosen modules into the test container.
-- **`tests/support/callers.ts`** – `asCustomer`, `testCallerContext`, `callerContextAs` supply the caller identity for order creation and payment confirmation.
-- **`src/modules/users/tests/factories.ts` / `src/modules/products/tests/factories.ts`** – `createUser` and `createProduct` seed the minimal domain data needed.
+- **`src/kernel/outbox.ts`** — Primary SUT: `outboxEventModel`, `relayOutbox`, and `settleOutboxNudges` are the functions under test.
+- **`src/kernel/events.ts`** — `resetDomainEvents()` clears in-memory event state after each test.
+- **`src/modules/orders/index.ts`** / **`src/modules/orders/services/index.ts`** — `orderService.create` builds the order that triggers the settlement.
+- **`src/modules/payments/module.ts`** — Registered in `beforeEach`; its settlement logic emits the `payment.succeeded` outbox event.
+- **`src/modules/webhooks/module.ts`** — Registered in `beforeEach`; owns the delivery fan-out logic exercised by `relayOutbox`.
+- **`src/modules/webhooks/repository.ts`** — `webhookSubscriptionRepository` (subscription setup) and `webhookDeliveryRepository` (delivery assertions and the mocked failure in the retry test).
+- **`src/modules/webhooks/secrets.ts`** — `mintRingSecret` generates the signing key for the subscription.
+- **`src/modules/payments/tests/factories.ts`** — `payByCard` simulates a successful card payment.
+- **`src/modules/products/tests/factories.ts`** — `createProduct` provides an in-stock product for the order.
+- **`src/modules/users/tests/factories.ts`** — `createUser` provides the buyer.
+- **`tests/support/checkout-modules.ts`** — `registerCheckoutModules` wires the real modules into the test kernel.
+- **`tests/support/callers.ts`** — `callerContextAs('admin')` supplies the auth context for `orderService.create`.
+- **`tests/support/response.ts`** — `asSuccess` unwraps the result envelope to extract the order.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb` initialises the in-memory test database.
 
 ## Notes
 
-- The idempotency test simulates a **crash-after-publish, before-mark** by manually setting `status: 'pending'` and `$unset`-ing `publishedAt`. This is a deliberate partial-failure scenario, not a natural code path.
-- The failure/retry test uses `mockRejectedValueOnce` on `webhookDeliveryRepository.create`, meaning the *delivery insert* fails, not the outbox publish. The retry is verified by resetting `nextAttemptAt` and calling `relayOutbox()` again.
-- The file references `docs/tools/outbox.md` in its doc comment for conceptual background on the outbox pattern.
-- `setupTestDb()` is called at module scope (not in `beforeEach`), so the DB connection is established once for the whole suite.
+- The test uses **real module registration** (not unit-level mocking) for payments and webhooks, making it a true integration test of the outbox pipeline. Only `webhookDeliveryRepository.create` is spied on, and only in the retry test.
+- The duplicate-publish test **manually mutates the outbox row** (`status: 'pending'`, clears `publishedAt`) to simulate a relay crash after the HTTP publish but before the status write — this is the specific race the outbox is designed to absorb.
+- `settleOutboxNudges()` must be called **before** `relayOutbox()` to simulate the nudge timer making the row eligible; calling `relayOutbox` alone would skip rows that haven't been nudged yet.
+- The file's header docstring references `docs/tools/outbox.md` as the design source for the outbox contract.

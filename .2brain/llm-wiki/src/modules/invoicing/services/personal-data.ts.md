@@ -1,7 +1,7 @@
 ---
 source: src/modules/invoicing/services/personal-data.ts
-sha256: 565e23d37ae4b5902034e849a38936bbf4ed9394b647aa898167f887462fe672
-generated_at: 2026-10-14T16:09:58.750288+00:00
+sha256: 55206a5add32508041665cadaad469f23ca163c5bee6819da5b3b60c410024b2
+generated_at: 2026-10-29T04:15:14.544836+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Serves the invoicing module's slice of the `POST /account/export` endpoint by collecting every invoice and credit note tied to an account's own orders. It exists as a dedicated file so that `module.ts` can register it as the `personalData` handler without coupling that logic to the repository or presenter directly.
+Implements the invoicing module's contribution to the `POST /account/export` endpoint (GDPR personal-data export). It gathers all invoices and credit notes belonging to an account by walking through that account's orders, since neither the invoice nor credit-note collections are keyed by `userId`.
 
 ## Key elements
 
-- **`collectPersonalData(userId: string)`** – The sole export. Resolves a `Promise<{ invoices: ExportedDocument[]; creditNotes: ExportedDocument[] }>` by:
-  1. Calling `findOwnOrders(userId)` to obtain the account's order IDs.
-  2. For each order, fetching its invoice and credit notes via `invoicingRepository`.
-  3. Mapping results through `presentExportedDocument` before returning.
-- No `erase` export is provided (see Notes).
+- **`collectPersonalData(userId: string)`** — The sole export. Resolves the user's orders via `orderService.findOwnOrders`, then for each order queries `invoicingRepository.findInvoiceByOrderId` and `findCreditNotesByOrderId`. Flattens the results and maps each document through `presentExportedDocument` into the `{ invoices, creditNotes }` shape the export handler expects.
+- **No `erase` export** — Deliberately absent. Both collections store only `orderId`, not `userId`, so the orders module's own `detachUserId` step already severs the link; there is nothing left to unlink here (Art. 17(3)(b)/(e) retention exemption).
 
 ## Relationships
 
-- **`src/modules/invoicing/module.ts`** – Registers this file's `collectPersonalData` as the invoicing section of the personal-data export.
-- **`src/modules/invoicing/presenter.ts`** – Supplies `presentExportedDocument` (shapes a raw document into the wire format) and the `ExportedDocument` return type.
-- **`src/modules/invoicing/repository.ts`** – Provides `invoicingRepository.findInvoiceByOrderId` and `.findCreditNotesByOrderId` for the actual data lookups.
-- **`src/modules/orders/index.ts`** – Re-exports `findOwnOrders`, which this file calls to resolve the user's order list before invoicing lookups.
-- **`src/modules/orders/services/read.ts`** – Likely the implementation behind `findOwnOrders`; the invoicing module depends on the orders module's read path to obtain order IDs.
+- **`src/modules/invoicing/module.ts`** — Registers `collectPersonalData` as the `personalData` handler for the export route. This file is the implementation behind that registration.
+- **`src/modules/invoicing/presenter.ts`** — Provides the `presentExportedDocument` mapper and the `ExportedDocument` type used to shape each invoice/credit-note record for the export response.
+- **`src/modules/invoicing/repository.ts`** — Source of `invoicingRepository`, which supplies `findInvoiceByOrderId` and `findCreditNotesByOrderId` used for the per-order lookups.
+- **`src/modules/orders/index.ts` / `src/modules/orders/services/index.ts`** — Source of `orderService.findOwnOrders(userId)`, the first hop that resolves which order IDs belong to the requesting account.
 
 ## Notes
 
-- **No `erase`/GDPR-erasure function.** Neither the `invoices` nor `creditNotes` collection stores `userId`; both are keyed by `orderId`. Once `orders`' own `detachUserId` severs the order-level link, there is nothing left to unlink here. This is the same Art. 17(3)(b)/(e) retention exemption documented in `orders/model.ts`'s `userId` field comment.
-- **Invoice is 0-or-1 per order; credit notes are many.** The flatMap for invoices guards with a truthy check (`invoice ? [ … ] : []`), while credit notes are mapped unconditionally.
-- The function is a plain promise chain (no `async`/`await`); keep that style consistent if extending.
+- The function issues **one repository call pair per order** (N+1 pattern). If an account has many orders this produces many round-trips; batch-query alternatives would require repository changes.
+- `presentExportedDocument` is applied uniformly to both invoices and credit notes — the presenter is responsible for any field-level differences between the two document shapes.
+- The absence of an `erase` function is intentional and documented in the module-level comment; do not add one without revisiting the retention-exemption rationale in `orders/model.ts`.

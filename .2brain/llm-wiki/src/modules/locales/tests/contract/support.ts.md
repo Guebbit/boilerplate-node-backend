@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/tests/contract/support.ts
-sha256: e3992873af7f510659c2acf5b157646bb170f0bda87f4bd4badc29605e8c30cc
-generated_at: 2026-10-15T10:47:23.978051+00:00
+sha256: c53fc8248113d1655f53019a7a90b0714a0aabd8a25cd335966ed8cd9ccebe6c
+generated_at: 2026-10-29T04:25:23.685622+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Shared setup helper for the locales contract test suites. It registers a language through the real `/locales` route so that the contract tests (`api.contract.test.ts`, `translations.contract.test.ts`) can operate on a known language without duplicating the registration call.
+Shared setup helper for the locales contract test suites. It defines a default language payload and a single function that registers a language by calling the real `POST /locales` route, so that individual test files don't repeat the boilerplate.
 
 ## Key elements
 
-- **`PORTUGUESE`** (const, exported) — Default language payload: `{ tag: 'pt', name: 'Portuguese', nativeName: 'Português' }`. Used as the body for `createLanguage` unless overridden.
-- **`createLanguage(bearer, body?)`** (async function, exported) — POSTs to `/locales` with the given Bearer token and body (defaults to `PORTUGUESE`). Throws an `Error` if the response is not `201`; otherwise returns the created language's `tag` string.
+- **`PORTUGUESE`** (constant) — Default language object (`tag: 'pt'`, `name: 'Portuguese'`, `nativeName: 'Português'`). Used as the fallback body whenever a test doesn't supply its own.
+- **`createLanguage(bearer, body?)`** (async function) — POSTs `body` to `/locales` with the given bearer token. Throws a descriptive `Error` (including status code and response body) if the response is not `201`. On success, returns the `tag` string from the response body.
 
 ## Relationships
 
-- **`tests/support/http.ts`** — Imports the `api` factory (`@tests/http`) to build the HTTP request. All calls go through the real server route, not a mock.
-- **`src/modules/locales/tests/contract/api.contract.test.ts`** — Consumes `createLanguage` (and possibly `PORTUGUESE`) as a fixture before exercising API-level contract assertions.
-- **`src/modules/locales/tests/contract/translations.contract.test.ts`** — Consumes `createLanguage` (and possibly `PORTUGUESE`) to ensure a language exists before asserting on translation behavior.
+- **`tests/support/http.ts`** — Provides the `api` HTTP client used by `createLanguage` to issue the POST request.
+- **`src/modules/locales/tests/contract/api.contract.test.ts`** — Consumes `createLanguage` / `PORTUGUESE` as part of its per-test setup.
+- **`src/modules/locales/tests/contract/translations.contract.test.ts`** — Same shared setup; calls `createLanguage` to obtain a valid language tag before asserting on translation endpoints.
 
 ## Notes
 
-- The function hard-codes the expectation of a `201` status; a `200` or `409` (e.g., language already registered) will cause a setup failure rather than a graceful fallback. If a test needs to re-run, it must handle the duplicate tag externally.
-- `body` is typed as `Record<string, unknown>`, so callers can register any language shape, but the function only reads `response.body.data.tag` from the response.
+- The function hits a **real route** (not a mock); the test environment must already have a running server.
+- The `body` parameter is typed `Record<string, unknown>`, so callers can pass arbitrary payloads, but the shape must match what the `/locales` route expects.
+- Non-201 responses are treated as setup failures and throw immediately—there is no retry or graceful fallback.

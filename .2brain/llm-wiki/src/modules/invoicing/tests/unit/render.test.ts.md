@@ -1,7 +1,7 @@
 ---
 source: src/modules/invoicing/tests/unit/render.test.ts
-sha256: 000934dfe989a029bc80f968e22404622372d5d27be46a034e64681b0d5fd349
-generated_at: 2026-10-15T10:40:57.368728+00:00
+sha256: 4eb16c1c86a95e2de445a71bbf2168202f71eb80ffe0acd246727da483819738
+generated_at: 2026-10-29T04:18:51.110942+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the invoice and credit-note PDF rendering service. It exercises `renderInvoicePdf` / `renderCreditNotePdf` against a **real** file-backed document store (a temp directory) while replacing the e-invoicing provider (no Chromium). The assertions target three behaviours: the second render streams the stored file instead of re-issuing, a retention of `0` stores nothing, and a store that throws never turns a download into a failure.
+Unit tests for the invoice and credit-note PDF render service. The e-invoicing provider (the actual PDF generator) is mocked out; the document store is real (a temporary directory). The tests verify the caching and resilience contract: a second download streams the stored file, retention `0` bypasses storage, and store failures never block a download.
 
 ## Key elements
 
-- **`renderInvoicePdf` / `renderCreditNotePdf`** — imported from `../../services/render`; the functions under test.
-- **`issue`** (`jest.fn()`) — stand-in for the e-invoicing provider's single method. Each call returns a distinct `Buffer` (`pdf-1`, `pdf-2`, …) so tests can tell a fresh render from a cached one.
-- **`anInvoice(id)` / `aCreditNote(id)`** — factory helpers that wrap a minimal object with `asStub` to satisfy the `InvoiceDocument` / `CreditNoteDocument` types without a full model.
-- **`storedNames()`** — lists the temp store directory (sorted) to assert what was persisted.
-- **Module mock of `../../providers`** — replaces `resolveEInvoicingProvider` with a one-liner that delegates to `issue`.
-- **Module mock of `@infrastructure/adapters/document-store`** — spreads `jest.requireActual` and re-wraps `readDocument` / `writeDocument` as `jest.fn` so individual tests can reject them.
-- **Three `describe` blocks** — stored-copy semantics (cache hit, unique names, co-located credit notes, re-render after deletion), retention `0` (no file on disk, provider called every time), and store failure (write/read rejection still yields PDF bytes).
-- **`beforeEach` / `afterEach`** — create and remove a unique `mkdtemp` directory; set `NODE_DOCUMENT_STORE_PATH` and `NODE_INVOICE_PDF_RETENTION_DAYS` via `setEnvironment`.
+- **`renderInvoicePdf` / `renderCreditNotePdf`** (imported from `../../services/render`) — the functions under test.
+- **`issue`** — a module-level `jest.fn` standing in for the provider's PDF-generation call. Re-implemented in `beforeEach` to return a distinct body per call (`pdf-1`, `pdf-2`, …) so "the stored copy" and "a fresh render" are distinguishable.
+- **`anInvoice(id)` / `aCreditNote(id)`** — helper factories that build minimal, frozen document objects via `asStub`.
+- **`storedNames()`** — helper that lists (sorted) the files in the temp store directory.
+- **`beforeEach` / `afterEach`** — create and remove a `mkdtemp` directory under `os.tmpdir()`, set `NODE_DOCUMENT_STORE_PATH` and `NODE_INVOICE_PDF_RETENTION_DAYS` via `setEnvironment`.
+- **`jest.mock('../../providers', …)`** — replaces `resolveEInvoicingProvider` so no Chromium/PDF engine is needed.
+- **`jest.mock('@infrastructure/adapters/document-store', …)`** — spreads the real module then wraps `readDocument` and `writeDocument` in `jest.fn(realImpl)` so individual tests can call `.mockRejectedValueOnce` without breaking the others.
+- **Three `describe` blocks** — "the stored copy of a rendered invoice" (caching, id uniqueness, credit-note coexistence, re-render after deletion), "a retention of 0" (no files written), "a store that fails" (download still succeeds on write or read failure).
 
 ## Relationships
 
-- **`src/modules/invoicing/services/render.ts`** — the code under test; both render functions are called directly.
-- **`src/infrastructure/adapters/document-store.ts`** — mocked at module level; `readDocument` and `writeDocument` are spied so individual tests can force failures while the rest of the module (path resolution, etc.) runs for real.
-- **`src/modules/invoicing/model.ts`** — type-only imports (`InvoiceDocument`, `CreditNoteDocument`) used by the `asStub` factory helpers.
-- **`tests/support/environment.ts`** — `setEnvironment` configures the temp store path and retention days per test.
-- **`tests/support/stub.ts`** — `asStub` casts minimal literals to the document types.
+- **`src/modules/invoicing/services/render.ts`** — the code under test; exports the two render functions.
+- **`src/modules/invoicing/model.ts`** — source of the `InvoiceDocument` and `CreditNoteDocument` types used in the stub helpers.
+- **`src/infrastructure/adapters/document-store.ts`** — the real file-backed store. The test mocks it only to intercept `readDocument`/`writeDocument` with `jest.fn` for selective failure; default behaviour delegates to the actual implementation.
+- **`tests/support/environment.ts`** — provides `setEnvironment` to point the store at the temp dir and set retention.
+- **`tests/support/stub.ts`** — provides `asStub` for creating frozen document literals.
 
 ## Notes
 
-- The document-store mock uses `jest.requireActual` + `jest.fn` spread rather than `jest.spyOn` on the namespace import, because `spyOn` cannot redefine a namespace-import getter under the project's SWC transform (see `tests/support/ports.ts`).
-- The provider mock returns a **different** byte string per call (`pdf-1`, `pdf-2`, …). This is essential: tests rely on the bytes to prove whether a render came from disk or from the provider.
-- Retention is controlled entirely by the `NODE_INVOICE_PDF_RETENTION_DAYS` environment variable (set per test), not by a constructor argument.
-- The store path is a real temp directory on disk, not an in-memory fake — this is deliberate so the test exercises the actual `readFile`/`writeFile` paths.
+- The document-store mock uses `jest.mock` with `jest.requireActual` rather than `jest.spyOn` because `spyOn` cannot redefine a namespace-import getter under the project's swc transform in mutation runs (see `tests/support/ports.ts`).
+- The `issue` mock's per-call counter means any assertion that compares `first` vs `second` buffer contents is relying on `pdf-1` ≠ `pdf-2`; a regression that accidentally calls `issue` twice on the "second" download would be caught by the `toHaveBeenCalledTimes(1)` guard as well.
+- Store file naming convention asserted: `invoice-<24-char-id>.pdf` and `credit-note-<24-char-id>.pdf`.

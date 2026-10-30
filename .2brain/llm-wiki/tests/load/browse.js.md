@@ -1,7 +1,7 @@
 ---
 source: tests/load/browse.js
-sha256: 89340a0e8d351c52b947f149ce044144970ed8ba2a1af84bbeec6654ddc3b03e
-generated_at: 2026-09-23T20:09:00.212071+00:00
+sha256: 1ede7db00349ffa602cef59cb0800a7390be00394c72d19e2943edbece24f35b
+generated_at: 2026-10-29T07:05:09.364919+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A k6 load test that simulates an anonymous visitor browsing the storefront under a ramped VU profile. Unlike the autocannon benchmark (`npm run bench`), this script walks multiple endpoints, exercises realistic request chains (list → detail), and asserts pass/fail thresholds so the shell can act on a verdict rather than just a number.
+A k6 load test that simulates an anonymous visitor browsing the storefront (catalogue listing, a product detail page, and facets). Unlike the single-endpoint autocannon benchmark (`npm run bench`), this script ramps concurrency, exercises multiple endpoints in sequence, and enforces pass/fail thresholds so the shell can act on a verdict rather than just reporting numbers.
 
 ## Key elements
 
-- **`options` (exported)** — k6 stage configuration (20 s ramp-up → 40 s hold at 20 VUs → 10 s ramp-down) and three thresholds: `p(95) < 400 ms` response time, `< 1 %` non-2xx/3xx, and `> 99 %` check pass rate.
-- **Default export (test scenario)** — two k6 `group` blocks:
-    - _catalogue_: `GET /products`, then extracts the first item's id and issues `GET /products/:id` to exercise the detail lookup and its cache.
-    - _facets_: `GET /products/categories`.
-- **`BASE_URL`** — read from `__ENV.BASE_URL`, defaults to `http://localhost:3000`.
+- **`options`** — Exports the k6 scenario config: a 20s ramp to 20 VUs, 40s hold, 10s ramp-down. Thresholds assert `p(95) < 400 ms`, `< 1%` failed requests, and `> 99%` check pass rate.
+- **`default()` (VU iteration)** — Runs two groups per VU tick:
+  - **`group('catalogue')`** — GETs `/products`, checks for a 200 and a non-empty `items` array, then follows through to `/products/{first.id}` to exercise the detail-lookup path and its cache.
+  - **`group('facets')`** — GETs `/products/facets` and asserts a 200.
+- **`BASE_URL`** — Resolved from the `BASE_URL` env var (set via `__ENV.BASE_URL`), defaulting to `http://localhost:3000`.
 
 ## Relationships
 
-No graph neighbors are recorded for this file. It is a standalone k6 script invoked externally (`k6 run k6/browse.js`) and does not import from or export to any other module in the repo.
+No graph neighbors are recorded for this file. It is a leaf script invoked directly by the `bench:k6` npm command.
 
 ## Notes
 
-- **Thresholds are deliberate placeholders.** They are set to values the API comfortably meets so the suite doesn't fail on first run. Replace them after measuring real p95 with `npm run bench` and applying roughly a 1.4× headroom multiplier.
-- **Not a merge gate.** Results are machine-dependent; on a shared CI runner they are noise. Run manually against a stack you control or on a fixed nightly environment.
-- **k6, not Node.** Despite the `.js` extension, this is a k6 script (uses `k6/http`, `k6` built-ins, `__ENV`). It cannot be executed with `node`.
-- The detail-page request is conditional: if the list response is missing or `data.items.0.id` is falsy, only the list check fires for that iteration.
+- **Thresholds are placeholders.** The 400 ms / 0.01 / 0.99 values are intentionally lenient so the suite passes on first run. Replace them after measuring with `npm run bench` and setting p95 to roughly 1.4× the observed value.
+- **Not a merge gate.** Load numbers are machine-dependent; on a shared CI runner alongside other jobs they are noise. Run manually against a controlled stack or on a fixed nightly environment.
+- **The detail-page call is conditional.** If the listing returns zero items, the `/products/:id` request is skipped entirely, so a misconfigured or empty database silently reduces the test's coverage without failing.
+- **k6, not autocannon.** This file uses the `k6/http` and `k6` modules; it is unrelated to the autocannon-based `bench` script except in intent.

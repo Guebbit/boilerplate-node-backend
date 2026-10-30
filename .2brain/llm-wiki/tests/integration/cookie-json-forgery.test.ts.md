@@ -1,7 +1,7 @@
 ---
 source: tests/integration/cookie-json-forgery.test.ts
-sha256: db8c4f5d2bfc656c414d8420230edde8aee43ae22218b11bc45dfa397484692b
-generated_at: 2026-10-15T12:46:38.339502+00:00
+sha256: 43186835efbde198644b98e4c4aa6ff277fa39c727e3aa190a3cdca26433d191
+generated_at: 2026-10-29T06:54:08.664204+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test verifying that a `j:`-prefixed cookie (which Express's `cookie-parser` auto-decodes into a JavaScript object) does not cause a 500 on a credential route. Without protection, an object like `{"$ne":null}` would leak into a Mongo filter or a string method call, crashing the handler.
+Integration test that guards against a cookie-parser JSON-injection path: a `j:`-prefixed cookie value is deserialized into a JavaScript object by `cookie-parser`, so a forged `jwt=j:{"$ne":null}` arrives at the `/account/logout` controller as an object rather than a string. The test verifies the logout handler tolerates this and returns `204` instead of crashing with a 500 (e.g., from passing the object into a Mongo filter or calling a string method on it).
 
 ## Key elements
 
-- **`setupTestDb()`** — called at module scope to provision a clean test database before the suite runs.
-- **`describe('a j: cookie on a credential route')`** — the single suite; currently contains one test.
-- **`it('is read as "no session", not as an object: logout answers 200')`** — sends `POST /account/logout` with `Cookie: jwt=j:{"$ne":null}` (URL-encoded) and asserts the response status is **200**, confirming graceful "no session" handling rather than a 500.
+- **`setupTestDb()`** — invoked once at module level to seed/reset the test database before the suite runs.
+- **`api()`** — returns a pre-configured `supertest`-style client bound to the app under test; used to issue the HTTP request.
+- **Test: `is read as "no session", not as an object: logout answers 200`** — POSTs `/account/logout` with header `Cookie: jwt=j%3A%7B%22%24ne%22%3Anull%7D` (the `encodeURIComponent` of `j:{"$ne":null}`) and asserts `response.status` is `204`.
 
 ## Relationships
 
-- **`tests/support/setup-test-db.ts`** — exports `setupTestDb`, invoked once before the test to create/seed the test database.
-- **`tests/support/http.ts`** — exports `api`, the HTTP client factory used to issue the `POST /account/logout` request with a custom `Cookie` header.
+- **`tests/support/setup-test-db.ts`** — provides `setupTestDb`, called at the top of the file to prepare database state for the single test case.
+- **`tests/support/http.ts`** — provides `api`, the HTTP client used to issue the forged-cookie request against the running app.
 
 ## Notes
 
-- The attack vector is specific to Express's `cookie-parser` behavior: any cookie value starting with `j:` is `JSON.parse`d and delivered to the handler as an object instead of a string. The test encodes this via `encodeURIComponent('j:{"$ne":null}')` so the wire format is a valid `j:` payload.
-- The test is scoped to the **logout** route; sibling credential routes (login, token-refresh) are not covered here.
+- The `j:` prefix is a `cookie-parser` convention: any cookie whose value starts with `j:` has the remainder `JSON.parse`d, so the downstream handler receives a raw object. This is the attack vector the test exercises.
+- The test description string says "logout answers 200" but the actual assertion checks `204`; treat the assertion as authoritative.
+- The test is intentionally minimal (one case) because it targets a single, narrow class of 500 caused by type confusion on one credential route.

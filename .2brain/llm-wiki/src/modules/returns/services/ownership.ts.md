@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/services/ownership.ts
-sha256: 94771ce51774f5d70002bab3f282bc0a9db4c71cd144e136a60ce0480ff0af68
-generated_at: 2026-10-15T11:57:28.348226+00:00
+sha256: becb6a2c0c193748450c19c14fea0c02adbc4bb3483ef2843eabdb2593b3d5d3
+generated_at: 2026-10-29T05:44:02.729081+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single-purpose guard that answers one question for the returns module: *does the caller own this order?* Both `createReturn` and `getReturn` call this before proceeding, because being able to *see* an order (operator visibility) is not the same as having the buyer's right to act on it (ownership).
+Central ownership gate for the `returns` module. Before any return-related operation touches an order, this file answers the single question: *may this caller open (or view) a return on this order?* It is the shared prerequisite that `createReturn` and `getReturn` invoke before proceeding.
 
 ## Key elements
 
-- **`ownOrder(orderId: string, authContext: AuthContext): Promise<OrderDocument | undefined>`** — The sole export. Delegates to `orderService.getForCaller` to fetch the order for the given caller, then additionally verifies that `order.userId` equals `authContext.id`. Returns the `OrderDocument` only when both conditions hold; otherwise `undefined`. Callers treat `undefined` as "no ownership" and must short-circuit.
+- **`OpenableOrder`** (interface) — Pairs an `OrderDocument` with a `byStaff` boolean that records whether the caller is acting on the buyer's behalf rather than as the buyer.
+- **`ownOrder(orderId, authContext)`** — Resolves the order and returns it only if the caller is the buyer (`isBuyer`). An operator who can *read* any order is not its buyer; this returns `undefined` in that case.
+- **`openableOrder(orderId, authContext)`** — Two-tier access check:
+  1. If the caller is the buyer → `{ order, byStaff: false }`.
+  2. Otherwise, if the caller holds the `update:Return` ability (resolved via `callerForSubject`) → fetches the order by ID and returns `{ order, byStaff: true }`.
+  3. No ability → `undefined` (callers treat this as 404).
 
 ## Relationships
 
-- **`@modules/orders` (index / services)** — Imports `orderService` and the `OrderDocument` type. All data access to the order record is delegated here; this file never touches a data store directly.
-- **`@types/auth-context`** — Imports the `AuthContext` type, which supplies the caller identity (`authContext.id`) used in the ownership comparison.
-- **`src/modules/returns/services/create.ts`** — Consumes `ownOrder` as a pre-check before creating a return.
-- **`src/modules/returns/services/read.ts`** — Consumes `ownOrder` as a pre-check before reading/returning return data (`getReturn`).
+- **`@kernel/permissions` → `callerForSubject`** — Resolves the caller's permission scope for a given subject (`'Return'`) so `holds` can be evaluated.
+- **`@kernel/ability` → `holds`** — Checks whether the resolved caller possesses `update` on `Return`.
+- **`@modules/orders` → `isBuyer`, `orderService`, `OrderDocument`** — `isBuyer` (from `domain/rules.ts`) determines buyer identity; `orderService` (from `services/index.ts`) provides `getForCaller` and `getById`; `OrderDocument` (from `model.ts`) is the order shape threaded through both exports.
+- **`create.ts`, `read.ts`, `options.ts`, `withdraw.ts`** (sibling return services) — Call `openableOrder` as a pre-flight check before performing their respective return operations.
+- **`@types` → `AuthContext`** — The caller identity passed into every function in this file.
 
 ## Notes
 
-- The function deliberately checks *ownership* (`userId === authContext.id`), not merely *visibility*. An operator with broad read access via `getForCaller` will still receive `undefined` from `ownOrder` if they are not the buyer.
-- The comparison uses `String(order.userId)` to guard against a type mismatch (e.g., numeric vs. string ID fields on the order document).
-- Callers should branch on `undefined` (falsy) rather than expecting an error/throw; the function never rejects for a non-owner.
+- `ownOrder` and `openableOrder` are deliberately separate: `ownOrder` is a *strict buyer* check (no staff path), while `openableOrder` is the *business* gate that also admits staff. Callers that only need "is this my order" should use `ownOrder`.
+- The `byStaff` flag is the only signal downstream services receive about *who* is acting; there is no separate "actor" field. Logic that branches on buyer-vs-staff behavior must read `byStaff`.
+- A staff member who is also the buyer is treated as buyer first (`byStaff: false`); the staff path is only reached when `isBuyer` is false.
+- Both functions return `undefined` (not `null`) on failure, and the documented contract is that callers map that to an HTTP 404 rather than 403, hiding existence of the order.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/tests/unit/schema-contract.test.ts
-sha256: 984a7abfcb675e401d59b0dabfbfbce3c64f88e57d3575411cb21efa1b945c1a
-generated_at: 2026-10-15T12:02:15.310650+00:00
+sha256: 77d8fc0d49423bd97c7560ab7f32cff580bbadadadec685a069a819f487958fe
+generated_at: 2026-10-29T05:51:18.757092+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit test that pins down the public contract of `returnSchema` — which fields are required, which enums are closed, what defaults apply, what references exist, and which indexes are declared. It also asserts the deliberate *absence* of a `userId` field, encoding the design decision that a return is owned solely by its order (supporting GDPR Art. 17(3)(b)/(e) account-erasure without touching return records).
+Asserts the structural contract of `returnSchema`: which fields are required, their types/enums/defaults, the index layout, and—critically—that the schema carries **no `userId`** so GDPR account erasure (Art. 17(3)(b)/(e)) never needs to touch a return record. It exists to fail loudly if anyone adds a person-linked field or breaks the order-keyed design.
 
 ## Key elements
 
-- **`describe('returnSchema', …)`** — single top-level block; no exported helpers, just Jest assertions.
-- **Required-fields test** — asserts `requiredPaths` equals `['currency','kind','lines','orderId','orderNumber','reason','returnPostage']`.
-- **No-person link test** — asserts `returnSchema.path('userId')` is `undefined`.
-- **ObjectId reference test** — asserts `orderId` is typed `ObjectId` and references the `Order` model.
-- **Defaults & enums test** — asserts `status` defaults to `'requested'` and lists its five allowed values; `reason` has five values; `returnPostage` has two; `kind` defaults to `'return'` with `['return','cancellation']`.
-- **Index test** — asserts `indexOptionSpecs` includes `returns_orderId_createdAt` and `returns_status_createdAt`.
+- **`requiredPaths` check** – pins the nine mandatory fields (`currency`, `kind`, `lines`, `openedBy`, `orderId`, `orderNumber`, `reason`, `requestedAt`, `returnPostage`).
+- **`userId` absence assertion** – confirms `returnSchema.path('userId')` is `undefined`, enforcing the no-person-key invariant.
+- **`orderId` reference check** – verifies it is an `ObjectId` with `ref: 'Order'`.
+- **Enum & default checks** – locks the closed vocabularies for `status` (6 values, default `'requested'`), `reason` (4 values), `returnPostage` (`'consumer' | 'shop'`), and `kind` (`'return' | 'cancellation'`, default `'return'`).
+- **Index spec check** – asserts two compound indexes exist: `returns_orderId_createdAt` (per-order returns) and `returns_status_createdAt` (staff queue).
 
 ## Relationships
 
-- **`src/modules/returns/model.ts`** — the source of the `returnSchema` object under test; every assertion here validates its shape.
-- **`tests/support/schema.ts`** — supplies the introspection helpers (`enumOf`, `indexOptionSpecs`, `refOf`, `requiredPaths`, `typeOf`, `defaultOf`) that let the test read Mongoose schema metadata without instantiating documents.
+- **`src/modules/returns/model.ts`** – the sole subject under test; provides `returnSchema` (a Mongoose schema instance).
+- **`tests/support/schema.ts`** – supplies the reusable assertion helpers (`enumOf`, `indexOptionSpecs`, `refOf`, `requiredPaths`, `typeOf`, `defaultOf`) that read a Mongoose schema without instantiating a model.
 
 ## Notes
 
-- The test is a *contract* test: it checks schema-level metadata (paths, types, enums, defaults, indexes) rather than runtime behavior or validation logic. A change to any of those in `model.ts` will break this file.
-- The absence-of-`userId` assertion is intentional and load-bearing for the GDPR compliance story documented in the module header; removing it silently would change the erasure guarantee.
-- Index assertions use `toContain` on a space-joined string, so ordering of indexes in the model does not matter, but a rename or removal of either compound index will fail the test.
+- Path aliases: `@modules/…` and `@tests/…` resolve to `src/modules/…` and `tests/support/…` respectively; no relative imports are used.
+- The index test joins all specs into one string and checks with `toContain`, so it tolerates additional indexes but catches missing ones.
+- `kind` is deliberately two-valued (`return` vs `cancellation`) so the model can distinguish "goods coming back" from "cancel what never shipped" without a separate collection.
+- The file is a pure schema-shape test; it never touches the database or validates runtime behavior.

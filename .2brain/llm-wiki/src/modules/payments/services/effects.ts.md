@@ -1,40 +1,35 @@
 ---
 source: src/modules/payments/services/effects.ts
-sha256: 450d122cc03c662daeb5947f414476a0f6823032a4645e069173ee227d9bbe09
-generated_at: 2026-10-15T11:29:20.787365+00:00
+sha256: 90c1f99ba3495754f3968b28f756c1ab0873c1a0b2f8f932228653a1ce819eb9
+generated_at: 2026-10-29T05:10:16.636068+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/payments/services/effects.ts
 
 ## Purpose
-
-Background sweep that finishes work left incomplete by the normal settlement flow: retries refunds the provider refused or never answered, and asks the provider about payments that settled without a webhook arriving. Exports two entry points (`retryOpenRefunds`, `reconcileStalePayments`) intended to be called on a schedule.
+Two scheduled sweep operations that finish what a settlement left undone: retrying refunds the provider refused or never acknowledged, and reconciling payments whose provider decided without delivering a webhook. Both sweeps are sequential, batch-capped, and idempotent, mirroring the sweep shape in `orders/services/cancel.ts`.
 
 ## Key elements
-
-- **`sweepDue`** (internal) — shared skeleton for both sweeps. Fetches one batch of due payments, processes them sequentially via a caller-supplied handler, warns if the batch hit the 200-payment cap, and returns the settled count.
-- **`retryOneRefund`** (internal) — wraps `settleOpenRefunds` for a single payment; logs and returns `false` on error so the payment stays open for the next sweep.
-- **`retryOpenRefunds`** (exported) — the refund sweep. Uses `paymentRepository.findWithOpenRefunds` with a grace period from `paymentEffectRetryMinutes()`.
-- **`reconcileOne`** (internal) — wraps `settleFromProvider` for a single payment; counts it settled only if the provider's answer actually transitioned the payment's status. Logs and returns `false` on error.
-- **`reconcileStalePayments`** (exported) — the reconcile sweep. Uses `paymentRepository.findStaleInFlight` with a grace period from `paymentReconcileMinutes()`.
-- **`SWEEP_BATCH_SIZE`** — constant `200`; caps how many payments one pass touches.
+- **`sweepDue`** (internal) — shared skeleton for both sweeps. Finds a batch of payments past a grace cutoff, processes them one-by-one, logs errors (leaving the payment for the next pass), and warns when the batch hit the 200-item cap so a truncated run isn't mistaken for completion.
+- **`retryOpenRefunds`** (exported) — the refund sweep. Calls `paymentRepository.findWithOpenRefunds`, then delegates each payment to `settleOpenRefunds`. Grace period from `paymentEffectRetryMinutes()`.
+- **`reconcileStalePayments`** (exported) — the reconciliation sweep. Calls `paymentRepository.findStaleInFlight`, then delegates each payment to `settleFromProvider`. Grace period from `paymentReconcileMinutes()`.
+- **`SWEEP_BATCH_SIZE`** — constant (200) capping how many payments one pass touches before the sweep asks to be re-run.
+- **`retryOneRefund`**, **`reconcileOne`** — thin per-payment adapters that convert the domain service result into the boolean `sweepDue` expects.
 
 ## Relationships
-
-- **`./refunds.ts`** — calls `settleOpenRefunds(payment)` per payment in the refund sweep; reuses the same idempotency keys so a re-ask is safe.
-- **`./settlement.ts`** — calls `settleFromProvider(payment)` per payment in the reconcile sweep; the write is conditional, so a webhook-delivered payment is a no-op.
-- **`../repository.ts`** — provides `paymentRepository.findWithOpenRefunds` and `paymentRepository.findStaleInFlight` as the "find" callbacks.
-- **`../model.ts`** — `PaymentDocument` is the unit passed through the sweep.
-- **`../config.ts`** — supplies the two grace-period functions (`paymentEffectRetryMinutes`, `paymentReconcileMinutes`).
-- **`../../infrastructure/adapters/logger.ts`** — all warn/error/info output.
-- **`./index.ts`** — re-exports the two public functions for module consumers.
-- **Tests** — `reconcile.test.ts`, `refunds.test.ts`, and `service.test.ts` exercise these sweeps end-to-end; `cancelled.test.ts` and `staff-reads.test.ts` cover adjacent paths that share the same repository queries.
+- **`../repository`** — calls `findWithOpenRefunds` and `findStaleInFlight` to select the due batches.
+- **`./refunds`** — calls `settleOpenRefunds` per payment in the refund sweep.
+- **`./settlement`** — calls `settleFromProvider` per payment in the reconcile sweep.
+- **`../config`** — reads `paymentEffectRetryMinutes` and `paymentReconcileMinutes` as the grace windows.
+- **`@infrastructure/adapters/logger`** — structured error/warn/info logging for each sweep pass.
+- **`../model`** — imports the `PaymentDocument` type used as the unit of work.
+- **`../services/index.ts`** — barrel file that re-exports the two public functions.
+- **`../jobs.ts`** — the cron/scheduler layer that calls `retryOpenRefunds` and `reconcileStalePayments` on their intervals.
 
 ## Notes
-
-- Processing is **sequential**, not parallel — intentional, mirroring `orders/services/cancel.ts`'s sweep. Do not add concurrency without understanding the provider's rate limits and the conditional-write guarantees in `settlement.ts`.
-- A "settled" count in `reconcileStalePayments` means the payment **changed state** this pass (`transitioned === true` and status differs). A payment the provider was still undecided about, or one that lost a race, does **not** increment the count.
-- Hand-paid refunds are explicitly out of scope for the refund sweep; only an operator's manual call can close them.
-- Stryker mutation-testing disable/restore annotations guard the log-only branches — keep them if you refactor the logging lines.
-- The batch-cap warning is the **only** signal that work remains; callers should loop or re-schedule until the returned count drops below the batch size.
+- Processing is deliberately **sequential**, not parallel, to match the cancel-sweep convention and keep provider call rates predictable.
+- A **full batch (200 items) triggers a warning**, not an error — the caller is expected to re-run the job; the warning exists so a truncated pass isn't silently read as "all done."
+- **Hand-paid refunds are explicitly excluded** from the refund sweep; only an operator's manual call can mark them settled.
+- The reconcile sweep is safe to run against already-settled payments: `settleFromProvider` uses conditional writes, so a payment the webhook already delivered is a no-op.
+- `Stryker` mutation-testing annotations (`// Stryker disable …`) surround every logger call — these are intentional and should not be removed.

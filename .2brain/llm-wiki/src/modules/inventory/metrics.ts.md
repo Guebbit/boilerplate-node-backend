@@ -1,28 +1,32 @@
 ---
 source: src/modules/inventory/metrics.ts
-sha256: c96dd09b71dffd561977e243491dad3d33ce577ea9682d30e693fbbb3cfd944c
-generated_at: 2026-10-15T10:34:54.523568+00:00
+sha256: 60c361347cf79b6cd03ac6c219cce44b51cdf4c6f473b239b857ca1945ab4db9
+generated_at: 2026-10-29T04:00:59.968354+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/inventory/metrics.ts
 
 ## Purpose
-Defines the inventory module's owned Prometheus gauges and registers them on the shared metrics registry. The file exists as a side-effect module: importing it registers the gauges, and the underscore-prefixed exports are never read. Placing gauges in the module (rather than `infrastructure`) keeps domain semantics local; the overview endpoint reads the values via the shared registry without importing this file.
+
+Defines the two Prometheus gauges that the inventory module owns and registers into the shared `metricsRegistry`. The file exists so that gauge registration is a pure side-effect import (bound to underscore-prefixed variables) and so the overview endpoint can read the metrics without creating a dependency back into this module.
 
 ## Key elements
-- **`_productsLowStockTotal`** (Gauge, `products_low_stock_total`) — Async `collect()` that calls `lowStockCount()` at scrape time to report how many products are at or under the low-stock threshold. Measures *availability*, not raw `onHand` units.
-- **`_inventoryReservedUnitsTotal`** (Gauge, `inventory_reserved_units_total`) — Async `collect()` that calls `stockLevelRepository.sumReserved()` to report total units held by open (unpaid) reservations.
+
+- **`_productsLowStockTotal`** (`Gauge`, metric name `products_low_stock_total`) — Reports how many products are at or under the low-stock threshold. Value is computed at scrape time via an async `collect()` callback that calls `inventoryService.lowStockCount()`. Counts *availability*, not raw units on hand.
+- **`_inventoryReservedUnitsTotal`** (`Gauge`, metric name `inventory_reserved_units_total`) — Reports total units currently held by open (unpaid) reservations across the catalogue. Computed at scrape time via `stockLevelRepository.sumReserved()`.
+
+Both gauges are intentionally bound to `_`-prefixed locals; nothing imports or reads the handles. Registration into `metricsRegistry` in the constructor is the entire job.
 
 ## Relationships
-- **`src/infrastructure/observability/metrics-registry.ts`** — Imports `metricsRegistry` (a `prom-client` Registry instance) to register both gauges.
-- **`src/modules/inventory/repository.ts`** — Imports `stockLevelRepository`; calls `sumReserved()` inside the reserved-units gauge's `collect`.
-- **`src/modules/inventory/services/index.ts`** — Imports `lowStockCount`; called inside the low-stock gauge's `collect`.
-- **`src/modules/inventory/services/levels.ts`** — Implementation home of `lowStockCount`, re-exported through `services/index.ts`.
-- **`src/modules/inventory/module.ts`** — Module entry point expected to import this file for its registration side effect (no runtime value read).
+
+- **`src/infrastructure/observability/metrics-registry.ts`** — Supplies the shared `metricsRegistry` instance that both gauges register into (passed as the `registers` array).
+- **`src/modules/inventory/services/index.ts`** — Provides `inventoryService.lowStockCount()`, the data source for `products_low_stock_total`.
+- **`src/modules/inventory/repository.ts`** — Provides `stockLevelRepository.sumReserved()`, the data source for `inventory_reserved_units_total`.
+- **`src/modules/inventory/module.ts`** — Expected to import this file for its side effect (gauge registration) without referencing the underscored exports.
 
 ## Notes
-- Both gauge variables are deliberately prefixed with `_` (unused in TypeScript) to signal "register-only" exports. The same convention is used in `metrics-registry.ts` for its process gauges.
-- `collect` callbacks are **async**; Prometheus will await them at scrape time. A slow `lowStockCount()` or `sumReserved()` query delays the entire scrape for this module.
-- The low-stock gauge intentionally avoids reporting `onHand`: a product with units fully reserved reads as out-of-stock to customers, so `onHand` would misreport availability.
-- The file docblock references `modules/account/metrics.ts` as the sibling pattern and `docs/modules/inventory.md` for broader module context.
+
+- The module docblock points to `modules/account/metrics.ts` as the canonical example of *why* domain gauges live in the module rather than in `infrastructure`, and to `docs/modules/inventory.md` for broader context.
+- `products_low_stock_total` measures availability, not `onHand`: a product with 40 units all reserved reads as **0** available here, so comparing this gauge against a simple `on_hand` counter will look inconsistent by design.
+- A steadily rising `inventory_reserved_units_total` with flat sales is an alert signal for abandoned checkouts or a stalled payment-confirmation flow.

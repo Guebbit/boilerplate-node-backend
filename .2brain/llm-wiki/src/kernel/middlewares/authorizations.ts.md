@@ -1,7 +1,7 @@
 ---
 source: src/kernel/middlewares/authorizations.ts
-sha256: 9a6c889b98ae1a14069230b1c4fab5d5cb113c7252126aa17876b7d25c1eb02e
-generated_at: 2026-10-15T09:51:49.920073+00:00
+sha256: 7a4e1d97bfaad4cb61ff4541785148afe90d09b426295aa833f80cb323866dc4
+generated_at: 2026-10-29T02:19:42.142515+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,43 +9,42 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express middleware guards that resolve a caller's identity (bearer token or session cookie) and enforce permission-key-level access. Every guard rejection is audited and, where applicable, surfaced as a security event before the response is sent. The file exists so that routes declare *which permission key* they need rather than *which role*, and so a single middleware chain handles anonymous access, authenticated access, rate-limited API keys, and freshness re-authentication uniformly.
+Express middleware guards that sit in front of routes to resolve identity and enforce authorization. Built on the kernel's authentication resolver, the file provides a family of guards (`getAuth`, `isAuth`, `requirePermission`, `requirePermissionViaCookie`, `requireFreshAuth`/`requireFreshAuthWhen`) that either populate `request.authContext`/`request.caller` or reject the request. Every rejection is audited and, where it names an attack, recorded as a security event before the response is sent.
 
 ## Key elements
 
-- **`getTokenBearer`** – Extracts the Bearer token from the `Authorization` header; returns `undefined` when absent.
-- **`getAuth`** – Primary middleware: resolves the caller via bearer token, session cookie (in cookie mode), or API key; populates `request.authContext`, `request.caller`, `request.sessionVia`; answers 429 for over-budget API keys and 403 for cookie-authenticated cross-origin unsafe requests.
-- **`isAuth`** *(referenced in module doc)* – Rejects (401) when `authContext` is absent.
-- **`requirePermission`** *(referenced in module doc)* – Rejects when the caller's role does not hold the supplied permission key; uses `errorLocaleKeyFor` for the i18n error code.
-- **`requirePermissionViaCookie`** *(referenced in module doc)* – SSE-specific variant that authenticates by session cookie rather than `Authorization` header.
-- **`requireFreshAuth` / `requireFreshAuthWhen`** *(referenced in module doc)* – Gate an already-authenticated caller on how recently they proved identity (`reauthWindowSeconds` from config).
-- **`auditRefusal`** – Records an audit event (route, method, outcome `failure`) before a guard answers a denial.
-- **`noteMiss` / `securityActionFor`** – Classify a refused credential (invalid signature, malformed, revoked API key, stale session) and either increment a stale-credentials counter or record a security event.
-- **`continueWithSession`** – Shared promise handler for bearer and cookie resolution; distinguishes miss, success, and infrastructure failure.
-- **`continueWithCookie`** – Cookie path; adds a `requireAllowedOrigin` CSRF check for unsafe methods before resolving.
-- **`applySession`** – Copies the resolved user onto `request.authContext`, sets `request.sessionVia`, and resolves `request.caller` via `callerInScope`.
-- **`errorLocaleKeyFor`** – Maps a string error code (e.g. `FORBIDDEN`) to its i18n key (`generic.error-forbidden`).
+- **`getAuth`** — Resolves `request.authContext` from a bearer token or (in cookie-session mode) a session cookie; anonymous callers pass through with no context set.
+- **`isAuth`** — Rejects with 401 when `authContext` is absent after `getAuth`.
+- **`requirePermission`** — Rejects with 403 when the resolved caller's role does not hold the declared rule; takes an action + subject, never a raw role name.
+- **`requirePermissionViaCookie`** — SSE-only variant that authenticates via the session cookie instead of the `Authorization` header.
+- **`requireFreshAuth` / `requireFreshAuthWhen`** — Gate an already-authenticated caller on how recently they last proved identity (controlled by `reauthWindowSeconds` from config).
+- **`getTokenBearer`** — Extracts the bearer token string from the `Authorization` header.
+- **`continueWithSession` / `continueWithCookie`** — Internal plumbing that resolves a credential, applies the session to the request, and handles miss/outage paths.
+- **`auditRefusal`** — Central helper that stamps route, method, and `outcome: 'failure'` onto every refusal audit record.
+- **`noteMiss` / `securityActionFor`** — Classify a refused credential (stale vs. forged vs. revoked) and emit the matching metric or security event.
+- **`errorLocaleKeyFor`** — Maps an error-code string to its `generic.error-…` locale key, used for both default and `deniedCode` overrides.
 
 ## Relationships
 
-- **`@kernel/authentication`** – Source of all credential resolution (`resolveBearer`, `resolveCookie`, `resolveCredential`, `watchCookie`, `clearDeadSessionCookie`, `cookieAuthenticatesRequests`). This file is the Express-facing consumer of that kernel.
-- **`@kernel/permissions`** – Provides `assertDeclared`, `callerFor`, `callerInScope`, `findKey`, `scopeOfKey`, `StepUpTier`; the permission-key registry that guards consult at runtime.
-- **`@kernel/ability`** – `heldKeys` / `holdsKey` used to test whether a caller's role set contains a required key.
-- **`@kernel/cookies`** – `bearerOf` and `readSessionCookie` extract raw tokens from headers and cookies.
-- **`@kernel/config`** – `reauthWindowSeconds` sets the freshness window for `requireFreshAuth`.
-- **`@infrastructure/http/response`** – `rejectResponse` sends structured error bodies (401, 403, 429) on guard failure.
-- **`@infrastructure/http/request`** – `callerContextOf` extracts identity fields for audit/security event records.
-- **`@infrastructure/http/errors`** – `isInfrastructureError` distinguishes infrastructure outages (→ 503) from auth failures (→ anonymous continue).
-- **`@infrastructure/http/middlewares/origin`** – `requireAllowedOrigin` enforces the CSRF origin check for cookie-authenticated unsafe methods.
-- **`@infrastructure/http/middlewares/rate-limit`** – `apiKeyLimiter` enforces per-key request budgets inside `getAuth`.
-- **`@infrastructure/observability/audit`** – `recordAudit`, `buildAuditEvent`, `coreAuditActions` back every refusal trail.
-- **`@infrastructure/observability/security-events`** – `recordSecurityEvent`, `staleCredentialsTotal` track forgery/revocation signals and stale-credential counts.
-- **`@infrastructure/i18n`** – `t` localises user-facing error messages.
+- **`@kernel/authentication`** — Source of `resolveBearer`, `resolveCookie`, `resolveCredential`, `cookieAuthenticatesRequests`, `API_KEY_TOKEN_PREFIX`, and the `Resolution`/`ResolveMissReason` types that drive every guard's decision logic.
+- **`@kernel/permissions`** — Provides `assertDeclared` (boot-time rule validation), `callerInScope`/`callerForSubject` (ability computation), `ruleId`, and `StepUpTier` (step-up auth tiers).
+- **`@kernel/ability`** — `holds` is the predicate that answers "does this role carry this rule?" for `requirePermission`.
+- **`@kernel/cookies`** — `bearerOf` and `readSessionCookie` extract credentials from the wire.
+- **`@kernel/config`** — Supplies `reauthWindowSeconds` for the freshness guards.
+- **`@infrastructure/http/middlewares/origin`** — `requireAllowedOrigin` is invoked for unsafe (non-`GET`/`HEAD`/`OPTIONS`) cookie-authenticated requests to block CSRF.
+- **`@infrastructure/http/middlewares/rate-limit`** — `apiKeyLimiter` enforces a per-key request budget on the API-key credential path.
+- **`@infrastructure/http/request`** — `callerContextOf` extracts the identity fields needed for audit and security-event records.
+- **`@infrastructure/http/response`** — `rejectResponse` and `ResponseErrorItem` shape the 401/403 error bodies.
+- **`@infrastructure/observability/audit`** — `recordAudit`, `buildAuditEvent`, and `coreAuditActions` (from the generated actions list) write the refusal trail.
+- **`@infrastructure/observability/security-events`** — `recordSecurityEvent` and `staleCredentialsTotal` emit attack metrics and stale-credential counters.
+- **`@infrastructure/i18n`** — `t` localizes user-facing error messages in rejection responses.
+- **`@modules/account/routes`** — The account module's routes are the primary consumers of these guards (login, session, profile endpoints).
 
 ## Notes
 
-- Guards accept a **permission key** string, never a role name. `assertDeclared` (from `@kernel/permissions`) validates at mount time that the key exists in the registry, turning a typo into a boot-time failure rather than a permanently-denied route.
-- Infrastructure failures (Mongo/Redis unreachable) are **never** conflated with credential rejection: `continueOrFailInfra` routes them to the global 503 handler, while a refused token simply leaves the request anonymous and lets `isAuth`/`requirePermission` produce the 401/403.
-- The `X-Session-Passive: true` request header can only *increase* the perceived idleness of a session; there is no forge-able path to make a session look more active.
-- A refused session cookie is immediately cleared via `clearDeadSessionCookie` so subsequent requests skip the lookup.
-- The error-code → locale-key mapping is a single convention (`UPPER_SNAKE` → `generic.error-lower-kebab`); adding a new `deniedCode` override on a `PermissionKey` requires only the matching `locales/*.json` entry.
+- Guards take **an action and a subject**, never a role-name string. `assertDeclared` makes a typo in a route mount a **boot failure**, not a silently unreachable route.
+- The `Session-Passive: true` request header marks polls/keep-alives so they don't count as the user acting; it can only make a session look *more* idle, so it is unforgeable from the client's perspective.
+- In cookie-session mode, a refused cookie is **cleared from the response** (`clearDeadSessionCookie`) so subsequent requests skip the lookup entirely.
+- API-key rejections send `WWW-Authenticate: Bearer error="invalid_token"` per RFC 6750 §3.1, distinguishing them from anonymous browse.
+- The error-locale-key convention (`generic.error-` + lowercase, underscores → hyphens) is uniform across default codes and per-rule `deniedCode` overrides; no extra locale entry is needed for a new override beyond the matching key.
+- `SAFE_METHODS` (GET, HEAD, OPTIONS) skip the origin check because a riding-along cookie on them cannot cause a state change.

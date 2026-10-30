@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/openapi.yaml
-sha256: e7c3bb7b3d6f019e4fb6384647a49cc46969b92a7e7ecfb0586e2beed55373f8
-generated_at: 2026-10-15T09:58:08.401994+00:00
+sha256: 68de299201a90d232cb244acda5209de4ca6bfa66244e602b12c5032a983c66d
+generated_at: 2026-10-29T02:37:45.496653+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.1.0 contract for the **account** module. It defines the module's public HTTP surface — authentication (sign-up, login, refresh, email verification, session teardown) and account management (profile CRUD, password, two-factor, data export, deletion) — and is consumed by the spec bundler, which merges it into the root document under the module's `basePath`.
+OpenAPI 3.1.0 contract for the **account** module. It defines the full API surface for authentication (signup, login, session lifecycle, email verification) and self-service account operations (profile CRUD, email-change flow, two-factor, data export, account deletion with grace period). Serves as the machine-readable specification that `src/modules/account/module.ts` must implement and that clients consume.
 
 ## Key elements
 
-- **`x-error-codes`** — module-specific error codes (`EMAIL_CHANGE_TOO_SOON`, `EMAIL_VERIFY_RESEND_TOO_SOON`, `SESSION_IDLE`, `TWO_FACTOR_RESEND_TOO_SOON`) with their HTTP status and `retryAfter` semantics; the bundler hoists these into the root `x-error-codes`.
-- **`x-personal-data`** — declares this module's contribution (`sessions`) to the composite `POST /account/export` response; removing the module removes the section.
-- **`tags`** (`Auth`, `Account`) — grouping labels for operations in the module.
-- **`/account/abilities` (GET)** — returns the caller's server-enforced authorization rules (tenant-scope and shop-scope lists plus `grantableRoles`) packed for client-side *rendering* only; no authority, answered even for anonymous (`guest`) callers.
-- **`/account` (GET / PUT / PATCH / DELETE)** — profile endpoints:
-  - **GET** — current user's full profile (`UserEnvelope`).
-  - **PUT** — replace all writable fields (RFC 9110 §9.3.4); `analyticsConsent` is mandatory (no cleared state); email change is async (→ `pendingEmail`).
-  - **PATCH** — merge-patch writable fields (RFC 7396); omitted fields untouched; same async email-change flow.
-  - **DELETE** — initiate the account-deletion flow; sends a one-time confirmation token to the user's email.
-- **`/account/pending-email` (DELETE)** — cancel a pending email change without proving it; safe no-op if nothing is pending.
-- **`x-versioned`** annotation on `/account` — signals the bundler to attach `ETag` / `If-Match` (and a 412 response) to the listed methods.
-- **Schemas** (defined further in the file, truncated here) — `ReplaceAccountRequest`, `UpdateAccountRequest`, `*Multipart` variants, `ExportSession`.
+- **Tags** — `Auth` (sign up, log in, refresh, end session, email recovery/verification) and `Account` (profile, credentials, 2FA, export, deletion).
+- **`x-error-codes`** — Module-specific error identifiers beyond the shared set: `EMAIL_ALREADY_USED` (409), `EMAIL_ALREADY_VERIFIED` (409), `EMAIL_CHANGE_TOO_SOON` (429), `EMAIL_VERIFY_RESEND_TOO_SOON` (429), `SESSION_IDLE` (401, staff/admin only), `TWO_FACTOR_RESEND_TOO_SOON` (429).
+- **`x-personal-data.sessions`** — Declares the `sessions` array this module contributes to the `AccountExportResponse` bundler.
+- **`GET /account/abilities`** — Returns the caller's packed authorization rules in two separate lists (tenant-scope and shop-scope). Client-side only for rendering; every request is still re-evaluated server-side. References the `Abilities` schema from the access module.
+- **`GET /account`** — Full profile of the authenticated user.
+- **`PUT /account`** — Full replace (RFC 9110 §9.3.4): omitted optional fields are cleared. `analyticsConsent` is required (no cleared state). Email change is async via `pendingEmail`.
+- **`PATCH /account`** — Merge-patch (RFC 7396): omitted fields unchanged, `null` clears an optional one.
+- **`DELETE /account`** — Locks the account immediately, schedules erasure after `NODE_ACCOUNT_DELETION_GRACE_DAYS` (default 30, capped at one calendar month per GDPR Art. 12(3)). Returns 202.
+- **`x-versioned: [get, put, patch]`** on `/account` — Bundler annotation that adds `If-Match` / `ETag` / 412 handling to the listed methods.
+- **Request bodies** — PUT and PATCH accept `application/json` and `multipart/form-data`; PATCH also accepts `application/merge-patch+json`.
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — this file `$ref`s shared schemas (`UserEnvelope`) and standard error responses (`Unauthorized`, `Conflict`, `ValidationError`, `TooManyRequests`, `InternalError`, `Success`) from the root spec. The bundler merges this module's document into that root.
-- **`src/modules/account/module.ts`** — the runtime module that mounts the routes declared here under its `basePath` and supplies handlers for each `operationId`.
-- **`src/modules/access/module.ts`** — the access module whose contract (`../access/openapi.yaml#/components/schemas/AbilitiesEnvelope`) is `$ref`'d by the `/account/abilities` response schema; the two modules share the authorization model.
-- **`src/infrastructure/security/breached-passwords/list.txt`** — the breached-password list consulted by this module's authentication operations (sign-up, password change) to reject credentials found in known breaches.
+- **`shared/contracts/openapi.root.yaml`** — Consumes shared schemas (`Account`) and standard error responses (`Unauthorized`, `Conflict`, `ValidationError`, `TooManyRequests`) via `$ref`.
+- **`src/modules/access/`** (sibling module) — `GET /account/abilities` returns the `Abilities` schema defined in the access module's OpenAPI spec.
+- **`src/modules/account/module.ts`** — The runtime implementation of every path and operation declared here; this file is the contract that module satisfies.
 
 ## Notes
 
-- `/account/abilities` is intentionally colocated under `/account` (not `/me/abilities`) because a module mounts at a single `basePath`; a second mount point would make the module "two things."
-- The abilities response is **non-authoritative by contract**: it tells a client what to *grey out*, never what to *allow*; every real request is re-evaluated server-side.
-- Email change is a **two-step async flow**: `PUT`/`PATCH` sets `pendingEmail` → `POST /account/email-change-confirm` proves the new address → a 7-day one-time undo link is mailed to the *old* address at the moment the change is requested. A no-op send (current or already-pending address) neither starts, restarts, nor cancels anything.
-- PUT and PATCH differ in omitted-field semantics (clear vs. leave), but both route email changes through the same `pendingEmail` pipeline.
-- `SESSION_IDLE` (401) applies only to staff/admin sessions; shopper sessions never receive it.
-- The file is longer than shown here; the truncated portion contains the remaining Auth and Account operations (sign-up, login, refresh, password, 2FA, export, deletion confirmation, etc.) and their schemas.
+- PUT and PATCH are deliberately different: PUT follows RFC 9110 (silence = clear), PATCH follows RFC 7396 (silence = keep, explicit `null` = clear).
+- Email change on PUT/PATCH does **not** mutate the address; it sets `pendingEmail`. Finalisation, cancellation, and undo are separate endpoints (`/account/email-change/…`).
+- `SESSION_IDLE` (401) applies only to staff/admin sessions governed by `NODE_SESSION_IDLE_TIME_STAFF`; shopper sessions never receive it.
+- `GET /account/abilities` answers for anonymous callers too: a visitor holds the `guest` role, so the endpoint is not an "authenticated-only" route.
+- The spec is truncated in the visible excerpt; the full file contains additional paths (login, signup, 2FA, email-change sub-routes, export, restore) that follow the same conventions.

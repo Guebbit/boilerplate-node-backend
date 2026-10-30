@@ -1,34 +1,35 @@
 ---
 source: src/modules/payments/emails.ts
-sha256: 3257a862533c59661a706f0c1e9fb420d4207ee9d85b496023089453e18afecc
-generated_at: 2026-10-15T11:25:32.335268+00:00
+sha256: edc66a687b62b6742e31219f6d16c9f007251968c93a14822396517a71a378c4
+generated_at: 2026-10-29T05:05:56.002263+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/payments/emails.ts
 
 ## Purpose
-
-Builds the finished, locale-resolved content for the two outbound emails the payments module sends: "payment received" (when a payment settles) and "refund issued" (when a non-return refund completes). Following the same convention as `@modules/account/emails`, the language is an explicit argument and the output is fully-interpolated text; the downstream mail template only does structural layout.
+Builds the five email bodies the payments module sends (payment received, refund issued, refund undeliverable, transfer instructions, transfer expired). Each function resolves all i18n strings into finished text at call time — language is an argument, output is done — and returns an `EmailContent` object whose template only performs simple interpolation later. This keeps translation logic out of the mailer adapter and out of the HTML templates.
 
 ## Key elements
-
-- **`money` (internal)** — Formats a decimal amount as a locale-aware currency string via `Intl.NumberFormat`.
-- **`paymentReceivedEmail` (exported)** — Returns an `EmailContent` object with template key `payments.payment-received`, a localized subject, per-line item descriptions, a computed order total, and a frontend link to the order page.
-- **`refundIssuedEmail` (exported)** — Returns an `EmailContent` object with template key `payments.refund-issued`, a localized body embedding the refund amount, and a full-vs-partial detail line chosen by the `full` flag.
+- **`paymentReceivedEmail`** — "Your card settled" email. Lists order lines with formatted prices, total, and a link to the order page.
+- **`refundIssuedEmail`** — "Refund completed" email. Distinguishes full vs. partial refund via a different `detail` string. Not used for return-driven refunds (those are announced by the `returns` module).
+- **`refundUndeliverableEmail`** — "We couldn't push the refund back to your card" email. Asks the buyer how to proceed; never includes the provider's rejection reason.
+- **`TransferInstructions`** (interface) — Shape for bank-transfer details: `beneficiary`, `iban`, optional `bic`, and `reference` (the RF creditor reference used for matching).
+- **`transferInstructionsEmail`** — "Here's how to pay by bank transfer" email. Includes IBAN/BIC, reference, and a deadline formatted in the shop's timezone.
+- **`transferExpiredEmail`** — "Your transfer deadline passed, order cancelled" email. Minimal: greeting, body, total, footer.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/mailer.ts`** — Imports the `EmailContent` type; both builders conform their return shape to it.
-- **`src/infrastructure/i18n/index.ts`** — Imports `translator` to obtain a locale-scoped translation function for every string in both emails.
-- **`src/modules/orders/index.ts`** — Imports `orderFrontendLink`, `orderTotal`, and the `OrderLines` type; used in `paymentReceivedEmail` to compute the total and build the order-page URL.
-- **`src/modules/payments/services/notify.ts`** — Expected caller that invokes these builders after settlement/refund events.
-- **`src/modules/payments/tests/unit/emails.test.ts`** — Unit tests for both builders.
-- **`tests/unit/infrastructure/adapters/mailer-templates.test.ts`** — Validates that the template keys (`payments.payment-received`, `payments.refund-issued`) and their required `data` fields exist in the template registry.
+- **`@infrastructure/adapters/mailer`** — Provides the `EmailContent` type every builder returns.
+- **`@infrastructure/i18n`** — Provides `translator(locale)` used by every builder to resolve strings.
+- **`@domain-primitives/money`** — Provides `formatMoney` for all monetary display values.
+- **`@modules/orders`** (`index.ts`) — Provides `OrderLines` type, `orderTotal`, and `orderFrontendLink`.
+- **`@modules/shop`** — Provides `shopTimezone()` for the transfer deadline's timezone name.
+- **`src/modules/payments/services/notify.ts`** — The service layer that calls these builders and hands the result to the mailer.
+- **`src/modules/payments/tests/unit/emails.test.ts`** / **`tests/unit/infrastructure/adapters/mailer-templates.test.ts`** — Unit tests for the builders and the mailer templates they feed.
+- **`src/modules/orders/emails.ts`** — Pattern sibling; the module docblock points to the account-emails convention, and this file follows the same "resolve strings here, interpolate in template" rule.
 
 ## Notes
-
-- The module doc explicitly points to `@modules/account/emails` as the canonical example of this "resolve-then-interpolate" pattern.
-- In `paymentReceivedEmail`, the `data` object uses **explicit field assignment** rather than spreading `order`. The comment explains why: `order` is often a hydrated Mongoose document whose schema paths live on the prototype, so a spread copies nothing.
-- `refundIssuedEmail` is deliberately **not** used for return-triggered refunds; those are announced by the returns module's own closing notice.
-- The `full` parameter in `refundIssuedEmail` selects between `detail-full` and `detail-partial` i18n keys, allowing the copy to distinguish a complete refund from a partial one.
+- `bic` is passed through as `undefined` rather than conditionally spread, because the mailer template guards with `typeof bic !== "undefined"` — omitting the key entirely would break that check.
+- The transfer deadline uses `Intl.DateTimeFormat` with explicitly spelled-out fields (year, month, day, hour, minute, `timeZoneName`) because `dateStyle`/`timeStyle` shorthand does not emit a `timeZoneName`.
+- The deadline is rendered in the **shop's** timezone (via `shopTimezone()`), not the buyer's, so an international customer doesn't misread the cutoff as local time.
+- `refundUndeliverableEmail` deliberately withholds the provider's rejection reason and frames the request for alternate payment as a question (consent language), not a decision.

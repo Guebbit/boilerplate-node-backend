@@ -1,7 +1,7 @@
 ---
 source: src/modules/antibot/openapi.yaml
-sha256: a35da89a55e9db92b3dc893377082147d822b64d5e157e7bdf3d95843bc9f379
-generated_at: 2026-10-15T10:19:54.965623+00:00
+sha256: 5eee4b3349ba604a904b6a76be13608a27f326913ff3954b5a169c254e6f1754
+generated_at: 2026-10-29T03:12:08.580191+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.1.0 contract for the antibot module — the "rung 3" human-challenge step in the anti-automation ladder. It declares the two public, unauthenticated endpoints clients call to discover the active challenge provider and (for self-hosted providers) fetch a work unit to solve.
+OpenAPI 3.1.0 contract for the antibot module (rung 3 of the anti-automation ladder). It declares the two public, unauthenticated endpoints that expose the active human-challenge provider's configuration and (for self-hosted providers) a challenge to solve, plus the schemas the API returns.
 
 ## Key elements
 
-- **`GET /antibot/config`** (`getAntibotConfig`) — Returns the active provider name, its public render parameters, and a `rungs` snapshot of every anti-automation tier. Always 200; the `none` provider is a valid state (empty parameters, no widget).
-- **`GET /antibot/challenge`** (`getAntibotChallenge`) — Returns an ALTCHA challenge (parameters + HMAC signature) only when the deployment is self-hosted. 404 is a truthful "not applicable" for `none` or vendor-hosted providers.
-- **`x-error-codes`** extension — Declares `ANTIBOT_NO_CHALLENGE` (404) and `ANTIBOT_VERIFICATION_FAILED` (401) as module-level error identifiers.
-- **`AntibotConfig` / `AntibotRungs`** schemas — Describe the provider name, public parameter map, and the status of rung 1 (identity budgets, always `true`) and rung 2 (email policy: `off` / `disposable` / `mx`).
-- **`AntibotChallenge` / `AntibotChallengeParameters`** schemas — The ALTCHA-specific work unit (algorithm, nonce, salt, cost, keyLength, keyPrefix, etc.) plus an `expiresAt` unix timestamp.
-- **Envelope schemas** (`AntibotConfigEnvelope`, `AntibotChallengeEnvelope`) — Wrap payload in the shared `{ success, status, message, data }` shape.
+- **`GET /antibot/config`** (`operationId: getAntibotConfig`) — Always 200. Returns the active provider name, its public render parameters (site key, script URL, etc.), and a `rungs` summary of every other anti-automation rung's status. `security: []` (no auth); `none` provider yields an empty parameter map.
+- **`GET /antibot/challenge`** (`operationId: getAntibotChallenge`) — Returns an ALTCHA challenge (parameters + HMAC signature) for self-hosted providers; returns 404 for `none` or vendor-hosted providers (truthful "not applicable" rather than an error).
+- **`AntibotConfig`** — `{ provider, parameters, rungs }`. `parameters` is a free-form string map (provider-specific).
+- **`AntibotRungs`** — `{ identityBudgets: boolean, emailPolicy: 'off'|'disposable'|'mx' }`. Status snapshot of rungs 1 and 2 alongside rung 3.
+- **`AntibotChallenge`** — ALTCHA shape: `{ parameters, signature }`.
+- **`AntibotChallengeParameters`** — Solver inputs (algorithm, nonce, salt, cost, keyLength, keyPrefix, optional keySignature, memoryCost, parallelism, expiresAt).
+- **`x-error-codes`** — `ANTIBOT_NO_CHALLENGE` (404) and `ANTIBOT_VERIFICATION_FAILED` (403), documented for downstream verification calls (not exercised by the two paths defined here).
+- **Tag `Antibot`** — Groups both operations.
 
 ## Relationships
 
-All shared types are imported from **`shared/contracts/openapi.root.yaml`**:
-
-- `#/components/responses/InternalError` — referenced by both paths' 500 response.
-- `#/components/responses/NotFound` — referenced by `/antibot/challenge`'s 404 response.
-- `#/components/schemas/EnvelopeSuccess`, `EnvelopeStatus`, `EnvelopeMessage` — referenced by both envelope schemas for the `success`, `status`, and `message` fields.
+- **`shared/contracts/openapi.root.yaml`** — The 404 response on `GET /antibot/challenge` is a `$ref` to `#/components/responses/NotFound` in that shared contract. This is the only cross-file reference in the document.
 
 ## Notes
 
-- Both endpoints set `security: []` deliberately — config must be reachable before a user has any credential (signup has no session yet).
-- The 404 on `/antibot/challenge` is **not** an error condition; it signals the active provider isn't self-hosted. Clients should branch on it, not surface it as a failure.
-- `AntibotChallenge` is ALTCHA-shaped by design; swapping the self-hosted provider is expected to change this schema. The file's comment calls this "the point of declaring it."
-- Every schema sets `additionalProperties: false` (closed objects), so unknown fields in responses are contract violations.
-- `rungs.identityBudgets` is typed `boolean` but documented as always `true` — it exists for shape stability, not configurability.
+- The file is a **contract only**; it contains no implementation logic. The actual route handlers and provider selection live elsewhere in `src/modules/antibot/`.
+- `security: []` on both paths is intentional: guarding `/antibot/config` behind a login would break signup (no credential exists yet).
+- `AntibotRungs.identityBudgets` is documented as *always* `true` (no off-switch), but the schema still declares it as a boolean for forward compatibility.
+- The `x-error-codes` block references errors (403 verification failure) that are **not** surfaced by either path defined in this file; they describe the server-side verification step that happens on form submission elsewhere.
+- Adding a second self-hosted provider would require changing the `AntibotChallenge` schema — the spec intentionally pins the shape to ALTCHA rather than leaving it free-form.

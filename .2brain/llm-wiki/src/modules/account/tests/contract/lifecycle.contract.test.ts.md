@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/contract/lifecycle.contract.test.ts
-sha256: c24a8a2718cdd10b3ca25ff865d56a31743a179aa6fd65fac50c51fbc78fe9d5
-generated_at: 2026-10-14T09:04:03.168133+00:00
+sha256: ad66ec59a85df5a24eea027a6473266c9b14fea770fb59da4bb38208b3efcc4f
+generated_at: 2026-10-29T02:51:21.725383+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for account-lifecycle endpoints that `api.contract.test.ts` does not cover: two-step account deletion, password-reset request, logout-all, and the live breach check. Each token-carrying flow is driven end-to-end by reading the one-time token back out of the mocked mail queue, so the assertions validate the exact payload a real client would receive.
+Contract tests for account-lifecycle endpoints that `api.contract.test.ts` does not cover: scheduled deletion + restore, password-reset request (including the anti-enumeration guarantee), "log out everywhere," the in-field breach check, and the mailed-greeting safety check. Each flow is driven end-to-end: the one-time token or greeting text is read back from the mocked mailer queue, so the assertion targets the exact artifact a real recipient would receive.
 
 ## Key elements
 
-- **`queued(template)`** — polls until a mail of the given template appears in the mocked `enqueueEmail` call log.
+- **`queued(template)`** — polls `enqueueEmail` mock calls until a mail of the given template appears; used because `POST /account/password/reset` intentionally returns before the mail is enqueued.
 - **`mailedToken(template)`** — extracts the `#token=` fragment from the newest queued mail's `linkUrl`; throws if absent.
-- **`mailedGreeting(template)`** — returns the `greeting` field of the newest queued mail (empty string if none).
-- **`describe('DELETE /account … delete-confirm')`** — verifies the two-step deletion happy path, a 422 for an unissued token, and a 401 without a session.
-- **`describe('POST /account/reset')`** — verifies the reset mail is sent, that an unknown address gets the identical 200 response with **no** mail (anti-enumeration), and a 422 for a malformed email.
-- **`describe('the name in a mailed greeting')`** — security tests: a verified address's chosen `username` appears in the reset mail; an unverified address and all signup verification mails get only the generic `"Hello!"`, preventing caller-controlled text from reaching a stranger's inbox.
-- **`describe('POST /account/logout-all')`** — asserts all session rows for the account are removed.
-- **`describe('POST /account/password/check')`** — verifies 200 for breached and unbreached candidates, 422 for an empty string.
-- **Mailer mock** — `jest.mock` keeps the real module but replaces `enqueueEmail` with a `jest.fn()` that resolves `undefined`; cleared in `beforeEach`.
+- **`mailedGreeting(template)`** — returns the `greeting` field of the newest queued mail of a template.
+- **`describe('DELETE /account and POST /account/restore')`** — verifies 202 on delete, `deletedBy === 'owner'` in the DB, then 204 on restore with the mailed token clearing `deletedAt`.
+- **`describe('POST /account/password/reset')`** — verifies 204 + token for known addresses; asserts byte-identical status/body/cookies/ETag for unknown addresses (anti-enumeration); 422 for a non-email body.
+- **`describe('the name in a mailed greeting')`** — asserts the caller-chosen `username` appears in a reset mail only when the address is verified; unverified addresses and signup verification mails get a generic `"Hello!"`.
+- **`describe('DELETE /account/sessions')`** — 204 and all session rows for the user are gone.
+- **`describe('POST /account/password/check')`** — 200 for a breached candidate, 200 for a clean candidate, 422 for an empty string.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** — side-effect import that registers contract-test matchers/globals the suite relies on.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the in-test database before any suite runs.
-- **`tests/support/eventually.ts`** — `eventually()` is the polling primitive behind `queued()` and the 200 ms "let detached work finish" guard in the enumeration test.
-- **`tests/support/http.ts`** — provides `api()` (supertest-style request builder) and `authenticateAs()` (login + bearer extraction).
-- **`src/modules/users/tests/factories.ts`** — `createUser()` fabricates users; `userRepository.findById` is used to assert the account row is gone after confirm-delete.
-- **`src/modules/account/tests/factories.ts`** — `sessionRowsOf()` queries the session table so the logout-all test can assert an empty result.
-- **`src/infrastructure/adapters/mailer.ts`** — the only mocked external port; the test reads its call arguments to retrieve tokens and greeting text.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` called at module level for DB isolation.
+- **`tests/support/http.ts`** — `api()` builds superagent requests; `authenticateAs('user')` returns `{ user, bearer }`.
+- **`tests/support/eventually.ts`** — `eventually(fn, timeout?)` provides the polling loop behind `queued()` and the deliberate 200 ms "nothing queued" window.
+- **`tests/support/problem.ts`** — `withoutInstance(body)` strips the non-deterministic `instance` field before deep-equality comparison of problem+error bodies.
+- **`tests/support/contract.ts`** — imported for its side effects (global contract-test setup/assertions).
+- **`src/modules/users/tests/factories.ts`** — `createUser` builds fixture users; `userRepository.findById` reads back locked/restored state.
+- **`src/modules/account/tests/factories.ts`** — `sessionRowsOf(userId)` returns the user's session rows for the "log out everywhere" assertion.
+- **`src/infrastructure/adapters/mailer.ts`** — `enqueueEmail` is jest-mocked at the module level; tests read tokens/greetings from its call log rather than from a separate in-memory queue.
 
 ## Notes
 
-- Token extraction depends on the `linkUrl` containing a `#token=<value>` fragment. A change to the URL scheme (e.g., query-string token) breaks `mailedToken` silently.
-- The "no account enumeration" test deliberately inserts a 200 ms wait (`eventually(() => false, 200)`) so that any async mail dispatch has time to fire before the assertion; removing it would turn a real bug into a flaky "not yet queued" false positive.
-- The greeting-security tests are the only place in the suite that inspects mail *body* content (as opposed to token presence), and they encode a product rule: user-supplied `username` is rendered only when the address has been verified.
-- `beforeEach` clears the mailer mock, so each test sees only its own queued mails — do not add cross-test mail assertions without a fresh clear.
+- The mailer mock replaces `enqueueEmail` with a `jest.fn()` that resolves `undefined`; all other exports are preserved via `requireActual`. `beforeEach` clears the mock so each test starts with an empty queue.
+- `findLast` (not `find`) is used to retrieve the *newest* mail of a template — critical when a test sequence queues multiple mails of the same type (e.g., the known-vs-unknown reset test).
+- The "no account enumeration" test waits a full 200 ms (`eventually(() => false, 200)`) before asserting no mail was queued, distinguishing a deliberate "not queued" result from a timing race.
+- The file's doc comment mentions "the expired-token sweep," but no corresponding `describe` block is present in the file as shown — that scenario may live elsewhere or be pending.
+- The greeting-safety tests encode a security invariant: a caller-supplied `username` must never be rendered into mail addressed to an unproven or third-party email, preventing a reflected-text phishing vector via the shop's own domain.

@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/http/response.ts
-sha256: 97ad9cf2bbfc9be16c6f2aebcebdc5689e9361504540dc5c8333db2b07b4127d
-generated_at: 2026-10-15T09:50:46.699236+00:00
+sha256: 1191f422a75c6e0acfa205cdae2fce978d241208072396791c46c149dee45b29
+generated_at: 2026-10-29T02:05:27.893599+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the canonical response envelope used by every API endpoint. All routes return the same top-level discriminated-union shape (`ResponseSuccess<T>` | `ResponseReject`) so that clients (including the orval-generated API client) can branch on `success` without route-specific knowledge. The file also provides the Express helpers that serialize and send that envelope.
+Provides the response serialiser layer: the internal `ServiceResult` union types (`ResponseSuccess<T>` / `ResponseReject`) that services produce, and the Express-bound functions (`successResponse`, `createdResponse`, `noContentResponse`, `generateReject`, etc.) that put a payload or RFC 9457 problem document on the wire. Separating the "build the result" step from the "send it" step lets unit tests and non-HTTP workers assert on the same shapes without an Express `Response`.
 
 ## Key elements
 
-- **`ResponseNeutral`** — base interface: `success`, `status`, `message`.
-- **`ResponseSuccess<T>`** — success branch: `success: true`, `data: T`, `errors: never` (type-level only, absent at runtime).
-- **`ResponseReject`** — failure branch: `success: false`, `data: undefined` (explicitly present for union-safety), `errors: ResponseErrorItem[]`.
-- **`ResponseErrorItem`** — one structured error: `code: ErrorCode`, `message: string`, optional `details`.
-- **`generateSuccess<T>(data, status?, message?)`** — builds a success envelope object without an Express `Response` (usable in tests / workers).
-- **`successResponse(response, data, status?, message?)`** — serializes and sends a success envelope via Express.
-- **`createdResponse(response, data, location, message?)`** — 201 + `Location` header (RFC 9110 §9.3.3).
-- **`createdOrOk(response, data, status?, location, message?)`** — dispatches to `createdResponse` when status is 201, otherwise to `successResponse`.
-- **`resolveErrorCode(status)`** / **`resolveErrorMessage(status)`** — map an HTTP status to its stable `ErrorCode` and canonical English reason phrase.
-- **`normalizeErrors(status, errors)`** — accepts a mix of plain strings and `ResponseErrorItem`s, guarantees a non-empty array, and fills missing `code`/`message` from the status.
-- **`generateReject(status?, errors?)`** — builds a reject envelope (defaults to 400).
-- **`rejectResponse(response, status?, errors?)`** — serializes and sends a reject envelope via Express.
+- **`ResponseSuccess<T>` / `ResponseReject`** – Discriminated union (`success: true | false`) for the internal result. `ResponseSuccess` carries `data: T`; `ResponseReject` carries `data: undefined` (explicitly present for union safety) and a non-empty `errors: ResponseErrorItem[]`.
+- **`ResponseErrorItem`** – One machine-readable failure: `code: ErrorCode`, `message: string`, optional `details`.
+- **`generateSuccess<T>(data, status?)`** – Returns a `ResponseSuccess<T>` without touching Express. Used in tests and non-HTTP contexts.
+- **`successResponse<T>(response, data, status?)`** – Sends `response.status(status).json(data)`.
+- **`createdResponse<T>(response, data, location)`** – Sets the `Location` header, then delegates to `successResponse` with 201.
+- **`createdOrOk<T>(response, data, status, location)`** – Dispatches to `createdResponse` when `status === 201`, otherwise `successResponse`.
+- **`noContentResponse(response)`** – Sends `204` via `.end()` (no body, no `Content-Type`).
+- **`generateReject(status?, errors?)`** – Builds a `ResponseReject` envelope. Defaults to 400. Accepts plain strings or pre-formed `ResponseErrorItem[]`.
+- **`resolveErrorTitle(status)`** – Returns the RFC 9110 English status phrase (patches 413/422 names newer than Node's `STATUS_CODES`).
+- **`resolveErrorCode(status)`** – Derives a catalogued `ErrorCode` from the status; 5xx (except 503) maps to `INTERNAL_SERVER_ERROR`; unknown codes fall back to `CLIENT_ERROR`.
+- **`resolveErrorText(status)`** – Looks up the i18n key `generic.error-<code>` for a translated fallback message.
+- **`normalizeErrors(status, errors)`** – Coerces mixed string/item inputs into a non-empty `ResponseErrorItem[]`, filling in `code`/`message` from the status when omitted.
+- **`retryAfterOf(rejection)`** – Extracts the first numeric `details.retryAfter` from a rejection's error items.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — controllers call `successResponse`, `createdResponse`, `createdOrOk`, and `rejectResponse` as their terminal return values.
-- **`src/app/error-handling.ts`** — the global error handler routes uncaught exceptions through `rejectResponse`.
-- **`src/infrastructure/http/errors.ts`** — provides domain-specific error constructors that produce `ResponseErrorItem` objects consumed by `normalizeErrors`.
-- **`src/infrastructure/http/ids.ts`** — ID validation failures are surfaced as `ResponseErrorItem` entries within a reject envelope.
-- **`src/infrastructure/http/middlewares/*`** (antibot-log, content-type, idempotency, json-depth, origin, upload) — each middleware either calls `rejectResponse` directly or throws an error caught by the error handler, which then uses it.
-- **`src/infrastructure/surfaces/create-delete-controller.ts`** — uses `createdResponse` / `createdOrOk` for resource-creation endpoints and `rejectResponse` for failures.
-- **`src/app/routes.ts` / `src/app/system-routes.ts`** — route handlers (via their controllers) emit the envelopes defined here.
-- **`@api/error-codes`** (generated) — provides the `ErrorCode` union that types `ResponseErrorItem.code`; imported **type-only** to avoid a codegen circularity (see Notes).
+- **`src/infrastructure/http/controller.ts`** – Consumers call `successResponse`, `createdResponse`, `createdOrOk`, and `noContentResponse` to terminate requests after invoking a service.
+- **`src/app/error-handling.ts`** – Uses `generateReject` and the `ResponseReject` shape to build global unhandled-error responses.
+- **`src/app/routes.ts` / `src/app/system-routes.ts`** – Route handlers return the response helpers or the internal result types defined here.
+- **`src/infrastructure/http/middlewares/idempotency.ts`** – Captures responses via `res.json`; a route answered with `noContentResponse` (`.end()`) bypasses that ledger, so such routes must not sit behind an `idempotencyKey`.
+- **`src/infrastructure/http/errors.ts`** – Supplies the error definitions that callers pass (as strings or structured items) into `generateReject` / `normalizeErrors`.
+- **`@api/error-codes`** (imported) – Provides the `ERROR_CODES` catalogue and the `ErrorCode` union used to type `ResponseErrorItem.code` at compile time.
+- **`@infrastructure/i18n`** (imported) – `t()` is called by `resolveErrorText` to fetch the translated fallback message.
+- **`scenarios/support/demo.ts` / `scenarios/support/doubles/payments/levers.ts`** – Test-support modules that construct or assert on `ResponseSuccess` / `ResponseReject` shapes via `generateSuccess` / `generateReject`.
 
 ## Notes
 
-- **Type-only import of `ErrorCode`.** The value import would create a cycle during `npm run regenerate` (the file sits on the bundle's incidental load path *before* `gen:api` produces the catalogue). `satisfies ErrorCode` at check time still enforces correctness.
-- **`errors: never` / `data: undefined` are type-level sentinels.** They exist solely to drive TypeScript narrowing and union-safety; they are absent (or `undefined`) at runtime.
-- **`rejectResponse` does not throw.** Controllers must `return rejectResponse(...)`; forgetting `return` lets execution continue and triggers Express' "headers already sent" error.
-- **`message` is derived, not caller-supplied.** `resolveErrorMessage` produces exactly one canonical phrase per status, so a handler name never leaks into a 404 body. The user-facing text lives in `errors[].message`.
-- **422 and 429 intentionally have no `code`** in `STATUS_ENVELOPE`; they fall through to the generic `REQUEST_ERROR` code. Clients are expected to branch on "the request was wrong," not on which flavour.
-- **`normalizeErrors` guarantees `errors.length ≥ 1`.** A reject envelope with an empty array would force every client to special-case it.
+- `ResponseSuccess.errors` is typed `never` and intentionally absent at runtime; `generateSuccess` uses an `as` cast because no literal satisfies `never`. This is a type-level guard only.
+- `ResponseReject.data` is explicitly `undefined` (not omitted) so that accessing `result.data` type-checks on both union members without a prior `success` check.
+- `noContentResponse` uses `.end()`, not `.json()`. This means the idempotency middleware (which hooks `res.json`) will not record the response. Do not combine 204 routes with `idempotencyKey`.
+- `resolveErrorCode` maps any 5xx (except 503) to `INTERNAL_SERVER_ERROR` to avoid leaking specific server-fault wording to clients.
+- The `message` field on `ResponseReject` is the RFC 9110 status phrase in English by design (RFC 9457 §3.1.3); the user-facing translated text lives in `errors[].message`.
+- `normalizeErrors` guarantees the returned array is non-empty; a caller passing `[]` gets a single item derived from the status, preventing clients from special-casing an empty `errors` array.

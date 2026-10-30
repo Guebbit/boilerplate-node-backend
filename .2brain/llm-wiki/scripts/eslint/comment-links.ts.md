@@ -1,7 +1,7 @@
 ---
 source: scripts/eslint/comment-links.ts
-sha256: a48cc59a56cd3dea030851493fef12dc11d1e805b0305d099d80ec8770f716b5
-generated_at: 2026-10-15T09:41:47.648773+00:00
+sha256: d0727e9564f2bf1fba2001b96748969d3e518afff1d81ba17ab45d762e8a87e0
+generated_at: 2026-10-29T01:37:04.694385+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-An ESLint rule that flags stale file references in code comments. Every comment in a linted file is scanned for `.ts`/`.tsx` path mentions; if the referenced file does not exist in the repo (per `git ls-files`), the rule reports a `stale` error. It exists so that renamed or deleted files do not silently leave dangling citations in comments, mirroring the check `scripts/docs/check-references.ts` performs for `docs/*.md` pages.
+ESLint rule that flags comments referencing `.ts`/`.tsx` files that no longer exist in the repo. It reuses the same resolution machinery as `scripts/docs/check-references.ts` (via `repo-references.ts`) but applies it to comment text rather than Markdown, with comment-specific accommodations: placeholders are skipped, URLs are exempt, and relative paths resolve against the file the comment lives in.
 
 ## Key elements
 
-- **`TS_REFERENCE`** – Regex (built from `TS_SEGMENT`) that matches a full `.ts`/`.tsx` path in arbitrary text, including paths containing `<placeholder>` segments.
-- **`URL_LIKE`** – Regex used to blank out external URLs before path scanning, so their path segments are never matched.
-- **`targetsCache` / `targets()`** – Module-level cache of `trackedTargets(ROOT)`; read once per lint run rather than per file.
-- **`resolvesTsReference(reference, filename)`** *(exported)* – Core resolver. Returns `true` (skip) for `<placeholder>` paths, resolves `./`/`../` paths against the containing file, and otherwise checks the reference by suffix against the tracked-file set, honouring the `ALLOWED` prefix exceptions.
-- **`commentLinks`** *(exported)* – The ESLint rule (built via `ESLintUtils.RuleCreator.withoutDocs`). Attaches a `Program` visitor that iterates all comments, strips URLs, extracts `.ts`/`.tsx` references, and reports `stale` for any that fail `resolvesTsReference`.
+- **`commentLinks`** (exported) — the ESLint rule itself; visits `Program`, iterates all comments, extracts `.ts`/`.tsx` references, and reports a `stale` message for any that do not resolve.
+- **`TS_REFERENCE`** — regex matching a full `.ts`/`.tsx` path (one or more segments), where each segment is either a word or a `<placeholder>`. Built so a placeholder segment causes the *entire* match to be captured and skipped, rather than leaving a dangling suffix.
+- **`URL_LIKE`** — regex blanked out of comment text before scanning, so external URLs never produce false positives.
+- **`resolvesTsReference(reference, filename)`** — resolution logic: placeholder → always OK; `./`/`../` → `existsSync` relative to the comment's file; otherwise → checked against the tracked-file set via `resolves`/`claimsAPath`/`allowedPathPrefix` from `repo-references.ts`.
+- **`targets()`** — memoised call to `trackedTargets(ROOT)`, read once per lint run rather than per file.
 
 ## Relationships
 
-- **`scripts/docs/repo-references.ts`** – Imports `allowed`, `trackedTargets`, `resolves`, and `claimsAPath`; the shared machinery for "does this path string correspond to a real tracked file."
-- **`scripts/modules-on-disk.ts`** – Imports `REPO_ROOT`, used as the base directory passed to `trackedTargets`.
-- **`scripts/eslint/index.ts`** – Parent config that registers `commentLinks` in the ESLint plugin's rule set.
-- **`tests/unit/scripts/eslint/comment-links.test.ts`** – Unit tests exercising `resolvesTsReference` and the rule's comment-scanning behaviour.
+- **`scripts/docs/repo-references.ts`** — supplies `allowed`, `trackedTargets`, `resolves`, `claimsAPath`; the two checkers share this resolution layer.
+- **`scripts/modules-on-disk.ts`** — provides `REPO_ROOT`, used as the root argument to `trackedTargets`.
+- **`scripts/eslint/index.ts`** — registers this rule in the plugin's rule set.
+- **`tests/unit/scripts/eslint/comment-links.test.ts`** — unit tests exercising the rule's report/skip logic.
 
 ## Notes
 
-- Comments are **not** in the AST; the rule hooks `Program` and calls `context.sourceCode.getAllComments()` to walk the token stream. It is deliberately not type-aware.
-- A `<placeholder>` segment (e.g. `src/modules/<name>/module.ts`) is skipped **whole** — the placeholder is baked into the match regex rather than filtered post-hoc, so no dangling sub-path is left behind.
-- Markdown files are **out of scope** here; the repo relies on `.gitignore` to exclude ephemeral plan docs rather than a pattern-based comment check.
-- Relative references (`./`, `../`) are resolved against the file that contains the comment (unlike doc-page citations, which need a page-relative base).
-- The `targets()` cache is module-scoped: one `git ls-files` call per lint run, not per file.
+- **Not type-aware.** Comments are absent from the AST, so the rule walks `sourceCode.getAllComments()` and regex-matches the raw text. No scope or import analysis is possible.
+- **Markdown is deliberately out of scope.** The guard against stale doc references is `.gitignore` (plan docs are removed on merge), not a lint rule.
+- **Reporting location** is the whole comment's `loc`, not the individual match offset — one report per offending comment, even if it contains multiple stale references.
+- **Cache is module-level** (`targetsCache`). It persists across files within a single lint run but resets when the process restarts.

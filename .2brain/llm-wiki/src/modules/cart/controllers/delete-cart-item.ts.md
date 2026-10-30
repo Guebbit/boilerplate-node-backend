@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/controllers/delete-cart-item.ts
-sha256: 8e17cdbdf267acd017be9d6688261876765f7899210c98b5657c49b34b9a862d
-generated_at: 2026-10-14T15:07:32.749051+00:00
+sha256: 7b4a52b0158beb77d8e551981ad2680b245946595bf6b40e3b1e00b44965f649
+generated_at: 2026-10-29T03:19:42.967398+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter that maps `DELETE /cart/:productId` (canonical) and `DELETE /cart` (alias) to `cartService.cartItemRemoveById`. It extracts the target `productId` from either the path segment or the request body, delegates to the cart service, and shapes the HTTP response (200 / 404 / 422) without business logic.
+Thin Express adapter for the `DELETE /cart/items/:productId` endpoint. Extracts the product ID from the path, delegates to `cartService.removeItemById`, and shapes the HTTP response (success or error) without containing business logic.
 
 ## Key elements
 
-- **`deleteCartItem`** (exported) — The sole handler. Reads `userId` from `request.authContext`, resolves `productId` via `requireId`, calls `cartService.cartItemRemoveById(userId, productId, callerContextOf(request))`, then responds with `successResponse` (200 + `CartResponse`) or short-circuits on `refused` / `catchAs`.
+- **`deleteCartItem`** (exported) — Express handler. Pulls `userId` from `request.authContext`, validates the `:productId` path segment via `requireId`, calls `cartService.removeItemById(userId, productId, callerContextOf(request))`, then either sends the updated `CartResponse` with 200 or propagates a refusal/error through `refused` / `catchAs`.
 
 ## Relationships
 
-- **`src/modules/cart/routes.ts`** — Registers `deleteCartItem` on the two DELETE routes (canonical path-segment route and the alias route with `x-alias-of: removeCartItem`).
-- **`src/modules/cart/services/index.ts`** — Provides `cartService.cartItemRemoveById`, the actual removal logic.
-- **`src/infrastructure/http/ids.ts`** — Provides `requireId`, which extracts and validates `productId` from params or body (404 for malformed-on-canonical, 422 for missing-on-alias).
-- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf`, forwarding request metadata into the service call.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse` for the 200 JSON reply.
-- **`src/infrastructure/http/controller.ts`** — Provides `refused` (service-level rejection) and `catchAs` (error mapping to HTTP status).
-- **`src/infrastructure/i18n/index.ts`** — Provides `t` for the localized success message (`cart.product-removed`) and the not-found / validation messages used by `requireId`.
-- **`src/types/index.ts`** — Declares `CartResponse` and `RemoveCartItemRequest` used in the function signature and response payload.
+- **`src/modules/cart/routes.ts`** — registers `deleteCartItem` as the handler for the `DELETE /cart/items/:productId` route.
+- **`src/modules/cart/services/index.ts`** — provides `cartService.removeItemById`, the sole business operation invoked here.
+- **`src/infrastructure/http/ids.ts`** — `requireId` validates and extracts the `productId` path segment; short-circuits with a 404 response if malformed.
+- **`src/infrastructure/http/request.ts`** — `callerContextOf` builds the caller context passed into the service call.
+- **`src/infrastructure/http/response.ts`** — `successResponse` emits the 200 JSON body.
+- **`src/infrastructure/http/controller.ts`** — `refused` and `catchAs` handle service-level rejections and unexpected errors respectively.
+- **`src/types/index.ts`** — supplies the `CartResponse` type used to type the success payload.
 
 ## Notes
 
-- One function serves two route shapes. The `requireId` helper disambiguates: on the canonical route a *malformed* path segment yields the same 404 copy as a missing cart line; on the alias route a missing/malformed body field yields a 422 naming `productId`.
-- The service itself returns 404 when the item isn't in the cart; the controller does not add its own existence check.
-- No query-string handling — neither route declares one (noted in the inline comment).
-- `request.authContext!` is asserted non-null; the auth middleware is expected to have populated it before this handler runs.
+- A malformed `:productId` path segment is intentionally indistinguishable from "item not in cart" — both yield the same 404 copy (`cart.item-not-found`). This avoids leaking which product IDs exist.
+- `request.authContext!.id` uses a non-null assertion; the cart router is expected to run an auth guard upstream.
+- The service is contractually responsible for returning a "refused" result (e.g. 404) when the item is absent; the controller does not check existence independently.

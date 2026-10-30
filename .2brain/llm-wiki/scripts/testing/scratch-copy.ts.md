@@ -1,7 +1,7 @@
 ---
 source: scripts/testing/scratch-copy.ts
-sha256: 092abc43a9362b705b76d547944549ae168e916b81d9eddada9a9b1401a17ca8
-generated_at: 2026-10-01T12:41:48.606823+00:00
+sha256: f4e55d0dc6d6ea3177a19355a57e009d8a7ab204fab72fee9bc055f971371853
+generated_at: 2026-10-29T01:46:12.985647+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Builds a disposable copy of the checkout into a scratch directory so that `measure:*` scripts can destructively mutate it (strip the shop, scaffold a module) and then run the repo's own checks against the result—without touching the real working tree.
+Builds a disposable copy of the checkout that the `measure:*` scripts can mutate (strip the shop, scaffold a module) and then run the repo's own checks against. It exists so those destructive experiments never touch the real working tree.
 
 ## Key elements
 
-- **`SKIP_ENTRIES`** — Set of top-level entries excluded from the copy (`node_modules`, `.git`, `.claude`, `tmp`); each is handled separately.
-- **`runIn(scratch, command, args) → boolean`** — Spawns a command with `cwd` set to the scratch root; returns `true` on exit code 0. Never throws: a non-zero exit is the *measurement*, not a script failure.
-- **`assembleScratchCopy(repoRoot, scratch) → void`** — Wipes and rebuilds the scratch tree:
-  1. `cpSync` the checkout, filtering out `SKIP_ENTRIES`.
-  2. Symlink `node_modules` from the original into the scratch (avoids reinstall).
-  3. Patch `tsconfig.json` to add `"preserveSymlinks": true` so TypeScript doesn't emit TS2883 for types reached through the symlink.
-  4. `git init` + `git add --all` so tools that call `git ls-files` (e.g. `docs:graph`) work inside the scratch.
+- **`SKIP_ENTRIES`** (const `Set`) — top-level directory names excluded from the copy (`node_modules`, `.git`, `.claude`, `tmp`); they are regenerated or symlinked instead.
+- **`runIn(scratch, command, commandArguments)`** (exported) — runs a command with `spawnSync` in the scratch directory. Always returns a boolean (`true` on exit 0); never throws, because a failing command is usually the measurement, not a script bug.
+- **`assembleScratchCopy(repoRoot, scratch)`** (exported) — wipes and rebuilds the scratch tree: copies the source (skipping `SKIP_ENTRIES`), symlinks `node_modules`, patches the local `tsconfig.json` to add `"preserveSymlinks": true`, then `git init` + `git add --all` so module-graph tooling (`git ls-files`) works. Throws only if the git steps fail.
 
 ## Relationships
 
-- **`scripts/testing/measure-demo-strip.ts`** — Consumer. Calls `assembleScratchCopy` to get a pristine scratch tree, then mutates it (removes the shop) and uses `runIn` to execute the repo's checks.
-- **`scripts/testing/measure-scaffold.ts`** — Consumer. Same pattern: `assembleScratchCopy` → scaffold a module into the scratch → `runIn` the checks.
+- **`scripts/testing/measure-demo-strip.ts`** and **`scripts/testing/measure-scaffold.ts`** — the two `measure:*` consumers. They call `assembleScratchCopy` to get a clean, git-initialized sandbox, make their mutation (strip / scaffold), then use `runIn` to execute the repo's own checks (type-check, lint, etc.) inside it. The scratch tree is disposable by design; the measurement scripts own the mutation, this file owns the setup.
 
 ## Notes
 
-- `scratch` **must** live outside `repoRoot`; `fs.cpSync` throws if the destination is a subdirectory of its source.
-- The tsconfig patch is a literal string replace of `"strict": true,`. If that line's formatting ever changes, the patch silently fails and TS2883 will reappear.
-- The module exports only `runIn` and `assembleScratchCopy` (declared `@module`); no default export.
+- The `scratch` path **must not live inside** `repoRoot`; `fs.cpSync` rejects a destination that is a subdirectory of its own source.
+- `node_modules` is symlinked, not copied or reinstalled — the scripts care about the *source* state, not npm resolution.
+- The `tsconfig.json` patch (adding `preserveSymlinks`) is a workaround for TS2883: without it, TypeScript refuses to name types reached through the symlinked `node_modules`, which would be a measurement artifact, not a real code issue.
+- `git init` is required because the repo's own `regenerate` module-graph step relies on `git ls-files`; a scratch tree without a `.git` directory would break that step.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/tests/integration/preorder.test.ts
-sha256: 86357783580486f7f561eca61b43a4bc55568e615d82d9eb319044d42b1f0f07
-generated_at: 2026-10-14T15:37:47.354545+00:00
+sha256: ba35284d00c6eeec489ecac3a2eb9ee5fdfda7311c9c05db7e57165bf78a0ff7
+generated_at: 2026-10-29T03:47:39.677498+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the paid-preorder delivery flow. They verify that the grouping rule reads the release date the order *frozen* (not the live catalogue), that fulfillment orders start `on_hold / awaiting_stock`, and that stock arriving through the outbox releases the hold — either in one shot or by splitting the order when the delivery is short. The tests use a real inventory service and a real outbox so the seam between the two modules is exercised end-to-end.
+Integration test that verifies the paid-preorder flow across the delivery ↔ inventory seam: a preorder line is held (`on_hold` / `awaiting_stock`) until stock is received, the release date is read from the order's frozen snapshot (never the live catalogue), and incoming stock either releases the whole fulfillment order or splits it into an open partial plus a still-held remainder.
 
 ## Key elements
 
-- **`inDays(days)`** – Helper that returns a `Date` `days` in the future; used to build release dates.
-- **`receiveAndSettle(productId, quantity)`** – Calls `inventoryService.receive` then `settleOutboxNudges`, simulating a stock arrival that flows through the outbox.
-- **`describe('grouping a paid preorder')`** – Two tests: the fulfillment order holds the buyer's promised date; mutating the catalogue's release date afterwards does not change the hold.
-- **`describe('stock arriving for a paid preorder')`** – Five tests covering:
-  - Full release (delivery covers the whole line → single `open` order).
-  - Split delivery (short delivery → two orders, one `on_hold`, one `open`; the new order inherits `agreedAt`).
-  - Lazy creation: if the paid-listener never fired, `fulfillmentOrdersOf` still materializes the orders on first read.
-  - Idempotency: calling `releaseAllocated` twice for the same allocation produces no extra split.
-  - Earliest-promise-first: one product at two release dates opens the earlier date first.
+- **`inDays(days)`** – local helper; returns a `Date` offset from now by the given number of days (used for release dates).
+- **`receiveAndSettle(productId, quantity)`** – calls `inventoryService.receive` then `settleOutboxNudges()`; models "stock arrives and the outbox delivers the announcement to delivery."
+- **`describe('grouping a paid preorder')`** – two tests: the line is held with the buyer's promised date, and a later catalogue date change does not affect the already-frozen order.
+- **`describe('stock arriving for a paid preorder')`** – five tests covering: full release (single order goes `open`), split delivery (partial opens, remainder stays `on_hold`), lazy fulfillment-order creation when the paid-listener never ran, idempotency of duplicate `releaseAllocated` calls, and earliest-promise-first ordering when one product is held for two dates.
+- **`beforeEach` / `afterEach`** – resets domain events, subscribes `deliveryModule`, marks events wired; tears down after each test.
 
 ## Relationships
 
-- **`@modules/delivery/tests/factories`** – `paidPreorderOrder` sets up a paid preorder order; `fulfillmentOrdersOf` triggers the grouping rule and returns the resulting fulfillment orders.
-- **`@modules/delivery/module`** – `deliveryModule.subscribe()` is called in `beforeEach` so the delivery listeners are wired before each test.
-- **`@modules/delivery/services`** (re-exports `releaseAllocated`) – called directly in the idempotency test to announce a release out-of-band.
-- **`@kernel/events`** – `resetDomainEvents` / `markDomainEventsWired` manage the in-memory event bus lifecycle around each test.
-- **`@kernel/outbox`** – `settleOutboxNudges` drains the outbox so the delivery module's release logic actually runs.
-- **`@modules/inventory`** – `inventoryService` provides `receive`, `setPreorderLimit`, `reserveForOrder`, `commitForOrder` to simulate stock arriving and allocation.
-- **`@modules/orders`** – `orderService.getById` reads back the persisted order to assert `fulfillment` counters; `createOrder` / `toOrderItem` build test orders.
-- **`@modules/products`** – `productService.updateById` mutates the catalogue (to prove the frozen date wins); `createProduct` builds test products.
-- **`@modules/users/tests/factories`** – `createUser` creates the buyer for the two-date test.
+- **`src/modules/delivery/module.ts`** – `deliveryModule.subscribe()` in `beforeEach` wires the delivery module's domain-event listeners so that order-paid and inventory-received events are processed.
+- **`src/modules/delivery/services/index.ts`** – `deliveryService.releaseAllocated` is called directly in the idempotency test to simulate a duplicate outbox announcement.
+- **`src/modules/delivery/tests/factories.ts`** – `paidPreorderOrder` creates a paid preorder order with configurable lines; `fulfillmentOrdersOf` queries the resulting fulfillment orders.
+- **`src/modules/inventory/index.ts`** – `inventoryService.receive`, `setBackorderLimit`, `reserveForOrder`, `commitForOrder` drive the stock side of the flow.
+- **`src/modules/orders/index.ts`** – `orderService.getById` is used to assert the order's `fulfillment` counters after each scenario.
+- **`src/modules/orders/tests/factories.ts`** – `createOrder`, `toOrderItem` build the two-date preorder order in the "earliest promise first" test.
+- **`src/modules/products/index.ts`** – `productService.updateById` changes the catalogue release date to prove the delivery module ignores it.
+- **`src/modules/products/tests/factories.ts`** – `createProduct` sets up the product fixture.
+- **`src/modules/users/tests/factories.ts`** – `createUser` creates the buyer.
+- **`src/kernel/events.ts`** – `resetDomainEvents` / `markDomainEventsWired` control the in-memory event bus between tests.
+- **`src/kernel/outbox.ts`** – `settleOutboxNudges` flushes pending outbox entries so the delivery module actually receives the inventory-received signal.
+- **`src/types/index.ts`** – `OrderStatus.paid` used when building the raw order in the two-date test.
 
 ## Notes
 
-- The "paid listener never ran" test reveals that `fulfillmentOrdersOf` is **lazy**: if the delivery module's paid-order listener was never triggered, the first call to the factory still materializes the fulfillment orders. This is a deliberate safety net, not a bug.
-- Split delivery produces **two** fulfillment orders with sequential numbers (1 = still holding, 2 = opened). The new order copies `agreedAt` from the original so downstream "Late" views and notifications still see the correct promise.
-- The test suite relies on the outbox as the **only** communication channel between inventory and delivery. There is no direct call from `inventoryService.receive` to delivery logic; `settleOutboxNudges` is what makes the release happen.
+- The file relies on `setupTestDb()` called at module scope (injected via `@tests/setup-test-db`); the test does not manage its own database lifecycle.
+- The "frozen date" invariant (test 2) is the core assertion that delivery reads `agreedAt`/`expectedAt` from the order document, not from `productService`'s current catalogue value.
+- The idempotency test bypasses the outbox and calls `releaseAllocated` twice with the same quantity — this is the only test that exercises the service method directly rather than through the event/outbox path.
+- The "earliest promise first" test manually drives the inventory reserve/commit sequence (`setBackorderLimit` → `reserveForOrder` → `commitForOrder`) because the two-date scenario cannot be expressed through the `paidPreorderOrder` factory alone.

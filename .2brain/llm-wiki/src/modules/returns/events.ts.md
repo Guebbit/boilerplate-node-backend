@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/events.ts
-sha256: 63a8c1083a4bd5512ebe5fd390391abf732f195572bf8199b86df0b655c73ecf
-generated_at: 2026-10-15T11:53:35.815434+00:00
+sha256: 931f122f91608151ef2229630d6f2695aa9a0e75fcdd4b9aabb055c501a65480
+generated_at: 2026-10-29T05:39:01.511145+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the three domain events the returns module emits by augmenting the kernel's app-wide `DomainEventMap` interface, and exports a string constant for each event name so other code can reference them without hard-coding the strings.
+Declares the four domain events the returns module emits by augmenting the kernel's shared `DomainEventMap` (same pattern as `modules/orders/events.ts`). Provides the typed payload shapes for each event and exports string-name constants so callers reference events without hard-coding literals.
 
 ## Key elements
 
-- **`declare module '@kernel/events'`** — Augments `DomainEventMap` with three payload types (chosen over a central list; see `modules/orders/events.ts` for rationale):
-  - `'return.requested'` — fired when a return is opened (withdrawal or staff-awaiting request). Payload: `returnId`, `orderId`, `reason`.
-  - `'return.received'` — fired when goods arrive back on sale. Payload: `returnId`, `orderId`.
-  - `'return.closed'` — fired when the refund settles (or there is none to return). Payload: `returnId`, `orderId`, `refundAmount`, `currency`.
-- **`RETURN_REQUESTED`**, **`RETURN_RECEIVED`**, **`RETURN_CLOSED`** — Exported string constants matching the event names above, intended for use by emitters and consumers.
+- **`DomainEventMap` augmentation (`declare module '@kernel/events'`)** — adds four payload types to the app-wide map:
+  - `return.requested` — a return opened (withdrawal or staff-pending request). Carries `returnId`, `orderId`, `reason`, `requestedAt` (buyer's stated time), and optional `statedVia` (withdrawal channel only).
+  - `return.decided` — staff approved or declined. Internal; no AsyncAPI channel.
+  - `return.received` — goods arrived and restocked (one `restock` movement per line, same transaction as the status move).
+  - `return.closed` — refund settled (or none owed). May fire immediately at birth for pre-dispatch withdrawals.
+- **`RETURN_REQUESTED` / `RETURN_RECEIVED` / `RETURN_CLOSED` / `RETURN_DECIDED`** — exported `const` strings equal to the event keys, for use in emission and subscription sites.
 
 ## Relationships
 
-- **`src/modules/returns/module.ts`** — Its `publicEvents` projection reads these event definitions and exposes them in the `webhooks` public catalogue.
-- **`src/modules/returns/services/*`** (`create.ts`, `receive.ts`, `close.ts`, `outcome.ts`, `cancel-remainder.ts`) — The service layer emits these events during their respective lifecycle transitions.
-- **`src/modules/returns/index.ts`** — Barrel re-export; makes the constants available to the rest of the module.
-- **Tests** (`tests/integration/outbox.test.ts`, `receive.test.ts`, `service.test.ts`, `tests/unit/public-events.test.ts`) — Assert that the correct events are emitted with the expected payloads.
+- **`src/modules/returns/module.ts`** — reads this map via its `publicEvents` projection to expose events in the `webhooks` public catalogue.
+- **`src/modules/returns/services/decide.ts`** — emits `return.decided`.
+- **`src/modules/returns/services/receive.ts`** — emits `return.received`.
+- **`src/modules/returns/services/outcome.ts`** — emits `return.closed` (and, for pre-dispatch withdrawals, `return.requested` at birth).
+- **`src/types/index.ts`** — supplies the `ReturnRemedy` type used in the `return.closed` payload.
+- **`src/modules/returns/index.ts`** — re-exports the event constants for module consumers.
+- **Tests** (`public-events.test.ts`, `receive.test.ts`, `outbox.test.ts`, etc.) — assert on the event names and payload shapes defined here.
 
 ## Notes
 
-- Module augmentation is the convention here: each module extends the shared `DomainEventMap` locally rather than registering into a central registry.
-- `return.closed` timing is context-dependent — it fires immediately at birth for pre-dispatch withdrawals (where the order's own cancel carries the refund) or later when the payment sweep completes a refund.
-- The file contains no runtime logic; it is purely type declarations plus three `const` exports.
+- `return.decided` is **internal only**; it has no AsyncAPI channel and should not be expected on the public webhook catalogue.
+- `requestedAt` records the buyer's stated time, not the shop's recording time.
+- `statedVia` is present **only** on withdrawal-stated requests; `remedy` is absent on a return born closed.
+- `return.closed` can fire in the same transaction as `return.requested` for a pre-dispatch withdrawal (the order's own cancel carries the refund), so subscribers must tolerate that ordering.

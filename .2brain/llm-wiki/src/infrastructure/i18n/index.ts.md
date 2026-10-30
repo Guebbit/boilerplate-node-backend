@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/i18n/index.ts
-sha256: 3e6d9ae37dec102a65fa20d345b22f8c6ebd56ee6a5398c77262760f4508c699
-generated_at: 2026-09-27T14:12:04.428036+00:00
+sha256: d8ea365174cc839a384c53a05ae586078a771d7e7d2154ef3d391d6bb8bfcfc9
+generated_at: 2026-10-29T02:07:07.595395+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel (facade) file for the request-scoped i18n subsystem. It is the **single import point** for translation infrastructure across the codebase (~70 call-sites use the `@infrastructure/i18n` alias), re-exporting four sub-modules—`./catalog`, `./boot`, `./overrides`, `./context`—so callers never touch `i18next` directly. This keeps the one-global i18next instance out of the per-request path; the per-request translator lives in `./context`.
+Barrel (re-export) file that is the **sole public entry point** for all i18n functionality. It exists to keep the global `i18next` instance out of the request path — callers always get a per-request `t` via `./context` rather than a shared singleton with one active language. Every consumer (~70 import sites) imports from `@infrastructure/i18n`, never from `i18next` directly.
 
 ## Key elements
 
-- **`t`** – the per-request translation function (from `./context`). Always import this, not `i18next`'s default export.
-- **`translator`** – factory/instance behind `t`; also from `./context`.
-- **`LocaleContext`** (type) – the typed context object that carries the active locale and dictionary for a single request.
-- **`createLocaleContext`, `runWithLocale`, `runWithLocaleContext`, `getCurrentLocale`, `getLocaleContext`** – context lifecycle helpers (from `./context`).
-- **`bootI18n`** (from `./boot`) – one-time startup of the shared i18next instance; call once at app boot, not per request.
-- **Catalog exports** (`getDefaultLocale`, `getFallbackLocale`, `listSupportedLocales`, `loadLocaleResources`, `localeCandidatesFor`, `readLocaleDictionary`, `registerLocaleDirectories`, `resetSupportedLocales`) – translation resource loading and locale-resolution chain (from `./catalog`).
-- **Overrides exports** (`applyLocaleOverrides`, `refreshLocaleOverrides`, `registerLocaleOverrideProvider`, `startLocaleOverrideRefresh`, `stopLocaleOverrideRefresh`, `isLocaleOverrideAvailable`, `getOverrideRefreshMs`, `resetLocaleOverrides`, `LocaleOverrideProvider`) – admin-side live translation overlay with a polling refresh cycle (from `./overrides`).
+- **`./catalog` re-exports** — `getDefaultLocale`, `getFallbackLocale`, `listSupportedLocales`, `loadLocaleResources`, `localeCandidatesFor`, `readLocaleDictionary`, `registerLocaleDirectories`, `resetSupportedLocales`. Manages which locales exist, their resource loading, and the candidate-chain resolution.
+- **`./boot` re-exports** — `bootI18n`. One-time shared-instance startup.
+- **`./overrides` re-exports** — `applyLocaleOverlay`, `applyLocaleOverrides`, `getOverrideRefreshMs`, `isLocaleOverrideAvailable`, `refreshLocaleOverrides`, `registerLocaleOverrideProvider`, `resetLocaleOverrides`, `startLocaleOverrideRefresh`, `stopLocaleOverrideRefresh`, plus types `LocaleOverlay` and `LocaleOverrideProvider`. Admin overlay: swap or augment translations at runtime with an optional periodic refresh.
+- **`./served` re-exports** — `dictionaryLocaleFor`, `draftLocaleFor`, `hasServedDictionary`, `isServedLocale`, `listServedLocales`, `resetServedLanguages`, `servedLocaleFor`, `setServedLanguages`. Tracks which languages a given request may actually be answered in (i.e., which dictionaries are loaded/available).
+- **`./context` re-exports** — `createLocaleContext`, `createPreviewContext`, `getCurrentLocale`, `getLocaleContext`, `runWithLocale`, `runWithLocaleContext`, **`t`**, `translator`, plus type `LocaleContext`. The per-request translation function and its surrounding context (AsyncLocalStorage-based).
 
 ## Relationships
 
-- **`src/infrastructure/http/middlewares/locale.ts`** – owns `Accept-Language` negotiation via `request.acceptsLanguages`. This module explicitly does **not** parse `Accept-Language` itself; it consumes the locale that the middleware has already resolved.
-- **`src/app.ts`, `src/app/demo.ts`, `src/app/error-handling.ts`** – import `t` and/or `bootI18n` through this barrel for app-level messages and startup.
-- **`src/infrastructure/http/controller.ts`, `errors.ts`, `frontend-link.ts`** – import `t` for user-facing strings.
-- **`src/infrastructure/http/middlewares/human-challenge.ts`, `idempotency.ts`, `rate-limit.ts`, `upload.ts`** – import `t` for middleware error/hint strings.
-- **`scenarios/locales.ts`, `scenarios/products.ts`** – integration/scenario tests that exercise the exports re-exported here.
-- **`scripts/ops/reap-inactive-accounts.ts`, `sweep-reservations.ts`** – operational scripts that import `t` (or catalog helpers) for CLI output.
+- **`src/infrastructure/http/middlewares/locale.ts`** — Explicitly *not* this file's concern. `attachLocale` in that middleware performs the `Accept-Language` → locale decision via `request.acceptsLanguages`; this barrel only consumes the resulting locale.
+- **Consumers (all ~70 import sites)** — `src/app.ts`, `src/app/error-handling.ts`, `src/infrastructure/http/errors.ts`, `src/infrastructure/http/middlewares/*` (content-type, human-challenge, idempotency, json-depth, origin), `scenarios/locales.ts`, `scenarios/products.ts`, `scenarios/support/demo.ts`, `scripts/ops/run-job.ts`, and others all `import { … } from '@infrastructure/i18n'` resolving to this file. They never reach into the submodules directly.
+- **`kernel/translation.ts`** (referenced in the module doc) — Owns the *translation port* (the module-level vocabulary contract), the same inversion pattern as `kernel/authentication.ts`. This barrel is the *implementation-side* surface, not the port definition.
 
 ## Notes
 
-- **Never import `i18next` directly** in application code. Its default export is a single global instance with one active language; this barrel routes through `./context` so each request gets its own translator bound to the correct locale.
-- The JSDoc header points to `docs/tools/i18n.md` for the broader i18n design.
-- Two concerns are **deliberately excluded** from this directory: (1) `Accept-Language` parsing (lives in the locale middleware) and (2) the translation *port* / published vocabulary (lives in `kernel/translation.ts`), mirroring the inversion pattern used by `kernel/authentication.ts`.
+- **Do not import `i18next` directly** in application code. The default export of `i18next` is a single global instance with one active language; using it inside a request handler silently breaks per-request isolation. Always go through this barrel (specifically `t` / `runWithLocale` from `./context`).
+- **Accept-Language parsing** is deliberately owned by `locale.ts` middleware (using `request.acceptsLanguages`), not by any helper in `./catalog`. Don't add a hand-rolled parser to the catalog.
+- The module doc points to `docs/tools/i18n.md` for the full design rationale.

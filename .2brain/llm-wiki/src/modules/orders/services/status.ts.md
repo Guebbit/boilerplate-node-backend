@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/services/status.ts
-sha256: 74ace1c0eed05d49a7bf9289a97ee248b5c039e84fac9f913e10dd7039bee564
-generated_at: 2026-10-15T11:11:49.056380+00:00
+sha256: 0c2585dd4c0c8d0b59adeac8b204a433eea138c5694f58d676c04551c0412b0f
+generated_at: 2026-10-29T04:50:22.988144+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The single status writer for orders. Other modules (`payments`, `delivery`) **report** a fact they have already recorded; this file decides whether the reported move still applies given the order's current status, performs the conditional write, and announces the resulting `ORDER_STATUS_CHANGED` event. No human-initiated request flows through this file.
+The single writer of order status transitions in this application. Other modules (`payments`, `delivery`, `returns`) report a fact they have already recorded; this file decides whether the fact still applies (via a conditional `from`-status check) and, if so, writes the new status and announces it exactly once. It enforces the tactical-DDD rule that `orders` is the only module that mutates `Order.status`.
 
 ## Key elements
 
-- **`markPaid(orderId, paymentMethod?, by?, session?)`** — Reports that a payment settled. Stamps `paidAt` and the actual payment method, commits the inventory hold (`held → committed`) in the same transaction, and refreshes the stock cache after commit. Emits the event that triggers invoicing.
-- **`markProcessing(orderId, session?, actor?)`** — Reports that fulfilment started on a paid order. Delegates to `markSystemMove('start')`.
-- **`markShipped(orderId, session?, actor?)`** — Reports that the last unit left (nothing remains to ship). Delegates to `markSystemMove('ship')`.
-- **`markDelivered(orderId, deliveredAt, session?, actor?)`** — Reports the last shipment arrived. Freezes the withdrawal deadline (`withdrawUntilFrom(deliveredAt, withdrawalPeriodDays())`) and writes it alongside the status.
-- **`markFulfilmentComplete(orderId, at, session, actor?)`** — Reports the order became complete in one act (digital-only fulfilment, or remainder-cancel after full delivery). Performs the multi-step move (`processing → shipped → delivered`, or `processing → delivered` for digital-only) in a single write. Requires a caller-supplied session.
-- **`announceMove`** *(internal)* — Transaction-aware helper: joins the caller's session or opens its own; writes conditionally then announces.
-- **`markSystemMove`** *(internal)* — Shared shape for the simple single-step moves (start, ship) using the `ORDER_EVENTS` table.
-- **`deliveredRow`** *(internal)* — Builds the timeline entry for a `delivered` move, including the frozen `withdrawUntil`.
+- **`markPaid(orderId, paymentMethod?, by?, session?)`** — Reports a settled payment. Has its own repository write (`orderRepository.markPaid`) because it stamps `paidAt` in the same `$set`. Also coordinates inventory: retakes released units if the hold window closed before payment landed, then commits stock. Returns `null` (→ refund path) when the order is no longer payable or stock is short.
+- **`markProcessing(orderId, session?, actor?)`** — Reports that fulfilment started. Delegates to `markSystemMove('process')`.
+- **`markShipped(orderId, session?, actor?)`** — Reports the last unit left for shipping. Delegates to `markSystemMove('ship')`.
+- **`markReopened(orderId, session?, actor?)`** — Reports a lost shipment; order goes back to `processing`. No timeline row is written (the loss event owns it).
+- **`markReshipped(orderId, session?, actor?)`** — Reports a legal-guarantee replacement on a `delivered` order; back to `processing`. No timeline row.
+- **`markSystemMove(orderId, event, session?, actor?)`** *(internal)* — Shared shape for the four non-`paid` moves: reads `from`/`to` from `ORDER_EVENTS[event]`, performs a conditional `updateStatusIfIn`, wraps in `withTimeline`, and announces via `statusChangedEvent`.
+- **`announceMove(session, write, announce)`** *(internal)* — Routes the write+announce into the caller's transaction (`announceWithin`) or opens its own (`announceInTransaction`).
+- **`MOVE_ROW`** *(constant)* — Maps each event name to its timeline entry `type`; `reopen` and `reship` map to `undefined` (no row).
+- **`deliveredRow(withdrawUntil, actor)`** *(internal)* — Builds the `delivered` timeline row carrying the frozen withdrawal deadline.
 
 ## Relationships
 
-- **`src/kernel/outbox.ts`** — Provides `announceWithin` and `announceInTransaction`, the two transaction-aware announcement primitives used by every move in this file.
-- **`src/modules/inventory/index.ts` / `services/index.ts`** — `inventoryService.commitForOrder` runs in the same transaction as `markPaid`; `inventoryService.refreshStockCacheForOrder` is called post-commit when the move opened its own transaction.
-- **`src/modules/orders/events.ts`** — Exports `ORDER_STATUS_CHANGED`, the event name announced after every successful move.
-- **`src/modules/orders/domain/index.ts`** (and sub-modules `lifecycle`, `rules`, `timeline`, `withdrawal`, `projections`) — Source of `ORDER_EVENTS`, `isDigitalOnlyOrder`, `withdrawUntilFrom`, `withdrawalStartFor`, and the `TimelineEntryInput` / `Stamped*` types that shape the writes and timeline entries.
-- **`src/modules/orders/config.ts`** — `withdrawalPeriodDays()` supplies the statutory window length.
-- **`src/modules/orders/model.ts`** — `OrderDocument` is the return type of every exported move.
-- **`src/modules/invoicing`** *(consumer)* — Subscribes to the `ORDER_STATUS_CHANGED` event emitted by `markPaid` to issue the invoice; the integration tests under `src/modules/invoicing/tests/integration/` exercise this flow.
+- **`src/kernel/outbox.ts`** — Provides `announceInTransaction` / `announceWithin` / `OutboxAnnouncements`; every status change is announced through the outbox relay.
+- **`src/modules/inventory/services/index.ts`** — `inventoryService.retakeReleasedForOrder`, `commitForOrder`, `releaseForOrder` are called inside `markPaid` to move the stock ledger in the same transaction.
+- **`src/modules/orders/repository.ts`** — `orderRepository.updateStatusIfIn`, `markPaid`, `findInSession` supply the conditional (idempotent) writes.
+- **`src/modules/orders/services/announce.ts`** — `statusChangedEvent` builds the `ORDER_STATUS_CHANGED` payload announced after each successful move.
+- **`src/modules/orders/domain/index.ts`** (and sub-modules `lifecycle`, `rules`, `timeline`, `withdrawal`, `projections`) — Supplies `ORDER_EVENTS` (the `from`/`to` table), `isPayable`, `isDigitalOnlyOrder`, `conformityUntilFrom`, `deliveryClockFor`, `withdrawUntilFrom`, and the `TimelineEntryInput` / `Stamped*` types.
+- **`src/modules/orders/events.ts`** — Defines `ORDER_STATUS_CHANGED` and `ORDER_CANCELLED` event constants used in outbox announcements.
+- **`src/modules/orders/config.ts`** — `withdrawalPeriodDays` seeds the withdrawal deadline stamped on `delivered` moves.
+- **`src/modules/orders/services/cancel.ts`** — `CANCEL_CAUSES` is imported (used in the truncated portion for cancellation-adjacent logic).
+- **`src/modules/orders/model.ts`** — `OrderDocument` type for all return values.
 
 ## Notes
 
-- **`markPaid` is the odd one out.** It bypasses `markSystemMove` because it stamps an extra field (`paidAt`) and carries inventory-commit logic in the same write; the shared `$set` in `markSystemMove` has no slot for that.
-- **Exactly-once under races.** Every write goes through `orderRepository.updateStatusIfIn` (or `markPaid`/`markDelivered` equivalents), so a redelivered webhook or retried delivery scan that arrives after the status has already moved simply returns `null` and announces nothing.
-- **`markFulfilmentComplete` always receives a session** (non-optional). Its multi-step write is atomic by contract; callers must supply the transaction.
-- **Withdrawal deadline is frozen at write-time.** `markDelivered` and `markFulfilmentComplete` compute `withdrawUntil` once and persist it, mirroring the "freeze the fact at the moment it happens" convention used for `shippingCost` and `currency`.
-- **`paymentMethod` in `markPaid`** is typed `'card'` only — it overrides the checkout-chosen method when the provider actually collected card payment. Offline methods leave the checkout choice untouched; the payment row carries the recorded method separately.
+- **`markPaid` is structurally different** from the other four exports. It does *not* go through `markSystemMove` because the repository write must also set `paidAt`; it instead calls `orderRepository.markPaid` directly. All other moves share the `updateStatusIfIn` + `ORDER_EVENTS` path.
+- **Conditional writes are the idempotency guarantee.** Two racing callers (redelivered webhook, retried scan) both execute `updateStatusIfIn`; only one matches the `from` set and writes, the other gets `null` and announces nothing.
+- **`markPaid` retake-then-commit ordering.** If the inventory hold was already released, units are retaken *before* the `paid` write. If the retake is short, `null` is returned and the caller (payments) refunds. If the status write then fails (racing move), already-retaken units are released again.
+- **`reopen` and `reship` write no timeline row.** Their causal event (the loss, the return receipt) is responsible for the timeline entry; `MOVE_ROW` encodes this as `undefined`.
+- **`paymentMethod` param on `markPaid`** only overrides to `'card'` when the provider actually took money; it never clears an existing checkout choice. An unknown method is omitted from the timeline `data` object (absent key, not `null`).

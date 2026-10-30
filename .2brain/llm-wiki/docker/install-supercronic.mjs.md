@@ -1,27 +1,31 @@
 ---
 source: docker/install-supercronic.mjs
-sha256: 853f299d192981e3ef08c06b863bb1ec67d8cf8b4ded0b7b656abbae0446771c
-generated_at: 2026-10-07T23:47:35.868824+00:00
+sha256: 738fd8cf2e7d9f0aec507394f033df38e9e77b7706db82a58c05ef4a8f5c4e16
+generated_at: 2026-10-29T01:18:21.944174+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # docker/install-supercronic.mjs
 
 ## Purpose
-Downloads, verifies, and installs the [supercronic](https://github.com/aptible/supercronic) cron scheduler binary into `/usr/local/bin` during Docker image builds. It exists because busybox `crond` resets supplementary groups before each job (requiring `CAP_SETGID`), which breaks under the unprivileged `node` user; supercronic runs jobs as-is. Written in Node (rather than shell) because Node is the one download tool guaranteed on both Alpine and Debian slim base images.
+
+Downloads the **supercronic** static binary, verifies it against a pinned SHA-256 digest, and installs it at `/usr/local/bin/supercronic` during Docker image builds. It is written in Node (rather than a shell script) because Node is the single tool guaranteed present in both the Alpine and Debian-slim base images. Supercronic replaces busybox `crond` because `crond` requires `CAP_SETGID` to reset supplementary groups per job, which breaks under the unprivileged `node` user.
 
 ## Key elements
-- **`VERSION`** – Pinned supercronic release tag (`v0.2.49`). Must be bumped together with the digest table.
-- **`SHA256`** – Map of `process.arch` → `{ asset, digest }` for the two supported architectures (`x64`/`amd64`, `arm64`/`arm64`). An unsupported arch throws at import time.
-- **`TARGET`** – Install path: `/usr/local/bin/supercronic`.
-- **Top-level logic (no exported functions)** – Sequential steps: resolve URL → `fetch` the release asset → SHA-256 verify against the pinned digest → `writeFile` → `chmod 0o755`. Any failure throws and aborts the build.
+
+- **`VERSION`** (`v0.2.51`) – the supercronic release to install; must be bumped together with the digests.
+- **`SHA256`** – maps `process.arch` → `{ asset, digest }`. Currently pins `x64` (asset `amd64`) and `arm64`. An unrecognised architecture throws immediately.
+- **`TARGET`** (`/usr/local/bin/supercronic`) – the install path; already on `PATH` in both images.
+- **Top-level flow** (no exported functions) – resolves the arch, `fetch`es the release tarball, computes SHA-256 via `node:crypto`, compares against the pinned digest, writes the bytes, then `chmod 0o755`.
 
 ## Relationships
-No in-repo graph neighbors. The file is invoked by `docker/Dockerfile` and `docker/Dockerfile.production` at build time (via a `RUN node docker/install-supercronic.mjs` step) and is otherwise standalone.
+
+- Consumed by `docker/Dockerfile` and `docker/Dockerfile.production` (referenced in the file header) as a build-time install step for the `cron` service image. No other files in the dependency graph reference this module.
 
 ## Notes
-- **Top-level `await`** – The file relies on ESM top-level await (`import` + `await fetch`), so it must be run as an ES module (`.mjs` extension / `"type": "module"` context).
-- **No `package.json` dependency** – Uses only Node built-ins (`node:crypto`, `node:fs/promises`, global `fetch`/`Buffer`). No `npm install` needed before running.
-- **Checksum is the security gate** – A mismatched SHA-256 fails the build; the digest is the *only* integrity check (no TLS-pinning or GPG signature step).
-- **Architecture coverage** – Only `x64` and `arm64` are pinned; any other `process.arch` (e.g., `ia32`, `riscv64`) throws immediately with a descriptive message.
-- **Idempotency** – Re-running simply overwrites the binary and re-sets permissions; no "already installed" short-circuit.
+
+- **Root required.** The script writes to `/usr/local/bin`, so it must run as a privileged user (i.e. before any `USER node` in the Dockerfile).
+- **Top-level `await` / ESM.** The file uses `.mjs` extension and top-level `await`; it is executed directly (e.g. `node install-supercronic.mjs`), not imported.
+- **Checksum is a hard gate.** A mismatch or a missing arch entry aborts the build with a descriptive error—there is no fallback or "trust on first use."
+- **Bump discipline.** When upgrading supercronic, update `VERSION` *and* both `digest` values in the same change; the asset name (`amd64` / `arm64`) must also stay in sync with the upstream release naming.
+- **No network retry.** A single `fetch` failure (DNS, HTTP ≥ 400) is fatal; there is no retry logic.

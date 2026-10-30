@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/domain/transitions.ts
-sha256: 599c643ffff3a96f6c46dc27fc43a25ba19fba31101dcafd8dba460ddf552468
-generated_at: 2026-10-14T15:54:21.070941+00:00
+sha256: 9dd7e70094382b98cc991c16f1bb8343143714d0cca23d30fa9873637371131f
+generated_at: 2026-10-29T04:00:27.265047+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure domain rule that maps each of the nine inventory transitions (reserve, ship, release, expire, preorder, allocate, receive, restock, adjust) to its effect on the three stock counters (`onHand`, `reserved`, `preordered`). Exists as a single, total decision point so that adding a tenth transition requires one entry here plus one enum value in `openapi.yaml`, and so that the ledger remains replayable regardless of which service or hold-line produced the movement.
+Pure domain rules that map each of the nine stock-movement transitions to the exact deltas applied to a product's three counters (`onHand`, `reserved`, `backordered`). No I/O, no status codes, no i18n — data in, a `CounterDelta` out. It also provides a small helper to compute remaining preorder allowance. This is the single source of truth for what a transition does; adding a tenth transition means one more case here plus one enum value in `openapi.yaml`.
 
 ## Key elements
 
-- **`HoldKind`** (`'stock' | 'preorder'`) — distinguishes whether a hold's units exist on the shelf or are only a claim against `preorderLimit`. Only relevant to the `release`/`expire` cases.
-- **`CounterDelta`** — the three signed deltas (`onHandDelta`, `reservedDelta`, `preorderedDelta`) that a single transition produces. Every column is always present (zero if untouched) to keep ledger rows self-contained.
-- **`counterDeltaFor(reason, quantity, kind)`** — the sole exported function. Takes a `StockMovementReason`, a unit count, and an optional `HoldKind`, and returns the `CounterDelta` implied by that transition. No I/O, no error throwing; an invalid reason is a type-level impossibility (the switch is exhaustive over the enum).
+- **`HoldKind`** (`'stock' | 'backorder'`) — distinguishes units that physically exist from units that are only a claim on the preorder allowance.
+- **`CounterDelta`** — a record of three signed deltas (`onHandDelta`, `reservedDelta`, `backorderedDelta`); every column is always present so the ledger is replayable.
+- **`counterDeltaFor(reason, quantity, kind?)`** — total switch over `StockMovementReason`; returns the `CounterDelta` for `reserve`, `ship`, `release`, `expire`, `backorder`, `allocate`, `receive`, `restock`, and `adjust`. `kind` is only consulted by `release`/`expire` (a backorder claim returns allowance, not `reserved`).
+- **`roomOn(level)`** — returns remaining preorder capacity (`backorderLimit - backordered`, clamped ≥ 0). A `null` limit yields `Infinity` (uncapped), and a `null` level yields `0` (closed).
 
 ## Relationships
 
-- **`src/types/index.ts`** — provides `StockMovementReason`, the enum that drives the switch.
-- **`src/modules/inventory/services/transition.ts`** — the service-layer caller; invokes `counterDeltaFor` and persists the resulting deltas via the repository.
-- **`src/modules/inventory/services/types.ts`** — likely re-exports or references `HoldKind` / `CounterDelta` in its public service signatures.
-- **`src/modules/inventory/domain/hold-lines.ts`** — sibling domain module in the same inventory domain; both are consumed by the transition service when building a ledger row.
-- **`src/modules/inventory/domain/index.ts`** — barrel file that re-exports this module's types and function for external import.
-- **`src/modules/inventory/model.ts`** — defines the persistent inventory record whose fields (`onHand`, `reserved`, `preordered`) the deltas are applied to.
-- **`src/modules/inventory/repository.ts`** — applies the computed deltas to the model and writes the ledger entry.
-- **`src/modules/inventory/tests/unit/transitions.test.ts`** — unit tests covering every `StockMovementReason` × `HoldKind` combination.
+- **`src/types/index.ts`** — provides the `StockMovementReason` enum that keys the switch in `counterDeltaFor`.
+- **`src/modules/inventory/services/transition.ts`** — the application service that calls `counterDeltaFor` to compute the delta before persisting it via the repository.
+- **`src/modules/inventory/repository.ts`** — the persistence boundary that applies the returned `CounterDelta` to the model row.
+- **`src/modules/inventory/model.ts`** — defines the counter fields the deltas are applied to.
+- **`src/modules/inventory/services/reserve.ts`** — constructs holds whose `HoldKind` determines which branch of `release`/`expire` fires later.
+- **`src/modules/inventory/services/levels.ts`** — manages the level row that `roomOn` reads for preorder capacity.
+- **`src/modules/inventory/domain/index.ts`** — barrel re-export; consumers import `counterDeltaFor` and `roomOn` through the domain entry point.
+- **`src/modules/inventory/tests/unit/transitions.test.ts`** — unit tests exercising every case of `counterDeltaFor` and edge cases of `roomOn`.
 
 ## Notes
 
-- `adjust` is the **only** transition where `quantity` is signed (e.g. `-3` for shrinkage, `+5` for a correction). All other transitions expect a positive quantity. Do not call `Math.abs` on it — the sign is intentional.
-- `release` and `expire` produce identical arithmetic but are kept as separate enum values so the ledger can record *why* units were freed (customer cancellation vs. timeout).
-- The `kind` parameter defaults to `'stock'`; passing `'preorder'` only changes the outcome for `release`/`expire` (decrements `preordered` instead of `reserved`). For all other transitions the `kind` argument is ignored.
-- This module deliberately does **not** compute customer-facing `availableStock`; that logic lives in `src/modules/products/domain/stock.ts`.
+- `quantity` is **always positive** except for `adjust`, where the sign encodes direction (e.g. `-3` = shrinkage). Do not pass `Math.abs`-ed values for `adjust`.
+- `release` and `expire` are arithmetic-identical but kept as separate enum values so the ledger records the narrative (customer cancel vs. timeout).
+- `roomOn` never returns `null` or a negative number; callers can safely do `quantity > roomOn(level)` without a null guard.
+- `ship` moves `onHand` and `reserved` together so a dispatch does not alter sellable availability for other holds.
+- The file is deliberately side-effect-free; any I/O belongs in `services/` or `repository.ts`.

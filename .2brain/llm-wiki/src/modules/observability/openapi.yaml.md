@@ -1,7 +1,7 @@
 ---
 source: src/modules/observability/openapi.yaml
-sha256: 0d17dc79431a09d8a0af2972c2b3ec650933ac76ea4f84831fb9dd5338dc20f4
-generated_at: 2026-10-15T10:55:56.268751+00:00
+sha256: 0b9af479cae800ff8623deb74952252a01ca916b74805d00ce12cdec8ba79a23
+generated_at: 2026-10-29T04:35:54.734877+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.1.0 module contract for the observability module. Defines the five operational endpoints (SSE event stream, detailed health snapshot, Prometheus metrics, JSON metrics overview, and platform-operator audit trail) along with their request/response schemas, security schemes, and shared-contract references. It exists so that API clients, dashboards, and documentation generators have a single source of truth for what this module exposes.
+OpenAPI 3.1 contract for the observability module. It defines the wire-level API for operational endpoints—SSE event streams, health/readiness detail, Prometheus metrics, a JSON metrics overview, and incident-only audit logs—and documents their authentication requirements, response shapes, and error semantics for both consumers (dashboards, Prometheus, load balancers) and AI assistants reasoning about the system's surface.
 
 ## Key elements
 
-- **`GET /observability/events`** — SSE stream (`text/event-stream`). Sends `metrics.snapshot` on connect, then periodic `metrics.updated` and `heartbeat`. Authenticated via `cookieAuth` (HttpOnly refresh cookie) because `EventSource` cannot set an `Authorization` header.
-- **`GET /observability/health`** — Authenticated, detailed readiness snapshot with uptime, memory, and telemetry-wiring detail. Explicitly **not** the container liveness (`/livez`) or LB readiness (`/readyz`) probe. Authenticated via `bearerAuth` (admin role).
-- **`GET /observability/metrics`** — Prometheus exposition format 0.0.4 (`text/plain`). Authenticated via a dedicated `metricsBearer` scheme (static credential, not a JWT). Returns **503** (deny-by-default) if no metrics token is configured.
-- **`GET /observability/metrics/overview`** — JSON KPI summary derived from the Prometheus counters/histograms, intended for dashboard cards. Requires admin role.
-- **`GET /observability/audit`** — Pageable list of recent **INCIDENT** events (security refusals, failed sign-ins, replayed refresh tokens, disabled webhook subscriptions) from the persisted audit trail. Supports filters: `actor`, `action`, `outcome`, `since`, plus shared `PageParam`/`PageSizeParam`. Requires the platform operator's observability key.
-- **`ObservabilityHealthTelemetry`** — Boolean flags (`loki`, `otel`, `umami`, `faro`, `analytics`) indicating which telemetry sinks are wired in this deployment. Read from environment; never probed. Deliberately kept **out of** the top-level `status` field because a lost sink costs visibility, not serving capability.
-- **Response envelopes** (`ObservabilityHealthResponseEnvelope`, `ObservabilityMetricsSummaryResponseEnvelope`, `AuditLogsResponseEnvelope`) — Standard `{success, status, message, data}` wrapper referencing shared-envelope components.
-- **Shared references** — Error responses, envelope fields, and pagination params are `$ref`'d from `../../../shared/contracts/openapi.root.yaml`.
+- **`/observability/events` (GET)** – SSE stream (`text/event-stream`). Authenticated via `cookieAuth` because `EventSource` cannot set an `Authorization` header; the HttpOnly refresh cookie is the credential. Emits `metrics.snapshot` on connect, then periodic `metrics.updated` and `heartbeat` events.
+- **`/observability/health` (GET)** – Authenticated (`bearerAuth`, admin role) readiness snapshot. Returns `ObservabilityHealth` with dependency statuses (database, cache, queue), telemetry wiring booleans, and uptime/memory detail. Explicitly *not* the liveness (`/livez`) or readiness (`/readyz`) probes.
+- **`/observability/metrics` (GET)** – Raw Prometheus exposition format (0.0.4). Authenticated via a static `metricsBearer` token (not a JWT) because Prometheus cannot perform token refresh. Returns `503` if no token is configured; `500` is plain text (not a Problem body) for scraper compatibility.
+- **`/observability/metrics/overview` (GET)** – Admin-authenticated JSON summary (`ObservabilityMetricsSummary`) derived from the same Prometheus counters/histograms, for dashboard KPI cards.
+- **`/observability/audit` (GET)** – Admin-authenticated list of INCIDENT-only events (security refusals, failed sign-ins, replayed tokens, disabled webhooks). IP addresses are HMAC-keyed digests. Paginated; filterable by `actor`, `action`, `outcome`, `since`. Returns `AuditLogsResponse`.
+- **`DependencyStatus`** – Enum: `ready | connecting | unavailable | disabled`. `disabled` is a valid configured state; `connecting` is distinct from `unavailable` to cover the startup grace window.
+- **`ObservabilityHealthTelemetry`** – Booleans for each telemetry sink (Loki, OTel, Umami, Faro, analytics) read from environment; deliberately excluded from the `status` field because losing a sink costs visibility, not capability.
+- **`ObservabilityDependency` / `ObservabilityHealthDependencies`** – Per-backing-service status objects (database, cache, queue) read from adapter connection state with no I/O.
 
 ## Relationships
 
-- **`src/modules/orders/openapi.yaml`** — The audit endpoint's description explicitly contrasts this platform-operator incident view with the shop admin's `GET /audit` in the orders module (customer orders, payments, accounts). The two `audit` endpoints serve different roles and are not interchangeable.
-- **`src/infrastructure/adapters/queue.ts`** — The health endpoint description states that "every dependency is read from the connection state its adapter already maintains," indicating the queue adapter's in-memory connection state is one of the backing-service signals surfaced by `GET /observability/health`.
-- **`src/infrastructure/persistence/lease.ts`** — The audit endpoint reads from the "persisted audit trail." Lease-based persistence is the storage mechanism behind that trail; the OpenAPI contract describes the read side, while `lease.ts` implements the write/read storage.
+- **`src/infrastructure/persistence/lease.ts`** – The audit-trail endpoint (`/observability/audit`) reads persisted incident events; lease management governs retention and expiry of those rows (90-day default).
+- **`src/modules/orders/openapi.yaml`** – The audit description explicitly scopes this endpoint to *platform-operator* incidents and defers shop-admin customer actions (orders, payments, accounts) to the orders module's own `GET /audit`.
+- **`src/infrastructure/adapters/queue.ts`** – Referenced as the `queue` entry in `ObservabilityHealthDependencies`; the health endpoint reports its status (`ready | connecting | unavailable | disabled`) from the adapter's existing connection state without opening new I/O.
 
 ## Notes
 
-- **Three distinct auth schemes** are used across the five endpoints: `cookieAuth` (SSE only), `bearerAuth` (admin JWT for health/overview/audit), and `metricsBearer` (static credential for Prometheus). Mixing them up will cause 401s that are easy to misdiagnose.
-- **Deny-by-default on `/observability/metrics`**: if the metrics token env var is unset the endpoint returns 503 rather than opening. This is intentional — an unauthenticated metrics endpoint is treated as a misconfiguration, not a fallback.
-- **IP addresses in audit rows** are HMAC-digested (`hmac:` + 12 hex chars), comparable but not readable. Any code or dashboard that expects raw IPs will be wrong.
-- **Telemetry wiring ≠ health**: the `ObservabilityHealthTelemetry` block is informational. A `false` on `loki` or `otel` does not flip the overall `success`/`status` to failure.
-- **Retention**: audit entries expire after a deployment-configured period (default 90 days). `meta.totalItems` counts all matching incidents, not just the current page.
+- Three distinct auth schemes coexist: `cookieAuth` (SSE only), `bearerAuth` (admin JWT for health/metrics-overview/audit), and `metricsBearer` (static token for Prometheus). Do not conflate them when reasoning about access control.
+- The `500` on `/observability/metrics` is intentionally **not** a Problem JSON body (`x-not-problem: true`); Prometheus scrapers parse exposition text only.
+- `/observability/health` performs zero I/O by design—every value is read from state adapters already maintain. Adding a probe or socket check here would violate the contract's stated invariant and could cause cascading latency under LB polling.
+- The file references shared contracts at `../../../shared/contracts/openapi.root.yaml` for common responses (`Unauthorized`, `Forbidden`, `ValidationError`, `Problem`) and parameters (`PageParam`, `PageSizeParam`); those definitions live outside this file.

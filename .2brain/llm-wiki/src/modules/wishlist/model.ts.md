@@ -1,7 +1,7 @@
 ---
 source: src/modules/wishlist/model.ts
-sha256: 8ce51007de989cfc84b2843cbe52b967f0a9b6299b469a3e12e3265c72b26e46
-generated_at: 2026-09-23T19:47:20.959764+00:00
+sha256: c53c0752a9b45b4cca1a5b9a51fd5abcecf9a9357e093db734c2e7870cb1e6d3
+generated_at: 2026-10-29T06:34:11.325957+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Mongoose schema, document interfaces, and model for the wishlist collection. A wishlist is a per-user document (`userId` → `{ items: [{ productId }] }`) with no quantity — it exists solely to track "which products does this user want?" so that the moment an amount matters the item moves to the cart. All persistence shape (indexes, serialization, uniqueness guarantees) is established here.
+Defines the Mongoose schema, model, and TypeScript interfaces for the per-user wishlist document. It establishes the persisted shape (one document per user, an array of product-only lines), the serialization transform, and the database index needed for reverse product lookups — so that every other file in the wishlist module can assume a single, stable document contract.
 
 ## Key elements
 
-- **`WishlistItem`** — interface for one line: `{ productId: Types.ObjectId }`. No other fields by design.
-- **`WishlistDocument`** — full document shape: `userId` (unique), `items: WishlistItem[]`, optional `createdAt`/`updatedAt`.
-- **`WishlistModel`** — type alias (`Model<WishlistDocument>`) for use in repository signatures.
-- **`wishlistItemSchema`** — sub-schema with `_id: false`, keeping subdocs clean for serialization.
-- **`wishlistSchema`** — main schema; `unique: true` on `userId` enforces one-wishlist-per-user at the DB level, enabling single-statement `findOneAndUpdate` upserts. `timestamps: true`.
-- **Index on `items.productId`** — unnamed (Mongoose-derived); lets product-deletion lookups avoid a collection scan.
-- **`applyWishlistTransform`** — built via `applySerialization(wishlistSchema)`; maps `_id`→`id` and strips `__v` on lean reads.
-- **`wishlistModel`** — the registered Mongoose model instance (entrypoint for repository imports).
+- **`WishlistItem`** — interface for a single wishlist line; only `productId: ObjectId`. No quantity by design.
+- **`WishlistDocument`** — extends Mongoose `Document`; carries `userId`, `items: WishlistItem[]`, and optional timestamps.
+- **`WishlistModel`** — `Model<WishlistDocument>` alias for type-safe model references.
+- **`wishlistItemSchema`** — sub-schema with `_id: false` and a required `productId` (ref `Product`).
+- **`wishlistSchema`** — top-level schema: `userId` (ref `User`, `unique: true`), `items` (array of item sub-docs, default `[]`), `timestamps: true`. Also registers an index on `items.productId`.
+- **`applyWishlistTransform`** — serialization function (built via `applySerialization`) that maps `_id`→`id` and strips `__v`.
+- **`wishlistModel`** — the registered Mongoose model (`'Wishlist'`); the single entrypoint other modules import.
 
 ## Relationships
 
-- **`@infrastructure/persistence/serialize`** — `applySerialization` is imported and applied to produce `applyWishlistTransform`.
-- **`./repository`** — owns all queries against `wishlistModel`; this file supplies the schema, document type, and transform.
-- **`./service`** — business rules (move-to-cart, idempotent `$addToSet`) operate on the types defined here.
-- **`./factories`** — constructs `WishlistItem` / document instances from domain inputs.
-- **`./index`** — barrel re-exports the public symbols of this file.
-- **`schema-contract.test.ts`** — asserts the schema shape (field names, `_id: false`, unique constraint) against the OpenAPI contract.
-- **`wishlist-races.test.ts`** — exercises concurrent `findOneAndUpdate({ userId }, …, { upsert: true })` to verify the uniqueness guarantee prevents duplicate documents.
+- **`src/infrastructure/persistence/serialize.ts`** — provides `applySerialization`, imported here to build `applyWishlistTransform`.
+- **`src/modules/wishlist/factories.ts`** — consumes `applyWishlistTransform` to wire lean-read normalization into the repository factory.
+- **`src/modules/wishlist/repository.ts`** — imports `wishlistModel` (and types) to issue `findOneAndUpdate` queries; owns all read/write operations.
+- **`src/modules/wishlist/service.ts`** — applies business rules (e.g. move-to-cart) on top of the repository; reads `productId` before any populate.
+- **`src/modules/wishlist/presenter.ts`** — shapes `WishlistDocument` data into the wire `WishlistResponse` view.
+- **`src/modules/wishlist/index.ts`** — barrel re-export of this module's public surface.
+- **`src/modules/wishlist/tests/unit/schema-contract.test.ts`** — asserts the schema's field-level contract (required fields, types, `_id: false`).
+- **`src/modules/wishlist/tests/integration/wishlist-races.test.ts`** — exercises concurrent upsert idempotence that relies on the unique `userId` index and `$addToSet` semantics.
 
 ## Notes
 
-- `items` subdocs have **no `_id`**. This is load-bearing: the OpenAPI `WishlistItem` schema declares `additionalProperties: false`, so a generated ObjectId would be a contract violation if ever serialized.
-- There is **no contract-type** (e.g. a `WishlistResponse` base) that `WishlistDocument` extends. The wire shape `{ items }` is a projection, not the stored document.
-- The `productId` field uses `ref: 'Product'` but the model never auto-populates; the service is responsible for resolving ids after lean reads.
-- The index on `items.productId` is intentionally unnamed — no code references it by name, so Mongoose's auto-derived name is sufficient.
+- `_id: false` on item sub-docs is deliberate: the OpenAPI contract declares `additionalProperties: false` on `WishlistItem`, so a generated sub-document `_id` would be a contract violation if serialized.
+- `unique: true` on `userId` is the enforcement mechanism for "one wishlist per user"; it lets every mutation be a single `findOneAndUpdate(…, { upsert: true })` with no preceding read.
+- The `items.productId` index is intentionally unnamed — nothing else creates an index with the same name, so Mongoose's auto-derived name causes no conflict (same convention as the cart module).
+- No quantity field exists on a wishlist line by design; the moment an amount matters, the item is moved to the cart. This is what makes `$addToSet` sufficient for idempotent insertion.
+- A wishlist document id never reaches the wire — the response is the items array, not the document.

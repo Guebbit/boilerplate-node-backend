@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/adapters/config.ts
-sha256: c662c8e08c4b0fd91b7897590b8fdd62cd09db8d2e6a3d35ceee7667b47f0ff7
-generated_at: 2026-10-14T07:42:31.023390+00:00
+sha256: 96e07b5a158299c1d38100690a87eef7c446fccb7975084d4a2aadb3930790c8
+generated_at: 2026-10-29T01:53:14.999394+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,44 +9,41 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Centralises every environment-variable slice that the infrastructure adapters read. Each slice is a `defineConfig` block with a typed shape, sensible defaults, and a `check` function that surfaces missing or contradictory values at boot time. The file exists so that a misconfigured value can be attributed to a single adapter (mail, Redis, images, anti-abuse, etc.) rather than to a flat bag of `NODE_*` variables.
+Centralised, typed configuration slices for every infrastructure adapter (mail, queue, Redis, images, outbound requests, PDF, export store, anti-bot). Each slice is a self-contained `defineConfig` block with field shapes, defaults, and cross-field validation so a bad value names the adapter it belongs to rather than surfacing as a runtime crash.
 
 ## Key elements
 
-- **`mailConfig`** – Transport selection (`smtp`/`log`) plus the SMTP account (host, port, user, pass, sender). `check` flags an SMTP host that lacks its companion credentials and blocks e2e runs aimed at a non-local host.
-- **`MailConfig`** (type) – `ReturnType<typeof mailConfig>`; the parsed shape a transport consumes.
-- **`mailFilesConfig`** – Spool directory and retention hours for queued mail attachments.
-- **`queueConfig`** – RabbitMQ connection (URL, host, port, credentials, enabled flag) and the shared retry policy (max attempts, delay).
-- **`redisConfig`** – Redis connection, cache prefix, and the cache enable switch. Shared by the cache adapter and the rate limiter.
-- **`imageConfig`** – Upload pixel/dimension caps, thumbnail size, public asset path, and quarantine path + retention.
-- **`outboundConfig`** – `NODE_OUTBOUND_ALLOWED_PORTS` CSV; `check` rejects non-numeric or out-of-range entries.
+- **`mailConfig`** / **`MailConfig`** – SMTP transport selection, host/port/user/pass/sender, and the `NODE_E2E_RUN` flag. Validation rejects an SMTP host missing its companion credentials and blocks e2e runs from dialing non-local mail servers.
+- **`mailFilesConfig`** – Spool directory and retention hours for mail attachments.
+- **`queueConfig`** – RabbitMQ connection (URL, host, port, user, password) plus the shared retry policy (`maxAttempts`, `retryDelaySeconds`).
+- **`redisConfig`** – Connection string / host / password, cache key prefix, and the on/off switch for the Redis-backed cache.
+- **`imageConfig`** – Max input pixels, max dimension, thumbnail size (defaults pulled from `sharedDefaults`), public path, and quarantine retention/path.
+- **`outboundConfig`** – CSV of allowed egress ports; validation rejects non-numeric or out-of-range entries.
 - **`pdfConfig`** – Puppeteer/Chromium executable path and the document-store directory.
-- **`exportStoreConfig`** – Directory where built personal-data exports wait for download.
-- **`ALTCHA_SECRET_MIN_LENGTH`** (constant, `16`) – Enforced minimum secret length for ALTCHA challenges.
-- **`antibotConfig`** – Provider selector (`none`/`altcha`/`turnstile`), email policy (allow/deny lists, disposable/MX check), and per-provider credentials. `check` ensures the selected provider has the secrets it needs.
-- **`E2E_LOCAL_SMTP_HOSTS`**, **`SMTP_COMPANIONS`** – Module-private constants used only by `mailConfig.check`.
+- **`exportStoreConfig`** – Directory where personal-data export bundles are staged before download or expiry.
+- **`ALTCHA_SECRET_MIN_LENGTH`** – Constant (16) used by the antibot check to enforce a minimum HMAC secret length.
+- **`antibotConfig`** – Provider selector (`none` / `altcha` / `turnstile`), email policy & allow/deny lists, and per-provider credentials. Validation ensures the chosen provider's required secrets are present and (for ALTCHA) meet the minimum length.
 
 ## Relationships
 
-- **`src/app/config.ts`** – Probes every slice exported here at application boot; unknown anti-bot provider names are rejected via the provider registry's resolver.
-- **`src/infrastructure/adapters/antibot.ts`** – Reads `antibotConfig` to dispatch to the chosen provider.
-- **`src/infrastructure/adapters/antibot-providers/index.ts`** – The provider registry whose valid names constrain `NODE_ANTIBOT_PROVIDER`; imports this file for the resolver.
-- **`src/infrastructure/adapters/antibot-providers/altcha.ts`** – Consumes `NODE_ANTIBOT_ALTCHA_SECRET` / `NODE_ANTIBOT_ALTCHA_COST`.
-- **`src/infrastructure/adapters/antibot-providers/turnstile.ts`** – Consumes `NODE_ANTIBOT_TURNSTILE_SITE_KEY` / `NODE_ANTIBOT_TURNSTILE_SECRET`.
-- **`src/infrastructure/adapters/mail-transports.ts`** – Reads `mailConfig` (transport, SMTP account) to build the active transport.
-- **`src/infrastructure/adapters/mail-spool.ts`** – Reads `mailFilesConfig` for spool path and retention.
-- **`src/infrastructure/adapters/cache.ts`** – Reads `redisConfig` for connection and cache switches.
-- **`src/infrastructure/adapters/image.ts`** / **`image-store.ts`** – Read `imageConfig` for dimension caps and storage paths.
-- **`src/infrastructure/adapters/document-store.ts`** – Reads `pdfConfig` for the Chromium path and storage directory.
-- **`src/infrastructure/adapters/export-store.ts`** – Reads `exportStoreConfig` for the export directory.
-- **`src/app/static-assets.ts`** – Reads `imageConfig` for `NODE_PUBLIC_PATH`.
-- **`scripts/ops/reap-mail-spool.ts`** – Reads `mailFilesConfig` to locate and prune the spool.
-- **`scripts/ops/reap-quarantine.ts`** – Reads `imageConfig` for the quarantine path and retention window.
+- **`src/app/config.ts`** – Imports the exported config slices and probes/resolves them at application boot before any adapter is constructed.
+- **`src/app/jobs.ts`** – Reads `queueConfig` to build RabbitMQ connections and apply the retry policy to job queues.
+- **`src/app/static-assets.ts`** – Consumes `imageConfig` to enforce upload size limits and resolve the public/quarantine paths.
+- **`src/infrastructure/adapters/antibot-providers/index.ts`** – The provider registry; it imports this file for the field names and refuses unknown `NODE_ANTIBOT_PROVIDER` values at resolution time.
+- **`src/infrastructure/adapters/antibot-providers/altcha.ts`** – Reads `antibotConfig` for the ALTCHA secret and cost parameters.
+- **`src/infrastructure/adapters/antibot-providers/turnstile.ts`** – Reads `antibotConfig` for the Cloudflare Turnstile site key and secret.
+- **`src/infrastructure/adapters/antibot.ts`** – Orchestrates the anti-abuse ladder using the provider and email-policy fields from `antibotConfig`.
+- **`src/infrastructure/adapters/cache.ts`** – Uses `redisConfig` to connect and to check the `CACHE_ENABLED` / prefix settings.
+- **`src/infrastructure/adapters/document-store.ts`** – Reads `pdfConfig.NODE_DOCUMENT_STORE_PATH` as its storage root.
+- **`src/infrastructure/adapters/export-store.ts`** – Reads `exportStoreConfig` for the export bundle directory.
+- **`src/infrastructure/adapters/image-store.ts`** / **`src/infrastructure/adapters/image.ts`** – Consume `imageConfig` for limits, public path, and quarantine settings.
+- **`src/infrastructure/adapters/mail-spool.ts`** – Uses `mailFilesConfig` for the spool path and retention window.
+- **`src/infrastructure/adapters/mail-transports.ts`** – Instantiates the chosen transport from `mailConfig` (host, port, credentials, sender).
+- **`src/infrastructure/adapters/mailer.ts`** – Composes `mailConfig` + `mailFilesConfig` + `mail-transports` into the public mail interface.
 
 ## Notes
 
-- `NODE_ANTIBOT_PROVIDER` is stored as plain text here; the *set* of valid values lives in the anti-bot provider registry (`antibot-providers/index.ts`), which imports this file. The registry's resolver rejects unknown names, and `app/config.ts` probes it at boot.
-- The `check` functions return arrays of human-readable error strings (or field-name strings for the antibot case). They run at boot, not per-request, so a bad value causes a startup failure rather than a silent runtime error.
-- `sensitive: true` on a field marks it for redaction in logs/diagnostics; the value is still stored in the config object itself.
-- `csv()` fields are split on commas and trimmed; `outboundConfig.check` then validates each entry is a 1–65 535 integer.
-- E2E guard: when `NODE_E2E_RUN` is true and transport is `smtp`, the host must be one of `localhost`, `127.0.0.1`, `::1`, or `mailpit`; otherwise boot fails with an explicit hint to use `NODE_MAIL_TRANSPORT=log`.
+- **Selector fields are opaque strings here.** `NODE_ANTIBOT_PROVIDER` is just `text()`; the set of valid names is owned by the provider registry (`antibot-providers/index.ts`), which imports this file. The registry's resolver rejects unknown names, and `app/config.ts` probes it at boot. Do not add a `choice()` enum to this file for provider selection.
+- **`check` callbacks return an array of field names** (or pre-formatted messages for `outboundConfig`), not thrown errors. The caller (`app/config.ts`) aggregates and reports them.
+- **`sharedDefaults`** (from `@infrastructure/config/defaults.generated`) provides the image-related defaults so the frontend and backend stay in sync without a manual copy.
+- Fields marked `sensitive: true` are expected to be redacted in logs and error output by the config framework; do not log those keys.

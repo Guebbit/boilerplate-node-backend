@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/security/password-hash.ts
-sha256: 1b55303bee0cb73769283ab5738674230bfc5d74e951ccd7302a7df2d79c2898
-generated_at: 2026-10-14T08:16:36.659494+00:00
+sha256: 6398373bdd98cf827ee9c88382e3445c84660aa7946db003df39db4f304432d9
+generated_at: 2026-10-29T02:15:48.783812+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides the application's password hashing and verification layer on top of Node 24.7+'s built-in `argon2`/`argon2id` primitive. It owns the three things Node does not: salt generation, PHC-string encoding/decoding, and a constant-time comparison. Cost parameters follow OWASP's second argon2id profile (~19 MiB, 2 passes, 1 lane), targeting < 50 ms per derivation.
+Thin wrapper around Node 24.7+'s built-in `argon2id` (`node:crypto`), adding the three things Node does not supply: a random salt, a PHC-string serialisation for storage, and a constant-time comparison for verification. Cost parameters are loaded from a shared YAML rule file so the PHP twin can read the same values.
 
 ## Key elements
 
-- **`hashPassword(password): Promise<string>`** — Async. Generates a 16-byte random salt, derives a 32-byte tag with argon2id (off the event loop via the threadpool), and returns a PHC string (`$argon2id$v=19$m=…,t=…,p=…$salt$hash`, unpadded base64).
-- **`hashPasswordSync(password): string`** — Synchronous variant intended solely for the unknown-email decoy computed at module import time, where awaiting a promise would just shift the delay.
-- **`verifyPassword(password, stored): Promise<boolean>`** — Parses the stored PHC string with `PHC_PATTERN`, re-derives using the salt and parameters *from the stored string* (not the module constants), and compares in constant time via `timingSafeEqual`. Returns `false` (never throws) if the stored value does not match the expected PHC shape.
-- **`PHC_PATTERN`** — Anchored regex that captures memory, passes, parallelism, salt, and hash from a PHC string.
-- **`encode` / `parametersFor`** — Internal helpers that serialise a `Derivation` object into a PHC string or into Node's `argon2` options object, respectively.
-- **Constants** — `MEMORY_KIB` (19 456), `PASSES` (2), `PARALLELISM` (1), `SALT_BYTES` (16, per RFC 9106 §3.1), `TAG_BYTES` (32).
+- **`hashPassword(password: string): Promise<string>`** — Async hash for storage. Generates a 16-byte salt, runs argon2id on the threadpool (promisified `crypto.argon2`), returns a PHC string.
+- **`hashPasswordSync(password: string): string`** — Synchronous variant using `argon2Sync`; intended only for the one import-time decoy hash where a promise would just shift the wait.
+- **`verifyPassword(password: string, stored: string): Promise<boolean>`** — Parses the stored PHC string (extracting its own m/t/p and salt), re-derives the tag, and compares with `timingSafeEqual`. Returns `false` (not a throw) if `stored` doesn't match the PHC pattern.
+- **`MEMORY_KIB`, `PASSES`, `PARALLELISM`** — Cost constants loaded at module load via `loadSharedRules('password-hash', passwordHashSchema)`.
+- **`SALT_BYTES = 16`, `TAG_BYTES = 32`** — Fixed sizes (128-bit salt per RFC 9106 §3.1, 256-bit output tag).
+- **`PHC_PATTERN`** — Regex that validates and decomposes the `$argon2id$v=19$m=…,t=…,p=…$salt$hash` shape (base64, no padding).
 
 ## Relationships
 
-- **`src/modules/account/services/login.ts`** — Calls `verifyPassword` (and likely `hashPassword`) to authenticate a login attempt.
-- **`src/modules/account/services/reauth.ts`** — Calls `verifyPassword` to gate re-authentication flows.
-- **`src/modules/users/model.ts`** — Defines the user record that stores the PHC string produced by `hashPassword`.
-- **`tests/unit/infrastructure/security/password-hash.test.ts`** — Unit tests for all three exports.
-- **`src/modules/account/tests/integration/password-hashing.test.ts`** — Integration tests exercising this module through the account services.
-- **`src/modules/users/tests/unit/schema-contract.test.ts`** — Asserts the stored-hash field's shape against the user schema.
+- **`src/infrastructure/config/shared-rules/load.ts`** — Provides `loadSharedRules`, used at import time to read the cost triple from the shared YAML rule.
+- **`src/infrastructure/config/shared-rules/password-hash.ts`** — Provides `passwordHashSchema` (the Zod/validator schema) that `loadSharedRules` uses to validate the YAML values.
+- **`src/modules/account/services/login.ts`** / **`src/modules/account/services/reauth.ts`** — Consumers of `verifyPassword` for credential checks.
+- **`src/modules/users/model.ts`** — Stores the resulting PHC string as the user's password field.
+- **`tests/unit/infrastructure/security/password-hash.test.ts`** — Unit tests for hash/verify round-trips and edge cases.
+- **`tests/cross-cutting/crypto-conformance.test.ts`** — Cross-cutting tests ensuring conformance (e.g., known-answer vectors).
+- **`src/modules/account/tests/integration/password-hashing.test.ts`** — Integration-level tests exercising the hash through the login flow.
 
 ## Notes
 
-- Verification is **parameter-independent**: `verifyPassword` reads memory/passes/parallelism from the stored string, so changing the module constants affects only *new* hashes.
-- `hashPasswordSync` is **not** a general-purpose alternative; it exists for exactly one call-site (the import-time decoy) where an async call would be pointless.
-- The PHC format uses **unpadded base64** (padding `=` characters are stripped via `replaceAll`).
-- `verifyPassword` guards against length mismatch before calling `timingSafeEqual` to avoid a runtime throw on differently-sized buffers.
-- No external hashing dependency (e.g. `argon2` npm package) is required; everything comes from `node:crypto`.
+- The stored PHC string is self-describing: `verifyPassword` reads m/t/p from the string itself, so changing the YAML rule only affects *new* hashes, not verification of old ones.
+- `hashPasswordSync` is **not** a general-purpose API; the doc comment restricts it to the single import-time decoy value. Use `hashPassword` everywhere else.
+- `verifyPassword` never throws on a malformed `stored` value — it resolves `false`. Callers should not rely on rejection to signal "not a valid hash."
+- Parallelism is fixed at 1 by the shared rule; the comment notes this is deliberate for server workloads.

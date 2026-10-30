@@ -1,7 +1,7 @@
 ---
 source: src/kernel/registry.ts
-sha256: 52950735cb16ceb7c09912e0ba6561c601bad39c364e04a5d3b211f6cc99f847
-generated_at: 2026-10-15T09:52:08.482961+00:00
+sha256: 1aa4fef657eba5b8a5672a945c9c9d6381b683cc71dc505ecca95b018703bd34
+generated_at: 2026-10-29T02:20:55.294135+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the typed contract interfaces that modules use to register capabilities with the application without the application (or its infrastructure adapters) importing module code directly. This file exists to enforce the "app tier sees every module, infrastructure sees none" boundary: infrastructure adapters and cross-domain services resolve module-supplied behavior through these registration interfaces rather than through direct imports, preserving the module-group dependency walls enforced by ESLint.
+Defines the set of typed interfaces that modules use to declare their cross-cutting needs (image writeback, queue consumption, translation targets, public events, browser analytics, data-subject requests) to the application without importing infrastructure directly. It is the inversion-of-control contract that lets infrastructure adapters (image worker, queue consumer, translation resolver, webhook publisher, analytics) resolve module behavior generically by string key, preserving the "app tier sees every module, infrastructure sees none" boundary enforced by ESLint.
 
 ## Key elements
 
-- **`ImageTarget`** — A single writeback callback a module registers so the image-digest worker can persist `imageUrl`/`thumbnailUrl` back onto the module's collection. The guard clause (matching `pendingImageKey`) makes stale or duplicate job deliveries a no-op.
-- **`ModuleConsumer`** — A queue-consumer declaration (`queue`, `handler`, `schema`, optional `prefetch`). `handler` is intentionally a *method* (not a property) so each module's generated payload type is preserved per-entry rather than collapsing to `unknown`. `app/workers.ts` collects and invokes these; the module itself never calls `consumeFromQueue`.
-- **`TranslatableTarget`** — A bundle of callbacks (`exists`, `fields`, `cacheTag`, `writeDerived`, `markEdited`, optional `checkFields`) a module registers so the `locales`/translation resolver can validate writes, update derived columns, and bump the entity's `ETag` without importing the owning module.
-- **`TranslationFieldIssue`** — A single `{ field, message }` record returned by `TranslatableTarget.checkFields`.
-- **`PublicEventProjection`** — The public (webhook-visible) name + payload a domain event maps to.
-- **`PublicEventTarget`** — A module's `toPublicEvent: (payload: never) => PublicEventProjection | undefined` declaration, letting `webhooks` subscribe generically. The `never` parameter gives the owning module full type safety at the call site while keeping the registry entry payload-agnostic.
-- **`BrowserEventReport`** — `Pick<AnalyticsEventInput, 'event' | 'properties'>`, the shape `analytics` forwards to its provider.
-- **`BrowserEventTarget`** — A module's `toReport: (body: never) => BrowserEventReport` declaration, resolved by `analytics` via `resolveBrowserEvents` (same `never`-parameter pattern as `PublicEventTarget`).
-- **`PersonalDataSubject`** — Identifies the data subject for export requests (truncated in source; at minimum carries `userId`).
+- **`ImageTarget`** — Callback contract (`writeback`) a module registers so the image-digest worker can persist `imageUrl`/`thumbnailUrl` on the owning collection after a successful digest. The `key` guard makes stale/duplicate deliveries no-ops.
+- **`ModuleConsumer`** — Declaration of a queue name, a Zod `schema`, a `handler` (method, not property, to preserve per-module payload types), and optional `prefetch`. Collected by `app/workers.ts`, which is the sole caller of `consumeFromQueue`.
+- **`TranslatableTarget`** — Module-supplied contract for an entity collection that carries translatable fields: `exists`, `fields`, `cacheTag`, `writeDerived`, `markEdited`, and optional `checkFields`. Lets `kernel/translation.ts` operate without importing the owning module's Mongoose model.
+- **`TranslationFieldIssue`** — Single `{ field, message }` pair returned by `TranslatableTarget.checkFields`.
+- **`PublicEventProjection`** — `{ eventType, data }` shape a webhook subscriber receives under the envelope's `data` key.
+- **`PublicEventTarget`** — `toPublicEvent(payload: never)` mapping a domain event to a `PublicEventProjection | undefined`; the `never` trick keeps one registry slot per event while the owning module gets full type safety.
+- **`BrowserEventReport`** — Type alias: `Pick<AnalyticsEventInput, 'event' | 'properties'>`.
+- **`BrowserEventTarget`** — `toReport(body: never) → BrowserEventReport`, letting the analytics service forward browser-reported events without importing the owning module.
+- **`PersonalDataS…`** (truncated) — Contract for data-subject export/erasure, matching rows by `id` or `email`.
 
 ## Relationships
 
-- **`src/kernel/events.ts`** — Exports `markDomainEventsWired`, which `registry.ts` imports. The `never`-payload typing in `PublicEventTarget.toPublicEvent` mirrors the handler-map trick in `events.ts`.
-- **`src/kernel/module-config.ts`** — Exports `assertModuleConfig`, imported by `registry.ts` for runtime validation of module manifests.
-- **`src/infrastructure/config/define.ts`** — Exports the `ConfigSlice` type that `registry.ts` imports for per-module config declarations.
-- **`src/infrastructure/observability/analytics/index.ts`** — Exports `AnalyticsEventInput`, from which `BrowserEventReport` is derived.
-- **`src/infrastructure/security/reencrypt.ts`** — Exports `ReencryptReport`, imported by `registry.ts`.
-- **`src/app/workers.ts`** — Consumes the `ModuleConsumer` entries registered in module manifests; it is the sole caller of `consumeFromQueue` for them.
-- **`src/app.ts`** / **`src/app/config.ts`** — The running application that materialises the module list this registry types; config slices declared here flow into per-module config.
-- **`scripts/ops/*`** (reap, sweep) — Operate against collections and outboxes whose writeback/consumer contracts are defined here; they depend on the same module-boundary rules that make these registration interfaces necessary.
+- **`src/modules.ts`** — The explicit module list that this registry "turns into a running application"; each module's manifest keys entries under the interfaces defined here.
+- **`src/kernel/events.ts`** — Provides `markDomainEventsWired` (imported here) and the `never`-typed handler-map pattern that `PublicEventTarget` mirrors.
+- **`src/kernel/module-config.ts`** — Provides `assertModuleConfig`, the runtime check that a manifest's shape is valid.
+- **`src/app/workers.ts`** — The sole consumer of `ModuleConsumer` entries; calls `consumeFromQueue` for each registered consumer.
+- **`src/infrastructure/observability/analytics/index.ts`** — Supplies `AnalyticsEventInput` (from which `BrowserEventReport` is derived); the analytics service resolves `BrowserEventTarget` entries generically.
+- **`src/infrastructure/security/reencrypt.ts`** — Supplies `ReencryptReport`, imported for the data-subject/erasure contract.
+- **`src/infrastructure/config/define.ts`** — Supplies `ConfigSlice`, used in module-config assertions.
 
 ## Notes
 
-- The `never`-parameter pattern (`toPublicEvent`, `toReport`, `handler`) is deliberate: a function typed to accept one concrete payload is assignable to a `(payload: never) => …` slot, giving the owning module full type safety while the registry stays payload-agnostic. Do not "fix" these to `unknown` — that erases per-module types.
-- `ModuleConsumer.handler` is a **method** signature, not a property. Changing it to a property arrow type (`handler: (message: unknown) => …`) would collapse all entries to `unknown` and defeat the per-module typing.
-- `ImageTarget.writeback` uses a **guard-then-write** pattern: it only updates if `pendingImageKey` still matches. This is the mechanism that makes at-least-once job delivery idempotent.
-- `TranslatableTarget.markEdited` is required (not optional) and must accept an optional `ClientSession` so the caller can join the tag-bump to the same transaction as the translation row writes and `writeDerived`.
-- `PublicEventTarget` and `BrowserEventTarget` are keyed on the manifest by domain-event name / browser-event name respectively; the resolution helpers (`resolvePublicEvents`, `resolveBrowserEvents`) live in this file and are what cross-domain callers (webhooks, analytics) actually invoke.
+- **`never` as a universal input type** is used deliberately in `PublicEventTarget.toPublicEvent` and `BrowserEventTarget.toReport`. A concrete-payload function is assignable to a `(payload: never) => …` slot, so the owning module retains full type safety at the call site while the registry stays homogeneous. Do not "fix" this to `unknown` — it would lose the assignability direction.
+- **`ModuleConsumer.handler` is a method, not a property**, so each module's distinct generated payload type is preserved. A property-function type would collapse all handlers to `unknown`.
+- **Guarded writeback** (`ImageTarget.writeback`) checks the `pendingImageKey` before writing; a `false` return means the document was deleted or superseded, not an error.
+- **`TranslatableTarget.markEdited`** exists because a translation edit mutates rows *outside* the entity document; without it the ETag would not advance and optimistic-concurrency protection would silently fail.

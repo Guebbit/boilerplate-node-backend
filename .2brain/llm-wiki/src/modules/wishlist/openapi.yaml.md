@@ -1,7 +1,7 @@
 ---
 source: src/modules/wishlist/openapi.yaml
-sha256: 28c6fa11c506085e4f600df8570daba3a7a328ab1fb681d64e9865b0f05be4b9
-generated_at: 2026-10-15T12:26:51.803148+00:00
+sha256: caaa33384cdac8c854ad9bea8e232ee7bbdb2faf7a034b2108f9d78b299deb97
+generated_at: 2026-10-29T06:34:34.379473+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.1.0 contract for the wishlist module. Defines the REST endpoints (list, save, remove, move-to-cart), their schemas, and the module's section in the account personal-data export. Serves as the single source of truth for the wishlist API surface that implementers, clients, and test suites code against.
+OpenAPI 3.1.0 contract for the wishlist module. It defines the four endpoints a client uses to save, list, remove, and move-to-cart products, plus the schemas those endpoints exchange. The `x-personal-data` extension lets the account-export bundler splice wishlist data into `AccountExportResponse` without the module hard-coding the export shape.
 
 ## Key elements
 
-- **`GET /wishlist`** — returns the authenticated user's saved product IDs. Empty and absent are the same state; never 404.
-- **`PUT /wishlist/{productId}`** — idempotent save. No body. Saving an already-saved product returns the same 200 (RFC 9110 §9.3.4). Hidden/soft-deleted products → 404; `purchasable: false` is still saveable.
-- **`DELETE /wishlist/{productId}`** — removes a saved line. A product not on the caller's wishlist → 404 (stale client signal).
-- **`POST /wishlist/{productId}/move-to-cart`** — the wishlist's exit. Writes the cart line first, then removes the wishlist line, so a mid-failure leaves the product saved rather than lost. Shoppers only (staff/admin → 403); existing cart line at 999 → 422 `CART_QUANTITY_LIMIT`.
-- **`WishlistItem`** — a line: `productId` + `availability`. Deliberately no quantity; the wishlist answers "do I want this," not "how many."
-- **`WishlistExportItem`** — stripped-down line (productId only) used in the `x-personal-data` account export.
-- **`WishlistResponse` / `WishlistResponseEnvelope`** — the standard `items` array and the shared `success/status/message/data` envelope wrapper.
-- **`x-personal-data.wishlist`** — extension that the bundler merges into `AccountExportResponse`; removing the module removes this section.
+- **`GET /wishlist`** (`getWishlist`) — returns the authenticated user's saved product ids and live availability. Never 404; empty list is the "no wishlist" state.
+- **`POST /wishlist/items`** (`createWishlistItem`) — saves a product by id. Idempotent: re-saving an existing line returns the same 200. 404 for a non-public product; 422 for a malformed body.
+- **`DELETE /wishlist/items/{productId}`** (`deleteWishlistItem`) — removes one line. 404 if the caller doesn't hold that line.
+- **`POST /wishlist/items/{productId}/move-to-cart`** (`moveWishlistItemToCart`) — transfers a saved line into the cart (qty 1, or increment). Staff/admins get 403 (no basket). 404 and 422 (`CART_QUANTITY_LIMIT`) here are the *cart's* answers, not the wishlist's.
+- **`CreateWishlistItemRequest`** — single required field `productId`.
+- **`WishlistItem`** — a line: `productId` + `availability` (sourced from the cart module's `LineAvailability`). No quantity by design.
+- **`WishlistExportItem`** — the stripped-down line (`productId` only) carried in the personal-data export; availability is omitted because it is the shop's live opinion, not user data.
+- **`WishlistResponse`** — `{ items: WishlistItem[] }`, the uniform body returned by all three mutating endpoints.
+- **`x-personal-data.wishlist`** — extension consumed by the bundler to register this module's slice in `AccountExportResponse`.
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — referenced for shared components: `Id`, `EnvelopeSuccess/Status/Message`, `ProductIdPathParam`, and the standard error responses (`Unauthorized`, `NotFound`, `InternalError`, `Forbidden`, `ValidationError`). This file does not redefine them.
-- **`src/modules/wishlist/module.yaml`** — the module manifest that declares this `openapi.yaml` as the module's API contract and wires it into the build/bundling pipeline.
+- **`shared/contracts/openapi.root.yaml`** — every shared building block in this spec is `$ref`-ed from there: `Unauthorized`, `NotFound`, `ValidationError`, `Forbidden` responses; the `ProductIdPathParam` path parameter; and the `Id` schema used by request/response bodies.
+- **`src/modules/wishlist/module.yaml`** — module manifest that bundles this spec. The `x-personal-data` block is read by the same bundler that processes `module.yaml`, so registering or removing the module here toggles the export section automatically.
+- **`src/modules/cart/openapi.yaml`** (implicit) — `WishlistItem.availability` reuses the cart's `LineAvailability` enum, and the move-to-cart endpoint's 404/422 semantics are inherited from the cart, not defined here.
 
 ## Notes
 
-- `WishlistItem.availability` reuses the cart module's `LineAvailability` enum (`../cart/openapi.yaml`). It never reports `insufficient_stock` because a wishlist line has no quantity; a `removed` product keeps its line and can be reactivated.
-- The 404 on `move-to-cart` for a no-longer-visible product is semantically the *cart's* answer (decided once at the cart layer), not the wishlist's. Same for the 422 quantity-limit response.
-- PUT vs. POST on save is intentional: "this product is saved" is a yes/no state on a URI, matching the GitHub starred-repo `PUT`/`DELETE` pattern. A double-clicked heart is not an error.
-- All responses use the shared envelope (`WishlistResponseEnvelope`); raw schema objects are never returned directly.
+- A wishlist line is intentionally **quantity-free**; the only "amount" question it answers is "do I want this?" Adding a quantity is the cart's job.
+- `availability` on `WishlistItem` is the shop's *live* stock opinion, not something the user saved. It is excluded from `WishlistExportItem` for that reason.
+- The 404 on `move-to-cart` can mean either "not on your wishlist" *or* "product no longer publicly visible (cart's rule)." The 422 is likewise the cart's `NODE_CART_LINE_MAX` ceiling, surfaced here as a convenience.
+- Staff and administrators may maintain a wishlist but cannot use `move-to-cart`; the 403 is a role check on basket ownership, not a wishlist permission.
+- All three mutating endpoints return the **full** `WishlistResponse` (not a single line, not 204). Clients should treat the body as the source of truth for the post-mutation state.

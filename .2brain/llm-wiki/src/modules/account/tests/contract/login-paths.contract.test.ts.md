@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/contract/login-paths.contract.test.ts
-sha256: f94402aa1fb457c549f638f82d73ef40981348fac9240d6be727162d6152767c
-generated_at: 2026-10-14T09:04:33.391164+00:00
+sha256: 25bf47463155d054f41ded8d04fc234603d13551265aa7f8e608c7aa954cac56
+generated_at: 2026-10-29T02:51:40.801672+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,40 +9,41 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract test that asserts two invariants shared by every login/session-continuation entry point (password, OAuth, refresh/next-request) in a single pass rather than re-testing them per entry point. Rule 1: no path may mint a session for a deactivated or soft-deleted account. Rule 2: password and OAuth login must each audit the caller's real role and increment the shared `auth_login_total` counter exactly once. Refresh is deliberately excluded from Rule 2 because it audits its own action/counter.
+Contract test that asserts invariants shared by **all** session-acquisition paths (password login, OAuth login, and session continuation via refresh or next-request) in a single table-driven suite. Two rules are enforced: (1) no path may grant a session or audit a successful `AUTH_LOGIN` for a deactivated/soft-deleted account, and (2) password and OAuth login must each audit the caller's real membership role exactly once and increment the shared `auth_login_total` counter. A third section verifies that all paths stop at a 2FA challenge for an armed account. The suite exists so that a regression in one path is caught against the baseline rather than discovered per-bug.
 
 ## Key elements
 
-- **`LoginPath`** – interface each entry point conforms to: `name`, `attemptRefused`, `assertRefused`, and optional `attemptSuccess` / `successStatus`. Drives the `describe.each` tables.
-- **`passwordPath`** – exercises `POST /account/login`; expects `401` on refusal, `200` on success.
-- **`oauthPath`** – exercises the fake OAuth start→callback flow; expects a `302` redirect containing `error=` and no session cookies on refusal, `302` on success.
-- **`continuationPath`** – in `jwt` mode hits `POST /account/refresh`; in `cookie` mode makes the next authenticated `GET /account`. Always expects `401`. Name is dynamic via `getSessionMode()`.
-- **`fakeLogin`** – performs one full OAuth start→callback round-trip against the `fake` provider.
-- **`badState`** – returns the document override (`{ active: false }` or `{ deletedAt }`) that puts an account in a refused state.
-- **`armed` / `ARMED_ATTEMPTS`** – 2FA-challenge section (truncated in source): ensures every path stops at a challenge when a second factor is enrolled.
-- **`jest.mock('@infrastructure/observability/audit', …)`** – full module replacement (not `jest.spyOn`) that swaps `emitAuditEvent` with a `jest.fn()` and re-wires `recordAudit` to route through it.
-- **Two `describe.each` blocks** – one for the refusal table (all three paths × deactivated/soft-deleted), one for the success table (password + OAuth × admin/customer).
+- **`LoginPath` interface** — structural contract with `name`, `attemptRefused`, `assertRefused`, and optional `attemptSuccess`/`successStatus`. Refresh/continuation omits `attemptSuccess` by design.
+- **`passwordPath`, `oauthPath`, `continuationPath`** — the three concrete `LoginPath` instances driving `describe.each`.
+- **`fakeLogin()`** — performs a full OAuth start → redirect → callback round trip against the registered `fake` provider.
+- **`attemptCookies(start)`** — extracts `__Host-oauth_state` and `__Host-oauth_verifier` from a start response into a single `Cookie` header.
+- **`badState(kind)`** — returns the document override for `deactivated` (`active: false`) or `soft-deleted` (`deletedAt`).
+- **`armed()`** — document override that enables a TOTP second factor.
+- **`ARMED_ATTEMPTS`** — `[name, attempt]` tuples used in the 2FA-challenge `describe.each`.
+- **`describe.each` blocks (×3)** — refusal table (all three paths × two states), success audit/metric table (password + OAuth × two roles), and 2FA challenge table (all paths).
+- **`jest.mock('@infrastructure/observability/audit', …)`** — replaces the audit port with `auditPortMock()` from `tests/support/ports`.
+- **`beforeAll`** — registers `fakeOAuthProvider` under the id `'fake'`.
 
 ## Relationships
 
-- **`scenarios/support/doubles/oauth-fake.ts`** – `fakeOAuthProvider` is registered via `registerOAuthProvider('fake', …)` in `beforeAll`; all OAuth assertions flow through it.
-- **`src/infrastructure/observability/audit.ts`** – mocked wholesale; the test observes `emitAuditEvent` calls to verify audit actions and outcomes.
-- **`src/modules/account/audit.ts`** – provides `accountAuditActions.AUTH_LOGIN` (and `.AUTH_TOKEN_REFRESHED`) used in assertions.
-- **`src/modules/account/metrics.ts`** – `authLoginTotal.inc` is spied on to verify the shared counter is called exactly once per successful login.
-- **`src/modules/account/oauth/providers/index.ts`** – `registerOAuthProvider` seeds the fake provider into the in-test registry.
-- **`src/modules/account/session/config.ts`** – `getSessionMode()` switches the continuation path between `POST /account/refresh` (jwt) and a plain authenticated request (cookie).
-- **`src/modules/users/repository.ts`** – `userRepository.linkOAuthAccount` wires the fake identity; `findByIdWithCredentials` + `save` deactivates/deletes an account *after* a session is minted.
-- **`src/modules/users/tests/factories.ts`** – `createUser`, `PLAIN_PASSWORD`, and `userRepository` re-export for fixture setup.
-- **`tests/support/contract.ts`** – imported as a side-effect; sets up contract-test conventions (likely matcher registration or global setup).
-- **`tests/support/cookies.ts`** – `setCookie` / `cookieHeader` for reading and forwarding session/CSRF/PKCE cookies across requests.
-- **`tests/support/http.ts`** – `api()` returns a configured supertest agent against the running server.
-- **`tests/support/ports.ts`** – `observePort` wraps a port function so the test can read its call log without breaking the real wiring.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` initialises an isolated database before the suite runs.
+- **`scenarios/support/doubles/oauth-fake.ts`** — supplies `fakeOAuthProvider`, the deterministic identity the OAuth path exercises.
+- **`src/infrastructure/observability/audit.ts`** — the port whose `emitAuditEvent` is replaced and observed; provides the audit action types.
+- **`src/modules/account/audit.ts`** — exports `accountAuditActions` (e.g. `AUTH_LOGIN`, `AUTH_TOKEN_REFRESHED`) used to filter spy calls.
+- **`src/modules/account/metrics.ts`** — exports `authLoginTotal`; the test spies on its `.inc` to assert the shared counter fires exactly once.
+- **`src/modules/account/oauth/providers/index.ts`** — `registerOAuthProvider` wires the fake provider into the runtime for the suite.
+- **`src/modules/account/session/config.ts`** — `getSessionMode()` determines whether the continuation path targets `POST /account/refresh` (jwt mode) or an arbitrary cookie-bearing request (cookie mode); also names the path dynamically.
+- **`src/modules/users/repository.ts`** — `userRepository` is used to link an OAuth identity and to mutate a user's `active`/`deletedAt` fields mid-test.
+- **`src/modules/users/tests/factories.ts`** — `createUser` and `PLAIN_PASSWORD` build test fixtures.
+- **`tests/support/contract.ts`** — global contract-test setup (imported for side effects).
+- **`tests/support/cookies.ts`** — `setCookie` / `cookieHeader` helpers for reading and composing cookie values.
+- **`tests/support/http.ts`** — `api()` returns a configured `supertest` agent against the running app.
+- **`tests/support/ports.ts`** — `observePort` wraps a function in a jest mock; `auditPortMock` provides the factory used by the `jest.mock` replacement.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` prepares the in-memory database before the suite runs.
 
 ## Notes
 
-- **Audit mock is a replacement, not a spy.** CommonJS namespace imports expose exports as non-configurable getters; `jest.spyOn` cannot redefine them under every transform this repo uses. The `recordAudit` re-wiring in the mock ensures calls that close over the module's own `emitAuditEvent` still land on the spy.
-- **Refusal ≠ silence.** A refused password login *does* audit `AUTH_LOGIN` with `outcome: 'failure'` (intentional timing-attack resistance). The contract asserts only that no path audits a *successful* `AUTH_LOGIN` for a bad-state account.
-- **Refresh is absent from the success table on purpose.** It audits `AUTH_TOKEN_REFRESHED` and increments `auth_refresh_total`—a different rule, not a gap.
-- **`auditSpy.mockClear()` placement matters for the continuation path.** The setup (a real successful login to obtain a session) fires its own `AUTH_LOGIN` event; the clear happens *after* that setup login and *before* the refusal under test, so the spy log contains only the refusal's audit trail.
-- **File is truncated** in the source provided; the 2FA-challenge table (`ARMED_ATTEMPTS`) is only partially visible.
+- The audit port is **replaced** (via `jest.mock` + factory), not spied on, because a CommonJS namespace import exposes each export as a non-configurable getter that `jest.spyOn` cannot redefine under this repo's transform pipeline. See `tests/support/ports.ts` for the helper.
+- `auditSpy.mockClear()` is called **after** any setup login and **immediately before** the attempt under test, so a legitimate `AUTH_LOGIN` from the setup step is not mistaken for the event the assertion targets.
+- The refresh/continuation path is deliberately **absent** from the success table: it audits `AUTH_TOKEN_REFRESHED` against `auth_refresh_total`, a different rule owned by `services/refresh.ts`.
+- The continuation path's displayed name and request method switch at runtime based on `getSessionMode()` (`'cookie'` vs `'jwt'`).
+- A refused password attempt still emits an `AUTH_LOGIN` event with `outcome: 'success'` = **false** (i.e. a failure event); the invariant is that no path emits a **successful** `AUTH_LOGIN`.

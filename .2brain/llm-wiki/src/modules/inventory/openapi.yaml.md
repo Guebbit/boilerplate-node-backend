@@ -1,34 +1,34 @@
 ---
 source: src/modules/inventory/openapi.yaml
-sha256: 787fe979d9412d64d733fa892d8574f45643b83808f229d35e021e1c66c5d865
-generated_at: 2026-10-15T10:35:06.850789+00:00
+sha256: dcbbaf1ac844b73433b99e76095f2e8d4e3654dfc5bea01b270b0fa0cbbcae3b
+generated_at: 2026-10-29T04:01:52.504290+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/inventory/openapi.yaml
 
 ## Purpose
-OpenAPI 3.1.0 contract for the inventory module. It defines the HTTP surface for stock counters (on-hand / reserved), preorder allowances, the stock-movement ledger, and the mutation endpoints (receipt, adjustment) that change those counters. Serves as the single source of truth for client and server teams building against this module.
+OpenAPI 3.1.0 module contract for the inventory domain. Defines the admin-facing REST surface for stock levels, preorder allowances, and the stock-movement ledger, plus the custom error code the module can raise.
 
 ## Key elements
-- **`x-error-codes`** — custom extension declaring `INVENTORY_BELOW_RESERVED` (409), used when an adjustment would push `onHand` below `reserved`.
-- **`GET /inventory/levels`** (`listInventoryLevels`) — paginated stock board; supports a `lowOnly` filter to surface products at or under the low-availability threshold.
-- **`GET /inventory/preorders`** (`listPreorderLevels`) — admin preorder board showing cap, outstanding (split unpaid/paid), and lifetime ordered count per product.
-- **`PUT /inventory/levels/{productId}/preorder-limit`** (`setPreorderLimit`) — absolute, idempotent set of a product's preorder allowance; lowering below outstanding is allowed (existing orders untouched).
-- **`GET /inventory/movements`** (`listStockMovements`) — paginated ledger, newest first; filterable by `productId` and `reason`.
-- **`POST /inventory/receipts`** (`receiveStock`) — adds units to `onHand`; requires an `Idempotency-Key` header to make retries safe.
-- **`POST /inventory/adjustments`** (`adjustStock`) — signed stocktake correction; refuses to drop `onHand` below `reserved`; also requires `Idempotency-Key`.
-- **Local schemas** (defined under `components`, truncated in source): `InventoryLevelsResponseEnvelope`, `PreorderLevelsResponseEnvelope`, `PreorderLimitRequest`, `InventoryLevelEnvelope`, `StockMovementsResponseEnvelope`, `StockMovementReason`, `ReceiptRequest`, `AdjustmentRequest`.
+- **`tags`** — single `Inventory` tag; scopes all operations to stock counters and holds.
+- **`x-error-codes`** — module-level custom extension declaring `INVENTORY_BELOW_RESERVED` (HTTP 409) for the below-reserved condition.
+- **`GET /inventory/levels`** (`listInventoryLevels`) — paginated stock board; supports `lowOnly` boolean filter; ordered most-scarce-first.
+- **`GET /inventory/preorders`** (`listPreorderLevels`) — paginated preorder board (cap, outstanding split by paid/unpaid); ordered most-outstanding-first.
+- **`GET /inventory/levels/{productId}`** (`getInventoryLevel`) — single product level row.
+- **`PATCH /inventory/levels/{productId}`** (`updateInventoryLevel`) — merge-patch (RFC 7396) to change only `backorderLimit`; idempotent; accepts `application/json` and `application/merge-patch+json`.
+- **`GET /inventory/movements`** (`listStockMovements`) — paginated ledger, newest-first; filterable by `productId` and `reason`; `meta.totalItems` reports full match count.
+- **`POST /inventory/levels/{productId}/receive`** (`receiveStock`) — supplier delivery; increments `onHand`; requires `Idempotency-Key` header.
+- **Referenced schemas** (defined later in the file, beyond truncation): `InventoryLevel`, `InventoryLevelsResponse`, `PreorderLevelsResponse`, `UpdateInventoryLevelRequest`, `StockMovementsResponse`, `StockMovementReason`, `ReceiptRequest`.
+- **Security** — every operation requires `bearerAuth` or `apiKeyAuth`.
 
 ## Relationships
-- **`shared/contracts/openapi.root.yaml`** — the root contract referenced (relative path `../../../shared/contracts/…`) for:
-  - Shared parameters: `PageParam`, `PageSizeParam`, `IdempotencyKeyHeader`.
-  - Standard error responses: `Unauthorized`, `Forbidden`, `ValidationError`, `InternalError`, `NotFound`, `Conflict`.
-  - Shared schema: `Id` (used for the `productId` path parameter and `productId` query filter).
+- **`shared/contracts/openapi.root.yaml`** — the sole external dependency. Provides reusable components consumed via `$ref`: pagination parameters (`PageParam`, `PageSizeParam`), the `Id` schema, the `IdempotencyKeyHeader` parameter, and the standard error responses (`Unauthorized`, `Forbidden`, `ValidationError`, `NotFound`, `Conflict`).
 
 ## Notes
-- Every operation requires `bearerAuth` or `apiKeyAuth`; there are no unauthenticated endpoints in this module.
-- Mutating endpoints (`receipts`, `adjustments`) are idempotent via an `Idempotency-Key` header; a retry with the same key replays the original response rather than applying the delta twice.
-- `setPreorderLimit` is absolute (PUT semantics) and idempotent by design — safe to retry without an explicit idempotency key.
-- The `x-error-codes` block is a module-level extension, not a standard OpenAPI construct; tooling that ignores vendor extensions will not surface `INVENTORY_BELOW_RESERVED` automatically.
-- The file is truncated in the source snapshot; the full `components/schemas` section (envelopes, request bodies, enums) lives below the visible portion.
+- **Merge-patch semantics on PATCH:** an empty body is a no-op that returns the current level; the operation is absolute and idempotent (safe to retry).
+- **`backorderLimit` conventions:** `0` closes backordering for new orders (existing outstanding are unaffected); `null` removes the cap entirely.
+- **Preorder data is admin-only** by design — exact counts are flagged as competitive-sensitive and never exposed publicly.
+- **Idempotency on `receive`:** a retried request with the same `Idempotency-Key` replays the first response; a key still being processed by an in-flight request returns 409.
+- **Movements ledger is paged, not capped:** the file explicitly notes this is the audit record, and a response that omits older rows would misreport history as complete.
+- **File is truncated in this snapshot** — additional paths (e.g., `adjust`) and the full `components/schemas` block exist below the visible content.

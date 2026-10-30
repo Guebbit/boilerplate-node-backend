@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/routes.ts
-sha256: ebce0c35562468c3656f9bd38153fcd8972dfb18a9b922c8326955de474f501a
-generated_at: 2026-10-15T12:20:18.269670+00:00
+sha256: ceecb9ba960ec3b1f14b4b084fbbca53ced36e8d7f4598fdbd515eab3a44d82a
+generated_at: 2026-10-29T06:28:45.584276+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Express router for the `/webhooks` admin surface. It wires every webhook route—subscription CRUD, secret rotation/removal, delivery log, replay, and the public event catalogue—behind a two-layer authorization gate (auth + fine-grained permission) and delegates handling to dedicated controller modules.
+Defines all HTTP routes for the `/webhooks` admin surface: subscription CRUD, enable/disable, signing-secret rotation, the delivery log (inspect + replay), and the event catalogue. This is the sole routing layer for the webhooks module — it wires URLs to controller handlers and attaches the auth/permission middleware chain.
 
 ## Key elements
 
-- **`router`** (exported) — the Express `Router` instance mounted under `/webhooks`.
-- **Auth chain** — `router.use(getAuth, isAuthOrCredential)` applies globally; allows both session tokens and `sk_…` API keys.
-- **Subscription routes** — `GET/POST /subscriptions`, `PUT /subscriptions/:id` (full replace), `PATCH /subscriptions/:id` (partial update), `DELETE /subscriptions/:id`.
-- **Secret management routes** — `POST /subscriptions/:id/rotate-secret` (add a new ring secret), `DELETE /subscriptions/:id/secrets/:secretId` (drop one).
-- **Delivery routes** — `GET /deliveries` (log, newest first), `POST /deliveries/:id/replay` (re-send).
-- **Event catalogue** — `GET /events` (list of events a subscription may filter on).
-- Every route is guarded by `requirePermission('webhooks.any.<action>')` where action ∈ {read, create, update, delete}.
+- **`router`** (exported `Router`) — the single Express router mounted at `/webhooks` by the module.
+- **Auth chain** — `router.use(getAuth, isAuthOrCredential)` applied globally to every route below it; per-route `requirePermission('<verb>', 'WebhookSubscription')` gates individual endpoints.
+- **Subscription routes** — `GET/POST /subscriptions`, `GET/PUT/PATCH/DELETE /subscriptions/:id`, plus `POST …/enable`, `POST …/disable`, `POST …/secrets`, `DELETE …/secrets/:secretId`.
+- **Delivery routes** — `GET /deliveries`, `GET /deliveries/:id`, `POST /deliveries/:id/replay`.
+- **Event catalogue** — `GET /events` (list of event types a subscription can filter on).
 
 ## Relationships
 
-- **`src/kernel/middlewares/authorizations.ts`** — provides `getAuth`, `isAuthOrCredential`, and `requirePermission`, the three functions used for the auth and permission gate.
-- **`src/modules/webhooks/controllers/*`** — each controller file exports the single handler function bound to one route (e.g. `listWebhookSubscriptions`, `createWebhookSubscription`, `replaceWebhookSubscription`, `updateWebhookSubscription`, `deleteWebhookSubscription`, `rotateWebhookSubscriptionSecret`, `removeWebhookSubscriptionSecret`, `listWebhookDeliveries`, `replayWebhookDelivery`, `listWebhookEvents`).
-- **`src/modules/webhooks/module.ts`** — the module entry point that imports and mounts this `router` into the application.
+- **`src/kernel/middlewares/authorizations.ts`** — provides `getAuth`, `isAuthOrCredential`, and `requirePermission`, all consumed here.
+- **`src/modules/webhooks/controllers/*`** — every controller function (`listWebhookSubscriptions`, `createWebhookSubscription`, `replaceWebhookSubscription`, `updateWebhookSubscription`, `createWebhookSubscriptionSecret`, `removeWebhookSubscriptionSecret`, `deleteWebhookSubscription`, `getWebhookSubscription`, `enableWebhookSubscription`, `disableWebhookSubscription`, `listWebhookDeliveries`, `getWebhookDelivery`, `replayWebhookDelivery`, `listWebhookEvents`) is imported and registered as a route handler.
+- **`src/modules/webhooks/module.ts`** — the module entry point that mounts this `router` into the application.
 
 ## Notes
 
-- **`isAuthOrCredential`, not `isAuth`** — the middleware deliberately accepts `sk_…` API keys so machine consumers can manage their own subscriptions without a session token.
-- **PUT vs. PATCH are distinct handlers** — `replaceWebhookSubscription` (full replace) and `updateWebhookSubscription` (partial field update) are separate functions in `update-subscription.ts`; they are not aliases.
-- **No public/anonymous routes** — every endpoint requires a `webhooks.any.*` permission, unlike the `feedback` module which exposes a public `/contact` route.
-- **Secret rotation is two-step** — rotating adds a new ring secret (old one stays active); removing a secret by ID completes the rotation. Both map to the `update` permission.
+- `isAuthOrCredential` is used deliberately (not `isAuth`) so that `sk_…` API keys can manage subscriptions; this module is designed for machine consumers.
+- `PUT /subscriptions/:id` performs a **full replace**; `PATCH` performs a **partial update** of the fields payload. Both map to the `update` permission.
+- Adding a secret (`POST …/secrets`) leaves the previous secret active; deleting one (`DELETE …/secrets/:secretId`) is the final step of a rotation.
+- Despite the docstring calling `GET /events` "public," it is still behind `requirePermission('read', 'WebhookSubscription')` — there is no truly unauthenticated route in this file.
+- No public (unauthenticated) routes exist here, in contrast to `tickets`'s `/contact` endpoint.

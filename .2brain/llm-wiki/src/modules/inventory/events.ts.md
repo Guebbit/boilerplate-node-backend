@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/events.ts
-sha256: 74129445e33af5f511dcae1d2b967c039e0e7a022f41340605cd820b6947931a
-generated_at: 2026-10-15T10:34:45.677254+00:00
+sha256: 754263412e1c39f331ea33f8c73cf72845a9a6d54b2629c2c2a6d97de414cfd9
+generated_at: 2026-10-29T04:00:37.613315+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the inventory module's two domain events by augmenting the kernel's `DomainEventMap`, and exports their name constants. The events exist to decouple listeners (`orders`, `delivery`) from this module without creating an import cycle: `orders` already imports inventory, and `delivery` imports only the event name.
+Declares the inventory module's four domain events by augmenting the kernel's `DomainEventMap` interface, and exports a typed constant for each event name. The events exist to break import cycles (e.g., `orders` already imports inventory, so it listens to an event rather than inventory calling back) and to give cross-module listeners a single, typo-safe string to subscribe to.
 
 ## Key elements
 
-- **`DomainEventMap` augmentation** (`declare module '@kernel/events'`) — adds two payload shapes to the kernel's global event catalogue:
-  - `inventory.reservation_expired` — `{ orderId: string }`. Emitted *after* the hold's stock is released; the `orders` listener cancels the order.
-  - `inventory.preorder_allocated` — `{ orderId: string; productId: string; waiting: number }`. Emitted in the same outbox transaction as the allocation; `waiting` is the *remaining* preorder-claim count (a state, not a delta), making redelivery idempotent for the `delivery` listener.
-- **`RESERVATION_EXPIRED`** — exported string constant (`'inventory.reservation_expired'`) so emitter and listeners share one spelling.
-- **`PREORDER_ALLOCATED`** — exported string constant (`'inventory.preorder_allocated'`), same purpose.
+- **`declare module '@kernel/events'`** — Augments `DomainEventMap` with four payload shapes:
+  - `inventory.reservation_expired` (`{ orderId }`) — hold timed out *after* release; `orders` cancels the order.
+  - `inventory.backorder_allocated` (`{ orderId, productId, waiting }`) — preorder units became real allocation; `waiting` is the remaining preorder claim (idempotent on redelivery).
+  - `inventory.stock_retaken` (`{ orderId, productIds }`) — payment re-acquired units on a released hold; triggers a catalogue stock refresh.
+  - `inventory.hold_orphaned` (`{ orderId }`) — order paid with no hold present; `tickets` opens work. Internal-only (no AsyncAPI channel).
+- **`RESERVATION_EXPIRED`**, **`PREORDER_ALLOCATED`**, **`STOCK_RETAKEN`**, **`HOLD_ORPHANED`** — Exported string constants equal to the event names above, so emitters and listeners share one spelling.
 
 ## Relationships
 
-- **`index.ts`** — barrel re-exports the two name constants so external consumers import from the module root.
-- **`module.ts`** — module registration entry point; pairs these events with the services that emit them.
-- **`services/sweep.ts`** — the service that detects hold expiries; emits `RESERVATION_EXPIRED` after releasing the reserved units.
-- **`services/allocate.ts`** — the service that fulfils preorder receipts; emits `PREORDER_ALLOCATED` in the allocation's outbox transaction.
-- **`tests/integration/preorder.test.ts`** — exercises the `PREORDER_ALLOCATED` flow end-to-end (allocation → event → delivery release).
+- **`src/modules/inventory/index.ts`** — Barrel that re-exports the four constants for external consumers.
+- **`src/modules/inventory/module.ts`** — Module registration; the events declared here become part of the module's event catalogue.
+- **`src/modules/inventory/services/allocate.ts`** — Emits `PREORDER_ALLOCATED` (inside the receipt's outbox transaction) and `HOLD_ORPHANED` (inside the payment transaction).
+- **`src/modules/inventory/services/holds.ts`** — Emits `RESERVATION_EXPIRED` after releasing the hold's units.
+- **`src/modules/inventory/services/sweep.ts`** — Sweep logic that may trigger hold expiry, producing `RESERVATION_EXPIRED`.
+- **Tests** (`preorder-cache.test.ts`, `preorder.test.ts`, `service.test.ts`) — Integration tests that assert the above events fire with the correct payloads during allocation and hold lifecycle flows.
 
 ## Notes
 
-- `waiting` on `preorder_allocated` is a **state** (remaining preorder claims), not a delta. A `0` value means all preorder units for that product/order are fully allocated; `delivery` can therefore release unconditionally and safely on redelivery.
-- `reservation_expired` is past-tense by design: the stock is *already* gone by the time the event fires, so the `orders` listener cancels rather than re-plans.
-- Stock-level changes (counter + explanatory row) are a single write and intentionally **not** events — see `products/events.ts` for the product-side catalogue.
+- Stock *level* changes are intentionally **not** events here; they live in `products/events.ts` because the counter write and its explanatory row are a single transactional write.
+- `inventory.hold_orphaned` is marked internal-only: it has no AsyncAPI channel, so it is consumed by an in-process listener (`tickets`) rather than a message broker.
+- `backorder_allocated.waiting` is an absolute remaining count, not a delta, making redelivery idempotent by design.
+- `stock_retaken` refreshes the catalogue's stock copy *eventually*; the authoritative counters moved in the payment's own transaction where the catalogue copy could not be written safely (no rollback).

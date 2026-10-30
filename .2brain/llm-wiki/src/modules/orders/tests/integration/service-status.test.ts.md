@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/integration/service-status.test.ts
-sha256: e87bcfd27eafe69e67af72827287b4bfe88cd6da8f067c7f2c2909a1acff641f
-generated_at: 2026-10-15T11:18:12.475465+00:00
+sha256: 3d1a897c4ee87f9c5b09fa6501260f2f61f09c09904eb4771ca80a599da51cb8
+generated_at: 2026-10-29T04:57:28.721139+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,41 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the order status-transition functions (`markPaid`, `markProcessing`, `markShipped`, `markDelivered`, `markFulfilmentComplete`). Runs against a **real MongoDB** (not mocks) to verify that the conditional `$in` write guarantees exactly-once status moves under concurrent access, that `ORDER_STATUS_CHANGED` events are emitted through the outbox relay, that `withdrawUntil` is computed correctly, and that session-accepting variants commit atomically with the caller's transaction.
+Integration tests for the five status-transition functions in `services/status.ts` (`markPaid`, `markProcessing`, `markShipped`, `markDelivered`, `markFulfilmentComplete`). The file runs against a **real MongoDB** instance to verify the conditional-write guarantee (`$in` filter), domain-event emission, outbox delivery, transaction isolation, and concurrent-race safety—behaviours a mock cannot exercise.
 
 ## Key elements
 
-- **`setupTestDb()`** (top-level) — provisions a dedicated Mongo instance for the suite.
-- **`beforeEach` / `afterEach`** — calls `markDomainEventsWired()` / `resetDomainEvents()` so the outbox relay has a subscriber to deliver to.
-- **`inTransaction` helper** — wraps a door function in `withTransaction` from the database runtime, mimicking how `delivery`'s acts invoke session-based doors.
-- **`describe('markPaid')`** — happy path (pending→paid, `paidAt` stamped) and refusal from paid / processing / cancelled.
-- **`describe('markProcessing')`** — paid→processing, refusal from pending, and verification that `orderService.markProcessing` is reachable as a sibling.
-- **`describe('markShipped')`** — processing→shipped, refusal from paid.
-- **`describe('markDelivered')`** — shipped→delivered; `withdrawUntil` = end-of-day on day N (default 30) after the delivery date; `NODE_WITHDRAWAL_PERIOD_DAYS=21` shortens it.
-- **`describe('markFulfilmentComplete')`** — physical order: processing→shipped→delivered in one write, two events, clock from the passed `at`; digital order: processing→delivered, clock from `paidAt`; refusal from paid/shipped/delivered leaves zero outbox rows; caller-transaction rollback reverts the order and emits nothing.
-- **`describe('the doors that take the caller's session')`** — confirms the write is invisible until the caller's transaction commits, then exactly one outbox event exists.
-- **`describe('two callers racing the same move')`** — two concurrent `markPaid` calls: exactly one returns a document, exactly one event fires.
+- **`setupTestDb()`** — boots a real Mongo for the entire suite (called once at module level).
+- **`beforeEach` / `afterEach`** — wires and resets the domain-event bus so the outbox relay is active during every test.
+- **`describe('markPaid')`** — happy-path (pending → paid, `paidAt` stamped in the same write) and refusal from paid/processing/cancelled (returns `null`, no event).
+- **`describe('markProcessing')`** — paid → processing; refusal from pending; also verifies `orderService.markProcessing` exposure on the service object.
+- **`describe('markShipped')`** — processing → shipped; refusal from paid.
+- **`describe('markDelivered')`** — shipped → delivered; asserts `withdrawUntil` (end of 30th day) and `conformityUntil` (two-year guarantee) deadlines; uses `withEnvironmentOverrides` to test a shorter `NODE_WITHDRAWAL_PERIOD_DAYS`.
+- **`inTransaction` helper** — thin wrapper around `withTransaction` used by `markFulfilmentComplete` and session-door tests.
+- **`describe('markFulfilmentComplete')`** — physical path (processing → shipped → delivered in one write, two events), digital-only path (processing → delivered, clock from `paidAt`), refusal from wrong states, and rollback on a thrown error after the write.
+- **`describe('the doors that take the caller's session')`** — verifies that session-based doors (`markShipped`, `markDelivered`) commit and emit events only at the caller's transaction boundary.
+- **`describe('two callers racing the same move')`** — fires two concurrent `markPaid` calls; asserts exactly one succeeds and one event is emitted.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/orders/services/status.ts` | **SUT** — imports all five `mark*` functions under test. |
-| `src/modules/orders/services/index.ts` | Imports `orderService` to verify doors are also reachable on the service object. |
-| `src/modules/orders/events.ts` | Imports `ORDER_STATUS_CHANGED` for event assertions. |
-| `src/kernel/events.ts` | `markDomainEventsWired`, `onDomainEvent`, `resetDomainEvents` — subscribe, assert, and clean up the in-process event bus. |
-| `src/kernel/outbox.ts` | `nudgeOutbox`, `outboxEventModel`, `settleOutboxNudges` — trigger and settle the relay, then assert on persisted outbox documents. |
-| `src/modules/orders/tests/factories.ts` | `seedOrder`, `seedDigitalOrder`, `readOrder` — create and read test fixtures. |
-| `tests/support/setup-test-db.ts` | `setupTestDb` — spins up the real Mongo instance. |
-| `tests/support/environment.ts` | `withEnvironment` — temporarily sets `NODE_WITHDRAWAL_PERIOD_DAYS`. |
-| `src/infrastructure/runtime/database.ts` | `withTransaction` — provides the session/transaction used by the `inTransaction` helper. |
-| `src/types/index.ts` | `OrderStatus` enum — used in seeds, assertions, and parameterised cases. |
+- **`src/modules/orders/services/status.ts`** — the system under test; all five `mark*` functions are imported and exercised directly.
+- **`src/modules/orders/services/index.ts`** — `orderService` is imported to confirm the status functions are reachable on the aggregated service object.
+- **`src/modules/orders/events.ts`** — `ORDER_STATUS_CHANGED` is subscribed to via `onDomainEvent` and asserted in every delivery test.
+- **`src/kernel/events.ts`** — `markDomainEventsWired` / `resetDomainEvents` manage the in-process event bus; `onDomainEvent` registers test listeners.
+- **`src/kernel/outbox.ts`** — `nudgeOutbox` wakes the relay after a caller commits a session transaction; `settleOutboxNudges` flushes pending deliveries before assertions; `outboxEventModel` is queried to count persisted events.
+- **`src/infrastructure/runtime/database.ts`** — `withTransaction` provides the `ClientSession` used by `markFulfilmentComplete` and the session-door tests.
+- **`src/modules/orders/tests/factories.ts`** — `seedOrder`, `seedDigitalOrder`, and `readOrder` create and inspect fixture documents.
+- **`src/types/index.ts`** — `OrderStatus` enum values used throughout assertions.
+- **`tests/support/environment.ts`** — `withEnvironmentOverrides` temporarily sets `NODE_WITHDRAWAL_PERIOD_DAYS` to verify configurable deadlines.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb` initialises the real Mongo connection for the suite.
 
 ## Notes
 
-- **Real Mongo is deliberate.** A mock cannot race against itself; the `$in` conditional write in `updateStatusIfIn` is the unit under guarantee, so the test must exercise it against a real store.
-- **`settleOutboxNudges()` must precede every event assertion.** The relay is asynchronous; without settling, `onDomainEvent` callbacks may not have fired yet.
-- **Session-accepting doors do not call `nudgeOutbox()` themselves.** The caller is responsible for nudging the relay after its own transaction commits (see `markFulfilmentComplete` tests).
-- **`withdrawUntil` is always end-of-day** (`23:59:59.999Z`) of the computed deadline, not the exact delivery timestamp.
-- **Digital orders** skip the `shipped` step and start the withdrawal clock from `paidAt`, not from the fulfilment-completion date.
-- **`markDomainEventsWired()` in `beforeEach` is load-bearing.** Without it the outbox relay has no subscriber and events are silently dropped, making every event assertion fail.
+- **Real Mongo, not mocks.** The file's header explicitly states that the conditional-write guarantee (`$in` filter) and race semantics cannot be tested with a mock.
+- **Outbox timing is two-step.** Session-based doors require the *caller* to call `nudgeOutbox()` after its own `withTransaction` resolves, then `settleOutboxNudges()` to flush before asserting on events. Non-session doors can `settleOutboxNudges()` immediately.
+- **`markDomainEventsWired()` is mandatory per-test.** Without it the outbox relay has no subscription and no events are delivered, even if the write succeeds.
+- **`paidAt` is an invariant, not a side-effect.** The test asserts it lands in the *same* write as the status change because downstream modules (`services/scope.ts`, `services/remove.ts`) read it.
+- **File is truncated in the dependency snapshot.** The final race-condition test ("two callers racing the same move") is cut off after the `Promise.all` setup; the remainder (assertions on `first`/`second` and event count) is not visible.

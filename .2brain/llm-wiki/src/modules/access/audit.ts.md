@@ -1,7 +1,7 @@
 ---
 source: src/modules/access/audit.ts
-sha256: 1cdb5f02c783144275e52ecd1fb824fa2dffd2a4d155b985d33f8fa9cfebd985
-generated_at: 2026-09-23T17:56:54.036098+00:00
+sha256: b65cedb01985178cd6820de7f57d5806f1f3910c5c412f7a6a668119d32e980c
+generated_at: 2026-10-29T02:21:54.656872+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the audit-action vocabulary owned by the access module and registers it into the app-wide `AuditActionMap` via TypeScript declaration merging. Only two events are audited—role assignment and role revocation—because those are the sole access-module actions that _change_ what a user may do; all other access-module functions are reads.
+Declares the audit-action vocabulary for the access module (role assignment and revocation) and registers it into the app-wide `AuditActionMap` via TypeScript module augmentation. It exists so that compliance queries can find access-mutating events by the `access.*` prefix while distinguishing them from read-only operations like `membershipsOf` or `rolesOf`.
 
 ## Key elements
 
-- **`accessAuditActions`** (const object, exported) — the two-action vocabulary:
-    - `ROLE_ASSIGNED: 'access.role.assigned'` — emitted when an admin grants a role to a membership.
-    - `ROLE_REVOKED: 'access.role.revoked'` — emitted when a role is removed.
-- **`declare module '@infrastructure/observability/audit'`** — augments the global `AuditActionMap` interface so the `access` key is typed against the `accessAuditActions` values. This is the mechanism that lets downstream code reference `'access.role.assigned'` in a type-safe `AuditAction` union without importing a shared enum.
+- **`accessAuditActions`** – `as const` object exporting two string-literal action identifiers:
+  - `ROLE_ASSIGNED` (`'access.role.assigned'`) – emitted when an admin grants a role to a membership.
+  - `ROLE_REVOKED` (`'access.role.revoked'`) – emitted when a membership's role is removed.
+- **`declare module '@infrastructure/observability/audit'`** – augments the shared `AuditActionMap` interface by adding an `access` key typed to the union of the two action strings, making them available type-safely to any consumer of that map.
 
 ## Relationships
 
-- **`src/modules/access/service.ts`** — the service layer that performs role grant/revoke operations; it is the expected caller of the `accessAuditActions` values when emitting audit events.
-- **`src/modules/access/tests/integration/access.test.ts`** — integration tests that exercise the access service and assert the correct audit actions are recorded.
+- **`services/grants.ts` / `services/role-audit.ts`** – consume `accessAuditActions` as the action identifiers they attach to audit log entries when a grant or revocation is performed.
+- **`services/memberships.ts`** – co-resident service in the same module; the file's comment contrasts its read-only actions (`membershipsOf`) with the mutating ones owned here.
+- **`tests/factories.ts`** – provides test fixtures (likely audit-log entries) that reference these action strings.
+- **`tests/integration/access.test.ts`** – exercises the access module end-to-end, asserting that the expected `access.role.*` actions appear in the audit trail.
+- **`src/modules/users/tests/integration/admin-user-grant-atomicity.test.ts`** – verifies that a user-grant operation and its accompanying audit emission are atomic; depends on the action identifiers declared here.
 
 ## Notes
 
-- The module comment explicitly calls out that the design mirrors `modules/account/audit.ts`: each domain module augments `AuditActionMap` locally rather than contributing to a single shared enum. If you add a new audited action here, follow the same pattern (add the key to `accessAuditActions`, no other registration needed).
-- The `as const` on `accessAuditActions` is load-bearing: the augmentation uses `(typeof accessAuditActions)[keyof typeof accessAuditActions]`, so widening to `string` would silently lose the literal-union type on `AuditActionMap.access`.
-- The doc comment notes that role assignment is "never self-service" (requires `users.any.update` or `users.any.create`); this is a policy statement, not enforced in this file.
+- The module-augmentation pattern (rather than a shared enum) is a deliberate project convention — see `modules/account/audit.ts` for the stated rationale. Each module owns its action strings locally.
+- `ROLE_ASSIGNED` is documented as always admin-initiated (`update:User` / `create:User`); self-service role changes are out of scope for this action.
+- Only the two `role` actions are mutation-class. Any future read helpers added to this module should *not* be added to `accessAuditActions` if they don't change permissions, so the `access.*` prefix stays scoped to compliance-relevant events.

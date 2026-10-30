@@ -1,26 +1,37 @@
 ---
 source: src/modules/users/events.ts
-sha256: 87ca00517effdd6cf64783f9ae6ae62f1485f9d10383d5e8a334a036ee44bcfd
-generated_at: 2026-09-27T15:37:11.548902+00:00
+sha256: d94fb56886bbbf000fc54b7c44ca4d2bc93d0dbdebcec0dcc5586a0e7b0cb889
+generated_at: 2026-10-29T06:12:29.978995+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/users/events.ts
 
 ## Purpose
-Declares the domain events owned by the users module by augmenting the kernel's `DomainEventMap` interface, so the event catalogue grows per-module without a shared enumeration file.
+
+Declares the domain events emitted by the `users` module and registers their payload types into the kernel's app-wide `DomainEventMap` via TypeScript module augmentation. This keeps the event catalogue distributed across owning modules rather than enumerated in a shared file.
 
 ## Key elements
-- **`declare module '@kernel/events'`** — TypeScript module augmentation that adds the users module's payload types to the global `DomainEventMap`.
-- **`'user.setup-requested': { userId: string }`** — Event emitted (per the comment, by `userService.create`) when an admin creates a user without a password and a setup email is queued. The `account` module is the expected subscriber.
-- **`USER_SETUP_REQUESTED`** (exported const) — String literal `'user.setup-requested'`; the runtime token used to emit or subscribe to the event.
+
+- **`UserChangedField`** (type) — Union of the five personal-data fields (`username`, `email`, `phone`, `website`, `imageUrl`) whose change is announced by `user.profile_changed`. Excludes preferences like locale/consent.
+- **Module augmentation of `@kernel/events`** — Adds seven event names and their payload shapes to `DomainEventMap`:
+  - `user.setup-requested` — admin created a user with a queued password (subscriber: `account`)
+  - `user.deactivated` — admin banned an account, sessions ended (subscriber: `account`)
+  - `user.deletion-cancelled` — staff restored a scheduled erasure (subscriber: `account`)
+  - `user.erased` — account hard-deleted; `users` itself requests GDPR Art. 17 analytics purge
+  - `user.profile_changed` — a personal-data field was rectified; carries `changed: UserChangedField[]` (names only, never values); feeds the `user.updated` webhook (GDPR Art. 19)
+  - `user.review_flagged` — shop rule flagged an account for staff review (subscriber: `tickets`); internal only
+  - `user.review_cleared` — staff resolved the flag with hold or lift (subscriber: `tickets`); internal only
+- **Seven string constants** (`USER_SETUP_REQUESTED`, `USER_DEACTIVATED`, `USER_DELETION_CANCELLED`, `USER_ERASED`, `USER_PROFILE_CHANGED`, `USER_REVIEW_FLAGGED`, `USER_REVIEW_CLEARED`) — Stable string identifiers for each event, intended for use by emitters and subscribers without re-typing the literal.
 
 ## Relationships
-- **`src/modules/users/service.ts`** — `userService.create` is documented as the emitter of `user.setup-requested`.
-- **`src/modules/users/index.ts`** — Likely re-exports the `USER_SETUP_REQUESTED` constant and/or the augmented type for consumers.
-- **`src/modules/users/module.ts`** — Module registration; this file's event declaration is what the module "owns."
-- **`src/modules/users/tests/integration/service.test.ts`** — Integration tests that exercise the creation flow and can assert the event is emitted with the expected `{ userId }` payload.
+
+- **Emitters (services):** `services/create.ts`, `services/activation.ts`, `services/credentials.ts`, `services/purchase-hold.ts`, `services/remove.ts`, and `services/update.ts` are the in-module callers that commit these events in their respective write transactions.
+- **Re-export / wiring:** `index.ts` and `module.ts` expose the constants and wire the events into the module's public surface.
+- **Tests:** `tests/unit/public-events.test.ts` validates the exported constants; `tests/integration/service.test.ts` and `tests/contract/api.contract.test.ts` verify that services emit the correct payloads and that the API contract matches.
 
 ## Notes
-- The event is *declared* here but *emitted* in `service.ts` and *consumed* by the `account` module. This file contains no runtime logic beyond the exported constant.
-- Payload type is intentionally minimal (`{ userId: string }`); the subscriber is responsible for looking up the user and sending the email.
+
+- Field names in `user.profile_changed` are intentionally limited to the set defined in `services/audit-changes.ts`; they never carry values, keeping the outbox row and delivery log replayable.
+- `user.review_flagged` and `user.review_cleared` are internal-only — no AsyncAPI channel carries them — so external consumers must not rely on receiving them.
+- `user.setup-requested` is emitted once per flag-set; the automatic purchase-hold has its own separate staff notice and is not announced through this event.

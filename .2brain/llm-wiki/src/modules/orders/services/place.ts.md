@@ -1,44 +1,41 @@
 ---
 source: src/modules/orders/services/place.ts
-sha256: 2e9d188d68ca44b0fdc60ecfe12afac31740fc47c7eda20a1ac6522f9e8e31a1
-generated_at: 2026-10-15T11:09:24.985654+00:00
+sha256: 53d6ba697949bb854aebf61c6ce749bb558374785223fe0395e7399ee2beb463
+generated_at: 2026-10-29T04:48:26.158702+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/orders/services/place.ts
 
 ## Purpose
-
-The single write path for creating a new order row. Both the admin `create` in `crud.ts` and the cart `checkout` funnel through `placeOrder`, so the actual write, stock hold, and event announcement exist in exactly one place. It validates lines, freezes them, reserves stock, allocates the order number, and persists the document — returning a plain verdict rather than an HTTP envelope.
+The single write path for creating a new order row. Both `crud.ts`'s admin `create` and the cart `checkout` service funnel through `placeOrder`, ensuring the write (freeze lines → hold stock → allocate number → persist) exists in exactly one place. Callers remain responsible for payment validation, order caps, address resolution, and cart pre-flight.
 
 ## Key elements
-
-- **`placeOrder(input: PlaceOrderInput): Promise<PlaceOrderOutcome>`** — The sole exported function. Runs the pipeline: `checkOrderLines` → `freezeOrderLines` → `inventoryService.reserveForOrder` → `allocateOrderNumber` → `orderRepository.create` + `appendTimeline` + `announceInTransaction`. On a failed write after a successful hold, releases the hold in `catch`.
-- **`PlaceOrderInput`** — All data needed for the write. Notable fields: `commitWith` (a callback that runs inside the same transaction and aborts it if it resolves `false`, used by checkout to atomically clear the cart), `shipping.method.priceFor` (prices against the *frozen* lines, not pre-frozen ones), `holdMinutes` (stock-hold length override).
-- **`PlaceOrderOutcome`** — Discriminated union: `{ ok: true; order }` or one of `'no-lines' | 'product-missing' | 'insufficient-stock' | 'superseded'`. Callers map these to their own wire error codes.
-- **`PlaceOrderLine`** — Pairs the caller's `{productId, quantity}` with a resolved `ProductSnapshot | null | undefined`.
-- **`PlaceOrderShipping`** / **`PlaceOrderAddress`** — Shipping method (with a `priceFor` callback) and address shapes; both optional.
-- **`OrderSuperseded`** (internal) — Error thrown inside the transaction to abort when `commitWith` reports a lost race.
+- **`placeOrder(input: PlaceOrderInput): Promise<PlaceOrderOutcome>`** — The sole export. Validates lines via `checkOrderLines`, freezes snapshots, reserves inventory, allocates an order number, writes the order document (with timeline and outbox event) inside a Mongoose session, and returns a plain verdict. Never throws on a business refusal.
+- **`PlaceOrderInput`** — Everything the write needs: user identity, lines (with optional per-line backorder flag), optional shipping (address + `priceFor` callback), optional `billingAddress`, `notes`, and a `commitWith(session)` hook that runs in the same transaction (used by checkout to clear the cart atomically).
+- **`PlaceOrderLine`** — A request line (`{productId, quantity}`) paired with its resolved `ProductSnapshot | null | undefined` and an optional `backorder` flag carrying a `restockDate`.
+- **`PlaceOrderShipping`** — Pre-resolved address and method; `method.priceFor` receives the *frozen* lines so free-shipping thresholds price the actual basket. `holdMinutes` overrides the inventory hold TTL.
+- **`PlaceOrderOutcome`** — Discriminated union: `{ok:true, order}` or `{ok:false, reason}` where reason is `'no-lines' | 'product-missing' | 'insufficient-stock' | 'superseded'`. Not an HTTP envelope.
+- **`OrderSuperseded`** — Internal error class thrown to abort the transaction when `commitWith` resolves `false`.
+- **`withOwedLines`** (internal) — Merges per-line backorder/owed metadata into the frozen items using `owedLineOf` before the write.
 
 ## Relationships
-
-- **`@modules/inventory`** (`inventoryService`, `StockShortfall`) — Calls `reserveForOrder` before the write and `releaseForOrder` in the catch path.
-- **`@kernel/outbox`** (`announceInTransaction`) — Commits the order row, its timeline entry, and the `order.created` outbox event in one transaction; delivery is decoupled from the response.
-- **`../domain/rules`** (`checkOrderLines`) — Pre-flight line validation; this file returns its verdict verbatim.
-- **`../domain/transfer-reference`** (`buildReference`) — Mints the bank-transfer reference from the pre-generated `orderId` (not a second id).
-- **`../repository`** (`orderRepository`) — Performs the actual `create` inside the outbox transaction.
-- **`./announce`** (`createdEvent`) — Supplies the outbox event payload.
-- **`../config`** (`shopCurrency`) — Provides the currency code stamped on the order.
-- **`@infrastructure/persistence/create-repository`** (`toObjectId`) — Coerces `userId` to an `ObjectId` for the document write.
-- **`@modules/cart/services/checkout`** — A caller; passes `commitWith` to atomically clear the cart in the same transaction.
-- **`./services/crud.ts`** — A caller; its admin `create` maps the same verdict to `ORDER_INSUFFICIENT_STOCK`.
-- **`./services/index.ts`** — Re-exports this module.
+- **`@modules/inventory` / `inventoryService`** — Calls `reserveForOrder(orderId, lines, holdMinutes)` to hold stock *before* the order row is written. Reads `outcome.held`, `outcome.shortfalls`, `outcome.owed`, and `outcome.expiresAt`.
+- **`../repository` (`orderRepository`)** — Persists the order document inside the session passed by `announceInTransaction`.
+- **`@kernel/outbox` (`announceInTransaction`)** — Wraps the repository write so the `order.created` outbox row commits in the same transaction as the order (and any `commitWith` step).
+- **`./announce` (`createdEvent`)** — Supplies the event payload for the outbox row.
+- **`./timeline` (`appendTimeline`)** — Opens the order timeline within the same transaction.
+- **`./snapshot` (`freezeOrderLines`)** — Produces the immutable `OrderDocumentItem[]` from resolved products and quantities.
+- **`./order-numbering` (`allocateOrderNumber`)** — Spends the next order number; called inside the `try` block so a failure releases the hold.
+- **`../domain/rules` (`checkOrderLines`)** — Pre-flight validation of quantities and product presence.
+- **`../domain/backorder` (`owedLineOf`)** — Computes owed quantity and promised restock date for backorder lines.
+- **`@infrastructure/persistence/create-repository` (`toObjectId`)** — Coerces the `userId` string to an `ObjectId` for the document.
+- **`@infrastructure/adapters/logger`** — Imported for structured logging (available in the full file).
+- **`../services/crud.ts` / `@modules/cart/services/checkout.ts`** — The two callers that map `PlaceOrderOutcome` to their own wire shapes (`ORDER_INSUFFICIENT_STOCK` vs `CART_INSUFFICIENT_STOCK`).
 
 ## Notes
-
-- **Hold-before-write is deliberate.** The `ObjectId` is generated up front so `reserveForOrder` can use it without a row existing. A refused hold therefore burns neither a DB row nor an order number. The only case requiring manual unwind is a hold taken but the subsequent write failing (handled in `catch`); a crash between the two leaves a stale hold that the reservation sweep expires.
-- **`paymentMethod: undefined` ≡ `'card'`.** No transfer reference is minted; no hold-length override is applied.
-- **`priceFor` receives frozen lines**, not a precomputed total, so the free-above-threshold rule prices the basket actually being written.
-- **Scope boundary is explicit:** payment-method validation, open-transfer cap, shipping-address resolution, and cart pre-flight/clearing all remain with the caller. This file only writes and holds.
-- The `as Partial<OrderDocument>` cast on `orderData` is required because the conditional spreads widen the type past what the repository's typed input can narrow.
-- The `OrderSuperseded` error is the *only* mechanism to abort the transaction from `commitWith`; it is not exported.
+- **Hold before write.** `reserveForOrder` is called with a pre-generated `ObjectId` *before* `allocateOrderNumber` and `orderRepository.create`. A refused hold therefore burns neither a row nor a number. A hold taken but followed by a failed write is the only case requiring manual unwind (catch block releases the hold).
+- **`commitWith` atomicity.** When checkout passes `commitWith`, a `false` result (lost cart-clear race) throws `OrderSuperseded`, aborting the entire transaction — no order, no outbox row, no hold leak.
+- **Shipping prices off frozen lines.** `PlaceOrderShipping.method.priceFor` receives the post-freeze `items`, not the caller's pre-freeze lines, so threshold rules price the basket actually being bought.
+- **Verdict, not throw.** Business refusals are returned via `PlaceOrderOutcome`, matching the convention set by `checkOrderLines`. Only infrastructure failures (DB errors, hold-release failure) throw.
+- **Conditional spreads in `orderData`.** Optional fields (`notes`, `paymentMethod`, `shippingAddress`, `billingAddress`, `shippingMethod`/`shippingCost`) are spread conditionally, then the whole object is cast `as Partial<OrderDocument>` to satisfy the repository's typed input.

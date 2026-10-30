@@ -1,7 +1,7 @@
 ---
 source: tests/broker/queue-broker.test.ts
-sha256: 22d0f2a5c70400fe66db961a06084235f73a9a4f2b558abcd4b6e491108d62c9
-generated_at: 2026-10-15T12:30:33.511409+00:00
+sha256: 048606ab9b5cf93794b64a139d850a8c4ad1063d004f0630ca2041d7e3967de1
+generated_at: 2026-10-29T06:37:34.936687+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite for the queue adapter that runs against a **real RabbitMQ** instance (started in a container). The unit suite mocks `amqplib` and only verifies the arguments passed to the broker; this file answers questions only a live broker can: whether topology actually declares on the running version, whether a retry republish carries the `x-retry-attempt` header, and where a message lands once its delivery limit is exhausted.
+Integration test for the queue adapter (`src/infrastructure/adapters/queue.ts`) run against a **real** RabbitMQ broker. It covers behaviors only a live broker can confirm: topology declaration of quorum queues, retry republish carrying the `x-retry-attempt` header, dead-letter parking after delivery-limit exhaustion, and the idempotent-declare path. It is the complement to `tests/unit/infrastructure/adapters/queue.test.ts`, which mocks `amqplib` and only verifies the arguments handed to the broker.
 
 ## Key elements
 
-- **`bootAdapter(environment?)`** – Re-imports `@infrastructure/adapters/queue` with `jest.resetModules()` so each copy owns its own connection and module-level channel state. Waits until `queueState() === 'ready'`.
-- **`inBrokerEnvironment(body, extra?)`** – Wraps a test case in `withEnvironmentOverrides` setting `NODE_RABBITMQ_URL`, retry delay (1 s), and max attempts (2).
-- **`uniqueQueue()`** – Returns a random queue name (`broker-test.<rand>`) so cases never collide with leftovers from prior cases.
-- **`recorder(decide?)`** – Returns a handler that logs each delivery (payload, raw message, timestamp) into a `Seen[]` array and delegates ack/nack/reject to `decide(callIndex)`.
-- **`crashOnce(queue)` / `crashRepeatedly(queue, times)`** – Simulate a worker dying without acking; resolve with the `ConsumeMessage` (or an array of `x-delivery-count` values) the broker redelivers.
-- **`depth(name)`** – Reads a queue's ready message count via a passive declare (`channel.checkQueue`), avoiding the laggy management-API counters.
-- **`waitUntil(check, what, timeoutMs?)`** – Polls `check()` every 100 ms until truthy; rejects with a descriptive error on timeout.
-- **`quiet(ms)`** – Simple sleep used to assert that something does *not* happen within a window.
-- **`anyPayload`** – `z.unknown()`, a permissive schema so cases focus on delivery mechanics rather than payload contracts.
-- **Three `describe` blocks** – topology declaration (quorum queues, retry/dead arguments, idempotent re-declare), retry & parking (attempt header, dead-letter after max attempts), and delivery-limit crash behavior (truncated in source).
+- **`inBrokerEnvironment(body, extra?)`** – Wraps a test case with the broker URL and short retry knobs (`RETRY_DELAY_SECONDS = 1`, `MAX_ATTEMPTS = 2`) as environment overrides, then restores them.
+- **`bootAdapter(environment?)`** – Calls `jest.resetModules()` then dynamically imports the adapter module, starts it, and waits until `queueState() === 'ready'`. Yields an isolated adapter instance (one connection each), which is required for the idempotent-declare and reconnect cases.
+- **`rawChannel()`** – Opens a raw `amqplib` connection/channel on the test vhost for interactions that are *not* the adapter (inspector, crash simulation).
+- **`depth(name)`** – Reads a queue's ready message count via a passive declare (`channel.checkQueue`), avoiding the management API whose stats lag by its sampling interval.
+- **`recorder(decide?)`** – Returns a handler that logs every delivery (payload, raw message, timestamp) and delegates ack/nack/retry to a caller-supplied `decide(callIndex)` function.
+- **`crashOnce(queue)` / `crashRepeatedly(queue, times)`** – Simulate a worker that consumes one message then closes its channel without acking, causing the broker to increment the delivery count and redeliver.
+- **`uniqueQueue()`** – Generates a random queue name (`broker-test.<8 hex chars>`) so cases never collide.
+- **`waitUntil(check, what, timeoutMs?)`** – Polls `check` at 100 ms intervals; rejects with a descriptive message on timeout. Built on `retryUntil` from `tests/support/eventually.ts`.
+- **`quiet(ms)`** – Resolves after `ms` ms; used for negative assertions ("this did not happen within X").
+- **`inspector`** – Lazily-created shared channel for `depth()` reads; cleaned up in `afterEach`.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/queue.ts`** – The module under test. Imported dynamically (after `jest.resetModules()`) to obtain fresh, independent adapter instances; its exports (`startQueue`, `stopQueue`, `publishToQueue`, `consumeFromQueue`, `queueState`, `deadLetterQueueOf`, `EMAIL_QUEUE`, etc.) are the API exercised by every case.
-- **`tests/broker/support/rabbitmq.ts`** – Provides `startRabbitMq()` (spins up a RabbitMQ container with the management plugin) and the `TestRabbitMq` type. Called in `beforeAll`; `broker.stop()` in `afterAll`.
-- **`tests/support/environment.ts`** – Provides `withEnvironmentOverrides`, used both by `inBrokerEnvironment` (per-case env) and `bootAdapter` (env visible at module-import time).
+- **`src/infrastructure/adapters/queue.ts`** – The module under test. Imported dynamically (never a top-level `import`) so each `bootAdapter` call gets a fresh module instance with its own connection.
+- **`tests/broker/support/rabbitmq.ts`** – Provides `startRabbitMq()` (boots a RabbitMQ container in `beforeAll`) and the `TestRabbitMq` type (exposes `.url` and `.management.*` helpers used to assert queue type/arguments).
+- **`tests/support/environment.ts`** – Supplies `withEnvironmentOverrides`, used by both `inBrokerEnvironment` and `bootAdapter` to set/restore env vars around each case.
+- **`tests/support/eventually.ts`** – Supplies `retryUntil`, the polling primitive behind `waitUntil`.
 
 ## Notes
 
-- **Module state isolation:** The adapter caches its channel in module scope. `bootAdapter` relies on `jest.resetModules()` to get an independent copy; without this, two adapters would share one channel and the idempotent-declare case would be meaningless.
-- **Long timeout:** `jest.setTimeout(120_000)` because real TTLs (1 s × retries) plus container image pulls exceed Jest's default.
-- **`depth` vs. management API:** The test deliberately uses `channel.checkQueue` (passive declare) for message counts rather than the management REST API, whose stats lag by its reporting interval.
-- **Cleanup is best-effort:** `afterEach` stops all tracked adapters and closes all tracked connections; a `.catch(() => undefined)` swallows errors from connections a case already dropped.
-- **Explicitly excluded:** Webhook delivery through the broker (covered by the live e2e and `webhooks/tests/integration/delivery.test.ts`) and publish-confirm refusal/timeout (untestable without sabotaging RabbitMQ itself).
+- **Module isolation is deliberate.** `jest.resetModules()` before each `import('@infrastructure/adapters/queue')` is required because the adapter stores its channel in module-level state. Two copies behave like two processes; skipping the reset would let one case's connection leak into another.
+- **`anyPayload = z.unknown()`** is used for the schema parameter of `consumeFromQueue`. These tests assert delivery mechanics, not payload validation, so the schema is intentionally permissive.
+- **Management API vs. passive declare:** `depth()` uses `channel.checkQueue` (passive declare) rather than `broker.management.queue()` because the management plugin's counters update on a fixed stats interval and can lag by several seconds—too unreliable for tight assertions.
+- **Deliberate gaps:** The webhook delivery path through the broker and publish-confirm refusal/timeout are excluded (covered by `webhooks/tests/integration/delivery.test.ts` and the unit suite respectively). A broker cannot be forced to reject a confirm without testing RabbitMQ itself.
+- **`jest.setTimeout(120_000)`** replaces the default 5 s timeout because real TTLs, container startup, and image pulls exceed it.
+- **`DELIVERY_LIMIT = 3`** mirrors the `QUORUM_DELIVERY_LIMIT` constant in `queue.ts`; it is the broker-side limit, separate from the adapter's `MAX_ATTEMPTS` retry budget.

@@ -1,7 +1,7 @@
 ---
 source: scripts/contracts/check-asyncapi-breaking.ts
-sha256: 23744a6f021c3c577f644469d2bedae3eeeb4906dc99dc64b4748893d2fa6a7e
-generated_at: 2026-10-15T09:36:48.702194+00:00
+sha256: cdda20668dee4d685f74fb66981115482f010decf2d928b004e2de713c781228
+generated_at: 2026-10-29T01:30:01.209445+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A CI gate (`npm run check:asyncapi-breaking`) that fails a commit when `asyncapi.public.yaml` — the partner-facing webhook event catalogue — drops or narrows a shape an existing subscriber depends on. It diffs the working-tree bundle against the bundle at the merge-base of the current branch and `origin/main`, so the comparison reflects what would actually ship rather than a possibly-stale local `main`.
+A gate script (run via `npm run check`) that fails the build when `asyncapi.public.yaml` — the partner-facing webhook event catalogue — drops or narrows a channel, field, or schema that existing subscribers depend on. It diffs the working-tree bundle against the merge-base commit of `origin/main` (or a `--base` override) to model "what this PR would actually ship."
 
 ## Key elements
 
-- **`BUNDLE`** — hardcoded to `'asyncapi.public.yaml'`; the only file this gate inspects.
-- **`base`** — the comparison ref; defaults to `'origin/main'`, overridable via `--base=<ref>`.
-- **`bundleAt(ref)`** — reads the bundle at an arbitrary git ref via `git show ref:asyncapi.public.yaml`; returns `undefined` if the file didn't exist yet at that ref.
-- **`describe(change)`** — formats a single `DiffOutputItem` as `path (action): before -> after` for human-readable output.
+- **`BUNDLE`** (`'asyncapi.public.yaml'`) — the single document this gate inspects.
+- **`base`** — git ref for comparison; defaults to `origin/main`, overridable with `--base`.
+- **`bundleAt(ref)`** — retrieves the bundle content at a given ref via `git show`; returns `undefined` if the file didn't exist yet.
+- **`describe(change)`** — formats a `DiffOutputItem` as `path (action): before -> after` for readable console output.
 - **`majorVersion(version)`** — extracts the leading `MAJOR` segment of an AsyncAPI version string.
-- **`baseCommit`** — result of `mergeBase(base, 'asyncapi-breaking')`; `undefined` means git can't determine it (treated as pass).
-- **Main flow (inline, no wrapper function)** — short-circuits on: base not found, file new at base, byte-identical files. Otherwise parses both documents with `@asyncapi/parser`, skips if the major version changed (a deliberate break), then calls `breakingChanges` and exits 1 with a per-change listing.
-- **Exit codes** — `0` pass / no-op, `1` breaking changes detected, `2` parse or unexpected error.
+- **`baseCommit`** — result of `mergeBase(base, …)`; the exact commit the branch forked from.
+- **Main async flow** — parses both documents with `@asyncapi/parser` (required because `@asyncapi/diff` rejects unresolved `$ref`s), short-circuits on a major-version bump, then calls `breakingChanges()` to enumerate structural regressions. Exits **1** on breaking changes, **2** on parse failure, **0** otherwise.
 
 ## Relationships
 
-- **`scripts/cli.ts`** — supplies `flagValue`, used to read the optional `--base` CLI flag.
-- **`scripts/contracts/asyncapi-breaking.ts`** — supplies `breakingChanges`, the structural diff function that compares two dereferenced AsyncAPI JSON documents and returns the list of `DiffOutputItem`s that are breaking.
-- **`scripts/git-base.ts`** — supplies `mergeBase`, which resolves the commit at which the branch diverged from `base`.
-- **`scripts/modules-on-disk.ts`** — supplies `REPO_ROOT`, the absolute path to the repository root used to resolve `git show` cwd and the on-disk bundle path.
+- **`scripts/cli.ts`** — provides `flagValue` to read the `--base` CLI argument.
+- **`scripts/contracts/asyncapi-breaking.ts`** — provides `breakingChanges(before, after)`, the function that actually classifies which diff items count as breaking (and filters `/info/version`).
+- **`scripts/git-base.ts`** — provides `mergeBase(ref, label)`, which resolves the fork-point commit and returns `undefined` if git can't determine it.
+- **`scripts/modules-on-disk.ts`** — provides `REPO_ROOT`, used as the `cwd` for `git show` and for joining the on-disk path to `BUNDLE`.
 
 ## Notes
 
-- `@asyncapi/diff` (used internally by `breakingChanges`) refuses documents that still contain `$ref`s, so both sides are run through `@asyncapi/parser` first. The parser also provides a version-aware document model.
-- A major-version bump is treated as the *intended* break and passes the gate; the gate only catches accidental narrowing/removal within the same major.
-- `/info/version` changes are explicitly ignored (handled inside `asyncapi-breaking.ts`).
-- The script is a top-level `tsx` entry (shebang `#!/usr/bin/env tsx`); it mixes a synchronous `execFileSync` call for git with an async `Promise.all` for parsing/diffing.
-- The `--base` flag lets you re-run the check against an arbitrary ref (e.g. `HEAD~3`) without changing branch state.
+- A **major AsyncAPI version bump** (e.g. `1.x` → `2.x`) is treated as the deliberate, reviewed break and causes the gate to **pass** rather than diff; `@asyncapi/diff` itself throws a `TypeError` on cross-major comparisons, so the check is done *before* calling `breakingChanges`.
+- If the bundle didn't exist at the base commit (new file on this branch), the script exits 0 with a log line rather than erroring.
+- Byte-identical bundles skip parsing entirely.
+- The script is top-level executable (`#!/usr/bin/env tsx`) and uses top-level `await`-free async via `Promise.all().then()`.
+- `npm run check` is the intended invocation; `npx tsx scripts/contracts/check-asyncapi-breaking.ts --base=HEAD~3` works for ad-hoc runs.

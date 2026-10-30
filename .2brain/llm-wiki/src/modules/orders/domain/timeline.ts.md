@@ -1,32 +1,32 @@
 ---
 source: src/modules/orders/domain/timeline.ts
-sha256: 987140ba58386f1092461c0199221f24ebbb885caf9724396c46907398377ae3
-generated_at: 2026-10-15T11:03:02.464308+00:00
+sha256: 357b0a7ce1573b7614a33870e8b88fe7233b05d5920f880714dd701cf214085f
+generated_at: 2026-10-29T04:40:59.948275+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/orders/domain/timeline.ts
 
 ## Purpose
-Defines **who may see each order-timeline row type** and the **input shape** a row must have when written. By making the audience a required mapping over every `OrderTimelineType`, it guarantees that no timeline type can exist without an explicit visibility decision (buyer, staff, or both).
+
+Defines the audience mapping for every order-timeline type and the shape of a timeline entry as written by the `orders` module. Its job is to make the "who can read this row?" decision a compile-time, per-type choice rather than a field-stripping step at read time.
 
 ## Key elements
-- **`TimelineAudience`** — Union type `'buyer' | 'staff'`.
-- **`TIMELINE_AUDIENCE`** — `Readonly<Record<OrderTimelineType, TimelineAudience>>` mapping every generated enum member to its audience. Exhaustive: a missing or extra key is a compile error.
-- **`isBuyerVisible(type)`** — One-liner that returns `true` when the type's audience includes `'buyer'`.
-- **`TimelineEntryInput`** — Interface describing one row as `orders` writes it: `type`, optional `actor`, `text`, scalar-only `data`, and `at`.
+
+- **`TIMELINE_AUDIENCE`** — `Readonly<Record<OrderTimelineType, OrderTimelineEntryAudience>>`. Exhaustive mapping of every `OrderTimelineType` to `'buyer'` or `'staff'`. Adding a new type to the contract without a row here is a compile error (and vice-versa).
+- **`isBuyerVisible(type)`** — Returns `true` when `TIMELINE_AUDIENCE[type] === 'buyer'`. The single predicate other code uses to decide whether a row is buyer-facing.
+- **`TimelineEntryInput`** — Interface for one row as `orders` writes it. Fields: `type`, `actor` (nullable), `text` (free text owned by `orders`), `data` (scalar `Record` for type-specific values), `at` (optional timestamp).
 
 ## Relationships
-- **`src/types/index.ts`** — Imports the `OrderTimelineType` enum that drives the `TIMELINE_AUDIENCE` key set.
-- **`src/modules/orders/domain/index.ts`** — Barrel re-export; consumers import timeline types through this.
-- **`src/modules/orders/presenter.ts`** — Consumes `isBuyerVisible` (or `TIMELINE_AUDIENCE`) to filter rows before rendering to the buyer.
-- **`src/modules/orders/services/timeline.ts`** — Writes rows conforming to `TimelineEntryInput`.
-- **`src/modules/orders/services/status.ts`** — Emits `TimelineEntryInput` rows (e.g. `status_overridden`, `fulfillment_held`) when status transitions occur.
-- **`src/modules/orders/tests/unit/timeline.test.ts`** — Unit tests for the mapping and `isBuyerVisible`.
+
+- **`src/types/index.ts`** — Source of the `OrderTimelineType` enum and `OrderTimelineEntryAudience` type that this file imports. `TIMELINE_AUDIENCE` is `Record`-keyed over the enum, creating a compile-time exhaustiveness link.
+- **`src/modules/orders/domain/index.ts`** — Barrel file that re-exports this module's public surface (`TIMELINE_AUDIENCE`, `isBuyerVisible`, `TimelineEntryInput`) for consumers within the `orders` module.
+- **`src/modules/orders/presenter.ts`** — Presumably calls `isBuyerVisible` to filter which rows are returned in a buyer-facing projection.
+- **`src/modules/orders/services/status.ts`** and **`src/modules/orders/services/timeline.ts`** — Service-layer writers that construct `TimelineEntryInput` objects when recording status changes or other timeline events.
+- **`src/modules/orders/tests/unit/timeline.test.ts`** — Unit tests exercising `TIMELINE_AUDIENCE` completeness and `isBuyerVisible` behavior.
 
 ## Notes
-- **Exhaustiveness is enforced at compile time.** Adding a new `OrderTimelineType` to the contract without a corresponding entry in `TIMELINE_AUDIENCE` (and vice-versa) breaks the build.
-- **Visibility is a whole-row decision**, not a field-level filter. The doc comment explicitly contrasts this with Magento's `is_visible_on_front` and WooCommerce's `is_customer_note`.
-- **`TimelineEntryInput.text`** is reserved for free text that `orders` itself owns (it carries its own retention clock). Sibling-module text must not be placed here.
-- **`data` is scalar-only** (`string | number | boolean | null`) to keep rows small and trivially exportable.
-- **`actor`** is `string | null | undefined` — `null`/absent means the system acted, not a user.
+
+- Audience is **per-type, not per-row**. There is no row-level visibility flag; if a type is `'staff'`, *every* row of that type is hidden from the buyer as a whole.
+- `TimelineEntryInput.text` is reserved for text that `orders` itself owns (e.g., a staff override reason). Sibling modules' free text must not be placed here — `orders` has its own retention clock on that field.
+- `data` is constrained to scalar values (`string | number | boolean`) to keep each row small and trivially exportable.

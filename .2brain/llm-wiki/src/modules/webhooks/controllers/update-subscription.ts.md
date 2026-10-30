@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/controllers/update-subscription.ts
-sha256: c7e4e84dc12c649400b57e8f2bb08661aafac2e0843a9861e74396f60043636d
-generated_at: 2026-10-15T12:18:41.588914+00:00
+sha256: bd176b339ee64b513af246e295a8c2a5451de2bb246f8bd7f4bb74d20d458e69
+generated_at: 2026-10-29T06:26:30.614000+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Builds the `PUT /webhooks/subscriptions/:id` (full replace) and `PATCH /webhooks/subscriptions/:id` (partial merge) HTTP handlers from a shared `createUpdateController` factory. Both verbs delegate to the same service method but accept different request schemas. This file intentionally does **not** manage subscription secrets — that lives on dedicated action routes.
+Defines the `PUT` (replace) and `PATCH` (merge) handlers for `/webhooks/subscriptions/:id` by composing the shared `createUpdateController` factory. Both verbs delegate to a single service method (`webhooksService.updateSubscription`) and render the response via `viewSubscription`, scoped to the tenant caller extracted from the request.
 
 ## Key elements
 
-- **`replaceWebhookSubscription`** – `PUT` handler. Validates the body against `ReplaceWebhookSubscriptionBody`, then calls `webhooksService.updateSubscription` with the full change set.
-- **`updateWebhookSubscription`** – `PATCH` handler. Validates against `UpdateWebhookSubscriptionBody` (partial/merge semantics), same service call.
-- Both are produced in one destructuring of `createUpdateController({ … })` with `versioned: false` and `entity: 'webhookSubscription'`.
-- `tenantCallerContextOf(request)` extracts the tenant scope from the incoming request and passes it as the third argument to the service call.
-- `presentWebhookSubscription(subscription)` shapes the response body before it is sent back.
+- **`replaceWebhookSubscription`** — Exported `PUT` handler. Validates the body against `ReplaceWebhookSubscriptionBody` (full replacement), then calls the service with the provided changes.
+- **`updateWebhookSubscription`** — Exported `PATCH` handler. Validates the body against `UpdateWebhookSubscriptionBody` (partial merge), then calls the same service method.
+- **`createUpdateController({ … })` call** — The single configuration block that wires both handlers: sets `versioned: false`, the entity label, the 404 error key (`generic.error-item-gone`), the two Zod schemas, the `update` callback, and the `present` (response-shaping) callback.
 
 ## Relationships
 
-- **`src/infrastructure/surfaces/create-update-controller.ts`** – Supplies the `createUpdateController` factory that this module invokes to wire up the two HTTP verbs, not-found handling, and schema validation in a single call.
-- **`src/infrastructure/http/request.ts`** – Provides `tenantCallerContextOf`, used to derive the tenant-scoped caller context passed into the service layer.
-- **`src/modules/webhooks/services/index.ts`** – Exports `webhooksService`, whose `updateSubscription` method performs the actual persistence for both verbs.
-- **`src/modules/webhooks/presenters.ts`** – Exports `presentWebhookSubscription`, the serializer the controller uses to format the response.
-- **`src/modules/webhooks/routes.ts`** – Registers `replaceWebhookSubscription` and `updateWebhookSubscription` as the handlers for the corresponding route paths.
+- **`src/infrastructure/surfaces/create-update-controller.ts`** — Provides the `createUpdateController` factory; this file is its consumer. The factory returns the `{ replace, update }` pair destructured into the two exports.
+- **`src/infrastructure/http/request.ts`** — Provides `tenantCallerContextOf`, used inside both the `update` and `present` callbacks to derive the caller identity passed to the service and view functions.
+- **`src/modules/webhooks/services/index.ts`** — Exports `webhooksService`, whose `updateSubscription` method is the sole write path invoked by both handlers.
+- **`src/modules/webhooks/services/actions.ts`** — Exports `viewSubscription`, the read-shaping function used in the `present` callback to format the response body for the given caller.
+- **`src/modules/webhooks/routes.ts`** — Imports the two exports to attach them to the `PUT` and `PATCH` route definitions for the subscription resource.
 
 ## Notes
 
-- The module doc-comment explicitly calls out that neither PUT nor PATCH touches the secret ring; secret rotation/removal are separate action routes (`rotate-subscription-secret.ts` / `remove-subscription-secret.ts`). Don't add secret mutations here.
-- `versioned: false` means the factory does not prepend or check a version prefix on the entity key — the endpoint path is unversioned.
-- Despite sharing one service method, the two verbs enforce **different** Zod schemas (`Replace…` vs `Update…`), so PUT requires all fields while PATCH accepts a subset.
+- Secret-ring operations (rotate, remove a secret) and the on/off toggle are intentionally **excluded** from these handlers; they live on separate action routes with their own controllers. Do not add those concerns here.
+- `versioned: false` means the entity does not carry a version/ETag check in this controller — concurrency is handled (or not) at the service layer.
+- Both verbs funnel through the *same* service method; the only difference is which Zod schema validates the incoming body (full vs. partial).

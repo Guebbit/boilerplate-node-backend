@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/openapi.yaml
-sha256: 453872581aee01d64081ba706bd33093ff577aef3a343525751ec4150c95d56b
-generated_at: 2026-10-15T11:42:57.046403+00:00
+sha256: 78f35d1e9f35fa18b363b441457ca48d916a0e57f769542235b520e1afef376d
+generated_at: 2026-10-29T05:27:20.875205+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.1.0 contract for the products module. It defines the full HTTP surface (list, create, read-by-id, replace, patch, delete, restore, catalogue facets, and shop settings) with schemas, parameters, and error responses, serving as the single source of truth for the module's API shape. The module entry point (`module.ts`) mounts these routes; the spec is what clients, tests, and tooling consume.
+OpenAPI 3.1.0 module contract for the **Products** module. It defines the HTTP surface (list, create, delete, detail, facets) and the request/response schemas that the module's controller implements. Serves as the single source of truth for client codegen, validation, and documentation of the product catalogue API.
 
 ## Key elements
 
-- **`paths./products` (GET)** — Paginated product listing. Accepts `sort`, `category`, `tag`, `minPrice`, `maxPrice`, `title`, `active`, `purchasable`, and `deleted` as query filters. The `deleted` flag is admin-gated (callers without read-deleted permission get an empty page for `deleted=true`).
-- **`paths./products` (POST)** — Create a product. Supports both `application/json` and `multipart/form-data` (for image upload). Requires a non-null `translations` entry for the fallback locale (`NODE_FALLBACK_LOCALE`). Protected by `uploadLimiter` (429) and enforces SKU uniqueness (409).
-- **`paths./products` (DELETE)** — Alias of `deleteProductById` (`x-alias-of`). Reads `hardDelete` from query *and* body; a `true` from any source wins. Soft-delete is one-way; restore via `POST /products/{id}/restore`.
-- **`paths./products/categories` (GET)** — Public, unauthenticated. Returns every category/tag with its visible-product count, sorted count-desc then name. Counts honour the same visibility rules as the listing.
-- **`paths./products/settings` (GET)** — Public, unauthenticated. Exposes shop-level catalogue settings (currently `NODE_DEFAULT_CURRENCY`). Intended to be read by create-forms before a product exists.
-- **`paths./products/{id}` (GET / PUT / PATCH / DELETE)** — Single-product operations. Marked `x-versioned`, meaning a bundler injects `ETag` on 200s and `If-Match` + 412 on writes. GET is functionally equivalent to `GET /products?id={id}`. PUT follows RFC 9110 §9.3.4 (full replacement); image is outside the body representation (set via upload, cleared via `imageUrl: null`, preserved when absent).
-- **Shared `$ref`s** — Common parameters (`PageParam`, `PageSizeParam`, `TextParam`, `IdParam`, `IdPathParam`, `HardDeleteParam`), responses (`ValidationError`, `Unauthorized`, `Forbidden`, `NotFound`, `Conflict`, `TooManyRequests`, `InternalError`, `Success`), and headers (`Location`) are all pulled from `shared/contracts/openapi.root.yaml`.
+- **`tags: Products`** — all operations are tagged under this single namespace (browsing, searching, managing products and images).
+- **`x-error-codes`** — module-specific error extensions; currently defines `PRODUCT_NOT_DELETED` (409, restore attempted on a non-deleted product).
+- **`GET /products`** (`listProducts`) — paginated, filterable listing. Accepts sort (JSON:API `?sort=-price,title`), category, tag, price range, title, `active`, `purchasable`, and `deleted` query params. Public (empty security array) or authenticated.
+- **`POST /products`** (`createProduct`) — creates a product with optional multipart image upload. Requires `bearerAuth` or `apiKeyAuth`. Enforces a non-null fallback locale in `translations`. Returns `201` + `Location` header; `429` guarded by `uploadLimiter`.
+- **`DELETE /products`** (`deleteProduct`) — body-based delete (id in body). `hardDelete` flag readable from query *or* body; `true` from any source wins. `x-alias-of: deleteProductById` links it to the path-param form.
+- **`GET /products/facets`** (`getCatalogueFacets`) — public, fully cacheable (`public, max-age=3600, stale-while-revalidate=60, stale-if-error=300`). Returns category/tag counts for filter chips.
+- **`GET /products/{id}`** (`getProductById`) — detail endpoint. `x-versioned: [get, put, patch, delete]` signals the bundler adds `ETag`/`If-Match` + `412`. Response body varies by caller permissions (`read:Translation`, `display:Locale`); `Cache-Control` downgrades to `private, no-cache` for privileged views.
+- **`#/components/schemas/*`** — module-local schemas (`Product`, `ProductsResponse`, `CreateProductRequest`, `CreateProductRequestMultipart`, `DeleteProductRequest`, `ProductSort`, `CatalogueFacetsResponse`, etc.) referenced by the paths above.
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — Referenced via `$ref` for every shared parameter, error response, and header. This file does not define any of those inline; the shared contract is the canonical source for cross-module consistency.
-- **`src/modules/products/module.ts`** — The module's entry point that wires this spec's operations to controllers and registers the routes. The spec's `operationId` values (e.g. `listProducts`, `createProduct`, `deleteProduct`) are the identifiers `module.ts` uses to bind handlers.
+- **`shared/contracts/openapi.root.yaml`** — the file `$ref`s this root spec for all shared building blocks: common parameters (`PageParam`, `PageSizeParam`, `TextParam`, `IdParam`, `IdPathParam`, `HardDeleteParam`), standard responses (`Unauthorized`, `Forbidden`, `Conflict`, `NotFound`, `ValidationError`, `NoContent`, `TooManyRequests`), and headers (`Location`). Keeping these in the root spec lets other modules reuse the same definitions without duplication.
+- **`src/modules/products/module.ts`** — the module's entry point that mounts the controller and routes this spec describes. The `operationId` values here (`listProducts`, `createProduct`, `deleteProduct`, `getCatalogueFacets`, `getProductById`) correspond to handler functions wired up in that module file.
 
 ## Notes
 
-- **Dual-filter design:** `category` and `tag` appear both as query params on `GET /products` and inside `SearchProductsRequest` (body on `POST /products/search`). The controller merges them, so the two call shapes are equivalent.
-- **`hardDelete` precedence:** On both `DELETE /products` and `DELETE /products/{id}`, the flag is read from query *and* body. A `true` from either source is final; a `false` elsewhere does not override it.
-- **`x-versioned` is a bundler directive, not standard OpenAPI.** It tells the build tooling to add ETag / If-Match mechanics; a raw spec parser will ignore it.
-- **Locale invariant on create:** The fallback-locale translation is mandatory and non-null. A product with no fallback cannot exist. The PUT/PATCH three-way table for locale entries is documented in the `PATCH /products/{id}` description.
-- **`purchasable` is intentionally public** (off-sale is a visible state), whereas `deleted` is admin-gated at the response level, not the schema level.
+- **Dual-source filter merging:** `GET /products?category=x` and `POST /products/search {category}` hit the same controller logic; params are declared on both the query and the request body. The `category`, `tag`, and price params are intentionally listed here *and* in `SearchProductsRequest` for this reason.
+- **`purchasable` is public:** off-sale status is not a privilege gate — any caller can filter to `purchasable=false`.
+- **`deleted` is privilege-gated:** callers without permission to see soft-deleted rows get an empty page for `deleted=true`, not an error.
+- **Cache semantics are permission-aware:** endpoints that can return caller-specific data (draft translations, deleted rows) must emit `private, no-cache`; the spec documents this per-response rather than via a single global rule.
+- **`x-versioned`** is a custom extension consumed by the build pipeline, not standard OpenAPI. It does not change the wire format — it instructs codegen/bundling to inject ETag handling.
+- **Fallback locale invariant:** `CreateProductRequest.translations` MUST include a non-null entry for `NODE_FALLBACK_LOCALE`; the contract treats a product without one as impossible.

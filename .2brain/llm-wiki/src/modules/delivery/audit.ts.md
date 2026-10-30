@@ -1,23 +1,36 @@
 ---
 source: src/modules/delivery/audit.ts
-sha256: 4e639ae19a5d3f8cff6cf6f7bde3608715174c959fda7fa656fb1f4b93047e76
-generated_at: 2026-10-15T10:26:20.143812+00:00
+sha256: 1c913f95ddbb03a5d6c86d0645a496ce42a315e23f85223f1ebb8e5cc38b5a4e
+generated_at: 2026-10-29T03:31:05.280478+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/delivery/audit.ts
 
 ## Purpose
-Declares the audit action identifiers for the delivery domain and registers them into the shared `AuditActionMap` type, so that delivery service code can emit type-safe audit events without a runtime enum.
+
+Declares the set of audit-action identifiers that the delivery module emits and registers them into the shared `AuditActionMap` via TypeScript module augmentation. It exists so that every delivery service file can reference a typed, exhaustive set of action names without a central enum, while still participating in one global map.
 
 ## Key elements
-- **`deliveryAuditActions`** (exported const object) — Maps readable names (`ADMIN_ORDER_FULFILLED`, `BUYER_WAIT_CONFIRMED`, etc.) to dot-separated action strings. Covers staff actions (fulfilment started, shipped, delivered, fulfilled, tracking edited, order held/released) and the single buyer action (wait confirmed).
-- **`declare module '@infrastructure/observability/audit'`** — Module augmentation that adds a `delivery` key to `AuditActionMap`, typed as the union of all action values. This is the mechanism by which the delivery domain plugs its actions into the global audit schema (same pattern as `modules/account/audit.ts`).
+
+- **`deliveryAuditActions`** — A `const` object mapping eight named keys to dotted string identifiers (e.g. `'admin.order.delivered'`). Covers: fulfilment start, shipped, delivered, digital fulfilled, tracking edit, lost, held, released.
+- **`declare module '@infrastructure/observability/audit'`** — Augments the shared `AuditActionMap` interface with a `delivery` key whose type is the union of all values in `deliveryAuditActions`. This is the only export surface consumed by other modules.
+- **Doc-comment metadata contract** — Specifies which extra fields each action carries in the audit log (e.g. `forced`/`reason` on delivered, `changes.trackingCode {from,to}` on tracking_edited, hold/lost reason codes but never free-text notes, `wasLost` flag on delivered).
 
 ## Relationships
-- **All delivery service files** (`start.ts`, `ship.ts`, `deliver.ts`, `fulfill.ts`, `tracking.ts`, `holds.ts`, `confirm-wait.ts`) — Each service imports `deliveryAuditActions` and references the relevant constant when recording an audit event (e.g. `start.ts` emits `ADMIN_ORDER_FULFILMENT_STARTED`, `confirm-wait.ts` emits `BUYER_WAIT_CONFIRMED`). This file is the single source of truth for those string values.
-- **`@infrastructure/observability/audit`** — The augmented module; `AuditActionMap` is the shared interface that all domain modules extend.
+
+- **`src/modules/delivery/services/deliver.ts`** — Emits `ADMIN_ORDER_DELIVERED` (and `wasLost` / `forced` metadata).
+- **`src/modules/delivery/services/fulfill.ts`** — Emits `ADMIN_ORDER_FULFILMENT_STARTED` and `ADMIN_ORDER_FULFILLED`.
+- **`src/modules/delivery/services/holds.ts`** — Emits `ADMIN_FULFILLMENT_ORDER_HELD` / `ADMIN_FULFILLMENT_ORDER_RELEASED` with the hold reason code.
+- **`src/modules/delivery/services/lost.ts`** — Emits `ADMIN_SHIPMENT_LOST` with the loss reason code.
+- **`src/modules/delivery/services/ship.ts`** — Emits `ADMIN_ORDER_SHIPPED`.
+- **`src/modules/delivery/services/tracking.ts`** — Emits `ADMIN_SHIPMENT_TRACKING_EDITED` with `changes.trackingCode`.
+- **`src/modules/delivery/services/process.ts`** — Orchestrates the above; any of the listed actions may be emitted during a processing step.
+- **`src/modules/account/audit.ts`** — Referenced in the header comment as the precedent for the augmentation-over-enum pattern.
 
 ## Notes
-- Actions are declared via `as const` + module augmentation rather than a shared enum, following the convention established in `modules/account/audit.ts`. Adding a new delivery audit action means adding a key here and updating the consuming service file.
-- The action string prefixes (`admin.*` vs. `fulfillment_order.*`) encode *who* performs the action, not *what* entity is affected—don't rely on the second segment to infer the resource.
+
+- The pattern is deliberate: actions are declared by *augmentation* into a shared interface rather than living in a central enum. See `modules/account/audit.ts` for the rationale.
+- Free-text fields (`holdNote`, `lostNote`, `lostMessage`) are explicitly excluded from audit metadata by convention — only the structured reason code is recorded.
+- `ADMIN_ORDER_DELIVERED` metadata `forced` + `reason` represents a sanctioned bypass; `wasLost` is only present when a previously-lost shipment is redelivered.
+- The `as const` assertion on `deliveryAuditActions` is what makes the augmented union type precise (literal strings, not `string`).

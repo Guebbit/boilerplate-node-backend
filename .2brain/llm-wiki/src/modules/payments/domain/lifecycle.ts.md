@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/domain/lifecycle.ts
-sha256: caf6cb4e7039a4e965721ee77a9190cc6687bce07ca9ac416fd8bc821222cc98
-generated_at: 2026-10-15T11:25:20.326648+00:00
+sha256: 0e702be1c69deb55684b4252eae492f467acf47494f201085cf45a8c49feca73
+generated_at: 2026-10-29T05:05:19.779177+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,42 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the set of payment statuses from which each write operation is permitted to run. Unlike an explicit `from → to` transition graph, these arrays encode only the "may I still move this payment?" guard, because every transition funnels through the single `settlePayment` function. Each array doubles as the `$in` predicate in the conditional write, so membership in the set **is** the concurrency guard, not an annotation.
+Defines which payment and refund statuses each domain operation is allowed to act from, and encodes the refund-settlement decision rules (reversal, finality, overshoot, hand-settlement eligibility). Every status array here doubles as the `$in` predicate for the conditional writes in `repository.ts`, making the array itself the concurrency guard rather than an adjacent check.
 
 ## Key elements
 
-- **`CONFIRMABLE_PAYMENT_STATUSES`** — `['requires_confirmation', 'declined']`. Gate for `confirmPayment`. In-flight statuses (`requires_action`, `processing`) are intentionally excluded; those are resolved by re-reading, not by re-confirming.
-- **`SETTLEABLE_PAYMENT_STATUSES`** — all four non-terminal statuses. Gate for confirm, sync, and webhook settlement writes. Excluding `succeeded` and `cancelled` is what makes `settlePayment` at-most-once.
-- **`SUCCESS_SETTLEABLE_PAYMENT_STATUSES`** — settleable plus `cancelled`. Used only by the success write, the amount-mismatch write, and the provider re-read gate, because money arriving on a cancelled intent is still real and must be recorded.
-- **`REAPABLE_PAYMENT_STATUSES`** — settleable plus `cancelled`. Allow-list for the retention reaper; a newly added money status will never be swept by default.
-- **`REFUNDABLE_PAYMENT_STATUS`** — single value `'succeeded'`. The only status from which a refund may originate.
-- **`OPEN_REFUND_STATUSES`** — `[pending, failed]`. Refund states still open for retry or settlement; `succeeded` is absent to preserve at-most-once refund landing.
+- **`CONFIRMABLE_PAYMENT_STATUSES`** – `['requires_confirmation', 'declined']`; the only states `confirmPayment` may originate from.
+- **`IN_FLIGHT_PAYMENT_STATUSES`** – `['requires_action', 'processing']`; states that indicate the provider has not decided yet and the next step is `sync`.
+- **`SETTLEABLE_PAYMENT_STATUSES`** – all non-terminal states; the at-most-once gate for `settlePayment` (terminal states are absent, so retried webhooks find nothing to move).
+- **`SUCCESS_SETTLEABLE_PAYMENT_STATUSES`** – `SETTLEABLE` + `'cancelled'`; used only by the success write, amount-mismatch write, and provider re-read gate.
+- **`REAPABLE_PAYMENT_STATUSES`** – `SETTLEABLE` + `'cancelled'`; the allow-list the retention reaper deletes against (safe by default for new statuses).
+- **`MANUAL_PROVIDER` / `isHandRecorded`** – identifies operator-recorded payments with no PSP behind them.
+- **`isOpenTransfer`** – a hand-recorded `requires_action` payment carrying a `transferReference`; still payable by the buyer.
+- **`REFUNDABLE_PAYMENT_STATUS`** – the single status (`'succeeded'`) from which money can be returned.
+- **`OPEN_REFUND_STATUSES` / `isOpenRefund`** – `pending` and `failed` (minus staff-canceled) are "open"; `succeeded` is closed.
+- **`FINAL_REFUND_FAILURES`** – refusal reasons that end retrying (`declined`, `expired_or_canceled_card`, `lost_or_stolen_card`, `provider_removed`, `disputed`).
+- **`UNCLEAR_REFUND_FAILURES`** – `provider_unavailable`, `unknown`; the refund *may* have gone through.
+- **`MONEY_DID_NOT_MOVE_FAILURES`** – final failures (minus `disputed`) plus `insufficient_funds`; grounds for hand-settlement.
+- **`owesBuyerAnotherWay`** – the buyer is owed money outside the provider (reversed, or finally refused) and must be asked how to pay.
+- **`RefundFacts` / `RefundablePayment`** – narrow structural types the rules read; `RefundablePayment` extends `DisputablePayment`.
+- **`isReversed`** – `reversedAt !== undefined`; the bank sent the settled refund back.
+- **`exceedsBy` / `exceedsRemaining`** – whether an unsent open refund would exceed the payment amount given other moved/holding refunds.
+- **`mayBeSettledByHand`** – the operator's gate for reporting a refund's money as returned outside the application (respects hand-recorded, reversal, final-failure, and overshoot rules).
 
 ## Relationships
 
-- **`src/types/index.ts`** — Imports `PaymentStatus` and `RefundStatus` enums used to type every exported array.
-- **`src/modules/payments/repository.ts`** — Consumes these arrays as the `$in` argument to conditional writes (`updateStatusIfIn`, `upsertConfirmable`), re-asserting the guard under the document lock.
-- **`src/modules/payments/services/settlement.ts`** — `settlePayment` is the sole consumer of `SETTLEABLE_PAYMENT_STATUSES` / `SUCCESS_SETTLEABLE_PAYMENT_STATUSES`; all status transitions pass through this one function.
-- **`src/modules/payments/services/intent.ts`** — `confirmPayment` uses `CONFIRMABLE_PAYMENT_STATUSES` as its entry gate.
-- **`src/modules/payments/domain/index.ts`** — Barrel re-export; these constants are part of the domain's public API.
+- **`src/domain-primitives/money.ts`** – imports `addMoney`, `subtractMoney`, `toMinorUnits`, `Money`; used by `exceedsBy` for the overshoot calculation.
+- **`src/modules/payments/domain/disputes.ts`** – imports `hasDecidedDispute`, `lostChargebackCovers`, `DisputablePayment`; `RefundablePayment` extends `DisputablePayment` and the `mayBeSettledByHand` logic consults chargeback coverage.
+- **`src/modules/payments/repository.ts`** – consumes the status arrays as `$in` values in `updateStatusIfIn` / `upsertConfirmable`; the arrays *are* the write guards.
+- **`src/modules/payments/services/refunds.ts`**, **`refund-sync.ts`**, **`refund-settlement.ts`** – apply the refund decision rules (`isOpenRefund`, `isFinalFailure`, `exceedsRemaining`, `mayBeSettledByHand`, `owesBuyerAnotherWay`).
+- **`src/modules/payments/services/intent.ts`** – gates `confirmPayment` via `CONFIRMABLE_PAYMENT_STATUSES`.
+- **`src/modules/payments/domain/index.ts`** – barrel re-export for the domain folder.
+- **`scenarios/support/doubles/payments/fake.ts`** – test double that exercises these status predicates.
 
 ## Notes
 
-- Arrays are used instead of `Set` because they are read both as a membership test *and* spread into a Mongo `$in` clause. A `Set` would require re-spreading for the second use.
-- `REAPABLE_PAYMENT_STATUSES` is deliberately an **allow-list**, not a deny-list, so a future money-bearing status is safe by default.
-- `SUCCESS_SETTLEABLE_PAYMENT_STATUSES` and `REAPABLE_PAYMENT_STATUSES` happen to contain the same four values today, but they are semantically distinct: one gates "money can land here," the other gates "this is safe to delete." Do not merge them.
-- The file contains no runtime logic—only constant declarations—so it is safe to import anywhere without side effects.
+- **Arrays, not Sets.** Each status constant is a `readonly` array so it can be used verbatim as a MongoDB `$in` operator without re-spreading. A `Set` would need `Array.from(...)` for the query path.
+- **No transition graph.** Unlike `orders/domain/lifecycle.ts`, there is no `from → to` map; all settlement transitions funnel through a single `settlePayment` function, so only the *from* set matters here.
+- **`disputed` is final but not "money didn't move."** It is in `FINAL_REFUND_FAILURES` (retry stops) but excluded from `MONEY_DID_NOT_MOVE_FAILURES` (the bank already took the money back).
+- **`insufficient_funds` is the inverse case.** It is retried (not final) yet proves no money left the shop, so it *is* in `MONEY_DID_NOT_MOVE_FAILURES`.
+- **At-most-once is structural.** `SETTLEABLE_PAYMENT_STATUSES` excludes `succeeded` and `cancelled`; a second write simply fails its `$in` predicate under mongod's document lock. There is no additional idempotency key at this layer.

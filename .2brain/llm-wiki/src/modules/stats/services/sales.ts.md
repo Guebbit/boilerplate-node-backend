@@ -1,7 +1,7 @@
 ---
 source: src/modules/stats/services/sales.ts
-sha256: c756ee4cafa3c0e095a0b4766806136583763ef1070653e39f704de0e9aca85f
-generated_at: 2026-10-15T12:04:42.325041+00:00
+sha256: c1aa1a79a5c1e466edd938914744c0ac64375fd51f06f235dc242bfb00dbfd58
+generated_at: 2026-10-29T05:56:39.476938+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Merges three independent time-bucketed sources — invoiced money, paid orders/units, and returned units — into a single per-currency, per-bucket sales table for a given period and its predecessor. Exists so the stats layer can present a unified "sales over time" view without each consumer re-implementing the merge.
+Merges time-bucketed sales data from three domain services (invoicing money, order counts/units, returned units) into a single per-currency, per-bucket structure and formats it as `SalesStats`. It is a thin merge layer — each upstream service already returns grouped rows, so this file only combines them by key without performing a large join.
 
 ## Key elements
 
-- **`ByCurrency`** (type) — `Map<currency, Map<bucketISO, RawFigures>>`; the in-memory shape used during the merge.
-- **`cellOf`** — lazily creates and returns the `RawFigures` cell for a (currency, bucket) pair inside a `ByCurrency` table.
-- **`rawFiguresFor`** — calls `invoicingService.moneyBuckets`, `orderService.paidBuckets`, and `returnService.returnedBuckets` in parallel for one window, then folds the rows into a `ByCurrency` table via `Object.assign` (partial overwrite per field).
-- **`totalOf`** — reduces all bucket cells of one currency into a single `RawFigures` using `addRawFigures`.
-- **`getSalesStats`** *(export)* — fetches current + previous window data, guarantees the shop's own currency is present (zeros if absent), and returns a `SalesStats` object with per-currency totals, previous-period totals, and an aligned array of per-bucket figures.
+- **`getSalesStats(period: Period): Promise<SalesStats>`** — the sole export. Fetches current- and previous-period raw figures in parallel, ensures the shop's own currency is always present (zeros for empty periods), and returns sorted currency entries with totals, previous-period totals, and per-bucket figures.
+- **`rawFiguresFor(window): Promise<ByCurrency>`** *(internal)* — calls `invoicingService.moneyBuckets`, `orderService.paidBuckets`, and `returnService.returnedBuckets` concurrently via `Promise.all`, then folds each row into a shared `Map<currency, Map<bucketISO, RawFigures>>`.
+- **`cellOf(table, currency, bucket)`** *(internal)* — lazily creates and returns the `RawFigures` cell at a (currency, ISO-instant) position.
+- **`totalOf(row)`** *(internal)* — sums every bucket in one currency row into a single `RawFigures` using `addRawFigures`.
+- **`ByCurrency`** *(type)* — `Map<string, Map<string, RawFigures>>`, keyed by ISO-4217 currency then ISO-8601 bucket instant.
 
 ## Relationships
 
-- **`src/modules/invoicing/index.ts`** — calls `invoicingService.moneyBuckets(window)` to get invoiced/credited amounts per bucket.
-- **`src/modules/orders/index.ts`** — calls `orderService.paidBuckets(window)` to get order counts and units per bucket.
-- **`src/modules/returns/index.ts`** — calls `returnService.returnedBuckets(window)` to get reversed units per bucket.
-- **`src/modules/stats/services/figures.ts`** — imports `addRawFigures`, `emptyRawFigures`, `figuresOf`, and the `RawFigures` type; provides the arithmetic and formatting helpers.
-- **`src/modules/stats/services/range.ts`** — imports the `Period` type (window, bucket size, bucket starts, echo string).
-- **`src/types/index.ts`** — imports the `SalesStats` return type.
-- **`@modules/shop`** (not in neighbor list but imported) — calls `shopCurrency()` to ensure the home currency always appears in results.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/invoicing/index.ts` / `services/index.ts` | Imports `invoicingService`; calls `moneyBuckets(window)` for invoiced/credited money. |
+| `src/modules/orders/index.ts` / `services/index.ts` | Imports `orderService`; calls `paidBuckets(window)` for order counts and units. |
+| `src/modules/returns/index.ts` / `services/index.ts` | Imports `returnService`; calls `returnedBuckets(window)` for reversed units. |
+| `src/modules/shop/index.ts` / `service.ts` | Imports `shopCurrency()` to guarantee the shop's home currency appears in every result. |
+| `src/modules/stats/services/figures.ts` | Imports `addRawFigures`, `emptyRawFigures`, `figuresOf`, and the `RawFigures` type. |
+| `src/modules/stats/services/range.ts` | Imports the `Period` type (window, bucket size, previous window, `echo`). |
+| `src/types/index.ts` | Imports the `SalesStats` return type. |
+| `src/modules/stats/services/index.ts` | Re-exports `getSalesStats` as the module's public API. |
 
 ## Notes
 
-- Merging is done with `Object.assign` on existing `RawFigures` cells, so each service only fills its own fields; fields it doesn't set remain `0` from `emptyRawFigures`.
-- The shop's own currency is force-included in the output even when no sales occurred in that currency for the period — an empty period reads as explicit zeros, not as an absent currency.
-- Bucket keys are ISO-8601 strings (`Date.toISOString()`), not `Date` objects, to keep the `Map` keys hashable.
-- `toSorted()` (ES 2023) is used for currency ordering; the runtime/target must support it.
-- Each owner service is expected to return already-grouped, small result sets (a few hundred rows max); this file performs no aggregation beyond the per-currency `totalOf` sum.
+- The shop's own currency is **always** included in the output, even when no transactions exist for it — an empty period yields zero-valued figures rather than a missing currency entry. Any *other* currency appears only if at least one service reported data in it.
+- Buckets are keyed by the bucket's **first instant** as an ISO-8601 string (`bucket.toISOString()`). The `period.bucketStarts` array drives which bucket slots appear in the response, so a missing cell simply becomes `emptyRawFigures()`.
+- `period.echo` is passed through verbatim into the response — it is the canonical period identifier for callers and is not recomputed here.
+- The file deliberately avoids building large in-memory structures; the contract is that each upstream service returns at most a few hundred already-grouped rows.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/services/view.ts
-sha256: 78f5a45747e0c1d4973efb0eda2d5e3218d9f733d801ee34ad1b4115bb63115f
-generated_at: 2026-10-14T15:13:50.890683+00:00
+sha256: e3d8f0f1c178c976c3eb556a556ded5a50cff4070d72c9216454963b5110175f
+generated_at: 2026-10-29T03:26:07.067961+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cart projection: transforms a stored `CartDocument` into the `CartView` shape that `openapi.yaml` declares as the cart response. It joins cart lines to their products, computes line availability, prices shipping, and assembles the summary — all in one pipeline that every cart endpoint (reads and mutation payloads) returns. Lives inside `services/` and is shared by the sibling service files (`checkout`, `items`, `merge`, `reorder`, `preorder`) rather than owned by any one of them.
+Cart projection layer: turns a stored `CartDocument` into the `CartView` that API responses and sibling services consume. It is internal to `services/` and shared by `checkout.ts`, `items.ts`, and `preorder.ts` rather than owned by any one of them. Every operation is a single addressed read; absence and emptiness are equivalent (no 404).
 
 ## Key elements
 
-- **`CartLine`** / **`JoinedCartLine`** — A cart line joined with its product. `productId` and `product` are kept as separate fields (not a Mongoose `populate`) so the lookup key is preserved alongside the result. `JoinedCartLine` narrows to lines whose product resolved.
-- **`CartView`** — The wire-format cart: `items`, `summary` (counts, totals, shipping cost, currency), and `shipping` (required flag, selected method, available options).
-- **`isJoined(line)`** — Type guard narrowing `CartLine` → `JoinedCartLine`.
-- **`readCartLines(cart)`** — Joins cart lines to products via a single `productService.findManyByIds` `$in` query. Returns `[]` for a null cart. Soft-deleted/hidden products still join (distinguishes "gone" from "not sellable").
-- **`shippingPriceFor(method, lines, currency)`** — Prices one shipping method for a basket: flat rate, or free once the items total reaches the method's `freeAbove` threshold.
-- **`shippingOptionsFor(joined)`** — Filters `SHIPPING_METHODS` by basket weight, prices each via `shippingPriceFor`, returns `{ required, options }`. Empty options when the basket is digital-only.
-- **`effectiveShippingChoice(stored, options)`** — Validates a stored shipping-method id against the current fitting options; returns `null` if the choice no longer applies (e.g. basket went digital-only).
-- **`buildView(cart, lines, available)`** *(private)* — Assembles the full `CartView` from already-joined lines and an availability map. Prices against the shop's *current* currency (not a frozen one). Uses `orderTotal` to avoid float artifacts.
-- **`toCartView(cart)`** — Public entry point. Chains `readCartLines` → `inventoryService.availableFor` → `buildView`. The joined `product` field is dropped from the response (contract is `additionalProperties: false` over `productId`, `quantity`, `availability`).
+- **`CartLine`** — `CartItem` extended with `product: Lean<ProductDocument> | null`. The id and the joined document are kept as separate fields on purpose (service-level join, not Mongoose `populate`).
+- **`JoinedCartLine`** / **`isJoined`** — type + guard narrowing to lines whose product resolved; the subset an order may be built from.
+- **`readCartLines`** — one `productService.findManyByIds` call for all line ids; returns `CartLine[]` with `null` for unresolvable ids. Unscoped: soft-deleted/hidden products still join so checkout can distinguish "gone" from "not sellable".
+- **`shippingPriceFor`** — flat rate or zero once the basket's items total reaches the method's `freeAbove`. Shared by the cart quote and the checkout charge so they cannot disagree.
+- **`shippingOptionsFor`** — filters `SHIPPING_METHODS` by `methodFitsWeight`, prices each via `shippingPriceFor`, and reports whether shipping is required at all.
+- **`effectiveShippingChoice`** — returns the stored method id only if it is still in the current fitting-options list; otherwise `undefined`.
+- **`buildView`** (private) — assembles the full `CartView`: sums lines, computes shipping, derives per-line `availability`, and delegates to `presentCart`. Prices in `shopCurrency()` (the cart has no frozen currency).
+- **`toCartView`** — public entry point: `readCartLines` → `inventoryService.availableFor` (preorder + backorder ids) → `buildView`. The joined product is dropped before the response (OpenAPI schema is `additionalProperties: false`).
 
 ## Relationships
 
-- **`../model`** — Imports `CartDocument` (the stored shape being projected).
-- **`../domain`** (re-exports from `domain/rules.ts`) — Uses `basketWeight`, `lineAvailability`, `needsShipping` for weight/availability logic.
-- **`./preorder`** — Imports `availabilityProductOf` and `preorderIdsOf` to resolve per-line availability and pass preorder product ids to the inventory check.
-- **`@modules/delivery`** (via `domain/rates.ts`) — Consumes `SHIPPING_METHODS`, `methodFitsWeight`, `priceShipping`, and the `StaticShippingMethod` type for option filtering and pricing.
-- **`@modules/inventory`** — Calls `inventoryService.availableFor` (same source used by checkout and merge) to get live stock units.
-- **`@infrastructure/persistence/create-repository`** — Imports the `Lean<T>` type used to type the joined product.
-- **`@modules/orders`** (external) — Imports `orderTotal`, `sumLineItems`, `shopCurrency` for pricing and currency.
-- **Sibling services** (`checkout`, `items`, `merge`, `reorder`) — Import this module's exports (especially `readCartLines`, `toCartView`, `isJoined`, `shippingOptionsFor`, `effectiveShippingChoice`) rather than duplicating the join/price logic. None of them owns this file.
+- **`../model.ts`** — source of the `CartDocument` shape that every function here reads.
+- **`../presenter.ts`** — `presentCart` maps the assembled data into the final `CartView`; `CartView` is the return type of `toCartView`.
+- **`../config.ts`** — provides `cartLineMax`, surfaced as `lineMax` in the view.
+- **`../domain/` (`availability.ts`, `rules.ts`)** — `lineAvailability`, `basketWeight`, `needsShipping` supply the per-line stock state and shipping applicability checks.
+- **`./preorder.ts`** — `availabilityProductOf`, `preorderIdsOf`, `backorderIdsOf` feed the inventory lookup and the availability computation.
+- **`@modules/delivery`** (barrel → `domain/rates.ts`) — `SHIPPING_METHODS`, `methodFitsWeight`, `priceShipping`, `StaticShippingMethod` define the catalogue of methods and the pricing math.
+- **`@modules/inventory`** (services/index) — `inventoryService.availableFor` returns `StockPosition[]` for the whole cart in one call; `StockPosition` is the per-product stock shape used in `buildView`.
+- **`@infrastructure/persistence/create-repository.ts`** — `Lean<T>` generic used to type the joined product without a full hydrated document.
+- **`@modules/orders`** — `orderTotal` (minor-unit-safe total) and `sumLineItems` (count / quantity / price) are reused so cart and order share identical arithmetic.
+- **`src/modules/cart/services/checkout.ts`**, **`items.ts`** — sibling services that import and reuse `isJoined`, `shippingOptionsFor`, `effectiveShippingChoice`, `readCartLines`, and `toCartView` rather than duplicating the logic.
 
 ## Notes
 
-- Absence and emptiness are the same state: a null cart yields an empty `CartView`, never a 404. Callers never need to distinguish "no cart" from "cart with zero items."
-- Currency is always the shop's *current* setting (`shopCurrency()`), because a cart has not yet frozen a currency. This differs from orders, which carry their own frozen `currency`.
-- `productService.findManyByIds` is intentionally unscoped (no `active`/`deletedAt` filter), so checkout can distinguish hard-deleted products (absent from the result) from soft-deleted ones (present but not sellable).
-- `totalPrice` is computed via `orderTotal` in minor units to avoid floating-point drift (e.g. `5.5600000000000005`).
-- The joined `product` field is internal to the projection; it is stripped before the response is returned, matching the `additionalProperties: false` contract in `openapi.yaml`.
-- The shipping option list and the checkout charge both derive from `shippingPriceFor`, so they cannot disagree.
+- The join is deliberately a service-level `findManyByIds`, not a Mongoose `populate`. The `productId` on the line is preserved alongside the resolved document (see strategic DDD doc §5).
+- `totalPrice` uses `orderTotal` (integer minor units) to avoid floating-point artefacts like `5.5600000000000005` when the cart total and the shipping cost are both decimals.
+- The cart prices in the shop's **current** `shopCurrency()`; it never freezes a currency because it has not yet checked out. An order, by contrast, carries its own frozen `currency`.
+- `shippingOptionsFor` returns an empty `options` array when `needsShipping` is false; `effectiveShippingChoice` will then always return `undefined`, so no method can be "selected" on a digital-only cart.
+- `toCartView` is the only exported async function that does an I/O round-trip for inventory; `buildView` itself is pure given its inputs.

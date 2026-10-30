@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/domain/fulfillment.ts
-sha256: a93d20ab1daf9114b8030f2f5051625e3b609a85b1b738748171d8213d367c78
-generated_at: 2026-10-14T15:22:33.171056+00:00
+sha256: e4a3c3b3b6cf3ca3e5922229929fe987ed3711e8f080d09d50f658e18c215f03
+generated_at: 2026-10-29T03:32:49.436179+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,44 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure domain rules for fulfillment: how an order's lines split into fulfillment orders at payment time, what quantity remains on each line, which status follows from the lines and any hold, and the summary the parent `orders` document carries. Every function is side-effect-free so the whole rule set is testable without a database.
+Pure domain rules that turn a paid order's frozen lines into fulfillment orders: how lines are split (ordinary vs. bespoke vs. waiting), what remains on each line, and what status follows from the lines' state. Keeping this logic free of I/O makes every branch testable without a database.
 
 ## Key elements
 
+- **`WaitCause`** — `'preorder' | 'backorder'`; why a fulfillment order is held for stock.
 - **`FulfillmentLine`** — one product on a fulfillment order with `quantity`, `shippedQuantity`, `cancelledQuantity`.
-- **`GroupableLine`** — the shape the grouping rule reads off an order's frozen snapshot; adds `ships`, `preorder`, `releaseDate`.
-- **`FulfillmentOrderDraft`** — a fulfillment order as produced by `groupOrderLines`, before numbering and storage.
-- **`groupOrderLines(lines)`** — the core split rule. Non-preorder lines form one `open` order; preorder lines get one `on_hold` (`awaiting_stock`) order per distinct UTC release day. Returns numbered drafts (1-based). A preorder line with no `releaseDate` is treated as an ordinary line.
-- **`statusOfLines(lines, held)`** — derives `FulfillmentOrderStatus` from remaining quantity, hold, and shipped count. Never set imperatively.
-- **`checkShipLines(lines, requested)`** — validates a shipment request against remaining quantities; returns a `ShipLinesVerdict` discriminated union. `undefined`/empty request means "ship everything that remains."
-- **`withShipped(lines, shipped)`** — returns new lines with `shippedQuantity` incremented.
-- **`withRemainderCancelled(lines)`** — returns new lines with all remaining units moved to `cancelledQuantity`.
-- **`remainderLines(lines)`** — flat `ProductQuantity[]` of lines that still have units left.
-- **`summarize(inputs)`** — recomputes the `FulfillmentReport` (shipped, remaining, onHold, awaitingStock, undelivered, lastDeliveredAt) from fulfillment orders and shipments. Never adjusted incrementally.
-- **`remainingOfLine` / `remainingOf`** — arithmetic helpers for "quantity − shipped − cancelled."
+- **`GroupableLine`** — a line as read from the order's frozen snapshot; carries `ships`, `preorder`, `releaseDate`, `noWithdrawal`, and `backorder` metadata.
+- **`FulfillmentOrderDraft`** — the shape `groupOrderLines` returns before it is persisted; includes `kind`, `status`, `lines`, optional `holdReason`, `agreedAt`, `expectedAt`, `cause`, and `defaulted`.
+- **`remainingOfLine` / `remainingOf`** — compute unshipped, uncancelled units for one line or a set of lines.
+- **`groupOrderLines(lines, timeZone)`** — the core splitting rule. Produces numbered drafts: one `open` order for ordinary ready lines, one for `noWithdrawal` ready lines, then one `on_hold` order per distinct (shop-day × cause × noWithdrawal × defaulted) group of waiting lines.
+- **`statusOfLines(lines, held)`** — derives `FulfillmentOrderStatus` from remaining units, shipped units, and hold flag; never set by a caller.
+- **`ProductQuantity` / `ShipLinesVerdict`** — input/output types for shipment validation.
+- **`checkShipLines(lines, requested)`** — validates a staff shipment request against what remains; returns the concrete lines to ship or a failure reason (`nothing-remains`, `unknown-product`, `too-many`).
 
 ## Relationships
 
-- **`domain/index.ts`** — re-exports this module's public API for consumers within the delivery domain.
-- **`domain/preorder.ts`** — provides the preorder-specific domain types/concepts (`preorder`, `releaseDate`) that `GroupableLine` and `groupOrderLines` consume.
-- **`model.ts`** — defines the Mongoose subdocument schema for stored fulfillment lines; this module's `plainLine` helper exists specifically to work around Mongoose getter semantics when reading those subdocuments.
-- **`services/fulfill.ts`** — orchestrates payment-time fulfillment; calls `groupOrderLines` to create the initial fulfillment orders.
-- **`services/cut.ts`** — processes a shipment; calls `checkShipLines` to validate, then `withShipped` to record it.
-- **`services/cancel-remainder.ts`** — calls `remainderLines` to identify what to cancel and `withRemainderCancelled` to apply it.
-- **`services/holds.ts`** — reads/writes hold state; relies on `statusOfLines` to keep derived status consistent with the hold flag.
-- **`services/confirm-wait.ts`** — lifts a preorder hold; interacts with the `on_hold` / `awaiting_stock` state produced by `groupOrderLines`.
-- **`services/progress.ts`** — calls `summarize` after any fulfillment-order mutation to refresh the order-level report.
-- **`services/override-sync.ts`** — syncs corrected data back; depends on the same line-level arithmetic (`remainingOfLine`, `withShipped`, `withRemainderCancelled`).
-- **`services/read.ts`** — assembles read-model output; uses `remainderLines` and `summarize` for display.
-- **`presenter.ts`** — maps domain data to UI shapes; reads `FulfillmentReport` and `FulfillmentLine` fields.
-- **`repository.ts`** — persists the drafts produced by `groupOrderLines` and stores updated lines from `withShipped` / `withRemainderCancelled`.
-- **`services/actions.ts`** — top-level action dispatch; routes to the above services and relies on this module's pure helpers for in-memory computation before persisting.
+- **`src/domain-primitives/time.ts`** — imports `dayInZone` so waiting lines are grouped by the shop's calendar day rather than UTC.
+- **`src/modules/delivery/domain/index.ts`** — barrel for the delivery domain; re-exports this module's public types and functions.
+- **`src/modules/delivery/services/fulfill.ts`** — the primary consumer: calls `groupOrderLines` when an order is paid, then persists the resulting drafts.
+- **`src/modules/delivery/services/cancel-remainder.ts`** — uses `remainingOf` / `statusOfLines` to decide what is still cancellable.
+- **`src/modules/delivery/services/cut.ts`** — calls `checkShipLines` to validate and size a shipment before cutting it.
+- **`src/modules/delivery/services/found.ts`** — applies `remainingOfLine` when a lost-parcel unit is restored to a fulfillment order.
+- **`src/modules/delivery/presenter.ts`** — reads `FulfillmentOrderDraft` / `FulfillmentLine` to build display output.
+- **`src/modules/delivery/repository.ts`** — persists the drafts produced by `groupOrderLines` and reads them back.
+- **`src/modules/delivery/domain/preorder.ts` / `lost.ts` / `reship.ts`** — sibling domain modules that mutate `FulfillmentLine` quantities (preorder release, lost-parcel re-owes, reship) and rely on `remainingOfLine` and `statusOfLines` to keep state consistent.
 
 ## Notes
 
-- **Mongoose subdocument trap:** `plainLine` copies fields individually because a spread on a Mongoose subdocument does not invoke its getters. Always pass lines through `plainLine` (or the exported functions that use it internally) before writing back.
-- **Preorder grouping is UTC-day-granular.** `dayKey` slices an ISO string to `YYYY-MM-DD`. Two preorders 12 hours apart on the same UTC day land in the same fulfillment order.
-- **`agreedAt` and `expectedAt` are set to the same instant** (the latest `releaseDate` in the group) by `groupOrderLines`. They are not distinct concepts at creation time.
-- **Digital lines in a mixed order** ride with the physical fulfillment order (`kindOf` returns `physical` if *any* line ships). They do not get a separate digital order.
-- **`summarize` is a full recompute**, not an incremental update. If a service mutates lines it should call `summarize` afterward rather than adjusting the report fields by hand.
-- **Status is always derived** via `statusOfLines`; no service should write `status` directly.
+- `groupOrderLines` is **pure** and returns `FulfillmentOrderDraft[]`; the caller is responsible for numbering (already done) and persistence.
+- The `defaulted` flag on a waiting draft means the promise date came from the 30-day catalogue default, not a product-specific date. Downstream logic (e.g., a later catalogue change) must skip updating `expectedAt` when this flag is set.
+- `noWithdrawal` lines are split into their own `open` order specifically so that cancelling the rest of the order does not cancel bespoke work (Q-W2 decision S4).
+- `checkShipLines` treats a duplicate `productId` in `requested` as a sum; it does not reject the duplicate.
+- The file is intentionally free of imports from `repository.ts`, `database.ts`, or any service — all inputs are plain data.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/model.ts
-sha256: 6d2c076a9ae572740ee2848f86cd8da6cc21900b8d298f1d3aca5445cb67eed6
-generated_at: 2026-10-15T11:54:01.339894+00:00
+sha256: 1498ed87e41cef9d872127f2df1ac96b1e7e6894a348c048b682470da4a2d54d
+generated_at: 2026-10-29T05:39:27.093917+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Mongoose schema, interfaces, and compiled model for a **Return** — the record of a customer's request to send goods back (or cancel an unshipped remainder). It also defines a per-order lock document used to serialise concurrent `POST /returns` calls. This file is purely structural: no queries, no business rules — those live in `./repository` and `./services`.
+Defines the Mongoose schema, compiled model, and serialization transform for **Return** documents (one per return/cancellation request, keyed by `orderId`). Also declares a small **ReturnOrderLock** model that serializes concurrent `POST /returns` calls via a write-conflict counter. All domain rules and queries live elsewhere (`./services`, `./repository`); this file is the persistence contract.
 
 ## Key elements
 
-- **`ReturnLine`** — embedded sub-document: `productId`, `quantity`, `title`, `unitPrice`. A frozen snapshot of what is coming back; `_id: false`, never addressed individually.
-- **`ReturnDocument`** — full document shape: identity (`orderId`, `orderNumber`, `currency`), state (`status`, `reason`, `kind`), lines, postage payer, decision/receipt/closure timestamps, and monetary fields (`handlingDeduction`, `refundAmount`, `shippingRefund`).
-- **`returnLineSchema` / `returnSchema`** — Mongoose schemas. Money fields use `moneyPath`; the schema is decorated with `moneyPlugin` (Decimal128 storage). Three compound indexes are declared for the order view, the staff queue, and daily-receipt stats.
-- **`applyReturnTransform`** — built via `applySerialization`; maps `_id → id`, strips `__v`, and **omits `shippingRefund`** so it never appears on the wire.
-- **`returnModel`** — the compiled Mongoose model, registered under the name `'Return'`.
-- **`ReturnOrderLockDocument` / `returnOrderLockModel`** — a single-row-per-order counter (`openings`). Two parallel `POST /returns` both `$inc` this row; the resulting write-write conflict forces the second writer to re-read and see the first's return, preventing write-skew under snapshot isolation. The document is never exposed or read back.
-- **`ReturnModel` / `ReturnOrderLockModel`** — typed Mongoose model aliases for repository/service use.
+- **`ReturnLine`** / **`returnLineSchema`** — embedded sub-document (no `_id`) capturing a product snapshot: `productId`, `quantity`, `title`, `unitPrice` (Decimal128), optional `restocked`.
+- **`ReturnDocument`** / **`returnSchema`** — the main document. Enum fields (`status`, `reason`, `kind`, `returnPostage`, `openedBy`, `remedy`, etc.) are backed by the `@types` unions. Money fields (`unitPrice`, `handlingDeduction`, `refundAmount`, `shippingRefund`) use `moneyPath`. Lifecycle timestamps (`requestedAt`, `decidedAt`, `receivedAt`, `closedAt`, `canceledAt`) track state transitions.
+- **`returnModel`** — compiled Mongoose model registered as `'Return'`.
+- **`applyReturnTransform`** — lean-read serializer: renames `_id`→`id`, strips `__v`, and **omits `shippingRefund`** (internal anti-double-refund bookkeeping, never sent on the wire).
+- **`ReturnOrderLockDocument`** / **`returnOrderLockModel`** — one row per order (`_id` = order id) with an `openings` counter. Used solely to create a write-write conflict so the driver retries the second concurrent return creation. Never exposed, never read back.
+- **Indexes** — `orderId+createdAt` (per-order lookups, account export), `status+createdAt` (staff queue), `status+receivedAt` (daily stats).
 
 ## Relationships
 
-- **`money-field.ts`** — imports `moneyPath` (schema field factory) and `moneyPlugin` (Decimal128 storage / lean-read conversion).
-- **`serialize.ts`** — imports `applySerialization` to build `applyReturnTransform`.
-- **`@modules/shop`** — imports `RETURN_POSTAGE_PAYERS` and the `ReturnPostagePayer` type for the `returnPostage` enum.
-- **`@types`** — imports `ReturnKind`, `ReturnReason`, `ReturnStatus` enums used as schema enums and interface members.
-- **`./index.ts`** — re-exports the model, interfaces, and transform for module consumers.
-- **`./repository.ts`** — the sole consumer of `returnModel` and `returnOrderLockModel` for reads/writes.
-- **`./services/*`** (`create`, `decide`, `receive`, `close`, `cancel-remainder`, `outcome`, `personal-data`, `read`) — construct or read `ReturnDocument` instances and rely on the interface shapes defined here.
-- **`./presenter.ts`** — maps a `ReturnDocument` (post-`applyReturnTransform`) to the public wire shape.
-- **`orders/index.ts` / `orders/config.ts`** — the `orderId` reference points into the Order collection; the lock model's `_id` is the Order's own id.
+- **`money-field.ts`** — provides `moneyPath` (field definition) and `moneyPlugin` (Decimal128 cast on write / Number on lean read). Applied to every monetary field.
+- **`serialize.ts`** — `applySerialization` builds `applyReturnTransform`; the repository factory calls it on every lean read.
+- **`repository.ts`** — imports `returnModel` and `returnOrderLockModel` to perform all queries; imports `applyReturnTransform` for read shaping.
+- **`services/create.ts`** — writes new returns and `$inc`s the lock row first.
+- **`services/decide.ts`**, **`services/receive.ts`**, **`services/close.ts`**, **`services/cancel.ts`**, **`services/cancel-remainder.ts`** — mutate the fields documented here (`status`, `decidedAt`, `receivedAt`, `refundAmount`, `remedy`, `handlingDeduction`, `closedAt`, `canceledAt`, etc.).
+- **`services/personal-data.ts`** / **`services/notify.ts`** — read return fields for GDPR erasure checks and outbound notifications.
+- **`presenter.ts`** — maps `ReturnDocument` fields into API-facing shapes; relies on `applyReturnTransform` having already stripped `shippingRefund`.
+- **`index.ts`** — barrel re-export for the module's public surface.
 
 ## Notes
 
-- **Keyed by `orderId`, never `userId`.** After account erasure the return record intentionally has no personal link; it is an Art. 17(3)(b)/(e) legal/accounting retention exemption, same category as `invoicing`.
-- **`shippingRefund` is internal bookkeeping** (prevents double-refunding delivery on the last-unit return). It is stripped by `applyReturnTransform` and must not appear in any public response.
-- **`returnPostage` is frozen at creation** from the `NODE_RETURN_POSTAGE_PAYER` env value — it records what the customer was told *before* the return, not the current config.
-- **The lock document is fire-and-forget.** Its only observable effect is the write conflict; it is never queried, projected, or returned to a client.
-- **Lines have no `_id`.** They are an immutable snapshot; nothing in the codebase addresses a line by its own identifier.
+- **Never keyed by `userId`.** The document is linked only via `orderId`. After account erasure the return persists with no personal link (Art. 17(3)(b)/(e) retention), same as an `invoicing` record.
+- **`shippingRefund` is internal.** It is stored to prevent double-refunding delivery, but `applyReturnTransform` always strips it. Do not rely on it being present in API payloads.
+- **`declineMessage` is free text** and is unset by the reaper; `declineReason` is a stable enum code that survives reaping.
+- **Withdrawals** (`reason: withdrawal`) are born in `approved` status — they skip the `requested` phase entirely.
+- **Lock model is fire-and-forget.** Its only observable effect is the write conflict; the `openings` counter is never read or reset.
+- All queries and business rules are deliberately kept out of this file (see `./repository` and `./services`).

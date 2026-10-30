@@ -1,7 +1,7 @@
 ---
 source: src/modules/access/index.ts
-sha256: 4ffe81811b68509ab4a7dc05d33ba4d8bfb0f503f4a6d73457cfdac0689e6099
-generated_at: 2026-09-23T17:57:02.445326+00:00
+sha256: 5e07aac1f28bb91ca782a58564593feddb0552244849e59ae94134d832aedb25
+generated_at: 2026-10-29T02:22:05.045508+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel file for the `access` module. It is the **only** import surface that sibling modules (e.g. `account`) are permitted to use, enforcing a single-point-of-entry convention described in `docs/theory/strategic-ddd.md` §5. Internal runtime schemas (`repository.ts`, `model.ts` runtime values) are intentionally kept private.
+Public barrel (entry point) for the Access module. Sibling modules are restricted to importing **only** from this file (per `docs/theory/strategic-ddd.md` §5); it curates what is exposed externally while keeping internal runtime schemas private.
 
 ## Key elements
 
-- **`export * from './service'`** — Re-exports all public values (functions, classes) from `src/modules/access/service.ts`.
-- **`export type * from './model'`** — Re-exports `src/modules/access/model.ts` as **type-only** declarations. No runtime code from `model.ts` is reachable through this barrel; `TenantDocument` and `MembershipDocument` are available solely as TypeScript types.
+- **`export * from './services'`** — re-exports every value and type from the services layer.
+- **`export type * from './model'`** — re-exports model symbols **as types only** (no runtime values leak out).
 
 ## Relationships
 
-- **Depends on (re-exports):** `src/modules/access/service.ts`, `src/modules/access/model.ts`.
-- **Imported by sibling modules:** `src/modules/account/module.ts` and the account controllers/services (`post-login.ts`, `post-signup.ts`, `post-login-2fa.ts`, `get-oauth-callback.ts`, `services/authentication.ts`, `services/oauth.ts`, `services/profile.ts`, `services/verification.ts`) resolve access-module symbols through this file rather than reaching into sub-paths.
-- **Referenced by operational tooling:** `scripts/db/access-grant.ts`, `scripts/db/bootstrap-access.ts`, `scenarios/accounts.ts`, `scenarios/users.ts` consume the same public surface.
+- **`src/modules/access/services/index.ts`** — sole value re-export source; all runtime access logic flows through here.
+- **`src/modules/access/model.ts`** — sole type re-export source; `TenantDocument` and `MembershipDocument` are surfaced to consumers exclusively as TypeScript types.
+- **`src/modules/account/*`, `src/modules/api-keys/*`, `scenarios/`, `scripts/`** — downstream consumers that import the Access API through this barrel rather than reaching into sub-path files.
 
 ## Notes
 
-- The deliberate asymmetry — `service` is a value re-export, `model` is a type-only re-export — means importing a _runtime_ symbol from `model.ts` (e.g., a Zod schema) will **not** work through this barrel. Consumers needing runtime schemas must import `model.ts` directly, which the module rule discourages.
-- `repository.ts` has **no** export here at all; it is fully internal.
-- Design rationale lives in `docs/theory/authorization.md`.
+- `repository.ts` exists inside the module but is **deliberately not exported** here; the JSDoc calls out that its runtime schemas (like those in `model.ts`) stay unpublished, consistent with the module's encapsulation rule.
+- Because the model re-export uses `export type *`, importing a model symbol at a value position (e.g. calling a Zod schema method) will fail at compile time — use the services layer for runtime access to schema behavior.
+- Canonical theory reference: `docs/theory/authorization.md`.

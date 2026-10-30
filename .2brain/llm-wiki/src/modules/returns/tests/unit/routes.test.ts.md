@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/tests/unit/routes.test.ts
-sha256: ae53849fc6c3694b2c52a82640e7cd6616840f02be90fcaa278d9653921af641
-generated_at: 2026-10-15T12:02:06.664006+00:00
+sha256: 1ed9d7463ecba0907a9903d123bd05dfa4b567e4101a0de66a646a353c7079a6
+generated_at: 2026-10-29T05:51:09.116027+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit test for the returns module's route table. It verifies the exact set of mounted routes, the authorization guards applied to each, the ordering constraint between `GET /options` and `GET /:id`, and which routes carry the `returns-write` rate-limit budget and the `idempotencyKey` middleware.
+Verifies the structural contract of the returns router: which routes are mounted, what guards protect each one, the relative ordering of paths, and the middleware chain (rate-limit, step-up auth, idempotency) on the write endpoints. It exists to catch accidental route additions, guard removals, re-ordering regressions, and chain re-arrangements in `@modules/returns/routes` before they reach integration or production.
 
 ## Key elements
 
-- **Jest mock** for `@infrastructure/http/middlewares/rate-limit`, replaced with `securityMock()` from the test support module so that guard/chain inspection utilities can introspect the middleware chain without a real limiter.
-- **`describe('returns routes — what is mounted')`** — asserts the full route-signature list (`GET /`, `POST /`, `GET /options`, `GET /:id`, `POST /:id/approve`, `POST /:id/decline`, `POST /:id/receive`).
-- **`describe('returns routes — authorization')`** — confirms every route has `isAuth`; the four "self-service" routes do **not** have `requirePermissionGuard`; the three staff decision routes **do**.
-- **`describe('returns routes — the options read')`** — asserts `GET /options` is registered before `GET /:id` to prevent Express from matching the literal string "options" as an `:id` parameter.
-- **`describe('returns routes — rate limiting and idempotency')`** — asserts only `POST /` carries the `returns-write` budget, and that `POST /` and `POST /:id/receive` include the `idempotencyKey` middleware.
+- **`jest.mock` blocks** — Replace the real rate-limit and authorization middlewares with shared mocks (`securityMock`, `authGuardsMock`) so the router can be introspected without spinning up live middleware.
+- **`routeSignatures(router)`** — Flattens the router into an ordered array of `"METHOD /path"` strings; used to assert the exact set and order of mounted routes.
+- **`guardsOn(router, signature)`** — Returns the list of guard names attached to a specific route; the tests use it to assert `isAuth` on every route and `requirePermissionGuard` only on the five staff write actions.
+- **`chainOf(router, signature)`** — Returns the ordered middleware chain for a route; used to assert rate-limit budget placement, idempotency-key presence, and the relative ordering of `returns-write` → `requireFreshAuthWhen(critical)` → `idempotencyKey` on `POST /`.
+- **Five `describe` blocks** — Cover: (1) mounted route signatures, (2) authorization guards, (3) `GET /options` preceding `GET /:id`, (4) rate-limit & idempotency, (5) guard ordering on `POST /`.
 
 ## Relationships
 
-- **`src/modules/returns/routes.ts`** — the system under test; this file imports its exported `router` and inspects it.
-- **`tests/support/routes.ts`** — provides the three inspection helpers (`routeSignatures`, `guardsOn`, `chainOf`) and the `securityMock()` factory used in the Jest mock, allowing assertions on middleware chains without executing real middleware.
+- **`src/modules/returns/routes.ts`** — The module under test. This file imports its exported `router` and inspects it exclusively through the `@tests/routes` helpers; no live HTTP calls are made.
+- **`tests/support/routes.ts`** — Supplies all test-introspection utilities (`routeSignatures`, `guardsOn`, `chainOf`) and the two shared mocks (`securityMock`, `authGuardsMock`) that stand in for real middleware during these assertions.
 
 ## Notes
 
-- The rate-limit middleware is mocked *before* the `router` import so that the module-level mock is in place when `routes.ts` registers its middleware stack.
-- Route-ordering is tested structurally (index comparison in the signature list) rather than via a live HTTP call, keeping the test independent of Express's dispatch behavior.
-- `POST /:id/receive` shares the idempotency ledger with `POST /` but does **not** carry the `returns-write` budget — only the initial open is budgeted.
+- The mocks use `jest.requireActual` to pull the mock factories from `@tests/routes` while still resolving through the mocked module path — this lets both the mock and the helper import the same singleton without circular-reference issues.
+- The `GET /options` vs `GET /:id` ordering test is a regression guard: Express/Express-like routers match by insertion order, so if `/options` were ever moved after `/:id`, the literal string `"options"` would be captured as an `:id` param.
+- The guard-order test on `POST /` encodes a deliberate security constraint: the step-up (re-auth) challenge must come **after** the rate-limit budget (so brute-force step-up attempts are throttled) but **before** the idempotency ledger (so a step-up challenge is never recorded as a consumable idempotency response).

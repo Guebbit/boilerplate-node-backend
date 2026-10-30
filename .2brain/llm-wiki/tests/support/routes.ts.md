@@ -1,7 +1,7 @@
 ---
 source: tests/support/routes.ts
-sha256: 39f79163e405f8efc6045b203f3cfa93920a527d65ba3aa86f28ac438a29e1ea
-generated_at: 2026-10-15T13:01:00.725459+00:00
+sha256: 2167bbdba18dd3476d02c687e2a2a45044e6d037c5423f8ba6e138b56c25a23b
+generated_at: 2026-10-29T07:10:56.141633+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides the test-side machinery for asserting a module's complete Express route table (every method, path, and middleware chain) rather than spot-checking a few routes. It exports `jest.mock` factories that replace middleware *factories* (cache, rate-limit, route-flag, authorizations) with labelled pass-throughs, so arguments captured in anonymous closures—TTLs, cache tags, permission tiers, budget namespaces—become readable strings on the mounted handler. A test then states the full table and any accidental route change forces a visible, reviewable test edit.
+Reads an Express router's full route table back out — every mounted method/path, in order, with the middleware chain and permission guards each carries — so module tests can assert the *entire* configuration as a snapshot. It exists because route files are "configuration written as code" that fail silently (a dropped `requirePermission`, a typo'd path, a wrong cache tag), and a contract suite alone cannot prove "nothing else is mounted."
 
 ## Key elements
 
-- **`ROUTE_LABEL`** – `Symbol.for('tests.routeLabel')`; the property on which each labelled middleware stores its factory-call string.
-- **`labelled(label)`** – Wraps `passThrough` in a fresh function (via `bind`) and writes `label` onto it; the building block every mock factory returns.
-- **`text()` / `list()`** – Render values into assertion strings; avoid `String()` on objects to prevent `[object Object]` collisions.
-- **`parseValue()` / `optionsOf(chain, factory)`** – Parse a rendered label back into a `key=value` record. Documented as a stopgap so the string-format coupling lives here, not in every test's `toContain`.
-- **`cacheMock()`** – Exported factory for `jest.mock` of `@infrastructure/http/middlewares/cache`. Spreads the real module first (so `noStore` etc. survive), then replaces `setCache`, `searchCache`, `invalidateCache` with labelled versions.
-- **`securityMock()`** – Exported factory for `jest.mock` of `@infrastructure/http/middlewares/rate-limit`. Replaces `buildRateLimiter` (labels by `budget.namespace`) and the three pre-built limiters (`global`, `api-key`, `uploads`).
-- **`routeFlagMock()`** – Labels `routeFlag('…')` calls.
-- **`authMock()`** (truncated) – Replaces `requireFreshAuth` / `requireFreshAuthWhen` with labelled versions; `isAuth` / `requirePermission` pass through unchanged since they are named functions.
-- **`routeTable(router)`** (referenced, truncated) – Walks an Express `Router` and returns `RouteRow[]` (method, path, `chain: string[]`, `permissionKey?`, `exactPermission?`).
-- **`RouteRow` / `LabelledMiddleware`** – Internal interfaces for the walker's output.
+- **`routeTable`** (implied by doc; the main export tests call) — walks a `Router` and returns an array of `RouteRow` objects.
+- **`RouteRow`** — one endpoint: `method`, `path`, `chain` (named/labelled middleware in order), `permissions` (every `PermissionAsk` on the route).
+- **`PermissionAsk`** — `{ action, subject }` pair extracted from `requirePermission` guards.
+- **`ROUTE_LABEL`** (`Symbol.for('tests.routeLabel')`) — the symbol under which mocked factories stamp their rendered call onto the middleware they return.
+- **`labelled(label)`** — builds a pass-through middleware that carries the label; used by all mock factories.
+- **`cacheMock()`** — replacement module for `@infrastructure/http/middlewares/cache`; relabels `setCache`, `searchCache`, `invalidateCache` while preserving real exports like `noStore`.
+- **`securityMock()`** — replacement for `@infrastructure/http/middlewares/rate-limit`; relabels `buildRateLimiter` by `budget.namespace` and pins the three module-level limiters.
+- **`routeFlagMock()`** — replacement for the route-flag middleware; relabels `routeFlag(flag)`.
+- **`optionsOf(chain, factory)`** — parses a rendered label back into a `Record<string, unknown>` of `key=value` pairs; a stopgap so module tests can `toContain`-assert individual options without coupling to the full string.
+- **`text` / `list` / `parseValue`** — internal render/parse helpers that avoid `[object Object]` ambiguity and preserve empty-vs-renamed array distinctions.
 
 ## Relationships
 
-- **`src/infrastructure/http/middlewares/cache.ts`** – Mocked by `cacheMock()`; the real module is loaded via `jest.requireActual` and spread, then individual factories are overwritten.
-- **`src/infrastructure/http/middlewares/rate-limit.ts`** – Mocked by `securityMock()`; same spread-then-override pattern.
-- **`src/infrastructure/http/middlewares/upload.ts`** – The (truncated) `storageMock` calls through to the real `upload.image()` so that `validateUploadedImages` / `quarantineUploadedImages` retain their names behind the label.
-- **`src/kernel/middlewares/authorizations.ts`** – Mocked by `authMock()` for the step-up factories; `isAuth` / `requirePermission` pass through as named functions.
-- **`src/kernel/permissions.ts`** – Source of the `StepUpTier` type imported at the top; the `permissionKey` / `exactPermission` fields on `RouteRow` reflect the key each `requirePermission` guard closed over.
-- **Every `src/modules/*/tests/unit/routes.test.ts`** – Consumer side: each file declares its own `jest.mock` one-liner pointing at the exports here, then calls `routeTable` and asserts the full table.
+- **`src/infrastructure/http/middlewares/cache.ts`** — every mock test file replaces this module with `cacheMock()`; this file spreads the real module via `jest.requireActual` so non-factory exports (e.g. `noStore`) remain available.
+- **`src/infrastructure/http/middlewares/rate-limit.ts`** — replaced by `securityMock()`; the real `buildRateLimiter` is called only during `jest.requireActual`, so module-owned budgets built *after* the mock are relabelled.
+- **`src/infrastructure/http/middlewares/upload.ts`** — a `storageMock` (referenced in the header comment) calls through to the real `upload.image()` so downstream named handlers (`validateUploadedImages`, `quarantineUploadedImages`) remain visible behind the label.
+- **`src/kernel/middlewares/authorizations.ts`** — `isAuth`, `requirePermission`, `getAuth` pass through unchanged (they are named functions); step-up factories like `requireFreshAuth` are replaced with labelled versions.
+- **`src/kernel/permissions.ts`** — supplies the `StepUpTier` type and the `PermissionAsk` shape that `routeTable` extracts from guards.
+- **`src/modules/*/tests/unit/routes.test.ts`** (account, addresses, cart, delivery, example, inventory, invoicing, locales, notifications) — each declares its own `jest.mock` lines pointing at this file's mock factories, then calls `routeTable` and asserts the full expected array.
+- **`src/modules/locales/tests/contract/api.contract.test.ts`** — exercises a subset of routes end-to-end; this file covers the "and NOTHING else" half.
 
 ## Notes
 
-- `jest.mock` is hoisted per module registry and **cannot** be applied from this helper; every consuming test file must declare its own `jest.mock('@…', () => require('@tests/routes').cacheMock())` (note `require`, not the imported binding, because `jest.mock` factories may not close over module scope).
-- `passThrough` is declared once and `bind`-ed per call rather than closed over, so each labelled middleware gets a unique function identity (required for `Object.assign` to write the label onto the right object).
-- `optionsOf` only reliably extracts `key=value` pairs; a factory's leading positional argument (e.g. `setCache`'s TTL) has no key and is skipped.
-- The mocks intentionally spread the real module first so non-factory exports (`noStore`, named limiters) remain available; replacing the whole module with a handful of keys would break `router.use(noStore)` in modules like `account`.
-- `searchCache` is built on top of `mockSetCache` rather than calling the real one, because the real `searchCache` closes over the real `setCache`, which would produce an unlabelled middleware invisible to `routeTable`.
+- **`jest.mock` is per-module-registry and hoisted** — a helper cannot apply it on a test file's behalf. Every consuming test must write its own `jest.mock(...)` lines (the one-liner pattern is shown in the header doc).
+- **Use `require` inside the `jest.mock` factory**, not the top-level import binding — Jest forbids closing over module scope in mock factories.
+- **`optionsOf` is a deliberate stopgap**: it round-trips through the rendered string this same file built. If the render format changes, only this file breaks, not every module test.
+- **`scopeKey` in `searchCache` is accepted and dropped** — it is a function that cannot be meaningfully rendered; its correctness is covered by dedicated unit tests, and the route table only needs to confirm one was passed (enforced at compile time by the `CacheOptions` type).
+- **Mock factories spread the real module first** (`...jest.requireActual(...)`). Replacing the whole module object would silently break direct exports like `noStore` that are mounted without a factory call.
+- **`text` uses `JSON.stringify` for objects** rather than `String()` to avoid `[object Object]` collisions between distinct configurations.

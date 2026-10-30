@@ -1,7 +1,7 @@
 ---
 source: scenarios/flows/client.ts
-sha256: 22907c3de7465af013ade2e4c4874c524e9f603ff8b0a390531c9b40d44858bf
-generated_at: 2026-10-14T06:57:49.933617+00:00
+sha256: c99a40cc5e8d868345cef7f0e59b4061b9f8726aeb1925214d5bb5982a2de28a
+generated_at: 2026-10-29T01:22:51.823659+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A thin HTTP client that the scenario flow runner uses to drive the running application over a single base URL and bearer token. It exists so every flow file can make authenticated requests without repeating envelope-unwrap logic, and it deliberately uses the runtime's native `fetch` (not supertest) because it executes at container boot where devDependencies may be absent.
+A minimal HTTP client that scenario flows use to drive the running application over HTTP during container bootstrap (`scenario:apply`). It wraps `fetch` (not `supertest`, which may be absent when `devDependencies` are not installed), handles TOTP two-factor login, and presents two call styles — `call` (throws on non-2xx) and `attempt` (returns the raw outcome) — so flows can assert both success and expected refusals.
 
 ## Key elements
 
-- **`Attempt`** (exported interface) — Normalised shape of any API response: `status`, `data` (from the envelope), `errorCode`, and `errorMessages`.
-- **`ScenarioFlowError`** (exported class) — The sole error type thrown by a failed `call`; embeds the actor's email, method, path, status, and error payload in its message.
-- **`Caller`** (exported interface) — A signed-in actor with two methods: `call` (throws on non-2xx, returns typed `data`) and `attempt` (never throws, returns the raw `Attempt` for flows that *expect* a refusal).
-- **`signIn`** (exported function) — Authenticates via `POST /account/login` with `{ email, password, transport: 'bearer' }`, extracts a token (handles both `token` and `sessionToken` response fields), and returns a `Caller` bound to that token.
-- **`send`** (internal) — The single `fetch` call site; serialises JSON bodies, strips `content-type` for `FormData` multipart uploads, and pipes the response through `readAttempt`.
-- **`readAttempt`** (internal) — Parses the API's `{ data, errors[] }` envelope into an `Attempt`; tolerates 204 / non-JSON bodies.
+- **`Attempt`** (exported interface) — Normalised response shape: `status`, `data` (success body or `undefined`), `errorCode`, and `errorMessages` extracted from the API's problem-details `errors[]` array.
+- **`Caller`** (exported interface) — A signed-in actor. Exposes `call` (throws `ScenarioFlowError` on non-2xx, returns typed `data`) and `attempt` (always resolves, returns the full `Attempt`).
+- **`signIn`** (exported function) — Signs in via `POST /account/login` (then `POST /account/login/2fa` when the account requires TOTP), extracts the bearer token, and returns a `Caller`.
+- **`ScenarioFlowError`** (internal class) — Error whose message names the actor, method, path, status, `errorCode`, and either the error messages or the raw body, so a failure deep into a multi-hundred-request seed is diagnosable without a stack trace.
+- **`send`** (internal) — The single `fetch` call site. Serialises JSON bodies, strips the `content-type` header for `FormData` (multipart uploads), and delegates response parsing to `readAttempt`.
+- **`readAttempt`** (internal) — Parses a `Response` into an `Attempt`; handles non-JSON bodies (204, plain text) by yielding `data: undefined`.
+- **`answerChallenge`** (internal) — If the login response signals `mfaRequired`, generates a TOTP code from the account's base32 secret via `otplib.generate` and posts it to `/account/login/2fa`.
+- **`Method`** (type) — `'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'`.
+- **`Problem`** (internal interface) — The subset of RFC 7807 problem-details members this file reads (`errors[].code`, `errors[].message`).
 
 ## Relationships
 
-- **`scenarios/flows/actions.ts`** and **`scenarios/flows/shop-history.ts`** — Sibling flow modules that import `signIn` / `Caller` to script their respective scenario steps against a live server.
-- **`scenarios/shop-modules.ts`** — Defines the shop-module catalogue that the flows (and this client's `PATCH` verb, noted as the products module's update shape) exercise.
-- **`scenarios/locales.ts`** — Provides locale data consumed during scenario setup; this client's requests are the transport through which that data is applied.
-- **`scripts/docs/generate-role-matrix.ts`** — Reads the scenario flow files (including this module's `Caller` usage) to generate the role/permission matrix documentation.
-- **`src/modules/cart/tests/integration/checkout-rate-limit.test.ts`** — Integration test that exercises the same checkout endpoints the scenario flows hit; shares the envelope/error-code conventions this client decodes.
+- **`scenarios/flows/actions.ts`**, **`scenarios/flows/shop-history.ts`**, **`scenarios/shop-modules.ts`** — Import `signIn` and the `Caller`/`Attempt` types to perform their respective HTTP sequences against the running app.
+- **`scenarios/locales.ts`** — Consumed by the same flow layer; the flows it supports also drive the app through this client.
+- **`scripts/docs/generate-role-matrix.ts`** — Documents or derives the actor/role matrix that these flows exercise; shares the actor-identity convention (`email`) this client embeds in error messages.
+- **`src/modules/cart/tests/integration/checkout-rate-limit.test.ts`** — Exercises the same bearer-token auth path that `signIn` produces; its assertions mirror the `Attempt` error-code/message convention defined here.
 
 ## Notes
 
-- `signIn` must go through the real login endpoint (not a hand-signed JWT) so that the session is **fresh**; `requireFreshAuth('critical')` on checkout and payment routes will reject stale tokens.
-- The `body` parameter accepts `FormData` in addition to plain objects; the `content-type` header is intentionally dropped for `FormData` so `fetch` can set the multipart boundary itself.
-- `call` is generic (`<T>`) but the cast is unchecked — flows are responsible for requesting the right shape. `attempt` always returns `data: unknown`.
-- The `Method` type includes `PATCH` specifically for the products module; there is no `HEAD` or `OPTIONS`.
+- Deliberately uses the runtime `fetch` rather than `supertest` so it works in bootstrap contexts where `devDependencies` are absent.
+- Login is always through the real `POST /account/login` endpoint (never a hand-signed JWT) so the resulting session satisfies `requireFreshAuth('critical')` on checkout and payment routes.
+- The login response may carry the token under `token` (jwt mode) or `sessionToken` (cookie mode with `transport: bearer`); `signIn` checks both.
+- `data` on `Attempt` is `undefined` for three distinct cases: a 204 no-content, a non-JSON body, and any non-ok status. Consumers must check `status` before treating `data` as meaningful.
+- `PATCH` exists in the `Method` union specifically for the products module's update shape, even though no flow in this file issues a PATCH directly.

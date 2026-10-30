@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/post-email-change-confirm.ts
-sha256: 68fef9797ae71668e12020a06be673dafd6cc1436d08b160121f1080731c4e24
-generated_at: 2026-10-15T09:54:38.359904+00:00
+sha256: f2e7cd7252cef6233aa9936fd31180cba3db146437a71c22d9f1d7c62bd5b80c
+generated_at: 2026-10-29T02:29:33.825899+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Handler for `POST /account/email-change-confirm`. It validates a one-time `email-change` token from the request body and delegates to the account service to swap the caller's `pendingEmail` into `email`. The endpoint is deliberately public: the token in the body *is* the credential, analogous to `verify-confirm`.
+Controller for `POST /account/email-change/confirm`. It validates a one-time email-change token from the request body and, on success, promotes the caller's `pendingEmail` to the active `email`. The endpoint is intentionally public: the token itself is the credential, not a session or login.
 
 ## Key elements
 
-- **`postEmailChangeConfirm`** (exported) — The sole handler. Parses the body with `ConfirmEmailChangeBody.safeParse`, then calls `accountService.confirmEmailChange(token, callerContext)`. On refusal it returns early; on success it sends a `successResponse`. Errors are routed through `catchAs` so a 409 (address already claimed) is distinguished from a true 500.
-- **`ConfirmEmailChangeBody`** (imported from `@api/schemas.zod`) — Zod schema for the `{ token }` body. Shared with the `verify-confirm` endpoint.
-- **`authEmailChangeConfirmTotal`** (imported from `../metrics`) — Prometheus counter incremented with `status: 'success' | 'failure'` on every code path.
+- **`postEmailChangeConfirm`** (exported) — the only export. Express handler that:
+  1. Parses the body with the shared `ConfirmEmailChangeBody` zod schema via `parseBody`.
+  2. Calls `accountService.confirmEmailChange(token, callerContext)` to spend the token and swap the address.
+  3. Returns **204 No Content** on success (`noContentResponse`).
+  4. Emits `authEmailChangeConfirmTotal` (`success` / `failure`) on every terminal path.
+  5. Routes errors through `catchAs`, which lets a unique-index conflict surface as a **409** rather than a blanket 500.
 
 ## Relationships
 
-- **`src/modules/account/routes.ts`** — Registers this handler on the `POST /account/email-change-confirm` route.
-- **`src/modules/account/services/index.ts`** — Provides `accountService.confirmEmailChange`, the business logic that spends the token and performs the swap.
-- **`src/modules/account/metrics.ts`** — Source of the `authEmailChangeConfirmTotal` counter.
-- **`src/infrastructure/http/controller.ts`** — Supplies `rejectValidation`, `refused`, and `catchAs` helpers used for the three response branches.
-- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf` to extract the authenticated caller's identity from the request.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse` for the happy-path reply.
-- **`src/types/index.ts`** — Source of the `VerifyEmailConfirmRequest` type (orval names it after the shared schema; both confirm endpoints accept the same `{ token }` shape).
-- **`src/infrastructure/adapters/logger.ts`** — Indirectly reached through `catchAs`, which logs whichever error category actually fired.
+| Neighbor | Interaction |
+|---|---|
+| `src/infrastructure/http/controller.ts` | Supplies `parseBody`, `refused`, and `catchAs` — the three shared controller helpers used here. |
+| `src/infrastructure/http/request.ts` | `callerContextOf(request)` extracts the authenticated caller identity for the service call. |
+| `src/infrastructure/http/response.ts` | `noContentResponse` sends the 204 on the happy path. |
+| `src/infrastructure/adapters/logger.ts` | Indirect dependency: `catchAs` delegates logging of the caught error to the app logger. |
+| `src/modules/account/services/index.ts` | `accountService.confirmEmailChange` performs the actual token-spend + address-swap logic. |
+| `src/modules/account/metrics.ts` | `authEmailChangeConfirmTotal` counter, incremented with `status: 'success'` or `'failure'`. |
+| `src/modules/account/routes.ts` | Registers this handler on the `/account/email-change/confirm` route. |
+| `src/types/index.ts` | Exports `VerifyEmailConfirmRequest` (the `{ token }` body type shared with the `verify-confirm` endpoint). |
 
 ## Notes
 
-- The request generic uses `VerifyEmailConfirmRequest`, not a dedicated type. This is intentional: orval names the type after the shared Zod schema that both confirm endpoints use, so there is no second type to maintain.
-- A `'verify'` token passed to this endpoint is explicitly refused at the service layer; the two token kinds must not substitute for each other.
-- The 409-vs-500 distinction is load-bearing: if the new email is claimed by another account *after* the token was issued but *before* this confirm runs, the unique-index rejection is a legitimate 409, not a server fault. `catchAs` is what makes that distinction; do not replace it with a blanket `catch` that returns 500.
+- **Type naming quirk.** The body type is imported as `VerifyEmailConfirmRequest` (not `EmailChangeConfirmRequest`) because orval generates a single type for the shared `{ token }` schema used by both the verify and confirm endpoints. This is intentional, not a copy-paste error.
+- **Token cross-use is rejected.** A `verify` token must *not* succeed here and vice-versa; the service enforces that the two prove different things.
+- **Error semantics are derived, not assumed.** `catchAs` inspects the thrown error to decide between a 409 (new address already claimed → unique-index violation) and a 500 (unexpected failure), logging whichever actually occurred.
+- **No response body on success.** The endpoint returns 204 with no payload; the client learns success purely from the status code.

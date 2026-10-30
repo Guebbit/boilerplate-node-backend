@@ -1,7 +1,7 @@
 ---
 source: scripts/contracts/authorization-bundle.ts
-sha256: 9e619648a9200df079b2a4af17ce5304737d7c38290d7c58f44d1e74c5baef15
-generated_at: 2026-10-15T09:35:49.598402+00:00
+sha256: 6f4ae21d97c7f197f805d506ead6ee0c06e13e6df838c642f40f93c8836754b8
+generated_at: 2026-10-29T01:29:36.460358+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Assembles `shared/authorization-keys.yaml` by text-splicing one fragment per module plus a root residual file. Keys live in their owning module's `authorization.yaml`, so deleting a module automatically removes its keys from the bundle — no hand-maintained registry to reconcile.
+Assembles `shared/authorization-keys.yaml` by splicing per-module `authorization.yaml` fragments (discovered on disk) into a root residual file. It uses raw text concatenation rather than a YAML-AST merge so that every authored byte is preserved — critical because the output is consumed by a PHP twin that would break if a stringifier re-quoted a scalar. The script is both a generator (`npm run regenerate`) and a staleness checker (`--check`).
 
 ## Key elements
 
-- **`assembleAuthorizationKeys()`** (exported) — Reads the root file, locates the splice marker, gathers every on-disk fragment in `PREFERRED_ORDER`, and returns the full YAML text.
-- **`fragmentKeysBlock(section)`** — Reads one fragment, validates that every key's `module:` field matches the owning section (fail-closed), strips the `keys:` heading, returns the raw list text.
-- **`sectionsOnDisk()`** — Discovers which sections contribute a fragment: every module folder containing `authorization.yaml`, plus `core`.
-- **`PREFERRED_ORDER`** — Section ordering that keeps the PHP twin's diff small; extras beyond this list are appended at the end.
-- **`SPLICE_MARKER`** (`# %AUTHORIZATION_KEYS%`) — A YAML comment in the root file marking where the `keys:` block is inserted.
-- **Top-level `writeOrCheck(...)` call** — Writes the output or, under `--check`, asserts the committed file is not stale.
+- **`assembleAuthorizationKeys()`** *(exported)* — Reads the root file, splits it at the `# %AUTHORIZATION_RULES%` and `# %AUTHORIZATION_SETS%` markers, then joins each section's rules and sets blocks in `PREFERRED_ORDER` to produce the final YAML string.
+- **`fragmentBlocks(section)`** — Reads one fragment, validates that every rule/set declares the correct `module:` field (fail-closed typo guard), and returns the `rules:` and `sets:` bodies with their headings stripped.
+- **`sectionsOnDisk()`** — Returns the list of sections that actually have a fragment file (modules with `authorization.yaml` plus `core`). A deleted module simply disappears from the output.
+- **`PREFERRED_ORDER`** — Hard-coded section ordering that mirrors the original hand-written file, kept so a PHP port's diff stays minimal.
+- **`fragmentPath(section)`** — Resolves the fragment file path; `core` maps to `shared/contracts/authorization-keys.core.yaml`, everything else to `src/modules/<section>/authorization.yaml`.
+- **`RULES_MARKER` / `SETS_MARKER`** — YAML comment lines in the root file that act as splice points.
+- **`writeOrCheck(OUTPUT_FILE, …)`** — Final call: writes the bundle or, under `--check`, diffs against the committed file.
 
 ## Relationships
 
-- **`scripts/contracts/fragments.ts`** — Provides `readAuthorizationFragment`, used to parse a fragment and extract its `keys` array for the module-attribution check.
-- **`scripts/contracts/generated-file.ts`** — Provides `writeOrCheck`, the shared write-or-`--check` mechanism for generated artifacts.
-- **`scripts/contracts/section-order.ts`** — Provides `orderSections`, which arranges the on-disk sections according to `PREFERRED_ORDER`.
-- **`scripts/modules-on-disk.ts`** — Provides `REPO_ROOT`, `MODULES_ROOT`, and `modulesWith`, used to discover which module folders exist and which carry an `authorization.yaml`.
+- **`scripts/contracts/section-order.ts`** — Provides `orderSections`, which sorts the on-disk sections by `PREFERRED_ORDER` (known entries first, unknowns appended).
+- **`scripts/contracts/fragments.ts`** — Provides `readAuthorizationFragment`, used here to parse a fragment's rules/sets for the module-attribution validation.
+- **`scripts/contracts/generated-file.ts`** — Provides `writeOrCheck`, the shared write-or-verify primitive for all generated bundles.
+- **`scripts/modules-on-disk.ts`** — Provides `REPO_ROOT`, `MODULES_ROOT`, and `modulesWith` for filesystem discovery of which modules carry a fragment.
+- **`scripts/contracts/asyncapi-bundles.ts`** — Conceptual contrast only (no import): that file merges channel maps through the YAML AST; this file deliberately avoids that path in favor of text splicing.
 
 ## Notes
 
-- **Text splice, not YAML merge.** Fragments are concatenated as raw text rather than merged through a YAML AST. This preserves every authored byte (quoting, descriptions) and matters because the PHP twin in a separate repo parses this file directly.
-- **`--check` is intentionally outside `bundle-registry.ts`.** In that registry "shared" means a paired frontend holds a copy; here the consumer is the PHP repo, which has no pairing test and is not in this repository.
-- **`core` is a special section.** Its fragment lives at `shared/contracts/authorization-keys.core.yaml`, not under a module folder. It is always included in `sectionsOnDisk()`.
-- **Fail-closed attribution.** If a key in a fragment declares a `module:` different from the folder it lives in, the bundle throws rather than silently accepting the misattribution.
+- **`core` is not a module directory.** Its fragment lives under `shared/contracts/`, not `src/modules/`. Code that generically iterates modules must special-case `core` (see `fragmentPath` and the `sectionsOnDisk` append).
+- **Validation is fail-closed, not advisory.** If any rule or set declares a `module:` value different from the section that owns the fragment, `fragmentBlocks` throws — the bundle refuses to emit a file with misattributed entries.
+- **Separate from `bundle-registry.ts`.** The header comment explains this bundle is intentionally *not* registered there: the registry's "shared" contract means "a paired frontend holds a copy," whereas this file is shared with an external PHP repository for which no pairing test exists.
+- **The root file's markers are YAML comments**, so the file remains a single valid YAML document even before splicing; the `rules:` and `sets:` keys are injected by the splice itself.

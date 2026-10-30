@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/post-verify-confirm.ts
-sha256: a21d4cfb9240f6eac29532330da79efd35bd7e646933b82bc4ec5321c254d036
-generated_at: 2026-10-15T09:56:27.215823+00:00
+sha256: 1f1a8ad3fb4491cc23ad139563b4b08e00f15c76a677e463d7a794ba419d0a12
+generated_at: 2026-10-29T02:32:51.001321+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP controller for `POST /account/verify-confirm`. It validates a one-time verification token from the request body, delegates the actual email-verification spend to the account service, and returns a structured success/failure response. Exists as the thin transport layer in the route → controller → service pipeline for email verification confirmation.
+Controller for `POST /account/email-verification/confirm`. Validates the request body, delegates to the account service to spend a one-time email-verification token and mark the email as verified, and emits a Prometheus metric for the outcome.
 
 ## Key elements
 
-- **`postVerifyConfirm`** (exported function) — The sole export. Accepts Express `Request`/`Response`. Pipeline:
-  1. `ConfirmEmailVerificationBody.safeParse(request.body)` — Zod validation; on failure calls `rejectValidation` and returns.
-  2. `accountService.confirmEmailVerification(token, callerContextOf(request))` — the only business call; service owns the find-then-spend logic.
-  3. Success path → `successResponse(response, undefined, result.status, result.message)`.
-  4. Refusal path (`refused`) or exception path (`catchAs`) → short-circuit with appropriate HTTP error.
-  - `authEmailVerifyTotal` is incremented on **every** exit path (validation failure, refusal, success, exception) with a `status` label.
+- **`postVerifyConfirm`** (exported handler) — Express handler accepting `Request<unknown, unknown, VerifyEmailConfirmRequest>` / `Response`. Parses the body against the `ConfirmEmailVerificationBody` Zod schema, calls `accountService.confirmEmailVerification(token, callerContext)`, and returns either `204 No Content` or an error response.
+- **`parseBody` / `refused` / `catchAs`** — imported from the HTTP controller helper; handle schema validation, service-level refusal, and unexpected exception formatting respectively.
+- **`authEmailVerifyTotal`** — Prometheus counter (from `../metrics`) incremented with `{ status: 'success' | 'failure' }` on every code path.
+- **`callerContextOf`** — extracts caller metadata from the raw request and passes it into the service call.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — Source of the `rejectValidation`, `refused`, and `catchAs` helpers used for every error branch.
-- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf(request)` to extract caller metadata passed into the service.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse` for the happy-path reply.
-- **`src/modules/account/metrics.ts`** — Exports the `authEmailVerifyTotal` counter incremented on each outcome.
-- **`src/modules/account/services/index.ts`** — Exports `accountService`; its `confirmEmailVerification` method performs the token spend and DB update.
-- **`src/modules/account/routes.ts`** — Registers `postVerifyConfirm` as the handler for the `POST /account/verify-confirm` route (this file is the callee, not the caller).
-- **`src/types/index.ts`** — Supplies the `VerifyEmailConfirmRequest` body type used in the Express `Request` generic.
+- **`src/infrastructure/http/controller.ts`** — source of `parseBody`, `refused`, `catchAs` helpers used for validation and error rendering.
+- **`src/infrastructure/http/response.ts`** — source of `noContentResponse` (204 reply).
+- **`src/infrastructure/http/request.ts`** — source of `callerContextOf` (caller identity extraction).
+- **`src/modules/account/services/index.ts`** — provides `accountService.confirmEmailVerification`, which owns the find-then-spend token logic.
+- **`src/modules/account/metrics.ts`** — provides the `authEmailVerifyTotal` counter.
+- **`src/modules/account/routes.ts`** — registers this handler on the `/account/email-verification/confirm` route.
+- **`src/types/index.ts`** — source of the `VerifyEmailConfirmRequest` body type used in the Express `Request` generic.
 
 ## Notes
 
-- **Deliberately unauthenticated.** No auth middleware guards this route; the token in the body *is* the credential (same pattern as `reset-confirm` / `delete-confirm`). Don't add an auth check here.
-- **No logic in the controller.** All find-then-spend semantics live in `accountService.confirmEmailVerification`. The controller only validates, forwards, and formats the response.
-- **Metric on every path.** If you add a new early-return, make sure `authEmailVerifyTotal` is still incremented, or the success/failure ratio will skew.
+- The endpoint is intentionally **public** (no auth middleware); the token in the body *is* the credential, mirroring the pattern used by `password/reset/confirm` and `restore`.
+- The token is **one-time**: the service "finds then spends" it, so replay is impossible.
+- Success returns **204 No Content** (no body). All other outcomes (bad schema, service refusal, thrown error) result in an error response.
+- The metric is incremented in **every** exit path (validation failure, service refusal, success, uncaught error), so the counter total equals the number of attempts.
+- `catchAs` is called with the literal string `'postVerifyConfirm'` as its context label for log correlation.

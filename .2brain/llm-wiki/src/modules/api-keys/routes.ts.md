@@ -1,7 +1,7 @@
 ---
 source: src/modules/api-keys/routes.ts
-sha256: 0870999b839e588a7420ae259041fee285ff159eed5431429cc491575ccd1e9a
-generated_at: 2026-10-14T15:00:24.185411+00:00
+sha256: 2e4a32b5ea032a33faff540588ed7427d26b6965e9c7dbc165b99cd9e9a92364
+generated_at: 2026-10-29T03:14:15.838950+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Express router for the `/api-keys` admin surface. It wires three routes—list, mint, and revoke—behind session-only authentication and granular permission checks, ensuring that the act of issuing or revoking API keys is always a human, session-authenticated operation.
+Express router that mounts the four `/api-keys` admin endpoints (list, read, mint, revoke). It exists as the single wiring point between the shared authorization middlewares and the four domain controllers, enforcing a session-only authentication policy for the credential-management surface.
 
 ## Key elements
 
-- **`router`** (exported) — The Express `Router` instance for the `/api-keys` prefix. Registered into the app by `module.ts`.
-- **Route-level middleware** — `getAuth` → `isAuth` is applied to the entire router via `router.use`, then each route additionally layers a `requirePermission('apikeys.any.*')` guard.
-- **`GET /`** — Lists API keys (secrets are never returned). Permission: `apikeys.any.read`.
-- **`POST /`** — Mints a new API key. Permission: `apikeys.any.create`.
-- **`DELETE /:id`** — Revokes an existing key by ID. Permission: `apikeys.any.delete`.
+- **`router`** (exported) — the Express `Router` instance that `module.ts` registers on the app.
+- **`router.use(getAuth, isAuth)`** — applies global auth to every route in this router. Deliberately `isAuth` (session), **not** `isAuthOrCredential`: API keys minted by this module cannot be used to manage other API keys.
+- **Route definitions** — each pairs a `requirePermission(scope, 'ApiKey')` guard with a controller handler:
+  - `GET /` → `listApiKeys`
+  - `GET /:id` → `getApiKey`
+  - `POST /` → `mintApiKey`
+  - `DELETE /:id` → `revokeApiKey`
 
 ## Relationships
 
-- **`src/kernel/middlewares/authorizations.ts`** — Provides `getAuth`, `isAuth`, and `requirePermission`, which form the auth/permission chain on every route.
-- **`src/modules/api-keys/controllers/list-api-keys.ts`** — Handler for `GET /`.
-- **`src/modules/api-keys/controllers/mint-api-key.ts`** — Handler for `POST /`.
-- **`src/modules/api-keys/controllers/revoke-api-key.ts`** — Handler for `DELETE /:id`.
-- **`src/modules/api-keys/module.ts`** — Registers this router into the application's route tree.
+- **`src/kernel/middlewares/authorizations.ts`** — provides `getAuth`, `isAuth`, and `requirePermission`, the three middleware functions applied to every route here.
+- **`src/modules/api-keys/controllers/list-api-keys.ts`**, **`get-api-key.ts`**, **`mint-api-key.ts`**, **`revoke-api-key.ts`** — imported as the handler for the corresponding route; this file performs no business logic itself.
+- **`src/modules/api-keys/module.ts`** — consumes the exported `router` to mount these routes on the Express app (and likely registers the `ApiKey` resource with the permission system).
 
 ## Notes
 
-- **`isAuth` is a deliberate choice, not a mechanical one.** The inline comment states that no handler here reads `authContext`, so `isAuthOrCredential` would pass a mechanical audit. It is rejected because allowing a credential to mint or revoke credentials means that credential never has to be rotated. Key management stays strictly human-session.
-- The module-level docblock makes explicit that the credentials this module *mints* are presented to **other** routes in the system; they are never accepted on these routes themselves.
+- The `isAuth` vs. `isAuthOrCredential` choice is an **intentional security boundary**, not an oversight. The code comment explicitly calls it out: a credential that can mint credentials would never need rotation. If you add a new route here, it must remain session-gated.
+- None of the routes read `authContext` beyond what `isAuth` enforces; the controllers are expected to extract the principal from the session set by `getAuth`.
+- Secrets are never returned by the list or read routes (noted in the route comments); the mint route is the only one that ever exposes a secret, and presumably only once.

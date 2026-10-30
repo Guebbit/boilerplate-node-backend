@@ -1,7 +1,7 @@
 ---
 source: src/modules/example/controllers/update-example.ts
-sha256: 88fc8431727dd883dd672adf8054e4989b4bd8c4865dfe5157854c5d2fd6f4d5
-generated_at: 2026-10-14T15:41:31.297325+00:00
+sha256: a6475ae19ced5785c9abdc50d7122f40f52f0c37b78c4a55ebddabd41bbabb3d
+generated_at: 2026-10-29T03:52:13.204556+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the two HTTP handlers for `PUT /examples/:id` (full replace) and `PATCH /examples/:id` (partial merge) by calling the shared `createUpdateController` factory. The file's only job is to supply the module-specific pieces — the two Zod schemas, the entity metadata, and the service delegation — while the factory owns the common pipeline (id resolution, `If-Match`/`ETag`, 404 handling).
+Wires up the `PUT /examples/:id` (replace) and `PATCH /examples/:id` (merge) endpoints for the example module. All shared mechanics—id lookup, `If-Match` / `ETag` handling, and the request pipeline—live in the `createUpdateController` factory; this file only supplies the two trimmed body schemas and the service call.
 
 ## Key elements
 
-- **`replaceExample`** — The `PUT` handler. Validates the body against `ReplaceExampleByIdBody`, then delegates to `exampleService.update` with a full-replacement change set.
-- **`updateExample`** — The `PATCH` handler. Validates the body against `UpdateExampleByIdBody`, then delegates to `exampleService.update` with a partial change set.
-- **`createUpdateController({ … })` call** — Configures the shared factory with `versioned: true`, entity name, 404 key, both schemas, the `update` callback, and an identity `present` mapper. Destructures the resulting `{ replace, update }` pair into the two named exports.
+- **`replaceTrimmedBody`** (local const) — `ReplaceExampleByIdBody` extended so `title` and `body` are whitespace-trimmed at the field level (blank-after-trim → 422, not a blank DB value).
+- **`updateTrimmedBody`** (local const) — Same trimming applied to `UpdateExampleByIdBody`, with `title`/`body` kept `.optional()` so a missing field in a PATCH body stays absent.
+- **`replaceExample`** (exported) — The `PUT` handler; registered in routes.
+- **`updateExample`** (exported) — The `PATCH` handler; registered in routes.
+- Both are created in one `createUpdateController` call configured with `versioned: true`, `entity: 'example'`, `notFoundKey: 'example.not-found'`, and a pass-through `present` (the service already returns the contract shape).
 
 ## Relationships
 
-- **`src/infrastructure/surfaces/create-update-controller.ts`** — Provides the `createUpdateController` factory that assembles the entire PUT/PATCH pipeline (id check, ETag/If-Match logic, status codes) and returns the two handler functions.
-- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf(request)`, used inside the `update` callback to extract and forward the caller's context to the service layer.
-- **`src/modules/example/services/index.ts`** — Exports `exampleService`; its `update(id, changes, context)` method performs the actual persistence logic that both handlers invoke.
-- **`src/modules/example/routes.ts`** — The route table that imports `replaceExample` and `updateExample` to register them on the `PUT` and `PATCH` endpoints respectively.
+- **`src/infrastructure/surfaces/create-update-controller.ts`** — Provides the shared update pipeline; this file is a thin configuration over it.
+- **`src/infrastructure/http/schemas.ts`** — Supplies `trimmedInto`, used to wrap the `title`/`body` Zod schemas with trim validation.
+- **`src/infrastructure/http/request.ts`** — Supplies `callerContextOf`, called inside the `update` callback to pass caller identity to the service.
+- **`src/modules/example/services/index.ts`** — Provides `exampleService.updateById`, the single business-logic call both handlers delegate to.
+- **`src/modules/example/routes.ts`** — Consumes the `replaceExample` / `updateExample` exports to attach them to the HTTP router.
 
 ## Notes
 
-- The `present` mapper is an identity function (`(example) => example`) because the service already returns responses in the API contract shape. Do not add transformation here.
-- Both methods share a single pipeline; the only per-method difference is which Zod schema validates the body. Any change to ETag or 404 behavior belongs in `create-update-controller.ts`, not here.
-- The module doc-comment points to `docs/api/write-methods.md` for the broader PUT-vs-PATCH semantics.
+- `present` is intentionally a no-op (`example => example`); if the service's return shape ever diverges from the API contract, this is where mapping would be added.
+- PATCH optional fields are unwrapped before trimming (`.unwrap()`) and then re-wrapped with `.optional()`, so a completely omitted field is not coerced to `""`.
+- `versioned: true` opts into `If-Match` / `ETag` enforcement; the factory handles the 412 / 428 responses.
+- The module doc comment points to `docs/api/write-methods.md` for the broader PUT-vs-PATCH contract.

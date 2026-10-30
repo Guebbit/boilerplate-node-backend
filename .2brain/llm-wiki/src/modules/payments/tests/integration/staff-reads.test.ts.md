@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/tests/integration/staff-reads.test.ts
-sha256: 0be4ae46cc93edaeea3dd0fa9dadfb70cd8f22116341856050169bce0af8d4b2
-generated_at: 2026-10-15T11:37:26.501601+00:00
+sha256: f179d137639e7cd237b4f6d70b628269ec95ead6d93db8a2db9a08721615a943
+generated_at: 2026-10-29T05:22:20.066659+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests (real Mongo) for the three staff-facing payment reads — `listPayments`, `listRefunds`, and `listAttention`. Validates that every derived `displayStatus` label is consistent with the filter that selects on it, that provider identifiers and failure details reach staff only, and that an attention row disappears once `retryOpenRefunds` has swept the underlying problem.
+Integration tests for the three staff-facing payment reads (list, per-order detail, needs-attention) executed against a real MongoDB instance. Verifies that every derived `displayStatus` label round-trips through its own filter, that provider identifiers and failure details are exposed only to staff callers, and that needs-attention rows clear once the underlying problem is resolved.
 
 ## Key elements
 
-- **`seedPayment(overrides?)`** — Creates a user, product, order, and payment document in one shot; increments a module-level `sequence` counter to guarantee unique customer emails.
-- **`seedEveryLabel()`** — Seeds exactly one payment per `PaymentDisplayStatus` value and returns a `Map<label, paymentId>` for assertion.
-- **`staleRefund(hoursAgo)`** — Seeds a payment whose single refund failed `hoursAgo` hours ago (a "stale refund" attention case).
-- **`backdate(payment, minutesAgo)`** — Rewrites `updatedAt` via a raw `updateOne` with `{ timestamps: false }` so Mongoose doesn't re-stamp it.
-- **`idsOf(filters)`** — Shorthand: runs `listPayments` as admin and returns the `id` array of the first page.
-- **`attentionRows()`** — Runs `listAttention` and returns the item array.
-- **`refundRecord(overrides?)`** — Builds a refund sub-document with a default shape; spreads overrides for per-case variation.
-- **`describe('listPayments by displayStatus')`** — Core invariant: filtering by each label returns exactly the payment that derives to it, and the returned item's `displayStatus` matches the label.
-- **`describe('listPayments filters and sort')`** — Exercises method, provider, amount range, order-id, reference, date (`createdTo`/`receivedFrom`), and `sort` (asc/desc) filters; also verifies row composition (order number + email).
-- **`describe('what each audience is sent')`** — Confirms staff receive `providerRef` and refund `failureReason`/`providerRefundRef`, while the payer's payload contains none of them.
-- **`describe('listRefunds')`** — Verifies cross-payment refund listing, newest-first ordering, and `status` / `createdTo` filters.
-- **`describe('listAttention')`** — Seeds a stale provider refund, asserts it appears, runs `retryOpenRefunds()`, then asserts the attention list is empty. Uses `withEnvironment` to set `NODE_PAYMENT_EFFECT_RETRY_MINUTES=0`.
+- **`seedPayment(overrides?)`** – Creates a user, product, order, and a `PaymentDocument` in one call; returns `{ user, order, payment }`. Increments a module-level `sequence` to keep emails unique.
+- **`seedEveryLabel()`** – Seeds one payment per `PaymentDisplayStatus` variant and returns a `Map<label, paymentId>` for the displayStatus round-trip test.
+- **`refundRecord(overrides?)`** – Shorthand factory producing a refund sub-document with sensible defaults.
+- **`backdate(payment, minutesAgo)`** – Rewrites `updatedAt` directly via `paymentModel.updateOne` (bypassing Mongoose timestamps) so time-based assertions are deterministic.
+- **`idsOf(filters)`** – Thin wrapper over `paymentService.listPayments` that returns just the ordered `id` array of the first page.
+- **`staleRefund(hoursAgo)`** – Seeds a payment whose single refund failed `hoursAgo` hours ago; used by needs-attention tests.
+- **`attentionRows()`** – Calls `paymentService.listAttention()` and returns the items array.
+- **`describe` blocks** – One each for: displayStatus filter round-trip; per-row action flags (refund, settleByHand, cancelRefund, pay, sync); filters (method, provider, amount range, order, reference, created/received date) and sort (amount, payBy); audience-specific field visibility (staff vs. payer).
 
 ## Relationships
 
-- **`src/modules/payments/services/index.ts`** — Source of all six service functions under test (`listPayments`, `listRefunds`, `listAttention`, `getForOrder`, `methodMix`, `retryOpenRefunds`).
-- **`src/modules/payments/model.ts`** — Provides `paymentModel` (Mongoose model used for seeding and `backdate`) and the `PaymentDocument` type.
-- **`src/modules/payments/module.ts`** — Registered via `registerCheckoutModules` in `beforeEach` so the service layer resolves within the test runtime.
-- **`src/modules/orders/index.ts`** — Exports `orderService` (imported; likely used in the truncated portion for order-state setup).
-- **`src/modules/orders/tests/factories.ts`** — `createOrder` / `toOrderItem` build the order fixture each payment hangs from.
-- **`src/modules/users/tests/factories.ts`** — `createUser` supplies the payer per seed.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` supplies the order line-item.
-- **`src/kernel/events.ts`** — `resetDomainEvents` in `afterEach` prevents event-bus leakage between tests.
-- **`src/types/index.ts`** — Exports `PaymentDisplayStatus` enum and `PaymentAttentionItem` type used throughout.
+- **`@modules/payments/services`** (`paymentService`) – Primary subject under test; all assertions go through `listPayments`, `getForOrder`, and `listAttention`.
+- **`@modules/payments/model`** (`paymentModel`, `PaymentDocument`) – Used for direct DB seeding (`create`), lookups (`findById`), and the `backdate` helper.
+- **`@modules/payments/module`** (`paymentsModule`) – Registered via `registerCheckoutModules` in `beforeEach` so the service layer is wired for the test environment.
+- **`@modules/payments/services/refunds`** (`refundForOrder`) – Imported (likely used in the truncated needs-attention / refund-resolution tests).
+- **`@kernel/events`** (`resetDomainEvents`) – Called in `afterEach` to prevent event-bus leakage between tests.
+- **`@modules/users/tests/factories`** / **`@modules/products/tests/factories`** / **`@modules/orders/tests/factories`** – Domain factories that `seedPayment` chains to build a realistic order graph.
+- **`@types`** – Provides the `PaymentDisplayStatus` enum and `PaymentAttentionItem` shape used in assertions and seeding.
+- **`tests/support/callers`** – `asAdmin()`, `asCustomer(id)`, `callerContextAs` supply the caller contexts for staff vs. payer audience tests.
+- **`tests/support/response`** – `asSuccess` unwraps the service response envelope for direct field assertions.
+- **`tests/support/checkout-modules`** – `registerCheckoutModules` boots the payments module in isolation each test.
+- **`tests/support/setup-test-db`** – `setupTestDb()` provisions and truncates the Mongo instance before the suite runs.
+- **`tests/support/environment`** – `withEnvironmentOverrides` imported for per-test env config (used in truncated section).
 
 ## Notes
 
-- The `sequence` counter is module-scoped, not reset per test; it exists solely to avoid email collisions when `seedPayment` runs many times in one file.
-- `backdate` must pass `{ timestamps: false }` to `updateOne`; without it Mongoose would overwrite `updatedAt` with the current time, defeating the purpose.
-- `withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', …)` is the mechanism that makes `retryOpenRefunds` treat a 3-hour-old failed refund as immediately retryable — without it the attention row would never clear in the test.
-- `methodMix` and `freezeDate` are imported but their usage is in the truncated tail of the file.
-- The audience-separation test uses `JSON.stringify(payer)` to assert that no provider ref or failure reason leaks, rather than checking individual keys — this catches accidental nesting.
+- `sequence` is a **module-level mutable counter** (not reset per test). It exists solely to guarantee unique payer emails across the whole file; it will never collide with factory-internal counters because the prefix is `payer{n}@example.com`.
+- The `backdate` helper passes `{ timestamps: false }` to `updateOne` to prevent Mongoose from re-stamping `updatedAt`—a necessary escape hatch for any test that asserts on `updatedAt` or time-ordered sorting.
+- Audience-visibility tests assert on **both** the per-order detail (`getForOrder`) and the list row (`listPayments`) to confirm the projection difference is consistent across endpoints.
+- The file is truncated in this snapshot; the needs-attention "clears once fixed" scenario (the third read named in the module docstring) lives beyond the visible portion.

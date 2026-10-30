@@ -1,33 +1,39 @@
 ---
 source: src/modules/account/tests/integration/reap-inactive.test.ts
-sha256: b36774e23d75cb35e8320a3a83bb0b1f4ccd381834ac4ad29baddfd6d5baf327
-generated_at: 2026-10-15T10:12:31.621829+00:00
+sha256: 23bd8f32897acc98828e3b2a2aa11afb5879e2f3cc62d0e18ecbed29a2a41612
+generated_at: 2026-10-29T02:59:03.289362+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/account/tests/integration/reap-inactive.test.ts
 
 ## Purpose
-
-Integration test that exercises the full inactivity-reaper stage sequence (warn → minimise → soft-delete → hard-delete) through the real service and a real database, verifying that exactly one stage advances per run and that each grace period is honoured before the next stage fires.
+Integration test that verifies the inactivity reaper's staged lifecycle — minimise → warn → soft delete → hard delete — enforces correct ordering, respects grace periods between stages, and never advances more than one stage per run. It exercises the real `reapInactiveAccounts` service against a real MongoDB instance.
 
 ## Key elements
+- **`setupTestDb()`** — called at module top level to spin up a real database for the suite.
+- **`setEnvironment({ NODE_MAIL_TRANSPORT: 'outbox' })`** — run in `beforeEach`; routes any mail the service might send into a safe outbox.
+- **`daysAgo(days)`** — returns a `Date` offset into the past by the given number of days.
+- **`users()`** — returns the raw Mongoose collection handle (`mongoose.connection.collection('users')`), used to read/reason about state the reaper wrote without going through application models.
+- **`backdate(id, fields?)`** — sets `createdAt` to 400 days ago and merges any extra fields (e.g. `inactivityWarnedAt`, `deletedAt`) to simulate elapsed time.
+- **`stateOf(id)`** — reads back the reaper-relevant fields (`inactivityWarnedAt`, `inactivityMinimisedAt`, `deletedAt`, `deletedBy`) or returns `null` if the document is gone.
+- **`reapInactiveAccounts({ inactiveDays, minimiseDays })`** — the unit under test; `0` on either dial disables that stage.
 
-- **`daysAgo(n)`** — returns a `Date` n days before now; used to backdate accounts.
-- **`users()`** — raw Mongoose collection handle (`users`); reads/writes docs without the application model layer so the test can inspect exactly what the reaper persisted.
-- **`backdate(id, fields?)`** — sets `createdAt` to 400 days ago (exceeding the 365-day inactivity threshold) and optionally sets extra fields in one `$set`.
-- **`stateOf(id)`** — fetches the reaper-relevant fields (`inactivityWarnedAt`, `inactivityMinimisedAt`, `deletedAt`, `deletedBy`) or `null` if the doc was hard-deleted.
-- **`describe('reapInactiveAccounts')`** — five cases covering: warn-once idempotency, soft-delete after warning grace, hard-delete after soft-delete grace, minimise on its own dial, and no-op when both dials are `0`.
+Test cases:
+1. Warns an inactive customer exactly once; a second immediate run is a no-op (grace runs from the warning timestamp).
+2. Soft-deletes a warned account whose grace has elapsed; stamps `deletedBy: 'reaper'`.
+3. Hard-deletes (removes the document) a reaper soft-delete whose grace has elapsed.
+4. Minimises on its own dial (`minimiseDays`) without triggering deletion when the deletion dial is off.
+5. Does nothing when both dials are `0`.
 
 ## Relationships
-
-- **`src/modules/account/services/reap-inactive.ts`** — imports and calls `reapInactiveAccounts`; this is the unit under test.
-- **`src/modules/users/tests/factories.ts`** — imports `createUser` to seed test accounts with a given email and role.
-- **`tests/support/environment.ts`** — imports `setEnvironment` to force `NODE_MAIL_TRANSPORT: 'outbox'` before each test, preventing real mail delivery.
-- **`tests/support/setup-test-db.ts`** — imports `setupTestDb` (called at module top) to provision a real database connection for the suite.
+- **`src/modules/account/services/reap-inactive.ts`** — the sole system under test; this file imports and calls `reapInactiveAccounts` directly.
+- **`src/modules/users/tests/factories.ts`** — provides `createUser` to seed a known account before each scenario.
+- **`tests/support/setup-test-db.ts`** — provides `setupTestDb` to bootstrap the real MongoDB connection the suite reads from.
+- **`tests/support/environment.ts`** — provides `setEnvironment` to stub the mail transport so the reaper's warn step doesn't attempt real delivery.
 
 ## Notes
-
-- The file-level docblock states that the candidate list each stage operates on is defined in `users/tests/integration/reaper.test.ts` (a different file), not here.
-- `inactiveDays: 0` and `minimiseDays: 0` are the "off" switches; the test uses `365` for the inactivity threshold and `0`/`30` for the minimise dial to isolate each concern.
-- All assertions read via the raw collection, not a Mongoose model, so the test is agnostic to model-level virtuals or hooks that might mask the true stored state.
+- The suite reads DB state through the **raw Mongoose collection** (`mongoose.connection.collection('users')`), not through the user model or service layer. This is intentional: it observes exactly what the reaper persisted, bypassing any virtuals or select projections.
+- `inactiveDays: 0` and `minimiseDays: 0` both mean *disabled* for their respective stages; the test suite relies on this convention.
+- The module doc-comment references `users/tests/integration/reaper.test.ts` as the source of candidate definitions, but that file is **not** imported here — the candidates are constructed inline via `createUser` + `backdate`.
+- No teardown is explicit; `setupTestDb` presumably handles cleanup, but the suite relies on per-test document isolation via distinct emails rather than truncating the collection.

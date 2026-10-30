@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/tests/unit/stock-view.test.ts
-sha256: acfb94d1cd186a9157a057d22e3c0f03339372c5980f7f9f805e0c7f7a961710
-generated_at: 2026-10-15T11:50:29.185047+00:00
+sha256: 1c72d8aa8b48795f1979a8b8153b3a36b0d94133649c0226dbc506e76bf35aa8
+generated_at: 2026-10-29T05:35:20.900112+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the `stock-view` service. Verifies the authorization gate (`canSeeStock`) so that only callers holding the literal `inventory.any.read` permission see exact stock counters, and verifies the redaction path (`redactStock`) which strips the three counters while preserving boolean flags, other fields, and the row's version for ETag purposes.
+Unit tests for the two public functions of the stock-view service (`canSeeStock`, `redactStock`). Validates the role-based gate for reading exact stock counters and the redaction contract that strips counters while preserving boolean flags, other fields, and the row's version.
 
 ## Key elements
 
-- **`product`** — a shared `Product` fixture carrying stock counters (`onHand`, `reserved`, `available`) and flags (`inStock`, `lowStock`).
-- **`describe('canSeeStock')`** — table-driven test asserting `true` for `manager`, `warehouse`, `admin`; `false` for `editor`, `support`, `customer`, `unverified`, a stranger caller, and `undefined`.
-- **`describe('redactStock')`** — four cases: (1) authorized caller receives the *same* object reference (`toBe`), (2) unauthorized caller gets a new object with the three counters removed, (3) the input fixture is never mutated, (4) `editRevision` is carried onto the copy so `versionOf` still yields the ETag value.
+- **`product`** – module-level fixture: a fully-populated `Product` (including `onHand`, `reserved`, `available`) used as the shared input object.
+- **`describe('canSeeStock', …)`** – table-driven test asserting `true` for `manager`, `warehouse`, `admin`; `false` for `editor`, `support`, `customer`, `unverified`, a stranger caller, and `undefined`.
+- **`describe('redactStock', …)`** – four cases:
+  - *passthrough*: when allowed (`true`), returns the **same reference** (`toBe`).
+  - *redaction*: when denied, the three counter fields are absent; flags and scalars remain (`toEqual` on a literal without counters).
+  - *immutability*: the original `product` object is unmodified after a redact call.
+  - *version survival*: a product carrying `editRevision: 4` still reports version `4` via `versionOf` on the redacted copy.
 
 ## Relationships
 
-- **`src/modules/products/services/stock-view.ts`** — the unit under test; this file imports `canSeeStock` and `redactStock`.
-- **`tests/support/callers.ts`** — provides `callerAs(role)` and `strangerCaller()` helpers used to fabricate caller identities for every test case.
-- **`src/infrastructure/persistence/versioning.ts`** — provides `versionOf`, used in the ETag-preservation assertion.
-- **`src/types/index.ts`** — supplies the `Product` type annotation for the fixture.
+- **`src/modules/products/services/stock-view.ts`** – the unit under test; imports `canSeeStock` and `redactStock`.
+- **`tests/support/callers.ts`** – provides `callerAs(role)` and `strangerCaller()` to build mock authorization callers without coupling to the real auth layer.
+- **`src/infrastructure/persistence/versioning.ts`** – provides `versionOf` to assert that the ETag/edit-revision survives redaction.
+- **`src/types/index.ts`** – supplies the `Product` type for the fixture.
 
 ## Notes
 
-- The authorized-case assertion uses `toBe` (reference identity), confirming `redactStock` short-circuits and returns the original object rather than a copy when the caller is permitted.
-- The redaction test checks immutability by reading `product.onHand` *after* the call, not by snapshotting beforehand.
-- Version propagation is exercised via a spread copy (`{ ...product, editRevision: 4 }`) rather than the base fixture, so the base fixture stays clean for other assertions.
-- Role list in the `it.each` table is exhaustive over the known product keys; adding a new role key requires updating this table to keep coverage complete.
+- The passthrough case uses reference equality (`toBe`), not structural equality—this is an intentional contract: no copy is made when the caller is authorized.
+- The role matrix is hard-coded inline in the test rather than derived from a shared constants list; adding a new role requires updating both the service and this table.
+- `editRevision` is the field name on the wire object, but the test reads it back through `versionOf`; the service's redaction logic must copy that field into the new object.

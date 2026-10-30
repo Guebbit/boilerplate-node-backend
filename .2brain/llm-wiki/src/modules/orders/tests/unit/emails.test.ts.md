@@ -1,34 +1,30 @@
 ---
 source: src/modules/orders/tests/unit/emails.test.ts
-sha256: 4d4ba27ea54ba9c13a7dd31019e810d5e167de15ec4b9e2c9a062edb33025553
-generated_at: 2026-10-15T11:19:10.361584+00:00
+sha256: c300aa2c3837b83d782a40a1ff2d5202fbb8c9dc87960b05c2dc2304211c156d
+generated_at: 2026-10-29T04:58:51.220627+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/orders/tests/unit/emails.test.ts
 
 ## Purpose
-
-Unit tests for the order **confirmation** and **cancellation** email builders (`orderConfirmEmail`, `orderCancelledEmail`). They verify that the rendered output correctly interpolates order lines, defers total computation to the domain layer, carries locale and link parameters through unchanged, and never re-resolves frozen product titles through the i18n layer. They exist because a formatting slip in a money-facing email is read as a billing error by the least able party to check it.
+Unit tests for the order email builders in `@modules/orders/emails` (`orderConfirmEmail`, `orderCancelledEmail`, `cardHoldExpiredEmail`). Verifies that rendered email content—line items, totals, locale formatting, links, and payment-status language—is correct and internally consistent with the order's own computed values.
 
 ## Key elements
-
-- **`describe('orderConfirmEmail')`** — 12 assertions covering: template name, one line per item with correct title/qty/price, total delegates to `orderTotal` (shipping included), greeting by name, empty-order safety, locale passthrough, no unresolved i18n keys, correct frontend link, product-title non-re-resolution guard, and "awaiting payment" (never "confirmed") copy.
-- **`describe('orderCancelledEmail')`** — 5 assertions covering: template name + order ID in body, refund note shows the paid total when a refund was issued, "No refund" when the operator skipped it, "nothing was charged" for unpaid orders, and locale/i18n hygiene.
-- **`ORDER` fixture** — two items with distinct titles, quantities, and prices so no field can silently stand in for another.
-- **`PAID` / `UNPAID` / `TOTAL` fixtures** — support the cancellation-email refund-path assertions.
+- **`ORDER`** — shared fixture: two items (quantities 2 and 3, prices €100 and €7.50), €4.25 shipping, EUR currency. Chosen so no field can be substituted for another.
+- **`describe('orderConfirmEmail')`** — asserts template name, per-line item rendering (title, qty, price), preorder/backorder shipping promises, locale-aware money formatting (incl. U+00A0), delegation to `orderTotal`, greeting interpolation, empty-order safety, locale passthrough, link URL, the "awaiting payment" (never "confirmed") business rule, and that product titles are interpolated verbatim (never passed through `t()`).
+- **`describe('orderCancelledEmail')`** — asserts template name, order-reference inclusion, refund wording (paid + refund, paid no-refund, unpaid), and locale translation.
+- **`cardHoldExpiredEmail`** — imported and tested (content truncated in the snippet).
 
 ## Relationships
-
-- **`src/modules/orders/emails.ts`** — the module under test; provides `orderConfirmEmail`, `orderCancelledEmail`, and the `OrderLines` type.
-- **`src/modules/orders/domain/index.ts`** — exports `orderTotal`; the test asserts the email builder *uses* it rather than recomputing, keeping email and charge from drifting.
-- **`src/modules/orders/domain/totals.ts`** — the actual summing logic, covered by its own property-based suite (`totals.property.test.ts`); this file only checks that the builder defers to it.
-- **`src/modules/orders/config.ts`** — provides `orderFrontendLink`; the test asserts the builder passes the order's id and locale through to produce the correct link.
+- **`src/modules/orders/emails.ts`** — the module under test; all three builder functions and the `OrderLines` type are imported from here.
+- **`src/modules/orders/domain/index.ts`** — source of `orderTotal`; tests assert the email builder defers to it rather than recomputing, so email and charge cannot drift.
+- **`src/modules/orders/domain/totals.ts`** — where `orderTotal` is implemented; its correctness is covered separately by `totals.property.test.ts` (referenced in the file's doc-comment).
+- **`src/modules/orders/config.ts`** — source of `orderFrontendLink`; tests verify the builder passes the order's id and locale through unchanged to produce the link URL.
 
 ## Notes
-
-- The invoice document is **not** this file's concern; it is explicitly delegated to `src/modules/invoicing/tests/unit/emails.test.ts`.
-- The "colliding title" test (`orders.email-confirm.greeting`) is the sharpest regression guard against accidentally passing a product title through `t()`.
-- The shipping-inclusion test is a two-call comparison: the same order with `shippingCost: 0` must produce a different total string, catching the "email quotes subtotal, card charges delivered total" drift.
-- The empty-items test guards against a builder that indexes `items[0]` instead of mapping; it's unreachable through checkout but reachable via admin-created orders.
-- The "awaiting payment" assertion enforces the SH2=C state invariant: at confirmation-mail time the order is always `pending`.
+- **Totals are never recomputed here.** The test asserts `orderTotal(ORDER)` equals the email's displayed total; the arithmetic correctness lives in the property tests.
+- **Product titles are frozen snapshots.** The "colliding title" test (`'orders.email-confirm.greeting'` as a literal title) is a sharp regression guard: if the builder ever wraps titles in `t()`, the key would resolve to a different string and the test would fail.
+- **Date rendering is timezone-sensitive.** A `2026-12-19T23:00:00Z` timestamp must render as "December 20" (local Rome, UTC+1), not the UTC date.
+- **Payment language is a business rule (SH2=C).** At the moment this email is sent the order is still `pending`; the copy must say "awaiting payment," never "confirmed."
+- **Empty orders must not throw.** An admin-created order with zero items is reachable; a builder that indexed `items[0]` would crash outside a test.

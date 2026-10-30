@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/tests/integration/service.test.ts
-sha256: 9c9230204f4cbe92d169d2cdad0dd3d7835f2eaf0782547ce0c29ad51ce68d04
-generated_at: 2026-10-15T11:49:18.985137+00:00
+sha256: c3d1d18f3437b954e28a3f81a11e7e355926ee1cf07d399ed92a3884d8984e0f
+generated_at: 2026-10-29T05:33:55.239292+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,40 +9,43 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for `productService` covering caller-scoped visibility rules on `search`/`getById`, the `create`/`updateById` flows, and `remove` side-effects (image-store cleanup, cart cascade on hard delete, translation-port invocation). Uses a real database (`setupTestDb`) with mocked collaborators (image store, translation port) to verify service logic and wiring without external infrastructure.
+Integration tests for `productService` covering three areas: caller-scoped visibility rules on `search` and `getById`, the create/update/remove mutation flows (including image-store side effects), and the hard-delete cart cascade. Runs against a real test database rather than unit-level mocks of the repository.
 
 ## Key elements
 
-- **`fakeTranslationPort(overrides?)`** – Factory returning a `TranslationPort` whose methods are pre-mocked jest fns; used to prove `remove` calls the port without a real translations collection.
-- **`jest.mock('@infrastructure/adapters/image-store', …)`** – Replaces only `imageStore.remove` with a mock while preserving the real `applyImageWriteback` (a pure mutation the tests depend on).
-- **`GUEST` / `LOGGED` / `ADMIN`** – Caller fixtures (`undefined`, customer, admin) that drive the three visibility tiers; a `warehouse` caller is also used inline.
-- **`titlesOf`** – Extracts `title` strings from result items for readable assertions.
-- **`describe('productService.search')`** – Visibility per role, text/price filters, pagination, soft-delete exclusion, batch-id filtering (silent absence, no 404).
-- **`describe('productService.getById')`** – Role-based visibility, wire-shape check (no Mongoose `save` on the returned object), `undefined`-id guard.
-- **`describe('productService.create')`** / **`describe('productService.updateById')`** – Happy-path insert and field-update assertions.
-- **`afterEach → resetDomainEvents()`** – Prevents global event-subscription leakage between tests.
+- **`fakeTranslationPort`** – Builds a `TranslationPort` double with jest-mocked methods (used as a port registration so `remove`'s hard-delete translation cascade is proven as a wiring fact without a real locales collection).
+- **`jest.mock('@infrastructure/adapters/image-store')`** – Replaces only `imageStore.remove` with a mock; keeps `applyImageWriteback` real. The mock is extracted via `jest.requireMock` as `imageStore`.
+- **`setupTestDb()`** – Initialises the shared in-memory/test database for the file.
+- **`afterEach → resetDomainEvents()`** – Clears global event subscriptions so registering a handler in one test doesn't leak into subsequent tests.
+- **`GUEST` / `LOGGED` / `ADMIN`** – Three `Caller` constants exercising the visibility matrix. `GUEST` is literally `undefined`; `LOGGED` and `ADMIN` differ only by role string.
+- **`titlesOf`** – Small helper to map result items to their `title` strings for readable assertions.
+- **`describe('productService.search')`** – Per-role visibility, text filter, `priceMin`/`priceMax` filters, pagination, soft-delete exclusion, and batch-id filtering (Tier A: invisible ids silently omitted, never a 404).
+- **`describe('productService.getById')`** – Per-role visibility, undefined-id guard, and that the return value is the wire shape (Mongoose `save` absent).
+- **`describe('productService.updateById')`** – Field updates (title, price, description via `translations`), `active` flag toggle, and image-URL swap verifying the old image is removed from the store. *(Truncated in the snippet; additional cases for remove/cascade likely follow.)*
 
 ## Relationships
 
-- **`src/modules/products/services/index.ts`** – The module under test; all assertions target its exported functions.
-- **`src/modules/products/repository.ts`** – Imported as `productRepository`; used for `count()` assertions after create.
-- **`src/modules/products/model.ts`** – `ProductDocument` type for casting update results.
-- **`src/kernel/events.ts`** – `resetDomainEvents()` called in `afterEach`.
-- **`src/kernel/outbox.ts`** – `settleOutboxNudges` (used in remove-cascade tests, likely in the truncated portion).
-- **`src/kernel/translation.ts`** – `registerTranslationPort` / `TranslationPort` type for the fake port.
-- **`src/infrastructure/http/response.ts`** – `ResponseReject` type imported for typing error-path assertions.
-- **`src/modules/products/tests/factories.ts`** – `createProduct` for seeding rows.
-- **`src/modules/users/tests/factories.ts`** – `createUser` for seeding caller identities.
-- **`src/types/index.ts`** – `Caller` type and `testCallerContext`.
-- **`tests/support/callers.ts`** – `callerAs` / `testCallerContext` helpers.
-- **`tests/support/checkout-modules.ts`** – `registerCheckoutModules` for cart-cascade tests.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` initialises the real test database.
-- **`tests/support/stub.ts`** – `asStub` for type-narrowing assertions on wire shape.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/products/services/index.ts` | System under test: `productService.search`, `.getById`, `.updateById`, `.callerScope` |
+| `src/modules/products/tests/factories.ts` | `createProduct` – seeds rows for every test |
+| `src/modules/users/tests/factories.ts` | `createUser` – seeds caller identities |
+| `src/modules/products/model.ts` | `ProductDocument` type used in cast assertions on mutation results |
+| `src/modules/products/repository.ts` | Imported (likely used indirectly or for direct assertion); the service delegates to it |
+| `src/types/index.ts` / `src/types/auth-context.ts` | `Caller` type for scope constants and `testCallerContext` |
+| `src/infrastructure/http/response.ts` | `ResponseReject` type for mutation-result union narrowing |
+| `src/kernel/events.ts` | `resetDomainEvents` in `afterEach` cleanup |
+| `src/kernel/outbox.ts` | `settleOutboxNudges` – settles outbox nudges (used in remove/cascade tests, below truncation) |
+| `src/kernel/translation.ts` | `registerTranslationPort` + `TranslationPort` – injects `fakeTranslationPort` |
+| `tests/support/callers.ts` | `callerAs`, `testCallerContext` – build the three caller identities |
+| `tests/support/checkout-modules.ts` | `registerCheckoutModules` – registers cart/order modules so the remove-cascade path is wired |
+| `tests/support/setup-test-db.ts` | `setupTestDb` – database lifecycle |
+| `tests/support/stub.ts` | `asStub` – type-narrowing helper for asserting absence of Mongoose methods |
 
 ## Notes
 
-- The image-store mock deliberately targets the **interface** (`imageStore.remove`), not the filesystem, so the tests stay valid if the backend moves to object storage. `applyImageWriteback` is kept real via `jest.requireActual`.
-- The translation port is a wiring double (same pattern as `orders/tests/unit/snapshot.test.ts`); it proves *that* the port is called, not *what* it returns.
-- Assertions compare **titles** rather than counts so a failure identifies *which* visibility rule shifted, especially between the near-identical `guest` and `logged` tiers.
-- `getById` is expected to return a plain wire object (Mongoose `toJSON` already applied) *before* any translation resolution; the `asStub` check for absent `save` enforces this.
-- Batch-id search treats invisible/soft-deleted ids as **silently absent** from the page, not as errors.
+- **Image-store mock boundary:** The mock targets `imageStore.remove`, not the filesystem or object-store adapter. Asserting on `deleteFile(publicPath + url)` would couple the test to the current backend; mocking the adapter keeps the test valid if images move to S3.
+- **`applyImageWriteback` stays real:** Only the destructive `remove` half is stubbed; the pure mutation helper that writes `imageUrl` onto the document still executes for genuine coverage.
+- **Visibility assertions use titles, not counts:** A mixed assertion (e.g. "length is 1") cannot say *which* rule moved. Comparing the exact title list pins the expectation to a specific product.
+- **`guest` vs `logged` differ only by the presence of a `Caller` object**, not a boolean flag. A rule that accidentally switches on truthiness rather than role will pass the `guest` test but still hide items from `logged`—the test suite is structured so such a regression surfaces as a *different* failure, not a silent pass.
+- **`getById` returns the wire shape:** The document's `toJSON` transform runs inside the service before translation resolution, so the result is a plain object (no `save`, no Mongoose internals). Tests assert this explicitly.

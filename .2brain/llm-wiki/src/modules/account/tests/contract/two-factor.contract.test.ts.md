@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/contract/two-factor.contract.test.ts
-sha256: 7436848aeb68030f8fab447af7e11c8409b7fb8714095847c670dfcfe68f0ec4
-generated_at: 2026-10-14T14:40:06.739643+00:00
+sha256: eed19548caf670f0657f48e29713a838407178ad34e7e22f6b4e18a03dab73fc
+generated_at: 2026-10-29T02:52:59.889652+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the two-factor authentication endpoints. Each test asserts that the HTTP response (status code and body shape) matches what `openapi.yaml` publishes for that operation—covering the status read, arming/removing factors, regenerating backup codes, and mailing login codes. The behavioural logic lives in `integration/two-factor.test.ts`; this file only pins the API surface.
+Contract tests that verify the HTTP response shapes (status codes, field presence, types) of the second-factor authentication endpoints against the definitions published in `openapi.yaml`. Business-logic assertions live in `integration/two-factor.test.ts`; this file only checks that each success and refusal answer matches the published contract.
 
 ## Key elements
 
-- **`mockOutbox`** — module-level array that captures every call to the mocked `enqueueEmail`, so tests can read the mailed code and template.
-- **`Session` interface** — pairs a `createUser` result with a `Bearer` token string; the unit of "signed-in caller" throughout the file.
-- **`verifiedSession()`** — creates a verified user (`verifiedAt` set) and logs in, returning a `Session`. Verification is required because the email factor refuses unverified addresses.
-- **`carryOn(session)`** — re-mints a bearer token via `mintSession` with `amr: ['pwd', 'otp']` after a factor change has revoked the current session.
-- **`armTotp(session)`** — POSTs `/setup` then `/confirm` for the TOTP method using a code from `codeFor`, stores the returned backup codes in `backupCodesOf`, and carries the session forward.
-- **`backupCodesOf`** — `Map<string, string[]>` keyed by TOTP secret; holds the backup codes each armed secret produced (used as proof when arming a second factor).
-- **`armEmail(session, proof?)`** — POSTs `/setup` (with a proof code if a second factor), pulls the mailed code from `mockOutbox`, POSTs `/confirm`, and carries the session forward.
-- **`describe` blocks** — one per endpoint: `GET /account/2fa`, `POST /account/2fa/backup-codes`, `DELETE /account/2fa/methods/{method}`, `DELETE /account/2fa`, `POST /account/login/2fa/send`, `POST /account/2fa/methods/{method}/send`, and `POST /account/2fa/methods/{method}/setup`.
+- **`mockOutbox`** – module-level array; captures every `enqueueEmail` call (template + data) instead of sending mail.
+- **`jest.mock('@infrastructure/adapters/mailer')`** – replaces `enqueueEmail` with a recorder so no real mail is dispatched.
+- **`Session`** – interface pairing a created user with a `Bearer` token for subsequent authenticated calls.
+- **`verifiedSession()`** – creates a verified user and returns a logged-in session.
+- **`carryOn(session)`** – re-mints a bearer token after a factor change has revoked all sessions (calls `mintSession` with `amr: ['pwd','otp']`).
+- **`armTotp(session)`** – performs TOTP setup + confirm, records the backup codes in `backupCodesOf`, and carries the session on.
+- **`backupCodesOf`** – `Map<string, string[]>` linking each armed secret to its one-time backup codes (used as "proof" for a second factor).
+- **`armEmail(session, proof?)`** – performs email setup (optionally with a proof code), reads the mailed code from `mockOutbox`, confirms, and carries on.
+- **`describe` blocks** – one per endpoint group: `GET /account/2fa`, `POST …/backup-codes`, `POST …/methods/{method}/remove`, `POST …/disable`, `POST /account/login/2fa/send`, `POST …/methods/{method}/send`, and `POST …/methods/{method}/setup` (second-method guard). Each asserts status codes and body shape only.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** — side-effect import (`@tests/contract`) that installs the OpenAPI shape-matching assertions used implicitly by `expect`.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the test database before any test runs.
-- **`tests/support/environment.ts`** — `setEnvironment({ NODE_MAIL_TRANSPORT: 'outbox' })` in `beforeEach` ensures the mail pipeline "delivers" into the mock outbox rather than dropping.
-- **`tests/support/http.ts`** — `api()` builds supertest-style request chains; `loginBearer()` performs a password login and returns the bearer token.
-- **`tests/support/session-epoch.ts`** — `forgetSessionEpoch(bearer)` invalidates the server-side session-epoch cache so the next request after `carryOn` is not rejected as stale.
-- **`tests/support/totp.ts`** — `codeFor(secret, offset)` generates a valid TOTP code for the given offset into the 30-second window.
-- **`src/modules/account/tests/factories.ts`** — `mintSession(userId, { amr })` creates a fresh bearer token representing a post-factor-change session.
-- **`src/modules/users/tests/factories.ts`** — `createUser(opts)` and `PLAIN_PASSWORD` seed a known user for login.
+| Neighbor | Interaction |
+|---|---|
+| `tests/support/contract.ts` | Side-effect import (`@tests/contract`) that installs the OpenAPI shape-assertion matcher used implicitly by `expect`. |
+| `tests/support/setup-test-db.ts` | `setupTestDb()` is called once at module scope to provision an isolated database. |
+| `tests/support/environment.ts` | `setEnvironment({ NODE_MAIL_TRANSPORT: 'outbox' })` runs in `beforeEach` so the "mail delivers" gate is open without a real transport. |
+| `tests/support/http.ts` | `api()` provides the `supertest`-style request helper; `loginBearer()` authenticates and returns the bearer string. |
+| `src/modules/account/tests/factories.ts` | `mintSession` is called inside `carryOn` to re-establish a bearer after session revocation. |
+| `tests/support/totp.ts` | `codeFor(secret, step)` generates a valid TOTP code for the given step index. |
+| `src/modules/users/tests/factories.ts` | `createUser` builds the test account; `PLAIN_PASSWORD` supplies the known password for the login-challenge test. |
 
 ## Notes
 
-- The mailer adapter is jest-mocked at module level; no real email is ever sent. Tests read the code directly from `mockOutbox`.
-- Arming or removing a factor **revokes every active session** for that account. Every helper that changes a factor calls `forgetSessionEpoch` + `carryOn` to restore a valid bearer, or subsequent requests will 401.
-- `codeFor(secret, N)` advances N × 30 s past the current window, so tests use `codeFor(secret, 1)` *after* setup (which consumed window 0) to stay within a valid window.
-- The `sentTo` field in mail responses is masked (e.g. `a***a@example.com`); tests assert the masked form, not the raw address.
+- **No real mail is sent.** The mailer is globally mocked; `mockOutbox` is the only channel for reading what "would have" been delivered. The `NODE_MAIL_TRANSPORT` env var is set to `'outbox'` purely to satisfy a server-side gate (`mailDelivers`) — the mock intercepts before any I/O.
+- **Session revocation is the reason `carryOn` exists.** Arming or removing any 2FA factor invalidates every existing session. The helper re-mints a bearer so the test can continue; omitting it causes the next request to get `401`.
+- **Second-method proof requirement.** Arming a *second* factor (e.g. email after TOTP) requires a valid code from an already-armed factor. `backupCodesOf` stores those codes during `armTotp` so `armEmail` can pass one.
+- **Contract vs. integration split.** This file deliberately avoids asserting *why* a response is correct (e.g. token rotation logic, code expiry). Those concerns belong to the integration suite; mixing them here would couple contract stability to implementation detail.
+- **Legacy endpoint tombstone.** The `is gone at the old DELETE addresses` test documents that `DELETE /account/2fa` returns 405 and `DELETE /account/2fa/methods/totp` returns 404, locking in the removal of the old API surface.

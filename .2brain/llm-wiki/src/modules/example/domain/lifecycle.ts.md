@@ -1,7 +1,7 @@
 ---
 source: src/modules/example/domain/lifecycle.ts
-sha256: 6d5c102f54f96a17c0eb32feb56a84d35c940f8672f33890edd50d4328779a5e
-generated_at: 2026-10-14T15:41:44.071738+00:00
+sha256: 72b813bfd3cb1acff3afeafe8108829e6218f7ad1e596f16cffb62bd5e702379
+generated_at: 2026-10-29T03:52:38.294265+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure business rules governing the status lifecycle of an example (draft → published → archived). It defines which status transitions are legal, when the `publishedAt` stamp is set, and two small helpers (read-visibility, body-length check) — all without any I/O.
+Declares the example's lifecycle state machine — the three statuses (draft, published, archived), the events that move between them, and a set of pure query helpers the services layer calls to decide what a given caller may do. No I/O; every export is a synchronous decision.
 
 ## Key elements
 
-- **`TRANSITIONS`** (module-private) — A read-only map from each `ExampleStatus` to the statuses it may move to. Draft allows published/archived; published allows only archived; archived allows only draft.
-- **`initialExampleStatus`** — The status a new example starts at (`draft`).
-- **`canTransition(from, to)`** — Returns `true` if the move is allowed, including a same-status "no-op" (a PUT restating the current status must not fail).
-- **`isPublished(status)`** — Whether an example in that status is publicly readable (only `published`).
-- **`shouldStampPublishedAt(nextStatus, alreadyPublishedAt)`** — Whether a write should set `publishedAt`: only on the *first* transition into `published`; re-publishing after an archive does not overwrite the original date.
-- **`fitsBodyLength(body, maximum)`** — Checks whether a body's character count is within a deployment-level ceiling (which may be tighter than the API contract).
+- **`ExampleEvent`** — union type: `'publish' | 'archive' | 'unarchive'`.
+- **`EXAMPLE_EVENTS`** — `as const satisfies Record<ExampleEvent, LifecycleEvent<ExampleStatus>>` table mapping each event to its `from`/`to` statuses. This is the single source of truth for allowed transitions.
+- **`initialExampleStatus`** — the status a new example starts in (`draft`), read from the `defineLifecycle` result.
+- **`canApply(event, status)`** — whether the event is a legal move from the given status.
+- **`statusAfter(event)`** — the destination status of an event, regardless of source.
+- **`exampleActionsFor(status, permits)`** — combines lifecycle validity with the caller's `update`/`delete` permissions into a full `ExampleActions` object.
+- **`isPublished(status)`** — boolean check; used to gate anonymous read access.
+- **`shouldStampPublishedAt(nextStatus, alreadyPublishedAt)`** — true only on the *first* transition into `published`; prevents re-publishing after an archive from overwriting the original timestamp.
+- **`fitsBodyLength(body, maximum)`** — checks a body string against a deployment-specific character ceiling.
 
 ## Relationships
 
-- **`src/types/index.ts`** — Provides the `ExampleStatus` enum (imported via the `@types` alias).
-- **`src/modules/example/domain/index.ts`** — Barrel file that re-exports this module's public API for consumers within the domain folder.
-- **`src/modules/example/services/crud.ts`** — Service-layer caller; consults `canTransition`, `shouldStampPublishedAt`, and `fitsBodyLength` when processing create/update requests.
-- **`src/modules/example/tests/unit/domain.test.ts`** — Unit tests exercising every exported predicate against the transition table and edge cases (same-status, re-publish, length boundary).
+- **`src/domain-primitives/lifecycle.ts`** — supplies `defineLifecycle` (the generic state-machine builder) and the `LifecycleEvent` type; this file is a concrete instantiation of that contract.
+- **`src/types/index.ts`** — provides the `ExampleStatus` enum and the `ExampleActions` return type used by `exampleActionsFor`.
+- **`src/modules/example/domain/index.ts`** — barrel that re-exports this module's public API to the rest of the codebase.
+- **`src/modules/example/services/transition.ts`** — calls `canApply` / `statusAfter` to validate and execute a status change.
+- **`src/modules/example/services/actions.ts`** — calls `exampleActionsFor` to build the per-request permission envelope.
+- **`src/modules/example/services/crud.ts`** — calls `isPublished`, `shouldStampPublishedAt`, and `fitsBodyLength` during create/read/update/delete.
+- **`src/modules/example/services/owner.ts`** — resolves the `permits` argument passed into `exampleActionsFor`.
+- **`src/modules/example/tests/unit/domain.test.ts`** / **`lifecycle.property.test.ts`** — unit and property-based tests exercising these helpers.
 
 ## Notes
 
-- `TRANSITIONS` is intentionally **not** exported; callers go through `canTransition` so the table shape stays an internal detail.
-- The same-status check (`from === to`) is baked into `canTransition` rather than left to the caller, so service code never needs a separate guard for idempotent PUTs.
-- `fitsBodyLength` uses a caller-supplied `maximum` rather than a hard-coded constant, allowing per-deployment overrides that sit below the contract ceiling.
+- `EXAMPLE_EVENTS` is the **only** place transitions are declared. Changing a transition means editing this table, not the services.
+- A published example is withdrawn only via `archive`; there is no `unpublish` event. Only `archived → draft` is allowed for re-entry.
+- `exampleActionsFor` gates **all three** lifecycle moves behind the `update` permission; `delete` is independent. A caller with `update: false` gets all lifecycle actions set to `false` even if the transition is structurally valid.
+- `shouldStampPublishedAt` is deliberately idempotent-safe: it returns `false` if `alreadyPublishedAt` is set, so a publish → archive → publish cycle preserves the original date.
+- `fitsBodyLength` accepts a caller-supplied `maximum`, implying the ceiling is deployment/config-dependent and may be stricter than the API contract's limit.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/services/deliver.ts
-sha256: 3e13b51d9060c5c184b3e4f5fbb9dc406dc1aca316349603434aba3bb71e2dd8
-generated_at: 2026-10-14T15:28:51.516549+00:00
+sha256: c157bd73082ed3f103de3646b9ac49d81fc44db66066cdd9d73a6546632dc323
+generated_at: 2026-10-29T03:39:01.971214+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Records a shipment's arrival (the "delivery door"). Within a single Mongoose transaction it stamps the shipment as delivered, recomputes the parent order's summary, and—when this was the last undelivered shipment with nothing left to ship—transitions the order to `delivered` and starts the CRD withdrawal clock. Supports a "forced" path that bypasses carrier confirmation but requires an override permission and a recorded reason.
+Records a shipment's arrival (the "delivery door"). Stamps the shipment as delivered, recomputes the order's progress/summary, and—when this is the last undelivered shipment—transitions the order to `delivered` and starts its withdrawal clock from that arrival instant (CRD Art. 9(2)(b)(i)). A lost shipment that turns up is accepted through the same path. All mutations occur in a single Mongoose transaction.
 
 ## Key elements
 
-- **`DeliverInput`** (exported interface) — Caller-supplied input: optional `forced` flag and `reason` string for override history.
-- **`Delivered`** (private interface) — Internal pair of `{ shipment: ShipmentDocument; order: OrderDocument }` returned by the transactional act.
-- **`deliverAct`** (private function) — The core transaction body: loads shipment and order in-session, guards order status (`processing`/`shipped` only), stamps the shipment with a single shared timestamp, reports progress, settles the order (status, summary, `lastDeliveredAt`), optionally records a forced-fulfilment entry, and fires the `announceDelivered` event.
-- **`deliverShipment`** (exported function) — Public entry point. Validates permissions (`refuseUnearnedForce`), loads shipment/order outside the transaction for early 404s, checks outranked-refusal, then wraps `deliverAct` in `runAct` (the transaction runner). On success, fires `notifyDelivered`, writes an audit record, and returns the shipment view via `viewShipment`.
+- **`deliverShipment`** *(exported)* — Public entry point. Runs `deliverAct` inside a transaction via `runAct`, records an audit entry on success, refreshes the shelf hold if the shipment was restored from lost, and returns the shipment view wrapped in `generateSuccess`.
+- **`deliverAct`** *(internal)* — The transactional core. Loads the shipment and order in-session, validates the order is deliverable, stamps the shipment (normal or lost-restore), reports progress, settles the order, and announces delivery. Returns a `Delivered` result or a refusal.
+- **`Delivered`** *(internal interface)* — Shape handed to post-transaction steps: the shipment doc, the order doc, and a `wasLost` flag.
 
 ## Relationships
 
-- **`./act`** — Provides `runAct` (transaction wrapper), `refuse`, and `refuseMissing` used for the refusal/transaction contract.
-- **`./progress`** — `reportProgress` recomputes the order's shipment summary; `settleOrder` applies the new status and `lastDeliveredAt` to the order document.
-- **`./force`** — `refuseUnearnedForce` gates the `forced` path before any I/O.
-- **`./announce`** — `announceDelivered` emits the domain event inside the transaction.
-- **`./notify`** — `notifyDelivered` dispatches post-commit notifications (outside the transaction).
-- **`./actions`** — `viewShipment` builds the API response view from the committed shipment and order.
-- **`../repository`** — `shipmentRepository` performs all shipment reads/writes (`findInSession`, `markDelivered`, `findById`).
-- **`../model`** — `ShipmentDocument` type for the repository's return shape.
-- **`../audit`** — `deliveryAuditActions` supplies the audit action enum value (`ADMIN_ORDER_DELIVERED`).
-- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` and their types shape every return path.
-- **`@infrastructure/i18n`** — `t()` resolves user-facing error strings.
-- **`@infrastructure/observability/audit`** — `recordAudit` writes the post-commit audit entry.
+- **`./act`** — `runAct` provides the Mongoose session/transaction boundary; `refuse` and `refuseMissing` produce typed rejection responses.
+- **`./found`** — `restoreLostShipment` re-opens a lost shipment; `viewShipmentOf` builds the public response view.
+- **`./progress`** — `reportProgress` recomputes order summary; `settleOrder` finalises status and timestamps.
+- **`./announce`** — `announceDelivered` emits the post-delivery notification.
+- **`../repository`** — `shipmentRepository.findInSession` / `markDelivered` persist the shipment state.
+- **`../model`** — `ShipmentDocument` type for the in-session shipment.
+- **`../audit`** — `deliveryAuditActions` supplies the audit action constant.
+- **`@modules/orders`** (barrel: `index.ts`, `model.ts`, `services/index.ts`, `domain/lifecycle.ts`) — `canRecordArrival` gates eligibility; `orderService.readOrder` loads the order; `orderService.refreshShelf` syncs stock holds after a lost-restore.
+- **`@infrastructure/http/response`** — `generateSuccess` and the `ResponseSuccess`/`ResponseReject` types shape the API response.
+- **`@infrastructure/observability/audit`** — `recordAudit` writes the audit trail entry.
 
 ## Notes
 
-- `deliverAct` is deliberately **not exported**; it can only run inside `runAct`'s transaction scope. Callers must go through `deliverShipment`.
-- A single `const at = new Date()` is captured once and passed to both `markDelivered` and `settleOrder` so the shipment stamp and the order's withdrawal deadline can never disagree.
-- The withdrawal clock uses `progress.summary.lastDeliveredAt ?? at` — if the order already had a prior delivered shipment, that earlier timestamp governs the deadline, not the current arrival.
-- Refusals inside the transaction (e.g. wrong order status) use the `refuse` helper, which **throws** to roll back the transaction; refusals outside it (404s, permission) return a `ResponseReject` directly.
-- The `forced` path adds an extra `orderService.recordForcedFulfilment` call within the same transaction, so the override history entry is atomic with the delivery itself.
+- The arrival timestamp (`at`) is captured once and shared between the shipment stamp and the order's `lastDeliveredAt` fallback, so the two can never disagree on when the goods arrived.
+- A lost-restore path also triggers `orderService.refreshShelf` **after** the transaction commits (the shelf hold moved inside the transaction, but the catalogue copy is refreshed outside it).
+- The `wasLost` flag is propagated into audit metadata (`{ wasLost: true }`) but does not change the response shape otherwise.
+- `deliverShipment` accepts `authContext` (nullable) only for populating the caller-scoped `actions` array in the view; the transactional act itself uses `context.caller.id`.

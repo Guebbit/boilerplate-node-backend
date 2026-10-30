@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/controllers/get-returns.ts
-sha256: 15f067464a04bf8338767f9ea716aeb40dd9723bf3488b9e17ab42f2266be5f7
-generated_at: 2026-10-15T11:51:26.334271+00:00
+sha256: 26a2441cc324798a0fe2456efd48e5ccf4132a6dc653bf2acf1e714764d7eb3f
+generated_at: 2026-10-29T05:36:00.889122+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP handler for `GET /returns`. Returns a paginated list of returns: all returns for staff callers, only their own returns for non-staff callers. Visibility scoping is decided entirely by the service layer from the auth context — never from a query parameter.
+Handles the `GET /returns` endpoint, returning a paginated list of return records. The visibility scope (all returns for staff, own-order returns for everyone else) is determined exclusively by the service layer from the authenticated caller's context — never from a query parameter.
 
 ## Key elements
 
-- **`listReturnsQuerySchema`** (module-level const) — Extends the generated `ListReturnsQueryParams` (from `@api/schemas.zod`) with `page` and `pageSize` fields coerced via `pageSchema` / `pageSizeSchema`, so the raw string values from a query string are validated and typed.
-- **`getReturns`** (exported const, Express handler) — Parses `request.query` against `listReturnsQuerySchema`, pulls the non-null `request.authContext` (set upstream by `isAuth` middleware), delegates to `returnService.listReturns(parsed, authContext)`, and sends the result via `successResponse`. Errors are funnelled through `catchAs(response, 'getReturns')`.
+- **`getReturns`** (exported const) — A list controller built via `createListController`. Accepts `page`, `pageSize`, and `sort` query params; passes the parsed input and the request's `authContext` to `returnService.listReturns`. Returns newest-first by default.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — Supplies `parseBody` (query-string validation) and `catchAs` (async error → HTTP response mapping).
-- **`src/infrastructure/http/response.ts`** — Supplies `successResponse` for the 200 reply.
-- **`src/infrastructure/http/schemas.ts`** — Supplies `pageSchema` and `pageSizeSchema` (Zod string→number coercions) used to build `listReturnsQuerySchema`.
-- **`src/modules/returns/services/index.ts`** — Exports `returnService`; the handler calls `returnService.listReturns(query, authContext)` and relies on the service to apply the staff-vs-self scoping.
-- **`src/modules/returns/routes.ts`** — Registers `getReturns` as the handler for the `GET /returns` route (and likely mounts the `isAuth` middleware that populates `request.authContext`).
+- **`src/infrastructure/surfaces/create-list-controller.ts`** — Provides the `createListController` factory that wraps validation, pagination, and HTTP response shaping around the thin `runList` callback defined here.
+- **`src/infrastructure/http/schemas.ts`** — Supplies `pageSchema` and `pageSizeSchema`, which are grafted onto the API-level `ListReturnsQueryParams` to form the full query-param schema for this route.
+- **`src/modules/returns/services/index.ts`** — Exposes `returnService`; this controller delegates all data access and scope logic to `returnService.listReturns`.
+- **`src/modules/returns/routes.ts`** — Registers `getReturns` on the `GET /returns` path (and presumably applies the `isAuth` middleware upstream).
 
 ## Notes
 
-- `request.authContext!` uses a non-null assertion; correctness depends on `isAuth` middleware running before this handler. There is no runtime guard in this file.
-- `parseBody` is named "body" but is used here for **query** parameters — it is a generic "parse a request segment against a Zod schema" helper, not limited to `request.body`.
-- The module doc-comment explicitly states the scoping rule (service-side, caller-based). Any future query-param like `?staff=true` would violate that contract.
+- `request.authContext` is asserted non-null (`!`) on the assumption that an `isAuth` middleware has already run; if that middleware is bypassed, the controller will crash rather than return 401.
+- The `page`/`pageSize` fields come from the infrastructure schema pair (not the API-level zod schema) specifically so that an absent value stays `undefined` rather than defaulting.
+- `sort` is a comma-separated list, split by the `csvLists` option passed to `createListController`.

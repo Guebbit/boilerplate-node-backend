@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/unit/withdrawal.test.ts
-sha256: b6dfd424deac0ba418eddb57175877eaf7201566f80af5b060232a40f8426b36
-generated_at: 2026-10-15T11:22:16.739398+00:00
+sha256: c3ab12227a10bfbcedfe789bb853a5e911d2f43602f3ee892708979605a738bb
+generated_at: 2026-10-29T05:01:30.235222+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the pure withdrawal-window rules (Consumer Rights Directive Art. 9/11a/16) that live in the orders domain layer. Verifies the start/end calculation of the 14-day window, status-based eligibility, dispatch state, and per-line exclusion logic.
+Unit tests for the pure withdrawal-window domain rules (Consumer Rights Directive Art. 9, 11a, 16). The file pins down the exact date arithmetic, status gates, and exclusion logic that determine whether a buyer can exercise a right of withdrawal, how long the window lasts, and what reason is reported when it is denied.
 
 ## Key elements
 
-- **`withdrawalStartFor` tests** — Physical orders start at arrival (`NOW`); digital-only orders start at `paidAt`; unpaid digital falls back to arrival.
-- **`withdrawUntilFrom` tests** — Confirms the window excludes the event day (14 full days *after*), always resolves to `23:59:59.999Z` of the 15th calendar day, is independent of the event's time-of-day, and handles month boundaries correctly.
-- **`canWithdraw` tests** — True for all statuses before the window opens; always false for `cancelled`; true on the exact last instant; false one millisecond after expiry; false when every line is excluded; true if at least one line is eligible.
-- **`isBeforeDispatch` tests** — `pending`/`paid`/`processing` read as in-shop; `shipped`/`delivered`/`cancelled` read as past dispatch; a `processing` order with `fulfillment.shipped: true` is treated as past dispatch (shipment fact overrides status).
-- **`isExcludedFromWithdrawal` tests** — True only when `product.noWithdrawal === true`; false for `false`, missing key, or `product: null`.
+- **`withdrawalStartFor` tests** — physical goods: window starts at delivery; digital: starts at payment; unpaid digital falls back to delivery.
+- **`withdrawUntilFrom` tests** — 14-day window ends at `23:59:59.999Z` of the 14th calendar day after the event; result is time-of-day-independent; crosses month boundaries correctly.
+- **`withdrawalClosesAt` tests** — adds one silent grace day (full UTC day) after the announced last day; verified across month and year boundaries.
+- **`conformityUntilFrom` tests** — 2-year conformity period, ending on the 7th day after the anniversary; leap-year edge (29 Feb → 8 Mar).
+- **`deliveryClockFor` tests** — withdrawal clock runs from its own start; conformity clock runs from arrival, independently.
+- **`canWithdraw` tests** — `true` for pending/paid/processing/shipped/delivered before window opens; `false` for cancelled; boundary cases at the last millisecond of the grace day.
+- **`isBeforeDispatch` tests** — status-based (pending/paid/processing = true; shipped/delivered/cancelled = false) with an override: partial shipment (`fulfillment.shipped = true`) flips a processing order to `false`.
+- **`canCorrectAddress` tests** — open when nothing shipped or units remain after a partial shipment; closed when all units left, shipped, delivered, cancelled, or no shipping address.
+- **Art. 16 exclusion tests** — `isExcludedFromWithdrawal` per line; `canWithdraw` is `false` only when *all* lines are excluded, `true` if at least one line is eligible.
+- **`withdrawalRefusalOf` tests** — returns `undefined` when withdrawal is offered; `all_excluded`, `window_closed`, or `nothing_left` otherwise; first-reason-wins ordering; final consistency check against `canWithdraw`.
+- **`repairedConformityUntil` tests** — extends the conformity deadline by exactly 12 months, preserving day-of-month and time.
 
 ## Relationships
 
-- **Imports** `canWithdraw`, `isBeforeDispatch`, `isExcludedFromWithdrawal`, `withdrawalStartFor`, `withdrawUntilFrom` from `src/modules/orders/domain/index.ts` (barrel that re-exports from `src/modules/orders/domain/withdrawal.ts`).
-- **Imports** `OrderStatus` enum from `src/types/index.ts` for status-based test cases.
+- **`src/modules/orders/domain/index.ts`** — the barrel file from which every tested function is imported (`canCorrectAddress`, `canWithdraw`, `conformityUntilFrom`, `deliveryClockFor`, `isBeforeDispatch`, `isExcludedFromWithdrawal`, `repairedConformityUntil`, `withdrawalClosesAt`, `withdrawalRefusalOf`, `withdrawalStartFor`, `withdrawUntilFrom`). This file is the sole SUT.
+- **`src/modules/orders/domain/withdrawal.ts`** — the implementation module that the barrel re-exports; these tests exercise its public API directly.
+- **`src/types/index.ts`** — provides the `OrderStatus` enum and `WithdrawBlockedReason` enum used to construct order fixtures and assert refusal codes.
 
 ## Notes
 
-- The 14-day window is calendar-day based: the event day is day 0, so the deadline is the 15th calendar day at `23:59:59.999Z`. Tests assert this explicitly with ISO strings.
-- `isBeforeDispatch` is not purely status-driven; the `fulfillment.shipped` boolean can flip the result for a `processing` order (partial shipment case).
-- Exclusion is per-line, not per-order: a mixed order (one excluded line, one eligible) still gets withdrawal offered.
-- A fixed `NOW` constant (`2026-03-10T12:00:00Z`) is shared across all `describe` blocks to keep boundary tests deterministic.
+- All tests use a frozen `NOW` (`2026-03-10T12:00:00Z`) for determinism; no test calls `Date.now()`.
+- The "silent grace day" (one full UTC day after the announced last day) is a deliberate product rule, not a bug; `canWithdraw` and `withdrawalRefusalOf` must agree on it.
+- `isBeforeDispatch` checks the *fulfillment* object, not just the status: a processing order with `shipped: true` is treated as past dispatch, preventing a refund of goods the buyer already holds.
+- `withdrawalRefusalOf` returns `undefined` (not `null`) when withdrawal *is* offered; the final consistency loop asserts `canWithdraw` is `true` iff the reason is `undefined` and status is not `cancelled`.
+- Tests are organized by function under `describe` blocks, with `it.each` for status-parameterized cases — keep that pattern when adding new statuses.

@@ -1,7 +1,7 @@
 ---
 source: tests/support/contract-routes.ts
-sha256: c6a90215e66c8058297dc883ebbf0ca5085e637c8d82c9e468e994175de27cfd
-generated_at: 2026-10-15T12:56:57.457867+00:00
+sha256: 1833d116dcc38611ca3bb34a7ec0a7fef9ac815517bf68f6d97d918b16c269a9
+generated_at: 2026-10-29T07:07:00.276887+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Produces a flat, contract-level inventory of every endpoint mounted by any enabled module (method, absolute path, guard chain, permission key). It lives in its own file rather than in `@tests/routes` because importing `enabledModules` drags in every module's event subscriptions and demo seeding — a cost per-module route unit tests have no reason to pay.
+Provides a flattened, guard-aware inventory of every HTTP endpoint mounted by any enabled module. It exists as a lightweight contract-layer view of the route table so that authorization, ownership, and security tests can assert against the full endpoint surface without paying the startup cost (event subscriptions, demo seeding) that `enabledModules` carries for the full app.
 
 ## Key elements
 
-- **`MountedRoute`** (interface) — one row per endpoint: `method`, absolute `path`, ordered `guards` array, optional `permissionKey`, and optional `exactPermission` flag.
-- **`everyMountedRoute()`** (exported function) — filters `enabledModules` down to those with `basePath` + `routes`, then calls `effectiveRouteTable` on each module's router and maps the result into `MountedRoute[]`, prepending the module's `basePath` to produce the absolute path.
+- **`MountedRoute` (interface)** — Shape of one endpoint row: `method` (uppercased HTTP verb), `path` (absolute, `basePath` + router path), `guards` (router-level + per-route guards in execution order), `permissions` (the `PermissionAsk[]` every `requirePermission` guard on the route asks; empty if none).
+- **`everyMountedRoute()` (function, no args)** — Flattens `enabledModules` → each module's `mounts` → each mount's `routes` through `effectiveRouteTable`, returning a `MountedRoute[]` with one entry per method/path pair.
 
 ## Relationships
 
-- **`src/modules.ts`** — provides `enabledModules`, the list of active modules from which `basePath` and `routes` are read.
-- **`tests/support/routes.ts`** — provides `effectiveRouteTable`, which extracts method/path/guard metadata from a single flat Express router.
-- **`tests/contract/authorization-contract.test.ts`** — consumes `everyMountedRoute` to assert permission-guard coverage across all endpoints.
-- **`tests/cross-cutting/api-key-security.test.ts`** — consumes `everyMountedRoute` to verify API-key guard placement across all endpoints.
+- **`src/modules.ts`** — Imports `enabledModules` to enumerate which modules (and their `basePath` / `routes`) are active.
+- **`tests/support/routes.ts`** — Imports `effectiveRouteTable` (the per-router guard-chain resolver) and the `PermissionAsk` type. This file deliberately wraps rather than re-exports that table so callers never trigger the full-module side effects that live in `@tests/routes`.
+- **`tests/contract/authorization-contract.test.ts`, `tests/contract/ownership-contract.test.ts`, `tests/cross-cutting/api-key-security.test.ts`, `tests/cross-cutting/identity-guards-follow-the-spec.test.ts`** — Consume `everyMountedRoute` / `MountedRoute` to iterate the entire endpoint surface and assert guard or permission invariants per route.
 
 ## Notes
 
-- Walks each module's router individually instead of the assembled `app` because `app.use(basePath, router)` nests a module as one opaque middleware layer; `effectiveRouteTable` only reads a flat router's own routes.
-- The `guards` array is the concatenation of `applies` (router-level middleware) followed by `chain` (per-route guards), in actual execution order.
-- `permissionKey` / `exactPermission` are `undefined` for routes that have no `requirePermission` guard.
+- Walks each module's **own** router, not the assembled Express `app`. `app.use(basePath, router)` nests the router as a single opaque middleware layer, so `effectiveRouteTable` would see only one entry instead of the module's individual routes.
+- A module whose `mounts` field is absent is treated as `[]` (default in the `flatMap`), so modules that export no mounts contribute zero rows without crashing.
+- `guards` is the concatenation `[...applies, ...chain]` — router-level guards first, then per-route guards — matching runtime execution order.

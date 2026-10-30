@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/config.ts
-sha256: 58c66f8e842e97983ab6c42bab8ef3359f357d95b1c464c186cc404b02d1543f
-generated_at: 2026-10-15T10:58:57.868073+00:00
+sha256: c1e19c0a557edddc53152438d176163a02ce3d02dbf21a7c13e515c355d97eee
+generated_at: 2026-10-29T04:37:47.916772+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,40 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Central configuration for the orders module: the shop's legal identity (name, address, contact), return-shipment rules, bank-transfer payment details, operational limits (order size, retention, retry intervals), and the single frontend deep-link into the paired UI. All values are read per-call via getter functions so tests can vary them per case without re-imports; a deployment corrects a value with a restart.
+Defines the orders module's tunable rules—withdrawal window, data-retention periods, line/quantity caps, purchase-hold thresholds, and the link into the paired frontend. Every value is read per call (not captured at import) so tests can vary them; a deployment change takes effect on restart. Shop identity, currency, and VAT rates deliberately live elsewhere.
 
 ## Key elements
 
-- **`ordersConfig`** — The `defineConfig` manifest declaring every `NODE_*` variable, its validator, default, and constraints. The single source of truth for shape and boot-time requiredness.
-- **`shopCountry()`** — Returns the shop's ISO-3166 country code (the only jurisdiction where VAT applies). Optional at runtime; required at boot.
-- **`shopTimezone()`** — Returns the IANA time-zone name governing calendar-year series and day-counting. Throws `ConfigError` if unset (only possible under `NODE_ENV=test`).
-- **`shopIdentity()`** — Returns a `ShopIdentity` object (legal name, address, email, phone, optional VAT number) for invoice seller blocks and CRD Art. 6(1)(b)–(c) notices.
-- **`returnAddress()`** — Returns a `ReturnAddress`; falls back to the shop's legal address when the dedicated return fields are only partially set.
-- **`returnPostagePayer()`** — Returns `'consumer'` (default) or `'shop'`; drives placed-order and withdrawal email wording per CRD Art. 14(1).
-- **`shipToCountries()`** — Returns the upper-cased ISO-3166 list the deployment will ship to; defaults to the shop's own country alone.
-- **`shopCurrency()`** — Delegates to `currencyConfig()` from infrastructure; the order-side door to the shared ISO-4217 code.
-- **`bankTransferBeneficiary()` / `bankTransferIban()` / `bankTransferBic()`** — Individual getters; `undefined` means transfer is not offered.
-- **`bankTransferIbanFriendly()`** — Strips whitespace and groups the IBAN into 4-character blocks for display to the customer.
-- **`RETURN_POSTAGE_PAYERS` / `ReturnPostagePayer`** — Const array and derived union type for the postage-payer choice.
-- **`requiredValue`** (module-private) — Guards against `undefined` on boot-required fields when `NODE_ENV=test` skips the manifest check.
+- **`ordersConfig`** — the single `defineConfig` object (`name: 'orders'`) holding all `NODE_*` env-backed settings with typed defaults and minimums.
+- **`maxAdminOrderLines()`** — effective line cap for admin-created orders: `min(config, schema ceiling)`.
+- **`maxAdminOrderLineQuantity()`** — effective per-line quantity cap, same ceiling logic.
+- **`withdrawalPeriodDays()`** — consumer withdrawal window (default 30, min 21).
+- **`orderPiiDaysAfterGuarantee()`** — PII retention after the conformity window closes (default 0).
+- **`orderPiiDaysUndelivered()`** — PII retention for a paid-but-undelivered order from `paidAt` (default 540).
+- **`orderEventTextRetentionDays()`** — retention for free-text on timeline rows, clocked from the row's own instant (default 1095).
+- **`orderExportMaxRows()`** — max rows per CSV export; exceeding it yields 422 (default 20 000).
+- **`orderFrontendLink({ locale, id })`** — resolves the order page URL in the paired frontend via `frontendLink`.
+- **`purchaseHoldCancelCount()`** — number of in-window cancellations that trigger a checkout hold (min 2).
+- **`purchaseHoldWindowDays()`** — rolling window (days) in which those cancellations are counted.
 
 ## Relationships
 
-- **`src/infrastructure/config/define.ts`** — Provides `defineConfig` and `ConfigError`; this file is a consumer of that DSL.
-- **`src/infrastructure/config/fields.ts`** — Provides the `text`, `email`, `int`, `csv`, `choice`, `timeZone` validators used in the manifest.
-- **`src/infrastructure/runtime/config.ts`** — Provides `currencyConfig`, re-exported here as `shopCurrency()`.
-- **`src/infrastructure/http/frontend-link.ts`** — Provides `frontendLink`; this file is its one caller in the orders layer (infrastructure does not know `orders` exists).
-- **`src/modules/invoicing/emails.ts` / `model.ts` / `services/numbering.ts`** — Consume `shopIdentity`, `shopTimezone`, and `shopCountry` for invoice rendering and year-numbered series.
-- **`src/modules/orders/emails.ts`** — Consumes `shopIdentity`, `returnPostagePayer`, and `returnAddress` for placed-order and withdrawal emails.
-- **`src/modules/cart/services/checkout.ts` / `view.ts`** — Read `shipToCountries` and bank-transfer getters to gate payment methods and display instructions.
-- **`src/modules/delivery/services/start.ts` / `notify.ts`** — Read return-shipment and delivery-relevant config values.
-- **`scenarios/flows/shop-history.ts`** — Reads shop identity and timezone for history/reporting context.
-- **`src/modules/invoicing/tests/integration/issue-invoice.test.ts` / `issue-credit-note.test.ts`** — Vary config values per test case via the per-call read pattern.
+- **`src/infrastructure/config/define.ts`** / **`fields.ts`** — provides `defineConfig`, `int`, and `text`; the sole structural dependency of this file.
+- **`src/infrastructure/http/frontend-link.ts`** — supplies `frontendLink` and `FRONTEND_LINK_RULES`; consumed by `orderFrontendLink`.
+- **`src/modules/orders/services/status.ts`**, **`retention.ts`**, **`timeline.ts`**, **`export.ts`**, **`purchase-hold.ts`**, **`override.ts`**, **`crud.ts`** — each consumes one or more of the exported getters (withdrawal, PII days, text retention, row cap, hold thresholds, line/quantity caps).
+- **`src/modules/orders/emails.ts`** — calls `orderFrontendLink` to embed the order URL in outbound email.
+- **`src/modules/orders/module.ts`** — registers the module; transitively depends on this config.
+- **`src/modules/delivery/services/notify.ts`** — reads withdrawal/retention values relevant to delivery notifications.
+- **`scenarios/flows/shop-history.ts`** — test scenario that varies these config values per case.
 
 ## Notes
 
-- The "per-call read, never capture at import" pattern is deliberate (set by `inventory/config.ts`): it lets each test case supply different values without module-cache resets.
-- `NODE_RETURN_ADDRESS_*` fields are treated as all-or-nothing: if any of street/city/zip/country is missing, `returnAddress()` silently falls back to the shop's legal address rather than returning a partial result.
-- `bankTransferIbanFriendly` intentionally does *not* use `ibantools`' `friendlyFormatIBAN`; it only does a 4-char chunk to keep `ibantools`' single-module ownership in `payments`.
-- `NODE_SHIP_TO_COUNTRIES` defaults to `[shopCountry()]` only; a deployment must explicitly widen the list to enable cross-border shipping.
-- `NODE_WITHDRAWAL_PERIOD_DAYS` has a hard minimum of 21 (CRD floor); `NODE_ORDER_PII_RETENTION_DAYS` defaults to 10 years.
+- **Per-call reads:** the pattern (borrowed from `inventory/config.ts`) means you cannot snapshot a value at module load and expect it to change in tests.
+- **Ceiling enforcement:** `maxAdminOrderLines` / `maxAdminOrderLineQuantity` silently cap at the API schema's max; setting the env var above that ceiling has no effect—the schema rejects first.
+- **Withdrawal minimum is 21, not 14:** the legal floor (Consumer Rights Directive Art. 9) is 14 days; 21 is chosen so a weekend/holiday rollover can never shorten the effective window below the legal minimum.
+- **VAT and shop identity are explicitly excluded** from this file by design (see `products` and `shop` configs respectively).
+- **`NODE_ORDER_PII_DAYS_AFTER_GUARANTEE` defaults to 0** — meaning PII is erased immediately once the conformity window ends unless the operator opts in.

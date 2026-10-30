@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/observability/security-events.ts
-sha256: 3ffbf5680aa8cf6da817f533155033ae804849f6338a023a3fb33a9122020e61
-generated_at: 2026-10-14T08:07:27.329175+00:00
+sha256: 216a692f1d35eab5e9881a3e6df65a8a2c28662ee0e5158a72fe92af9596f39e
+generated_at: 2026-10-29T02:11:27.885429+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines Prometheus counters for security-attack events (forged or guessed credentials) and pairs each increment with a structured audit log entry so the metric and the evidence can never disagree. The counters are rate-alertable; the audit lines are the forensic record.
+Pairs every `security.*` audit log entry with a Prometheus counter so that the audit trail (evidence) and the rate-based alert rule (signal) can never disagree on event counts. It is the single choke-point for incrementing security metrics and writing their corresponding audit records.
 
 ## Key elements
 
-- **`securityEventsTotal`** — `Counter` (`security_events_total`, label `event`). One series per attack type; label value is always a string from the bounded `coreAuditActions` set, never request data.
-- **`staleCredentialsTotal`** — `Counter` (`auth_stale_credentials_total`, labels `kind`, `reason`). Tracks expired/revoked sessions and keys presented by legitimate customers. Metric-only; intentionally **not** audited because FE tokens expire every few minutes and auditing would be noise.
-- **`SECURITY_EVENT_ACTIONS`** (module-private) — `readonly` tuple of the five `security.*` audit actions this module accepts. Pre-initialises each series to 0 at startup so `increase()` alerts fire on the very first post-restart event.
-- **`SecurityEventAction`** (exported type) — Union of the five action strings; constrains what callers may pass.
-- **`recordSecurityEvent(context, action, metadata?)`** — The single entry point. Increments `securityEventsTotal` **and** calls `recordAudit` in one synchronous call. Actor is always `anonymous`/`failure`; optional `metadata` (e.g. route) is merged into the audit entry.
+- **`securityEventsTotal`** – `Counter` (from `prom-client`) labeled `{ event }`. One series per `security.*` action. Registered against `metricsRegistry`.
+- **`staleCredentialsTotal`** – `Counter` for refused expired/revoked sessions and keys. Metric-only by design (FE token churn is too noisy to audit).
+- **`SecurityEventAction`** – `Extract<AuditAction, \`security.${string}\`>`; the closed set of valid label values, preventing unbounded cardinality from request data.
+- **`registerSecurityEvents(actions)`** – Pre-sets each action's series to 0 so Prometheus `increase()` alerts fire correctly after a restart. Called by modules to seed their own `security.*` actions.
+- **`recordSecurityEvent(context, action, metadata?)`** – Increments `securityEventsTotal` and calls `recordAudit` in the same synchronous call. Actor is always `anonymous` / `failure`.
 
 ## Relationships
 
-- **`./audit.ts`** — Imports `recordAudit` (writes the audit line) and `coreAuditActions` (source of the bounded action strings).
-- **`./metrics-registry.ts`** — Registers both counters against the shared `metricsRegistry` instance so they appear in the single `/metrics` endpoint.
-- **`@types` (`CallerContext`)** — Typed parameter for the caller identity recorded in the audit entry.
-- **`src/kernel/middlewares/authorizations.ts`** — Primary caller; emits token-signature, token-malformed, and API-key-revoked events during auth rejection.
-- **`src/modules/payments/controllers/post-payment-webhook.ts`** — Emits `SECURITY_PAYMENT_WEBHOOK_INVALID_SIGNATURE` when a webhook payload fails verification.
-- **`src/modules/observability/metrics-scraper.ts`** — Consumes the counter values for external monitoring/alerting.
-- **`tests/integration/security-events.test.ts`** — End-to-end tests that exercise `recordSecurityEvent` through real middleware paths.
-- **`tests/unit/kernel/authorizations.test.ts`** — Unit tests verifying the authorisation middleware calls `recordSecurityEvent` with the correct action.
+- **`./audit`** – Imports `recordAudit` (writes the log entry), `coreAuditActions` (the built-in `security.*` action constants), and the `AuditAction` type.
+- **`./metrics-registry`** – Provides the shared `Registry` instance the counters register into.
+- **`./metric-config`** – `counterConfig` supplies the label/help/name defaults for each counter.
+- **`./metrics.generated`** – `infrastructureMetricData.securityEventsTotal` / `.staleCredentialsTotal` carry the static metric metadata (name, help, labels).
+- **`@types`** – `CallerContext` type used as the first argument to `recordSecurityEvent`.
+- **`src/kernel/middlewares/authorizations.ts`** – Primary caller; invokes `recordSecurityEvent` when a token signature is invalid, a token is malformed, or an API key is revoked.
+- **`src/modules/observability/audit.ts`** – Registers module-specific `security.*` actions via `registerSecurityEvents` before they can be recorded.
+- **`src/modules/payments/audit.ts`** – Same pattern: seeds payment-specific security actions into the shared counter.
+- **`src/modules/observability/metrics-scraper.ts`** – Exports the `metricsRegistry` (which holds these counters) to the Prometheus scrape endpoint.
+- **`tests/integration/security-events.test.ts`** – End-to-end assertions that a refused request produces both the counter increment and the audit entry.
+- **`tests/unit/kernel/authorizations.test.ts`** – Unit-tests that the authorization middleware calls `recordSecurityEvent` with the expected action.
 
 ## Notes
 
-- `recordSecurityEvent` does **not** accept `staleCredentialsTotal`—that counter has no public setter in this file; callers must increment it directly. This is deliberate: stale-credential events are metric-only and skip audit.
-- All series are pre-touched to 0 (`inc({...}, 0)` in a loop) at module load. Adding a new action to `SECURITY_EVENT_ACTIONS` automatically gets the same treatment; forgetting to do so for a *new* counter would break `increase()` alerts after a cold start.
-- The `event` label is bounded by `coreAuditActions` (a fixed enum), keeping cardinality flat. Never pass free-form strings as the `action` parameter.
-- `staleCredentialsTotal` labels are `kind` + `reason`, not `event`—do not confuse the two counters when writing PromQL.
+- `actorUserId` and `actorRole` are hardcoded to `'anonymous'` inside `recordSecurityEvent`; these events occur before (or instead of) successful auth, so there is no real user to attribute.
+- `staleCredentialsTotal` intentionally has **no** accompanying `recordAudit` call—deliberate, not an oversight.
+- The label value is constrained by the `SecurityEventAction` type at compile time; passing an arbitrary string would be a type error. This is the cardinality guard.
+- `registerSecurityEvents` is idempotent: calling it twice with the same action simply sets the series to 0 again before the first real `inc()`.

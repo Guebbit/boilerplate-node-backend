@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/services/refunds.ts
-sha256: b7bb8657c1acf89e87d5c6f6230f3c7bf103cc2e3cd99354a156b1e93bcb5953
-generated_at: 2026-10-15T11:31:21.929017+00:00
+sha256: 9b08bbce8014b55b7e62a354d6457c8dc56386a72ab2968834a38b2bf75c8c99
+generated_at: 2026-10-29T05:13:14.883477+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,40 +9,41 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The single service in the payments module that moves money out. It exposes the operator-facing `refundByOrder` action and the automatic `ORDER_REFUND_OWED` compensation (`refundForOrder`), both funnelled through a shared `performRefund` path. Refunds are reserved with one conditional write before the provider is ever contacted, so racing requests cannot over-refund a payment.
+The sole mechanism for moving money out of a payment. Exposes the operator-facing `refundPayment` action and the `order.cancelled` listener's compensation (`refundForOrder`), both funnelled through `performRefund`. A refund is a conditional write on the payment document that reserves the amount, then asks the provider; the record settles only on provider confirmation.
 
 ## Key elements
 
-- **`RefundRequest`** (interface) — the shape of a refund ask: optional `amount` (decimal, defaults to everything remaining), `reason`, optional `returnId`, `lines`, and `shipping`.
-- **`CANCELLATION_REQUEST`** (frozen const) — the fixed request the automatic listener path uses: full amount, reason `cancellation`.
-- **`OpenedRefund`** (interface) — the payment + refund record returned immediately after the conditional write succeeds.
-- **`remainingOf(payment)`** — computes `amount − amountRefunded` in minor units; the guard every refund must fit within.
-- **`openRefund(payment, request, actor?, session?)`** — the atomic "reserve" step. Generates the `RefundRecord`, computes the new `amountRefunded`, and calls `paymentRepository.addRefund` as one conditional write. On a miss outside a caller session it re-reads the payment and retries; inside a caller session a miss is final. Also appends a `refund_issued` timeline row to the order in the same transaction.
-- **`failureReasonOf(error, refund)`** (private) — classifies a rejected provider call into a `RefundFailureReason` code; logs the provider's wording (truncated to 500 chars) but never stores it.
-- **`leaveForOperator(orderId, payment)`** (private) — the no-provider fallback for hand-paid orders in the automatic path: logs a warning, records an audit row under `SYSTEM_ACTOR`, and returns the payment unchanged.
-- **`isFullyRefunded(payment)`** (private) — true when `remainingOf` is zero **and** every record is `succeeded`; used to drive `displayStatus`.
-- **`announceRefund(payment, refund, context, outcome)`** (private) — writes the log line and the audit row for a settled refund. (File is truncated; the `PAYMENT_REFUNDED` event publish via `announceInTransaction` is expected here.)
-- **`performRefund` / `refundByOrder` / `refundForOrder`** — not visible in the truncated content but referenced by the module doc-block as the two public entry points.
+- **`RefundRequest`** — input shape: `amount` (decimal, absent = everything left), `reason`, optional `returnId` / `lines` / `shipping`, and `capAtRemaining` (clamp instead of reject).
+- **`CANCELLATION_REQUEST` / `LATE_PAYMENT_REQUEST`** — frozen `RefundRequest` constants for the two automatic callers.
+- **`openRefund`** *(exported)* — the core primitive. One conditional write that appends the `RefundRecord` **and** raises `amountRefunded`; a miss means a racing writer moved the amount, so the payment is re-read and the check re-runs. Commits the order's timeline row in the same transaction.
+- **`leaveForOperator`** — hand-paid path: opens the refund, logs a warning, records the audit row, and leaves the record `pending` for an operator's later `settleRefundByHand`. No caller settles on the spot.
+- **`announceOwedByHand`** — enqueues a `PAYMENT_REFUND_OWED_BY_HAND` outbox event (only for hand-recorded payments) inside the opening transaction.
+- **`recordOwedByHand`** *(exported)* — writes a `recordAudit` row naming the order, refund, and amount so a person knows cash/transfer is owed outside the app.
+- **`failureReasonOf`** — maps a rejected provider call to a `RefundFailureReason`; distinguishes "no answer" (timeout / 5xx) from "refused" in the log line. Provider wording is logged (truncated to 500 chars) but never persisted.
+- **`OpenedRefund` / `RefundOutcome`** — return types carrying the post-write payment, the refund id, and a `leftOpen` flag.
 
 ## Relationships
 
-- **`@infrastructure/runtime/database`** — `withTransaction` wraps the standalone `openRefund` write when no caller session is supplied.
-- **`@modules/orders`** — `orderService.appendTimeline` records the `refund_issued` event on the order in the same transaction as the refund write.
-- **`@infrastructure/observability/audit`** — `recordAudit` is called in `leaveForOperator` and (per the truncated `announceRefund`) for admin-initiated refunds.
-- **`@kernel/permissions`** — `SYSTEM_ACTOR` and `callerForSubject` build the audit caller for the automatic path; `AuthContext` drives the operator path.
-- **`@kernel/outbox`** — `announceInTransaction` publishes the `PAYMENT_REFUNDED` domain event (imported from `@kernel/events`) so downstream listeners react atomically with the settlement.
-- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` / `fieldError` shape the HTTP responses returned by `refundByOrder`.
-- **`@infrastructure/adapters/logger`** — structured log lines for warnings (provider refusal, hand-paid fallback) and info (settlement confirmation).
-- **`@infrastructure/i18n`** — `t` provides localised user-facing error messages.
-- **`../domain`** — `REFUNDABLE_PAYMENT_STATUS` gates whether a re-read retry in `openRefund` is still legal.
-- **`../audit`** — `paymentsAuditActions` supplies the audit action codes (`PAYMENT_REFUND_OWED_BY_HAND`, etc.).
-- **`../repository`** — `paymentRepository.addRefund` and `.findByOrderId` perform the conditional write and the freshness re-read.
+| Neighbor | Interaction |
+|---|---|
+| `domain-primitives/money.ts` | All arithmetic on money goes through its helpers (`toMinorUnits`, `addMoney`, `subtractMoney`, `minMoney`, `fitsCurrency`, `toDecimalAmount`). |
+| `infrastructure/runtime/database.ts` | `withTransaction` wraps the conditional write so the refund row and the order-timeline commit atomically. |
+| `kernel/outbox.ts` | `enqueueOutboxEvent` / `announceInTransaction` publish `PAYMENT_REFUND_OWED_BY_HAND`; `nudgeOutbox` pokes delivery. |
+| `kernel/permissions.ts` | `systemCallerContext` identifies the system actor for automatic (listener-initiated) refunds. |
+| `kernel/ability.ts` | `holds` checks whether the caller may refund a given payment. |
+| `kernel/events.ts` | `DomainEventMap` type for event payloads. |
+| `infrastructure/observability/audit.ts` | `recordAudit` writes the audit row for every opened refund and for the owed-by-hand record. |
+| `infrastructure/observability/forbidden.ts` | `auditForbidden` logs a denied refund attempt. |
+| `infrastructure/http/response.ts` | `fieldError`, `generateSuccess`, `generateReject` shape the API response for the operator endpoint. |
+| `infrastructure/i18n/index.ts` | `t` provides localised error/success messages. |
+| `infrastructure/adapters/logger.ts` | `logger.warn` for provider-refusal and hand-paid warnings. |
+| `modules/access/index.ts` | `ownOrderFlag` gates whether the caller may touch this specific order's payment. |
 
 ## Notes
 
-- **Idempotency key is per record, not per payment.** The format `refund:{paymentId}:{refundId}` means two distinct partial refunds are separate keys (so the provider won't deduplicate them), while a retry of the *same* record reuses its key.
-- **Provider is read from the payment row, never from deployment config.** A `manual` payment has no provider to call; a PSP refund must go back to whichever PSP actually captured the money, even if the deployment has since switched PSPs.
-- **Payment status never changes on refund.** It stays `succeeded`; `displayStatus` is derived. The only thing preventing a double-refund is the `amountRefunded` condition in `addRefund`.
-- **Inside a caller-supplied session, a conditional-write miss is final.** There is no re-read-and-retry loop because the caller's transaction owns the authoritative state; re-reading outside it would see a stale document.
-- **Stryker markers** (`Stryker disable all` / `restore all`) wrap `logger` calls in `leaveForOperator` and `announceRefund` to suppress mutation-testing noise on pure log statements.
-- **`MAX_ERROR_LENGTH = 500`** caps how much of a provider's raw error string appears in log lines; the full string is never persisted on the refund record.
+- **Provider dispatch is per-payment, not per-deployment.** The provider is read from the payment row itself, so a refund always goes back to the PSP that actually took the money, even if the deployment has since switched providers.
+- **`manual` / hand-recorded payments have no provider call.** They skip the provider step entirely; the record stays `pending` until an operator explicitly settles it.
+- **The payment's `status` stays `succeeded` regardless of how much is refunded.** The derived `displayStatus` reads `refunded` only when the records' amounts sum to the full `amount`.
+- **Double-refund protection** is the conditional write's `amountRefunded` guard, not a separate lock or state flag.
+- **`capAtRemaining: true`** (used by the automatic cancellation path) clamps the refund to what is actually left rather than rejecting, guarding against a racing refund that already consumed part of the remainder.
+- **A failed provider call does not delete the record.** It marks it `failed` (still an "open" status) so the sweep retries with the **same** idempotency key.

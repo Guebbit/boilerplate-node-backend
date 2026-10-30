@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/domain/lifecycle.ts
-sha256: 9ad14653dc1d1f32e7747654897ca1401537f9ea723dcda0760cd15a3e14fb06
-generated_at: 2026-10-15T11:52:34.028809+00:00
+sha256: a4b9d1b9afd27adbc716acd31a9b287404c570ed06772850b5ed7af1b3fc3fe9
+generated_at: 2026-10-29T05:37:24.717649+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the return lifecycle: which `ReturnStatus` each write operation may execute **from**. Each exported status array is a closed, membership-checked guard that backs a conditional write in `repository.ts` (`claimStatus`), making concurrent duplicate decisions (e.g. approve + decline) resolve to exactly one winner at the database level.
+Defines the return lifecycle's state-transition guards: which `ReturnStatus` values permit each write operation (decide, receive, close, cancel). Because each constant is consumed directly as the `FROM` clause in a conditional database write (`claimStatus`), membership in these arrays *is* the concurrency guard, not documentation. Also provides pure helpers that compute a return's initial status and whether it still "holds" a unit of goods.
 
 ## Key elements
 
+- **Re-exported types** — `ReturnStatus`, `ReturnReason`, `ReturnKind`, `ReturnRemedy` re-exported from `@types` for downstream convenience.
 - **`DECIDABLE_RETURN_STATUSES`** — `[requested]`. The only status from which staff may approve/decline.
-- **`RECEIVABLE_RETURN_STATUSES`** — `[approved]`. The only status from which goods may be marked received.
-- **`CLOSABLE_RETURN_STATUSES`** — `[received]`. The only status from which a return may be closed (refund issued).
-- **`initialStatusFor(reason)`** — Returns `approved` for a `withdrawal` (EU right, no decision needed); `requested` for all other reasons.
-- **`QUANTITY_HOLDING_RETURN_STATUSES`** — `[requested, approved, received, closed]`. Statuses whose returns still consume the order line's returnable quantity.
-- **`BACK_RETURN_STATUSES`** — `[received, closed]`. Statuses indicating the goods have physically returned.
-- **`holdsReturnedGoods({ kind, status })`** — True when `kind === ReturnKind.return` **and** the status is in `QUANTITY_HOLDING_RETURN_STATUSES`. Cancellations never hold goods.
-- **Re-exported types** — `ReturnStatus`, `ReturnReason`, `ReturnKind` from `@types` (the closed contracts this table is built on).
+- **`RECEIVABLE_RETURN_STATUSES`** — `[approved]`. The only status from which goods may be logged as received.
+- **`CLOSABLE_RETURN_STATUSES`** — `[received]`. The only status from which the return can be finalized (refund issued).
+- **`CANCELABLE_RETURN_STATUSES`** — `[approved]`. Distinct from decline: an approved return whose goods never arrived.
+- **`QUANTITY_HOLDING_RETURN_STATUSES`** — `[requested, approved, received, closed]`. Statuses that still "speak for" a unit against an order line's returnable quantity.
+- **`BACK_RETURN_STATUSES`** — `[received, closed]`. Statuses that count as the goods being physically back.
+- **`initialStatusFor(reason, byStaff?)`** — Returns `approved` for withdrawals or staff-initiated returns; `requested` otherwise.
+- **`handsUnitsBack(returned)`** — True when the remedy is `replace` or `repair` (unit returned to buyer).
+- **`holdsReturnedGoods(returned)`** — True when a `return`-kind record is in a quantity-holding status *and* did not hand the unit back (i.e. it counts against new-return availability).
 
 ## Relationships
 
-- **`src/types/index.ts`** — Source of the three imported enum/type definitions; this file re-exports them for consumers.
-- **`src/modules/returns/domain/index.ts`** — Barrel that re-exports this module's symbols to the rest of the domain.
-- **`src/modules/returns/services/create.ts`** — Consumes `initialStatusFor` to set the status on a new return record.
-- **`src/modules/returns/services/decide.ts`** — Reads `DECIDABLE_RETURN_STATUSES` as the `FROM` clause for the claim.
-- **`src/modules/returns/services/receive.ts`** — Reads `RECEIVABLE_RETURN_STATUSES` as the `FROM` clause.
-- **`src/modules/returns/services/close.ts`** — Reads `CLOSABLE_RETURN_STATUSES` as the `FROM` clause.
-- **`src/modules/returns/domain/accounting.ts`** — Uses `holdsReturnedGoods` / `QUANTITY_HOLDING_RETURN_STATUSES` to compute how many units are still held.
-- **`src/modules/returns/domain/refund-amount.ts`** — Uses `BACK_RETURN_STATUSES` to decide whether a delivery refund applies.
-- **`src/modules/returns/domain/status-projection.ts`** — Reads the status sets to project order-level state.
-- **`src/modules/returns/tests/unit/domain.test.ts`** — Unit-tests the transition table and `initialStatusFor` / `holdsReturnedGoods` logic.
+- **`@types` (`src/types/index.ts`)** — source of the four domain types re-exported here.
+- **Services (`create`, `decide`, `receive`, `close`, `cancel`)** — each imports the relevant `*_STATUSES` constant and passes it as the expected-status argument to the repository's conditional write, so exactly one concurrent actor can win the transition.
+- **`create.ts`** — calls `initialStatusFor` to set the status at insert time.
+- **`domain/accounting.ts`** — consumes `QUANTITY_HOLDING_RETURN_STATUSES` / `holdsReturnedGoods` to compute how many units a new return may still claim.
+- **`domain/refund-amount.ts`** — consults `BACK_RETURN_STATUSES` to decide whether the goods are back and the delivery refund applies.
+- **`domain/status-projection.ts`** — maps the status set into user-facing projections.
+- **`domain/index.ts`** — barrel re-export; makes the constants and helpers available to the module's public API.
+- **`tests/unit/domain.test.ts`** — unit-tests the pure helpers and the constant arrays.
 
 ## Notes
 
-- The status arrays are `readonly` and intentionally **single-element** for the write guards. Adding a status to any of them silently widens which concurrent writes can succeed — treat membership as a concurrency-control decision, not just a list.
-- `QUANTITY_HOLDING_RETURN_STATUSES` includes `closed`. A closed return still occupies quantity because the goods, though back, were part of a valid return that consumed the line's returnable count. A `declined` return is the only status excluded — it never held goods in the first place.
-- `initialStatusFor` is the **only** place that maps a reason to a starting status. All service entry points should call it rather than hard-coding `approved` or `requested`.
+- The constants are `readonly` arrays, not `Set`s. Membership checks use `.includes`, which is O(n) — fine for 4-element lists but not a pattern to scale.
+- `CANCELABLE_RETURN_STATUSES` and `RECEIVABLE_RETURN_STATUSES` both contain `approved`; the distinction is semantic (cancel = goods never arrived, receive = goods arrived), enforced by the *service* logic, not by the status set alone.
+- `handsUnitsBack` treats `replace` and `repair` as "unit is back in buyer's hands," meaning the original unit is *not* counted as returned for guarantee purposes. This is a deliberate policy choice documented in the JSDoc.
+- `byStaff` defaults to `false`; the only caller path that passes `true` is a staff-initiated creation, where opening the return *is* the approval.

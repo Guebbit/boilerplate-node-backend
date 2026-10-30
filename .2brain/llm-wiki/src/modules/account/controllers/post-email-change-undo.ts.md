@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/post-email-change-undo.ts
-sha256: 3ba67871b847d3ba782d3845bed169c0ca2db28970c69391e68650c917d5d73e
-generated_at: 2026-10-15T09:54:49.292179+00:00
+sha256: 3501aace490b7de337e78a7e440ce73243e355aee5a0f0f8c7dc5f2e02c89c3a
+generated_at: 2026-10-29T02:29:43.975311+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP handler for `POST /account/email-change-undo`. Receives a one-time undo token (emailed to the old address), validates the body, and delegates to the account service to revert a previously confirmed email change. The endpoint is public—the token in the request body is the sole credential.
+Controller for `POST /account/email-change/undo`. It validates a one-time undo token (delivered to the old address) and reverts the account's email change. The endpoint is public—no session auth; the token in the body is the sole credential.
 
 ## Key elements
 
-- **`postEmailChangeUndo`** (exported) — Express handler. Validates the body against `ConfirmEmailChangeBody` (zod), calls `accountService.undoEmailChangeByToken(token, callerContext)`, and emits a structured success/error response. Increments the `authEmailChangeUndoTotal` metric on every exit path (validation failure, service refusal, success, exception).
+- **`postEmailChangeUndo`** (exported) — Express handler. Parses the body, calls `accountService.undoEmailChangeByToken`, returns `204 No Content` on success, or an error on refusal/exception. Tracks success/failure via the `authEmailChangeUndoTotal` counter.
 
 ## Relationships
 
-- **`src/modules/account/services/index.ts`** — calls `accountService.undoEmailChangeByToken` to perform the actual revert.
-- **`src/modules/account/metrics.ts`** — reads/writes the `authEmailChangeUndoTotal` counter (success/failure).
-- **`src/infrastructure/http/controller.ts`** — uses `rejectValidation`, `refused`, and `catchAs` for uniform error/4xx handling.
-- **`src/infrastructure/http/request.ts`** — extracts `callerContextOf(request)` (IP, UA, etc.) to pass to the service.
-- **`src/infrastructure/http/response.ts`** — uses `successResponse` for the 2xx reply.
-- **`src/types/index.ts`** — imports the `VerifyEmailConfirmRequest` type (orval-generated shared `{ token }` shape).
-- **`src/modules/account/routes.ts`** — registers this handler on the `POST /account/email-change-undo` route.
+- **`@infrastructure/http/controller`** — provides `parseBody`, `refused`, and `catchAs` helpers used for validation, result-checking, and error serialization.
+- **`@infrastructure/http/request`** — provides `callerContextOf`, extracted and passed into the service call.
+- **`@infrastructure/http/response`** — provides `noContentResponse` for the 204 reply.
+- **`src/modules/account/services/index.ts`** — `accountService.undoEmailChangeByToken(token, callerContext)` performs the actual revert.
+- **`src/modules/account/metrics.ts`** — `authEmailChangeUndoTotal` Prometheus counter incremented on every outcome.
+- **`src/types/index.ts`** — `VerifyEmailConfirmRequest` type (the shared `{ token }` body shape).
+- **`src/modules/account/routes.ts`** — registers this handler on the `POST /account/email-change/undo` route.
 
 ## Notes
 
-- The request-body schema is **`ConfirmEmailChangeBody`**, the *same* zod schema used by the confirm endpoint, because both accept `{ token: string }`. This is intentional, not a copy-paste error.
-- The TS type name `VerifyEmailConfirmRequest` is misleading: orval names the type after the *first* endpoint that used the shared schema. The actual token type enforced server-side is `email-change-undo`, so a confirm or verify token will be rejected by the service.
-- A **409 Conflict** is an expected, non-bug outcome: the old address may have been re-claimed by another user between the change and the undo attempt. `catchAs` maps it to a proper client error rather than a 500.
-- No authentication middleware guards this route; security relies entirely on the one-time token's uniqueness and type-scoping.
+- The body is validated against **`ConfirmEmailChangeBody`**, the same Zod schema used by the confirm endpoint—there is no separate "undo" schema because both carry an identical `{ token }` shape.
+- The imported type `VerifyEmailConfirmRequest` is **not** verification-specific; orval derived the name from the shared OpenAPI schema. Don't be misled by the name.
+- A **409 Conflict** is an expected, non-buggy response: the old address may have been re-registered in the interim.
+- Token-type isolation is enforced at the service layer: a confirm or verify token will never satisfy an undo call, so the three link types cannot cross-act.

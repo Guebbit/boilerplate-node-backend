@@ -1,7 +1,7 @@
 ---
 source: scripts/mutation/check-baseline.ts
-sha256: c9c16a1b700dee304b7fa79f80cd74143f48668124e1da8610feff5d14ccc850
-generated_at: 2026-10-15T09:42:24.699837+00:00
+sha256: 440123e8e29a940dcab9cda8909b7626fbf25ea2bdbf2f9f9ec92b0faf4d7a51
+generated_at: 2026-10-29T01:38:18.330740+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-CLI entry point for the per-file mutation ratchet. It compares the scores from the last Stryker run (read from `tmp/reports/mutation/mutation.json` or a sharded directory) against `mutation-baseline.json`, optionally recording new or improved scores. It deliberately does **not** run Stryker itself, so the check is cheap enough to run in a separate CI step from the actual mutation pass.
+CLI entry point for the per-file mutation-testing ratchet. It reads a Stryker `mutation.json` report and compares per-file kill-rates against `mutation-baseline.json`, exiting non-zero on any regression. It can also record a new baseline (`--update`) or fold in a sharded sweep's reports (`--merge --merge-dir=<dir>`). It deliberately does **not** invoke Stryker so the check is cheap and CI can split the run and the gate into separate steps.
 
 ## Key elements
 
-- **Flag parsing** — reads `--update`, `--merge`, and `--merge-dir=<path>` from `process.argv` (via `flagValue` from `../cli`).
-- **Report loading** — calls `readReport()` for a single run or `readReportsUnder(mergeDirectory)` for a sharded sweep.
-- **First-baseline guard** — if no baseline exists, a bare check is a no-op (exit 0); only `--update` or `--merge` will write one.
-- **Partial-report guard** (`--update` path) — `missingFromReport` detects files the baseline knows that the report omits; if present, the update is refused (exit 1) to prevent silently dropping files from the ratchet.
-- **`--merge` path** — uses `compareMerged` / `mergeIntoBaseline`; records new and improved files, leaves files no shard measured untouched, still fails on regressions.
-- **Single-run path** — uses `compareToBaseline`; prints per-file verdicts (held / improved / new / removed / regressed), fails on any regression.
-- **Ratchet write** — `nextBaseline(current, baseline)` takes the *higher* of current vs. baseline per file, so a regressed file keeps its old (higher) score and keeps failing until genuinely fixed.
-- **Exit codes** — `0` pass, `1` regression (or partial-report refusal), `2` usage / missing report.
+- **Flag parsing** — `update`, `merge`, `mergeDirectory` are resolved at module top via `hasFlag`/`flagValue` from `../cli`.
+- **`current: Record<string, number>`** — this run's per-file scores, loaded via `readReport()` or `readReportsUnder(mergeDirectory)`.
+- **`printProgress(comparisons)`** — logs every `new` and `improved` file; called on every code path so a silent pass is distinguishable from a check that isn't running.
+- **First-baseline guard** — if no baseline exists and neither `--update` nor `--merge` was passed, the command is a no-op (exit 0) with a hint to run `npm run mutation:check -- --update`.
+- **Partial-report guard** — `missingFromReport` detects files in the baseline absent from the report; `--update` refuses to write in that case (exit 1) to prevent erasing the ratchet's memory.
+- **`--merge` path** — calls `compareMerged`, `printProgress`, `mergeIntoBaseline`, then exits; only records new/improved files, leaves unmeasured files untouched.
+- **Single-run path** — calls `compareToBaseline`, prints progress + removals, and on regression either exits 1 (bare check) or rewrites the baseline via `nextBaseline` (which keeps the *higher* of old/new score) before exiting 1.
+- **Exit codes** — `0` pass/no-baseline, `1` regression, `2` usage error (missing `--merge-dir`, unreadable report).
 
 ## Relationships
 
-- **`scripts/mutation/baseline.ts`** — supplies every piece of domain logic: baseline read/write, report reading, comparison (`compareToBaseline`, `compareMerged`), the partial-report guard (`missingFromReport`), ratchet scoring (`nextBaseline`), merge (`mergeIntoBaseline`), regression formatting (`formatRegressions`), and the `BASELINE_PATH` constant. This file is purely orchestration and console output.
-- **`scripts/cli.ts`** — provides the `flagValue` helper used to extract `--merge-dir=<path>` from `process.argv`.
+- **`scripts/mutation/baseline.ts`** — provides all domain logic: `compareToBaseline`, `compareMerged`, `missingFromReport`, `formatRegressions`, `nextBaseline`, `mergeIntoBaseline`, `readBaseline`, `readReport`, `readReportsUnder`, `writeBaseline`, `BASELINE_PATH`, and the `FileComparison` type. This file is purely the CLI layer over those functions.
+- **`scripts/cli.ts`** — supplies `hasFlag` and `flagValue` for argument parsing.
 
 ## Notes
 
-- New and improved files are printed **even on a passing run** so the ratchet's movement is visible in CI logs; a silent pass would be indistinguishable from a check that isn't running.
-- `tmp/*` (including the report and any locally-created baseline) is gitignored, so a local partial run cannot leak into CI.
-- The frontend repository ships a copy of this CLI **without** `--merge` / `--merge-dir`, since it has no sharded sweep.
-- On a regressed `--update`, the file is still rewritten (because `nextBaseline` preserves the old higher score), so the next run will still fail until the code is fixed.
+- `--update` means "this report is the **full** scope"; a partial run (`--mutate 'some/file.ts'`) will be rejected. Sharded sweeps must use `--merge` instead.
+- `nextBaseline` is a ratchet: it keeps the maximum of current and baseline per file, so a regressed file retains its old score and stays red until genuinely fixed.
+- Progress (new/improved) is printed even when the overall result is a pass, so operators can see the ratchet moving.
+- The frontend's copy of this CLI omits the `--merge` path entirely, since the frontend runs no sharded sweep.
+- `tmp/reports/mutation/mutation.json` is gitignored; the baseline file it guards against is the only persistent artifact.

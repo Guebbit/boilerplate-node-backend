@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/controllers/post-payment-confirm.ts
-sha256: 7dc5091369752b74855687314a7b2a4117e6d25255b1706e866d17f9209bd994
-generated_at: 2026-10-15T11:23:49.182707+00:00
+sha256: c007e5a509bb448beb402e1536bdc6ffa4873fcefbab220e631f341c4fcb9d63
+generated_at: 2026-10-29T05:03:07.690523+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP handler for `POST /payments/:id/confirm`. Receives the tokenised payment-method reference from the browser's payment form, delegates to the payment service to complete the charge, and maps the outcome (succeeded, declined, or in-flight) to the appropriate HTTP status and response body.
+HTTP handler for `POST /payments/:id/confirm` — the step where the browser hands over the tokenised payment method reference and the payment is actually attempted. It maps the service result to three HTTP outcomes (succeeded, in-flight, declined) and fires the associated metrics and audit context.
 
 ## Key elements
 
-- **`postPaymentConfirm(request, response)`** – The sole export. Validates the `:id` param, parses the body against `ConfirmPaymentBody`, calls `paymentService.confirmPayment(...)`, sets metrics, and writes the response. Declines produce `409 PAYMENT_DECLINED`; in-flight (`requires_action` / `processing`) and successes both produce `200`.
+- **`postPaymentConfirm(request, response)`** — the sole export. Validates the route param (`:id`), parses the JSON body against `ConfirmPaymentBody` (zod), then delegates to `paymentService.confirmPayment`.
+- **Decline detection** — after the service call, checks for `ERROR_CODES.PAYMENT_DECLINED` in the result's error list and sets `request.paymentConfirmDeclined = true` so the downstream decline-budget rate limiter can distinguish a genuine card decline from the route's other 409.
+- **Metrics** — increments `paymentConfirmTotal` with one of three labels: `succeeded`, `in_flight`, or `declined`. Not-found / race rejections are intentionally not counted.
+- **In-flight path** — a `requires_action` or `processing` result is a 200 (not a 4xx) so the browser proceeds to the provider's next step. The payment is re-fetched via `paymentService.presentWithActions` to include any `actions` payload the form needs.
+- **Error path** — `refused(response, result)` serialises non-success results (e.g. 409 `PAYMENT_DECLINED`); unhandled rejections are caught by `catchAs`.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** – Provides the `parseBody`, `refused`, and `catchAs` helpers used for validation, error mapping, and unhandled-error serialization.
-- **`@infrastructure/http/ids`** – `requireId` extracts and validates the `:id` route param (404 on miss).
-- **`@infrastructure/http/request`** – `callerContextOf` pulls the caller's context (IP, user-agent, etc.) to pass into the service.
-- **`@infrastructure/http/response`** – `successResponse` serialises the 200 body.
-- **`../services` (`paymentService`)** – The domain operation actually executed (`confirmPayment`).
-- **`../presenter`** – `presentPayment` shapes the `Payment` entity into the public API shape before sending.
-- **`../metrics`** – `paymentConfirmTotal` counter is incremented with a discriminated `outcome` label.
-- **`../routes`** – Registers this handler at `POST /payments/:id/confirm`.
-- **`@types`** – `Payment` type used in the response generic.
+- **`src/modules/payments/services/index.ts`** — calls `paymentService.confirmPayment` and `paymentService.presentWithActions`.
+- **`src/modules/payments/metrics.ts`** — increments `paymentConfirmTotal`.
+- **`src/modules/payments/routes.ts`** — registers this function as the handler for `POST /payments/:id/confirm`.
+- **`src/infrastructure/http/controller.ts`** — provides `catchAs`, `parseBody`, and `refused` helpers.
+- **`src/infrastructure/http/ids.ts`** — provides `requireId` for the `:id` route param.
+- **`src/infrastructure/http/request.ts`** — provides `callerContextOf` (extracts audit caller metadata).
+- **`src/infrastructure/http/response.ts`** — provides `successResponse` for the 200 path.
+- **`src/types/index.ts`** — supplies the `Payment` type used in the success response.
 
 ## Notes
 
-- **Cross-cutting flag on `request`:** The handler sets `request.paymentConfirmDeclined` (a boolean). This is read downstream by the decline-budget rate limiter's `requestWasSuccessful` (in `rate-limits.ts`) so that only genuine card declines spend budget, not the route's other 409 paths. Any change to this property name or assignment site will silently break that limiter.
-- **In-flight is 200, not 4xx:** `requires_action` and `processing` statuses return 200 because the browser still has a next step; a 4xx would signal "stop" to the client.
-- **Metric label discipline:** Not-found and race-condition rejections are deliberately *not* counted in `paymentConfirmTotal` (they aren't confirm attempts). In-flight is its own `outcome` label rather than being folded into success or decline, so a spike in challenges is distinguishable from a spike in declines.
+- `request.paymentConfirmDeclined` is a **side-channel flag** consumed by the rate limiter's `requestWasSuccessful` predicate (`rate-limits.ts`). It is not part of the response; removing it silently breaks decline-budget accounting.
+- In-flight results are deliberately counted under their own `in_flight` label rather than being grouped with `succeeded` or `declined` — a spike in challenges is a different incident from a spike in declines.
+- The success path makes a **second service call** (`presentWithActions`) to attach provider-specific `actions` to the returned payment. Skipping it would omit the "finish at provider" step from the form's state.
+- The body schema (`ConfirmPaymentBody`) comes from `@api/schemas.zod`, not from the payments module itself.

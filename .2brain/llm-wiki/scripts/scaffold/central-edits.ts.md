@@ -1,7 +1,7 @@
 ---
 source: scripts/scaffold/central-edits.ts
-sha256: 7eec00971cb02683bc6517cbb27a7825c806163805b32b2cd4676ec44e1284c3
-generated_at: 2026-10-01T12:38:41.206440+00:00
+sha256: 9719156f0b92a148746815159b9a4b74bb77b91673c32d3a7e024843f77eb537
+generated_at: 2026-10-29T01:41:45.992501+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the set of pure text-transform edits a newly scaffolded module must apply to four files **outside** its own folder (the module registry, two authorization YAML files, and a cross-cutting parity test). Each transform locates a known anchor in the target file and inserts the module's entries, throwing immediately if the anchor is missing so the scaffold aborts before any write.
+Defines the set of pure text-transform edits a newly scaffolded module requires in files **outside** its own directory. Each transform is anchored to a specific line; if the anchor is missing it throws immediately rather than silently skipping, so a reshaped target file blocks the scaffold before anything is written.
 
 ## Key elements
 
-- **`CentralEdit` (interface)** — Describes one edit: a repo-relative `path` and an `apply(source: string): string` function.
-- **`centralEdits(names: ModuleNames): CentralEdit[]`** — Main export. Returns the four edits in a fixed order: `src/modules.ts` → `shared/authorization-roles.yaml` → `shared/authorization-conformance.yaml` → `tests/cross-cutting/replace-patch-parity.test.ts`.
-- **`appendToList(source, anchor, items)`** (internal) — Appends `- item` lines into the block that follows an anchor line, stopping at the first blank line. Detects indentation from the last existing line in the block.
-- **`addParityEntry(source, names)`** (internal) — Inserts a new row into the parity test's `known` table, maintaining alphabetical order by entity name.
-- **`entityOf(row)`** (internal) — Extracts the entity key (text before the first `:`) from a parity-table row string.
+- **`CentralEdit`** (interface) — shape of one edit: a repo-relative `path` and an `apply(source) → string` function.
+- **`centralEdits(names: ModuleNames)`** — returns the ordered array of all four central edits for a module.
+- **`appendToList`** (internal) — inserts dash-prefixed items into the list block that follows an anchor line, up to the first blank line. Reuses the indentation of the last existing item.
+- **`addParityEntry`** (internal) — inserts a row into the `known` table in the parity test, keeping rows alphabetical by entity name.
+- **`entityOf`** (internal) — extracts the entity key from a table-row string.
 
 ## Relationships
 
-- **`scripts/scaffold/names.ts`** — Provides `permissionKeys()` (builds the permission-key strings for the YAML edits) and the `ModuleNames` type used throughout.
-- **`scripts/scaffold/registry.ts`** — Provides `registerModule()`, which is the `apply` function for the `src/modules.ts` edit.
-- **`scripts/scaffold/apply.ts`** — Consumes the `centralEdits` array to actually read/write the four target files during a scaffold run.
-- **`tests/unit/scripts/scaffold/central-edits.test.ts`** — Unit tests for the transforms in this file.
+- **`scripts/scaffold/names.ts`** — provides `permissionRules`, `permissionSetName`, and the `ModuleNames` type consumed here.
+- **`scripts/scaffold/registry.ts`** — provides `registerModule`, used as the `apply` function for the `src/modules.ts` edit.
+- **`scripts/scaffold/apply.ts`** — graph neighbor; the `CentralEdit[]` returned by `centralEdits` is the data it operates on to perform the actual file writes.
+- **`tests/unit/scripts/scaffold/central-edits.test.ts`** — unit tests for the transforms exported by this file.
 
 ## Notes
 
-- Every transform is **fail-fast**: if its anchor string is not found in the target file, it throws an `Error` rather than silently skipping. A shape change in any of the four central files will therefore block the scaffold.
-- The four target files and their anchors are **hardcoded** in `centralEdits`. Adding a fifth central file requires editing this file.
-- `appendToList` relies on a blank line to delimit the end of the list block; if the YAML structure changes to use a different delimiter, the transform will misbehave before it even throws.
-- `addParityEntry` re-inserts trailing commas based on row position, so the parity table must use a `const known: Record<string, string> = { … };` shape with one entry per line.
+- The four target files are: `src/modules.ts`, `shared/authorization-roles.yaml`, `shared/authorization-conformance.yaml`, and `tests/cross-cutting/replace-patch-parity.test.ts`.
+- All transforms are **anchor-dependent**: if the anchor line has been renamed or removed, the edit throws with a descriptive message. Callers should treat that as a "manual intervention required" signal.
+- `addParityEntry` inserts alphabetically by entity name and re-manages trailing commas on every row in the block.
+- The YAML edits append items to existing `&admin_sets` / `&admin_permissions` anchors; they do not create those blocks from scratch.

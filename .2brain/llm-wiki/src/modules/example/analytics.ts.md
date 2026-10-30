@@ -1,7 +1,7 @@
 ---
 source: src/modules/example/analytics.ts
-sha256: dae85ccb14efd7b3dd2a9c1a1176586e2628d6622aff88279c8df4fa9248a8ed
-generated_at: 2026-10-15T10:29:42.175130+00:00
+sha256: 934735631a7a2fa9594ae50ca1966f0cdc4679cb79b283d6e0bcd7918ea00675
+generated_at: 2026-10-29T03:50:55.197754+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the analytics event names the example module fires and registers them into the app-wide `AnalyticsEventMap` via a TypeScript module augmentation. This is an **optional, self-contained capability file**: deleting it (and the corresponding `emitAnalyticsEvent` call in the service layer) removes the module from analytics entirely.
+Declares the analytics event names that the *example* module is allowed to fire, by re-exporting a generated constant and augmenting the app-wide `AnalyticsEventMap` type. This is the single source of truth for which events belong to this module; the app-level union of all analytics events grows automatically from each module that includes this file.
 
 ## Key elements
 
-- **`exampleAnalyticsEvents`** (const, exported) — Maps intent keys to wire-level event strings. Currently a single entry: `EXAMPLE_PUBLISHED → 'example_published'`.
-- **`declare module '@infrastructure/observability/analytics'`** — Augments the shared `AnalyticsEventMap` interface with an `example` key typed as the union of `exampleAnalyticsEvents` values, giving type-safe event names to all consumers.
+- **`exampleAnalyticsEvents`** (re-export from `./rules.generated`) — the generated object of event names (e.g. `example_published`) produced from `rules.yaml`.
+- **`declare module '@infrastructure/observability/analytics'`** — module augmentation that adds an `example` key to the global `AnalyticsEventMap` interface, constraining the value to the union of the generated event-name keys.
 
 ## Relationships
 
-- **`src/modules/example/services/crud.ts`** — Expected consumer: the module's own doc comment notes that removing this file also requires removing the `emitAnalyticsEvent` call (presumably in the CRUD service) to fully opt out.
-- **`src/modules/example/tests/unit/analytics.test.ts`** — Unit test for this module (verifies event names and/or the augmentation).
+- **`src/modules/example/rules.generated.ts`** — upstream source of `exampleAnalyticsEvents`; this file both imports it (for the augmentation) and re-exports it so consumers can reference the names directly from `analytics.ts`.
+- **`src/modules/example/services/transition.ts`** — the service layer that calls `emitAnalyticsEvent` with these names at runtime (the file's header notes to drop that call if this file is deleted).
+- **`src/modules/example/tests/unit/analytics.test.ts`** — unit tests exercising this module's exports and augmentation.
 
 ## Notes
 
-- Event-name strings must follow the convention in `docs/tools/analytics.md#naming` (e.g. lowercase snake_case).
-- The `as const` on the export object is load-bearing: the augmentation relies on the literal union type to propagate exact event-name strings to all `emitAnalyticsEvent` call sites.
-- No runtime code is executed by this file; it is purely a type-level registration plus a constant export.
+- This file is intentionally tiny by design. If a module has no analytics events, the whole file (and the corresponding `emitAnalyticsEvent` call at the emit site) should be deleted — do not leave an empty augmentation.
+- Event names come from `rules.generated.ts`, which is regenerated from `rules.yaml`. Edit `rules.yaml`, not this file, to add or remove events.
+- The naming convention is documented at `docs/tools/analytics.md#naming`.

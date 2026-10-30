@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/authenticated-controllers.test.ts
-sha256: 16c8c009a154d1491d37b0988904065c12f8e2800a3655346b1d3be4c0bead29
-generated_at: 2026-09-27T15:49:30.147956+00:00
+sha256: 1090f5cbd4ffd9661253c501585b90f9a6976a989ac4d6b07e7e0a79104f3186
+generated_at: 2026-10-29T06:43:34.792705+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cross-cutting invariant test that enforces two auth-middleware guarantees across every module: (1) any controller that non-null-asserts `authContext` must be mounted behind `isAuth` (not merely `isAuthOrCredential`), and (2) every `requirePermission` key behind `isAuthOrCredential` must be tenant-scoped (contain an `.any.` segment). It exists to catch the class of runtime 500s where a handler reads `authContext.id` on a route the auth middleware never populates.
+Cross-cutting invariant test that closes a gap TypeScript cannot: a controller asserting `request.authContext!` (non-null) claims its route is behind `isAuth`, but whether the *route* actually carries that guard lives in routing code, not in types. This file verifies that claim by cross-referencing source-level assertions with the resolved Express middleware stack. A second invariant ensures every `requirePermission` behind `isAuthOrCredential` asks for a tenant-scoped, owner-agnostic rule (since credential callers carry no `authContext` at all).
 
 ## Key elements
 
-- **`ASSERTS_AUTH_CONTEXT`** — Regex `/\bauthContext!/` matching a non-null assertion (not an optional `?.` read, not a bare reference).
-- **`handlersReadingAuthContext(moduleRoot)`** — Scans `controllers/*.ts` under a module for the regex; returns the set of exported handler names that assert `authContext`.
-- **`handlersMountedUnauthenticated(router)`** — Walks `effectiveRouteTable(router)` and collects handler names from rows whose `applies` + `chain` do **not** include `isAuth`.
-- **`permissionKeysBehindCredentialGuard(router)`** — Returns the `requirePermission` keys from rows that **do** include `isAuthOrCredential`.
-- **`moduleNames()`** — `readdirSync(MODULES_ROOT)`; lists every module directory (routed or not).
-- **Test: "finds no handler asserting an auth context its route does not guarantee"** — Cross-references the two sets above per module and expects no intersection.
-- **Test: "actually finds controllers to check" (canary)** — Asserts the total count of asserting handlers is > 10, so an empty scan cannot masquerade as a pass.
-- **Test: "finds no key with a different breadth segment"** — Filters `isAuthOrCredential` keys lacking `.any.` and expects none.
-- **Test: "actually finds keys to check" (canary)** — Asserts > 10 keys are seen, preventing a false green from zero routes.
-- **Jest mocks** — Stubs `cache`, `route-flag`, `upload`, and `rate-limit` middlewares via factories exposed by `@tests/routes` so route resolution stays deterministic.
+- **`moduleNames()`** — lists every directory under `MODULES_ROOT` (`src/modules/`), whether or not it exports a router.
+- **`ASSERTS_AUTH_CONTEXT`** — regex `/\bauthContext!/` matching a non-null assertion (not optional chaining, not an optional parameter). Intentionally matches the bare token so a destructured `const { authContext } = request; authContext!.id` is still caught.
+- **`handlersReadingAuthContext(moduleRoot)`** — scans a module's `controllers/*.ts` for the regex above; returns the set of exported handler names (`export const name = …`) that assert.
+- **`handlersMountedUnauthenticated(router)`** — walks `effectiveRouteTable(router)` and returns handler names on rows whose `applies` + `chain` do **not** include `isAuth`.
+- **`permissionsBehindCredentialGuard(router)`** — collects `PermissionAsk[]` from rows whose chain includes `isAuthOrCredential`.
+- **`describe('every controller reading the caller…')`** — cross-references the two sets above per module; fails if a handler asserting `authContext!` is mounted unauthenticated. Includes a canary test asserting ≥ 10 handlers were actually found.
+- **`describe('every requirePermission behind isAuthOrCredential…')`** — resolves each `PermissionAsk` via `findRule(ruleId(…))` and asserts the rule is `scope: 'tenant'` with `conditions === undefined` and `credential !== false`. Includes its own canary.
+- **Four `jest.mock` blocks** — stub `cache`, `route-flag`, `upload`, and `rate-limit` middleware with factories exported from `@tests/routes`, so importing real routers doesn't pull in live infrastructure.
 
 ## Relationships
 
-- **`tests/support/routes.ts`** — Source of `effectiveRouteTable` (the resolved middleware-per-route table used for all guard lookups) and the mock factories consumed by the `jest.mock` calls.
-- **`tests/support/routed-modules.ts`** — Provides `ROUTED_MODULES`, the name → Express `Router` map that lets the test build each module's route table without booting the full app.
-- **`tests/support/paths.ts`** — Supplies `MODULES_ROOT`, the filesystem root under which `moduleNames()` and `handlersReadingAuthContext` operate.
-- **`src/kernel/registry.ts`** — Indirect dependency: the `ROUTED_MODULES` entries are populated from the module registry, so the set of modules this test iterates is ultimately defined there.
+- **`tests/support/routes.ts`** — primary dependency. Provides `effectiveRouteTable` (resolves every route's middleware + handler chain as Express sees it), the `PermissionAsk` type, and the four mock factories consumed by the `jest.mock` calls.
+- **`tests/support/routed-modules.ts`** — provides `routersOfModule(name)` to obtain the `Router` instance(s) a module exports, feeding both `handlersMountedUnauthenticated` and `permissionsBehindCredentialGuard`.
+- **`tests/support/paths.ts`** — provides the `MODULES_ROOT` constant used to enumerate module directories and locate their `controllers/` folders.
+- **`src/kernel/permissions.ts`** — provides `findRule` and `ruleId` to resolve a `PermissionAsk` into its declared rule metadata (scope, conditions, credential flag) for the credential-guard invariant.
 
 ## Notes
 
-- The guard check is intentionally **`isAuth` only**, not `isAuthOrCredential`. An `sk_…` credential resolves to `request.caller` with no `authContext`, so a `!` read behind the split guard is just as broken as one behind no guard. Widening the filter would remove the only check distinguishing the two.
-- The regex targets `authContext!` (word-boundary) rather than `request.authContext!` so that a destructured `const { authContext } = request; authContext!.x` is still caught.
-- Optional reads (`authContext?.prop`, passing `authContext` as a nullable helper argument) are deliberately **not** flagged — they are the correct pattern behind `isAuthOrCredential`.
-- Route guards are inspected via `effectiveRouteTable` (the resolved Express stack), not by regexing `routes.ts` source. This handles guards written through variables, spreads, or multi-line `router.use` calls.
-- Both invariant blocks pair their assertion with a **canary** count test; if the scanning code silently stops finding targets, the canary fails before the "no offenders" assertion can produce a false green.
+- **`isAuth` vs `isAuthOrCredential` is the crux.** The first `describe` deliberately checks only `isAuth`. Widening to accept `isAuthOrCredential` would silently permit `authContext!` reads that 500 on credential calls — the test exists precisely to keep that split enforced.
+- **Canary tests are load-bearing.** Each `describe` includes an `it('actually finds …')` assertion (≥ 10 items). Without them, a typo in the regex, a rename of `MODULES_ROOT`, or a removed `controllers/` directory would turn a real failure into a vacuous pass.
+- **Source is read as text; routes are resolved as objects.** Controllers are grepped via `readFileSync` + regex (no import), while route middleware is read from the live `Router` through `effectiveRouteTable`. This avoids the weaker alternative of regexing `routes.ts`, which would miss variable-indirected guards, spreads, and multi-line `router.use` calls.
+- **`src/kernel/registry.ts`** appears in the dependency graph but is not directly imported here; it is reached transitively through the router/middleware resolution path.

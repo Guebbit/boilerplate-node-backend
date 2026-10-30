@@ -1,7 +1,7 @@
 ---
 source: src/modules/addresses/module.ts
-sha256: 8ee528b3dc664c407c1d091d57d6088d566aaa97a32649b6d32e958840d3c6cb
-generated_at: 2026-10-15T10:18:02.859083+00:00
+sha256: da1d775dc2f3ee9422b324675a76f42b24681165f9ebba36b73bd1cae339f416
+generated_at: 2026-10-29T03:08:27.094968+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module manifest for the **addresses** book — the shipping-address collection a user's checkout resolves against. Declared as its own `AppModule` so that `cart`'s checkout (the only sibling consumer) never needs to import `account`, and so `users` reaches the data solely through the `personalData` hooks defined here rather than a direct import.
+Module manifest for the **addresses** collection (one document per user, holding shipping addresses that checkout resolves against). Declares the module's routes, config, PII lifecycle hooks, and locale path so the kernel can register everything without any consumer importing `account` or this module's internals directly.
 
 ## Key elements
 
-- **Default export (`AppModule`)** — the manifest object the kernel registry consumes. Fields:
-  - `name: 'addresses'`, `basePath: '/account'` — registers the module and mounts its routes under the shared `/account` prefix.
-  - `routes` — the Hapi router from `./routes.ts`.
-  - `config` — a single `addressesConfig.slice` entry pulled from `./config.ts`.
-  - `personalData[0]` — a `PersonalData` descriptor with three hooks:
-    - `collect` — reads the user's addresses via `addressesGet` for data-export purposes.
-    - `erase` — `addressesDeleteByUserId`; removes the book inside the same transaction as account destruction.
-    - `minimise` — `addressesMinimise`; drops re-enterable convenience data on an idle account.
-  - `reencrypt: reencryptAddressBooks` — re-encrypts all PII fields (name, street, city, zip, country, phone) when the global key rotates.
-  - `locales` — path to a sibling `locales/` directory for i18n strings.
+- **`default` export** (`satisfies AppModule`) — the manifest object the kernel loads.
+- **`mounts`** — registers `./routes`'s router under the `/account` base path (shared with the `account` module).
+- **`config`** — exposes `addressesConfig.slice` for runtime configuration.
+- **`personalData`** — the GDPR/erasure contract for the `addresses` section:
+  - `collect` — returns the user's address list (via `addressService.list`).
+  - `erase` — deletes all addresses in the same transaction as account destruction (`addressService.removeByUserId`).
+  - `minimise` — drops the book when an account goes idle (`addressService.minimise`).
+- **`reencrypt`** — hook for PII re-encryption of all address fields (`addressService.reencrypt`).
+- **`locales`** — path to the module's locale directory.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — provides the `AppModule` type this export satisfies; the registry is the consumer of the manifest.
-- **`src/modules.ts`** — top-level module barrel that discovers/registers this file's default export.
-- **`src/modules/addresses/service.ts`** — source of the four imported functions (`addressesGet`, `addressesDeleteByUserId`, `addressesMinimise`, `reencryptAddressBooks`).
-- **`src/modules/addresses/routes.ts`** — supplies the `router` object wired into the manifest.
-- **`src/modules/addresses/config.ts`** — supplies the `addressesConfig` object.
-- **`src/modules/addresses/reencrypt.ts`** — implementation behind `reencryptAddressBooks` (re-exported through `service.ts`).
-- **`src/modules/users/tests/integration/minimise.test.ts`** — exercises the `minimise` hook declared in this file's `personalData` entry.
-- **`src/modules/addresses/tests/integration/reencrypt.test.ts`** — exercises the `reencrypt` hook.
-- **`src/modules/account/module.yaml`** — the `account` module shares the same `/account` `basePath`; the two routers coexist because `getAuth` early-returns a single auth resolution (see `kernel/middlewares/authorizations.ts`).
+- **`src/kernel/registry.ts`** — provides the `AppModule` type that the default export satisfies.
+- **`src/modules/addresses/service.ts`** — source of all business logic referenced by the manifest (`list`, `removeByUserId`, `minimise`, `reencrypt`).
+- **`src/modules/addresses/routes.ts`** — supplies the Express router mounted at `/account`.
+- **`src/modules/addresses/config.ts`** — supplies the module's config slice.
+- **`src/modules/account/module.yaml`** — co-occupies the `/account` URL prefix; auth is resolved once for both routers (see `getAuth` early return in `kernel/middlewares/authorizations.ts`).
+- **`src/modules/users/tests/integration/minimise.test.ts`** — exercises the `minimise` hook declared here.
+- **`tests/integration/erasure.test.ts`** — exercises the `erase` hook declared here.
+- **`src/modules/addresses/tests/integration/reencrypt.test.ts`** — exercises the `reencrypt` hook declared here.
 
 ## Notes
 
-- The `/account` `basePath` is **intentionally shared** with the `account` module. Do not change it here without checking `getAuth`'s early-return logic in the authorization middleware, which is what keeps the combined auth cost at one resolution instead of two.
-- All six address fields (name, street, city, zip, country, phone) are PII-encrypted; the `reencrypt` hook must be kept in lockstep with whatever schema `service.ts` writes.
-- `minimise` is explicitly lighter than `erase`: it drops re-enterable data for *idle* accounts, whereas `erase` is the irreversible deletion tied to account destruction.
+- The module deliberately avoids an import dependency on `account`; the only cross-module consumer is `cart`'s checkout, and `users` reaches addresses solely through the `personalData.erase` hook — the same pattern used by `cart`, `wishlist`, `payments`, and `orders`.
+- All address fields (name, street, city, zip, country, phone) are PII-encrypted; the `reencrypt` hook covers the entire document.
+- The `/account` prefix is shared with `account` by design; mounting two routers there costs one auth resolution, not two (early return in `getAuth`).

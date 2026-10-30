@@ -1,7 +1,7 @@
 ---
 source: package.json
-sha256: c05c8cf6fe87ed785a68b16439d5f0e7fe22bf0be3bc3f269b06e8c3cd3616b7
-generated_at: 2026-10-15T09:33:40.293946+00:00
+sha256: 54a0248ff78b466c2cf275e778fd6b97503896c29b76e35b73e6e34ad01a07e0
+generated_at: 2026-10-29T01:20:41.431096+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,42 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Project manifest for `boilerplate-node-api-mongodb-mongoose` (v3.0.0). Defines the full set of npm scripts that drive development, testing, contract validation, code generation, documentation, and operational tooling. It also pins all runtime and dev dependencies. The `postinstall` and `prepare` hooks ensure generated artifacts (API types, contract bundles, permission actions, git hooks) are present immediately after `npm install`.
+Root manifest for **boilerplate-node-api-mongodb-mongoose** (v3.0.0). Declares the project's runtime and dev dependencies, and defines the full set of npm scripts that drive development, testing, linting, codegen, CI gates, container orchestration, and benchmarking for an Express 5 / Mongoose 9 REST + AsyncAPI service.
 
 ## Key elements
 
-- **`scripts`** — ~100 npm scripts grouped by concern: dev/serve (`dev`, `dev:docker`), testing (`test:unit`, `test:contract`, `test:fuzz`), lint/type-check (`ts-check`, `lint`), contract tooling (`lint:openapi`, `lint:asyncapi`, `contracts:bundle`, `authorization:bundle`), code generation (`gen:api`, `gen:asyncapi`, `gen:permission-actions`), documentation (`docs:*`), operational maintenance (`reap:*`, `sweep:*`, `reencrypt`), container orchestration (`compose:*`), and compound gates (`complete`, `complete:static`, `complete:light`).
-- **`postinstall`** — Runs `gen:permission-actions`, `contracts:bundle`, `gen:api`, and `gen:asyncapi` to regenerate type bundles and permission maps on every install.
-- **`prepare`** — Invokes `husky` to install git hooks.
-- **`devDependencies`** — Includes tooling for linting (ESLint, Prettier, Spectral, Stryker mutation testing), TypeScript compilation (SWC, Babel), OpenAPI/AsyncAPI validation, Prism mock server, dependency-cruiser, and VitePress docs.
-- **`main`** — Points to `src/cluster.ts`, the cluster-mode entry point.
+- **`main`** – `src/cluster.ts`; the process entry-point for production and most dev/start scripts.
+- **`scripts.start`** – `node --import tsx src/cluster.ts`; production launch.
+- **`scripts.dev` / `dev:docker` / `dev:docker:cluster`** – Watch-mode dev servers via `tsx watch` or `nodemon`, importing `scenarios/support/development-doubles.ts` to inject test doubles.
+- **`scripts.e2e:serve`** – Starts the cluster with `NODE_E2E_RUN=1` for end-to-end tests.
+- **`scripts.demo`** – Runs `scenarios/run-server.ts` with the same doubles import.
+- **`scripts.postinstall`** – Runs four codegen steps in sequence: `gen:permission-actions`, `contracts:bundle`, `gen:api`, `gen:asyncapi`.
+- **`scripts.prepare`** – Installs Husky git hooks.
+- **`scripts.complete`** – Composite gate: `complete:static` → `docs:build` → full `test` suite.
+- **`scripts.complete:static` / `complete:static:gates`** – Lint + Prettier + `ts-check` + OpenAPI/AsyncAPI Spectral lint + `check` (artifact regeneration, breaking-change detection, dependency-cruiser).
+- **`scripts.check`** – Validates regenerated artifacts, AsyncAPI breaking changes, spec identity, doc references, and dependency-cruiser rules across `src`, `src/modules`, and the bootstrap script.
+- **`scripts.test`** – Sequential suite: unit → cross-cutting → integration → contract → fuzz, all via `scripts/testing/run-suite.ts`.
+- **`scripts.bench` / `bench:search`** – Autocannon load tests (20 clients, 30 s).
+- **`scripts.bench:k6`** – Runs a k6 script inside a container (default engine: podman).
+- **`scripts.compose*`** – Podman/Compose wrappers (`up`, `restart`, `rebuild`); full profile adds `observability`, `analytics`, `docs` services.
+- **`scripts.gen:api`** – Deletes `./api`, regenerates via Orval, then generates error-codes, request-content-types, and permission-actions.
+- **`scripts.host`** – Prefix helper that sets local `NODE_DB_URI`, `NODE_MONGODB_HOST`, `NODE_REDIS_*` and then delegates to `npm run <subcommand>`.
+- **`dependencies`** – Express 5, Mongoose 9, MongoDB driver 7, Redis, AMQP (`amqplib`), OpenTelemetry SDK + instrumentations (Express, HTTP, Mongoose, Redis), CASL + Mongoose plugin, `sharp` (pinned 0.35.5), `jose`, `openid-client`, `puppeteer-core`, `winston`, `prom-client`, `posthog-node`, `tsx`, `dotenv`, `i18next`, `multer`, `helmet`, `express-rate-limit` + `rate-limit-redis`, `altcha-lib`, `bowser`, `nodemailer`, `csv-stringify`, `ibantools`, `ipaddr.js`, `otplib`, `cookie-parser`, `cors`, `ejs`, `sitemap`, `disposable-email-domains-js`, `@guebbit/js-toolkit`.
+- **`devDependencies`** – TypeScript ~6.0, ESLint 10 + plugins (boundaries, jest, unicorn, jsdoc, eslint-comments), Prettier, Jest 30 + `@swc/jest` + `ts-jest`, Stryker mutation testing, Spectral (OpenAPI/AsyncAPI lint), `@asyncapi/parser` + `modelina` + `diff`, Orval, dependency-cruiser, Knip, jscpd, `mongodb-memory-server`, `supertest`, `fast-check`, `cross-env`, `nodemon`, VitePress + Mermaid, `@stoplight/prism-cli`, `@redocly/cli`, Husky + lint-staged + commitlint, autocannon, `@babel/plugin-transform-modules-commonjs`, `@types/*` for Express 5, cookie-parser, cors, ejs, multer, node 24, supertest, jest 30.
 
 ## Relationships
 
-- **`src/app.ts` / `src/app/routes.ts` / `src/app/error-handling.ts` / `src/app/security.ts` / `src/app/telemetry.ts` / `src/app/static-assets.ts`** — The `start`, `dev`, `e2e:serve`, and `debug` scripts launch the application whose bootstrap logic lives in `src/cluster.ts` → these app modules.
-- **`src/infrastructure/runtime/server-lifecycle.ts`** — Referenced indirectly: the `start`/`dev` scripts invoke the server lifecycle that this module encapsulates.
-- **`scenarios/support/demo.ts`** — Imported via the `--import ./scenarios/support/development-doubles.ts` flag in nearly every dev/test/demo script, registering in-memory fakes before app code loads.
-- **`scenarios/flows/loopback.ts`** — Part of the scenario suite driven by `scenario:apply` and `demo` scripts.
-- **`src/modules/account/session/device-label.ts`** — Consumed by the contract and integration test suites (`test:contract`, `test:integration`) that the `test` script orchestrates.
-- **`tests/contract/password-set-paths.test.ts`**, **`tests/cross-cutting/contract-error-declarations.test.ts`**, **`tests/cross-cutting/replace-patch-parity.test.ts`** — Executed by `test:contract` and `test:cross-cutting` scripts respectively; these suites are aggregated under the top-level `test` script.
-- **`src/infrastructure/adapters/image.ts`** — Exercised by integration and contract test runs; also touched by `scenario:images` for seed-image generation.
+- **`src/infrastructure/runtime/otel-sdk.ts`** – Consumes the `@opentelemetry/*` packages (SDK, exporter, instrumentations, resources, semantic-conventions) declared under `dependencies`; `package.json` is the sole source of those version pins.
+- **`tests/contract/password-set-paths.test.ts`** – Executed by the Jest run invoked through `scripts.test:contract` (`run-suite.ts contract`); the `NODE_SESSION_MODE=cookie` variant (`test:contract:cookie`) selects the cookie auth path this test exercises.
+- **`scenarios/support/doubles/payments/levers.ts`** – Part of the `scenarios/support/` tree imported by every dev/demo/e2e script via `--import ./scenarios/support/development-doubles.ts`; its availability is a precondition for those scripts to run.
 
 ## Notes
 
-- **Container engine is podman by default.** The `compose` and `bench:k6` scripts use `${CONTAINER_ENGINE:-podman}`. If you use Docker, set `CONTAINER_ENGINE=docker`.
-- **`postinstall` generates code.** A clean `node_modules` is not enough — API client types (`api/`), AsyncAPI types (`src/types/asyncapi.generated.ts`), contract bundles, and permission-action maps are all produced at install time. Deleting `api/` without re-running `npm run gen:api` will break the build.
-- **`complete` is the full CI gate.** It chains lint → prettier → all static checks (TS, OpenAPI, AsyncAPI, dep-cruiser, doc-generation round-trips) → docs build → all test suites. Use `complete:light` for a faster local loop (lint + gates + unit + cross-cutting only).
-- **`host` script is a prefix, not a full command.** It sets empty `NODE_DB_URI` / `NODE_REDIS_URL` and localhost hosts, then expects `npm run <script>` to follow. It is not a runnable script on its own.
-- **Test randomization.** `test:order-random` runs integration + contract + fuzz suites in-band with randomized order; the seed is printed for reproducibility.
-- **Mutation testing is separate.** `mutation` / `mutation:full` use Stryker and are not part of the `test` or `complete` pipelines.
+- **`postinstall` is a codegen gate.** It runs `gen:permission-actions`, `contracts:bundle`, `gen:api`, and `gen:asyncapi` in sequence. A failed codegen step aborts `npm install`. CI or offline environments must account for this.
+- **`sharp` is the only pinned version** in `dependencies` (exact `0.35.5`, no caret). All others use `^` or `~`.
+- **`scripts.host` ends with `npm run` and no subcommand.** It is a prefix wrapper; you must append a script name (e.g. `npm run host dev`).
+- **`scripts.bench` and `bench:k6`** rely on shell positional-arg expansion (`${1:-/products}`, `${1:-browse}.js`). They must be invoked through `sh`/`bash`, not directly as `node`.
+- **`scripts.compose`** defaults the container engine to **podman** via `${CONTAINER_ENGINE:-podman}`; set `CONTAINER_ENGINE=docker` to override.
+- **`scripts.gen:api` deletes `./api`** (`rm -rf`) before regenerating. Any local, uncommitted changes in that directory are lost.
+- **TypeScript is pinned to `~6.0.0`** (tilde, not caret), and `@types/node` targets Node 24.
+- The `complete:light` / `complete:light:gates` scripts provide a faster CI path (skips integration/contract/fuzz, docs build) for pre-commit or PR checks.

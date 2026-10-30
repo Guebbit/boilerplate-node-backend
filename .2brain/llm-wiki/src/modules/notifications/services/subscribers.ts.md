@@ -1,7 +1,7 @@
 ---
 source: src/modules/notifications/services/subscribers.ts
-sha256: 2c7d170cb1ddd18cd50e8b8176eec7b75e503eb6b3c0cd6740a5ef45bef6bfd4
-generated_at: 2026-10-15T10:52:06.917194+00:00
+sha256: 41a756f4377a7807a24f1a262f890bc428f6f29700ebcc7ac466d9f2355c384a
+generated_at: 2026-10-29T04:31:34.906167+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Maps domain events to inbox notification rows. Each exported function is a thin adapter: it takes a typed event payload, shapes it into one or more `NewNotification` objects, and hands them to `notificationsCreate` in `./inbox`. The module's `subscribe()` call (lived in `module.ts`) wires these functions to the event bus; the actual persistence stays in `inbox.ts`.
+Maps each domain event to the notification rows it produces. Every exported function is a one-to-one event handler that converts a `DomainEventMap` payload into either user-inbox rows (delegated to `notificationsCreate` in `./inbox`) or staff alerts (delegated to `./staff`). The module's `subscribe()` (wired in `./index`) attaches these handlers to the event bus; this file contains only the mapping logic, no I/O beyond the calls it delegates to.
 
 ## Key elements
 
-- **`removedFor`** (private helper) — Builds an array of `NewNotification` rows, one per `userId`, for the two "item removed" event shapes. Accepts a `code` discriminator so the same logic serves both cart-line and wishlist removal.
-- **`onCartLinesRemoved`** — Handler for `cart.lines_removed`; delegates to `removedFor` with code `notifications.cart-line-removed`.
-- **`onWishlistItemsRemoved`** — Handler for `wishlist.items_removed`; delegates to `removedFor` with code `notifications.wishlist-item-removed`.
-- **`onCartMergeRefused`** — Handler for `cart.merge_refused`; writes a single notification listing all refused lines.
-- **`onFulfillmentOrderDelayed`** — Handler for `fulfillment_order.delayed`; picks the notification code based on `needsAnswer` (`preorder-confirm-wait` vs `preorder-delayed`). Includes `expectedAt` / `answerBy` in `params` only when present. Resolves immediately (no write) when `userId` is `undefined` (erased account).
+- **`onCartLinesRemoved` / `onWishlistItemsRemoved`** – One `warning` row per affected user when a product leaves the catalogue. Share the private helper `removedFor`.
+- **`onStockAlertSent`** – Single `info` row: the product the user asked about is back in stock.
+- **`onCartMergeRefused`** – Single `warning` row listing all lines that could not be added during a guest-cart merge.
+- **`onFulfillmentOrderHoldNoticed`** – `warning` row mirroring the hold notice to the buyer's inbox. No-ops when `userId` is undefined (erased account).
+- **`onShipmentLost`** – `warning` row with staff-written message, items still owed, and expected replacement date. No-ops for erased accounts.
+- **`onFulfillmentOrderDelayed`** – `warning` row informing the buyer of a date change. No-ops for erased accounts.
+- **`onPurchaseHoldPlaced`** – Staff alert to the tenant's ban-capable set; deduped per `userId:until`.
+- **`onWebhookSubscriptionAutoDisabled`** – Staff alert to the webhook-managing set; deduped per `subscriptionId:disabledAt`.
+- **`onReturnRequested`** – Staff alert for a genuine return request. Silently skips `reason === 'withdrawal'` (withdrawals are born approved). Uses `DEPLOYMENT_TENANT_ID`.
+- **`onOutboxEventDead`** – Staff alert to deployment administrators when an outbox event exhausts retries. Uses `DEPLOYMENT_TENANT_ID`.
+- **`onTicketOpened`** – Staff alert to the *working* set (see `alertSetsOf`). If zero staff were notified and the ticket is a `contact`, falls back to `ticketService.mailFallbackMailbox`.
+- **`onTicketAssigned`** – Single-member alert (`notifyStaffMember`) to the new assignee only.
+- **`alertSetsOf`** (private) – Returns `['TicketManagement']` for contact tickets, `[routeSet]` otherwise. Deliberately excludes readers-only sets (`TicketDisplay`).
 
 ## Relationships
 
-- **`src/kernel/events.ts`** — Imports `DomainEventMap` as the type source for every payload parameter.
-- **`src/modules/notifications/repository.ts`** — Imports the `NewNotification` type that defines the row shape produced by each handler.
-- **`src/modules/notifications/services/inbox.ts`** — Calls `notificationsCreate`, which performs the actual database write.
-- **`src/modules/notifications/module.ts`** — Registers these exported handlers on the event bus via the module's `subscribe()` wiring.
-- **`src/modules/notifications/services/index.ts`** — Barrel file that re-exports these handlers (and other service exports) for external import.
+- **`@kernel/events`** – Source of the `DomainEventMap` type; defines every payload shape these handlers accept.
+- **`../repository`** – Provides the `NewNotification` row type used in all inbox mappings.
+- **`./inbox`** – `notificationsCreate` performs the actual DB writes; this file only builds the row arrays.
+- **`./staff`** – `notifyStaff` / `notifyStaffMember` deliver staff-side alerts (email, digest, etc.) and return a count of recipients.
+- **`@modules/tickets`** – `ticketService.mailFallbackMailbox` is called as a last resort when no staff member can receive a contact-ticket alert.
+- **`@kernel/access/tenant`** – `DEPLOYMENT_TENANT_ID` scopes deployment-level alerts (outbox dead, return requested) to the platform tenant rather than a customer tenant.
+- **`./index`** – Wires the exported handlers to the event bus via `subscribe()`.
 
 ## Notes
 
-- Every notification written here uses `severity: 'warning'` by design — the module docblock states these are "something changed without you asking," not errors.
-- `onFulfillmentOrderDelayed` is the only handler that can be a no-op (undefined `userId`); callers should not assume a write always occurs.
-- The conditional spread for `expectedAt` and `answerBy` means downstream consumers must treat those params as optional even when the event type marks them as possibly-present.
-- `removedFor` is intentionally unexported; the two removal handlers are the only public surface for that shared logic.
+- **Erased-account guard.** Three handlers (`onFulfillmentOrderHoldNoticed`, `onShipmentLost`, `onFulfillmentOrderDelayed`) check `userId === undefined` and resolve immediately. No other handler needs this guard because their payloads always carry a `userId`.
+- **Severity convention.** Buyer-facing rows are `warning` ("something changed without you asking") except `onStockAlertSent`, which is `info`. Staff rows inherit severity from the staff-routing layer, not from this file.
+- **Optional param spread.** Handlers use `...(cond ? { key: val } : {})` to omit `params` fields (e.g. `message`, `expectedAt`, `owed`) when absent, keeping the stored row lean.
+- **Dedupe keys** on every staff alert follow the pattern `<event>:<id>` (or `<event>:<id>:<timestamp>`) to suppress repeat deliveries of the same logical event.
+- **`onTicketOpened` fallback is conditional on `told === 0`.** If even one staff member receives the alert, the fallback mailbox is *not* touched.

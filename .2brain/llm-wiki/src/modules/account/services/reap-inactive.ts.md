@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/reap-inactive.ts
-sha256: b61c92e59aa94531ff5572ac1d4086a63c690e7167cfc05dd3e02f7ce9393a72
-generated_at: 2026-10-15T10:02:13.854735+00:00
+sha256: a26462fdd6519fa98d3d968cd3047126eb5af9256b8042bb4fd9884867568ab6
+generated_at: 2026-10-29T02:43:39.727729+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the staged inactivity-reaper pipeline (minimise → warn → soft-delete → hard-delete) as a single exported function. Kept separate from the cron script so that stage ordering is a unit-tested fact, not an implicit side-effect of a file nothing else imports.
+Implements the four-stage inactivity reaper (minimise → warn → soft-delete → hard-delete) as a pure, ordered pipeline. It is deliberately separated from its cron caller so that stage ordering is a unit-testable fact of this module rather than an emergent property of a script file.
 
 ## Key elements
 
-- **`GRACE_DAYS`** (const, `30`) — fixed pause between warn/soft/hard stages; intentionally not configurable.
-- **`daysAgo`** (private helper) — returns a `Date` `n` days in the past.
-- **`warn`** (private) — sends the inactivity-warning email (via `enqueueEmail`) and stamps `inactivityWarnedAt` through `userService.markInactivityWarned`. Only includes the user's display name when the address is verified.
-- **`minimiseStage`** (private) — calls `userService.minimiseInactiveBefore`, logs the result. Failures are per-account and non-fatal.
-- **`deletionStages`** (private) — runs the three deletion sub-stages sequentially: find-and-warn, soft-delete past grace, hard-delete past grace. Uses `systemCallerContext('User')` as the audit actor for both deletes.
-- **`reapInactiveAccounts`** (export) — orchestrates the pipeline. `minimiseDays > 0` triggers stage 0; `inactiveDays > 0` triggers stages 1–3. Either dial at `0` disables its path.
+- **`reapInactiveAccounts({ inactiveDays, minimiseDays })`** — sole public entry point. Runs stage 0 (minimise) when `minimiseDays > 0`, then stages 1–3 (deletion path) when `inactiveDays > 0`. Returns an `InactiveReapCounts`.
+- **`InactiveReapCounts`** — exported interface: `{ minimised, warned, softDeleted, hardDeleted }`, one count per stage.
+- **`deletionStages(inactiveDays)`** — internal async helper for stages 1–3; queries users to warn, soft-delete, and hard-delete in sequence, logging a summary at the end.
+- **`warn(user)`** — internal; composes the i18n warning email via `inactivityWarningEmail`, enqueues it, then stamps `inactivityWarnedAt` via `userService.markInactivityWarned`.
+- **`minimiseStage(minimiseDays)`** — internal; calls `userService.minimiseInactiveBefore`, logs the result, and returns the count. Per-account failures are contained (logged, not thrown) so one bad record doesn't halt the rest.
+- **`GRACE_DAYS`** — module-level constant (30). Fixed, not configurable; keeps the single `inactiveDays` dial in day units.
+- **`daysAgo(days)`** — tiny utility returning `Date` for *days* days before now, using `DAY_MS`.
 
 ## Relationships
 
-- **`scripts/ops/reap-inactive-accounts.ts`** — the cron/ops script that invokes `reapInactiveAccounts` and owns the job lease, module-hook registration, and i18n bootstrapping before calling in.
-- **`src/modules/users`** (`userService`, `UserDocument`) — all account lookups and mutations (`minimiseInactiveBefore`, `findInactiveUnwarned`, `findWarnedStillInactive`, `findReaperSoftDeletedPastGrace`, `remove`) go through the users service.
-- **`src/modules/account/emails.ts`** — provides `inactivityWarningEmail` (template + data) and `greetableName` for the warning mail.
-- **`src/infrastructure/adapters/mailer.ts`** — `enqueueEmail` is the transport for the warning email.
-- **`src/infrastructure/adapters/logger.ts`** — structured logging of stage completion.
-- **`src/infrastructure/i18n`** — `getDefaultLocale` fallback when a user has no explicit locale.
-- **`src/kernel/permissions.ts`** — `systemCallerContext` supplies the audit-trail identity for non-HTTP deletions.
-- **`src/modules/account/services/index.ts`** — re-exports this module so downstream consumers import from the barrel.
-- **`src/modules/account/tests/integration/reap-inactive.test.ts`** — integration tests that exercise stage ordering and per-account failure isolation.
+- **`src/modules/users/index.ts`** — primary dependency. Imports `userService` (all query/mutation methods: `minimiseInactiveBefore`, `markInactivityWarned`, `findInactiveUnwarned`, `findWarnedStillInactive`, `softDeleteInactive`, `findReaperSoftDeletedPastGrace`, `eraseInactive`) and the `UserDocument` type.
+- **`src/modules/account/emails.ts`** — provides `inactivityWarningEmail` (locale-aware template builder) and `greetableName` (safe display-name helper).
+- **`src/infrastructure/adapters/mailer.ts`** — `enqueueEmail` is the transport for the stage-1 warning.
+- **`src/infrastructure/i18n/index.ts`** — `getDefaultLocale` is the fallback when a user has no stored locale.
+- **`src/infrastructure/adapters/logger.ts`** — `logger.info` records each stage's completion with counts.
+- **`src/kernel/permissions.ts`** — `systemCallerContext('User')` supplies the audit-context object passed to soft/hard deletes (no HTTP request behind them).
+- **`src/domain-primitives/time.ts`** — `DAY_MS` constant for date arithmetic.
+- **`src/modules/account/services/index.ts`** — barrel re-export; makes `reapInactiveAccounts` reachable to the jobs layer.
+- **`src/modules/account/jobs.ts`** — the cron caller that invokes `reapInactiveAccounts`, owns the job lease, and ensures translations/module hooks are booted before calling.
+- **`src/modules/account/tests/integration/reap-inactive.test.ts`** — integration tests that assert the exact stage ordering and the "zero disables that stage" contract.
 
 ## Notes
 
-- The file does **not** register module hooks or boot i18n itself; the caller (the ops script) must do both before invoking `reapInactiveAccounts`.
-- `GRACE_DAYS` is a hard-coded constant, not a dial. The two external dials are `minimiseDays` and `inactiveDays` (both day counts, `0` = off).
-- Stage 0 (minimise) runs even when `inactiveDays` is `0`; the two dials are independent.
-- The warning email deliberately uses `user.email` (not the display name) as the greeting fallback for unverified addresses, since the display name is untrusted user-supplied text.
-- Deletions pass `systemCallerContext('User')` rather than a per-request context because there is no HTTP request behind the job; the audit trail is the sole record of who (the system) performed the deletion.
+- Stage ordering is the contract: minimise → warn → soft-delete → hard-delete. The doc-block at the top and the integration test together pin this; do not reorder without updating both.
+- `GRACE_DAYS` is **not** a user-facing setting. The only two dials are `inactiveDays` and `minimiseDays`; setting either to `0` disables that entire branch.
+- The warning email intentionally uses the *verified* email address for the greeting name check — accounts that never verified are still warned but get a neutral greeting.
+- Both delete stages pass a `systemCallerContext` rather than a user-scoped one; this is the audit trail for a process with no interactive actor.
+- The caller (job layer) is responsible for booting i18n translations and registering per-module `personalData.minimise` / `erase` hooks *before* invoking this function; none of that setup lives here.

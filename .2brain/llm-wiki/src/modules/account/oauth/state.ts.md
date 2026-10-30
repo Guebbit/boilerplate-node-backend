@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/oauth/state.ts
-sha256: 7505606dacb2955264e1607970d76e13fdb31a0069c722cf7dd1f7d005f70b7c
-generated_at: 2026-10-14T08:44:39.954413+00:00
+sha256: 701a9a57089b2145a4ca6385ff86f404be5e04b7cdc36f4299b8cc0f4546b02c
+generated_at: 2026-10-29T02:37:24.676310+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Manages the per-attempt cookies that an OAuth login round-trip requires: the CSRF `state` token (double-submit pattern, not a server-side session), the PKCE `code_verifier`, and two convenience values (`continue` path, `locale`). It mints tokens, sets/clears the corresponding Express cookies, and provides the validation predicates the callback controller uses to verify a returned request is legitimate before acting on it.
+Manages the per-attempt cookies that an OAuth login requires before the browser is redirected to the provider: the CSRF `state` (double-submit), the PKCE `code_verifier`, and the untrusted `continue` / `locale` values the visitor supplied. It provides the generation primitives, the Express cookie set/clear helpers, and the read-back validators, all in one place so the start and callback controllers never touch `node:crypto` or cookie-flag logic directly.
 
 ## Key elements
 
-- **Cookie name constants** — `OAUTH_STATE_COOKIE`, `OAUTH_VERIFIER_COOKIE`, `OAUTH_CONTINUE_COOKIE`, `OAUTH_LOCALE_COOKIE`: the literal cookie names shared across the flow.
-- **`OAUTH_COOKIE_TTL_MS`** (module-private) — 5-minute TTL; long enough to pick a provider account, short enough to bound replay.
-- **`generateOAuthState()`** — returns a 128-bit hex token for the CSRF handshake.
-- **`generateCodeVerifier()`** — returns a 43-char base64url string (32 random bytes) satisfying RFC 7636 §4.1 length rules.
-- **`codeChallengeOf(verifier)`** — computes the S256 (`SHA-256` → base64url) code challenge per RFC 7636 §4.2.
-- **`createStateCookie` / `destroyStateCookie`** — set or clear the `oauth_state` cookie on an Express `Response`.
-- **`createVerifierCookie` / `destroyVerifierCookie`** — same pair for `oauth_verifier`.
-- **`createContinueCookie` / `destroyContinueCookie`** — same pair for `oauth_continue`.
-- **`createLocaleCookie` / `destroyLocaleCookie`** — same pair for `oauth_locale`.
-- **`stateMatches(cookieValue, queryValue)`** — constant-time-unnecessary equality check (neither side is a secret) used by the callback to confirm the round-trip.
-- **`isSameOriginPath(value)`** — type-guard that a `continue` value is a same-origin relative path; uses WHATWG `URL` resolution against a placeholder origin to catch `//evil`, `/\evil`, etc.
-- **`isLocaleTag(value)`** — type-guard that a `locale` value matches a permissive BCP 47 shape (2-3 alpha subtag + up to three 2-8-char subtags).
+- **Cookie-name constants** (`OAUTH_STATE_COOKIE`, `OAUTH_VERIFIER_COOKIE`, `OAUTH_CONTINUE_COOKIE`, `OAUTH_LOCALE_COOKIE`, `OAUTH_LINK_COOKIE`) — all prefixed `__Host-` to block sibling-subdomain injection.
+- **`OAUTH_COOKIE_TTL_MS`** — 5 minutes; shared by every cookie in this module.
+- **`generateOAuthState()`** — 128-bit random hex string for the CSRF handshake.
+- **`generateCodeVerifier()`** — 32 random bytes, base64url-encoded (43 chars, no padding), satisfying RFC 7636 §4.1.
+- **`codeChallengeOf(verifier)`** — SHA-256 of the verifier, base64url-digested; the value sent as `code_challenge` (RFC 7636 §4.2).
+- **`oauthCookieOptions()`** *(private)* — spreads `hostCookieOptions()` from `session/cookies` and adds the 5-min `maxAge`.
+- **`create*Cookie` / `destroy*Cookie` pairs** — five set/clear helpers (state, verifier, link, continue, locale) that call `response.cookie` / `response.clearCookie` with the shared options.
+- **`stateMatches(cookieValue, queryValue)`** — plain string equality check; neither side is secret, so no timing-safe compare is needed.
+- **`isSameOriginPath(value)`** — type guard: resolves the candidate against a `http://same-origin.invalid` placeholder and confirms the origin is unchanged; rejects absolute URLs, `//evil`, and `/\evil`.
+- **`isLocaleTag(value)`** — type guard: matches a BCP 47–shaped tag (2–3 alpha, up to three 2–8 char subtags). Deliberately looser than the set of locales actually served.
 
 ## Relationships
 
-- **`src/modules/account/session/cookies.ts`** — imports `secureCookieOptions` so every OAuth cookie inherits the same `httpOnly`/`sameSite`/`secure` flags as session cookies.
-- **`src/modules/account/controllers/get-oauth-start.ts`** — calls `generateOAuthState`, `generateCodeVerifier`, `codeChallengeOf`, the four `create*Cookie` helpers, and `isSameOriginPath`/`isLocaleTag` to validate query params before setting cookies and redirecting to the provider.
-- **`src/modules/account/controllers/get-oauth-callback.ts`** — reads the cookies, calls `stateMatches`, re-validates `continue`/`locale` via `isSameOriginPath`/`isLocaleTag`, exchanges the code, then calls all four `destroy*Cookie` helpers.
-- **`src/modules/account/tests/unit/oauth-state.test.ts`** — unit-tests the token generators, the S256 transform, `stateMatches`, `isSameOriginPath`, and `isLocaleTag`.
-- **`scenarios/support/doubles/oauth-fake.ts`** — supplies a fake OAuth provider that exercises the cookie set/clear cycle in integration scenarios.
-- **`tests/unit/scenarios/oauth-providers.test.ts`** — scenario-level tests that exercise the full start→callback flow, exercising the cookie lifecycle end-to-end.
+- **`src/modules/account/session/cookies.ts`** — supplies `hostCookieOptions()` (secure, same-site, path flags) that `oauthCookieOptions()` extends with the TTL.
+- **`src/modules/account/controllers/get-oauth-start.ts`** — calls `generateOAuthState`, `generateCodeVerifier`, `codeChallengeOf`, and the `create*Cookie` helpers to set up the redirect to the provider.
+- **`src/modules/account/controllers/post-oauth-link-start.ts`** — same as above plus `createLinkCookie` for the signed-in linking variant.
+- **`src/modules/account/controllers/get-oauth-callback.ts`** — reads the cookies back, calls `stateMatches`, `isSameOriginPath`, `isLocaleTag` for validation, then calls the `destroy*Cookie` helpers on both success and failure paths.
+- **`src/modules/account/tests/unit/oauth-state.test.ts`** — unit-tests the generators, validators, and set/clear behavior in isolation.
+- **`scenarios/support/doubles/oauth-fake.ts`** — test fake that references the cookie-name constants to simulate a completed OAuth round-trip without a real provider.
+- **`tests/unit/scenarios/oauth-providers.test.ts`** — end-to-end scenario tests that exercise the full start → callback flow through the real controllers and this module.
 
 ## Notes
 
-- **Double-submit, not server-side session.** The `state` value is minted and delivered in the *same* response that sets the cookie; no server store is involved. The callback trusts the request only when the cookie value equals the query-param value. This means a stolen `state` cookie alone (or a forged query param alone) is insufficient.
-- **`continue` and `locale` are untrusted input.** They are validated with `isSameOriginPath` / `isLocaleTag` **twice**: once in the start controller (against the query param) and again in the callback (against the cookie value, because a cookie is client-writable). Never read a cookie value and use it directly.
-- **All four cookies share identical lifetime and clearing points.** Any code path that calls `destroyStateCookie` must also call the other three destroy helpers; they are grouped by convention, not enforced by a single function.
-- **`isSameOriginPath` uses a placeholder origin (`http://same-origin.invalid`).** This is not a real host; it exists solely so `new URL(value, origin)` can resolve relative paths. The check is whether the resolved origin *equals* the placeholder — any absolute URL, protocol-relative URL, or backslash-slash escape will resolve elsewhere and fail.
-- **`isLocaleTag` is deliberately looser than the set of locales the app actually serves.** It only prevents injection-shaped values into a redirect URL; the frontend is responsible for ignoring tags it does not support.
+- **Double validation by design.** `isSameOriginPath` and `isLocaleTag` are applied twice — once against the incoming query param at the start controller and again against the cookie value at the callback — because a cookie is client-writable and can never be trusted on its own.
+- **`stateMatches` is intentionally not timing-safe.** The doc comment states that neither the cookie nor the query param is secret; the check defeats a forged callback URL, not a guessed token.
+- **`__Host-` prefix is load-bearing.** A browser refuses to let another origin set or overwrite a `__Host-` cookie, so an attacker cannot plant both halves of the double-submit pair.
+- **TTL is 5 minutes.** Chosen to be long enough to pick a Google account on a second screen but short enough to bound cookie-reuse windows.
+- **No server-side session or signing secret is involved.** Both `state` and `verifier` are self-contained; comparison is value-to-value, not value-to-stored-hash.

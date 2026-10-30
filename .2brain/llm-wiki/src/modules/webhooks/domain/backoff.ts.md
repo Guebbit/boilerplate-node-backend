@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/domain/backoff.ts
-sha256: 7d970675d221b3ef15727db979843ab2b76588c8d491e41f5e5ec9c9017c17aa
-generated_at: 2026-09-23T19:39:32.344296+00:00
+sha256: 978a4bf3ac51799a27d1f876b1df3fcfc30280ecd21264204ce4c361f40d115d
+generated_at: 2026-10-29T06:26:43.254407+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure, dependency-free retry-backoff rules for webhook deliveries. Defines the delay schedule, the max-attempt count, and the auto-disable threshold so that the sweep worker, the attempt service, and unit tests all share a single source of truth for "when is the next try" and "when do we give up on a subscription."
+Pure domain rules defining the webhook retry backoff schedule (delay tiers, max attempts) and the auto-disable threshold (consecutive-failure count + minimum elapsed time). Exists so the sweep job, the delivery worker, and unit tests all read the same table instead of duplicating timing constants.
 
 ## Key elements
 
-- **`WEBHOOK_RETRY_DELAYS_MS`** — `readonly number[]` of 5 tiers (5 s, 5 min, 30 min, 2 h, 10 h). Indexed 0-based; index _n_ is the wait _after_ attempt _n+1_ fails.
-- **`WEBHOOK_MAX_ATTEMPTS`** — `6` (1 initial + 5 retries), derived from the array length.
-- **`nextRetryDelayMs(failedAttempt)`** — Returns the delay in ms for the given 1-based failed attempt, or `undefined` when all tiers are spent (signal to mark the delivery `exhausted`).
-- **`nextAttemptAt(failedAttempt, now?)`** — Wraps the delay into a `Date` for stamping onto `nextAttemptAt` in the repository. Returns `undefined` when exhausted.
-- **`WEBHOOK_MAX_CONSECUTIVE_FAILURES`** — `5`: number of consecutive _exhausted_ chains before a subscription becomes eligible for auto-disable.
-- **`WEBHOOK_MIN_FAILING_MS`** — 3 days: time-based floor on how long the streak must persist (matches Stripe's webhook threshold).
-- **`shouldAutoDisable(consecutiveFailures, failingSince, now?)`** — Returns `true` only when **both** the chain-count threshold **and** the time floor are met. `failingSince` is `undefined` when no streak is open.
+- **`WEBHOOK_RETRY_DELAYS_MS`** — `readonly number[]` of per-tier delays in ms (5 s, 5 m, 30 m, 2 h, 10 h). Index 0 is the wait *after* attempt 1 fails (1-based indexing).
+- **`WEBHOOK_MAX_ATTEMPTS`** — Total attempts a delivery receives (initial try + one per tier).
+- **`nextRetryDelayMs(failedAttempt)`** — Returns the delay for the next retry or `undefined` when all tiers are exhausted.
+- **`nextAttemptAt(failedAttempt, now?)`** — Returns a `Date` to stamp onto `nextAttemptAt` in the repository, or `undefined` when exhausted. `now` is injectable for tests.
+- **`WEBHOOK_MAX_CONSECUTIVE_FAILURES`** — Number of consecutive exhausted retry chains required before auto-disable is considered.
+- **`WEBHOOK_MIN_FAILING_MS`** — Minimum wall-clock duration (3 days) a failure streak must span before auto-disable fires.
+- **`shouldAutoDisable(consecutiveFailures, failingSince, now?)`** — Dual-gate check: both the chain count **and** the time floor must be met. Returns `false` if `failingSince` is `undefined`.
 
 ## Relationships
 
-- **`src/modules/webhooks/domain/index.ts`** — Barrel file; re-exports the constants and functions from this module so the rest of the webhooks domain can import them via the package path.
-- **`src/modules/webhooks/services/attempt.ts`** — Consumes `WEBHOOK_MAX_ATTEMPTS`, `nextRetryDelayMs`, and `nextAttemptAt` to decide whether to schedule a retry row or mark the delivery exhausted after each failed attempt.
-- **`src/modules/webhooks/tests/unit/backoff.test.ts`** — Unit-tests the schedule values, the `undefined` boundary, and the two-gate logic of `shouldAutoDisable` using the injectable `now` parameter.
+- **`rules.generated.ts`** — Source of the actual numeric values (`retryRules.delaysMs`, `autoDisableRules.maxConsecutiveFailures`, `autoDisableRules.minFailingMs`), generated from `rules.yaml`. This file re-exports them under stable names.
+- **`domain/index.ts`** — Barrel re-export; makes the constants and helpers importable at the module level.
+- **`services/attempt.ts`** — Consumer that calls `nextAttemptAt` / `shouldAutoDisable` when recording a delivery outcome and scheduling (or not) the next row.
+- **`tests/unit/backoff.test.ts`** — Unit tests exercising the delay lookup, exhaustion boundary, and the dual-gate auto-disable logic with injected clocks.
 
 ## Notes
 
-- **1-based indexing.** `failedAttempt` is always 1-based (1 = the initial try). `WEBHOOK_RETRY_DELAYS_MS[0]` is the wait _after_ attempt 1 fails. Off-by-one here is the most common bug.
-- **Shape, not precision.** Delays are scheduled onto `nextAttemptAt`; the sweep picks them up at its own interval, so the actual wait can be up to one sweep period later than the nominal value.
-- **Auto-disable is a two-gate check.** Count alone or time alone is insufficient. An endpoint that fails fast (short chain) still waits out the 3-day floor; one that fails slowly still needs 5 exhausted chains.
-- **`failingSince` lifecycle** is managed by `repository.ts#recordOutcome` (stamped on first failure after a success, cleared on next success) — not by this file.
-- **Injectable clock.** Both `nextAttemptAt` and `shouldAutoDisable` accept an optional `now: Date` defaulting to `new Date()`, keeping them pure and testable without `jest.useFakeTimers`.
+- Values are **generated** from `rules.yaml`; do not edit the numbers here—update the YAML and regenerate.
+- The 1-based indexing convention (`failedAttempt` = the attempt that *just* failed) is easy to off-by-one against.
+- Backoff granularity is the **sweep interval**, not exact timing—the comments explicitly state these are the *shape* of the backoff, not a precision guarantee.
+- The 3-day floor (`WEBHOOK_MIN_FAILING_MS`) exists specifically so a platform-side outage that exhausts the ~12.5 h retry ladder does not mass-disable subscribers whose endpoints are fine.
+- `failingSince` is stamped by `repository.ts#recordOutcome` on the first failure after a success and cleared on the next success; this file only *reads* it.

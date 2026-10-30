@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/post-2fa-confirm.ts
-sha256: a24a6d584205b9694713dd453f3a733ac303827a9c95dd2fc9794327c6109099
-generated_at: 2026-10-15T09:54:21.298808+00:00
+sha256: bd34495f7810afb2959bce9bf775d389c0e640e85809ff53878f74ca7707e7d7
+generated_at: 2026-10-29T02:28:18.808231+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP controller for `POST /account/2fa/methods/{method}/confirm`. It validates the path and body parameters, delegates to `twoFactorService.confirmTwoFactorMethod`, remints the caller's session (since confirming a factor revokes all existing sessions), and returns the service result (including backup codes for a first factor) along with the fresh session credentials.
+Thin HTTP adapter for `POST /account/2fa/methods/{method}/confirm`. Validates the incoming request, delegates to `twoFactorService.confirmTwoFactorMethod`, handles session reminting (since arming a factor revokes all existing sessions), and returns the confirmation payload including backup codes when this is the account's first factor.
 
 ## Key elements
 
-- **`post2faConfirm`** (exported) — Express handler. Parses path params (`method`) and body (`code`) via Zod, calls the two-factor service, increments the `authTwoFactorEnrollTotal` metric on both success and failure, and on success remints a session with `AMR.otp` appended before sending a `200` response.
+- **`post2faConfirm`** (exported) — Express handler for the confirm endpoint. Parses path params (`method`) and body (`code`) via Zod schemas, calls the service, remints the session, and responds.
+- **Session snapshot → confirm → remint** — `sessionSnapshotOf` is captured *before* calling `confirmTwoFactorMethod`, because that call revokes all sessions (including the caller's). `remintSession` then issues a fresh session carrying the original AMR claims plus `AMR.otp`.
+- **`authTwoFactorEnrollTotal`** — Prometheus counter incremented with `status: 'success'` or `'failure'` on every terminal path (body-parse rejection, service refusal, or success).
+- **`withProofs(amr, AMR.otp)`** — appends the OTP assertion-method reference to the session proof set before reminting.
+- **`catchAs(response, 'post2faConfirm')`** — terminal error handler; maps unexpected throws to a structured error response.
 
 ## Relationships
 
-- **`../services` (`twoFactorService`)** — the sole domain operation invoked (`confirmTwoFactorMethod`).
-- **`../session/session`** — `sessionSnapshotOf` captures the current session *before* the service call (because the call revokes it); `remintSession` issues a new session with the updated proof list.
-- **`../domain/session-proof`** — `AMR.otp` and `withProofs` build the new authentication-method list for the reminted session.
-- **`../metrics`** — `authTwoFactorEnrollTotal` is incremented with `{ method, status }` on every terminal outcome.
-- **`@infrastructure/http/controller`** — `rejectValidation`, `refused`, and `catchAs` handle the three error/response paths.
-- **`@infrastructure/http/request`** — `callerContextOf` extracts IP/user-agent for the service call.
-- **`@infrastructure/http/response`** — `successResponse` formats the final JSON body.
-- **`@infrastructure/i18n`** — `t` localises the success message string.
-- **`@types`** — `TwoFactorConfirmed` and `TwoFactorConfirmRequest` shape the response and request types.
+- **`src/infrastructure/http/controller.ts`** — provides `parseBody`, `refused`, and `catchAs` used for request validation, service-result unwrapping, and error termination.
+- **`src/infrastructure/http/request.ts`** — `callerContextOf` extracts IP/UA context forwarded to the service.
+- **`src/infrastructure/http/response.ts`** — `successResponse` shapes the 200 JSON reply.
+- **`src/modules/account/services/index.ts`** — `twoFactorService.confirmTwoFactorMethod` is the business-logic call this controller wraps.
+- **`src/modules/account/session/session.ts`** — `sessionSnapshotOf` and `remintSession` handle the revoke-and-reissue session dance.
+- **`src/modules/account/domain/session-proof.ts`** — `AMR.otp` constant and `withProofs` helper used to stamp the new session's proof set.
+- **`src/modules/account/metrics.ts`** — exports the `authTwoFactorEnrollTotal` counter.
+- **`src/modules/account/routes.ts`** — wires this handler to the `POST /account/2fa/methods/:method/confirm` route.
+- **`src/types/index.ts`** — defines the `TwoFactorConfirmRequest` and `TwoFactorConfirmed` shapes used in the typed `Request`/`Response` generics.
 
 ## Notes
 
-- The session snapshot is taken **before** calling the service because `confirmTwoFactorMethod` revokes all sessions, including the one this request is authenticated with. Forgetting to snapshot first would leave the caller logged out.
-- The response body merges `result.data` (e.g. backup codes) with the newly issued session token via `{ ...result.data, ...issued }`.
-- `request.authContext!` uses a non-null assertion — the route is expected to be gated by an auth middleware; if it is reached without one, the handler will throw.
-- The metric is incremented on the *body*-validation failure path (using `pathParameters.data.method`) as well as on service-level refusal and success, so the "failure" label covers both schema and business-logic rejections.
+- The session snapshot must be taken **before** `confirmTwoFactorMethod` is called; the comment in the code explicitly calls this out because the service deletes all sessions as part of arming. Reordering those two calls will 401 the caller.
+- `request.authContext!` relies on upstream auth middleware having populated the context; this controller does not guard against its absence.
+- The `method` label on the metric comes from the validated path parameter (not the body), so it is safe even when body parsing fails.
+- On the success path the response body merges `result.data` (service output, e.g. backup codes) with `issued` (the freshly reminted session token) into a single `TwoFactorConfirmed` object.

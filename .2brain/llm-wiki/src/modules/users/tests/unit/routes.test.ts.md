@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/tests/unit/routes.test.ts
-sha256: ea64eb1754ef16352ccab9eb8832d94b29871ec9fed1f77fbccaf1819cf4a529
-generated_at: 2026-10-15T12:16:34.626310+00:00
+sha256: 9dd1cb16f956b9c708927cc0fc93d3067ec40706a45eb07c6230842408e8f8a3
+generated_at: 2026-10-29T06:24:07.313971+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit-test the user-administration router (from `@modules/users/routes`) to verify that every documented endpoint is mounted in the correct order, that each endpoint carries the full identity-and-permission guard chain, and that caching/upload middleware is applied (or absent) as intended. Assertions are made per endpoint so that a route accidentally mounted above the guard `use()` still fails.
+Unit test suite that pins down the user-administration router's contract: exact endpoint set and mount order, per-route authorization guard chain, cache-header policy, and upload-validation wiring. It exists so that a new route added above the shared `use(getAuth, isAuthOrCredential)` line, or a route that silently loses its permission guard, is caught immediately rather than at review time.
 
 ## Key elements
 
-- **`ALL`** — Array of the ten documented route signatures (e.g. `'POST /search'`, `'GET /:id'`, …) in mount order. Serves as the single reference list for every `it.each` block.
-- **`describe('user routes — what is mounted')`** — Asserts `routeSignatures(router)` equals `ALL` exactly (order-sensitive) and that `/search` is declared before `/:id`.
-- **`describe('user routes — authorization')`** — For every signature in `ALL`, asserts the guard chain contains `getAuth` → identity guard (`isAuthOrCredential`) → `requirePermissionGuard` in that order. Also asserts no endpoint is unguarded.
-- **`describe('user routes — caching and uploads')`** — Asserts GET reads use `privateNoCache` (no `setCache*`), POST uses `noStore`, image-mutation endpoints carry `upload.image` + `validateUploadedImages` + `quarantineUploadedImages`, and `DELETE /:id/hard` is gated by `routeFlag(hardDelete)` while plain deletes are not.
-- **Three `jest.mock` calls** — Stub `cache`, `route-flag`, and `upload` middlewares by delegating to mock factories exported from `@tests/routes` (via `jest.requireActual`).
+- **`ALL`** — Array of every documented endpoint signature (method + path) in expected mount order (14 entries, `POST /search` through `DELETE /:id/hard`).
+- **`jest.mock` × 3** — Replaces the cache, route-flag, and upload middleware modules with factories provided by the test-support module, so assertions inspect the middleware chain by name rather than side-effecting.
+- **"what is mounted" block** — Asserts `routeSignatures(router)` equals `ALL` (exact set *and* order) and that `/search` precedes `/:id` (Express first-match routing).
+- **"authorization" block** — For every endpoint, asserts the guard chain contains `getAuth` → identity guard (`isAuthOrCredential`) → `requirePermissionGuard` in that order; also asserts no endpoint lacks `requirePermissionGuard`.
+- **"caching and uploads" block** — Asserts GET routes use `privateNoCache` (never `setCache`), `POST /search` uses `noStore`, write endpoints carry `upload.image` + `validateUploadedImages` + `quarantineUploadedImages`, and `DELETE /:id/hard` is gated by `routeFlag(hardDelete)` while the soft deletes are not.
 
 ## Relationships
 
-- **`src/modules/users/routes.ts`** — The module under test; provides the `router` that every assertion inspects.
-- **`tests/support/routes.ts`** — Supplies all test helpers (`routeTable`, `routeSignatures`, `guardsOn`, `identityGuardIndex`, `chainOf`) and the three mock factories (`cacheMock`, `routeFlagMock`, `storageMock`) used by the `jest.mock` calls.
+- **`src/modules/users/routes.ts`** — The file under test; exports `router`, which is imported and inspected throughout.
+- **`tests/support/routes.ts`** — Provides the inspection utilities (`routeTable`, `routeSignatures`, `guardsOn`, `identityGuardIndex`, `chainOf`) and the three mock factories (`cacheMock`, `routeFlagMock`, `storageMock`) used in the `jest.mock` calls.
 
 ## Notes
 
-- Mocks are wired through `jest.requireActual<typeof import('@tests/routes')>` rather than inline factories — the mock implementations live in the shared support file, not here.
-- The `ALL` array must stay in sync with the router's mount order; adding a new endpoint without updating it will fail the first test immediately.
-- The identity-guard assertion is intentionally position-based (`indexOf` comparisons), not just membership, to enforce the `getAuth → identity → requirePermission` ordering.
+- The identity guard here is `isAuthOrCredential`, **not** a plain session check — API-key tenants sync against this directory, so the test explicitly expects that specific guard name.
+- Guard order is asserted (`getAuth` < identity < `requirePermissionGuard`) because `requirePermissionGuard` reads the role from context that `getAuth` populates; a reordered chain would read from an empty context.
+- Caching assertions cite RFC 9111 §3.5 (private-only responses): admin-only data must never enter shared Redis; `privateNoCache` is the permitted browser-side mechanism.
+- Tests run per-endpoint (`it.each(ALL)`) rather than once, so a route accidentally mounted *above* the `use(...)` line still fails its own assertion.
+- `chainOf` returns the middleware chain as strings; cache mocks appear as `setCache(...)` and `privateNoCache`, uploads as `upload.image`, flags as `routeFlag(hardDelete)` — matching the names the mocks register.

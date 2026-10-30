@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/emails.ts
-sha256: ab701aa1612edfca5699e17e8c17ff7caa0a43c195a139acba84a561853c66f0
-generated_at: 2026-10-15T11:53:23.056048+00:00
+sha256: 5a4386f09a057564f4c555e1189f15e4e08a540c3bb4b4360ec92ddc6ba1bdfc
+generated_at: 2026-10-29T05:38:51.378902+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Resolves the customer-facing copy for all return/withdrawal notices into finished, language-ready strings at call time. It exists so that whichever layer sends the email (mail adapter, queue worker, etc.) only ever handles complete text and never performs locale lookups itself — the same "resolve here, render nowhere" rule as `@modules/account/emails`.
+Composes the finished, localized email content for every return and withdrawal notice the returns module sends. It resolves all copy into concrete strings at call time (via the i18n translator), so the downstream renderer (`mailer` adapter) only formats an `EmailContent` object and resolves nothing further. A single template ID (`returns.notice`) carries all notice kinds; differences live in the locale files, not in separate templates.
 
 ## Key elements
 
-- **`ReturnNoticeKind`** (type) — union of the five notice variants: `withdrawal-acknowledged`, `return-requested`, `return-approved`, `return-declined`, `return-closed`.
-- **`ReturnNoticeInput`** (interface) — the data a caller must supply to fill the template: `orderRef`, optional `returnPostage` payer, `at` (Date), optional `declineReason`, optional `refund` amount, optional `returnAddress`.
-- **`returnNoticeEmail`** (exported function) — takes `kind`, `locale`, `name`, and `input`; returns a fully populated `EmailContent` object (template id `returns.notice`, subject, and a `data` bag with greeting, body, optional postage line, optional return-address line, and footer).
-- **`stamp`** (private helper) — formats a `Date` as long date + short time in **UTC** via `Intl.DateTimeFormat`, satisfying Art. 11a's requirement that an acknowledgement state the exact moment.
+- **`ReturnNoticeKind`** (type) — Discriminant union of the nine notice variants (`withdrawal-acknowledged`, `withdrawal-recorded`, `return-requested`, `return-opened`, `return-approved`, `return-declined`, `return-closed`, `return-replaced`, `return-repaired`).
+- **`ReturnNoticeInput`** (interface) — All data a notice may need: `orderRef`, `at`, optional `returnPostage`, `recorded`, `declineReason`/`declineMessage`, `refund`, `returnAddress`, `remedyChoice`.
+- **`returnNoticeEmail`** (exported function) — Main entry point. Takes `kind`, `locale`, `name`, and `input`; returns a ready-to-send `EmailContent` with subject, greeting, body, postage line, return address, remedy notice, and footer.
+- **`stamp`** (internal) — Formats a `Date` as long date + short time in UTC using `Intl.DateTimeFormat`, required by Art. 11a for unambiguous timestamps.
+- **`declineSentence`** (internal) — Builds the decline reason string: translated code sentence + optional staff-written message (which stays in staff's language).
 
 ## Relationships
 
-- **`src/infrastructure/adapters/mailer.ts`** — imports the `EmailContent` type that shapes the return value of `returnNoticeEmail`.
-- **`src/infrastructure/i18n/index.ts`** (and `context.ts`) — imports `translator`, which is called once per email to obtain a locale-bound translation function `t`.
-- **`src/modules/orders/index.ts`** — imports `addressLine` to format the `ReturnAddress` for the approval notice.
-- **`src/modules/orders/emails.ts`** — cited in the module doc-block as the precedent for the resolve-at-call-time convention; no runtime import.
-- **`src/modules/returns/services/notify.ts`** — the service layer that calls `returnNoticeEmail` and hands the result to the mailer.
-- **`src/modules/returns/index.ts`** — module barrel; re-exports this file's public symbols.
-- **`src/modules/returns/tests/unit/emails.test.ts`** — unit tests exercising `returnNoticeEmail` across kinds and locales.
-- **`tests/unit/infrastructure/adapters/mailer-templates.test.ts`** — verifies the `returns.notice` template renders the `data` bag this file produces.
+- **`@infrastructure/adapters/mailer`** — Consumes the `EmailContent` type as the return shape of `returnNoticeEmail`.
+- **`@infrastructure/i18n`** — Calls `translator(locale)` to obtain a translation function; all copy keys are resolved here.
+- **`@domain-primitives/money`** — Uses `formatMoney` to render the refund amount in the buyer's locale.
+- **`@modules/shop`** — Calls `addressLine` to flatten a `ShopAddress` into a single-line string for the return-address field.
+- **`@types`** — Imports `ReturnPostagePayer` and `ShopAddress` for the input interface.
+- **`src/modules/returns/services/notify.ts`** — The service layer that assembles `ReturnNoticeInput` and calls `returnNoticeEmail`.
+- **`src/modules/returns/index.ts`** — Re-exports the public surface of this module.
+- **`src/modules/returns/tests/unit/emails.test.ts`** — Unit tests exercising each notice kind and edge cases.
+- **`tests/unit/infrastructure/adapters/mailer-templates.test.ts`** — Validates the `returns.notice` template renders the data shape this file produces.
 
 ## Notes
 
-- **Single template, many kinds.** All five notices share one `returns.notice` template; the only variation is which copy strings and which optional slots (postage, address) are populated. There is no per-kind template.
-- **Postage line is deliberately suppressed** for `return-declined` and `return-closed` (nothing is being posted) and when `returnPostage` is absent (withdrawal before dispatch).
-- **Date/time is always UTC.** The `stamp` helper hard-codes `timeZone: 'UTC'` to avoid ambiguity across a customer's local timezone — do not "fix" this to local time.
-- **`locale` is a string argument, not a context read.** The function is pure with respect to the locale: pass it in, get finished text out. This keeps the mailer layer free of i18n dependencies.
-- **`refund.amount` is formatted via `Intl.NumberFormat`** with the caller-supplied currency code; there is no hardcoded currency.
+- **No unresolved placeholders.** By design, `returnNoticeEmail` returns fully-rendered strings; the mailer adapter must not attempt further interpolation.
+- **UTC timestamps are deliberate.** `stamp` forces `timeZone: 'UTC'` to satisfy the legal requirement for an unambiguous acknowledgement time (Art. 11a). Do not "fix" this to local time.
+- **Postage suppression is kind-based, not input-based.** Even if `returnPostage` is set, the postage line is omitted for `return-declined`, `return-closed`, `return-replaced`, and `return-repaired`.
+- **`declineMessage` is intentionally un-translated.** It is staff's free-text note and passes through verbatim; only the `declineReason` code is looked up in the locale.
+- **`remedyChoice` is boolean-only.** When true, a static `returns.email.remedy-notice` string is appended; no dynamic content is injected for this field.

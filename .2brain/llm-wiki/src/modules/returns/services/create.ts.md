@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/services/create.ts
-sha256: c699b6ddabc34a9550b3f75e825d2890d71a0fc4c4b497c16db4bc5aa4230533
-generated_at: 2026-10-15T11:56:11.499358+00:00
+sha256: 5eb7b3e34f6c747e368e4cbfc85e074093876b08ccafc426fbc20b5514881dfb
+generated_at: 2026-10-29T05:42:02.931893+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,40 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single entry point for opening a return. It also serves as the "withdrawal button" handler: the same call branches on whether goods have been dispatched. Pre-dispatch it cancels the order, refunds in full, and writes a `Return` closed at birth (no lines). Post-dispatch it writes an open `Return` with the lines coming back and delegates the unshipped remainder to a separate cancellation.
+Opens a return for an order — the same call that powers the withdrawal button. The shape of the resulting `Return` record depends on whether goods have shipped: pre-dispatch it delegates to the order's own cancellation (full refund, stock release) and writes a closed, line-less `Return` as dated proof; post-dispatch it writes an open `Return` with the goods coming back and cancels unshipped items separately. Handles both buyer-initiated and staff-initiated openings, including policy waivers.
 
 ## Key elements
 
-- **`refundOwedOn(order)`** – Returns the full order total if the order was paid; `0` otherwise.
-- **`writeWithdrawalRecord(order, context)`** – Inside a transaction: creates a `Return` with `status: 'closed'`, empty lines, the refund amount, and the Art. 11a postage payer. Enqueues `return.requested` then `RETURN_CLOSED` outbox events. After commit: nudges the outbox and records the audit trail.
-- **`withdrawBeforeDispatch(order, input, authContext, context)`** – Calls `orderService.cancelById` with `{ withdrawal: true }`. On success, writes the withdrawal record and sends the acknowledgement mail. On cancel failure (e.g. a shipment landed in between), re-reads the order and falls through to `openReturn` if it is no longer before-dispatch.
-- **`alreadyReturned(orderId, session)`** – Queries existing returns under the session, filters to those that hold returned goods, and flattens their lines into `ProductQuantity[]` for quantity checks.
-- **`appendOpened(created, session)`** – Appends `return_requested` (and `return_approved` when the status is already `approved`) to the order timeline within the same transaction.
-- **`writeReturn(order, input, lines, session)`** – Creates the `Return` document with resolved lines (title, unit price pulled from the order), initial status, and optional `decidedAt` for withdrawals. Enqueues `return.requested` and appends timeline events.
-- **`openUnderLock(order, input, shipped)`** – The core post-dispatch path. Acquires the order's lock row, reads already-returned quantities, validates requested lines via `checkRequestedLines` against `returnableQuantities(shipped, earlier)`, then writes the return — all in one transaction to prevent two parallel openings from both committing a full return.
-- **`announceOpened(order, created, context)`** – Post-commit: records the audit trail, syncs the order's return projection, and sends the acknowledgement mail (withdrawal-specific or generic).
-- **`CreateReturnInput` / `CreateReturnOutcome`** – Re-exported from `./outcome` for consumers.
+- **`alreadyReturned(orderId, session)`** — Reads existing returns for the order and flattens their lines into `ProductQuantity[]`, so a new return's quantities are checked against what is already in flight. Cancellations are excluded (nothing ships back).
+- **`appendOpened(created, actor, session)`** — Appends `return_requested` (and `return_approved` when the return is born approved) to the order's timeline via `orderService`.
+- **`Opening` (interface)** — Extends `Statement` with optional `staffId` and `policyExceptions`, carrying who opened it and what was waived.
+- **`writeReturn(order, input, lines, opening, session)`** — Persists the `Return` document, enqueues `return.requested` (and `return.decided` for staff-opened non-withdrawal) outbox messages, then appends the timeline rows.
+- **`excludedProductIds(order)`** — Collects product IDs where Art. 16 removes the right of withdrawal.
+- **`isWaiver(opener, reason)`** — True when staff open a non-withdrawal return for the buyer, meaning they are waiving shop rules.
+- **`openUnderLock(order, input, shipped, opener)`** — The core transaction: locks the order row, reads already-returned quantities, validates requested lines against returnable quantities, freezes policy exceptions, and calls `writeReturn`. All under `withTransaction` to prevent concurrent double-returns.
+- **`announceOpened(order, created, context)`** — Post-commit: audits the opening and calls `syncReturnStatus` to bring the order's projected return status in step.
+- **`openFor(order, input, opener, authContext, context, …)`** *(truncated in source)* — Higher-level orchestrator: judges the reason's deadline on the buyer's request date, removes Art. 16-excluded goods from the shipped set, then delegates to `openUnderLock`.
+- **Re-exports** — `CreateReturnInput` and `CreateReturnOutcome` from `./outcome`.
 
 ## Relationships
 
-- **`@modules/orders`** (`orderService`, `orderTotal`, `isBeforeDispatch`, `isExcludedFromWithdrawal`, `OrderDocument`) – Cancels the order (withdrawal path), appends timeline events, computes refund totals, and classifies the dispatch state.
-- **`@modules/delivery`** (`shippedQuantities`) – Provides the per-product shipped quantities that bound what is returnable.
-- **`@infrastructure/runtime/database`** (`withTransaction`) – Wraps all write paths (withdrawal record, return creation) in a MongoDB transaction.
-- **`@kernel/outbox`** (`enqueueOutboxEvent`, `nudgeOutbox`) – Enqueues `RETURN_CLOSED` and `return.requested` domain events; nudges the relay after commit.
-- **`@infrastructure/http/response`** (`generateReject`) – Produces structured HTTP error payloads for rejected outcomes.
-- **`@infrastructure/i18n`** (`t`) – Translates customer-facing messages.
-- **`../domain`** (`checkRequestedLines`, `returnableQuantities`, `initialStatusFor`, `wireLines`, `holdsReturnedGoods`, `ProductQuantity`) – Pure domain logic for quantity validation, status derivation, and line normalisation.
-- **`./cancel-remainder`** (`createCancellation`) – Creates the `kind: 'cancellation'` record for unshipped units when a post-dispatch return is opened.
-- **`./notify`** (`mailReturnNotice`) – Sends the Art. 11a withdrawal acknowledgement or the generic "return received" mail.
-- **`./ownership`** (`ownOrder`) – Verifies the caller owns the order; also used to re-read a fresh order after a failed cancel.
-- **`./projection`** (`syncReturnStatus`) – Updates the order's cached return status after the return is persisted.
-- **`./outcome`** – Shared outcome discriminated-union types and factory helpers (`badLines`, `refused`, `recordOpened`, `windowClosed`, etc.).
+- **`@infrastructure/runtime/database`** — Wraps the entire open operation in `withTransaction`; the order row is locked for the duration.
+- **`@kernel/outbox`** — `nudgeOutbox` is the caller's responsibility after commit to wake the relay for enqueued `return.requested` / `return.decided` messages.
+- **`@modules/orders`** — Imports `orderService` (timeline append, cancel path), `isBeforeDispatch` (chooses withdrawal vs. return), `isExcludedFromWithdrawal` (Art. 16 filter), and `withdrawalRefusalOf`. `OrderDocument` type shapes all order reads.
+- **`@modules/delivery`** — `deliveryService` is imported, presumably to determine what has actually shipped per product.
+- **`@modules/returns/domain`** — Domain logic lives here: `checkRequestedLines`, `returnableQuantities`, `wireLines`, `holdsReturnedGoods`, `initialStatusFor`, `policyExceptionsOf`, `checkStatement`, `isGuaranteeReason`, `isReasonOpen`.
+- **`@infrastructure/http/response`** — `generateReject` builds error responses for the various `bad*` / `windowClosed` outcomes.
+- **`@infrastructure/i18n`** — `t` for localised user-facing messages.
+- **`./withdraw`, `./cancel-remainder`** — `withdrawBeforeDispatch` handles the pre-dispatch path; `createCancellation` handles unshipped items post-dispatch.
+- **`./outcome`** — Defines the input/outcome types and the factory functions (`opened`, `badLines`, `windowClosed`, `enqueueRequested`, `enqueueApproved`, etc.) that shape the result.
+- **`@modules/shop`** — `returnPostagePayer()` determines who pays return shipping.
 
 ## Notes
 
-- **Withdrawal ≠ cancellation.** A withdrawal is a `Return` record (closed, no lines) layered on top of the order's own cancel. The refund is settled by the order's cancel path, not by the `Return` row; the row is the dated customer-facing proof.
-- **Race guard.** If a shipment lands between the "before dispatch" read and the cancel, the cancel fails and the code re-reads the order. If it is now post-dispatch, it opens a normal return instead of a full refund. This is the `!cancelled.success` branch in `withdrawBeforeDispatch`.
-- **Lock ordering.** `openUnderLock` calls `returnRepository.lockOrder` *before* reading already-returned lines, so two concurrent openings serialize on the same row and the second sees the first's lines. This is the explicit defence against snapshot-isolation double-commits.
-- **Cancellations are not returns.** Lines on a `kind: 'cancellation'` record are excluded from `alreadyReturned` (via the `holdsReturnedGoods` filter) because those units never shipped and therefore can't be "coming back."
-- **Post-commit vs. in-transaction.** Mail, `nudgeOutbox`, `syncReturnStatus`, and `recordOpened` (audit) all run *after* the transaction commits. The outbox events themselves (`return.requested`, `RETURN_CLOSED`) are enqueued *inside* the transaction so they are atomic with the write.
-- **Non-null assertion in `writeReturn`.** `byProduct.get(productId)!` is safe only because `checkRequestedLines` is guaranteed to accept only products present on the order. If that invariant changes, the assertion will throw.
+- **The withdrawal button is not a separate code path.** It funnels through the same `openFor` call; the pre-dispatch branch simply produces a closed, line-less `Return` alongside the order's own cancellation.
+- **Concurrency guard.** The `lockOrder` row lock inside `openUnderLock` exists because snapshot isolation alone would let two parallel openings both see zero prior returns and both commit a full return.
+- **Policy exceptions are frozen at open time.** When staff waive a deadline or Art. 16 exclusion, the exceptions are computed once and stored on the `Return` record; they are not re-evaluated later.
+- **Outbox relay is woken by the caller**, not inside `writeReturn`. The transaction must commit before `nudgeOutbox` fires, so the caller owns that sequencing.
+- **Staff-opened returns are born `approved`** (except withdrawals, which are the buyer's legal right). `decidedAt` is set at creation so there is nothing left for a later approval step.
+- **`checkRequestedLines` guarantees the product exists on the order**, so the non-null assertion on `byProduct.get(productId)!` in `writeReturn` is safe by contract.

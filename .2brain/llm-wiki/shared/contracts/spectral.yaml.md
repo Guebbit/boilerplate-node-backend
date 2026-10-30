@@ -1,7 +1,7 @@
 ---
 source: shared/contracts/spectral.yaml
-sha256: 103b5a80e83e602f3bc1393749b03f6bf080d50182588d3dfc97f347c4fc125a
-generated_at: 2026-10-14T07:36:43.087256+00:00
+sha256: 865842c575608d613188997c9bf62de4a8cf7e1af949d4e000ebe021c926142c
+generated_at: 2026-10-29T01:47:51.168469+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Spectral linter configuration for the project's OpenAPI 3.1 specifications. Extends the base `spectral:oas` preset and layers on project-specific rules that enforce security declarations, correct verb/operationId alignment, naming conventions for operations and schemas, and mandatory `maxLength` on request strings. Every rule is set to `severity: error`, so violations block the CI pipeline.
+Spectral (OpenAPI linter) ruleset that enforces the project's API contract conventions. It extends `spectral:oas` and adds custom rules covering security declaration, naming, error/response shape, and schema hygiene so that contract drift is caught at lint time rather than in review.
 
 ## Key elements
 
-- **`extends: ['spectral:oas']`** — pulls in Spectral's built-in OAS rules before applying the custom ones below.
-- **Quality gates** — `operation-operationId` and `operation-tags` promoted to error severity.
-- **`operation-security-declared`** — every operation must carry a `security` key (even `[]` for public endpoints), so a missing guard is caught rather than mistaken for an intentional public route.
-- **`no-nullable-keyword`** — rejects the OpenAPI 3.0 `nullable` keyword (exempt under `properties`); enforces `type: [X, 'null']` or `oneOf` with a null branch instead.
-- **`no-refs-typo`** — catches the common `$refs` → `$ref` typo.
-- **`verb-replace-is-put` / `verb-update-is-patch`** — operationId prefix must match the HTTP verb (`replace*` → PUT, `update*` → PATCH). Two allowlisted exceptions: `updateCartItemById` and `updateLocaleEntry`.
-- **`operation-id-no-http-verb-prefix`** — operationIds must not start with `post`, `put`, or `patch` followed by an uppercase letter.
-- **`operation-id-camel-case`** — operationIds must be camelCase (`^[a-z][a-zA-Z0-9]*$`).
-- **`request-schema-no-http-verb-prefix` / `request-schema-pascal-case`** — `*Request` schemas must be PascalCase and must not start with an HTTP verb.
-- **`response-schema-no-http-verb-prefix` / `response-schema-pascal-case`** — same conventions for `*Response` schemas.
-- **`parameter-name-camel-case`** — parameter names must be camelCase; `in: header` parameters are exempt (wire-format hyphenation is intentional).
-- **`string-declares-max-length`** — every string reachable through a request body or nested parameter schema must declare `maxLength`. Exempts: `enum`, fixed formats (`date`, `date-time`, `uuid`, `time`, `binary`), and composed schemas (`allOf`/`oneOf`/`anyOf`).
-- **`string-parameter-declares-max-length`** — companion rule for parameters whose schema *is* the string (bare `type: string` on the parameter itself), which the recursive selector above cannot reach.
+- **Quality gates** — `operation-operationId` and `operation-tags` set to `error` (inherited from `spectral:oas`).
+- **`operation-security-declared`** — Every operation must have a `security` field present (`[]` for public, named scheme otherwise). Prevents a missing guard being read as intentional.
+- **`no-nullable-keyword`** — Rejects the OpenAPI 3.0 `nullable` keyword (unknown in 3.1 / JSON Schema 2020-12); enforces `type: [X, 'null']` or `oneOf` instead.
+- **`no-refs-typo`** — Fails on the common `$refs` misspelling.
+- **`error-responses-are-problem-json`** — 4xx/5xx responses must declare only `application/problem+json` (RFC 9457). `x-not-problem: true` opts a response out.
+- **`success-body-is-not-an-array`** — 2xx `application/json` schemas must not be top-level `array`.
+- **`verb-replace-is-put` / `verb-update-is-patch`** — `operationId` starting with `replace` must be a PUT; starting with `update` must be a PATCH. Catches verb drift behind an unchanged id.
+- **`operation-id-no-http-verb-prefix` / `operation-id-camel-case`** — `operationId` must be camelCase and must not start with `post`, `put`, or `patch`.
+- **`request-schema-*` / `response-schema-*`** — Schema names ending in `Request` or `Response` must be PascalCase and must not start with an HTTP verb.
+- **`parameter-name-camel-case`** — Parameters (except `in: header`) must be camelCase.
+- **`string-declares-max-length` / `string-parameter-declares-max-length`** — Request-side string schemas and bare string parameters must declare `maxLength`. Exempts enums, fixed formats (`date`, `uuid`, …), binary, and composed schemas.
 
 ## Relationships
 
-- **`shared/contracts/spectral.modules.yaml`** — module-level Spectral configuration that references this rules file, tying these rules into the linting pipeline for the API contract specs.
+- **`shared/contracts/spectral.modules.yaml`** — Per-module Spectral configuration that sits alongside this file. This file defines the shared baseline rules; the modules file is where individual services can extend or override them.
 
 ## Notes
 
-- All custom rules are `severity: error`; there is no warning tier in this file.
-- The `no-nullable-keyword` rule uses `not: {}` as the schema, which rejects *any* value — the keyword is refused regardless of what it was set to.
-- `string-declares-max-length` only inspects request-side schemas (bodies, parameters). Response strings are intentionally exempt because they are server-generated.
-- The `parameter-name-camel-case` rule deliberately skips `in: header` parameters to preserve conventional hyphenated header names (e.g. `x-antibot-challenge-token`).
-- The `verb-update-is-patch` allowlist is hardcoded in the `given` JSONPath filter rather than a separate data structure; adding a new exception means editing the filter expression directly.
-- Reference the shared `Text` type (1–200 chars) and `docs/api/field-limits.md` for the canonical `maxLength` values to use when satisfying the length rules.
+- All custom rules are `severity: error` — they block CI, not warn.
+- The `no-nullable-keyword` rule uses `not: {}` to reject the keyword regardless of its value, because any `nullable` key is invalid in 3.1.
+- `string-declares-max-length` has two companion rules because the recursive `..` selector matches schema *children*, not a parameter whose schema *is* the string; `string-parameter-declares-max-length` covers that one-level-up case.
+- `parameter-name-camel-case` intentionally excludes `in: header` because wire headers are hyphenated by convention.
+- The `error-responses-are-problem-json` rule uses `propertyNames: { const: 'application/problem+json' }` to ensure *only* that media type is present, not just that it is among others.
+- Referenced conventions: Zalando API Guidelines 176 (problem+json) and 110 (no bare arrays), RFC 9457.

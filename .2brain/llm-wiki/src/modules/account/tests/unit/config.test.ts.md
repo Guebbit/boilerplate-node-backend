@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/unit/config.test.ts
-sha256: db7c112927fec1b213be4dd70de6879c72c95b4114f5c96fe211a12f9d85cb67
-generated_at: 2026-10-14T09:18:57.043846+00:00
+sha256: db7315ea8b146422a1dc547455c13cf940b0846ea24b6e5628252a838f9acf87
+generated_at: 2026-10-29T03:03:37.691792+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for `accountFrontendLink`, the helper that maps a link *kind* (verify, reset, delete, email-change) plus a locale and token to a full frontend URL. The file validates both the built-in default templates and the per-kind environment-variable override mechanism, ensuring each kind resolves to a distinct path and that overriding one kind does not affect the others.
+Unit tests for the account config module's three public concerns: the `accountFrontendLink` URL builder (default templates and per-kind env-var overrides), the `NODE_ACCOUNT_DELETION_GRACE_DAYS` validation (default value and 1–31 range), and the `deletionPurgeAt` date calculation (grace-days vs. calendar-month cap).
 
 ## Key elements
 
-- **`accountFrontendLink`** (imported from `@modules/account/config`) — the function under test; takes a kind, a locale, and a token and returns a fully-resolved frontend URL.
-- **`withoutEnvironmentInThisFile`** (imported from `@tests/environment`) — called at module scope to guarantee the five `NODE_FRONTEND_LINK_*` env vars are unset for every test in this file, preventing cross-test contamination.
-- **`setEnvironment`** (imported from `@tests/environment`) — used inside the override test to set a single env var for the duration of that test.
-- **`TOKEN`** — a fixed hex string (`a1b2c3d4e5f6`) used as the token argument in all assertions.
-- **`describe('accountFrontendLink — the default template per kind')`** — four tests (one per kind) asserting the exact expected URL, plus one test asserting all four URLs are pairwise distinct.
-- **`describe('accountFrontendLink — per-kind override')`** — sets `NODE_FRONTEND_LINK_RESET` and asserts that only the reset URL changes while the verify URL remains the default.
+- **`withoutEnvironmentInThisFile([...])`** — called once at the top of the file; clears six `NODE_*` env vars so tests start from a clean slate.
+- **`TOKEN`** — a fixed hex string used as the token argument in every link assertion.
+- **`describe('accountFrontendLink — the default template per kind')`** — verifies each of the four kinds (`verify`, `reset`, `restore`, `email-change`) produces the expected `http://localhost:8080/en/…#token=…` URL, and that all four paths are distinct.
+- **`describe('accountFrontendLink — per-kind override')`** — sets `NODE_FRONTEND_LINK_RESET` to a custom template and asserts only the reset link changes while verify stays default.
+- **`describe('NODE_ACCOUNT_DELETION_GRACE_DAYS')`** — asserts the default is `30` and that values `0` or `32` cause `accountConfig()` to throw.
+- **`describe('deletionPurgeAt')`** — asserts the function returns the *shorter* of (a) the grace-days interval and (b) one calendar month, with concrete date arithmetic (e.g., Jan 30 → Feb 28).
 
 ## Relationships
 
-- **`src/modules/account/config.ts`** — exports `accountFrontendLink`; this test file is its primary unit-test consumer. All assertions here validate the behavior defined in that module.
-- **`tests/support/environment.ts`** — provides `withoutEnvironmentInThisFile` (module-level env isolation) and `setEnvironment` (per-test env mutation). The test file relies on both for a hermetic environment.
+- **`src/modules/account/config.ts`** — the module under test. This file imports `accountConfig`, `accountFrontendLink`, and `deletionPurgeAt` from it and exercises their behavior with controlled inputs.
+- **`tests/support/environment.ts`** — provides the `withoutEnvironmentInThisFile` and `setEnvironment` helpers used to isolate and manipulate process env vars between test cases.
 
 ## Notes
 
-- The file's doc comment records a **D14 architectural fix**: env vars and default templates intentionally live in `config.ts` (account domain) rather than in `infrastructure/http/frontend-link.ts`, which only performs template-to-URL resolution.
-- Tokens are embedded as a **URL fragment** (`#token=…`) in the default templates, not as a query parameter. The override test uses a `?t=` query-param style, showing the template string is fully operator-controlled.
-- `withoutEnvironmentInThisFile` is called at the top level (not inside a `beforeEach`), so the env reset applies for the lifetime of the file's test run.
+- Default link templates append the token as a **URL hash fragment** (`#token=…`), not a query parameter, despite the first test's description text saying "query param." Custom override templates (set via env var) *can* use query-param syntax (`?t={token}`).
+- `deletionPurgeAt` enforces a two-bound cap: the result is always the earlier of "now + grace days" and "first instant of the next calendar month." This is a business rule that is easy to miss without the test.
+- All env-var manipulation is scoped to this file via `withoutEnvironmentInThisFile`; the tests do not mutate shared global state beyond what `setEnvironment` provides.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/controllers/get-cart.ts
-sha256: 7cc36058c687c382472b6c34381859241481c69bdbfe1ff23585c3a5f96e3e19
-generated_at: 2026-09-23T18:29:19.867104+00:00
+sha256: 39c7c8772c2809ffd95568dde41e13c1fa9caebb57b37d40e11ddea1dbe29acf
+generated_at: 2026-10-29T03:20:05.240927+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter that exposes the current user's cart over `GET /cart`. It exists solely to bridge the Express request/response cycle to `cartService.cartGetForView`, keeping business logic in the service layer.
+Thin HTTP adapter that handles `GET /cart` by delegating to `cartService.getForView` and formatting the result into a standard JSON response. It contains no business logic; its sole job is to bridge Express request/response objects to the cart service layer.
 
 ## Key elements
 
-- **`getCart(request, response)`** — The single exported controller. Reads the authenticated user ID from `request.authContext!.id`, extracts caller metadata via `callerContextOf`, delegates to `cartService.cartGetForView`, and returns the result through `successResponse<CartResponse>`. Errors are funnelled to `catchAs(response, 'getCart')`.
+- **`getCart(request, response)`** — The only export. Extracts the authenticated user id (`request.authContext!.id`) and caller context, calls `cartService.getForView`, then sends the result via `successResponse<CartResponse>`. Errors are funneled through `catchAs(response, 'getCart')`.
 
 ## Relationships
 
-- **`src/modules/cart/services/index.ts`** — Consumes `cartService.cartGetForView`; the only business call made in this file.
-- **`src/infrastructure/http/response.ts`** — Uses `successResponse` to serialize the `CartResponse` payload back to the client.
-- **`src/infrastructure/http/controller.ts`** — Uses `catchAs` as the unified error-forwarding handler.
-- **`src/infrastructure/http/request.ts`** — Uses `callerContextOf` to derive request context (e.g. IP, user-agent) passed into the service.
 - **`src/modules/cart/routes.ts`** — Registers `getCart` as the handler for the `GET /cart` route.
-- **`src/types/index.ts`** — Imports the `CartResponse` type used to type the success payload.
+- **`src/modules/cart/services/index.ts`** — Provides `cartService.getForView`, the actual cart-fetching logic this controller wraps.
+- **`src/infrastructure/http/response.ts`** — Supplies `successResponse`, the standard envelope used to send a successful JSON payload.
+- **`src/infrastructure/http/controller.ts`** — Supplies `catchAs`, the shared error-catch helper that formats a failure response.
+- **`src/infrastructure/http/request.ts`** — Supplies `callerContextOf`, used to extract caller metadata passed into the service.
+- **`src/types/index.ts`** — Defines the `CartResponse` type used as the generic parameter on `successResponse`.
 
 ## Notes
 
-- Authentication is **not** performed here; the doc comment and the non-null assertion (`request.authContext!`) imply an upstream middleware guarantees a logged-in user.
-- The controller is intentionally a one-liner wrapper — all domain logic lives in `cartService`. Avoid adding branching or mapping logic in this file.
+- `request.authContext!` uses a non-null assertion. Authentication is enforced by upstream middleware (noted in the docstring); if a route is ever mounted without that middleware, the `!` will throw at runtime rather than fail at compile time.
+- The controller is intentionally stateless and synchronous in shape (`.then`/`.catch` chain). Any validation or authorization beyond the "who is the user?" question belongs in the service layer, not here.

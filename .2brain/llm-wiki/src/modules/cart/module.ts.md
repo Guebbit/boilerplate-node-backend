@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/module.ts
-sha256: 2414dcea8349d641eabf60104d1311b0bb185d174a3a9dbe086e27b9d72b9da5
-generated_at: 2026-10-14T15:09:13.480582+00:00
+sha256: 3297ee2cec142d7ec3d08e964de46107599d46aaac21a584674c232fa2ff2f0e
+generated_at: 2026-10-29T03:22:13.971842+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module manifest (entry point) for the shopping-cart module. It assembles the cart's HTTP routes, configuration, rate limits, personal-data hooks, and domain-event subscriptions into a single `AppModule` object that the kernel registry consumes at startup.
+The cart module's manifest entry. It declares how the cart plugs into the application kernel: which routes it mounts, which domain events it subscribes to, what config and rate-limit slices it contributes, what personal-data hooks it exposes, and where its locale files live. It is the single registration point that ties together the cart's internal services, routes, and configuration.
 
 ## Key elements
 
-- **Default export** — the `AppModule` manifest: `name: 'cart'`, `basePath: '/cart'`, `routes` (from `./routes`), `config` (a slice of `cartConfig`), `rateLimits`, `personalData`, `subscribe`, and `locales` path.
-- **`personalData.collect`** — fetches the user's cart lines via `cartGet` and strips each to `{ productId, quantity }` only.
-- **`personalData.erase`** — delegates to `cartDeleteByUserId` (a hard-delete that joins the caller's transaction).
-- **`subscribe`** — registers a `PRODUCT_DELETED` handler that calls `productRemoveFromCartsById(productId, titles)` to purge the deleted product from every cart.
+- **Default export (`AppModule`)** — The module manifest object. Declares `name: 'cart'`, mounts the router at `/cart`, contributes `cartConfig.slice` and `cartRateLimits`, defines `personalData` hooks, registers an event subscription, and points to `locales/`.
+- **`personalData.collect`** — Returns only `{ productId, quantity }` per line, deliberately excluding joined product name/price (those are catalogue data, and the `CartItem` contract forbids extra properties).
+- **`personalData.erase`** — Calls `cartService.deleteByUserId` within the caller's hard-delete transaction (`session` parameter), so the cart rows are removed atomically with the rest of the user's data.
+- **`subscribe()`** — Handles `PRODUCT_DELETED` domain events. Before removing the line from carts, it re-checks `productService.isLive(productId)` to avoid a race where a retried delivery arrives after a product restore.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — the export is typed `satisfies AppModule`; the registry is the consumer of this manifest.
-- **`src/kernel/events.ts`** — provides `onDomainEvent`, used inside `subscribe` to listen for cross-module events without a direct module import.
-- **`src/modules/products/index.ts`** — source of the `PRODUCT_DELETED` event constant; the cart subscribes to it reactively (no import of product logic).
-- **`src/modules/cart/routes.ts`** — supplies the `router` wired into the manifest.
-- **`src/modules/cart/config.ts`** — supplies `cartConfig`, sliced before being exposed.
-- **`src/modules/cart/rate-limits.ts`** — supplies `cartRateLimits`.
-- **`src/modules/cart/services/index.ts`** — re-exports `cartGet`, `cartDeleteByUserId`, and `productRemoveFromCartsById` used by the personal-data hooks and event handler.
+- **`src/kernel/registry.ts`** — Provides the `AppModule` type that the default export satisfies; the module is registered through the kernel's registry.
+- **`src/kernel/events.ts`** — Source of `onDomainEvent`, used to subscribe to `PRODUCT_DELETED`.
+- **`src/modules/products/index.ts`** — Imported for `PRODUCT_DELETED` and `productService`. The cart reacts to product deletion; products does *not* import the cart (the reverse link is via the domain event, keeping the graph acyclic).
+- **`src/modules/cart/routes.ts`** — Provides the `router` that gets mounted at `/cart`.
+- **`src/modules/cart/services/index.ts`** — Provides `cartService` used by both personal-data hooks and the event handler.
+- **`src/modules/cart/config.ts`** — Provides `cartConfig` (sliced into the manifest's config array).
+- **`src/modules/cart/rate-limits.ts`** — Provides `cartRateLimits` registered in the manifest.
 
 ## Notes
 
-- **Acyclic import graph by design.** The module doc explicitly states that products and users "reach back" only through domain events or the `personalData.erase` hook — never via direct imports. Do not add a `products` or `users` import here.
-- **`collect` strips catalogue data on purpose.** The shared `CartItem` contract is `additionalProperties: false`; including product name/price would violate it. Only `productId` and `quantity` survive.
-- **`config` uses `.slice()`** to hand out a shallow copy, preventing downstream mutation of the original array.
+- The `personalData.erase` hook receives a `session` and joins the caller's existing hard-delete transaction rather than opening its own — do not call `deleteByUserId` elsewhere without passing the shared session.
+- `collect` intentionally omits product name/price. If you add fields to the returned object, the `CartItem` OpenAPI contract (`additionalProperties: false`) will reject them.
+- The `PRODUCT_DELETED` handler is idempotent-safe: if the product is live again at processing time, the line is left in place. This guards against at-least-once event redelivery after a product restore.
+- The file is a `@module` (side-effect-free barrel); it exports no named symbols other than the default manifest.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/services/retention.ts
-sha256: a13520a26e12c5b5bade76ae07c488bf3f119e542a9ba85f2b7a9a3e6938947b
-generated_at: 2026-10-15T11:58:38.849457+00:00
+sha256: ea6ae3e74f01b95b166acdb41c4e26d4632514926248d82d90df6ab918bc6fcb
+generated_at: 2026-10-29T05:45:10.051437+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the free-text retention sweep for returns: after a return has been quiet past a configurable number of days, its user- or staff-authored text fields (`note`, `declineReason`) are wiped. The return row itself (the legal record) is never deleted—only the free text is removed.
+Implements the free-text retention sweep for returns: once a return's `updatedAt` exceeds the configured quiet period, its human-authored text fields (`note`, `declineMessage`) are unset while the structured row (and reason codes) is preserved as a legal record. Exists to satisfy the data-retention policy described in `docs/theory/data-retention.md#free-text-on-returns`.
 
 ## Key elements
 
-- **`scrubReturnText()`** (exported) — Queries the repository for returns whose `updatedAt` is older than the retention window, clears their free-text fields, and returns the count of affected rows. Logs an `info` message only when the count is greater than zero.
+- **`scrubReturnText(): Promise<number>`** — The single export. Computes a cutoff date (`now − returnTextRetentionDays() * DAY_MS`), calls `returnRepository.scrubFreeTextBefore(cutoff)`, logs a summary line only when at least one row was affected, and resolves with the scrubbed count. Designed to be invoked by the `reap:returns` job.
 
 ## Relationships
 
-- **`src/modules/returns/repository.ts`** — Calls `returnRepository.scrubFreeTextBefore(cutoffDate)` to perform the actual database update.
-- **`src/modules/returns/config.ts`** — Reads `returnTextRetentionDays()` to determine the cutoff (sourced from `NODE_RETURN_TEXT_RETENTION_DAYS`).
-- **`src/infrastructure/adapters/logger.ts`** — Emits an info log when rows are scrubbed.
-- **`src/modules/returns/services/index.ts`** — Re-exports `scrubReturnText` as part of the public services barrel.
-- **`src/modules/returns/tests/integration/retention.test.ts`** — Integration tests covering the scrub behavior.
-- **`scripts/ops/reap-returns.ts`** (referenced in the module doc comment) — The ops script that invokes `scrubReturnText` as a scheduled sweep.
+- **`src/domain-primitives/time.ts`** — Imports `DAY_MS` for the date arithmetic that derives the cutoff.
+- **`src/infrastructure/adapters/logger.ts`** — Imports `logger`; writes a single `info` entry when `scrubbed > 0`.
+- **`src/modules/returns/config.ts`** — Imports `returnTextRetentionDays()` to obtain the configurable retention window (days).
+- **`src/modules/returns/repository.ts`** — Imports `returnRepository`; calls `scrubFreeTextBefore(date)` to perform the actual column-level `SET NULL` at the data layer.
+- **`src/modules/returns/jobs.ts`** — Expected consumer of `scrubReturnText` as part of the scheduled `reap:returns` sweep.
+- **`src/modules/returns/services/index.ts`** — Barrel re-export so the function is reachable via the service namespace.
+- **`src/modules/returns/tests/integration/retention.test.ts`** — Integration tests that exercise `scrubReturnText` against a real repository.
 
 ## Notes
 
-- The retention clock is anchored to `updatedAt`, **not** a "closed" date. An approved return whose goods never arrive never formally closes, so `updatedAt` is the practical last-activity marker.
-- The retention threshold is environment-driven (`NODE_RETURN_TEXT_RETENTION_DAYS`); changing it does not require a code change.
-- Stryker mutation coverage is explicitly disabled on the `logger.info` line (test-only concern).
+- The retention clock is **`updatedAt`, not the return's closing/approval date**. An approved return whose goods never arrive keeps its text for as long as staff leave it untouched; it is not grandfathered.
+- `declineMessage` is treated as free text and is wiped; structured reason codes are **not** touched.
+- `returnTextRetentionDays()` is a function call (not a constant), implying the value is resolved at runtime (likely an environment variable via `config.ts`).
+- A `// Stryker disable next-line all` comment sits above the `logger.info` call to suppress mutation testing on a pure side-effect line.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/get-session-config.ts
-sha256: a944251cbecedba2f438006fc4745a2df85898638297b4f1f4be90eda6da5dbc
-generated_at: 2026-10-14T08:32:27.182931+00:00
+sha256: b53474550925adc5f1763057ad65cbfd0d6cffacf56ee8f053d3dde68a43c48f
+generated_at: 2026-10-29T02:27:41.929658+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express controller for the public `GET /account/session-config` endpoint. It tells a client which session mode the current deployment uses so the client can adapt at boot time rather than maintaining its own configuration switch.
+Public `GET /account/session-config` controller that reports how this deployment manages session persistence (mode, tiered lifetimes, optional staff cap) so clients can adapt at boot rather than carrying their own configuration switch.
 
 ## Key elements
 
-- **`getSessionConfig`** (exported) — The sole route handler. Resolves a `SessionConfig` object (`{ mode: getSessionMode() }`) and sends it via `successResponse`. Any thrown error is funneled through `catchAs(response, 'getSessionConfig')`. The `Request` parameter is intentionally unused (prefixed `_`).
+- **`getSessionConfig`** — The sole export. Accepts an Express `(request, response)` pair (request intentionally unused, prefixed `_`), resolves a `SessionConfig` payload via `successResponse`, and routes any thrown error through `catchAs`.
+- Payload shape: `{ mode, lifetimeSeconds: { short, medium, long }, staffLifetimeSeconds? }`. The `staffLifetimeSeconds` key is spread in only when `> 0`; a value of `0` means the cap is disabled and the field is omitted entirely.
 
 ## Relationships
 
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse`, which wraps the `SessionConfig` payload in the project's standard HTTP success envelope.
-- **`src/infrastructure/http/controller.ts`** — Provides `catchAs`, the shared error-to-response mapper used in the `.catch` branch.
-- **`src/modules/account/routes.ts`** — The router that mounts `getSessionConfig` on the `GET /account/session-config` path.
-- **`src/modules/account/session/config.ts`** — Source of `getSessionMode()`, the single value the endpoint actually returns.
-- **`src/types/index.ts`** — Declares the `SessionConfig` interface used as the generic parameter of `successResponse`.
+- **`src/modules/account/session/config.ts`** — Source of `getExpiryTime`, `getSessionMode`, and `getStaffLifetimeSeconds`; the actual deployment-level configuration values returned to the client.
+- **`src/infrastructure/http/response.ts`** — Provides `successResponse`, which serialises the `SessionConfig` body.
+- **`src/infrastructure/http/controller.ts`** — Provides `catchAs`, the shared error-capture helper wired into the `.catch` tail.
+- **`src/modules/account/routes.ts`** — Upstream router that maps `GET /account/session-config` to this handler.
+- **`src/types/index.ts`** — Defines `RememberTier` (the enum passed to `getExpiryTime`) and the `SessionConfig` return type.
 
 ## Notes
 
-- Uses the `Promise.resolve().then().catch()` idiom rather than `async/await`; the `.catch` fires specifically if `getSessionMode()` throws (e.g., unreadable configuration at runtime).
-- The endpoint is public — no authentication middleware is applied here or in the route wiring.
-- Adding a new field to the response means extending `SessionConfig` in `@types` and populating it in the `.then` body; the response envelope shape is governed by `successResponse`, not by this file.
+- Error handling uses the `Promise.resolve().then().catch()` idiom (not `async/await`) so that `catchAs` can intercept synchronous throws from the config getters.
+- The conditional `...(staffLifetimeSeconds > 0 && { staffLifetimeSeconds })` spread means clients must treat the field as optional; absence means "no staff lifetime cap."

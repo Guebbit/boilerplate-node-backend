@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/services/reserve.ts
-sha256: 5c39c5b2cd8f462880be78aace5edf1fe1912b2a1877fd2d04807ac97a01e029
-generated_at: 2026-10-14T15:58:59.088227+00:00
+sha256: 7f7cccfeb04408c16f195a4e286829003b03eea3445b5ce54c097559ecbee09b
+generated_at: 2026-10-29T04:04:21.714214+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the all-or-nothing reservation ("hold") of stock lines for an order. Takes every line or none: writes a hold document first as an exactly-once guard, then conditionally decrements each line's stock, rolling back any already-taken lines if a single line is refused or a write throws. Exists so that checkout can atomically claim shelf units or preorder allowance without leaking partial holds or creating deadlock-prone lock orderings.
+Implements the all-or-none stock reservation (hold) for an order. Either every line in the order is taken from inventory, or none are — partial state is never exposed to the caller. It handles simple shelf reservations, backorder/preorder claims, and "spilling" lines that draw partly from shelf and partly from the backorder cap, all while maintaining a consistent lock order to avoid deadlocks between concurrent checkouts.
 
 ## Key elements
 
-- **`reserveForOrder(orderId, lines, holdMinutes?)`** (exported) — Entry point. Inserts a hold, iterates lines in lock order, calls `applyTransition` per line. On refusal returns `{ held: false, shortfalls }` after unwinding; on throw unwinds then rethrows; on success returns `{ held: true, expiresAt }`.
-- **`giveBackAndDeleteHold(orderId, taken, hold, note)`** (internal) — Rolls back: narrows the hold to only the lines actually taken, releases each via `applyTransition(release, …)` (logging failures rather than propagating), then deletes the hold document.
-- **`inLockOrder(lines)`** (internal) — Returns a copy of `lines` sorted by `productId` (locale `'en'`) to impose a single deterministic lock order across workers.
-- **`takeReasonFor(line)`** (internal) — Maps `line.kind` to `StockMovementReason.reserve` or `.preorder`.
-- **`leftFor(line, level)`** (internal) — Computes the remaining quantity for a refused line: `available` for shelf lines, `preorderLimit − preordered` (floored at 0) for preorder lines.
+- **`reserveForOrder`** *(exported)* — Entry point. Inserts the hold document first (idempotent via unique `orderId`), then takes each line in sorted lock order. Returns `{ held: true, expiresAt, owed }` on success or `{ held: false, shortfalls }` with the actually-available figure read back from this module's own stock level. Accepts an optional `holdMinutes` override (default `reservationTtlMinutes()`).
+- **`takeLine`** — Dispatches a single line: delegates to `takeSpillLine` for spilling non-backorder lines, otherwise performs one conditional `applyTransition`. Returns the parts taken or `null` on refusal.
+- **`takeSpillLine`** — Runs a multi-step take (shelf part + backorder claim + hold rewrite) inside a single `withTransaction`. Aborts via a sentinel `OwedRefused` error if the cap cannot cover the owed portion, so the shelf part rolls back atomically. Refreshes the product cache *outside* the transaction.
+- **`giveBackAndDeleteHold`** — Rollback helper shared by refusal and exception paths. Narrows the hold to the actually-taken lines *before* releasing counters, then releases each line (each release is logged, never thrown), and finally deletes the hold document.
+- **`inLockOrder`** — Sorts lines by `productId` (locale-stable `localeCompare`) to impose a single lock acquisition order and prevent multi-line deadlock.
+- **`takeReasonFor`** / **`leftFor`** — Map a line to the correct `StockMovementReason` and compute remaining availability (shelf, cap, or both) for shortfall reporting.
+- **`owedPartsOf`** — Extracts the backorder-claim parts from a taken line's parts, used to populate the `owed` field in the success result.
+- **`OwedRefused`** — Sentinel error class thrown inside the spilling transaction to trigger a clean abort.
 
 ## Relationships
 
-- **`src/modules/inventory/services/transition.ts`** — Calls `applyTransition` for every take and release; this file is the primary consumer of that module.
-- **`src/modules/inventory/repository.ts`** — Uses `reservationRepository` (insertHold, findByOrderId, narrowToTaken, deleteOne) and `stockLevelRepository.findByProductId`.
-- **`src/modules/inventory/config.ts`** — Imports `reservationTtlMinutes` as the default hold duration.
-- **`src/modules/inventory/model.ts`** — Imports `ReservationDocument` and `StockLevelDocument` types.
-- **`src/modules/inventory/services/types.ts`** — Imports `StockLine`, `StockShortfall`, `ReserveOutcome`.
-- **`src/modules/inventory/services/index.ts`** — Barrel re-export surface for `reserveForOrder`.
-- **`src/infrastructure/adapters/logger.ts`** — Logs errors during rollback so a single failed release doesn't abort the rest.
-- **`src/modules/products/index.ts`** — Calls `productService.findByIdRaw` to fetch the product title for the shortfall report.
-- **`src/types/index.ts`** — Imports the `StockMovementReason` enum.
-- **Integration tests** (`cache-invalidation`, `hold-crash-window`, `multi-line-race`, `preorder`, `service`) — Exercise the hold-insert race, crash-window unwinding, multi-line deadlock avoidance, preorder allowance, and the happy/sad paths respectively.
+- **`./types.ts`** — Provides `StockLine`, `StockShortfall`, and `ReserveOutcome` shapes used throughout.
+- **`./transition.ts`** — `applyTransition` is the sole mechanism for moving counters (both take and give-back); `refreshStockCache` is called after a successful spill take.
+- **`../repository.ts`** — `reservationRepository` (insert, narrow, find, delete, replace hold) and `stockLevelRepository` (read availability) are the persistence layer.
+- **`../config.ts`** — `reservationTtlMinutes()` supplies the default hold expiry.
+- **`../domain/index.ts`** — `roomOn` computes remaining backorder capacity for a level document.
+- **`../model.ts`** — `ReservationDocument` and `StockLevelDocument` types.
+- **`@infrastructure/runtime/database.ts`** — `withTransaction` wraps the spilling-line take in an atomic unit.
+- **`@infrastructure/adapters/logger.ts`** — Error logging in the rollback path (failed releases, failed hold deletion).
+- **`@modules/products/index.ts`** — `productService.findByIdRaw` reads the product title for the shortfall response.
+- **`@types/index.ts`** — `StockMovementReason` enum.
+- **`services/index.ts`** — Re-exports `reserveForOrder` for external consumers.
+- **`delivery/tests/unit/fulfillment.test.ts`** — Exercises the reservation/fulfillment boundary that depends on the hold semantics defined here.
 
 ## Notes
 
-- **Hold-before-take ordering is deliberate.** The unique `orderId` on the hold document is the exactly-once guard: a retried checkout gets `null` from `insertHold` and returns the *existing* hold's `expiresAt`, not a freshly computed one.
-- **Rollback narrowing.** `narrowToTaken` runs *before* any release write. A crash mid-cleanup therefore leaves a hold that names only lines whose counters actually moved — never a phantom line.
-- **Error isolation in rollback.** Each release `.catch`es and logs; one failed give-back does not prevent the others. The same pattern guards the final `deleteOne`.
-- **`// eslint-disable-next-line no-restricted-syntax`** on the `for…of` loop is intentional: the loop must give back only lines in `taken[]` up to the failure point, which no `Promise.all` wrapper can express.
-- **Shortfall read-back** queries this module's own `stockLevelRepository`, not the product's synced copy, to avoid reporting a number that lags by one transition.
-- **`holdMinutes` parameter** exists because some payment methods (e.g. `bank_transfer`) need a longer window than the default `reservationTtlMinutes()`.
+- **Lock order matters.** Lines are always processed sorted by `productId`. Two orders listing the same products in opposite order would otherwise deadlock on the second line. Do not reorder the input before calling `reserveForOrder`.
+- **Rollback is exception-safe.** The `try` block around the per-line loop means a thrown error (DB hiccup, not a refusal) still unwinds through `giveBackAndDeleteHold` before rethrowing — no hold survives naming lines that were never actually taken.
+- **Shortfall availability is read from this module's stock level**, not the product's synced copy, which can lag by one transition. A deleted product reads as zero available.
+- **The hold is written before any counter moves.** A retried checkout simply fails the unique insert and reports the *existing* hold's expiry, not a freshly computed one.
+- **Spill-line cache refresh is deliberately outside the transaction** — the product catalogue copy cannot participate in the rollback.

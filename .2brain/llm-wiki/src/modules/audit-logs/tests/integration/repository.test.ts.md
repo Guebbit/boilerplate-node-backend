@@ -1,35 +1,39 @@
 ---
 source: src/modules/audit-logs/tests/integration/repository.test.ts
-sha256: 4078bb3347c6b1c57561cf14ac3af066ad0e0b1c2ed069f48db5a63b8f929ee3
-generated_at: 2026-10-14T15:06:50.072628+00:00
+sha256: e29ae2b300b2cba89efb6921d85f5ae65e5596b9964c8091460e1c7a81627213
+generated_at: 2026-10-29T03:19:09.739814+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/audit-logs/tests/integration/repository.test.ts
 
 ## Purpose
-Integration test suite that exercises `auditLogRepository` (create, search, deep paging, and cursor-based own-trail reads) against an in-memory MongoDB spun up by `setupTestDb`. It exists to lock in the repository's contract—filter semantics, pagination math, `since`-bound exclusivity, tie-breaking sort order, and field-shape guarantees—so that regressions in the capped-read or cursor logic are caught before they reach the service layer.
+
+Integration tests for `auditLogRepository` (and one service-level filter) executed against an in-memory MongoDB instance. Verifies create, search-with-filters, pagination semantics, deep-paging correctness, and the `ownOrder` filter — guarding against regressions like capped reads and `Number()`-coerced date bounds.
 
 ## Key elements
-- **`makeEntry(overrides)`** — builds a fully-populated `AuditLogDocument` fixture using `coreAuditActions` and sensible defaults; every test entry derives from this.
-- **`search(filters, since?)`** — thin wrapper that calls `auditLogRepository.search` with the explicit `sinceScope` and `AUDIT_SORT` the service would pass, keeping test call-sites short.
-- **`describe('auditLogRepository') > 'create'`** — verifies storage of optional context fields, credential-id round-trip, and rejection of incomplete entries.
-- **`describe('auditLogRepository') > 'search'`** — covers unfiltered ordering, single/combo filters (`actor`, `action`, `outcome`, `target`), exclusive `since` lower bound, Date-vs-Number coercion safety, page-size vs. total-items distinction, `_id`/`__v` stripping, ISO-8601 timestamp shape, and the empty-result case.
-- **`describe('deep paging')`** — seeds 205 entries a minute apart; asserts page 21 (rows 201–205) is served and that three overlapping 100-row pages contain no duplicates (validates `AUDIT_SORT`'s `_id` tie-breaker).
-- **`walk(actor, limit)`** — helper that follows `ownEntriesPage` cursors until exhausted, mimicking the export path in `findOwnAuditEntries`.
-- **`describe('reading an actor's own trail by cursor')`** — seeds 7 tied-timestamp entries for one actor and asserts the cursor walk returns each exactly once even when a page boundary splits the tie.
+
+- **`makeEntry(overrides)`** — Fixture factory returning a fully-shaped `Partial<AuditLogDocument>` using `coreAuditActions.SECURITY_UNAUTHORIZED` as the default action.
+- **`search(filters, since?)`** — Local helper that calls `auditLogRepository.search` with an explicit `sinceScope(since)` and `AUDIT_SORT`, because the repository exposes the base (policy-free) `search`.
+- **`walk(actor, limit)`** — Pages through `auditLogRepository.ownEntriesPage` until `next` is exhausted, collecting `requestId`s; simulates the export path.
+- **`targetsOf(items)`** — Returns a sorted array of `targetId` values for order-independent assertions.
+- **`describe('auditLogRepository' > 'create')`** — Verifies optional context fields round-trip, `actorCredentialId` is stored, and required-field validation rejects incomplete entries.
+- **`describe('auditLogRepository' > 'search')`** — Covers unfiltered ordering (newest-first), single and combined filters (actor, action, outcome, target), exclusive `since` bound, Date-vs-Number coercion, page-vs-total distinction, `_id`/`__v` stripping, ISO-8601 `timestamp`, and empty results.
+- **`describe('auditLogRepository' > 'deep paging')`** — Seeds 205 rows; asserts page 21 of 10 returns the five oldest entries and that three concurrent 100-row pages cover all 205 with no duplicates.
+- **`describe('auditLogService.search — the ownOrder filter')`** — Service-level test: `ownOrder: true` keeps only entries flagged with `metadata.ownOrder`; other values pass through or exclude accordingly.
 
 ## Relationships
-- **`src/modules/audit-logs/repository.ts`** — the system under test; the suite calls `auditLogRepository.create`, `.search`, `.sinceScope`, `.ownEntriesPage`, and the exported `AUDIT_SORT`.
-- **`src/infrastructure/observability/audit.ts`** — source of `coreAuditActions` (the three security actions) and the `AuditEntry` type used to shape fixtures; deliberately avoids domain-specific actions.
-- **`src/modules/audit-logs/model.ts`** — provides the `AuditLogDocument` type that `makeEntry` returns and that assertions are cast against.
-- **`src/modules/audit-logs/service.ts`** — `findOwnAuditEntries` and `OWN_ENTRIES_PAGE` are imported; the cursor-walk `describe` block mirrors how the service pagers consume `ownEntriesPage`.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module scope to provision the in-memory Mongo collection the repository reads/writes.
-- **`tests/support/stub.ts`** — `asStub<Record<string, unknown>>` is used to inspect raw document keys (`_id`, `__v`) without leaking internal typing into assertions.
+
+- **`src/modules/audit-logs/repository.ts`** — System under test. Imports `auditLogRepository`, `AUDIT_SORT`, and `sinceScope`.
+- **`src/modules/audit-logs/service.ts`** — Secondary SUT for the `ownOrder` describe block. Imports `auditLogService`, `OWN_ENTRIES_PAGE`.
+- **`src/modules/audit-logs/model.ts`** — Provides the `AuditLogDocument` type used in fixtures and assertions.
+- **`src/infrastructure/observability/audit.ts`** — Source of `coreAuditActions` (the action enum) and the `AuditEntry` type for `makeEntry`.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the in-memory Mongo instance at module load.
+- **`tests/support/stub.ts`** — `asStub` casts a typed item to `Record<string, unknown>` for negative key-presence checks (`_id`, `__v`).
 
 ## Notes
-- **Action vocabulary is intentionally core-only.** The file's comments explain that domain actions (e.g. `admin.product.created`) are compiled per enabled module and would break the test if that module is removed; the three `coreAuditActions` are the stable set.
-- **`since` is exclusive (`>`), not inclusive.** This matches the ring-buffer paging contract: passing the newest timestamp you already hold must not re-return that row.
-- **`since` is passed as a `Date` inside `scope`, not in the filter object's range spec.** The range spec coerces bounds with `Number()`, which would corrupt a Date comparison in Mongo; the test explicitly guards against that regression.
-- **`AUDIT_SORT` includes `_id` as a secondary sort key.** Without it, bulk-written entries sharing a timestamp have no deterministic page boundary and the "no duplicate rows across pages" assertion would be flaky.
-- **The file is truncated in the provided snapshot**; the final cursor-walk assertions (beyond the 7-tied-entries case) are not visible here.
+
+- Fixtures deliberately use only `coreAuditActions` (security actions), never domain-specific actions, so the test compiles regardless of which feature modules are enabled.
+- `since` is threaded through `scope` (not the generic `search` spec) specifically to keep it a `Date`; the generic path coerces bounds with `Number()`, which produces a value Mongo cannot compare against a stored `Date`.
+- `AUDIT_SORT` includes `_id` as a tiebreaker because `timestamp` is not guaranteed unique across bulk inserts; without it, two concurrent pages could disagree on tie order.
+- The deep-paging block encodes the invariant "a trail that counts what it cannot serve is not a trail" — any implementation that caps the read at a fixed row count while still reporting the true total will fail these tests.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/unit/revocation-table.test.ts
-sha256: 600cedba4161f441582972d144401ff1e958c342d1d332537468b1aa33dacc95
-generated_at: 2026-10-15T10:15:21.420860+00:00
+sha256: 88aafadccca87b58fa68b3a6cda3e7c1b563ec324f9bf196bc7eddb59ee18114
+generated_at: 2026-10-29T03:05:20.213758+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cross-cutting invariant tests for the `REVOCATION` table. It verifies global constraints across all revocation causes that no single per-cause test would catch (e.g., "every cause that keeps the caller's session must ride the epoch in its own write").
+Verifies cross-cutting invariants of the `REVOCATION` table — constraints that hold *across* all causes simultaneously and would not be caught by a test targeting a single cause in isolation (e.g. "every cause that keeps the caller's session must announce `false`").
 
 ## Key elements
 
-- **`CAUSES`** — derived array (`Object.keys(REVOCATION)`) typed as `RevocationCause[]`; the canonical list of every cause, used to drive `it.each` loops and whole-table assertions.
-- **`announces` filter test** — asserts that exactly `email-change-undo`, `logout-all`, and `password-reset` are flagged as compromise announcements.
-- **`pending` filter test** — asserts that exactly `email-change-undo`, `password-change`, and `password-reset` purge pending one-time links/challenges.
-- **`it.each(CAUSES)` — caller-keeps ⇒ epoch** — for any cause where `callerKeeps` is truthy, `epoch` must be `'with-write'`.
-- **`it.each(CAUSES)` — caller-keeps ⇒ no announce** — for any cause where `callerKeeps` is truthy, `announce` must be `false`.
-- **`modes` exclusivity test** — asserts that `refresh-reuse` is the *only* cause whose `modes` is `'jwt'` (refresh-token reuse is the sole session-mode-specific trigger).
+- **`CAUSES`** — derived at module load as `Object.keys(REVOCATION)` cast to `RevocationCause[]`; drives every assertion in the file.
+- **`announces`** (imported predicate) — used to filter causes the subscriber must treat as a compromise; the test pins the resulting sorted set to exactly `['email-change-undo', 'logout-all', 'password-reset']`.
+- **Pending-purge test** — asserts the sorted set of causes whose entry has a `pending` field is exactly `['deactivation', 'deletion-scheduled', 'email-change-undo', 'password-change', 'password-reset']`.
+- **`it.each` / `callerKeeps` invariants** (two parameterized tests) — for every cause where `callerKeeps` is truthy, asserts `epoch === 'with-write'` and `announce === false`.
+- **Session-mode exclusivity test** — asserts only `'refresh-reuse'` maps to `modes === 'jwt'`.
 
 ## Relationships
 
-- **`src/modules/account/domain/revocation.ts`** — sole import source. Pulls in the `REVOCATION` constant (the table under test), the `announces` predicate (used as a `Array.filter` callback), and the `RevocationCause` type for `CAUSES` annotation.
+- **`src/modules/account/domain/revocation.ts`** — sole dependency. Provides the `REVOCATION` table (the object under test), the `announces` predicate, and the `RevocationCause` type. The test file imports nothing else from the domain.
 
 ## Notes
 
-- The module docblock is explicit: these tests exist for invariants that *no individual cause's test* would detect. Don't duplicate per-cause assertions here; add new cross-cause rules instead.
-- `it.each(CAUSES)` cases are *conditional* — they only assert when `callerKeeps` is truthy, so adding a new cause with `callerKeeps: false` will pass vacuously.
-- The `announces` import is a function, not a data flag; the test uses it as a filter predicate rather than reading `REVOCATION[cause].announce` directly in the first assertion.
+- `announces` is imported as a *function* (not a field), so it is a domain-level predicate rather than a raw property read. The test relies on it being a pure `(cause) => boolean` filter.
+- The two `it.each` tests are intentionally silent when `callerKeeps` is falsy (`if` guard), meaning they only constrain a subset of causes; a new cause with `callerKeeps` set will be checked automatically on the next run.
+- All set comparisons use `.toSorted()` to make ordering irrelevant, so adding a new cause without updating the expected array will fail the test.

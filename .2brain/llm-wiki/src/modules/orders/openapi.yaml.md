@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/openapi.yaml
-sha256: 97313252ff51e4312d1cf2383c6c1285e8fc0ae728195a5d79e05e1316d10dc0
-generated_at: 2026-10-15T11:05:24.312947+00:00
+sha256: f8ee429b80aff2e8a7c6bdf84c426344891da251e7a653ee44064bf035e76d4d
+generated_at: 2026-10-29T04:43:38.619488+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.1.0 contract for the orders module. It declares the module's full HTTP surface (paths, parameters, request/response schemas), domain-specific error codes, and its contribution to the account personal-data export. It is the single source of truth that clients, docs generators, and the build-time bundler consume to know what the orders API exposes.
+OpenAPI 3.1.0 contract for the orders module. It declares the HTTP surface (list, create, delete, and other order-lifecycle endpoints), the module-specific error codes, and the orders' contribution to the account data export. Serves as the single source of truth for what the orders API exposes, how callers filter and sort, and what failure modes are guaranteed.
 
 ## Key elements
 
-- **`tags`** – Registers the `Orders` tag under which all operations in this file are grouped.
-- **`x-error-codes`** – Custom extension enumerating eight domain error codes (`ORDER_INSUFFICIENT_STOCK`, `ORDER_EXPORT_TOO_LARGE`, `ORDER_INVOICED`, `ORDER_LINE_LIMIT_EXCEEDED`, `ORDER_NOT_CANCELLABLE`, `ORDER_NOT_CANCELLED`, `ORDER_OVERRIDE_NOT_ALLOWED`, `ORDER_OVERRIDE_AWAITING_STOCK`), each with its HTTP status and a human-readable description of when it fires.
-- **`x-personal-data`** – Custom extension declaring two arrays (`orders`, `orderTimeline`) that the bundler merges into `AccountExportResponse` for `POST /account/export`. Removing this module removes its export section.
-- **`GET /orders`** (`listOrders`) – Paginated list with ~15 filter parameters (status, fulfillment, payment method, deleted flag, date ranges, user/product id). Visibility is scoped by `orders.self.read` vs `orders.any.read`.
-- **`POST /orders`** (`createOrder`) – Creates an order for the `userId` in the body. Bounded by schema caps (1000 lines × 999999 units) and optional deployment limits (`NODE_ADMIN_ORDER_MAX_LINES`, `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`). Supports `Idempotency-Key`. Response links to `createPaymentIntent` and `cancelOrderById`.
-- **`DELETE /orders`** (`deleteOrder`) – Soft or hard delete identified by `id` in the body. `hardDelete=true` is only allowed for a cancelled, never-paid order. Carries `x-alias-of: deleteOrderById`, indicating one controller serves both this route and the `{id}` form.
-- **Shared-contract `$ref`s** – Reusable parameters, schemas, and error responses are pulled from `../../../shared/contracts/openapi.root.yaml`.
+- **`x-error-codes`** — Machine-readable catalogue of order-specific errors (e.g. `ORDER_INSUFFICIENT_STOCK`, `ORDER_PRODUCT_UNAVAILABLE`, `ORDER_INVOICED`, `ORDER_HAS_MONEY_HISTORY`, `ORDER_OVERRIDE_AWAITING_STOCK`), each with its HTTP status and the shape of `errors[].details`.
+- **`x-personal-data`** — Declares the `orders` and `orderTimeline` sections that the export bundler appends to `POST /account/export`; removing the module removes these sections.
+- **`GET /orders`** — Paginated list with rich filtering (status, fulfillmentStatus, paymentStatus, paymentMethod, returnStatus, date ranges, `deleted` flag). Permission model: `read:Order` scopes to own orders; `display:Order` lifts that restriction and enables the `userId` filter.
+- **`POST /orders`** — Admin/self order creation. Enforces stock availability, product soft-deletion, and a two-layer line-count/quantity cap (schema-level 1000 × 999 999, deployment-level via `NODE_ADMIN_ORDER_MAX_LINES` / `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`). Supports `Idempotency-Key`.
+- **`DELETE /orders`** (and the `{id}` alias) — Soft or hard delete. Hard delete requires a cancelled order with no post-cancel money history; soft delete hides from the buyer and is reversible via `POST /orders/{id}/restore`. The `hardDelete` flag is read from query, body, or path on whichever route is mounted.
+- **Shared parameter/schema `$ref`s** into `../../../shared/contracts/openapi.root.yaml` for pagination, idempotency, standard error responses, and value types (Email, IdParam, etc.).
 
 ## Relationships
 
-- **`src/modules/orders/module.yaml`** – The module's manifest/configuration; this OpenAPI file is the API contract it registers. The two together define what the orders module exposes.
-- **`src/modules/payments/module.ts`** – The `createOrder` response includes an OpenAPI `links` entry (`PayOrder`) whose target is the `createPaymentIntent` operation in the payments module, wiring the "pay a new order" flow across modules at the contract level.
-- **`src/modules/observability/openapi.yaml`** – Sibling module contract. Both contribute `x-personal-data` sections that the bundler assembles into a single `AccountExportResponse`; they are independent but co-located in the same bundling step.
+- **`src/modules/orders/module.yaml`** — The module manifest that this OpenAPI spec belongs to; `module.yaml` declares the module's metadata and points to this file as its contract.
+- **`src/modules/payments/module.ts`** — Implements payment capture, invoicing, and refunds that the orders contract references (e.g. `ORDER_INVOICED`, `ORDER_HAS_MONEY_HISTORY`, the "refunds a paid one" behaviour on cancel). The orders spec assumes payment status transitions produced by the payments module.
+- **`src/modules/observability/openapi.yaml`** — Sibling module contract in the same monorepo structure; shares the same `openapi.root.yaml` base and the same `x-error-codes` / `x-personal-data` extension conventions, but defines no order-specific operations.
 
 ## Notes
 
-- Two non-standard extensions (`x-error-codes`, `x-personal-data`) carry semantics the OpenAPI spec itself cannot express. Tooling and the bundler must understand both.
-- `DELETE /orders` and the (truncated) `DELETE /orders/{id}` are the **same controller**; the `x-alias-of` annotation and the `hardDelete` parameter being readable from query, body, and path on whichever route it is mounted on are intentional, not a duplicate.
-- The `sort` query parameter on `GET /orders` uses JSON:API grammar (comma-separated, leading `-` for descending), not the more common `sort=field,dir` style.
-- The file is **truncated** in this excerpt; additional paths (e.g. `/orders/{id}`, `/orders/{id}/cancel`, `/orders/{id}/restore`) and component schemas exist beyond what is shown here.
+- The `deleted` query parameter is admin-effective: a caller without permission to see soft-deleted rows gets an empty page for `deleted=true` rather than an error.
+- `x-alias-of` (e.g. on `DELETE /orders`) links two routes served by the same controller; the `hardDelete` flag is unified across them, but the `id` source differs (body vs. path).
+- The `orderTimeline` export intentionally includes staff reasons (the buyer's data, not the buyer's screen), while the writing staff member's identity stays in the audit log per CJEU Pankki S (C-579/21).
+- Sort uses JSON:API grammar (`?sort=-price,title`), not the more common `sort=field,dir` pair.

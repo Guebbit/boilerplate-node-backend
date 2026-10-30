@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/tests/unit/hold-lines.test.ts
-sha256: cd509468296e497319dc805e2d519a64d9a191e7b3bcfa4e8a28a6153b5f4f2a
-generated_at: 2026-10-15T10:37:16.096583+00:00
+sha256: 7d8e2b1e5bba8050531674e7441a79aac766ea9d3ef0de7ba986fb7e4fcc751b
+generated_at: 2026-10-29T04:08:50.550803+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the `takeFromHold` pure function (the arithmetic of a partial shipment or cancelled remainder against an inventory hold). The file exists to pin down the function's exact input/output contract—especially the `kind`-aware behavior introduced with preorder claims—so that regressions are caught before they reach integration or e2e layers.
+Unit tests for the pure hold-line arithmetic: removing quantity from a hold (partial shipment or cancelled remainder) via `takeFromHold`, and appending quantity to a hold via `withAdded`. Exists to pin down the invariants of these operations—especially the interaction between shelf units and preorder (`backorder`) claims—so that regressions in allocation logic are caught at the function level.
 
 ## Key elements
 
-- **`describe('takeFromHold')`** — five tests covering the base (kind-less) contract: partial take per product, full drain, overtake capped at held quantity, unknown product yields empty `taken`, and duplicate product lines on either side are merged in the result. Also asserts **purity** (the input `hold` array is not mutated).
-- **`describe('takeFromHold, with preorder claims')`** — five tests for the `kind: 'preorder'` dimension:
-  - Kind isolation: taking a `preorder` line leaves shelf lines untouched and vice-versa.
-  - A line without `kind` is always treated as shelf stock, never as a claim.
-  - Fallback: a `preorder` request can be satisfied by shelf units that replaced the original claim (e.g., stock arrived and was allocated).
-  - Priority: the claim is exhausted first; only the shortfall is drawn from shelf units.
-  - One-way restriction: a shelf (kind-less) line can never consume a `preorder` line.
-- **Shared fixtures** — `hold` (two products), `mixed` (same product on both shelf and preorder lines), and `allocated` (shelf-only). Defined inline per `describe` block.
+- **`describe('takeFromHold')`** — Six cases covering: partial take per product, full consumption (hold empties), over-request clamping, unknown product (no-op), summing across duplicate product lines, and referential purity (input array unchanged).
+- **`describe('takeFromHold, with preorder claims')`** — Five cases covering: kind-scoped take (backorder vs. shelf), shelf lines never matching a claim, backorder lines falling back to shelf units that replaced the claim, claim-first then shelf-overflow ordering, and shelf lines never consuming a claim.
+- **`describe('withAdded')`** — Three cases covering: merging same-product/same-kind lines, keeping shelf and backorder lines of the same product as separate entries, and the empty-hold identity.
 
 ## Relationships
 
-- **`src/modules/inventory/domain/hold-lines.ts`** — Provides the `takeFromHold` function under test (re-exported via the domain barrel). All assertions in this file specify that function's behavioral contract.
-- **`src/modules/inventory/domain/index.ts`** — The barrel module the test imports from (`import { takeFromHold } from '../../domain'`). Changing the re-export path or name here breaks this file's import.
+- **`src/modules/inventory/domain/index.ts`** — Barrel import source; the test imports `takeFromHold` and `withAdded` from `../../domain`, which re-exports them.
+- **`src/modules/inventory/domain/hold-lines.ts`** — The module under test; contains the implementations of both functions.
 
 ## Notes
 
-- Purity is an explicit contract: the "is pure" test snapshots the input before the call and compares after. Any refactor that mutates the caller's array will fail this test.
-- The `kind` field is optional; its absence means **shelf**. Tests encode the asymmetry: shelf → claim is forbidden, claim → shelf fallback is allowed.
-- Duplicate `productId` entries on either the hold side or the request side are merged in the result (single line per product in `remaining`/`taken`).
-- Test fixtures use `as const` on `kind` to keep the literal type; omitting it would widen to `string` and mask type errors at the call site.
+- Purity is explicitly tested: the input `hold` array must not be mutated by `takeFromHold`.
+- A line with no `kind` field is always treated as a shelf unit and will never satisfy a `backorder` request.
+- A `backorder` line *can* consume shelf units (the "fallback" case), but the reverse is never allowed.
+- `withAdded` merges by `(productId, kind)` pair; same product with different kinds stays as separate lines.
+- Test fixtures use single-character product IDs (`'a'`, `'b'`, `'z'`) for readability; the `'z'` product is deliberately absent from the hold to exercise the no-op path.

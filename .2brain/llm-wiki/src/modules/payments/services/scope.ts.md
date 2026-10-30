@@ -1,32 +1,35 @@
 ---
 source: src/modules/payments/services/scope.ts
-sha256: 05c85e6f7b5d4ef2a4e52a04151cbdc3681ecd0e0ed6b52374672ef9a582d39d
-generated_at: 2026-10-15T11:31:49.118065+00:00
+sha256: 4696f2a6b339313b64ac86ff58dbb4f0654cf39880b278a82e05271f75ade43f
+generated_at: 2026-10-29T05:13:38.750655+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/payments/services/scope.ts
 
 ## Purpose
-Defines the four row-level scoping rules for the payments collection. Every other payments service and controller consults these helpers instead of re-deriving "which rows does this caller see?" logic, ensuring a single, consistent permission boundary across the module.
+
+Centralises the row-scoping rules for the payments collection so that every other service in this module applies a consistent "who can see/do what" filter. It separates **read** scope (possibly broad, role-driven) from **payer** scope (strictly the payer's own rows) to prevent a `display:Payment` role from accidentally granting cross-customer write or payment-intent access.
 
 ## Key elements
-- **`callerScope(context?)`** – Returns a filter for payments the caller may **read**. Delegates to `accessibleFilter(context, 'Payment')`. Payments are never soft-deleted, so ownership is the only axis.
-- **`payerScope(context?)`** – Returns a filter for payments the caller may **confirm or sync** (the customer's money steps). Restricted to the payer's own rows via `paymentRepository.ownerScope`. With no context, falls back to the anonymous read scope (matches nothing).
-- **`buyerOrderScope(context?)`** – Returns a filter for the orders on which the caller may **open a payment intent**. Combines `orderService.ownerScope(context.id)` with `deletedAt: null` to require the order is the buyer's and still live.
-- **`readsAllPayments(context?)`** – Boolean guard: true only when the caller holds the `payments.any.read` key (checked via `heldKeys` / `callerForSubject`). Used to decide whether to expose provider IDs and refund failure reasons.
+
+- **`callerScope(context?)`** — Returns an accessible-filter for the `Payment` collection. This is the READ scope; it may be broad for roles that hold `display:Payment`.
+- **`payerScope(context?)`** — Returns a filter limited to the caller's own payments (`paymentRepository.ownerScope`). Used for CONFIRM and SYNC operations. Falls back to the anonymous read scope (matches nothing) when `context` is undefined.
+- **`buyerOrderScope(context?)`** — Returns a filter for the buyer's own *live* orders (`orderService.ownLiveScope`), used when opening a payment intent. Falls back to `orderService.callerScope(undefined)` when `context` is undefined.
+- **`readsAllPayments(context?)`** — Boolean: whether the caller holds `display:Payment`. When true the caller may be sent provider-side IDs and refund failure reasons.
 
 ## Relationships
-- **`src/kernel/access/query.ts`** – Supplies `accessibleFilter`, the generic "which rows does this context see?" primitive that `callerScope` wraps.
-- **`src/kernel/permissions.ts`** – Supplies `callerForSubject`, which resolves the permission subject for a given AuthContext and resource; used by `readsAllPayments`.
-- **`src/kernel/ability.ts`** – Supplies `heldKeys`, which enumerates the key set a subject holds; used by `readsAllPayments`.
-- **`src/modules/orders/index.ts`** (→ `src/modules/orders/services/index.ts`) – Exposes `orderService`, whose `ownerScope` and `callerScope` methods provide the order-side ownership filter that `buyerOrderScope` composes.
-- **`src/modules/payments/repository.ts`** – Exposes `paymentRepository.ownerScope`, the concrete "rows owned by this user" filter used by `payerScope`.
-- **`src/types/auth-context.ts`** – Provides the `AuthContext` type that every scope function accepts.
-- **`src/modules/payments/services/index.ts`** – Re-exports these helpers so sibling services (`intent`, `list`, `refunds`, `settlement`, `view`) and the controllers (`post-payment-offline`, `post-payment-refund`) can import them without reaching into this file directly.
+
+- **`@kernel/access/query`** — `accessibleFilter` builds the base read filter consumed by `callerScope`.
+- **`@kernel/permissions`** — `callerForSubject` resolves the caller identity inside `readsAllPayments`.
+- **`@kernel/ability`** — `heldRules` checks the resolved caller's rule set in `readsAllPayments`.
+- **`@modules/orders`** — `orderService.ownLiveScope` / `orderService.callerScope` supply the order-side scope used by `buyerOrderScope`.
+- **`../repository`** — `paymentRepository.ownerScope` produces the per-owner filter used by `payerScope`.
+- **`@types`** — `AuthContext` is the context parameter type across all four exports.
 
 ## Notes
-- `callerScope` is the **read** scope; `payerScope` is the **write/money** scope. They intentionally differ: a role with `payments.any.read` widens `callerScope` but never touches `payerScope`. Do not substitute one for the other.
-- `readsAllPayments` checks the key `payments.any.read` specifically; `holdsKey` would also match `payments.self.read`, so the name is load-bearing.
-- When `context` is `undefined`, all three filter functions return the anonymous scope (effectively an empty match), so a missing auth context never accidentally grants access.
-- `buyerOrderScope` adds `deletedAt: null` because orders *are* soft-deleted (unlike payments), making that axis necessary here.
+
+- Payments are **never soft-deleted**, so ownership is the only scoping axis here (unlike orders, which also check a "still present" predicate).
+- `payerScope` and `buyerOrderScope` are deliberately **narrower** than `callerScope`. A role that only holds `display:Payment` passes `readsAllPayments` but does **not** widen the payer scope — payer actions always resolve to the caller's own ID.
+- `readsAllPayments` checks for `display:Payment` specifically. The code comment warns that a generic `holds` check would also match `read:Payment`, which is intentionally excluded.
+- When `context` is `undefined`, `payerScope` degrades to `callerScope(undefined)` (anonymous, matches nothing) rather than returning an empty object, keeping the "scope is a filter" contract uniform.

@@ -1,7 +1,7 @@
 ---
 source: tests/contract/route-spec-parity.test.ts
-sha256: 540bc4e2029fcab1d834070f791223e7ad2da746dfa465c56317d086d79e88c2
-generated_at: 2026-10-15T12:33:51.671503+00:00
+sha256: b46e12ea789143c8677c3195148949c14fd287478466cb2856c6598250ec0bc7
+generated_at: 2026-10-29T06:41:03.745821+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract test that asserts a bidirectional parity between the routes the application actually mounts (read from live Express routers) and the operations declared in the bundled `openapi.yaml`. It catches undocumented endpoints, unfulfilled spec promises, and duplicate registrations.
+Contract-parity test that asserts the set of HTTP operations the app actually mounts (read from live Express routers via the module registry) is identical to the set of operations declared in the bundled `openapi.yaml`. It checks both directions — no undocumented endpoints, no unfulfilled declarations — plus a no-duplicates guard and a vacuous-pass guard.
 
 ## Key elements
 
-- **`HTTP_METHODS`** – `Set` of the six valid OpenAPI operation keys used to filter spec path-item entries.
-- **`toSpecPath(expressPath)`** – Rewrites Express parameter syntax (`:id`) to OpenAPI syntax (`{id}`) so both sides share one spelling.
-- **`operationsOf(prefix, router)`** – Calls the `routeTable` helper on a single router, prefixes each path with the mount point, and returns an array of `METHOD /spec/{path}` strings.
-- **`mountedOperations()`** – Collects operations from every entry in `enabledModules` (using each module's `basePath` + `routes`) and appends the system router's operations at root.
-- **`declaredOperations()`** – Reads and YAML-parses `../../openapi.yaml`, flattens `paths` × method keys (filtered to `HTTP_METHODS`) into `METHOD /path` strings.
-- **`isTestLever(operation)`** – Returns `true` for any operation whose path contains ` /__/`, used to exclude the demo extension's levers from both sides.
-- **`describe('mounted routes and the published contract')`** – Four tests:
-  1. *Non-empty guard* – both sides must have > 100 entries (prevents a broken walker from vacuously passing).
-  2. *Spec covers mounted* – every mounted operation must appear in the spec.
-  3. *Mounted covers spec* – every declared operation must be served by the app.
-  4. *No duplicates* – no `METHOD path` pair is registered more than once in the mounted set.
+- **`HTTP_METHODS`** — `Set` of the five standard verbs that count as OpenAPI path-item operations.
+- **`toSpecPath(expressPath)`** — Rewrites Express-style `:param` segments to OpenAPI `{param}`.
+- **`operationsOf(prefix, router)`** — Calls `routeTable` on a single router and returns `METHOD /spec/{path}` keys prefixed with the mount path.
+- **`mountedOperations()`** — Flattens every enabled module's `mounts` (basePath + routes) plus the system router into one list of operation keys.
+- **`declaredOperations()`** — Parses `openapi.yaml` from disk and extracts every `METHOD /path` key.
+- **`isTestLever(operation)`** — True for any key containing ` /__test/`, used to exclude the demo extension's levers.
+- **`describe` block** — Four tests: non-empty guard (>100 on each side), mounted ⊆ declared, declared ⊆ mounted, and no duplicate mounted operations.
 
 ## Relationships
 
-- **`src/modules.ts`** – imports `enabledModules`, the module registry that exposes each enabled module's `basePath` and `routes` router. This is the authoritative list of what the app mounts.
-- **`src/app/system-routes.ts`** – imports the system router (mounted at `/`), which is appended to the mounted-operations list after all module routers.
-- **`tests/support/routes.ts`** – imports `routeTable`, the shared helper that walks an Express router's internal stack and returns a flat array of `{ method, path }` entries.
+- **`src/modules.ts`** — Imports `enabledModules`, the registry of enabled modules. Each entry's `mounts` array supplies the `basePath` and `routes` (Express router) that `operationsOf` reads. Using the registry (rather than a booted app) works around Express 5 dropping mount-path metadata from its router stack.
+- **`src/app/system-routes.ts`** — Imports `router` (the system router). It is read at mount prefix `''` (root) and contributes its operations to the mounted set.
+- **`tests/support/routes.ts`** — Imports `routeTable`, the walker that inspects an Express router's internal stack and returns `{ method, path }` pairs. This is the only mechanism by which the test discovers what a router actually serves, including routes registered in loops or helpers.
 
 ## Notes
 
-- Uses the `enabledModules` registry rather than the booted Express `app` because Express 5's router stack does not retain mount-path information; the registry does.
-- Deliberately out of scope: `/__test/*` routes (demo extension levers) and `express.static` (no route table, no spec operation).
-- The spec side uppercases method keys explicitly; the mounted side relies on whatever case `routeTable` returns—both must agree for the comparisons to hold.
-- The non-empty guard threshold (100) is a sanity floor, not a contractual count; it exists solely to fail loudly if the route walker or spec parser is broken.
+- The test reads **live routers**, not source text, so dynamically registered routes (loops, helper calls, renamed imports) are captured correctly.
+- Express 5's router stack does not record mount paths, which is why the registry (`enabledModules`) is used instead of calling `app.routes()` on a booted instance.
+- `/__test/*` routes (mounted by a process option for the demo extension) and `express.static` mounts are **deliberately excluded** on both sides before comparison.
+- The first test (>100 entries on each side) is a guard against a `routeTable` or spec-parsing regression silently producing two empty lists and letting the parity assertions pass vacuously.
+- The no-duplicates test catches a second registration of the same `METHOD /path`, which Express would let the first handler win, making the second unreachable and the contract ambiguous.

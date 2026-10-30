@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/oauth/providers/client.ts
-sha256: 38a8074a7d2e1ffbf43c2ccbe439c6e537c1b584fdbfff07acc92272607e0450
-generated_at: 2026-10-14T08:43:12.130995+00:00
+sha256: 9407686191d108a6be1ec6649f3347049e967a93ed5fe87f93a50721c890ae14
+generated_at: 2026-10-29T02:37:08.234031+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Shared OAuth client plumbing on top of `openid-client`. It centralises the one `fetch` wrapper every provider call goes through (deadline, body cap, no redirects) and the helpers that turn a provider's static server description into a working configuration, authorization URL, and code redemption. Both provider adapters (GitHub, Google) import from here rather than re-implementing this logic.
+Shared OAuth client layer for every provider adapter, built on top of `openid-client`. It centralises three things that all providers need identically: a hardened `fetch` (deadline, redirect rejection, body-size cap) that every library call goes through, the construction of a provider's `Configuration` from statically-declared endpoints and deployment credentials, and the two OAuth flow steps—building the consent URL and redeeming the authorization code. Endpoints are written down in each provider's own file rather than discovered over the network, so login requires no extra request that could fail or be spoofed.
 
 ## Key elements
 
-- **`providerFetch`** (`client.CustomFetch`) — the sole outbound HTTP channel for token exchange and key-set download. Enforces three limits `openid-client` does not set itself: an `AbortSignal.timeout` deadline (merged with the library's own signal via `AbortSignal.any`), `redirect: 'error'` so a 302 is never followed, and a byte-capped body read (via `readCappedText`) re-wrapped as a fresh `Response`.
-- **`configurationFor(name, server)`** — resolves the deployment's `clientId`/`clientSecret` for the given registry key, builds an `openid-client` `Configuration` (passing the secret as a string so it is sent as `client_secret_post`), and attaches `providerFetch`. Not memoised; call it each time variables are set.
-- **`authorizationUrlFor(configuration, parameters)`** — calls `buildAuthorizationUrl` with `redirect_uri`, `scope`, `state`, `code_challenge`, and a fixed `code_challenge_method: 'S256'`. Returns the consent-screen URL as a string.
-- **`redeemCode(configuration, callbackUrl, expected)`** — delegates to `authorizationCodeGrant`, passing `expectedState` and `pkceCodeVerifier` from the `OAuthExpectation`. The library validates the redirect (one code, matching state, no `error=`, `iss` check) and, for OIDC providers, verifies the ID token before resolving.
+- **`providerFetch`** (module-private) — The `client.CustomFetch` injected into every configuration. Wraps `fetch` with: a timeout via `AbortSignal.any` (merges the library's own signal with `OAUTH_FETCH_TIMEOUT_MS`), `redirect: 'error'` (any redirect is a hard failure), and a post-fetch body read through `readCappedText` at `DEFAULT_BODY_CAP_BYTES`, re-wrapped in a fresh `Response`.
+- **`configurationFor(name, server)`** — Builds an `openid-client` `Configuration` from a provider's static `ServerMetadata` and the deployment's credentials (fetched via `getOAuthCredentials(name)`). Attaches `providerFetch` via `configuration[client.customFetch]`. The secret is passed as the third constructor argument (string), which makes the library send it as `client_secret_post`. Not memoised—call it whenever the provider is configured.
+- **`authorizationUrlFor(configuration, parameters)`** — Calls `client.buildAuthorizationUrl` with `redirect_uri`, `scope`, `state`, `code_challenge`, and `code_challenge_method: 'S256'` (the only PKCE method offered). Returns the consent-screen URL as a string.
+- **`redeemCode(configuration, callbackUrl, expected)`** — Calls `client.authorizationCodeGrant`, passing the full callback URL (query string intact), `expectedState`, and `pkceCodeVerifier`. The library validates the authorization response (one `code`, `state` match, no `error=`, `iss` check per RFC 9207) and, for OIDC providers, verifies the ID token before returning.
 
 ## Relationships
 
-- **`providers/port.ts`** — imports the `OAuthExpectation` type (shape of `state` + `codeVerifier` kept per attempt).
-- **`oauth/config.ts`** — imports `getOAuthCredentials` (resolves client-id/secret per provider name) and `OAUTH_FETCH_TIMEOUT_MS` (the deadline constant).
-- **`infrastructure/http/read-capped-body.ts`** — imports `readCappedText` and `DEFAULT_BODY_CAP_BYTES` to enforce the response-body size limit inside `providerFetch`.
-- **`providers/github.ts` / `providers/google.ts`** — the two consumers; each declares its static endpoints and calls `configurationFor`, `authorizationUrlFor`, and `redeemCode` from this module.
+- **`../config`** (`src/modules/account/oauth/config.ts`) — Supplies `getOAuthCredentials` (per-provider `clientId`/`clientSecret`) and the `OAUTH_FETCH_TIMEOUT_MS` constant used by `providerFetch`.
+- **`@infrastructure/http/read-capped-body`** (`src/infrastructure/http/read-capped-body.ts`) — Provides `readCappedText` and `DEFAULT_BODY_CAP_BYTES`, the byte-cap mechanism applied to every provider response inside `providerFetch`.
+- **`./port`** (`src/modules/account/oauth/providers/port.ts`) — Defines the `OAuthExpectation` type (`state` + `codeVerifier`) that `redeemCode` consumes.
+- **`./github`** / **`./google`** (`src/modules/account/oauth/providers/github.ts`, `google.ts`) — Each declares its static `ServerMetadata` and calls `configurationFor`, `authorizationUrlFor`, and `redeemCode` to drive its OAuth flow. They are the primary consumers of every export in this file.
+- **`src/infrastructure/config/fields.ts`** — Indirect dependency: `getOAuthCredentials` in `config.ts` reads deployment values defined there, so this file ultimately depends on those field definitions.
 
 ## Notes
 
-- Provider endpoints are **static** (written in each provider file); no discovery request is ever made. A login therefore has no extra network round-trip that could fail or be spoofed.
-- The `client_secret_post` grant type (secret in the body) is what both Google and GitHub accept; no `client_secret_basic` header path is used.
-- PKCE is offered as **S256 only**; no `plain` fallback.
-- `configurationFor` is intentionally **not** memoised — it is expected to be called once per request when the deployment's variables are available.
+- **Static endpoints only.** There is no OIDC discovery request; each provider file hard-codes its `ServerMetadata`. Adding a new provider means writing a new endpoints object, not adding a network call.
+- **Body is fully buffered.** `providerFetch` reads the entire response body (up to the cap) into a string before re-wrapping it. Streaming or very large token/key-set responses are not supported.
+- **`AbortSignal.any` usage.** The timeout and any library-provided signal are combined so whichever fires first aborts the request. The `.filter(...)` guard excludes `undefined` signals before passing the array.
+- **PKCE is S256 only.** There is no `plain` option; `code_challenge_method` is always `'S256'`.
+- **`client_secret_post` posture.** Because the secret is passed as a string third argument to `Configuration`, it goes in the request body rather than the `Authorization` header. Both Google and GitHub accept this form.

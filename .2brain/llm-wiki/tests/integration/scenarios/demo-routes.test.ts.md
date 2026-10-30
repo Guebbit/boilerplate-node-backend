@@ -1,7 +1,7 @@
 ---
 source: tests/integration/scenarios/demo-routes.test.ts
-sha256: d9754b28d14c29fe5d585f661c6fe1fadefcab25305fc249ef34a084b85db267
-generated_at: 2026-10-15T12:53:08.405476+00:00
+sha256: 4073587653d20d96832a0612946257dc630048a1a2ddf67e56cf739b8bbbf2dd
+generated_at: 2026-10-29T07:02:20.860374+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,43 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the demo/test-surface routes installed by `installDemo`. Verifies that production has no such surface (404), that each route handler returns correct status codes and bodies for valid and invalid input, and that side-effects (seeding, job execution, clock manipulation, outbox) behave as documented. Uses two throwaway Express apps rather than the real `src/app.ts` for most cases, switching to the full app only where the `shop` scenario must drive real API calls.
+Integration tests for the `/__test/*` lever routes installed by `installDemo`. The file proves two things: (1) the production app exposes none of these routes, and (2) when the routes *are* mounted on a throwaway Express app, their handlers validate bodies, return the correct status codes, and produce the expected side effects (seed data, job execution, payment-refund failures, disputes).
 
 ## Key elements
 
-- **`testApp()`** – Minimal Express app with `express.json()` + `installDemo(app)`. Used by every case whose subject is a route handler in isolation.
-- **`drivableApp()`** – Express app with the full middleware chain (`installSecurity`, `installRequestParsing`, `installRequestContext`, `installDemo`, `installRoutes`, `installErrorHandling`) in the same order as `src/app.ts`. Required for the `shop` restore test, which issues real API calls (login, checkout, etc.) against the app.
-- **`mockFailNextEmptyDatabase`** – One-shot flag that makes the next `emptyDatabase()` call reject. Named with the `mock` prefix because `jest.mock` hoisting restricts closure identifiers to that prefix.
-- **`stubClock()`** – In-memory `DemoClock` implementation that records `advance` calls and `reset` counts; used to assert clock-route behaviour without real time.
-- **`jest.mock('@scenarios/support/database-snapshot')`** – Wraps the real module, overriding only `emptyDatabase` to reject when the flag is armed.
-- **Test groups** – `production has no demo surface`, `POST /__test/restore`, `POST /__test/jobs/:name`, `GET /__test/emails`, `/__test/clock`.
+- **`testApp()`** – Builds a minimal Express app with only `express.json()` + `installDemo(app, resolveJobs(enabledModules))`. Used by most cases whose subject is the handler itself.
+- **`drivableApp()`** – Adds the full middleware chain (`installSecurity`, `installRequestParsing`, `installRequestContext`, `installRoutes`, `installErrorHandling`) around `installDemo`. Required because building the `shop` scenario drives real API calls (login, checkout, etc.) that a bare `testApp()` would 404.
+- **`mockFailNextEmptyDatabase`** – A one-shot `{ armed: false }` flag. When armed, the next call to `emptyDatabase()` *or* `restoreDatabaseCopy()` rejects with a synthetic error, then self-disarms. Used to simulate a seed failure.
+- **`jest.mock('@scenarios/support/database-snapshot', …)`** – Factory mock that wraps the real module, injecting the one-shot rejection. The variable name must start with `mock` (Jest hoisting constraint).
+- **`afterEach` / `afterAll` hooks** – Un-arm the mock so a leftover flag can't poison the next scenario; tear down the file-sandbox (shop scenario uploads a product image via a real route).
+- **`attemptRefund(providerRef)`** – Thin wrapper around `fakePaymentProvider.refund` with fixed idempotency/refund IDs for deterministic assertions.
+- **Test groups** – `describe` blocks for: production 404, `POST /__test/restore`, `GET /__test/jobs`, `POST /__test/jobs/:name`, `POST /__test/payments/refund-failure`, `POST /__test/payments/dispute`.
 
 ## Relationships
 
-- **`scenarios/support/demo.ts`** – Source of `installDemo`, the route installer under test.
-- **`scenarios/support/demo-clock.ts`** – Provides `registerDemoClock` / `DemoClock` type; the `/__test/clock` tests install and assert against a stub clock via this module.
-- **`src/app/security.ts`** – `installSecurity` and `installRequestParsing` are wired into `drivableApp()` to replicate production middleware.
-- **`src/app/request-context.ts`** – `installRequestContext` is part of the `drivableApp()` chain.
-- **`src/app/routes.ts`** – `installRoutes` mounts the real API routes in `drivableApp()` so the `shop` scenario's internal calls (login, checkout) resolve.
-- **`src/app/error-handling.ts`** – `installErrorHandling` gives `drivableApp()` the same error middleware as production.
-- **`src/modules/products/model.ts`** – `productModel` is queried to assert the `shop` seed actually wrote products.
-- **`src/modules/orders/model.ts`** – `orderModel` is queried to assert orders were created and to inspect scrubbed fields after `reap-orders`.
-- **`src/modules/users/tests/factories.ts`** – `createUser` seeds a user for the `reap-orders` tests.
-- **`src/modules/products/tests/factories.ts`** – `createProduct` seeds a product referenced by test orders.
-- **`src/modules/orders/tests/factories.ts`** – `createOrder`, `toOrderItem`, `detachOrderUserId` build and age an order for the retention-window tests.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` initialises the test database before the suite runs.
-- **`tests/support/http.ts`** – `api()` is used by the "production has no demo surface" case to hit the real `createApp()`; importing it also pulls in `src/app.ts` at module-load time, which registers all enabled modules (including products' `translatables`).
-- **`tests/support/file-sandbox.ts`** – `emptyFileSandbox` is called in `afterAll` to clean up any file uploaded through the demo routes.
+| Neighbor | Interaction |
+|---|---|
+| `scenarios/support/demo.ts` | Source of `installDemo`, the routes under test. |
+| `scenarios/support/demo-clock.ts` | Provides `registerDemoClock` / `DemoClock` type (imported for clock control during scenario builds). |
+| `scenarios/support/doubles/payments/fake.ts` | `fakePaymentProvider` is called directly in refund-failure tests to verify the lever actually blocks/allows refunds. |
+| `src/app/security.ts` | `installSecurity` and `installRequestParsing` installed in `drivableApp()`. |
+| `src/app/request-context.ts` | `installRequestContext` installed in `drivableApp()`. |
+| `src/app/routes.ts` | `installRoutes` installed in `drivableApp()`. |
+| `src/app/error-handling.ts` | `installErrorHandling` installed in `drivableApp()`. |
+| `src/kernel/registry.ts` | `resolveJobs` converts module job declarations into the map handed to `installDemo`. |
+| `src/modules.ts` | `enabledModules` is the input to `resolveJobs`. |
+| `src/modules/products/model.ts` | `productModel.countDocuments()` asserts the shop seed populated products. |
+| `src/modules/products/tests/factories.ts` | `createProduct` seeds test fixtures. |
+| `src/modules/orders/model.ts` | `orderModel` used for count and PII-scrub assertions. |
+| `src/modules/orders/tests/factories.ts` | `createOrder`, `toOrderItem`, `detachOrderUserId` build order fixtures. |
+| `src/modules/payments/model.ts` | `paymentModel.findOne` asserts refund/dispute state. |
+| `src/modules/payments/tests/factories.ts` | `payByCard` creates a completed payment to exercise refund/dispute levers. |
 
 ## Notes
 
-- The `mockFailNextEmptyDatabase` identifier **must** keep the `mock` prefix; `jest.mock` hoists the factory above all imports and will throw if it closes over an identifier that doesn't match.
-- The `emptyDatabase` failure test uses `scenario: 'blank'` rather than `'shop'` because `shop` is already cached by a preceding test and a cached restore never calls `emptyDatabase()` again.
-- `drivableApp()` installs `installRequestParsing` explicitly; without it the `shop` scenario's first `POST /account/login` 500s because the JSON body is never parsed.
-- The `api()` import from `@tests/http` has a side-effect: importing it loads the real `src/app.ts`, which registers every enabled module (including `products`' `translatables` declaration) at import time. No test in this file manually builds that lookup.
-- The `/__test/clock` tests register a stub clock and clean up with `registerDemoClock(undefined)` in `afterEach`.
+- **`drivableApp()` exists for exactly one reason:** the `shop` scenario drives ~200 real API calls (login, checkout, …) against whatever app `installDemo` was handed. Without the full middleware chain those calls 500 on the first JSON-parse step.
+- **`mockFailNextEmptyDatabase` naming:** Jest hoists `jest.mock` calls above all imports, so the factory may only close over identifiers prefixed `mock`. Renaming this variable to something else will break at runtime.
+- **The production-404 case uses `api()` (the real app)**, not `testApp()`. Using `testApp()` would be circular—it *does* call `installDemo`.
+- **`POST /__test/jobs/constructor`** is a regression guard: the job lookup must use `hasOwnProperty` (or equivalent), not the `in` operator, to avoid matching inherited prototype keys.
+- **`reap-orders` test** asserts PII scrubbing: the order's `email` field is replaced with `anonymized@deleted.invalid` after the job runs.
+- **120 s timeout** on the `shop` default-body test reflects the cost of driving the full application flow (login → cart → checkout → …).

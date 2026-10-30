@@ -1,7 +1,7 @@
 ---
 source: src/modules/notifications/services/inbox.ts
-sha256: ad2dbe87c425edf23d587a4917311c0cc5cf5ceb43ec069b42899837188a7569
-generated_at: 2026-10-15T10:51:31.015583+00:00
+sha256: 2e26a4084a35cb6ed164473e05ca95adda73cdc9bfdd5f078259ca31da6443e8
+generated_at: 2026-10-29T04:30:32.780759+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,45 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The inbox service: the single place where notifications are read, written, and removed (one-at-a-time, all-at-once, or by the per-user cap). Every mutation is fanned out to the owner's open streams so multiple tabs stay in sync. It sits between the HTTP layer (which it wraps in `ResponseSuccess`/`ResponseReject`) and the repository, and delegates presentation to the presenter.
+The inbox service for the notifications module: it writes, reads, and removes a user's own notifications and their tenant's staff (work) notices, enforces per-audience caps, and pushes every change to the owner's open WebSocket streams so multiple tabs stay in sync.
 
 ## Key elements
 
-- **`notificationsList(userId)`** – Reads the caller's full inbox, newest first, returned as a `NotificationsView`.
-- **`notificationsCreate(rows)`** – Bulk-inserts, publishes a `CREATED` event per row to its owner, then trims each distinct owner's inbox to the configured cap **sequentially** (one after another, not in parallel).
-- **`notificationDelete(userId, id)`** – Deletes a single owned notification. Returns 404 for both "not found" and "not yours" to prevent ID probing. Publishes a `DELETED` event with the specific `id`.
-- **`notificationsDismissAll(userId)`** – Empties the caller's inbox. Succeeds even if the inbox was already empty. Publishes a `DELETED` event with `all: true`.
-- **`notificationsReadAll(userId)`** – Marks every unread notification read as of a single timestamp; publishes a `READ` event carrying that timestamp.
-- **`notificationsDeleteByUserId(userId, session)`** – Hard-deletes all notifications for a user. Accepts a Mongoose `ClientSession` so it joins the caller's transaction (used by the `personalData.erase` hook during account deletion).
-- **`trimInbox(userId)`** *(module-private)* – Delegates to `notificationRepository.trimToNewest` with the cap from `notificationsConfig()`, then publishes a `DELETED` event for the evicted IDs (only if any were removed).
+- **`notificationsList`** – Returns a user's own notifications (newest first) as a `NotificationsView`; used by data export and tests.
+- **`notificationsListStaffNotices`** – Returns staff-notice metadata (code, timestamps) for data export; deliberately omits `params` because it may name other people's accounts or orders.
+- **`notificationsListVisible`** – The primary inbox read: own messages plus staff notices the caller currently holds the permission sets for, merged and sorted newest-first.
+- **`notificationGet`** – Fetches one notification by id; returns 404 for unknown, foreign, or no-longer-authorized rows (uniform to prevent probing).
+- **`notificationsCreate`** – Bulk-inserts own notifications, pushes each to the owner's streams, then trims each owner to the "own" cap sequentially.
+- **`notificationsCreateStaffOnce`** – Inserts a staff notice with a dedupe key; pushes and trims only on a fresh write. Returns `boolean` so the caller can gate a follow-up email.
+- **`notificationsWriteSummary`** – Upserts a summary row (keyed by `dedupeKey`). Pushes a DELETED + CREATED pair when the row appears or its count grows; silently updates when the count falls. Returns `SummaryOutcome` (`'appeared' | 'grew' | 'unchanged'`) so the digest service knows whether to send mail.
+- **`notificationsClearSummary`** – Deletes all summary rows for a code (e.g. count hit zero) and pushes DELETED events.
+- **`notificationDelete`** – Deletes one own notification; 404 if not found or not owned.
+- **`notificationsDismissAll`** – Deletes every notification for a user; pushes a single `all: true` DELETED event.
+- **`notificationsReadAll`** – Marks all of a user's notifications read with a single timestamp; pushes a READ event.
+- **`notificationsDeleteByUserId`** – Hard-deletes for account erasure; accepts a Mongoose `ClientSession` so it joins the caller's transaction (a throw here aborts the delete).
+- **Internal: `visibleTo`** – Visibility predicate: own messages always visible; staff notices visible only if the caller is in tenant scope, in the same tenant, and still holds one of the recorded permission sets.
+- **Internal: `trimInbox`** – Deletes rows past the newest N for a user + audience, then pushes a DELETED event listing the removed ids.
+- **Internal: `countOf`** – Reads the `count` field from a summary row's `params`.
 
 ## Relationships
 
-- **`../repository.ts`** – All persistence (`listByUserId`, `insertMany`, `trimToNewest`, `deleteOwned`, `deleteAllOwned`, `markAllRead`, `deleteByUserId`) goes through `notificationRepository`.
-- **`../presenter.ts`** – Shapes raw notifications into `NotificationsView` for the list and into the per-notification payload pushed on `CREATED`.
-- **`./stream.ts`** – Every mutation calls `publishToUser` to push a `NOTIFICATIONS_CHANNELS.*` event to the owner's open streams.
-- **`../config.ts`** – Reads `notificationsConfig().NODE_NOTIFICATIONS_MAX_PER_USER` for the cap passed to `trimInbox`.
-- **`@infrastructure/http/response`** – Wraps outcomes in `generateSuccess` / `generateReject` for the HTTP layer.
-- **`@infrastructure/i18n`** – Supplies translated user-facing strings (`notifications.not-found`, `notifications.deleted`, `notifications.dismissed-all`, `notifications.read-all`).
-- **`@types`** – Provides the `NOTIFICATIONS_CHANNELS` enum values used as stream event names.
-- **`services/index.ts`** – Re-exports the public functions of this module so other code can import from the barrel.
+- **`../repository.ts`** – All persistence goes through `notificationRepository`; this file never touches Mongoose models directly.
+- **`../presenter.ts`** – Converts `NotificationDocument` rows into `NotificationsView` / `Notification` shapes for API and stream payloads.
+- **`./stream.ts`** – Every mutation calls `publishToUser` to push CREATED / DELETED / READ events to the user's open connections.
+- **`../staff-routing.ts`** – `callerHoldsAnySet` is used in `visibleTo` to decide whether a staff notice is still visible after a role change.
+- **`../config.ts`** – Reads `NODE_NOTIFICATIONS_MAX_PER_USER` and `NODE_NOTIFICATIONS_STAFF_MAX_PER_USER` caps via `notificationsConfig()`.
+- **`@infrastructure/http/response`** – Returns `ResponseSuccess` / `ResponseReject` so route handlers can pass them through.
+- **`@infrastructure/i18n`** – Uses `t('notifications.not-found')` for the 404 message.
+- **`@types`** – Imports `Caller`, `StaffNoticeExport`, `NOTIFICATIONS_CHANNELS`, `Notification`.
+- **`../model.ts`** – Imports the `NotificationDocument` type used in internal helpers.
+- **`../services/digest.ts`** (upstream caller) – Calls `notificationsWriteSummary` / `notificationsClearSummary` and branches on the returned `SummaryOutcome` to decide whether to send a digest email.
+- **`../services/staff.ts`** (upstream caller) – Calls `notificationsCreateStaffOnce` and uses the boolean return to gate a confirmation email.
 
 ## Notes
 
-- **Sequential trimming:** `notificationsCreate` deliberately awaits `trimInbox` one user at a time. A bulk product delete can target thousands of users; parallelizing would amplify DB load for no correctness gain.
-- **Anti-enumeration:** `notificationDelete` intentionally returns the same 404 body whether the ID is unknown or belongs to another user.
-- **Idempotent dismiss:** `notificationsDismissAll` does not error on an already-empty inbox—the desired end-state is the same.
-- **Transaction coupling:** `notificationsDeleteByUserId` must receive the caller's `ClientSession`; a throw here rolls back the entire account-deletion transaction.
-- **`trimInbox` is internal:** It is not exported; external callers should go through `notificationsCreate` (which trims after insert) or the repository directly.
+- **Uniform 404:** `notificationGet` and `notificationDelete` return the same 404 for an unknown id, a foreign id, and a staff notice whose permission sets were revoked. This is intentional: a probing caller cannot distinguish the three cases.
+- **Sequential trimming:** In `notificationsCreate`, per-user `trimInbox` calls run in a `for…of` loop, not in parallel. A bulk product-delete can name thousands of users; one cap-query per user is already the minimum cost.
+- **Delete-then-create for summaries:** `notificationsWriteSummary` pushes a DELETED event for the old row *before* the CREATED event for the new row, so a tab never holds two copies of the same summary.
+- **Silent count decrease:** When a summary's count drops, the row is updated in the DB but no stream event is emitted — the comment notes "good news does not need a ping."
+- **Transaction safety:** `notificationsDeleteByUserId` takes a `ClientSession` and is documented as the `personalData.erase` hook. A failure inside it aborts the hard-delete transaction.
+- **Staff export excludes `params`:** `notificationsListStaffNotices` maps only `code`, `createdAt`, and optional `readAt`. The `params` field is omitted because it may contain other people's account names and order details.

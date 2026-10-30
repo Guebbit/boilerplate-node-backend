@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/tests/integration/opening-stock.test.ts
-sha256: 1e8b08c1d6992ca2b21c03827cdfe7d81da2678256c07337aac55f158259d36c
-generated_at: 2026-10-14T16:02:49.845625+00:00
+sha256: d3d4f9177e6b543e8690107851c416cced0bcb34e8691875cf3440d5ee15952d
+generated_at: 2026-10-29T04:07:35.360731+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test that verifies the inventory module's `PRODUCT_CREATED` listener is idempotent under the outbox's at-least-once delivery guarantee: a redelivered event books the opening count exactly once, and a product created with zero stock creates the level row without producing a ledger movement.
+Integration test that verifies the `PRODUCT_CREATED` listener is **idempotent** under the outbox's at-least-once delivery guarantee: a redelivered event must not create a second stock-level row, must not alter an existing on-hand count, and must never book a spurious ledger movement.
 
 ## Key elements
 
-- **`productWithoutLevel()`** — helper that creates a real product (via `createProduct({ onHand: 0 })`) then deletes its stock-level row, simulating the state right after a product is created but before the event relay delivers.
-- **`onHandOf(productId)`** — reads the level row through `stockLevelRepository.findByProductId`; returns `undefined` when no row exists.
-- **`movementCount(productId)`** — calls `listMovements({ productId })` and returns the ledger-row count.
-- **`describe('PRODUCT_CREATED listener')`** — two test cases:
-  - *Books once on double delivery*: emits `PRODUCT_CREATED` twice with `onHand: 7`, asserts `onHand === 7` and exactly 1 movement.
-  - *Zero stock, no movement*: emits once with `onHand: 0`, asserts `onHand === 0` and 0 movements.
+- **`setupTestDb()`** – one-time test-database initialisation (in-memory or throwaway schema).
+- **`beforeEach`** – resets the in-memory domain-event queue and re-subscribes `inventoryModule` so every test starts with a clean listener wiring.
+- **`afterAll`** – final domain-event reset to avoid leakage.
+- **`productWithoutLevel()`** (local helper) – creates a real product via the products factory, then deletes its stock-level row to simulate the window where the product exists but the relay has not yet created the level.
+- **`onHandOf(productId)`** (local helper) – returns the stored `onHand` count, or `undefined` if no level row exists.
+- **`movementCount(productId)`** (local helper) – returns the number of ledger rows for the product via `inventoryService.listMovements`.
+- **Test 1 – "opens the level at zero and books no movement"** – emits `PRODUCT_CREATED` once; asserts level is created at 0 and zero movements exist.
+- **Test 2 – "opens it once when the same event is delivered twice, and leaves what a receipt booked"** – emits the event, performs a real `receive(7)`, then emits the event again; asserts on-hand is still 7 and exactly one movement row exists.
 
 ## Relationships
 
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the in-memory/test database before any test runs.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` inserts a real product document.
-- **`src/modules/products/index.ts`** — supplies the `PRODUCT_CREATED` event-name constant.
-- **`src/kernel/events.ts`** — `emitDomainEvent` triggers the listener; `resetDomainEvents` (called in `beforeEach`/`afterAll`) clears the event bus between tests.
-- **`src/modules/inventory/module.ts`** — the module under test; `subscribe()` wires the `PRODUCT_CREATED` handler.
-- **`src/modules/inventory/repository.ts`** — `stockLevelRepository` is used both to set up the "no row yet" precondition and to assert the resulting `onHand` value.
-- **`src/modules/inventory/services/index.ts`** (re-exports from `levels.ts`) — `listMovements` provides the ledger rows used to verify idempotency.
+- **`src/kernel/events.ts`** – supplies `emitDomainEvent` / `resetDomainEvents` to drive and clean the in-memory event bus.
+- **`src/modules/inventory/module.ts`** – `inventoryModule.subscribe()` registers the listener under test.
+- **`src/modules/inventory/repository.ts`** – `stockLevelRepository.deleteByProductId` (setup) and `findByProductId` (assertion).
+- **`src/modules/inventory/services/index.ts`** – `inventoryService.receive` (simulates a real receipt) and `inventoryService.listMovements` (assertion).
+- **`src/modules/products/index.ts`** – exports the `PRODUCT_CREATED` event name.
+- **`src/modules/products/tests/factories.ts`** – `createProduct` creates a persisted product for the test.
+- **`tests/support/callers.ts`** – `testCallerContext` satisfies the caller-argument required by `receive`.
+- **`tests/support/setup-test-db.ts`** – `setupTestDb` initialises the test database.
 
 ## Notes
 
-- `beforeEach` calls both `resetDomainEvents()` **and** `inventoryModule.subscribe()`. Forgetting the subscribe step silently skips every listener, making all assertions pass with stale state.
-- The "delete the level row" step in `productWithoutLevel` is essential: without it the factory's own creation logic may already have written a row, and the idempotency assertion would be meaningless.
-- The test emits the event **twice in sequence** (not concurrently) to model the outbox redelivery, not a race condition.
+- The module docstring frames the contract explicitly as **at-least-once idempotency**, not just "first delivery works." Both tests should be read through that lens.
+- `productWithoutLevel` deletes the level row *after* creation to mimic the real race (product committed, relay pending); without that deletion the factory's own creation path may already have opened the level.
+- The second test deliberately interleaves a `receive` call between the two emissions to prove the listener does not **clobber** stock that a legitimate receipt has already booked.

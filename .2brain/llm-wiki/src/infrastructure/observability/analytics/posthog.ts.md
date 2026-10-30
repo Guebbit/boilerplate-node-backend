@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/observability/analytics/posthog.ts
-sha256: eda1dad8d57c6be647d31d459eaffcf99e58fedea0bd331d9a275ef1a458c408
-generated_at: 2026-10-14T08:04:37.376609+00:00
+sha256: e18d8b0c99502fbdc8c84656907b91229b3469e90daa0d951b350a0d8e0e3f0c
+generated_at: 2026-10-29T02:08:26.905641+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the PostHog adapter for the analytics port. Selected via `NODE_ANALYTICS_PROVIDER=posthog` as an alternative to the default Umami provider, chosen specifically for identity-shaped funnels because PostHog stitches a user's timeline by `distinct_id` — a capability Umami lacks. The trade-off is a hosted (or self-hosted) external dependency.
+PostHog implementation of the analytics provider port. It exists as the non-default analytics backend for identity-shaped funnels (PostHog stitches a user's timeline by `distinct_id`), selected via `NODE_ANALYTICS_PROVIDER=posthog`. The trade-off is a hosted dependency, which is why `umami` remains the default.
 
 ## Key elements
 
-- **`isPostHogConfigured()`** — returns `true` only when both `NODE_POSTHOG_API_KEY` and `NODE_POSTHOG_HOST` are set. Used as a gate before any client work.
-- **`_client`** — module-private, lazily instantiated `PostHog` Node client. Batching config: `flushAt: 20`, `flushInterval: 10 000` ms.
-- **`getClient()`** — creates (or returns) the shared client. Safe to assert the API key is non-null because it is only reached past the `isPostHogConfigured()` guard.
-- **`posthogAnalyticsProvider`** (exported) — the `AnalyticsProvider` object:
-  - `configured()` — delegates to `isPostHogConfigured()`.
-  - `capture(event)` — enqueues the event locally (non-blocking). Spreads `event.properties` first, then appends `trace_id` if present, so caller data cannot overwrite it.
-  - `shutdown()` — flushes pending events with a 3 s cap, then clears `_client` so a racing `capture()` builds a fresh client rather than writing to a closing one.
-- **`SHUTDOWN_TIMEOUT_MS`** (3000) — deliberately shorter than the library's 30 s default to stay within the process shutdown deadline.
+- **`posthogAnalyticsProvider`** (export) — the `AnalyticsProvider` object with `name`, `configured()`, `capture()`, `forget()`, and `shutdown()`. This is the only public export.
+- **`getClient()`** (module-private) — lazily instantiates the shared `PostHog` client (`flushAt: 20`, `flushInterval: 10_000`). Guarded by `isPostHogConfigured()` upstream, so the non-null assertion on the API key is safe.
+- **`isPostHogConfigured()`** — checks that both `NODE_POSTHOG_API_KEY` and `NODE_POSTHOG_HOST` are set.
+- **`readErasureConfig()`** — reads the three separate erasure env vars (`NODE_POSTHOG_PERSONAL_API_KEY`, `NODE_POSTHOG_PROJECT_ID`, `NODE_POSTHOG_API_HOST`) needed for the management-API `forget()` call.
+- **`capture(event)`** — enqueues a PostHog capture; merges `trace_id` into properties without allowing caller properties to overwrite it.
+- **`forget(distinctId)`** — calls the PostHog `persons/bulk_delete` management endpoint with `delete_events: true`; throws on non-2xx or non-empty `deletion_errors`. Resolves silently (no-op) when erasure config is absent.
+- **`shutdown()`** — flushes pending events (bounded to `SHUTDOWN_TIMEOUT_MS = 3000`) and clears the module-level client so a racing `capture()` builds a fresh instance.
+- **`warnedAboutConfiguration`** (module-private flag) — ensures the "missing credentials" warning is logged at most once per process.
 
 ## Relationships
 
-- **`src/infrastructure/observability/analytics/index.ts`** — this file *implements* the `AnalyticsProvider` port and the `AnalyticsEvent` type defined there. It is the concrete adapter; `index.ts` is the contract.
-- **`src/infrastructure/observability/config.ts`** — supplies `analyticsConfig()`, the single source for `NODE_POSTHOG_API_KEY`, `NODE_POSTHOG_HOST`, and the provider selector.
-- **`src/infrastructure/adapters/logger.ts`** — provides `logger.warn` for the one-time misconfiguration warning (emitted only once per process lifetime via the `warnedAboutConfiguration` flag).
+- **`src/infrastructure/observability/analytics/index.ts`** — source of the `AnalyticsProvider` and `AnalyticsEvent` type imports that this file implements and consumes.
+- **`src/infrastructure/observability/config.ts`** — provides `analyticsConfig()`, the single accessor for all PostHog-related env vars used here.
+- **`src/infrastructure/adapters/logger.ts`** — supplies the `logger` used for the one-time misconfiguration warning in `capture()`.
 
 ## Notes
 
-- **Host is required, not optional.** PostHog defaults its host to the US cloud; the code rejects a missing `NODE_POSTHOG_HOST` to prevent silently shipping product data to the wrong region.
-- **Buffering means events are lost on crash/deploy unless `shutdown()` is called.** Up to 20 events (or 10 s of traffic) sit in memory before the first flush.
-- **`_client` is cleared *before* `shutdown()` resolves.** A `capture()` that races the shutdown will see `_client === undefined`, call `getClient()`, and build a brand-new client — it will not enqueue onto the one being torn down.
-- **Stryker mutation-testing** annotations wrap the warn block so dead-code mutations on the warning path are not flagged.
-- The underscore prefix on `_client` is the project convention for module-private mutable state.
+- Two distinct credential sets are required: capture uses a `phc_` project key + ingestion host; erasure uses a personal API key (scope `person:write`) + a separate management `apiHost`. They are independent — capture works without erasure config and vice-versa.
+- `shutdown()` clears `_client` **before** awaiting the flush, so a concurrent `capture()` call re-enters `getClient()` and creates a fresh client rather than enqueueing onto one mid-close.
+- The 3 s shutdown timeout is intentionally well under the process's own shutdown deadline (and under PostHog's library default of 30 s) so that a forced exit still leaves time for any downstream trace flush.
+- The `// Stryker disable all` / `// Stryker restore all` pair around the warn block is a mutation-testing suppression; the logger call is the only side effect in that branch.

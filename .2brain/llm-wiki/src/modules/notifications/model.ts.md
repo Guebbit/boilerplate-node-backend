@@ -1,7 +1,7 @@
 ---
 source: src/modules/notifications/model.ts
-sha256: d89e920c196b8b1e9d2f95536522c4855c48b033ceba236bfa077285cecb0fd2
-generated_at: 2026-10-15T10:50:31.885305+00:00
+sha256: 24f0e2beab4707d13b624acf4fc15dc8f02dd69947de32261bec85bfa679e407
+generated_at: 2026-10-29T04:28:59.819501+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Mongoose schema and model for persisted notifications, plus the TypeScript type system that ties each `code` to its `params` shape. The design stores a semantic `code` + structured `params` pair (never rendered text) so that localization lives entirely in the frontend and a row remains valid across language changes.
+Defines the persistence contract for notifications: the Mongoose schema, indexes, model, and the full set of TypeScript types that tie each notification `code` to its `params`. Notifications are stored as code + structured params (never as sentences) so the frontend owns all copy and a row survives locale changes.
 
 ## Key elements
 
-- **`NOTIFICATION_CODES` / `NOTIFICATION_SEVERITIES`** — `as const` arrays enumerating the closed set of valid values; also used as Mongoose `enum` constraints.
-- **`NotificationCode` / `NotificationSeverity`** — literal-union types derived from the arrays above.
-- **`NotificationParametersByCode`** — interface mapping each code to its params interface (e.g. `CartLineRemovedParams`, `PreorderDelayedParams`).
-- **`NotificationBody`** — discriminated union `{ code: C; params: … }` per code; narrowing on `code` narrows `params`.
-- **`NotificationDocument`** — full document type: common fields (`userId`, `severity`, `readAt`, `createdAt`) ∩ `NotificationBody`.
-- **`notificationSchema`** — Mongoose schema; `params` is `Schema.Types.Mixed`; `updatedAt` is disabled; a single compound index `{ userId: 1, createdAt: -1 }` is declared.
-- **`applyNotificationTransform`** — wraps `applySerialization` to normalize lean reads (`_id`→`id`, strips `__v`).
-- **`notificationModel`** — the compiled Mongoose model (`'Notification'`).
+- **`CODE_TABLE`** – A `satisfies Record<NotificationCode, true>` literal listing every valid code. Acts as a compile-time exhaustiveness check against the contract's `Notification` type.
+- **`NOTIFICATION_CODES`** – Runtime array of all codes, used as the schema `enum`.
+- **`STAFF_NOTIFICATION_CODES`** – Subset of codes that `./staff-routing` can resolve an audience for.
+- **`STAFF_SUMMARY_CODES`** – Staff codes rewritten by the daily digest rather than announced once.
+- **`StaffNotificationCode` / `StaffSummaryCode`** – Narrowed literal-union types derived from the arrays above.
+- **`NotificationParametersByCode`** – Maps each code to its `params` type (one entry per variant of `Notification`).
+- **`NotificationBody`** – Discriminated union (`{ code: C; params: … }`) so narrowing on `code` narrows `params`.
+- **`NotificationDocument`** – `NotificationCommon & NotificationBody`; the full document shape.
+- **`NotificationModel`** – `Model<NotificationDocument>` for repository typing.
+- **`notificationSchema`** – Mongoose schema with three indexes: `{ userId, createdAt }` (inbox order), partial-unique `{ userId, dedupeKey }` (staff upsert), and TTL on `expiresAt` (staff expiry). `updatedAt` is disabled.
+- **`applyNotificationTransform`** – Serialization helper (`_id` → `id`, drops `__v`) built via `applySerialization`.
+- **`notificationModel`** – The registered Mongoose model (`'Notification'`).
 
 ## Relationships
 
-- **`src/infrastructure/persistence/serialize.ts`** — provides `applySerialization`, imported here to build `applyNotificationTransform`.
-- **`src/modules/notifications/repository.ts`** — consumes `notificationModel` and `applyNotificationTransform` for all persistence queries (the schema comment notes "Queries live in `./repository`").
-- **`src/modules/notifications/factories.ts`** — the writer side; constructs `NewNotification` values whose shape matches the same `NotificationBody` union.
-- **`src/modules/notifications/presenter.ts`** — reads `NotificationDocument` / `NotificationBody` to render output.
-- **`src/modules/notifications/index.ts`** — barrel re-export of the types and model defined here.
-- **`src/types/index.ts`** — source of the params interfaces (`CartLineRemovedParams`, `CartMergeRefusedParams`, `PreorderDelayedParams`) used in `NotificationParametersByCode`.
-- **`src/modules/notifications/tests/factories.ts`** — test factories that build in-memory notification documents conforming to this schema.
-- **`src/modules/notifications/tests/unit/presenter.test.ts`** — exercises the presenter against documents shaped by this model's types.
+- **`@infrastructure/persistence/serialize`** – Imports `applySerialization` to build `applyNotificationTransform`.
+- **`./repository`** – The only consumer of `notificationModel` for queries (per the in-file comment "Queries live in `./repository`").
+- **`./factories`** – Builds `NewNotification` objects from the same `NotificationBody` union; the schema's `params: Mixed` is a deliberate gap the factory fills with the correct shape.
+- **`./staff-routing`** – Consumes `STAFF_NOTIFICATION_CODES` to find a recipient for work notices.
+- **`./services/digest`** – Rewrites rows whose `code` is in `STAFF_SUMMARY_CODES`, using `dedupeKey === code` as the upsert target.
+- **`./presenter`** – Consumes `NotificationDocument` for rendering.
+- **`./index`** – Barrel re-export.
+- **`@types`** – Source of the `Notification` contract type, `NotificationAudience`, and `NotificationSeverity` enums.
 
 ## Notes
 
-- `params` is `Mixed` at the DB level; the discriminated-union guarantee is a TypeScript contract upheld by the writers, not enforced by Mongoose or Mongo.
-- `updatedAt` is deliberately off. A notification is write-once; the only post-creation mutation is `readAt`, which is self-describing.
-- The single compound index `{ userId: 1, createdAt: -1 }` is shared by two operations: the inbox read (newest-first) and the cap-trim (walk from the far end). Adding a new query pattern should check whether it is covered by this index before adding another.
-- `NotificationCommon` is intentionally non-exported; external code should use the exported `NotificationDocument` alias.
+- `params` is `Schema.Types.Mixed` in the schema. Type safety for params is enforced entirely at write-time by the factories/writers, **not** by Mongoose or the database.
+- The partial unique index on `dedupeKey` uses `partialFilterExpression: { dedupeKey: { $type: 'string' } }` so user-facing rows (which have no `dedupeKey`) are excluded from the uniqueness constraint.
+- The document type is written out explicitly rather than inferred; the code union exceeds what TypeScript can serialize for an inferred discriminant (TS7056).
+- `tenantId`, `sets`, `dedupeKey`, and `expiresAt` are staff-row-only fields; they are absent (or undefined) on user-facing rows.
+- A row is written once; the only post-creation mutation is setting `readAt`.

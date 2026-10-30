@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/routes.ts
-sha256: 4659518351a19feea02caff361389149dc61a9719f834025e89caf75d1d98f20
-generated_at: 2026-10-15T11:55:00.210532+00:00
+sha256: 97dbb06a75efdedaac7203a41055cb14f61e68d567cd3d50991cd282a3ded533
+generated_at: 2026-10-29T05:40:35.599668+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express route table for the returns module. It wires every return endpoint to the correct authentication, permission, rate-limiting, caching, and idempotency middleware, then delegates to the corresponding controller. It exists so that the module's HTTP surface is declarative and auditable in one place.
+Express route table for the returns module. Wires every HTTP endpoint for creating, listing, reading, and transitioning return records, and attaches the per-route policy stack (auth, permission, rate-limit, step-up, idempotency, cache-control) in the correct order.
 
 ## Key elements
 
-- **`router`** (exported `Router`) – the single HTTP entry point for `/returns`. All routes inherit `getAuth` + `isAuth` via `router.use`.
-- **`isStaffCancellation`** (local predicate) – returns `true` when the request body has `kind: 'cancellation'` **and** the caller holds the `payments.any.update` ability key. Used as the condition for `requireFreshAuthWhen` on `POST /` so that only a staff-initiated refund triggers a `stepUp: critical` prompt; a buyer's own withdrawal passes through silently.
+- **`router`** (export) — the `express.Router` instance; every route is behind `getAuth` → `isAuth` (session required).
+- **`needsFreshLogin`** — predicate used by `requireFreshAuthWhen` on `POST /returns`. Returns `true` when the body carries `statedVia` (any caller) or when it is a staff `cancellation` with a non-`withdrawal` reason and the caller holds the `Refund` create ability. Triggers critical-tier step-up.
+- **`GET /`** — list returns (staff see all; customers see their own). `privateNoCache`.
+- **`POST /`** — create a return or withdrawal. Stack: `returnsWriteLimiter` → `requireFreshAuthWhen(needsFreshLogin, 'critical')` → `idempotencyKey` → controller.
+- **`GET /options`** — available return/cancel actions for an order. Declared before `/:id` to avoid the literal "options" being captured as an id.
+- **`GET /:id`** — single return, scoped in the service layer.
+- **`POST /:id/approve` / `POST /:id/decline`** — staff decision actions; require `update:Return`.
+- **`POST /:id/receive`** — goods arrived (pays customer back). Requires `receive:Return` (carries `stepUp: critical` in the key table) + `idempotencyKey`.
+- **`POST /:id/close`** — end a received return outside the usual payout path. Same `receive:Return` key; no idempotency (service returns 409 on repeat).
+- **`POST /:id/cancel`** — end an approved return whose goods never came. `update:Return`, no step-up, no idempotency (409 on repeat).
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `@kernel/middlewares/authorizations` | Supplies `getAuth`, `isAuth`, `requirePermission`, `requireFreshAuthWhen` used on every route. |
-| `@kernel/permissions` | `callerForSubject` resolves the caller's identity for the ability check inside `isStaffCancellation`. |
-| `@kernel/ability` | `holdsKey` evaluates whether the caller possesses `payments.any.update`. |
-| `@infrastructure/http/middlewares/idempotency` | `idempotencyKey` middleware on `POST /` and `POST /:id/receive` to ensure at-most-once side effects. |
-| `@infrastructure/http/middlewares/cache` | `privateNoCache` on all `GET` routes so per-caller responses are never cached. |
-| `./rate-limits` | `returnsWriteLimiter` throttles `POST /` before idempotency and controller logic run. |
-| `./controllers/post-return` | Handles `POST /`. |
-| `./controllers/get-returns` | Handles `GET /`. |
-| `./controllers/get-return-options` | Handles `GET /options`. |
-| `./controllers/get-return-by-id` | Handles `GET /:id`. |
-| `./controllers/post-return-decision` | `postReturnApprove` / `postReturnDecline` handle `POST /:id/approve` and `POST /:id/decline`. |
-| `./controllers/post-return-receive` | Handles `POST /:id/receive`. |
-| `src/modules/returns/module.ts` | Consumes the exported `router` to register routes under the module's mount path. |
-| `src/modules/returns/tests/unit/routes.test.ts` | Unit-tests the route wiring, middleware ordering, and permission assertions defined here. |
-| `tests/cross-cutting/step-up-auth-routes.test.ts` | Verifies that `requireFreshAuthWhen` fires (or is skipped) correctly on `POST /` depending on the caller's key and body `kind`. |
+- **`src/kernel/middlewares/authorizations.ts`** — provides `getAuth`, `isAuth`, `requirePermission`, `requireFreshAuthWhen`; the primary auth/permission enforcement for every route.
+- **`src/kernel/permissions.ts`** — `callerForSubject` resolves the subject used in the ability check inside `needsFreshLogin`.
+- **`src/kernel/ability.ts`** — `holds` performs the RBAC check for the `Refund` ability in `needsFreshLogin`.
+- **`src/infrastructure/http/middlewares/idempotency.ts`** — `idempotencyKey` middleware on `POST /` and `POST /:id/receive`.
+- **`src/infrastructure/http/middlewares/cache.ts`** — `privateNoCache` on the three read routes.
+- **`src/modules/returns/rate-limits.ts`** — `returnsWriteLimiter` applied to `POST /`.
+- **`src/modules/returns/controllers/*.ts`** — eight controller handlers, one or two per route (approve/decline share `post-return-decision.ts`).
+- **`src/modules/returns/module.ts`** — consumes the exported `router` to mount it in the application.
 
 ## Notes
 
-- **Route order is significant.** `GET /options` is declared before `GET /:id`; swapping them would make the literal string `"options"` match the `/:id` param.
-- **`isStaffCancellation` reads `request.body`.** This is safe only because the application mounts a body parser globally before any module router. Do not move this guard ahead of parsing.
-- **Middleware order on `POST /`:** `returnsWriteLimiter` → `idempotencyKey` → `requireFreshAuthWhen` → `postReturn`. The limiter is first so a rate-limited burst does not consume an idempotency key; the idempotency key is before the step-up prompt so a replay that passes the key does not re-trigger a session challenge.
-- **`POST /:id/receive`** requires the `returns.any.receive` permission (which carries `stepUp: critical` in `shared/authorization-keys.yaml`) *and* an `Idempotency-Key`. The permission gate is before the idempotency gate: an unauthorised caller is rejected without touching the idempotency store.
+- **Middleware order on `POST /` is load-bearing.** Step-up auth sits *before* `idempotencyKey` so a 401 challenge is not recorded in the idempotency ledger and replayed after re-auth.
+- **`/options` must stay above `/:id`.** Express matches in declaration order; moving it after would make the literal string "options" resolve as an id.
+- **`needsFreshLogin` reads the raw `request.body`.** It runs before Zod validation in the controller. This is safe only because nothing between `express.json` and the controller mutates the body, and `CreateReturnBody` is a `strictObject` with exact-enum fields (no coercion).
+- **No idempotency on close/cancel.** The service returns `409 Conflict` on a second attempt, which is the intended idempotent response; adding an idempotency key would be redundant.
+- **`POST /:id/close` reuses the `receive:Return` permission key.** Closing is treated as the tail of the same money-moving act as receiving, hence the same critical step-up.

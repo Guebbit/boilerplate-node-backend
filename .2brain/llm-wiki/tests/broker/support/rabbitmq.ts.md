@@ -1,7 +1,7 @@
 ---
 source: tests/broker/support/rabbitmq.ts
-sha256: 4a833b8fb0684e2a74fa62324a147389f92265d0651aabad5a2ed93a7e7685c3
-generated_at: 2026-10-15T12:30:51.679927+00:00
+sha256: 520b36655ee3761733815f3636a0135ca3e3bf1341f036e50efb9bf26a368c71
+generated_at: 2026-10-29T06:37:48.745574+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides a ready-to-use RabbitMQ broker for the queue-broker test suite, scoped to a throwaway vhost so each run is isolated from prior topology. It either connects to a pre-existing broker (via `NODE_TEST_RABBITMQ_URL`) or spins one up in a container, then hands back an AMQP URL, a typed management-API handle, and a cleanup function.
+Test-support module that provisions a RabbitMQ broker (either an externally-supplied instance or a locally-spawned container) scoped to a unique virtual host per run. It exposes an AMQP URL, a narrow management-API client, and a teardown handle so the broker test suite can exercise the queue adapter against a real broker without polluting state between runs.
 
 ## Key elements
 
-- **`startRabbitMq()`** — Main entry point. Resolves the AMQP/management URLs, waits for broker readiness, creates a unique vhost with full permissions for the `guest` user, and returns a `TestRabbitMq`. Rejects (does not skip) when no broker and no container engine are available.
-- **`TestRabbitMq`** — Interface bundling `url` (vhost-scoped AMQP), `vhost` (name), `management` (`ManagementApi`), and `stop()` (deletes vhost, then stops the container if one was started).
-- **`ManagementApi`** — `queue(name)` returns the declared definition (`type`, `durable`, `arguments`, message counters); `dropConnections()` closes all open connections from the broker side and returns the count.
-- **`ManagedQueue`** — Typed subset of the management API's queue-definition JSON.
-- **`waitForBroker(url, timeoutMs)`** — Repeatedly attempts an AMQP connect/close until the broker accepts or the 90 s deadline expires.
-- **`listConnections` / `closeAll`** — Poll `/vhosts/{vhost}/connections` (the broker's stats interval is ~5 s, so a just-opened connection may not appear yet), then `DELETE` each by name.
-- **`createVhost(base, vhost)`** — `PUT` the vhost, then `PUT` wildcard permissions for the user.
-- **`call(base, path, init)`** — Low-level `fetch` wrapper that injects a Basic-auth header (because `fetch` rejects credentials embedded in a URL).
-- **`jsonOrThrow(response)`** — Parses JSON or rejects with the HTTP status.
+- **`startRabbitMq()`** — Main entry point. Resolves the broker from `NODE_TEST_RABBITMQ_URL` / `NODE_TEST_RABBITMQ_MANAGEMENT_URL` or launches a container. Waits for AMQP readiness, creates a UUID-suffixed vhost, grants the built-in user full permissions on it, and returns a `TestRabbitMq`.
+- **`TestRabbitMq`** (interface) — The bundle returned: `url` (vhost-scoped AMQP), `vhost` (name), `management` (API handle), `stop()` (delete vhost + stop container if started).
+- **`ManagementApi`** (interface) — Two operations: `queue(name)` to read a queue's declared definition/counters, and `dropConnections()` to close all vhost connections broker-side.
+- **`ManagedQueue`** (interface) — Narrowed view of the management API's queue JSON (`type`, `durable`, `arguments`, `messages_ready`, `messages_unacknowledged`).
+- **`call(base, path, init)`** — Internal `fetch` wrapper for the management API; injects Basic-Auth header (credentials stripped from URL).
+- **`waitForBroker(url, timeoutMs)`** — Polls `amqplib.connect` via `retryUntil` until the broker accepts a connection.
+- **`listConnections` / `closeAll`** — Poll the connections endpoint (to work around the broker's 5 s stats interval), then `DELETE` each connection.
+- **`createVhost(base, vhost)`** — `PUT /vhosts/{vhost}` + `PUT /permissions/{vhost}/{user}` to grant `.*` access.
+- **`jsonOrThrow`** — Parses a `Response` body, rejecting with a descriptive error on non-2xx.
+- **`IMAGE`** — Defaults to `rabbitmq:4-management` (needed for the HTTP API); overridable via `NODE_TEST_RABBITMQ_IMAGE`.
 
 ## Relationships
 
-- **`tests/container-engine.ts`** — Imported for `containerEngineAvailable()`, `startContainer()`, and the `containerEngine` display name; used when no pre-existing broker URL is supplied.
-- **`tests/broker/queue-broker.test.ts`** — Primary consumer; calls `startRabbitMq()` to obtain the broker and `management` handle for assertions, and calls `stop()` in teardown.
+- **Imports** `retryUntil` from `tests/support/eventually.ts` — used by `waitForBroker` to poll AMQP connectivity.
+- **Imports** `containerEngine`, `containerEngineAvailable`, `startContainer` from `tests/support/container-engine.ts` — used to detect a container runtime and launch the RabbitMQ container when no external broker URL is set.
+- **Consumed by** `tests/broker/queue-broker.test.ts` — the broker test suite calls `startRabbitMq()` to obtain its broker and management handle, and calls `stop()` in teardown.
 
 ## Notes
 
-- The test image is `rabbitmq:4-management`, not the production `rabbitmq:4-alpine`, because the suite needs the management HTTP plugin (queue-definition reads, connection drops) that the alpine image does not ship.
-- `fetch` cannot carry userinfo in the URL, so every management call re-encodes credentials as a `Basic` auth header.
-- `dropConnections` polls for up to 20 s because RabbitMQ's connection stats refresh on a ~5 s interval; a connection opened milliseconds earlier is invisible until the next stats tick.
-- The suite **refuses to skip**: if neither a URL nor a container engine is available, it throws with an actionable message rather than letting the test pass silently.
-- `stop()` swallows the vhost-delete error (`.catch(() => undefined)`) so a partial failure in cleanup does not mask the test result, then proceeds to stop the container.
+- The management image (`rabbitmq:4-management`) is required because production uses `rabbitmq:4-alpine`, which lacks the management HTTP plugin. This file deliberately uses the management variant.
+- `fetch` is called with credentials stripped from the URL and re-attached as an `Authorization: Basic …` header, because undici's `fetch` rejects credentials embedded in the URL.
+- `dropConnections` polls the connections list for up to 20 s before giving up, because the broker updates its stats on a ~5 s interval and a freshly-opened connection may not yet appear.
+- The vhost name is `broker-test-<8 hex chars>` (UUID slice). If a previous run left the vhost behind (e.g., crash before `stop()`), the adapter's fixed queue/exchange names would trigger `PRECONDITION_FAILED` on the next run — the vhost-per-run design exists specifically to prevent this.
+- The module refuses to skip: if neither an env-var broker nor a container engine is available, it rejects with an explanatory error rather than silently passing.

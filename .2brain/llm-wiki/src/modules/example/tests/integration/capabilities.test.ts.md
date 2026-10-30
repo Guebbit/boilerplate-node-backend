@@ -1,7 +1,7 @@
 ---
 source: src/modules/example/tests/integration/capabilities.test.ts
-sha256: 6ceeaaba66e3c9cc48ea6ce95143463c4eab6992f75dff4753616ba9357d42e7
-generated_at: 2026-10-14T15:47:15.702253+00:00
+sha256: 16ab28a7d893f3cc362ec3e87e8e78c88f285602073a2c87748b2e3b44a6e6ac
+generated_at: 2026-10-29T03:57:27.225737+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite that exercises the example module's optional capabilities against a real test database: the publish notification mail, cover-image upload/rotation, personal-data export and erasure (GDPR-style), the two repository writes the `locales` port performs on the collection, and the image-digest writeback guard. Each capability is proved in isolation so that a regression in one does not mask a break in another.
+Integration tests proving each optional capability of the example module against a real in-memory MongoDB: the publish notification mail (via the domain-event → `subscribe` wiring), the cover-image lifecycle (`setCover`), GDPR personal-data export/erasure, and the three writes the `locales` port makes on the example collection. Each capability is tested in isolation so a regression in one does not mask the others.
 
 ## Key elements
 
-- **`describe('the publish mail')`** — Emits `EXAMPLE_PUBLISHED` on the domain-event bus (after calling `exampleModule.subscribe()`) and asserts `enqueueEmail` fires with the owner's locale-appropriate subject/greeting; also asserts no mail for a missing user.
-- **`describe('setCover')`** — Calls `setCover` (from `services/index`) and verifies URL/thumbnail persistence, old-cover file deletion via `imageStore.remove`, and a 404 response when a non-owner attempts the write.
-- **`describe('personal data')`** — Exercises `collectPersonalData` (export scoped to the subject, drafts included, owner name stamped) and `eraseForUser` inside `withTransaction`, confirming rows are deleted atomically while cover-file removal is deferred to the post-commit callback.
-- **`describe('the writes locales makes…')`** — Covers `exampleRepository.existsById`, `writeTranslatedFields` (overwrite + null→empty-string), and `markEdited` (bumps `updatedAt` without counting as a content edit).
-- **`describe('the image digest writeback')`** — Verifies `exampleRepository.writebackImage` applies URLs only when the `pendingImageKey` still matches, ignores stale keys, and treats a repeat of an already-applied job as "held."
-- **Mocks (top of file)** — `enqueueEmail` (mailer), `imageStore.remove` (image-store, with `requireActual` so `applyImageWriteback` still runs), and the audit port (`emitAuditEvent` intercepted, `recordAudit` rebuilt around the real `buildAuditEvent`).
-- **`subscribe()` helper** — Calls `exampleModule.subscribe()` to wire the listener to the bus, mirroring what `registerModules` does at boot.
+- **`subscribe()`** — one-liner helper that calls `exampleModule.subscribe()`, replicating what `registerModules` does at boot so event listeners are active before `emitDomainEvent`.
+- **"the publish mail" suite** — verifies `enqueueEmail` is called with the correct locale-aware subject/greeting, and is *not* called for banned users, users in deletion grace, or orphaned user IDs.
+- **"setCover" suite** — covers URL/thumbnail persistence, audit emission (`EXAMPLE_COVER_CHANGED`), old-image deletion after new-image commit, post-commit image-handoff failure (logged, not thrown), and 404 for non-owner access.
+- **"personal data" suite** — exercises `collectPersonalData` (includes drafts, excludes other users, returns `[]` for empty) and `eraseForUser` (transactional row deletion + deferred `imageStore.remove` after commit).
+- **"the writes `locales` makes on this collection" suite** — tests the `exampleRepository.translatable` port: `exists`, `writeDerived` (sets fallback title without bumping `updatedAt`), null→empty-string coercion, and `markEdited` (bumps `updatedAt`/ETag only).
+- **"the image digest writeback" suite** — (truncated) verifies digest URLs are written only while the pending key is still resolvable.
+- **Mocks** — `mailer.enqueueEmail` (full mock), `imageStore.remove` (partial; `applyImageWriteback` stays real), `auditPort` (via `auditPortMock()` from `@tests/ports`).
+- **`afterEach`** — resets the domain-event bus and clears all jest mocks.
 
 ## Relationships
 
-- **`@infrastructure/adapters/mailer`** — Mocked; `enqueueEmail` is the sole mail side-effect the publish test asserts on.
-- **`@infrastructure/observability/audit`** — Partially mocked; `emitAuditEvent` is spied so `setCover`'s audit assertion can use `observePort`.
-- **`@infrastructure/runtime/database`** — `withTransaction` wraps the erasure test to prove row-delete is atomic while file-delete is deferred.
-- **`@kernel/events`** — `emitDomainEvent` / `resetDomainEvents` drive the publish-mail scenario; events are cleared in `afterEach`.
-- **`@modules/example/module`** — `exampleModule.subscribe()` attaches the module's listener for the publish-mail test.
-- **`@modules/example/events`** — Exports the `EXAMPLE_PUBLISHED` event token used as the emit target.
-- **`@modules/example/audit`** — Provides `exampleAuditActions.EXAMPLE_COVER_CHANGED` for the audit assertion in the cover test.
-- **`@modules/example/repository`** — The primary system under test for the locales and writeback blocks (`existsById`, `writeTranslatedFields`, `markEdited`, `writebackImage`, `save`, `count`, `findById`).
-- **`@modules/example/services/personal-data`** — Source of `collectPersonalData` and `eraseForUser` exercised in the personal-data block.
-- **`@modules/example/services/index`** — Re-exports `setCover`, the function under test in the cover block.
-- **`@modules/example/tests/factories`** — `createExample` and `fieldOf` provide seeded rows and a small helper to read a single document field.
-- **`@modules/users/tests/factories`** — `createUser` creates the owner/stranger identities used across every block.
-- **`@types`** — `ExampleStatus` enum used to mark a row as published in the export test.
-- **`tests/support/callers`** — `callerContextAs` builds the authenticated caller context passed to `setCover`.
+- **`@kernel/events`** — `emitDomainEvent` triggers the module's listener; `resetDomainEvents` tears it down between tests.
+- **`@infrastructure/adapters/mailer`** — the sole external side-effect of the publish-mail path; fully mocked.
+- **`@infrastructure/adapters/logger`** — spied on (`logger.error`) to assert post-commit failure is logged, not thrown.
+- **`@infrastructure/observability/audit`** — replaced with `auditPortMock()` so `observePort` can capture emitted audit actions.
+- **`@infrastructure/runtime/database`** — `withTransaction` wraps `eraseForUser` to prove row deletion is atomic and file cleanup is deferred.
+- **`@modules/example/module`** — `exampleModule.subscribe()` wires the event listener under test.
+- **`@modules/example/events`** — `EXAMPLE_PUBLISHED` is the domain event the publish-mail tests emit.
+- **`@modules/example/audit`** — `exampleAuditActions.EXAMPLE_COVER_CHANGED` is the expected audit action in the cover tests.
+- **`@modules/example/repository`** — `exampleRepository` is used directly for `save`, `count`, `findById`, and the `translatable` sub-port.
+- **`@modules/example/services`** — `exampleService.setCover` is the SUT for the cover-image suite.
+- **`@modules/example/services/personal-data`** — `collectPersonalData` and `eraseForUser` are the SUTs for the GDPR suite.
+- **`@modules/example/tests/factories`** — `createExample` seeds rows; `fieldOf` reads a single column back.
+- **`@modules/users/tests/factories`** — `createUser` seeds the owner/other accounts each test needs.
 
 ## Notes
 
-- Only the filesystem-touching `imageStore.remove` is stubbed; `applyImageWriteback` runs as a real pure mutation so the writeback logic is tested, not bypassed.
-- The audit mock spreads `requireActual` and then overrides `recordAudit` to call the real `buildAuditEvent` internally, so event shapes stay realistic.
-- The erasure test relies on the `withTransaction` callback pattern: `eraseForUser` returns an `afterErase` thunk that must be awaited *outside* the transaction to trigger deferred file deletion — forgetting to call it will leave `imageStore.remove` un-invoked and the assertion will fail.
-- `afterEach` resets domain events *and* clears all mocks; ordering matters because `subscribe()` re-attaches a listener each test and stale listeners would cause double-mail in subsequent runs.
-- The file uses `MISSING_ID` (from `@tests/ids`) for "non-existent entity" cases rather than a fresh `ObjectId`, making intent explicit.
+- The tests run against a **real MongoDB** (`setupTestDb()`); only I/O adapters (mailer, image-store file removal, audit sink) are mocked. This is intentional: it exercises the module's event wiring, transaction boundaries, and repository queries end-to-end.
+- `imageStore` is a **partial mock** — only `remove` is stubbed. The pure `applyImageWriteback` mutation runs for real, so digest-writeback tests exercise the actual mapping logic.
+- The `locales` port's `writeDerived` is expected to **not** bump `updatedAt`; the `markEdited` call is the only path that does. Tests assert this explicitly to guard against accidental coupling.
+- `eraseForUser` returns a **post-commit callback** (`afterErase`); file deletion is asserted to have *not* happened before that callback is invoked, enforcing the "commit first, side-effect second" contract.
+- The publish-mail test uses `locale: 'it'` to confirm the mailer receives a localized subject and greeting, coupling the test to the mailer's i18n contract rather than a hard-coded English string.

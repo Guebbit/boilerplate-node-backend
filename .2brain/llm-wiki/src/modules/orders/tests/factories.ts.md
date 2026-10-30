@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/factories.ts
-sha256: 03ece1190ff2484984485d7a49b7b153027ca3acef4b8691ad58d028c057d553
-generated_at: 2026-10-15T11:13:06.201511+00:00
+sha256: 62144ed8a56b97afb245da2db9a5d0fbe8b665386d34897f0bbce188f7e5a4c8
+generated_at: 2026-10-29T04:51:44.054176+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Database-touching order factories for the orders test suite. While `../factories.ts` provides a pure in-memory builder (operating on data snapshots), this file wraps that builder around **real persisted Mongoose documents**, adds convenience seeds (`seedOrder`, `seedDigitalOrder`), and exposes direct repository/model helpers that tests use to assert on or force persisted state. It exists so integration and contract tests can create, inspect, and manipulate orders in the test database without driving full service flows.
+Test-database factories for orders. This file wraps the in-memory order builder (`../factories.ts`) so that test fixtures work with **real persisted documents** (a hydrated `ProductDocument`, a `UserDocument`) rather than raw seed data. It also exposes direct repository/model mutations that let tests reach states the public API cannot produce, without driving full checkout or payment flows.
 
 ## Key elements
 
-- **`toOrderItem(product, quantity?, locale?)`** — Converts a persisted `ProductDocument` into an embeddable order-line snapshot. Spreads the full document (minus `_id`, `__v`, `taxClass`), resolves `taxClass` → `taxRate`, and stamps `preorder: true` when applicable. Mirrors `freezeOrderLines` semantics.
-- **`makeOrder(user, items, extras?)`** — Delegates to the pure `buildOrder` in `../factories.ts`, filling in `userId`/`email` from a `UserDocument` and passing `extras` through verbatim (no shipping defaults).
-- **`createOrder(user, items, extras?)`** — Calls `orderRepository.create(makeOrder(...))`; returns the hydrated `OrderDocument`.
-- **`seedOrder(status)` / `seedDigitalOrder(status, paidAt?)`** — One-line orders for a fresh user + product, forced to a given status. Digital variant uses a `requiresShipping: false` product and optionally stamps `paidAt`.
-- **`orderRepository`** (re-export) — The live repository instance, exported so sibling test files can `jest.spyOn` it to intercept calls made *inside* this module (a wrapper function cannot do this).
-- **`readOrder` / `findOrder` / `countOrders` / `saveOrder`** — Thin passthroughs to `orderRepository` for raw DB assertions.
-- **`forceOrderStatus(orderId, status)`** — Writes any status by passing all `OrderStatus` values to `updateStatusIfIn`, bypassing lifecycle guards. Test-only door for reaching unreachable states.
-- **`detachOrderUserId(userId, anonymizeAfter)`** — `$unset`s `userId` and `$set`s an explicit `anonymizeAfter`, sidestepping the `createdAt`-derived clock in `orderRepository.detachUserId`.
-- **`markOrderPaidAt(orderId, paidAt)`** — Directly stamps the internal-only `paidAt` field (not reachable via `OrderOverrides` or the wire).
-- **`setWithdrawUntil(orderId, withdrawUntil?)`** — Sets or clears the frozen withdrawal deadline.
-- **`timelineOf(orderId, typePrefix?)`** — Reads the order timeline as admin (`asAdmin`), optionally filtering by type prefix.
-- **`lastOverrideOf(orderId)`** — Returns the last `status_overridden` timeline entry.
+- **`toOrderItem(product, quantity?, locale?)`** – Converts a persisted `ProductDocument` into an `OrderLineInput` snapshot. Strips `_id`/`__v`/`taxClass`, resolves `taxRate`, and flags `preorder` based on release date — mirroring what `freezeOrderLines` would freeze at order time.
+- **`makeOrder(user, items, extras?)`** – Delegates to the in-memory `buildOrder` (`../factories.ts`), passing `userId`, `email`, `items`, and any `OrderExtras` (status, shipping columns, totals, etc.).
+- **`orderRepository`** (re-export) – The live repository instance, intended for `jest.spyOn` in sibling test files. Not meant for direct data access.
+- **`createOrder(user, items, extras?)`** – Persists an order via `orderRepository.create` and returns the Mongoose document.
+- **`seedOrder(status)`** – Convenience: fresh user + product, single line, forced to `status`.
+- **`seedDigitalOrder(status, paidAt?)`** – Same as `seedOrder` but the product has `requiresShipping: false`; optionally stamps `paidAt` immediately.
+- **`readOrder(id)` / `findOrder(where)` / `countOrders(where?)`** – Thin raw-query assertions on persisted state.
+- **`forceOrderStatus(orderId, status)`** – Sets any status unconditionally (bypasses lifecycle guards) for tests that need to prove a *different* caller handles an illegal state.
+- **`detachOrderUserId(userId, piiClockStartedAt)`** – `$unset`s `userId` on all matching orders and sets the PII-retention clock to an explicit instant.
+- **`markOrderPaidAt(orderId, paidAt)`** – Stamps `paidAt` directly (internal-only field not reachable via `OrderOverrides`).
+- **`setConformityUntil(orderId, date | undefined)`** – Sets or clears the frozen conformity deadline.
+- **`setWithdrawUntil(orderId, date | undefined)`** – Sets or clears the frozen withdrawal deadline (the state `markDelivered` leaves behind).
+- **`timelineOf(orderId, typePrefix?)`** – Reads the full admin timeline; optional prefix filter on entry type.
+- **`lastOverrideOf(orderId)`** – Returns the last `status_overridden` timeline row.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/create-repository.ts`** — Imports `toObjectId`, used in `detachOrderUserId` and `setWithdrawUntil` to convert string ids to Mongoose ObjectIds.
-- **`src/modules/delivery/tests/factories.ts`** — Sibling factory file following the same "pure builder + DB wrapper" split within its own module.
-- **Test files in `src/modules/{cart,delivery,account,addresses}/tests/…`** — Consumers of the factories and helpers exported here (e.g., `seedOrder`, `createOrder`, `readOrder`, `forceOrderStatus`) in their integration and contract suites.
+- **`../factories.ts`** (sibling, in-memory builder) – `makeOrder` calls its `buildOrder` and re-exports its `OrderFixture`/`OrderLineInput`/`OrderOverrides` types. This file is the *persistence* layer on top of that builder.
+- **`../repository`** – `createOrder`, `readOrder`, `findOrder`, `countOrders`, `forceOrderStatus` all call `orderRepository`; the raw `orderModel` is used for direct `updateMany`/`findByIdAndUpdate` paths (`detachOrderUserId`, `markOrderPaidAt`, `setConformityUntil`, `setWithdrawUntil`).
+- **`src/infrastructure/persistence/create-repository.ts`** – Imports `toObjectId` for casting string IDs to ObjectId in raw model queries.
+- **`@modules/products/tests/factories`** – `createProduct` is used by `seedOrder`/`seedDigitalOrder`.
+- **`@modules/users/tests/factories`** – `createUser` is used by the same seed helpers.
+- **`../services/timeline`** – `timelineOf` calls `readTimeline` as admin.
+- **`@tests/callers`** – Provides `asAdmin` for timeline reads.
+- **Consumers** – Cart integration tests (`checkout`, `stock`, `service`, `product-removal-protects-orders`, `checkout-expected-total`, `checkout-interleavings`, `checkout-stock-divergence`), delivery tests (`destination`, `lost-parcel`, `order-status-races`), the account contract test (`shop.contract.test.ts`), and the addresses checkout test all import factories from this file to seed and assert on order state in the test database.
 
 ## Notes
 
-- `toOrderItem` deliberately spreads the entire product document rather than naming fields, so a new column on `ProductDocument` is carried into the snapshot automatically. The only exclusions are Mongo internals and `taxClass` (replaced by the resolved `taxRate`).
-- `extras` in `makeOrder` is passed through, **not** defaulted. Shipping fields that are `undefined` stay `undefined`, preserving the "no method chosen" vs. "chose a free one" distinction in totals.
-- `orderRepository` is re-exported specifically for `jest.spyOn` on the *live* object. A function wrapper around `orderRepository.create` would copy the call, not the binding, and could not intercept internal calls (e.g., the rollback path in `placeOrder`).
-- `forceOrderStatus` is explicitly **not** a production path; `orderService` exposes no unconditional status writer. Use it only to craft a state the real API cannot produce, then assert a *different* caller handles it.
-- `markOrderPaidAt` exists because `paidAt` is internal-only (omitted from the wire in `model.ts`), so no `OrderOverrides` key or API call can set it.
-- `detachOrderUserId` uses `timestamps: false` to avoid side-effecting `updatedAt` on the many orders it touches.
+- **`toOrderItem` vs. `../factories.ts` builder**: The in-memory builder accepts a product *snapshot object* (useful for seeds built from catalogue rows that were never persisted). This file's `toOrderItem` accepts a real `ProductDocument` and calls `.toObject()`, so newly added columns are captured automatically — but it *requires* the document to be hydrated from the DB.
+- **`forceOrderStatus` is intentionally bypass-only**: `orderService` exposes no unconditional status writer; this export exists solely so a test can place an order in a state (e.g. `cancelled`) that the API would never reach, in order to verify a *different* code path's guard.
+- **`markOrderPaidAt` / `setConformityUntil` / `setWithdrawUntil`** bypass the service layer on purpose. They exist for retention/window tests where driving the full checkout → payment → delivery flow would be the only alternative.
+- **`OrderExtras`** omits `userId`, `email`, and `items` from `OrderOverrides` because those are always supplied positionally; shipping-related columns pass through rather than defaulting, preserving the distinction between "no method chosen" and "chose a free one."
+- **`orderRepository` re-export** is documented for `jest.spyOn` use in sibling tests; for simple assertions prefer the narrower helpers (`readOrder`, `findOrder`, `countOrders`).

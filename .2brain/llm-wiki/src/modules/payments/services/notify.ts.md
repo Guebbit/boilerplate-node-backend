@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/services/notify.ts
-sha256: 4a332b95794d0bc3fb9638028b42a7894673c669a59729e40c6876eb478c9fb1
-generated_at: 2026-10-15T11:30:42.138458+00:00
+sha256: 6f0ffbd00f12998ff437bd32d3f865869e7e469eeda4898eb1b7ab8c594e5856
+generated_at: 2026-10-29T05:11:59.378975+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Event-listener handlers that send buyer-facing notification emails when a payment settles (`payment.succeeded`) or a refund is recorded (`payment.refunded`). Using listeners instead of inline sends ensures every settlement path (webhook, browser confirm, offline record, crash-recovery sweep) triggers the mail. A mail failure is logged and swallowed — it must never roll back money that already moved.
+Sends all buyer-facing emails for the payment lifecycle: payment received, refund issued, refund undeliverable, bank-transfer instructions, and transfer-expired cancellation. Two exports are registered as event listeners (`payment.succeeded`, `payment.refunded`) so they fire on every settlement path (webhook, browser confirm, offline record, crash-recovery sweep); the other two are called directly by the code that opens or cancels a transfer payment. A failed email never rolls back a financial action — all failures are logged and swallowed.
 
 ## Key elements
 
-- **`mailPaymentReceived`** (exported) — Handles `payment.succeeded`. Looks up the order via `orderService.getById`, then queues a `paymentReceivedEmail` through `enqueueEmail`. This is the buyer's confirmation that their card actually went through.
-- **`mailRefundIssued`** (exported) — Handles `payment.refunded`. Fetches the payment and order in parallel, locates the specific refund, applies skip rules (see Notes), then queues a `refundIssuedEmail` with a `completesPayment` flag.
-- **`moneyWentBack`** (private) — Returns `true` if the refund carries a `providerRefundRef` **or** the payment was `refundedByHand`; distinguishes a real money movement from a corrupted-row settle.
-- **`completesPayment`** (private) — Sums all successful refund records settled up to (and including) the target refund and compares to the payment total via `toMinorUnits`. Reads from the record list, not the payment's current status, so a later refund can't retroactively change what an earlier one reports.
+- **`mailPaymentReceived`** — event listener on `payment.succeeded`; tells the buyer their card payment went through.
+- **`mailRefundIssued`** — event listener on `payment.refunded`; tells the buyer their money went back. Skips return-linked refunds (those get a `returns` closing notice) and refunds that moved no real money.
+- **`mailRefundUndeliverable`** — handles both `payment.refund_failed` (final) and `payment.refund_reversed`; asks the buyer how to receive a refund the bank could not return. Skips if the record no longer owes the buyer another way.
+- **`mailTransferInstructions`** — called by the transfer-payment opener; emails IBAN/BIC, beneficiary, reference, and deadline.
+- **`mailTransferExpired`** — called by the transfer-payment canceller; notifies the buyer the transfer never arrived and the order is cancelled.
+- **`moneyWentBack`** (private) — true if a settled refund has a `providerRefundRef` or `settledByHand === true`.
+- **`completesPayment`** (private) — sums all succeeded refunds settled up to (and including) the target refund and compares to the payment total, using `toMinorUnits`.
 
 ## Relationships
 
-- **`@infrastructure/adapters/logger`** — Imports `logger`; used to log-and-swallow errors in both catch blocks.
-- **`@infrastructure/adapters/mailer`** — Imports `enqueueEmail`; the actual transport for both outbound messages.
-- **`@kernel/events`** — Imports the `DomainEventMap` type to type the event payloads each handler receives.
-- **`@modules/orders` (→ `orders/services`)** — Imports `orderService`; calls `getById` to resolve the order and `mailBuyer` to render the email in the buyer's locale.
-- **`../emails`** — Imports `paymentReceivedEmail` and `refundIssuedEmail` template builders (subject, template, data).
-- **`../repository`** — Imports `paymentRepository`; `mailRefundIssued` calls `findByOrderId` to fetch the payment document.
-- **`../model`** — Imports `PaymentDocument` and `RefundRecord` types used in the helper predicates.
-- **`../services/index`** — Re-exports the two handlers so the module can wire them as listeners.
-- **`@shared-kernel/money`** — Imports `toMinorUnits` for currency-safe amount comparison in `completesPayment`.
-- **`@types`** — Imports `RefundStatus` (specifically `.succeeded`) to filter settled refund records.
+- **`@infrastructure/adapters/mailer`** — every send goes through `enqueueEmail`; this file never rejects on mail failure.
+- **`@infrastructure/adapters/logger`** — all `.catch` handlers log via `logger.error` before swallowing.
+- **`@kernel/events`** — consumes `DomainEventMap` payload types for the three event-driven exports.
+- **`@modules/orders`** (`orderService`) — resolves the order, its email, locale, and buyer name for every mail; also the channel for `mailBuyerOfOrder` / `mailBuyer`.
+- **`@modules/payments/emails`** — imports the five template builders (`paymentReceivedEmail`, `refundIssuedEmail`, `refundUndeliverableEmail`, `transferInstructionsEmail`, `transferInstructionsEmail`).
+- **`@modules/payments/config`** — reads `bankTransferBeneficiary`, `bankTransferIbanFriendly`, `bankTransferBic` for the instructions mail.
+- **`@modules/payments/repository`** — `paymentRepository.findByOrderId` in both refund handlers.
+- **`@modules/payments/model`** — `PaymentDocument` and `RefundRecord` types.
+- **`@modules/payments/domain`** — `owesBuyerAnotherWay` guard in `mailRefundUndeliverable`.
+- **`@domain-primitives/money`** — `toMinorUnits` for currency-accurate comparison in `completesPayment`.
+- **`@modules/payments/services/intent`** — the caller side: the service that opens a transfer payment calls `mailTransferInstructions`; the canceller calls `mailTransferExpired`.
+- **`@modules/payments/services`** (`index.ts`) — re-exports these functions for external consumers.
 
 ## Notes
 
-- **Refund skip rule:** `mailRefundIssued` bails if `refund.returnId` is set **and** the reason is not `'cancellation'`. A return's refund is covered by the returns module's own closing notice; a cancellation (remainder) refund has no such notice and is mailed here.
-- **Idempotency-safe:** Both handlers are side-effect-only (log + enqueue). They never write to the payment or order, so re-delivery of an event is harmless.
-- **Stryker comments** (`// Stryker disable all` / `restore all`) wrap the error-logging blocks to exclude the intentional no-op catch from mutation-coverage requirements.
-- **`completesPayment`** intentionally uses `<=` on `settledAt` (ties broken by `_id` equality) so concurrent settlements on the same timestamp are still counted.
+- **Idempotency is the caller's job.** `mailTransferInstructions` and `mailTransferExpired` are called once by the code that transitions the payment (open / cancel), so a redelivered event does not double-mail. The two event-listener emails rely on the event bus delivering each event once.
+- **`mailRefundIssued` is intentionally narrow.** A refund with a `returnId` *and* reason ≠ `cancellation` is skipped (the `returns` module owns that notice). A remainder-cancellation refund *does* carry a `returnId` but has no closing notice, so it is mailed here.
+- **`completesPayment` reads records, not payment status.** This keeps the "is this the final refund?" answer stable even if a later refund arrives after the mail is composed.
+- **`enqueueEmail` never rejects.** Every `void enqueueEmail(...)` call is fire-and-forget with an eslint suppression; the surrounding `.catch` on the `orderService` chain is the only error surface.
+- **Stryker mutants are disabled** around the `logger.error` calls in `.catch` blocks to prevent mutation testing from flagging the intentional log-only handlers.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/services/progress.ts
-sha256: 1caf0cbfe5cc527c712df2c777fff5ddbd26d51c2a434be05befcc210fd45a95
-generated_at: 2026-10-14T15:32:06.658963+00:00
+sha256: 6ba88a778522e8c2b481c0df628fe3a52e508e39737d22be5d083ea2494383aa
+generated_at: 2026-10-29T03:42:28.585790+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Keeps the `orders` module in step with delivery's writes, inside an act's transaction. It recomputes the fulfillment summary from the delivery records themselves (never adjusts it) and asks `orders` to move the order's status exactly when the summary indicates all goods have left or all have arrived. If `orders` refuses (e.g., the order was cancelled in the meantime), this file aborts the act.
+Synchronizes the `orders` record with delivery's fulfillment state inside an act's transaction. It recomputes the fulfillment summary from the actual records (never adjusts it) and asks `orders` to move status only when the summary justifies a transition. This file is the single point where delivery *requests* an order-status change; `orders` remains the only writer.
 
 ## Key elements
 
-- **`ProgressReport`** (interface) — the bundle of data `reportProgress` reads and writes back: the updated order, the computed summary, the fulfillment orders, and the shipments.
-- **`reportProgress(orderId, session)`** — sequential read of fulfillment orders and shipments under the act's transaction, computes a summary via `summarize`, hands it to `orderService.recordFulfillmentProgress`, and returns a `ProgressReport`. Refuses the act (409 `DELIVERY_NOT_SHIPPABLE`) if the order can no longer be fulfilled.
-- **`expectMoved(moved)`** — internal guard; calls `refuse(409, ORDER_NOT_PROCESSING)` if the status write returned `null`, aborting the act.
-- **`settleOrder(orderId, status, summary, at, session, actor?)`** — moves the order's status only when the summary warrants it: `processing → shipped` (units left, none out), `shipped → delivered` (all arrived), or a **double move** `processing → delivered` in one call (digital fulfilment, or remainder cancelled after every shipment already arrived). No-op when units remain or nothing has shipped.
+- **`ProgressReport`** (interface) — the shape of what `reportProgress` read and wrote: the post-write order, the computed summary, and the raw fulfillment orders / shipments.
+- **`reportProgress(orderId, session)`** — loads fulfillment orders and shipments sequentially under the act's session, calls `summarize` to build a `FulfillmentReport`, then hands it to `orderService.recordFulfillmentProgress`. Refuses the act (409 `DELIVERY_NOT_SHIPPABLE`) if the order can no longer be fulfilled.
+- **`startFulfilment(order, session, actor)`** — moves the order `paid → processing` if it is still in that state. No-op (silent) when the order has already moved past `paid`; refuses (409 `ORDER_NOT_PAID`) if `markProcessing` fails to land. Called before `reportProgress` so subsequent writes see `processing`.
+- **`settleOrder(orderId, status, summary, at, session, actor?)`** — performs the terminal status move dictated by the summary: `processing → shipped`, `shipped → delivered`, the double-move `processing → delivered`, or `processing → undeliverable` (lost). No-op when units remain or nothing was shipped.
+- **`expectMoved`** (private) — guard that refuses the act (409) if a status transition failed to land.
 
 ## Relationships
 
-- **`src/modules/orders/index.ts`** — calls `orderService.recordFulfillmentProgress`, `orderService.markShipped`, and `orderService.markFulfilmentComplete`. This file never writes order status directly; it delegates entirely to the orders module.
-- **`src/modules/orders/model.ts`** — uses the `OrderDocument` type for return values and status checks.
-- **`src/modules/delivery/domain/index.ts`** — imports `summarize` and the `FulfillmentReport` type to compute the summary from raw records.
-- **`src/modules/delivery/repository.ts`** — imports `fulfillmentOrderRepository` and `shipmentRepository` to read the act's snapshot.
-- **`src/modules/delivery/model.ts`** — imports `FulfillmentOrderDocument` and `ShipmentDocument` types.
 - **`src/modules/delivery/services/act.ts`** — imports `refuse` to abort the act on any failure path.
+- **`src/modules/delivery/domain/index.ts`** — imports `summarize` (pure computation of `FulfillmentReport`) and the `FulfillmentReport` type.
+- **`src/modules/delivery/model.ts`** — imports `FulfillmentOrderDocument` and `ShipmentDocument` types.
+- **`src/modules/delivery/repository.ts`** — imports `fulfillmentOrderRepository` and `shipmentRepository` for the two reads.
+- **Other delivery services** (`ship.ts`, `deliver.ts`, `cancel-remainder.ts`, `reship.ts`, `split.ts`, etc.) — consume `reportProgress`, `startFulfilment`, and `settleOrder` as shared steps within their respective act transactions (this file is the common progress-reporting sub-step they all share).
 
 ## Notes
 
-- Reads are deliberately **sequential** (`.then` chain), not parallel, because a Mongoose `ClientSession` does not support concurrent operations within a single transaction.
-- `orders` remains the sole status writer; this file only *asks* it to move and *refuses* the act when it cannot. The 409 codes (`DELIVERY_NOT_SHIPPABLE`, `ORDER_NOT_PROCESSING`) are the two distinct "no" answers.
-- The `at` parameter on `settleOrder` stamps the completion instant (last arrival or cancel time) for the order timeline — it is not a "now" call.
-- `actor` is optional: present for staff-initiated acts (timeline attribution), absent for system-driven flows.
+- Reads are intentionally sequential (`.then` chain), not parallel: a Mongoose `ClientSession` does not support concurrent operations on the same session.
+- `startFulfilment` is a *conditional* no-op: if the order is already past `paid`, it silently returns without refusing. This is deliberate — multiple services call it and only one will be in the right state.
+- `settleOrder` contains a "double move" path (`processing → delivered` in one call) that covers digital fulfillments and the edge case of a remainder cancelled after all shipments arrived. The docstring table is the canonical reference for which transition fires when.
+- The "ship racing a cancel" guard lives specifically in `reportProgress`: if `recordFulfillmentProgress` returns `null` (order was cancelled concurrently), the act is refused before any further writes.
+- `orders` is the sole status writer; this file never writes status directly — it only calls `orderService.*` methods and refuses the act if the call does not land.

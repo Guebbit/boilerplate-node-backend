@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/config.ts
-sha256: ecbd00c642047e0b3f278984362b9a08d9a857d29fca16e7544cbcdd7bc4c4ed
-generated_at: 2026-10-15T11:22:53.964017+00:00
+sha256: 81a5d4ad9ee405f35ee6939b190b7e537778ef6a3196975298ff735ea8e86cf8
+generated_at: 2026-10-29T05:02:07.648120+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Central read-point for every deployment-tuned value the payments module owns: which methods are offered, the payment-effect sweep grace windows, abandoned-payment retention, and the webhook secret ring. Bank-transfer *values* (beneficiary, IBAN, BIC, hold hours) belong to `@modules/orders`; this file only validates them at boot. All getters read the config per call (never cache) so tests can vary values and no second module transcribes its own fallback.
+Centralises every deployment-tunable payment value (bank-transfer account details, provider selection, webhook secrets, grace windows) behind a single `defineConfig` call, and exposes typed accessor functions so that consumers read the value at call-site rather than transcribing their own fallback. Follows the same per-call-read pattern as `@modules/inventory`'s config.
 
 ## Key elements
 
-- **`PaymentMethodInfo`** — interface for one entry in the methods list (`id: 'card' | 'bank_transfer'`, optional `holdHours`).
-- **`listPaymentMethods()`** — returns the methods a deployment offers, in presentation order. Card appears only if `NODE_PAYMENT_PROVIDER` is set; bank transfer only if `bankTransferEnabled()` (from orders) is true. Empty list ⇒ checkout is off.
-- **`validateBankTransferConfig()`** — boot-time check that returns offending env-var names. Uses `ibantools` to validate IBAN (after `electronicFormatIBAN` strips spaces) and BIC shape; also flags a missing beneficiary when IBAN is set.
-- **`paymentsConfig`** — the `defineConfig` object declaring all `NODE_PAYMENT_*` fields and the `check` function (webhook-secret ring length + bank-transfer validation).
-- **`paymentEffectRetryMinutes()`** — grace window before `retryOpenRefunds` finishes an in-flight refund.
-- **`paymentReconcileMinutes()`** — grace window before `reconcileStalePayments` asks the provider for status.
-- **`paymentAttentionMinutes()`** — threshold before a refund is listed under "needs attention" on the payments page.
-- **`abandonedPaymentRetentionDays()`** — days before `reapAbandonedPayments` deletes an abandoned attempt.
-- **`paymentWebhookSecrets()`** — splits `NODE_PAYMENT_WEBHOOK_SECRET` into its comma-separated ring (first entry signs, any entry verifies). Returns `[]` when unset.
+- **`paymentsConfig`** — the `defineConfig` declaration: shape of all `NODE_PAYMENT_*` / `NODE_BANK_TRANSFER_*` variables plus the boot-time `check`.
+- **`bankTransferBeneficiary` / `bankTransferIban` / `bankTransferIbanFriendly` / `bankTransferBic` / `bankTransferHoldHours` / `bankTransferEnabled`** — typed accessors for the bank-transfer block; `IbanFriendly` groups the IBAN into 4-char blocks for display.
+- **`listPaymentMethods(): PaymentMethodInfo[]`** — returns the methods this deployment offers (card, bank_transfer, or empty); the single source of truth both `GET /payments/methods` and checkout consult.
+- **`PaymentMethodInfo`** — interface with `id` and optional `holdHours`.
+- **`validateBankTransferConfig(): string[]`** — boot-time IBAN/BIC validation via `ibantools`; returns offending variable names.
+- **`paymentWebhookSecrets(): string[]`** — splits the comma-separated `NODE_PAYMENT_WEBHOOK_SECRET` into a signed-ring (first signs, any verifies).
+- **`paymentEffectRetryMinutes` / `paymentReconcileMinutes` / `paymentAttentionMinutes` / `abandonedPaymentRetentionDays`** — per-call accessors for the four grace/retention windows consumed by the effects sweeps and the payments page.
+- **`TRANSFER_PAYMENT_RETENTION_DAYS`** — constant (365); how long a cancelled bank-transfer is kept for late-reference matching.
+- **`webhookSecretRing`** (private) — splits the raw env value into trimmed entries, preserving empty slots so they fail the length check.
 
 ## Relationships
 
-- **`@infrastructure/config/define` / `fields`** — provides `defineConfig`, `int`, `secret`, `text` used to declare the shape and check.
-- **`@modules/orders` (config)** — imports `bankTransferBeneficiary`, `bankTransferIban`, `bankTransferBic`, `bankTransferEnabled`, `bankTransferHoldHours` for validation and the methods list.
-- **`./controllers/get-payment-methods`** and **`./services/list`** — consume `listPaymentMethods()`.
-- **`./module.ts`** — the resolver that probes `NODE_PAYMENT_PROVIDER` (cannot live here to avoid a circular import).
-- **`./providers/webhook-signature`** / **`./providers/index`** — read `paymentWebhookSecrets()` to verify signed deliveries.
-- **`./services/effects`** — reads the three grace-window getters to schedule sweeps.
-- **`./services/retention`** — reads `abandonedPaymentRetentionDays()`.
-- **`./tests/unit/config.test.ts`** — unit-tests the validation and ring-parsing logic.
+- **`src/infrastructure/config/define.ts`** — provides `defineConfig`, the function that wraps the shape + check into a validated config reader.
+- **`src/infrastructure/config/fields.ts`** — provides the `text`, `int`, and `secret` field-builder helpers used to declare each variable's type, default, and constraints.
+- **`src/modules/payments/controllers/get-payment-methods.ts`** — calls `listPaymentMethods()` to build the HTTP response; defers to `bankTransferEnabled()` rather than re-deriving the check.
+- **`src/modules/cart/services/checkout.ts`** — reads `bankTransferEnabled()` and `listPaymentMethods()` to gate whether a method is selectable at checkout.
+- **`src/modules/payments/presenter.ts`** — reads `bankTransferBeneficiary`, `bankTransferIbanFriendly`, and `bankTransferBic` to render the `nextAction` shown to the buyer.
+- **`src/modules/payments/providers/webhook-signature.ts`** — reads `paymentWebhookSecrets()` to obtain the ring it verifies incoming signatures against.
+- **`src/modules/payments/services/effects.ts`** — reads `paymentEffectRetryMinutes`, `paymentReconcileMinutes`, and `abandonedPaymentRetentionDays` to time its sweep ticks.
+- **`src/modules/payments/services/deadline.ts`** — reads `bankTransferHoldHours` to compute the reservation deadline for a `bank_transfer` order.
+- **`src/modules/payments/providers/index.ts`** — the provider resolver; it imports this file (hence the provider-probe logic lives there, not here, to avoid a circular import).
+- **`src/modules/payments/module.ts`** — wires the config into the module's DI / export surface.
+- **`src/modules/payments/services/refunds.ts` / `refund-settlement.ts`** — consume the retry and reconcile windows for refund state transitions.
 
 ## Notes
 
-- **Ownership boundary:** bank-transfer business values live in `orders/config.ts`; this file only *validates* them and *surfaces* them in the methods list. Do not duplicate them here.
-- **Per-call reads:** every getter calls `paymentsConfig()` (or the orders getters) at invocation time. There is no module-level cached snapshot.
-- **Webhook secret ring:** entries are comma-separated and trimmed; a trailing comma produces an empty entry that *stays* in the array so the 16-char floor check catches it. The first entry is the signing key; all entries are accepted for verification (rotation = put new first, drop old later).
-- **`NODE_PAYMENT_PROVIDER` probe:** intentionally absent from this file's `check`; `module.ts` resolves it because importing the resolver here would be circular.
-- **`NODE_PAYMENT_WEBHOOK_SECRET` `minLength: 0`:** the field may legitimately be unset (no card provider). The 16-character floor is enforced in `check` only when the value *is* set.
+- **Per-call read, not import-time cache.** Every accessor calls `paymentsConfig()` inside its body. This lets tests swap values between calls and prevents a second reader from hard-coding its own fallback.
+- **IBAN is stored verbatim** (spaces and case as the operator typed it). Only `bankTransferIbanFriendly` normalises for display; the boot check uses `ibantools.electronicFormatIBAN` to strip spaces before validating.
+- **`NODE_PAYMENT_PROVIDER` has no default.** Unset ⇒ card payments are off. `NODE_PAYMENT_WEBHOOK_SECRET` is therefore optional (`minLength: 0`), but any *set* value must have every comma-separated entry ≥ 16 characters.
+- **Trailing-comma guard.** `webhookSecretRing` deliberately keeps empty entries after split, so a stray trailing comma fails the length check instead of silently shrinking the ring.
+- **`TRANSFER_PAYMENT_RETENTION_DAYS` is a constant**, not an env variable. It is intentionally longer (1 year) than `abandonedPaymentRetentionDays` so a late bank transfer can still be matched by reference.
+- **Provider probe lives in `./providers`.** Because the resolver imports this file, the provider's own liveness check cannot be placed here without creating a circular dependency.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/tests/integration/subscription-lifecycle.test.ts
-sha256: b4ef18b1205396d91c1e09c95ae72f07510031b57c5860d4e1105fa38d84d44a
-generated_at: 2026-10-15T12:24:09.273843+00:00
+sha256: d01b685043631c1e5dd584384de896c7702712ce7ed4925b25efe6658b25e39f
+generated_at: 2026-10-29T06:32:36.511555+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-End-to-end integration tests for the webhook subscription service (`create`, `list`, `update`, `remove`, `rotateSecret`, `removeSecret`) run against a real database. It pins service-level outcomes — listing order/tenant isolation, validation refusals, partial-update semantics, secret-ring rotation, and removal — in places where the HTTP contract suite does not already cover them (the SSRF-guard table lives under `tests/fuzz/`).
+Integration tests that exercise the webhook **subscription service** end-to-end against a real database. They pin service-level outcomes for listing, reading, creation (including validation and SSRF-refusal paths), the secret ring, disable/enable, update, and removal. Because the HTTP contract suite is outside the mutation ruler's scope, these tests lock the same outcomes at the service boundary.
 
 ## Key elements
 
-- **SSRF-guard mock** (`jest.mock('@infrastructure/adapters/ssrf-guard')`) — replaces `resolveSafeOutboundTarget` so that `internal.example.test` always rejects; records every URL asked about in the `mockChecked` array (named `mock*` so the hoisted mock can close over it).
-- **Audit mock** (`jest.mock('@infrastructure/observability/audit')`) — swaps in a jest-fn `emitAuditEvent` and a thin `recordAudit` wrapper, enabling assertions on emitted audit events via the `auditedAs(action)` helper.
-- **`subscribe(url?, eventTypes?)`** — convenience helper that calls `create` and throws on failure, returning the created subscription document.
-- **`stored(id)` / `read(id, key)` / `ringIds(id)`** — read-back helpers that query `webhookSubscriptionRepository.findById` to assert persisted state.
-- **`describe` blocks** — *listing*, *what a create refuses*, *updating*, and (truncated) secret-ring and removal suites.
-- **`context`** — a fixed caller context (`callerAs('manager')`, `analyticsConsent: false`) shared across tests.
-- **`beforeEach` / `afterEach`** — reset `mockChecked`, clear the audit mock, register `['orders']` in the catalogue, spy on `logger.warn`; tear down by unregistering the catalogue and restoring all mocks.
+- **`jest.mock('@infrastructure/adapters/ssrf-guard')`** – Replaces `resolveSafeOutboundTarget` so any URL on `REFUSED_HOST` (`internal.example.test`) rejects with `SsrfRefusedError`; all other URLs resolve to a public address. Records every checked URL in `mockChecked`.
+- **`jest.mock('@infrastructure/observability/audit')`** – Swaps the audit port with `auditPortMock()` so `emitAuditEvent` calls are capturable.
+- **`subscribe(url?, eventTypes?)`** – Convenience wrapper around `create` that throws if the service refuses.
+- **`stored(id)` / `read(id, key)` / `ringIds(id)`** – Helpers that read rows back directly via `webhookSubscriptionRepository.findById`.
+- **`auditedAs(action)`** – Filters captured `emitAuditEvent` calls to a single audit action.
+- **`describe('listing')`** – Tenant isolation, newest-first ordering, `enabled`/`autoDisabled` filters, sort with id tiebreak, and per-role `actions` on each row.
+- **`describe('reading one')`** – `getById` returns the row for own tenant, `undefined` for unknown or foreign-tenant ids.
+- **`describe('what a create refuses')`** – Unknown event types (422), SSRF-refused URL (422, no internal reason leaked, `logger.warn` fires), tenant subscription cap (409, guard not invoked), and per-tenant cap counting.
 
 ## Relationships
 
-- **`src/modules/webhooks/services/subscriptions.ts`** — the system under test; all six exported service functions are imported and exercised.
-- **`src/modules/webhooks/repository.ts`** — `webhookSubscriptionRepository` is used directly to insert foreign-tenant rows and to read back stored state; `webhookDeliveryRepository` is imported (likely used in the truncated removal/rotation sections).
-- **`src/modules/webhooks/services/catalogue.ts`** — `registerWebhookCatalogue` is called in `beforeEach`/`afterEach` to control which event names are considered valid.
-- **`src/modules/webhooks/audit.ts`** — `webhooksAuditActions` provides the action-name constants used in audit assertions.
-- **`src/modules/webhooks/model.ts`** — `WebhookSubscriptionDocument` type parameterises the generic `read` helper.
-- **`src/modules/webhooks/secrets.ts`** — `mintRingSecret` generates fixture secret entries for direct repository inserts.
-- **`src/infrastructure/observability/audit.ts`** — fully replaced (not spied) so that `recordAudit`'s internal closure over `emitAuditEvent` is intercepted.
-- **`src/infrastructure/adapters/logger.ts`** — `logger.warn` is spied on to assert the SSRF-refusal warning is logged with `reason: 'unsafe-address'`.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the real database before the suite runs.
-- **`tests/support/callers.ts`** — `callerAs('manager')` builds the authenticated caller identity used in every service call.
-- **`tests/support/environment.ts`** — `setEnvironment` sets `NODE_WEBHOOK_SUBSCRIPTION_CAP` for the limit-exceeded tests.
+- **`src/modules/webhooks/services/subscriptions.ts`** – The module under test; every service function (`create`, `list`, `getById`, `update`, `disable`, `enable`, `remove`, `createSecret`, `removeSecret`) is called directly.
+- **`src/modules/webhooks/services/catalogue.ts`** – `registerWebhookCatalogue` sets the allowed event-type catalogue in `beforeEach` / clears it in `afterEach`.
+- **`src/modules/webhooks/repository.ts`** – `webhookSubscriptionRepository` is used to insert foreign-tenant rows and to read stored rows back; `webhookDeliveryRepository` is imported (used in truncated portions).
+- **`src/modules/webhooks/model.ts`** – `WebhookSubscriptionDocument` type constrains the `read` helper's key parameter.
+- **`src/modules/webhooks/secrets.ts`** – `mintRingSecret` produces a secret entry for direct repository inserts.
+- **`src/modules/webhooks/audit.ts`** – `webhookSubscriptionRepository` and `webhookAuditActions` are imported for audit-action assertions.
+- **`src/infrastructure/observability/audit.ts`** – Fully mocked; `emitAuditEvent` is the capture point.
+- **`src/infrastructure/adapters/logger.ts`** – `logger.warn` is spied to assert the SSRF-refusal log fires with `reason: 'unsafe-address'`.
+- **`tests/support/setup-test-db.ts`** – `setupTestDb()` provisions the real database for the whole suite.
+- **`tests/support/callers.ts`** – `callerAs('manager')` builds the default tenant caller; a read-only variant is constructed inline for the actions test.
+- **`tests/support/environment.ts`** – `setEnvironment` toggles `NODE_WEBHOOK_SUBSCRIPTION_CAP` for the limit test.
 
 ## Notes
 
-- The SSRF guard is **replaced**, not spied: the real module's `SsrfRefusedError` class is re-exported via `jest.requireActual` so the service still throws the correct error type.
-- `mockChecked` must be named with the `mock` prefix because `jest.mock` is hoisted above it; without the prefix the factory would capture `undefined`.
-- The audit mock is likewise a **replacement** (not a spy) because `recordAudit` closes over its own module's `emitAuditEvent` binding; a simple spy on the imported function would not intercept it.
-- Tenant isolation is verified by inserting rows under `'another-tenant'` directly through the repository, bypassing the service layer.
-- The subscription-cap test asserts that the URL guard is **never consulted** when the cap is already hit (`mockChecked` stays empty), confirming short-circuit ordering in the service.
-- The module doc-comment explicitly scopes this file to the *service door*; the HTTP contract suite and the SSRF fuzz table are separate test files.
+- **Jest hoisting constraint:** `mockChecked` is prefixed `mock*` so the hoisted `jest.mock` factory can close over it; a plain `const checked` would throw.
+- **Audit is mocked, not spied:** `recordAudit` closes over its own module's `emitAuditEvent`, so a simple `jest.spyOn` on the export would miss internal calls. The mock replaces the whole port.
+- **SSRF guard is fully replaced, not partially spied:** Its own integration coverage lives in `tests/fuzz/`; duplicating it here would create a second source of truth for the guard's behaviour.
+- **SSRF refusal message is asserted to NOT contain `"private address"`** — the internal reason must not leak to the caller.
+- **Subscription-cap test asserts `mockChecked` is empty** after the refusal, proving the guard is short-circuited before URL validation when the cap is hit.
+- **Tenant isolation is tested in every `describe` block** by inserting a row under `'another-tenant'` and asserting it never appears.
+- **`registerWebhookCatalogue` is global mutable state** — it is set in `beforeEach` and cleared in `afterEach`; forgetting to clear it leaks the catalogue into other test files running in the same worker.

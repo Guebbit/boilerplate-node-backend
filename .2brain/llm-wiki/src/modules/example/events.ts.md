@@ -1,7 +1,7 @@
 ---
 source: src/modules/example/events.ts
-sha256: d4b34fe59a3c1e1d376ae487f90a173f55674d10c12cf40ad46e23ec008d34b1
-generated_at: 2026-10-15T10:30:30.044018+00:00
+sha256: 7f41a41b134b077aaf9b7d55d6f16b10a6cf9da0efef9602ce9b81657aad4a21
+generated_at: 2026-10-29T03:52:58.128332+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the domain events emitted by the `example` module. It augments the kernel's app-wide `DomainEventMap` with this module's event payloads (a pattern chosen over a central event list, per the convention in `modules/orders/events.ts`). Each event declared here is also exposed as a public webhook via `module.ts`.
+Declares the domain events this module emits by augmenting the kernel's global `DomainEventMap` interface (module augmentation pattern, per `modules/orders/events.ts`). Currently defines a single event, `example.published`, which fires when an example transitions to the published state (initially or after un-archiving) and is surfaced as a public webhook via `module.ts`.
 
 ## Key elements
 
-- **`declare module '@kernel/events'`** — TypeScript module augmentation that adds `'example.published'` to `DomainEventMap` with payload `{ exampleId: string; userId: string; title: string }`. Fires when an example first moves to `published` or is restored from `archived`.
-- **`EXAMPLE_PUBLISHED`** (exported const) — String literal `'example.published'`; the canonical key for referencing the event in emitting code.
+- **`declare module '@kernel/events'`** — Augments the kernel's `DomainEventMap` interface to register the `'example.published'` key and its payload shape: `{ exampleId: string; userId: string; title: string }`.
+- **`EXAMPLE_PUBLISHED`** (exported constant) — String value `'example.published'`, a convenience reference to the event name for emit/listen sites.
 
 ## Relationships
 
-- **`src/modules/example/module.ts`** — Reads the events declared here and registers them as public webhooks via its `publicEvents` export.
-- **`src/modules/example/index.ts`** — Module barrel; re-exports or aggregates the public surface this file contributes.
-- **`src/modules/example/tests/unit/manifest.test.ts`**, **`tests/integration/service.test.ts`**, **`tests/integration/capabilities.test.ts`** — Test suites in the dependency graph that exercise the event declaration and its emission.
+- **`src/modules/example/module.ts`** — The comment states this event is exposed as a public webhook through `module.ts`'s `publicEvents` list.
+- **`src/modules/example/index.ts`** — Module barrel; expected to re-export `EXAMPLE_PUBLISHED` for external consumers.
+- **`src/modules/example/services/transition.ts`** — The service that performs the published-state transition is the likely emit site for `example.published`.
+- **Tests** (`integration/capabilities.test.ts`, `integration/service.test.ts`, `unit/manifest.test.ts`) — Verify event emission, payload shape, and webhook exposure.
 
 ## Notes
 
-- The event is added by *augmenting* the kernel's `DomainEventMap` interface rather than importing it from a central registry. When adding new events to this module, follow the same `declare module` pattern.
-- The payload type is defined once, in the augmentation block. The `EXAMPLE_PUBLISHED` constant is just the string key for convenience in dispatch code.
-- See `docs/tools/events-and-logging.md#the-domain-event-bus-and-what-it-is-not` for scope and limitations of the event bus.
+- This file contains **no runtime logic** — only a type augmentation and a string constant. Deleting it (or a specific entry) removes the event from the type map and any webhook registration that references it.
+- Follow the augmentation pattern (per-module `declare module`) rather than a central event list; see `modules/orders/events.ts` for the rationale.
+- The `@module` doc-comment includes a "Delete it if" guideline: remove the file entirely if the module emits no events.

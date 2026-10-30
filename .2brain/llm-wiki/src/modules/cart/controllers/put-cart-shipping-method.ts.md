@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/controllers/put-cart-shipping-method.ts
-sha256: 934f67338ca7dfd95dc420362ae95c64a9fe1a26ec0558ffd45ce2ea69285b58
-generated_at: 2026-09-27T14:44:07.562477+00:00
+sha256: 980e1c1660bb62cc3c552d9a1e59fc0be0fbb34c764cfb52055f4819d1b7efe3
+generated_at: 2026-10-29T03:21:05.256007+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter for `PUT /cart/shipping-method`. It validates the request body, delegates to the cart service to set (or clear with `null`) the shipping method, and returns the re-priced cart. Contains no business logic itself.
+Thin HTTP adapter for the `PUT /cart/shipping-method` endpoint. Validates the incoming body, delegates to `cartService.setShippingMethod`, and formats the result into a standard success or refusal response. It exists to keep Express-specific concerns (parsing, status codes, auth extraction) out of the service layer.
 
 ## Key elements
 
-- **`putCartShippingMethod`** (exported) — Express handler. Reads `userId` from `request.authContext`, validates the body against the `SetCartShippingMethodBody` Zod schema, calls `cartService.cartShippingMethodSet`, and emits the cart or an error response.
-- **Body validation** — `parseBody(SetCartShippingMethodBody, …)` short-circuits with an early return on schema failure.
-- **Error / refusal handling** — `refused(response, result)` maps service-level refusals to the correct HTTP status; `catchAs(response, 'setCartShippingMethod')` converts unhandled rejections into a JSON error.
+- **`putCartShippingMethod`** (exported) — The request handler. Reads `userId` from `request.authContext!.id`, validates the body against `SetCartShippingMethodBody` (Zod schema), calls `cartService.setShippingMethod(userId, body.shippingMethodId)`, and returns either the updated `CartResponse` or a refusal.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — supplies `parseBody`, `refused`, and `catchAs`, the three HTTP-glue helpers this file relies on for validation, refusal, and catch handling.
-- **`src/infrastructure/http/response.ts`** — supplies `successResponse<CartResponse>`, the single success-path serializer.
-- **`src/modules/cart/services/index.ts`** — source of `cartService`; this file calls `cartService.cartShippingMethodSet(userId, shippingMethodId)` and consumes its `{ data }` or refusal shape.
-- **`src/modules/cart/routes.ts`** — registers `putCartShippingMethod` on the `PUT /cart/shipping-method` route (with the auth middleware that populates `request.authContext`).
-- **`src/types/index.ts`** — provides the `CartResponse` and `SetCartShippingMethodRequest` types used in the handler signature and response typing.
+- **`src/infrastructure/http/controller.ts`** — Supplies the `parseBody`, `refused`, and `catchAs` helpers that this handler composes for validation, error short-circuiting, and error formatting.
+- **`src/infrastructure/http/response.ts`** — Supplies `successResponse`, which wraps the service result into the project's standard success envelope.
+- **`src/modules/cart/services/index.ts`** — Source of `cartService`; the actual `setShippingMethod` logic lives there.
+- **`src/modules/cart/routes.ts`** — Registers `putCartShippingMethod` on the `PUT /cart/shipping-method` route.
+- **`src/types/index.ts`** — Provides the `CartResponse` and `SetCartShippingMethodRequest` type contracts used in the handler signature and response.
 
 ## Notes
 
-- `request.authContext!` uses a non-null assertion: the handler assumes an auth middleware has already run and attached the user. Calling this without that middleware will throw at runtime.
-- `shippingMethodId` may be `null` in the request body; the service interprets that as "clear the shipping method."
-- The `@module` JSDoc header and the inline doc comment are the canonical description of the endpoint's contract; keep them in sync if the behavior changes.
+- `request.authContext!` uses a non-null assertion; the endpoint assumes an upstream auth middleware has already populated it. No guard is present in this file.
+- `body.shippingMethodId` may be `null` to **clear** the selected shipping method (per the module doc comment), so the service must handle both set and clear in one code path.
+- The handler uses `.then().catch()` chaining rather than `async/await`, matching the pattern in the `@infrastructure/http/controller` helpers.

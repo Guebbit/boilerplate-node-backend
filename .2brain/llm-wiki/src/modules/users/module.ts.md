@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/module.ts
-sha256: a83a6c6df26fed885316ec6253c1e87ebaa838932cb35ae0ae2cf27d57bdd0ed
-generated_at: 2026-10-15T12:08:38.198387+00:00
+sha256: 96122566cd4620795bbf73ab793337fcc1151c3d85525af580007471dac27eff
+generated_at: 2026-10-29T06:13:40.110657+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module manifest for the `users` domain: admin-facing search, read, write, and soft-delete of user records. It wires together the module's routes, repository, services, PII encryption, and personal-data lifecycle hooks (erase, minimise, re-encrypt) into a single `AppModule` export that the kernel registry consumes at boot.
+Module manifest for the **users** domain: admin-facing search, read, write, and soft-delete of user records. It wires together routing, personal-data erasure hooks, public webhook events, a `USER_ERASED` analytics subscription, image writeback, and PII re-encryption into a single `AppModule` object consumed by the kernel registry at startup.
 
 ## Key elements
 
-- **`onRegistered(modules)`** — Called by the kernel after all modules are known. Resolves every enabled module's `personalData.erase` and `personalData.minimise` hooks via the registry and pushes the combined lists into the local `erasure-registry` singleton so the hard-delete path can fan out to all modules in one transaction.
-- **`default export`** (satisfies `AppModule`) — The module manifest:
-  - `name: 'users'`, `basePath: '/users'`
-  - `routes` — re-exported from `./routes`.
-  - `locales` — path to the module's locale directory.
-  - `imageTargets` — registers `userRepository.writebackImage` as the image writeback target under the key `users`.
-  - `personalData` — two export sections:
-    - `profile` — returns the full user row with credentials via `userService.findByIdWithCredentials`; returns `undefined` if the row is gone, which causes the `account` module to answer 404 for this section.
-    - `signInMethods` — returns linked providers and armed factors (no secrets) via `userService.exportSignInMethods`.
-  - `reencrypt: reencryptUserPhones` — hook invoked when the PII encryption key is rotated.
-  - `config: [usersConfig.slice]` — exposes the module's PII encryption-key configuration.
-- **Side-effect import of `./events`** — registers event listeners at module load.
+- **`onRegistered(modules)`** – Resolves every enabled module's `personalData.erase` and `personalData.minimise` hooks via the kernel registry and registers them in `./erasure-registry.ts` so the hard-delete path can fan out in one transaction.
+- **`publicEvents`** – Maps `USER_ERASED` → `user.erased` and `USER_PROFILE_CHANGED` → `user.updated` to minimised public payloads (user ID + changed-field names only; no personal values in the log).
+- **`subscribe()`** – Listens for `USER_ERASED` and calls `resolveAnalyticsProvider().forget(userId)`. Rejection is expected to trigger the outbox retry / dead-letter path.
+- **`imageTargets.users.writeback`** – Exposes `userRepository.writebackImage` so the kernel's image-pipeline can write back user avatars/profile images.
+- **`personalData`** – Two export sections: `profile` (full row via `userService.findByIdWithCredentials`; returns 404 when the row is gone) and `signInMethods` (linked providers + armed factors, no secrets).
+- **`reencrypt`** – Points to `userService.reencryptUserPhones` for the PII-encrypted phone field.
+- **`config`** – Exposes `usersConfig` (the PII encryption key entry from `./config.ts`).
+- **Default export** – Satisfies `AppModule`; declares `name: 'users'`, mounts the router at `/users`, registers locales, templates, and `usersJobs`.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — Provides `resolvePersonalDataErasers`, `resolvePersonalDataMinimisers`, and the `AppModule` type used to satisfy the manifest shape.
-- **`src/modules/users/config.ts`** — Supplies `usersConfig.slice`, the PII encryption key config slice embedded in the manifest.
-- **`src/modules/users/erasure-registry.ts`** — Receives the resolved eraser/minimiser lists via `setPersonalDataErasers` / `setPersonalDataMinimisers` so the hard-delete service can invoke them.
-- **`src/modules/users/repository.ts`** — `userRepository` is referenced for the image writeback target.
-- **`src/modules/users/routes.ts`** — Provides the `router` attached to the manifest.
-- **`src/modules/users/services/index.ts`** — Exports `userService` (profile, sign-in-method collection) and `reencryptUserPhones` (PII re-encryption hook).
-- **`src/modules/users/services/reencrypt.ts`** — Implementation behind the `reencryptUserPhones` hook.
-- **`src/modules/users/events.ts`** — Imported for side effects (event registration).
-- **Integration tests** (`users/tests/integration/*`, `invoicing/tests/integration/*`, `stats/tests/integration/*`) — Exercise the hard-delete, re-encrypt, and minimise flows that depend on this manifest's wiring.
+- **`src/kernel/registry.ts`** – Source of the `AppModule` / `PublicEventTarget` types and the `resolvePersonalDataErasers` / `resolvePersonalDataMinimisers` helpers used in `onRegistered`.
+- **`src/kernel/events.ts`** – Provides `onDomainEvent` and the `DomainEventMap` type used to type the `USER_ERASED` / `USER_PROFILE_CHANGED` payloads.
+- **`src/infrastructure/observability/analytics/index.ts`** – `resolveAnalyticsProvider` is called in the `USER_ERASED` subscription to forget the user's analytics ID.
+- **`src/modules/users/events.ts`** – Defines the `USER_ERASED` and `USER_PROFILE_CHANGED` event constants referenced here.
+- **`src/modules/users/erasure-registry.ts`** – Receives the resolved eraser/minimiser lists via `setPersonalDataErasers` / `setPersonalDataMinimisers`.
+- **`src/modules/users/repository.ts`** – `userRepository.writebackImage` is exposed as the image writeback target.
+- **`src/modules/users/config.ts`** – `usersConfig` is sliced into the manifest's `config` array.
+- **`src/modules/users/jobs.ts`** – `usersJobs` is passed into the manifest for the kernel's job scheduler.
+- **`src/modules.ts`** – Aggregates this manifest (alongside other modules) when building the enabled-module list handed to `onRegistered`.
 
 ## Notes
 
-- The `account` module writes to the **same** user document through the shared `userRepository`; there is no separate `users` collection. This is intentional — `users` and `account` are two views over one kernel document.
-- `personalData.profile` returns `undefined` (not `null`) when the row is absent. `account`'s assembly specifically 404s on that section because a partial export without the profile row is meaningless.
-- TOTP secrets on the user document belong to `account`'s re-encryption walk, not this module's `reencryptUserPhones` hook — only phone numbers are PII-encrypted here.
-- The `imageTargets` key is literally the string `'users'`; it is the writeback registration point, not a database collection name.
+- **One-way dependency rule:** other modules (cart, addresses, …) hold arrows *into* `users` but never write to the user document directly. Hard-delete is the only cross-module write, and it runs every module's erase hook in a single transaction.
+- **`account` is a co-writer, not a graph neighbour:** signup and profile-update flows in the `account` module write through the same `userRepository`. This file's `imageTargets` and `personalData` sections exist so `account` can resolve them without importing `users` directly.
+- **Public-event payloads are deliberately minimal:** `user.updated` ships only `userId` + `changed` (field names), never the new values, to avoid duplicating PII into webhook logs.
+- **Analytics forget is best-effort-by-design:** a rejection doesn't crash the erase flow; the outbox parks the message as `dead` and raises an alert rather than silently dropping it.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/tests/contract/api.contract.test.ts
-sha256: 5e679811d5683dc116c0e2070fb2ea700cd89ea867d4df256d2136a57272f151
-generated_at: 2026-10-15T10:47:16.055351+00:00
+sha256: 23cad1f0051e5b819c6ec46a4c2cdbbbfc60c19ba305bdc52b392aa81b953b14
+generated_at: 2026-10-29T04:25:16.286767+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the `/locales` API surface (list, per-locale dictionary, per-locale message tree, and language creation). The central invariant under guard is the **two-tier boundary**: a language existing in the database (client-side, downloadable) must never imply the API can serve its own copy in that language (server-side, file-based). The tests are written so that collapsing those tiers fails here rather than surfacing as a client bug.
+Contract tests for the `/locales` API surface. The file guards a specific architectural boundary: languages shipped as **deployed files** (the API's own error messages, available in outages) versus languages **registered in the database** (client-facing, editable at runtime). The tests assert that a language existing in the DB never silently implies the API can answer in it, so a future change collapsing the two tiers fails here rather than in a client.
 
 ## Key elements
 
-- **`createEntry`** — local helper that POSTs a single key/value pair to `/locales/:tag/apps/:app/entries` and returns the new entry's id; throws on any non-201.
-- **`describe('GET /locales')`** — asserts the public manifest matches `listSupportedLocales()`, reports `default`/`fallback` from i18n, shows database-only languages with `source: 'dynamic'` and only client apps, merges both tiers into one row with `source: 'both'`, exposes `entryCount`/`revision`, and hides inactive languages.
-- **`describe('GET /locales/:locale')`** — asserts the returned `messages` contain both the shared JSON file (e.g. `it.json`) and at least one module-contributed namespace; 404s for unknown or database-only locales; path-traversal guard for encoded `..` / absolute-path attempts.
-- **`describe('GET /locales/:locale/messages')`** — asserts the nested key tree a client merges, the `revision` field, empty-object for zero entries, public access, and 404 parity between inactive and unknown tags.
-- **`describe('POST /locales')`** — asserts 201 on success, 409 on duplicate tag, 422 on invalid tag format and on whitespace-only `name`/`nativeName` (regression from a fuzz-suite finding), trimming of display names, and 401 for unauthenticated callers.
+- **`createEntry` (local helper)** — Posts a key/value pair through the real `POST /locales/:tag/apps/:app/entries` route and returns the new entry's `id`. Used to seed translations without touching the DB directly.
+- **`tags` (local helper)** — Extracts the `tag` array from a manifest response body.
+- **`describe('GET /locales')`** — Verifies the manifest lists every deployed language, merges DB-only and file-only languages correctly (source: `"static"`, `"dynamic"`, `"both"`), reports entry counts/revision, hides inactive languages from anonymous callers but exposes them to `display:Locale` API keys, and is publicly reachable (200 without auth).
+- **`describe('GET /locales/:locale/dictionary')`** — Serves the API's own i18n dictionary (shared + module namespaces) for deployed locales only; 404s for DB-only locales and for path-traversal attempts (`..%2F..`, encoded `/etc/passwd`, `en.json`).
+- **`describe('GET /locales/:locale')`** — Returns a registered language in the same shape as the list and write endpoints; answers the `Location` header returned by `POST /locales`; serves file-only languages with `source: "static"` and all `actions` set to `false`; hides inactive languages from visitors but shows them to authenticated staff.
+- **`describe('GET /locales/:locale/messages')`** — Returns the nested key→value tree a client merges, includes the current `revision`, returns `{}` for an empty language, and is public.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** — imported as `@tests/contract`; likely registers shared contract-test assertions or schema-match helpers that each "matches the contract" case relies on.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called once at module top to prepare a clean in-memory database for the suite.
-- **`tests/support/http.ts`** — provides `api()` (HTTP client bound to the test server) and `authenticateAs()` (admin bearer token) used throughout.
-- **`tests/support/ids.ts`** — exports `MISSING_ID`, used for negative-path assertions.
-- **`src/modules/locales/tests/contract/support.ts`** — provides `createLanguage(bearer, overrides?)` and the `PORTUGUESE` payload constant shared with other contract tests in this directory.
-- **`src/infrastructure/i18n/index.ts`** (re-exporting `catalog.ts` and `context.ts`) — source of `listSupportedLocales`, `getDefaultLocale`, `getFallbackLocale`, and the `translator` instance; the tests compare API responses against these values to pin the server-side tier.
+- **`@infrastructure/i18n` (index, catalog, context)** — Imports `listSupportedLocales`, `getDefaultLocale`, `getFallbackLocale`, and `translator` to assert that the manifest's `locales` array, `default`, and `fallback` fields match the runtime i18n configuration, and to compare the dictionary endpoint's output against the `it.json` shared locale file.
+- **`./support`** — Imports `createLanguage` (admin-creates a language row via the real API) and the `PORTUGUESE` fixture object used for POST bodies.
+- **`@tests/contract`** — Side-effect import that registers contract-testing matchers / setup.
+- **`@tests/http`** — Provides `api()` (supertest-style request builder), `authenticateAs`, and `authenticateAsRole` for building authenticated requests.
+- **`@tests/credentials`** — Provides `credentialHolding` to mint an API key scoped to `display:Locale` for the visibility test.
+- **`@tests/ids`** — Exports `MISSING_ID` (used in assertions where an absent id is expected, e.g. static-locale responses).
+- **`@tests/setup-test-db`** — `setupTestDb()` is called at module top-level to ensure a clean DB fixture before any test runs.
+- **`@tests/routes`** — Provides route constants/helpers used by the HTTP helpers above (indirect dependency through `@tests/http`).
 
 ## Notes
 
-- The file imports `itTranslation` directly from `src/locales/it.json` (via a relative path) to compare the shared-key subset of the per-locale endpoint; module-contributed namespaces are asserted *by exclusion* from that set rather than by name, so the test stays valid as modules are added/removed.
-- The whitespace-only `name`/`nativeName` case is a **regression test** for a fuzz-suite finding: JSON Schema cannot express "non-empty after trim," so the controller performs the check; the test documents *why* the check lives in the controller.
-- Path-traversal cases use encoded sequences (`..%2F..%2Fpackage`, `%2Fetc%2Fpasswd`) because Express normalises literal `..` before routing; the test comments note this is the realistic attack shape.
-- `MISSING_ID` is imported but may only be exercised in truncated portions of the file (e.g. negative-path tests for `PATCH`/`DELETE` endpoints not shown here).
-- The suite is explicitly **public-read**: several tests assert 200 without an `Authorization` header, encoding the requirement that the locale manifest is available to unauthenticated clients.
+- The file is intentionally **public-facing**: several tests assert 200 with no `Authorization` header because the primary consumer is a client that has *just* failed to log in.
+- The "tier boundary" is the load-bearing assertion. The test *"still 404s for a language that exists only in the database"* (dictionary endpoint) exists specifically so the day the API starts serving DB-stored copy as its own error messages, it breaks here first.
+- Path-traversal tests use **encoded** sequences (`%2F`) rather than literal `..` because Express normalises the latter before routing; the realistic attack vector is the encoded form.
+- The dictionary test for `it` asserts module-contributed namespaces as *"at least one extra key beyond the shared file"* rather than naming specific modules, so it survives adding/removing modules.
+- `setupTestDb()` is called at module scope (not inside each test), relying on the test runner's isolation; it is not wrapped in `beforeEach`.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/unit/withdrawal-notice.test.ts
-sha256: 76f233416783c8f195362e1b2fa68881858441ede01d30a3b5372221abe1c7f6
-generated_at: 2026-10-15T11:22:05.261108+00:00
+sha256: e369fa4dacf808b13ed994dcd81f046e0bff554c7495f2b5a61ac1cc44f9d02e
+generated_at: 2026-10-29T05:01:14.852197+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the `withdrawalNotice` function and its integration into the placed-order emails. Verifies that the correct legal case (physical goods, digital, fully/partially excluded) is selected, that every EU-mandated placeholder (withdrawal period, shop identity, goods/return address, postage payer, online-function link, Annex I note 3) is filled with a concrete value, and that the rendered EJS output matches expectations in both English and Italian.
+Unit tests for the `withdrawalNotice` builder and its integration into the placed-order confirmation email. Verifies the three CRD cases (physical goods, digital, mixed / all-excluded), that every statutory placeholder (period, shop identity, return address, postage payer) is resolved from environment or defaults, and that the shared EJS partial renders correctly in both `en` and `it`.
 
 ## Key elements
 
-- **`line(title, flags)`** – helper that builds a single `OrderLines['items'][number]` with optional `requiresShipping` / `noWithdrawal` flags.
-- **`GOODS` / `DIGITAL`** – two fixture `OrderLines` objects representing the primary test scenarios.
-- **`textOf(notice)`** – joins `terms + effects + form` into one string for substring assertions.
-- **`render(email)`** – renders a real `.ejs` template from `MODULES_ROOT/orders/templates/` rooted at `REPO_ROOT`, mimicking the production mailer.
-- **`describe` blocks** –
-  - *which case applies* – goods, digital, mixed, all-excluded, partially-excluded, no-exclusion.
-  - *every placeholder is filled* – shop identity, configurable period (14 vs 21 days), goods/return address, postage payer, order-page link, Annex I(A) note 3 wording, i18n completeness, Italian heading.
-  - *both placed-order emails carry the notice* – asserts `orderConfirmEmail` and `bankTransferInstructionsEmail` both embed the notice fields.
-  - *the shared partial, rendered* – full EJS render checks (heading, form, exclusion-only output, HTML-escaping of shop name).
+- **`line(title, flags)`** – factory that builds a single `OrderLines['items'][number]` entry; the `requiresShipping` and `noWithdrawal` flags drive case selection.
+- **`GOODS` / `DIGITAL`** – two-line and one-line fixture baskets used across all suites.
+- **`textOf(notice)`** – flattens `terms`, `effects`, and `form` into one string for substring assertions.
+- **`render(email)`** – calls `ejs.renderFile` against the real `.ejs` template under `orders/templates/`, rooted at `REPO_ROOT`, mimicking the production mailer.
+- **`describe('withdrawalNotice: which case applies')`** – asserts the correct statutory clock (receipt vs. contract), presence/absence of return-instruction paragraphs, and the "some excluded" naming of `noWithdrawal` items.
+- **`describe('withdrawalNotice: every placeholder is filled')`** – checks shop identity, configurable withdrawal period (`NODE_WITHDRAWAL_PERIOD_DAYS`), return address fallback vs. override, postage-payer wording, order-page link, the Annex I(A) note-3 acknowledgement (post-Directive 2023/2673), and absence of unfilled `{{…}}` or `orders.email-withdrawal.*` i18n keys in both locales.
+- **`describe('the placed-order email carries the notice')`** – asserts `orderConfirmEmail` embeds the exact `withdrawalNotice` object.
+- **`describe('the shared partial, rendered')`** – renders the actual EJS template and checks HTML output (heading, form, exclusion-only case, single HTML-escaping of shop name).
 
 ## Relationships
 
-- **`src/modules/orders/emails.ts`** – imports `withdrawalNotice`, `orderConfirmEmail`, `bankTransferInstructionsEmail`, and the `OrderLines` type; all assertions target the return values of these functions.
-- **`src/modules/orders/config.ts`** – imports `orderFrontendLink` to assert the order-page URL appears in the notice text.
-- **`tests/support/environment.ts`** – imports `withEnvironmentOverrides` to run assertions under modified env vars (`NODE_WITHDRAWAL_PERIOD_DAYS`, `NODE_RETURN_ADDRESS_*`, `NODE_RETURN_POSTAGE_PAYER`, `NODE_SHOP_LEGAL_NAME`).
-- **`tests/support/paths.ts`** – imports `REPO_ROOT` and `MODULES_ROOT` to locate the real EJS templates for the `render` helper.
+- **`src/modules/orders/emails.ts`** – primary SUT; provides `withdrawalNotice`, `orderConfirmEmail`, and the `OrderLines` type under test.
+- **`src/modules/orders/config.ts`** – supplies `orderFrontendLink`, verified as the URL embedded in the notice's online-withdrawal paragraph.
+- **`tests/support/environment.ts`** – `withEnvironmentOverrides` is used to simulate `NODE_WITHDRAWAL_PERIOD_DAYS`, `NODE_RETURN_ADDRESS_*`, `NODE_RETURN_POSTAGE_PAYER`, and `NODE_SHOP_LEGAL_NAME` without mutating the real process env.
+- **`tests/support/paths.ts`** – exports `REPO_ROOT` and `MODULES_ROOT` so the template renderer locates `orders/templates/*.ejs` regardless of the working directory.
 
 ## Notes
 
-- Tests assert exact EU regulatory wording (CRD Art. 6(1)(h), 8(7), Annex I; Directive 2023/2673 note 3). Changing the template text will break assertions.
-- The "no placeholder" sweep checks for `{{`, `orders.email-withdrawal` (i18n key prefix), and `^orders\.` in headings across **both locales and both order types**.
-- The `render` helper reads templates from the actual filesystem relative to `REPO_ROOT`; running the test in a non-repo context will fail.
-- The double-escape test (`Smith & Sons` → `Smith &amp; Sons`, not `&amp;amp;`) guards against a known EJS auto-escape pitfall.
+- The "some excluded" test expects a hard-coded English sentence (`"No right of withdrawal: Custom mug and Sealed soap."`); if i18n is extracted, the assertion must be updated in lockstep.
+- The Annex I(A) note-3 assertions explicitly guard against the *old* phrasing ("electronically fill in" / "compilare e inviare elettronicamente") to catch regressions from the pre-2023/2673 template.
+- `render()` reads from the filesystem at test time; the templates directory must exist relative to `MODULES_ROOT`, and the EJS `root` option prevents path-traversal surprises.
+- The HTML-escaping test (`Smith & Sons` → `Smith &amp; Sons`, not `&amp;amp;`) guards against double-escaping in the EJS partial.

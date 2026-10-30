@@ -1,26 +1,33 @@
 ---
 source: src/modules/inventory/controllers/post-receipt.ts
-sha256: 2c27299f4465f072568d0e8b32c0da24de933705ab309f4e751d128770f54edf
-generated_at: 2026-10-14T15:53:30.780321+00:00
+sha256: 03dba5251faa89fe9a6c830533c1cfc05f566c3bb2a6f4939b0033b2bb8414f8
+generated_at: 2026-10-29T03:59:39.541348+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/inventory/controllers/post-receipt.ts
 
 ## Purpose
-Handles `POST /inventory/receipts` — the endpoint through which units from a supplier are added to shop inventory. It validates the incoming body, delegates to the inventory service, and returns the resulting stock level (or a refusal).
+
+Handles `POST /inventory/levels/:productId/receive`, the endpoint for recording stock received from a supplier. It validates the product ID and request body, delegates to the inventory service, and returns the updated `InventoryLevel`. The receipt is audited: it records which admin added how many units.
 
 ## Key elements
-- **`postReceipt`** (exported) — The sole handler. Reads `productId`, `quantity`, and `note` from the parsed body, calls `inventoryService.receive(...)` with the caller's context, and responds with either a 200 success carrying an `InventoryLevel` payload or a refusal.
+
+- **`postReceipt`** (exported) — The request handler. Validates `productId` from route params, parses the body against `ReceiveStockBody`, calls `inventoryService.receive(productId, quantity, note, callerContextOf(request))`, and responds with `200` + `InventoryLevel` or a refusal/error.
 
 ## Relationships
-- **`src/modules/inventory/routes.ts`** — Registers `postReceipt` as the handler for the `POST /inventory/receipts` route.
-- **`src/modules/inventory/services/index.ts`** — Source of `inventoryService`, whose `.receive()` method performs the actual stock-receipt logic.
-- **`src/infrastructure/http/controller.ts`** — Provides the `parseBody`, `refused`, and `catchAs` helpers used for request validation, service-refusal handling, and error forwarding.
-- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf`, which extracts the authenticated admin's identity from the request for the audit trail.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse`, used to serialize the 200 reply.
-- **`src/types/index.ts`** — Source of the `InventoryLevel` type that shapes the response payload.
+
+- **`src/infrastructure/http/controller.ts`** — Supplies the `parseBody`, `refused`, and `catchAs` helpers used for validation short-circuits, service-result handling, and error catching.
+- **`src/infrastructure/http/ids.ts`** — Supplies `requireId`, which extracts and validates the `productId` route parameter.
+- **`src/infrastructure/http/request.ts`** — Supplies `callerContextOf`, used to attach the authenticated admin's context for audit.
+- **`src/infrastructure/http/response.ts`** — Supplies `successResponse`, the standard 200 JSON reply helper.
+- **`src/modules/inventory/services/index.ts`** — Exports `inventoryService`; this controller calls `inventoryService.receive(…)`.
+- **`src/modules/inventory/routes.ts`** — Registers `postReceipt` on the `POST /inventory/levels/:productId/receive` route.
+- **`src/types/index.ts`** — Provides the `InventoryLevel` type used as the response payload.
 
 ## Notes
-- The module JSDoc flags this as one of only two ways units can enter the shop and emphasizes the audit intent (which admin added how many). The audit context is passed implicitly via `callerContextOf(request)` rather than a request-body field.
-- On validation failure (`parseBody` returns `null`) or service refusal, the handler exits early without calling `.catch`; errors from the service promise are funnelled through `catchAs(response, 'postReceipt')`, which prefixes the error tag for logging.
+
+- The route param is typed `productId?: string` (optional); `requireId` is responsible for rejecting missing/invalid values before the service is called.
+- On validation failure the handler returns `Promise.resolve()` rather than throwing — the infrastructure helpers have already sent the error response.
+- Success returns HTTP **200**, not 201, indicating a state change on an existing resource rather than creation.
+- The body schema (`ReceiveStockBody`) comes from `@api/schemas.zod`, not from this module.

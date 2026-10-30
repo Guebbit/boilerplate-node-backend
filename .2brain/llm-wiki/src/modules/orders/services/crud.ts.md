@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/services/crud.ts
-sha256: 60e02bda91386ab0ba364ccdd0892b760d911b6052e4210c5da827941dcb62ea
-generated_at: 2026-10-15T11:07:32.824405+00:00
+sha256: 82ee7d7419de34e42f82e9f8cdaa4e769287ab48fa5d7bcec9c2c93e9ce3e1f8
+generated_at: 2026-10-29T04:46:19.102085+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The admin-facing write path for orders: creating a new order (product snapshot, stock hold, invoice allocation) and updating an existing one (email only). It composes validation, rank checks, locale resolution, and post-write side-effects (audit, analytics, email) around `placeOrder`, which owns the actual persistence and rollback.
+Admin-side order write path: creates a new order on behalf of a buyer (by resolving products and delegating the actual write to `placeOrder`) and updates an existing order's email. Read and delete operations live in sibling modules (`./read`, `./remove`); cancellation is handled by `./cancel`.
 
 ## Key elements
 
-- **`create(userId, email, items, context)`** — Main admin order-creation entry point. Enforces deployment line/quantity limits, checks caller-vs-buyer rank, resolves the buyer's stored locale, batch-resolves product IDs, delegates to `placeOrder`, then fires `recordCreated` and mails the buyer.
-- **`recordCreated(order, context)`** — Shared "order was created" audit + analytics emit. Extracted so both this file and `@modules/cart`'s checkout can report the same fact without one path triggering the other's email.
-- **`update(order, data)`** — Applies an email change to an in-memory `OrderDocument` and persists it via `orderRepository.save`. Status is intentionally not a field here.
-- **`updateById(id, data, context)`** — Fetches by ID, 404s if missing, runs `outrankedOrderRefusal`, delegates to `update`, and records an `ORDER_UPDATED` audit entry on success.
-- **`lineLimitRefusal(items)`** *(private)* — Returns a 422 `ResponseReject` if line count or per-line quantity exceeds the operator-configured ceilings from `config.ts`.
-- **`resolveItemProducts(items)`** *(private)* — `Promise.all` over `productService.findByIdRaw` to pair each input line with its full product document.
+- **`create(userId, email, items, context)`** — Main entry point. Validates line-count/quantity against operator limits, confirms the buyer exists, resolves each product (scoped to the caller's read permissions), refuses if any product is deleted, then delegates to `placeOrder` for the atomic write (stock hold, snapshot, invoice allocation). Maps each `placeOrder` failure reason to the appropriate HTTP status/error-code. On success, calls `recordCreated` and returns `201`.
+- **`recordCreated(order, context)`** — Emits the `ORDER_CREATED` audit row and analytics event. Intentionally separated from `placeOrder` so that webhooks (fired inside `placeOrder`) remain independent of observability side-effects.
+- **`updateById(id, data, context)`** — The "door" for admin order edits. Loads the order, captures an `auditChanges` diff (email is recorded by name only, not value), delegates to `update`, then records the `ORDER_UPDATED` audit row.
+- **`update(order, data)`** — Marked `@internal`. Applies the `email` field (the only updatable field in `UpdateOrderByIdRequest`) and persists via `orderRepository.save`. Status changes are explicitly out of scope.
+- **`lineLimitRefusal(items)`** — Internal helper; returns a `422` reject if line count or per-line quantity exceeds the operator-configured ceilings from `../config`, or `undefined` if within limits.
+- **`resolveItemProducts(items, scope)`** — Internal helper; resolves each `productId` in parallel via `productService.findByIdRawScoped`, returning `{ item, product | null }` pairs.
 
 ## Relationships
 
-- **`./place`** — `placeOrder` performs the actual write, stock hold, and rollback; this file supplies resolved inputs and maps the `outcome` back into HTTP responses.
-- **`./notify`** — `mailBuyer` / `sendOrderPlacedEmail` deliver the post-creation email; called only here (not in `recordCreated`) to avoid double-sending on the shared path.
-- **`./scope`** — `outrankedOrderRefusal` gates `updateById` against a buyer who ranks ≥ the caller.
-- **`../analytics`, `../audit`, `../config`, `../model`** — Provide event-name constants, audit-action constants, operator limits, and the `OrderDocument` type respectively.
-- **`@infrastructure/i18n`** — `t()` for user-facing messages, `getDefaultLocale()` as fallback when the buyer lookup fails.
-- **`@infrastructure/observability/analytics`, `@infrastructure/observability/audit`** — `emitAnalyticsEvent` / `recordAudit` for the post-creation and post-update side-effects.
+- **`./place` (`placeOrder`)** — The single function that performs the actual order write (stock hold, snapshot freeze, invoice allocation). `create` composes around it and handles its typed failure union; `recordCreated` exists separately so webhook emission inside `placeOrder` is not coupled to audit/analytics.
+- **`../repository` (`orderRepository`)** — `updateById` loads the document via `findById`; `update` persists via `save`.
+- **`../model` (`OrderDocument`)** — The document shape all functions read/write.
+- **`../config`** — Supplies `maxAdminOrderLines()` and `maxAdminOrderLineQuantity()` for the operator-level line limits.
+- **`../analytics` / `../audit`** — Provide the event-name and action-name constants (`ordersAnalyticsEvents`, `ordersAuditActions`) used in audit and analytics emission.
 - **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` shape every return value.
-- **`@modules/access`** — `outrankedRefusal` blocks an operator from placing an order for an equal-or-superior user.
-- **`@modules/products`** — `productService.findByIdRaw` resolves product snapshots; `canSeeStock` gates whether the stock-shortage refusal exposes the `available` quantity.
-- **`@modules/users`** — `userService.getById` fetches the buyer's stored locale.
-- **`@infrastructure/adapters/logger`** — Error logging when the buyer-locale lookup fails.
+- **`@infrastructure/i18n`** — `t()` for user-facing messages; `getDefaultLocale()` for buyer-locale fallback.
+- **`@infrastructure/observability/*`** — `recordAudit`, `auditChanges`, `emitAnalyticsEvent`, `buildAnalyticsBase` for the observability side-effects.
+- **`@modules/products`** — `productService.findByIdRawScoped` for product lookup; `canSeeStock` gates whether stock levels appear in error details.
+- **`@modules/users`** — `userService.getById` to verify the buyer exists before any write.
+- **`src/modules/orders/services/index.ts`** — Barrel file that re-exports the public API of this module.
 
 ## Notes
 
-- **Buyer locale, not caller locale.** The order snapshot uses the *recipient's* stored language (`userService.getById(userId).locale`), because an admin may place an order for someone else. A lookup failure falls back to `getDefaultLocale()` rather than aborting.
-- **`recordCreated` is audit/analytics only.** The `ORDER_CREATED` domain event (webhook) is emitted by `placeOrder` itself; this function intentionally does not duplicate it.
-- **Stock-shortage refusal is role-aware.** The `available` field in the shortfall details is included only when `canSeeStock(context.caller)` is true, preventing the refusal from widening a stock read.
-- **`create` is `async` by design** so that `toObjectId` (inside `placeOrder`) rejects as a promise rejection rather than throwing synchronously, keeping the failure shape consistent.
-- **`update` handles email only.** `UpdateOrderByIdRequest` does not declare `status`; status transitions are owned elsewhere (see `docs/theory/tactical-ddd.md#who-writes-the-status`).
-- **`superseded` outcome from `placeOrder` is an invariant violation** in this code path (no `commitWith` step is passed), so it `throw`s rather than returning a 409.
+- **Buyer locale, not caller locale.** The order snapshot uses `buyer.locale`, never `context.locale`. An admin placing an order for another user must not leak their own UI language into the recipient's record.
+- **`update` is exported but `@internal`.** Sibling code should go through `updateById` so the audit-changes row is always recorded. Calling `update` directly skips the diff capture.
+- **`superseded` from `placeOrder` is treated as a programming error.** This endpoint passes no `commitWith` step, so a lost write-race is impossible; hitting it throws rather than returning a 409.
+- **Two distinct limit layers.** Schema-level ceilings (in the API contract / `asyncapi.public.yaml`) are enforced by validation before this code runs. `lineLimitRefusal` enforces the *operator's* deployment-specific caps from `../config`.
+- **Stock in error payloads is visibility-gated.** The `available` field is stripped from `ORDER_INSUFFICIENT_STOCK` details unless `canSeeStock(context.caller)` is true, preventing a refusal from leaking inventory data to callers who shouldn't see it.

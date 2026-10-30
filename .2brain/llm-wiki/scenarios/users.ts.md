@@ -1,7 +1,7 @@
 ---
 source: scenarios/users.ts
-sha256: c4df254427901f65cf97587305cd1595119baceea624cb510c0988811d9588db
-generated_at: 2026-10-14T07:06:49.728784+00:00
+sha256: 15170d3a48c9860630ce394be3a3e4c4a82bae7101c1bbc1993114df52efd19e
+generated_at: 2026-10-29T01:27:51.946914+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,40 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Seeds the user collection for the demo and blank scenarios. It builds every account the demo needs — the four named login accounts (root, customer, editor, moderator), five persona accounts in specific email/2FA/ban states, four staff accounts, and ten filler customers that give the flow runner a varied order history — then exposes two seed functions: one for the full set and one for the named subset used by the `blank` scenario.
+Builds and seeds the full user directory for the demo dataset: 13 named accounts (one per persona in `personas.yaml`, covering every tenant role) and 10 filler customers used to vary order history in the shop flow runner. Accounts carry varied states (verified, 2FA-armed, consented, inactive) so that e2e suites and integration tests can log in as each one rather than only reading about the role.
 
 ## Key elements
 
-- **`seedCustomerId(index)`** — Returns a deterministic hex string for a filler customer ID, avoiding `ObjectId`'s time-based default so `scenario:apply` upserts stay idempotent.
-- **`SEED_CUSTOMER_IDS`** (exported) — Named map of the ten filler customer IDs (`amelia`…`isla`). Read by `scenarios/flows/shop-history.ts` instead of raw hex.
-- **`SEED_CUSTOMER_EMAILS`** (exported) — Pre-built email per filler customer, keyed the same way as `SEED_CUSTOMER_IDS`. Exported so the flow runner can sign each one in without deriving an address from the username.
-- **`personaUsers`** — Five user documents each in a distinct state: unverified, 2FA-armed (with hashed backup codes), pending email change, banned (`active: false`), and a plain second shopper. Written directly to the collection because reaching those states via API would require mail or codes the seeder doesn't read.
-- **`staffUsers`** — Four verified accounts (manager, warehouse, support, operator) for shop and platform roles.
-- **`namedUsers`** (exported) — The four test-critical accounts plus all persona and staff users. This is the set `seedNamedUsersCollection` writes.
-- **`customerUsers`** — The ten filler customers built from `CUSTOMER_NAMES`, with alternating `analyticsConsent` and avatar.
-- **`userFixtures`** (exported) — Concatenation of `namedUsers` and `customerUsers`; the full demo roster.
-- **`seedUsersCollection()`** (exported) — Upserts every fixture via `insertIfAbsent`, then assigns the `customer` role to the ten filler customers via `assignRole`. Called by `seedShop` through the `shopModules` list.
-- **`seedNamedUsersCollection()`** (exported) — Upserts only `namedUsers`. Called by `scenarios/blank.ts`'s `seedBlank`.
+- **`SEED_CUSTOMER_IDS`** — Deterministic hex-string IDs for the 10 filler customers, keyed by name (`amelia` … `isla`). Never `new Types.ObjectId()`; the prefix `67f0c2` keeps the namespace distinct from product filler IDs.
+- **`SEED_CUSTOMER_EMAILS`** — `@example.com` emails for the same 10, exported so the flow runner can sign them in without reconstructing addresses.
+- **`seedNamedUsersCollection()`** — Seeds only the 13 named accounts via `insertIfAbsent`. Called exclusively by `scenarios/blank.ts`.
+- **`shopModule`** — `{ seed: seedUsersCollection }` entry consumed by `shop-modules.generated.ts` and run by `seedShop`. Seeds all 23 accounts (named + filler).
+- **`userOf(name)`** (internal) — Maps a persona's `state` flags (verified, active, pendingEmail, consent, authenticator, 2FA) onto a `makeUser` row.
+- **`armedAuthenticator(userId)`** / **`emailTwoFactor()`** (internal) — Produce the `twoFactorMethods`, backup-code, and timestamp overrides for TOTP- and email-based 2FA.
 
 ## Relationships
 
-- **`scenarios/accounts.ts`** — Sole source of all IDs, emails, passwords, and the `seedPersonaCredentials` / `seedStaffCredentials` objects. This file never hard-codes a credential.
-- **`scenarios/seed.ts`** — Supplies `insertIfAbsent` and the `SeedOutcome` type used by both seed functions.
-- **`scenarios/blank.ts`** — Calls `seedNamedUsersCollection` to seed users without the filler customer base (blank has no shop).
-- **`scenarios/shop-modules.ts`** — Registers `seedUsersCollection` in the module array that `seedShop` walks.
-- **`scenarios/flows/shop-history.ts`** — Reads `SEED_CUSTOMER_IDS` and `SEED_CUSTOMER_EMAILS` to sign in as filler customers and create varied order histories.
-- **`src/modules/users/factories.ts`** — Provides `makeUser`, the document factory used for every account in this file.
-- **`src/modules/users/repository.ts`** — Provides `userRepository`, the insert target for `insertIfAbsent`.
-- **`src/modules/access/index.ts`** — Provides `assignRole`, used to grant the `customer` role to the ten filler customers.
-- **`src/kernel/access/tenant.ts`** — Provides `DEPLOYMENT_TENANT_ID` passed to `assignRole`.
-- **`src/modules/account/two-factor/backup-codes.ts`** — Provides `generateBackupCodeSalt` and `hashBackupCodes` for the 2FA persona's stored codes.
-- **`tests/integration/scenarios/shop.test.ts`** — Integration tests that exercise the seeded users end-to-end.
+- **`scenarios/accounts.ts`** — Source of `SEED_IDS`, `seedCredentials`, `SEED_TWO_FACTOR_BACKUP_CODES`, `SEED_STAFF_TOTP_SECRET`; provides the ids and passwords this file never invents on its own.
+- **`scenarios/personas-schema.ts`** — `personas` and `PERSONA_NAMES` drive which accounts exist and what state flags each carries.
+- **`scenarios/seed.ts`** — `insertIfAbsent` provides the idempotent upsert; re-running against a seeded DB is a no-op.
+- **`scenarios/blank.ts`** — Calls `seedNamedUsersCollection` so the blank fixture has the 13 accounts but none of the filler customers.
+- **`scenarios/flows/shop-history.ts`** — Reads `SEED_CUSTOMER_IDS` / `SEED_CUSTOMER_EMAILS` to shop as the 10 filler customers; none has a login in `@scenarios/accounts`.
+- **`scenarios/shop-modules.generated.ts`** — Codegen collects the `shopModule` export; deleting this file removes the entry.
+- **`src/modules/users/factories.ts`** — `makeUser` builds each user document; `UserOverrides` types the 2FA and consent fields.
+- **`src/modules/users/repository.ts`** — `userRepository` is the target of every `insertIfAbsent` call.
+- **`src/modules/account/two-factor/backup-codes.ts`** — `generateBackupCodeSalt` and `hashBackupCodes` arm the email-2FA persona's fixed codes.
+- **`src/modules/account/two-factor/totp.ts`** — `encryptTotpSecret` encrypts the shared staff TOTP secret bound to a specific account ID.
 
 ## Notes
 
-- Filler customer IDs are hand-rolled hex strings (`67f0c2` + zero-padded index), **not** `ObjectId`, specifically so re-seeding is idempotent. Do not replace them with `new Types.ObjectId()`.
-- The ten filler customers use `makeUser`'s default password; they have **no** entry in `@scenarios/accounts` and no login credentials attached. `shop-history.ts` signs them in with that default.
-- The `customer` account carries `analyticsConsent: true` because the paired-frontend e2e test (`analytics.cy.ts`) asserts a `cart_item_added` event that requires opt-in consent.
-- `marcus` (filler index 7) is **not** seeded banned. The flow bans her at runtime via `PATCH /users/{id}` so the audit log records the ban as an event rather than a static row.
-- Named accounts get their role from `seedAccessModel` (run by `@scenarios/accounts` before this file); only the ten filler customers need the `assignRole` call inside `seedUsersCollection`.
-- `SEED_CUSTOMER_EMAILS` uses a type assertion over `Object.fromEntries` because TypeScript cannot prove that `CUSTOMER_NAMES` covers every key of `SEED_CUSTOMER_IDS` exactly once.
+- **Deterministic IDs are load-bearing.** `seedCustomerId` pads a fixed hex prefix so `scenario:apply`'s upsert is idempotent. Replacing it with `new Types.ObjectId()` would break idempotency on every reseed.
+- **Backup-code salt is per-process.** `generateBackupCodeSalt()` runs once at module load. The fixed codes (`SEED_TWO_FACTOR_BACKUP_CODES`) stay valid as long as the salt and digests are written in the same run.
+- **Filler customers have no `@scenarios/accounts` entry.** They log in with `makeUser`'s default password; no credentials are stored in the accounts fixture.
+- **`marcus` is never seeded banned.** The ban is performed at runtime via `PATCH /users/{id}` so the audit log records the action rather than a pre-existing flag.
+- **Image assignment is intentional.** Named 2FA-armed accounts get `userImages.root`; filler customers alternate between the two images by index parity. `demo:remove` deletes these seed images.

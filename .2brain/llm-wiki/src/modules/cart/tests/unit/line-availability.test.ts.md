@@ -1,32 +1,29 @@
 ---
 source: src/modules/cart/tests/unit/line-availability.test.ts
-sha256: e9c9d5148c39a5876c9f1770e5c8498e9cd4d1a385275fa059da4becb9b490a9
-generated_at: 2026-10-15T10:25:29.816801+00:00
+sha256: 0302103562389909e02bd4f3013d1c28e9487985f1d393517a80a096f526bb2c
+generated_at: 2026-10-29T03:30:46.748793+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/cart/tests/unit/line-availability.test.ts
 
 ## Purpose
-
-Unit tests for the `lineAvailability` function — the single precedence rule that determines the status of a cart line, wishlist line, merge result, or checkout refusal. Every row of the precedence table is exercised with no mocks and no database.
+Unit tests that exhaustively exercise the `lineAvailability` precedence table (cart and wishlist variants) and the `isBuyable` gate. The file exists to pin down every row of the availability decision matrix so that cart, wishlist, merge, and checkout all agree on a single source of truth.
 
 ## Key elements
-
-- **`LIVE`** — a minimal "happy-path" product (`{ active: true, purchasable: true }`) used as the base state each test case bends one field of.
-- **`describe('lineAvailability')`** — the top-level suite containing three groups:
-  - *Cart line table* (17 `it.each` cases): walks the full precedence ladder from `removed` through `unavailable`, `out_of_stock`, `insufficient_stock`, `preorder`, to `in_stock`, including edge cases like missing `available` field, exact-quantity match, and hidden-preorder interaction.
-  - *Wishlist line table* (6 `it.each` cases): confirms the same precedence holds but without the `insufficient_stock` branch.
-  - *"never gives a wishlist line insufficient_stock"* — a parametric sweep over several `available` values asserting that string never appears in the result.
+- **`LIVE`** — shared base fixture (`{ active: true, purchasable: true }`) that every test case mutates by spreading and overriding one or two fields.
+- **`describe('lineAvailability')` / cart-line table** — ~25 `it.each` rows covering: removed, unavailable, out_of_stock, insufficient_stock, in_stock, preorder, backorder, and their edge combinations (hidden + off-sale, preorder + hidden, backorder + unlimited stock, etc.).
+- **`describe('lineAvailability')` / wishlist-line table** — 8 rows where `quantity` is intentionally omitted, confirming the same state set minus `insufficient_stock`.
+- **`it('never gives a wishlist line insufficient_stock')`** — property-style guard: sweeps multiple `available` values and asserts the result set excludes `insufficient_stock`.
+- **`describe('isBuyable')`** — asserts `true` for `{in_stock, preorder, backorder}` and `false` for `{insufficient_stock, out_of_stock, unavailable, removed}`.
 
 ## Relationships
-
-- **`src/modules/cart/domain/availability.ts`** — defines `lineAvailability` and the `AvailabilityFacts` type under test.
-- **`src/modules/cart/domain/index.ts`** — the re-export barrel from which this file actually imports both symbols (`import { lineAvailability, type AvailabilityFacts } from '../../domain'`).
+- **`src/modules/cart/domain/availability.ts`** — implements `lineAvailability`, `isBuyable`, and the `AvailabilityFacts` type under test. This file is the sole behavioral contract for that module.
+- **`src/modules/cart/domain/index.ts`** — the barrel re-export through which the test imports `isBuyable`, `lineAvailability`, and `AvailabilityFacts` (`import { … } from '../../domain'`).
 
 ## Notes
-
-- The precedence order is strictly: `removed` → `unavailable` → `out_of_stock` → `insufficient_stock` → `preorder` → `in_stock`. A hidden product is always `removed` even if also a preorder or off-sale.
-- Wishlist lines intentionally never return `insufficient_stock`; the last dedicated test asserts this invariant across a range of stock values.
-- Tests are pure table-driven (`it.each` with typed `[label, facts, expected]` tuples); there is no setup/teardown, no spy, and no external I/O.
-- The `LIVE` constant intentionally omits fields like `preorder`, `deletedAt`, and `purchasable` defaults, so "a product that never set the flags" still resolves to `in_stock`.
+- Tests are pure: no mocks, no database, no async. Each row is a synchronous call-then-`toBe` assertion.
+- The wishlist table omits the `quantity` field from `AvailabilityFacts`; the cart table always supplies it. This is the only structural difference between the two test suites.
+- Backorder logic is tested as `available + shelf ≥ quantity → in_stock`, `shelf < quantity ≤ available + shelf → backorder`, `available + shelf < quantity → insufficient_stock`.
+- Preorder explicitly ignores `shelf` (one test row sets `shelf: 9` and still expects `preorder`).
+- The `LIVE` constant sets both `active` and `purchasable` to `true`; individual rows override whichever flag they need to flip. A row with `{}` (neither flag set) is treated as in-stock, confirming the defaults are permissive.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/example/factories.ts
-sha256: 02eee8837430470f47beec3f65d9e806df567847ba382c5cc2069c4de26ebc43
-generated_at: 2026-10-14T15:42:11.773683+00:00
+sha256: 6e8ab0ee9005f629ed9c5b0cef61a3287ad5ab604a6f6b12000b89a42f05c0f1
+generated_at: 2026-10-29T03:53:06.057278+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides a single factory function (`makeExample`) that builds partial `ExampleDocument` objects ready for `exampleRepository.create`. It exists so that tests and seeds can construct fixtures without going through the service layer (which enforces domain rules the fixture does not need to satisfy). Exposed at the path alias `@modules/example/factories`; deliberately excluded from the module barrel.
+Test and seed fixture builder for the `example` module. It produces a `Partial<ExampleDocument>` ready to hand to `exampleRepository.create`, intentionally bypassing the validation a service layer would enforce. It is reachable at `@modules/example/factories` and is deliberately excluded from the barrel export.
 
 ## Key elements
 
-- **`ExampleOverrides`** (interface) — the input contract for `makeExample`. `userId` is required (24-char hex); all other fields (`title`, `body`, `status`, `id`, `publishedAt`) are optional and fall back to defaults.
-- **`PinnedExample`** (type) — a `Partial<ExampleDocument>` with a guaranteed `_id: Types.ObjectId`. Describes the shape a seed needs in order to look the row back up by id.
-- **`makeExample(overrides)`** (function, the sole runtime export) — spreads conditional `_id`/`publishedAt` keys, coerces `userId` to an `ObjectId`, and applies the defaults: title `"An example"`, body `"What this example says."`, status `ExampleStatus.draft`.
+- **`ExampleOverrides`** (interface) — the caller-facing shape: `userId` (required), plus optional `title`, `body`, `status`, `id`, and `publishedAt`.
+- **`PinnedExample`** (type alias) — `Partial<ExampleDocument>` with a guaranteed `_id: Types.ObjectId`; the shape a seed uses to look the row up again.
+- **`makeExample(overrides)`** — assembles the fixture. Defaults: `title` → `'An example'`, `body` → `'What this example says.'`, `status` → `ExampleStatus.draft`. `_id` and `publishedAt` are included only when the caller supplies them (avoids writing `undefined` keys).
 
 ## Relationships
 
-- **`src/modules/example/model.ts`** — imports the `ExampleDocument` type; `makeExample`'s return type is `Partial<ExampleDocument>`.
-- **`src/types/index.ts`** — imports `ExampleStatus` (re-exported from `@types`) for the default status value.
-- **`src/modules/example/tests/factories.ts`** — tests the factory itself (expected values, id pinning, optional-field behaviour).
-- **`scenarios/example.ts`** — consumes `makeExample` to build fixtures within higher-level scenario tests.
+- **`src/modules/example/model.ts`** — imports the `ExampleDocument` type; the factory's return shape is a partial of that document.
+- **`src/types/index.ts`** — imports `ExampleStatus` for the default status and the `status` override.
+- **`src/modules/example/tests/factories.ts`** — test-scoped re-export or thin wrapper around this factory so test files can `import { makeExample }` without the full path.
+- **`scenarios/example.ts`** — consumes the factory to build seeded rows for scenario setup.
 
 ## Notes
 
-- The module is intentionally **not** re-exported from the barrel; import it via the `@modules/example/factories` alias.
-- `publishedAt` and `_id` are only present in the output object when the caller explicitly supplies them — absent keys are omitted entirely rather than set to `undefined`, keeping the partial document clean for the repository.
-- `PinnedExample` is a type-only export with no runtime counterpart; use it to annotate the return of `makeExample` when the caller needs the `_id` guarantee (e.g., a seed script that queries by id later).
+- The factory writes *past* service-level rules; it is not a general-purpose builder and should not be imported into application code.
+- `id` and `publishedAt` are spread conditionally (`...(overrides.x === undefined ? {} : { x: … })`) so the resulting object has no `undefined` keys — this matters if downstream code checks key presence rather than falsiness.
+- The `PinnedExample` type is exported for type-only use by seeds; `makeExample` itself returns `Partial<ExampleDocument>`, not `PinnedExample`. A seed can still cast or intersect when it needs the guaranteed `_id`.

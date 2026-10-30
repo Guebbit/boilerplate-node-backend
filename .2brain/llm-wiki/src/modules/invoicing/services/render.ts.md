@@ -1,7 +1,7 @@
 ---
 source: src/modules/invoicing/services/render.ts
-sha256: 9f20b8bd772a242a72e6779a0ef7c2542f1421aa5c99065b70975eee8576b7ed
-generated_at: 2026-10-14T16:10:18.605837+00:00
+sha256: 677e1065facd1ba818ad39b2558e4b69e03f1bfb3c98062ac4c5e79ed27010ca
+generated_at: 2026-10-29T04:15:27.433394+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Converts a frozen invoice or credit note into its PDF bytes. It is the single call-site for `resolveEInvoicingProvider`, so controllers never need to know the e-invoicing port exists. Rendering is lazy (first download, not issue time) and the result is cached on disk for a configurable retention period; the frozen Mongo row remains the source of truth.
+Converts a frozen invoice or credit-note row into its PDF bytes. It is the single call site for the e-invoicing provider's `issue` method, so controllers never reference the provider port directly. PDFs are rendered lazily on first download (not at issue time), cached on disk for a configurable retention window, and streamed back on subsequent downloads.
 
 ## Key elements
 
-- **`renderInvoicePdf(invoice)`** (exported) — Returns a `Promise<Buffer>` of the invoice PDF. Builds the provider payload via `sharedFields` and delegates to `storedOrRendered` with name `invoice-<id>.pdf`.
-- **`renderCreditNotePdf(creditNote)`** (exported) — Same flow for a credit note; adds `reversalOf` pointing back to the original invoice number. Stored as `credit-note-<id>.pdf`.
-- **`storedOrRendered(name, render)`** (private) — Checks disk first; on miss or read error, calls `render()` and attempts to write the result. Retention of `0` skips storage entirely. Any store I/O failure degrades to a plain render (logged, never thrown to the caller).
-- **`sharedFields(document, kind)`** (private) — Maps the stored document's fields into the `EInvoicingDocument` shape the provider expects. This is the **only** place `decryptInvoiceParty` is called for the billing address.
+- **`renderInvoicePdf(invoice)`** — Returns the invoice's PDF bytes, reading the stored copy if present or rendering and storing a fresh one.
+- **`renderCreditNotePdf(creditNote)`** — Same flow for credit notes; additionally includes `reversalOf` referencing the parent invoice number.
+- **`storedDocumentName(kind, id)`** — Builds the on-disk file name (e.g. `invoice-<id>.pdf`).
+- **`sharedFields(document, kind)`** — Maps a stored document's fields into the `EInvoicingDocument` shape the provider expects; this is the sole decryption point for the billing address.
+- **`storedOrRendered(name, render)`** — Core read-or-render logic; skips storage entirely when retention is `0`.
+- **`readStored(name)`** — Reads a cached PDF; returns `undefined` on any read error (logged, never thrown).
+- **`storeBestEffort(name, bytes)`** — Writes rendered bytes to disk; returns the bytes regardless of write success.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/document-store.ts`** — `readDocument` / `writeDocument` provide the on-disk PDF cache.
-- **`src/infrastructure/adapters/logger.ts`** — Warns when a cached PDF can't be read or a fresh render can't be persisted.
-- **`src/modules/invoicing/config.ts`** — Reads `NODE_INVOICE_PDF_RETENTION_DAYS` to decide whether to use the disk cache at all.
-- **`src/modules/invoicing/model.ts`** — Imports `InvoiceDocument` and `CreditNoteDocument` types that define the frozen document shape.
-- **`src/modules/invoicing/pii.ts`** — `decryptInvoiceParty` is called here (and nowhere else) to obtain plaintext billing-address fields.
-- **`src/modules/invoicing/providers/index.ts`** — `resolveEInvoicingProvider()` yields the active provider whose `.issue()` actually produces the PDF bytes.
-- **`src/modules/invoicing/services/index.ts`** — Re-exports the two public render functions for the rest of the app.
-- **`src/modules/invoicing/tests/unit/render.test.ts`** — Unit tests exercising render, caching, and PII-decryption paths.
+- **`providers/index.ts`** — Calls `resolveEInvoicingProvider().issue(...)` to actually produce the PDF bytes.
+- **`pii.ts`** — Calls `decryptInvoiceParty` inside `sharedFields`; the only consumer of the billing address plaintext.
+- **`document-store.ts`** — Uses `readDocument` / `writeDocument` for the PDF cache.
+- **`config.ts`** — Reads `NODE_INVOICE_PDF_RETENTION_DAYS` to decide whether to cache at all.
+- **`model.ts`** — Imports `InvoiceDocument` and `CreditNoteDocument` types for its public signatures.
+- **`logger.ts`** — Emits warnings when a cached read or write fails.
+- **`services/index.ts`** — Re-exports the public functions (`renderInvoicePdf`, `renderCreditNotePdf`, `storedDocumentName`).
+- **`tests/unit/render.test.ts`** — Unit tests for the render, storage, and fallback logic.
 
 ## Notes
 
-- **PII boundary:** `sharedFields` is the sole reader of the plaintext billing address. If you add a new render path, it must go through here to keep decryption centralized.
-- **Retention `0`** disables the disk cache entirely; every request re-renders. Useful in dev/test or when the store adapter is unavailable.
-- **Concurrent first-downloads** are safe: both render the same frozen row (byte-identical output) and the store's write is atomic, so the last writer wins without corruption.
-- **Provider upgrade risk:** If the e-invoicing provider changes its PDF output, a previously cached file will be byte-different from a fresh render. The cache does not include a provider version in the filename.
+- **PII boundary:** `sharedFields` is the only place in the codebase that decrypts the stored billing address. Any new code that needs the plaintext must go through this path.
+- **Retention `0`** disables caching entirely — every download triggers a fresh render.
+- **Concurrent first downloads** are safe: both threads render, both write the same bytes, and the store's write is atomic. No lock is taken.
+- **Failures are non-fatal by design:** a read error falls back to rendering; a write error returns the bytes anyway. Neither case propagates an exception to the caller.
+- **Stryker mutation-testing disables** are present on the two `catch`/`then` error handlers; remove them only if those lines are actually tested.

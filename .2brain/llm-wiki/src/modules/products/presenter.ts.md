@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/presenter.ts
-sha256: a3265d4e77dc8834bf79e2750159cb41a6b4196909bbec862a21c02669840bd0
-generated_at: 2026-10-15T11:43:10.394560+00:00
+sha256: 8fdf003420210c3fabdf53ec501ea9aa28997b881bc936fead5b92eec718719d
+generated_at: 2026-10-29T05:27:32.677868+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single mapping point that converts a Mongoose `ProductDocument` into the public `Product` contract. All read paths (including `services/read.ts`'s `getById`) route through here so that derived stock/availability fields are computed once and agree everywhere, rather than each caller hand-casting `.toJSON() as Product`.
+Singular mapping layer that turns a `ProductDocument` (Mongoose) into the public `Product` contract. Every read path that serialises a full document — including `services/read.ts`'s `getById` — funnels through this file so that derived fields (`available`, `inStock`, `lowStock`, `preorder`, `backorder`, `buyable`, `currency`) are computed once and agree everywhere. Search lean-rows skip the full presentation and call `derivedStockFields` directly.
 
 ## Key elements
 
-- **`derivedStockFields(facts)`** — Computes the non-stored block of a product response: `available`, `inStock`/`lowStock` flags, `preorder`, and live `currency`. Accepts the two stock counters plus `PreorderFacts`. Used both by `presentProduct` and by search's lean rows that never hold a full document.
-- **`presentProduct(document)`** — Maps a full `ProductDocument` onto the `Product` contract. Spreads in `derivedStockFields`, ISO-stringifies the three date fields, conditionally includes optional fields (see Notes), and wraps the result with `carryVersion` so the row's version rides beside the contract for `ETag` generation.
+- **`derivedStockFields(facts: BuyableFacts)`** — Returns the block of derived, never-stored `Product` fields. Computes `available` (shelf stock for normal products; remaining preorder allowance for preorders), `inStock`/`lowStock` flags via `stockFlags`, and sets `preorder`, `backorder`, `buyable`, and a live `currency`. Explicitly forces `lowStock: false` when the product is a preorder.
+- **`presentProduct(document: ProductDocument): Product`** — Maps a full Mongoose document onto the `Product` shape. Spreads `derivedStockFields(document)`, conditionally includes every optional field (omitted when `undefined`), ISO-stringifies all date fields, and wraps the result with `carryVersion` so the row version rides alongside for ETag generation.
 
 ## Relationships
 
-- **`@types` (`src/types/index.ts`)** — Source of the `Product` contract type that both exports target.
-- **`@infrastructure/persistence/versioning` (`src/infrastructure/persistence/versioning.ts`)** — Provides `carryVersion`, used by `presentProduct` to attach the row version for `ETag`.
-- **`./domain/stock`** — Provides `availableStock` and `stockFlags`, the pure functions behind the derived availability block.
-- **`./domain/preorder`** — Provides `isPreorder` and the `PreorderFacts` type used as input to `derivedStockFields`.
-- **`./config`** — Provides `lowStockThreshold` and `productCurrency` (reads `NODE_DEFAULT_CURRENCY` at call time).
-- **`./model`** — Source of the `ProductDocument` input type.
-- **`src/modules/products/services/read.ts`** — Primary consumer; its `getById` calls `presentProduct` (per module doc comment).
+- **`./domain/stock`** — Supplies `availableStock`, `preorderAllowanceLeft`, and `stockFlags`, the core arithmetic behind every derived stock value.
+- **`./domain/preorder`** — `isPreorder` determines whether the product is in a preorder window, which switches the `available` calculation and suppresses `lowStock`.
+- **`./domain/backorder`** — `isBackorder` sets the `backorder` flag in the output.
+- **`./domain/buyable`** — `isBuyable` sets the `buyable` flag; its `BuyableFacts` type is the input contract for `derivedStockFields`.
+- **`./config`** — `lowStockThreshold()` provides the configurable threshold passed into `stockFlags`.
+- **`./model`** — Defines the `ProductDocument` type that `presentProduct` accepts.
+- **`@modules/shop`** — `shopCurrency()` is called live to embed the current currency in every presented product.
+- **`@infrastructure/persistence/versioning`** — `carryVersion` attaches the document's version to the result object (not part of the `Product` contract) for ETag use.
+- **`@types`** — The `Product` interface this file conforms to.
+- **`services/read.ts`** — Primary consumer of `presentProduct` for the `getById` path.
+- **`tests/integration/scenarios/shop.test.ts`** — Integration tests that exercise the full presentation pipeline end-to-end.
 
 ## Notes
 
-- **Optional-field omission pattern:** Every optional field (`taxClass`, `sku`, `description`, etc.) is spread behind an `=== undefined` guard, so absent fields are *omitted* from the response rather than emitted as `null`/`undefined`.
-- **Preorder overrides `lowStock`:** When `preorder` is `true`, the spread explicitly sets `lowStock: false` after `stockFlags` has already computed it — a preorder is waiting for stock that doesn't exist yet, so "running low" is semantically wrong.
-- **`currency` is not persisted:** It is read live from `productCurrency()` (env-driven) at presentation time; the document does not store it.
-- **Version is outside the contract:** `carryVersion` wraps the result so the version is available to middleware for `ETag` without polluting the `Product` type.
+- **Preorder overrides**: When `isPreorder` is true, `available` is computed from the preorder allowance (`backorderLimit` − `backordered`), *not* from `onHand`/`reserved`. Additionally `lowStock` is hard-set to `false` regardless of the flag calculation, because a preorder waits for stock that doesn't exist yet.
+- **Conditional spread pattern**: Every optional field uses `...(x === undefined ? {} : { x })` to keep `undefined` keys out of the JSON payload. Don't add a field without this guard or you'll leak `undefined` keys.
+- **`carryVersion` is not part of `Product`**: The returned object is structurally `Product & { _version: … }`. Downstream code that type-casts to `Product` will silently ignore the version; only the ETag middleware reads it.
+- **`derivedStockFields` is the public hook for search**: Search index rows never hold a full document, so they call this function with hand-assembled `BuyableFacts` rather than going through `presentProduct`.

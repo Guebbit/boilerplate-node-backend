@@ -1,7 +1,7 @@
 ---
 source: tests/cluster/support/redis.ts
-sha256: b6278940719b5c01008315494aa7eae8b869e1d47688d9e61d433283eda8cb14
-generated_at: 2026-10-15T12:31:46.331075+00:00
+sha256: ef1105f64e057618c57a73ace168bb69916abf8b9174524d6e82ba87b292bf6c
+generated_at: 2026-10-29T06:38:17.849692+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides the cluster test suite with a disposable Redis instance. It either points at an already-running Redis (via env var) or spins one up through the repo's existing container engine, so tests that need a real Redis socket don't have to manage lifecycle themselves.
+Provides the cluster test suite with a disposable Redis instance. It either points at a Redis already supplied by the environment (CI service container) or spins one up via the repo's own container-engine abstraction, then waits for readiness before handing back a connection URL and a `stop` handle.
 
 ## Key elements
 
-- **`startRedis()`** — Main export. Returns `Promise<TestRedis>`. If `NODE_TEST_REDIS_URL` is set, returns it immediately (no-op `stop`). Otherwise starts a container and waits for PING/PONG before resolving.
-- **`TestRedis`** — Interface: `{ url: string; stop: () => Promise<void> }`.
-- **`waitForPong(port, timeoutMs)`** — Internal. Raw TCP connection, sends `PING\r\n`, retries every 250 ms until the deadline (default caller: 60 s).
+- **`TestRedis`** — interface: `{ url: string; stop: () => Promise<void> }`. The contract every consumer of this module expects.
+- **`startRedis()`** *(exported)* — Resolves a `TestRedis`. If `NODE_TEST_REDIS_URL` is set, it returns immediately with a no-op `stop`. Otherwise it calls `startContainer` with the Redis image, waits for PING/PONG, and returns the mapped URL plus the engine's stop function.
+- **`waitForPong(port, timeoutMs)`** *(internal)* — Raw TCP `PING\r\n` → `+PONG` readiness probe using `node:net`, wrapped in `retryUntil` (250 ms interval). No Redis client library required.
 - **`IMAGE`** — Defaults to `docker.io/library/redis:7-alpine`; overridable via `NODE_TEST_REDIS_IMAGE`.
-- **Container name prefix** — `node-backend-cluster-redis`; container is started with `--rm` so an interrupted run leaves no residue.
 
 ## Relationships
 
-- **Imports** `containerEngine`, `containerEngineAvailable`, `startContainer` from `tests/support/container-engine.ts` — the sole container-lifecycle dependency.
-- **Consumed by** `tests/cluster/rate-limit.test.ts` and `tests/cluster/redis-idle.test.ts`, which call `startRedis()` to get a Redis URL for their suites.
+- **`tests/support/container-engine.ts`** — Imports `containerEngine`, `containerEngineAvailable`, and `startContainer`. All container lifecycle (image pull, port mapping, `--rm` naming, teardown) is delegated here; this file never shells out directly.
+- **`tests/support/eventually.ts`** — Imports `retryUntil` to poll the PING/PONG probe within a 60 s budget.
+- **`tests/cluster/rate-limit.test.ts`**, **`tests/cluster/redis-idle.test.ts`** — Cluster tests that consume `startRedis()` to obtain their Redis target and call `stop` in teardown.
+- **`scripts/testing/run-prism-smoke-test.ts`** — Smoke-test script in the same cluster-test graph; likely invokes `startRedis` for its Redis dependency.
 
 ## Notes
 
-- `NODE_TEST_REDIS_URL` takes priority over any container start. In that path `stop()` is a resolved no-op — the caller owns the external instance's lifecycle.
-- Health check uses a bare `net.connect` socket, not a Redis client library, so the file has zero runtime dependencies beyond Node stdlib and the container-engine module.
-- The error message for a missing container engine references `CONTAINER_ENGINE` (default `podman`), set on the container-engine side.
-- The PONG check expects the reply to start with `+PONG`; any other response (including an auth-required `-NOAUTH`) is treated as a failure and will exhaust the 60 s deadline.
+- Readiness is checked with a raw TCP socket, not a Redis client—intentionally avoids pulling in a driver dependency just to confirm the port is listening.
+- The container is started with `--rm` and a run-specific name prefix (`node-backend-cluster-redis-*`), so an interrupted test run leaves no stale container behind.
+- When `NODE_TEST_REDIS_URL` is set, `stop()` is a no-op; the suite must not attempt to tear down an externally managed service.
+- The error message when no container engine is found is deliberately verbose: it tells the developer to either set `NODE_TEST_REDIS_URL` (the in-container path) or ensure `podman`/`docker` is on `PATH`.

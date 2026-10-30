@@ -1,7 +1,7 @@
 ---
 source: src/modules/wishlist/module.ts
-sha256: ab76a28255c299c947b73d83f0c391f99fd3bf2cd89f5f25a2ef1019a5a693e7
-generated_at: 2026-10-15T12:26:31.372327+00:00
+sha256: 0c182c2bc88ba9a344fd2b2506448f4dea313604e0734e7eaf7b1374a27c04a7
+generated_at: 2026-10-29T06:34:21.250060+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module manifest for the wishlist feature. Registers the wishlist's HTTP routes, a `PRODUCT_DELETED` event subscription (to purge stale product references), and a personal-data hook pair (`collect` / `erase`) so the account module can export or permanently delete a user's saved items without importing wishlist directly.
+Module manifest for the wishlist feature. Wires the wishlist's router, personal-data hooks, and domain-event subscription into the application registry so the kernel can mount, export, erase, and react on the module's behalf.
 
 ## Key elements
 
-- **`default` export (`AppModule`)** — The single exported object, type-checked with `satisfies AppModule`. Fields:
-  - `name` / `basePath` — Module identifier (`'wishlist'`) and route prefix (`/wishlist`).
-  - `routes` — The Hono (or equivalent) router re-exported from `./routes`.
-  - `personalData[0]` — One entry with `collect` (calls `wishlistService.wishlistExportLines`) and `erase` (calls `wishlistDeleteByUserId`). The `erase` function joins the caller's hard-delete transaction.
-  - `subscribe` — Subscribes to `PRODUCT_DELETED`; on fire, calls `productRemoveFromWishlistsById(productId, titles)` to strip the deleted product from every user's wishlist.
-  - `locales` — Path to a sibling `locales/` directory, resolved via `path.join(__dirname, 'locales')`.
+- **Default export (`AppModule`)** — the manifest object the kernel consumes to register the module.
+- **`mounts`** — mounts the wishlist `router` (from `./routes`) at base path `/wishlist`.
+- **`personalData[0]`** — declares the `wishlist` section:
+  - `collect` — calls `wishlistService.exportLines(userId)` to serialize lines for data-export.
+  - `erase` — calls `wishlistService.removeByUserId(userId, session)`, joining the caller's hard-delete transaction.
+- **`subscribe`** — subscribes to `PRODUCT_DELETED`; on delivery it checks `productService.isLive(productId)` and only removes wishlist lines if the product is *not* live (guards against retried events arriving after a restore).
+- **`locales`** — resolves the `locales/` directory relative to this file.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — Provides the `AppModule` type that shapes the default export.
-- **`src/kernel/events.ts`** — Provides `onDomainEvent`, used inside `subscribe` to listen for domain events.
-- **`src/modules/products/index.ts`** — Source of the `PRODUCT_DELETED` event constant (imported as `@modules/products`).
-- **`src/modules/wishlist/routes.ts`** — Supplied as `routes` on the manifest.
-- **`src/modules/wishlist/service.ts`** — Supplies `wishlistService`, `wishlistDeleteByUserId`, and `productRemoveFromWishlistsById`.
-- **`src/modules/account/module.yaml`** — Downstream consumer: the account module's personal-data flow invokes this module's `collect`/`erase` hooks at runtime; no static import exists here (keeps the import graph acyclic).
-- **`src/modules.ts`** — Likely the aggregation point that imports this default export to assemble the full app.
-- **`src/modules/wishlist/module.yaml`** — Static metadata manifest colocated with this file.
+- **`src/kernel/registry.ts`** — imports the `AppModule` type that shapes this manifest.
+- **`src/kernel/events.ts`** — imports `onDomainEvent` used inside `subscribe`.
+- **`src/modules/products/index.ts`** — imports the `PRODUCT_DELETED` event constant and `productService` for the liveness check.
+- **`src/modules/wishlist/routes.ts`** — provides the `router` passed into `mounts`.
+- **`src/modules/wishlist/service.ts`** — provides `wishlistService` used by both personal-data hooks and the event handler.
+- **`src/modules/wishlist/module.yaml`** — companion YAML manifest for the same module.
+- **`src/modules.ts`** — aggregate that likely re-exports or registers this module.
+- **`tests/integration/erasure.test.ts`** — integration test exercising the `erase` hook.
 
 ## Notes
 
-- `erase` does **not** run in its own transaction; the comment states it "joins the caller's own hard-delete transaction." The calling side (account module) is responsible for transaction boundaries.
-- The `subscribe` closure captures `titles` from the event payload and passes it to the cleanup function, presumably for a user-facing notification or log line.
-- No business rules (max items, dedup, etc.) live in this file or are modelled here per the header comment — the module is intentionally thin.
-- `locales` is resolved relative to `__dirname`, so it breaks if the file is bundled in a way that changes `__dirname` (e.g., certain ESM transpilation targets).
+- The `PRODUCT_DELETED` handler is intentionally defensive: a retried delivery can land *after* a product is restored, so `isLive()` gates the removal to avoid telling shoppers a live product was removed.
+- The `erase` hook threads the `session` object into `removeByUserId`, meaning it participates in the caller's transaction rather than opening its own.
+- The module deliberately does **not** import the cart module (move-to-cart is triggered from cart's side) to keep the dependency graph acyclic.

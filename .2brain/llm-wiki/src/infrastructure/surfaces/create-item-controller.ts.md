@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/surfaces/create-item-controller.ts
-sha256: a6416d516c585b167db9b0f234aa5fc8104b702195cdfc190f7dbd0924de30a1
-generated_at: 2026-10-14T08:18:49.823752+00:00
+sha256: 3fd95ebea13fcaa506a428dda4799636eebc6163879143e1dd01ebcd2eff63ea
+generated_at: 2026-10-29T02:17:10.288830+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A factory that builds the "read-one" (fetch-by-path-id) Express handler for any entity. It centralises the API contract decision that a malformed or missing id returns the module's own 404 (not a 500), so that behaviour has a single landing site rather than being repeated inline in every module.
+Factory that builds a module's **read-one** (fetch-by-ID) Express handler. It centralises the contract that a malformed path parameter answers as a 404 (not a 400), that a missing row uses the module's own i18n key, and that successful responses carry an `ETag`. Modules call it once with an entity-specific spec instead of repeating this logic inline.
 
 ## Key elements
 
-- **`ItemControllerSpec`** (interface) — The four per-entity parameters: `entity` (lowercase singular name used to build the operation name), `fetch` (async callback that receives the id *and* the request, returns `unknown`; `null`/`undefined`/`void` means "not found"), `notFoundKey` (i18n key for the 404 body), and optional `handlerSuffix` (replaces the default `'Item'` in the generated name, e.g. `'Admin'` → `getProductAdmin`).
-- **`createItemController`** (function, default export pattern) — Takes an `ItemControllerSpec` and returns a named Express handler. Handler flow: `requireId` → early-return on bad id → `fetch` → 404 if falsy result, otherwise `setEtag` + `successResponse` → `.catch(catchAs)` for unexpected errors.
+- **`ItemControllerSpec`** (interface) — the per-entity configuration: `entity` (singular lowercase name, e.g. `'product'`), `fetch(id, request) → Promise<unknown>` (the row lookup; returns a falsy value on miss), and `notFoundKey` (i18n key for the 404 body).
+- **`createItemController(spec)`** (exported factory) — returns a named Express handler. Derives the operation name via `operationName('get', entity, 'Item')` (e.g. `getProductItem`). On call: validates the path param with `requireId`, calls `fetch`, then either 404s with `t(notFoundKey)`, or serialises the row with `successResponse` after setting an `ETag`. Errors are funnelled through `catchAs`.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** — Provides `namedHandler` (wraps the handler with a name for logging/stack traces), `operationName` (builds `get<Entity><Suffix>`), and `catchAs` (error-to-response mapping scoped to the operation name).
-- **`@infrastructure/http/ids`** — `requireId` validates the path parameter *before* any database call; returns `null` and writes the 404 itself when the id is malformed.
-- **`@infrastructure/http/response`** — `successResponse` (200 with body) and `rejectResponse` (404 with i18n message).
-- **`@infrastructure/http/preconditions`** — `setEtag` computes and sets the `ETag` header from the fetched row so clients can `If-Match` it on subsequent edits.
-- **`@infrastructure/i18n`** — `t` translates `notFoundKey` into the 404 response body.
-- **Consumers** (module controllers): `get-example.ts`, `get-product-item.ts`, `get-product-admin.ts`, `get-user-item.ts` each call `createItemController` with their own spec, providing the entity-specific `fetch` closure (which may scope by caller role, permission, etc.).
-- **`tests/unit/infrastructure/surfaces/create-item-controller.test.ts`** — Unit-tests the factory in isolation.
+- **`@infrastructure/http/controller`** — supplies `namedHandler` (wraps the handler with a display name), `operationName` (builds `get<Entity>Item`), and `catchAs` (maps thrown errors to an error response).
+- **`@infrastructure/http/ids`** — supplies `requireId`, which validates the path parameter is a well-formed ID *before* the database is touched and emits the 404 when it isn't.
+- **`@infrastructure/http/preconditions`** — supplies `setEtag`, which stamps the response with a version token for `If-Match` on subsequent edits.
+- **`@infrastructure/http/response`** — supplies `successResponse` (200/201 body) and `rejectResponse` (404 body with i18n message).
+- **`@infrastructure/i18n`** — supplies `t`, the translation function used to resolve `notFoundKey` into a human-readable string.
+- **Module consumers** (`get-product-item`, `get-user-item`, `get-subscription`, `get-example`) — each calls `createItemController` with its own `fetch` (which may apply `callerScope`, `requirePermission`, etc.) and a module-specific `notFoundKey`.
+- **`tests/unit/infrastructure/surfaces/create-item-controller.test.ts`** — unit tests for the factory's 404, ETag, and error paths.
 
 ## Notes
 
-- The `fetch` callback is deliberately typed to return `unknown`; the controller never inspects the row's shape. A "miss" is any falsy value the service returns — the controller does not distinguish `null` from `void`.
-- `handlerSuffix` exists to disambiguate a second read-one on the same entity (e.g. `getProductAdmin` vs `getProductItem`). Without it, both would generate the same operation name.
-- The `fetch` function receives the full `Request` object so that visibility rules (caller scope, permission checks) live in the module's service call, not in this shared controller.
+- `fetch` receives the full Express `Request` because visibility rules are **caller-specific** (e.g. products narrow by scope, users check permissions). The controller itself never inspects the row — it only checks truthiness for the 404 path and passes the value through to `successResponse`.
+- A malformed ID and a missing row are deliberately **indistinguishable** to the caller (both 404, same i18n key). This is an intentional API-contract decision, not an oversight.
+- The `entity` string is singular lowercase (`'product'`, not `'Product'` or `'products'`); it feeds `operationName` so log lines, stack traces, and generated `docs/modules/` tables all agree.

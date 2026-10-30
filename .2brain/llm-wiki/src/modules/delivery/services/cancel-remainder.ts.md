@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/services/cancel-remainder.ts
-sha256: afae7de333f88f7f173194b3da6ad0d223c6dd0035339042fe67e7fe1f0b6b7c
-generated_at: 2026-10-14T15:27:35.960199+00:00
+sha256: 53598668474b78ca38a42180255da8fcd89eedba56e5fedf75f8dd1fb472681c
+generated_at: 2026-10-29T03:38:33.992089+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cancels the unshipped remainder of fulfillment orders. It is the delivery-side "door" that the `returns` module calls (inside `returns`'s own transaction) to mark lines as cancelled after a buyer's partial withdrawal or a full order cancellation. Money, stock, and Return records are left to `returns`; this file only mutates fulfillment-order lines and status.
+Cancels the unshipped remainder of a fulfillment order (partial withdrawal) or every fulfillment order of an order that itself was cancelled. It is a "door" called by the `returns` module inside the caller's own transaction, because `returns` already owns the money, stock, and Return-record writes and must keep them atomic with the delivery-side status change.
 
 ## Key elements
 
-- **`RemainderCancel`** — Discriminated union returned by `cancelRemainder`. On success carries the per-product `lines` cancelled and a `waitingForStock` flag (true when the order was on-hold for stock, meaning `inventory` must release preorder allowance rather than shelf units). On failure carries a `reason` (`not-found`, `nothing-shipped`, `nothing-to-cancel`).
-- **`cancelRemainder(fulfillmentOrderId, orderId, session, reason?)`** — Cancels the unshipped remainder of one fulfillment order within the caller's Mongoose transaction. Validates ownership and shipped status, computes cancelled lines via domain helpers, writes an optimistic-lock `claim`, reports order progress, settles the order, and fires announce/record hooks. Refusals before the first write return `ok: false`; a failure after the first write throws to abort the caller's transaction.
-- **`cancelAllForOrder(orderId)`** — `ORDER_CANCELLED` event listener. Iterates every fulfillment order on the order, skips already `closed`/`cancelled` ones (idempotent), and claims each remaining order with `status: 'cancelled'`. Chooses `cancelReason` as `no_answer` (if the consent deadline expired) or `order`. Runs in its own transaction via `runAct`.
+- **`RemainderCancel`** (type) — Discriminated union return type: `{ ok: true; lines; waitingForStock }` or `{ ok: false; reason: 'not-found' | 'nothing-shipped' | 'nothing-to-cancel' }`.
+- **`cancelRemainder(fulfillmentOrderId, orderId, session, reason?, actor?)`** — Cancels all unshipped lines on one fulfillment order. Validates existence and that another fulfillment order still holds units (if nothing has shipped yet), claims the row via optimistic concurrency, recomputes order progress, settles the order, and fires cancellation announcements. Runs entirely inside the caller's `ClientSession`.
+- **`cancelAllForOrder(orderId)`** — Event-listener entry point for `ORDER_CANCELLED`. Iterates every fulfillment order of the order and cancels its full quantity. Idempotent: skips rows already `closed` or `cancelled`. Uses `runAct` to open its own short transaction.
 
 ## Relationships
 
-- **`../domain` (fulfillment.ts, preorder.ts, index.ts)** — Imports `remainderLines`, `withRemainderCancelled`, `statusOfLines`, `hasWaitExpired`, and the `ProductQuantity` type for line computation and cancel-reason logic.
-- **`../repository`** — Uses `fulfillmentOrderRepository.findInSession`, `.claim` (optimistic-lock write), and `.findByOrderId` for all persistence.
-- **`./announce`** — Calls `announceCancelled` (event emission) and `recordRemainderCancelled` (audit record) after a successful claim.
-- **`./act`** — Uses `refuse` (structured error for post-write conflicts) and `runAct` (transactional wrapper for `cancelAllForOrder`).
-- **`./progress`** — Calls `reportProgress` and `settleOrder` to recompute order-level status/summary after the remainder is cancelled (e.g. flipping an order to `shipped` + `delivered`).
-- **`@modules/orders`** — Reads the order via `orderService.readOrder` to verify shipped status and to fetch progress context.
-- **`src/modules/delivery/services/index.ts`** — Re-exports this module's public API.
-- **`src/modules/delivery/module.ts`** — Registers `cancelAllForOrder` as the `ORDER_CANCELLED` listener.
-- **Tests** (`preorder-board`, `preorder-late`, `service`, `timeline`) — Integration tests that exercise remainder-cancellation paths end-to-end.
+- **`../domain` (`src/modules/delivery/domain/index.ts`)** — Imports `remainderLines`, `statusOfLines`, `withRemainderCancelled`, and the `ProductQuantity` type; these pure helpers compute the new line quantities and the resulting fulfillment-order status.
+- **`../repository` (`src/modules/delivery/repository.ts`)** — All persistence goes through `fulfillmentOrderRepository` (`findInSession`, `findByOrderId`, `claim`); no direct model access in this file.
+- **`./act` (`src/modules/delivery/services/act.ts`)** — `refuse` produces the `ActRefusal` thrown on a lost concurrency claim; `runAct` wraps `cancelAllForOrder` in its own transaction.
+- **`./announce` (`src/modules/delivery/services/announce.ts`)** — `recordRemainderCancelled` writes the timeline row for a single-cancel; `announceCancelled` emits the domain event after the row is claimed.
+- **`./progress` (`src/modules/delivery/services/progress.ts`)** — `reportProgress` recomputes the order's aggregate status/summary; `settleOrder` persists the transition (e.g. to `shipped`/`delivered`) and starts the withdrawal clock.
+- **`@modules/orders` (`src/modules/orders/index.ts`)** — `orderService.readOrder` fetches the parent order to check `fulfillment.shipped` and to read the order ID for progress/settlement.
+- **`@types` (`src/types/index.ts`)** — Enum values `FulfillmentCancelReason`, `FulfillmentHoldReason`, `FulfillmentOrderStatus` used in status logic and stored on the row.
 
 ## Notes
 
-- **Transaction ownership:** `cancelRemainder` does *not* open its own transaction; it runs inside the caller's (`returns`) session. A throw after the first write is intentional — returning would commit a partial claim.
-- **`cancelAllForOrder` is sequential by design:** a Mongoose session does not permit parallel operations, so the `for` loop is required, not just a style choice.
-- **`waitingForStock` is a signal for `inventory`:** when true, the released quantity is a claim on the preorder allowance, not physical shelf stock. The caller (`returns` → `inventory`) must branch on this flag.
-- **Idempotency in `cancelAllForOrder`:** already-`closed` or `cancelled` fulfillment orders are silently skipped, so redelivered `ORDER_CANCELLED` events are safe no-ops.
-- **`unset` fields:** both cancel paths clear `holdReason`, `holdNote`, and `consentDeadline` — a cancelled remainder no longer carries hold metadata.
+- **Transaction ownership:** `cancelRemainder` does *not* open its own transaction; the caller (the `returns` service) passes in the session. A failure *after* the first write throws to abort that whole transaction — returning a value there would commit a partial claim.
+- **Pre-write refusals** (`not-found`, `nothing-shipped`, `nothing-to-cancel`) are returned as `{ ok: false }` and never touch the database write path.
+- **`waitingForStock`** flag: when the fulfillment order was on hold for stock, the cancelled lines represent a preorder allowance rather than shelf units; the caller uses this to pick the correct inventory rollback.
+- **Status derivation:** `statusOfLines(lines, false)` yields `closed` if any line was partially shipped, `cancelled` if nothing ever shipped. Hold fields (`holdReason`, `holdNote`) are explicitly unset on cancel.
+- **`cancelAllForOrder` is sequential by design** — a Mongoose transaction session does not support parallel operations, so fulfillment orders are claimed one after another in a `for` loop.
+- **Order can reach terminal state here:** cancelling the last remainder after every shipment has already arrived transitions the order to `shipped` + `delivered` in the same transaction, with the withdrawal clock starting from *now* (the later of last-delivery and this cancel).

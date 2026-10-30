@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/http/middlewares/json-depth.ts
-sha256: 5b14e5a3370d1142a26e6ef53cdce2a056aebc162fe744422bafd9e409800c36
-generated_at: 2026-10-14T07:56:55.437742+00:00
+sha256: 94d2a2ac5a4f7c5bb8a96170e800b0a1ab397fec01f7fc6fc5956518becae670
+generated_at: 2026-10-29T02:03:06.470771+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-An Express middleware that rejects JSON request bodies nested deeper than a fixed limit (`MAX_JSON_DEPTH = 32`) with a 400 response. It exists because `express.json`'s byte-size limit does not protect against stack-overflow (`RangeError`) in any downstream recursive walk (Zod parsing, idempotency fingerprinting, cache-key hashing). Positioned immediately after the body parser, before route handlers, so a single guard covers all consumers.
+Rejects parsed JSON request bodies whose nesting exceeds a fixed depth (`MAX_JSON_DEPTH = 32`) with a 400, before any route or downstream walker (fingerprinting, cache-key hashing, Zod validation) can throw a `RangeError`. It fills the gap left by `express.json`, which enforces only a byte limit and therefore admits arbitrarily deep structures like `[[[…]]]`.
 
 ## Key elements
 
-- **`MAX_JSON_DEPTH`** (exported const) — the allowed maximum container nesting depth (32). The root object/array counts as depth 1.
-- **`exceedsDepth(root, limit)`** (exported function) — iterative depth check using an explicit stack (`pending`). Returns `true` as soon as any container is found at depth > `limit`. Avoids recursion so it cannot itself throw the `RangeError` it guards against.
-- **`limitJsonDepth(request, response, next)`** (exported middleware) — the Express handler. Checks `request.is(JSON_TYPES)` to skip non-JSON bodies, then calls `exceedsDepth`. On violation, responds 400 via `rejectResponse` with `ERROR_CODES.BAD_REQUEST` and a `details.reason` of `'body-too-deep'`. Otherwise calls `next()`.
-- **`JSON_TYPES`** (internal const) — `['application/json', 'application/merge-patch+json']`, the media types parsed by `express.json` in `app/security.ts`.
+- **`MAX_JSON_DEPTH`** (const, exported) – the maximum allowed container depth (32).
+- **`JSON_BODY_TYPES`** (const, exported) – the media types this guard inspects: `application/json` and `application/merge-patch+json`.
+- **`exceedsDepth(root, limit)`** (exported) – iterative depth check using an explicit stack; returns `true` if any container sits deeper than `limit`. The root container counts as depth 1.
+- **`limitJsonDepth(req, res, next)`** (exported) – Express middleware. Calls `request.is(JSON_BODY_TYPES)` to skip non-JSON requests, then runs `exceedsDepth` on `request.body`. On violation, responds 400 via `rejectResponse` with code `BAD_REQUEST` and a `details` object (`reason: 'body-too-deep'`, `maxDepth`); otherwise calls `next()`.
 
 ## Relationships
 
-- **`src/app/security.ts`** — Configures `express.json` and sets the media types this guard checks via `request.is()`. This middleware is registered right after the parser there.
-- **`src/infrastructure/http/response.ts`** — Provides `rejectResponse`, the standard 4xx/5xx response helper used to emit the 400.
-- **`src/infrastructure/i18n/index.ts` / `src/infrastructure/i18n/context.ts`** — Provide the `t()` translation function used for the error message string.
-- **`tests/unit/infrastructure/http/middlewares/json-depth.test.ts`** — Unit tests for `exceedsDepth` and `limitJsonDepth`.
+- **`src/app/security.ts`** – mounts the JSON parser with the same media-type list that `JSON_BODY_TYPES` mirrors; this middleware runs immediately after that parser.
+- **`src/infrastructure/http/response.ts`** – supplies `rejectResponse`, the 400 reply helper used by `limitJsonDepth`.
+- **`src/infrastructure/i18n/index.ts` / `context.ts`** – supplies the `t()` function that localises the error message string (`generic.error-bad-request`).
+- **`tests/unit/infrastructure/http/middlewares/json-depth.test.ts`** – unit tests for `exceedsDepth` and the middleware.
 
 ## Notes
 
-- **Iterative, not recursive.** The doc comment explicitly warns that a recursive implementation would throw the same `RangeError` this guard prevents. The explicit `pending` stack is intentional.
-- **JSON-only scope.** `urlencoded` bodies are bounded by `qs`'s own depth limit and multipart field names by multer's; this middleware does not touch them.
-- **Depth counting convention.** The root container is depth 1, so `MAX_JSON_DEPTH = 32` means 31 levels of nesting *inside* the root are permitted.
-- **`request.is()` gate.** When the body is absent or a non-JSON media type, `exceedsDepth` is never called — no wasted walk.
+- **Iterative by design.** A recursive depth check would itself throw the `RangeError` this guard exists to prevent. The implementation uses a plain array as a stack.
+- **Scope is JSON only.** Urlencoded bodies are bounded by `qs`'s depth limit and multipart field names by multer; this middleware intentionally ignores them (`request.is` returns false for those types).
+- **`request.is()` semantics:** returns `false` when the body is absent or the `Content-Type` isn't in `JSON_BODY_TYPES`, so the guard is a no-op for those requests.
+- **Depth counting:** the top-level container is depth 1. A body of `{a: {b: {c: 1}}}` is depth 3.

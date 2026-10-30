@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/metrics.ts
-sha256: 064b9c77a78ae6eb28e67b0484ad2d54537285212a812c75c3a143b1154d20cb
-generated_at: 2026-10-15T09:57:11.345530+00:00
+sha256: 3b637a217f626e83a14ab83ad1c561341eb8eff3781b4309eb86ddfdab7ea812
+generated_at: 2026-10-29T02:35:23.084363+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,44 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines and exports Prometheus `Counter` instances that track every major authentication and account-management event (login, signup, 2FA, email changes, password resets, OAuth, token lifecycle, data export). All counters register on the shared `metricsRegistry` so a single `/metrics` scrape includes both HTTP-level and domain-level signals. Nothing reads these counters programmatically; they are consumed exclusively by the metrics endpoint and alerting rules.
+Defines the full set of domain-level Prometheus counters for the account/authentication module. Every counter is registered on the shared `metricsRegistry` so a single `/metrics` scrape carries them alongside HTTP metrics. This file is strictly a *write* surface for the account controllers; nothing in this module reads the counters back — the observability overview endpoint resolves them by name off the registry.
 
 ## Key elements
 
-- **`authLoginTotal`** — Login attempts by `status` (success / failure). Failure spike = credential-stuffing indicator.
-- **`authSignupTotal`** — Sign-up attempts by `status`. Catches broken registration faster than user reports.
-- **`authPasswordResetTotal`** / **`authPasswordResetConfirmTotal`** — Separate counters for the *request* and the *token-spending* step of password reset, so the funnel is readable as two series.
-- **`authRefreshTotal`** / **`authRefreshReuseTotal`** — Refresh-token operations by `status`; the second counts post-rotation reuse (token leak) with no labels.
-- **`authPasswordChangeTotal`** — Authenticated password-change attempts (distinct from the reset flow).
-- **`authReauthTotal`** — Step-up re-auth attempts; failure means a live session's password was wrong (stolen-session probe).
-- **`authEmailVerifyTotal`** — Email-confirmation token spend (send is NOT counted; rides the email queue).
-- **`authEmailChangeConfirmTotal`** / **`authEmailChangeUndoTotal`** — Separate counters for confirm vs. undo token spend; tokens are cross-rejecting by design.
-- **`authTokenCleanupTotal`** — Expired-token cleanup runs; no `status` label (binary maintenance job).
-- **`authAccountDeleteTotal`** — Account-deletion requests by `status` (GDPR-weighted).
-- **`authTwoFactorEnrollTotal`** — 2FA enrollment confirmations by `method` + `status`.
-- **`authTwoFactorCodeSentTotal`** — 2FA codes sent by `method` + `status`; the only 2FA counter an unauthenticated caller can move.
-- **`authTwoFactorDisableTotal`** — 2FA disable attempts by `method` + `status`.
-- **`authTwoFactorChallengeTotal`** — Login-time 2FA challenge by `status`; password already verified.
-- **`authTwoFactorBackupCodesRegenerateTotal`** — Backup-code regeneration by `status`.
-- **`authOauthTotal`** — OAuth login/signup by `provider` + `status`; kept separate from `authLoginTotal` to avoid a `provider: 'password'` label on every existing call site.
-- **`authOneTimeTokenRejectedTotal`** — Rejected one-time link tokens by `flow` (literal values, never request data). Pre-initialised to zero for all five flows at module load.
-- **`accountExportFailedTotal`** — Failed data-export builds (Art. 15 GDPR); no labels.
+All exports are `Counter` instances from `prom-client`. The dominant label is `status` (success / failure / etc.), which lets one counter serve as both a volume gauge and a success-ratio signal.
+
+| Export | Name (Prometheus) | Labels |
+|---|---|---|
+| `authLoginTotal` | `auth_login_total` | `status` |
+| `authSignupTotal` | `auth_signup_total` | `status` |
+| `authPasswordResetTotal` | `auth_password_reset_total` | `status` |
+| `authPasswordResetConfirmTotal` | `auth_password_reset_confirm_total` | `status` |
+| `authRefreshTotal` | `auth_refresh_total` | `status` |
+| `authRefreshReuseTotal` | `auth_refresh_token_reuse_detected_total` | — |
+| `authPasswordChangeTotal` | `auth_password_change_total` | `status` |
+| `authReauthTotal` | `auth_reauth_total` | `status` |
+| `authEmailVerifyTotal` | `auth_email_verify_total` | `status` |
+| `authEmailChangeConfirmTotal` | `auth_email_change_confirm_total` | `status` |
+| `authEmailChangeUndoTotal` | `auth_email_change_undo_total` | `status` |
+| `authAccountDeleteTotal` | `auth_account_delete_total` | `status` (scheduled / cancelled / purged / failure) |
+| `authTwoFactorEnrollTotal` | `auth_two_factor_enroll_total` | `method`, `status` |
+| `authTwoFactorCodeSentTotal` | `auth_two_factor_code_sent_total` | `method`, `status` |
+| `authTwoFactorDisableTotal` | `auth_two_factor_disable_total` | `method`, `status` |
+| `authTwoFactorChallengeTotal` | `auth_two_factor_challenge_total` | `status` |
+| `authTwoFactorBackupCodesRegenerateTotal` | `auth_two_factor_backup_codes_regenerate_total` | `status` |
+| `authOauthTotal` | `auth_oauth_total` | `provider`, `status` |
+| `authOneTimeTokenRejectedTotal` | `auth_one_time_token_rejected_total` | `flow` |
+| `accountExportFailedTotal` | `account_export_failed_total` | — |
 
 ## Relationships
 
-- **`src/infrastructure/observability/metrics-registry.ts`** — Imports `metricsRegistry` and registers every counter on it, making them available on the shared Prometheus registry.
-- **All listed controllers** (`delete-2fa-method`, `delete-2fa`, `delete-account-request`, `get-oauth-callback`, `get-refresh-token`, `post-2fa-backup-codes`, `post-2fa-confirm`, `post-email-change-confirm`, `post-email-change-undo`, `post-login-2fa-send`, `post-login-2fa`, `post-password-change`, `post-reauth`, `post-reset-confirm`) — Each controller imports the relevant counter(s) from this file and calls `.inc({ status, … })` at its success and failure paths. This file is the sole source of truth for the metric names and label schemas those call sites use.
+- **`src/infrastructure/observability/metrics-registry.ts`** — provides the single `metricsRegistry` instance that every counter in this file registers against. This is the only import.
+- **Account controllers** (the remaining graph neighbors) are the *consumers*: each calls `.inc({ status })` (or the relevant label set) on the counter that matches its endpoint. For example, the password-change controller increments `authPasswordChangeTotal`, the re-auth controller increments `authReauthTotal`, the OAuth callback increments `authOauthTotal`, the 2FA confirm controller increments `authTwoFactorEnrollTotal`, etc. No controller imports another counter from this file.
 
 ## Notes
 
-- Every counter uses `labelNames: […] as const` to get literal-type checking on `inc()` label keys at the call site.
-- `authOneTimeTokenRejectedTotal` is pre-seeded with `.inc({ flow }, 0)` for each flow literal at module load (Prometheus best-practice: avoids a missing-time-series gap after a restart that would break `increase()` alerts).
-- `authTokenCleanupTotal` and `authRefreshReuseTotal` intentionally have **no** labels — the event is binary or fully identified by its existence.
-- The `status` label is the convention that lets a single counter serve as both a volume gauge and a success-ratio signal; alerting rules compute the ratio from the two label series.
-- Counter names follow the Prometheus convention `<domain>_<subject>_total`; the domain prefix is `auth_` for auth flows and `account_` for account-lifecycle flows (export).
+- **Pre-seeded series:** `authOneTimeTokenRejectedTotal` calls `.inc({ flow }, 0)` at module-load time for each known flow (`password_reset`, `email_verify`, `email_change`, `email_change_undo`, `account_restore`) so that `increase()` alerts fire on the very first post-restart refusal rather than on a missing-series.
+- **`as const` on `labelNames`:** narrows label names to literal types, so `.inc({ status })` is compile-time-checked against the declared set instead of accepting arbitrary string keys.
+- **Separate counters vs. shared labels:** intentionally distinct counters are used where two flows would otherwise be conflated (e.g., `authEmailChangeConfirmTotal` vs. `authEmailChangeUndoTotal`; `authOauthTotal` vs. `authLoginTotal`; `authPasswordResetTotal` vs. `authPasswordResetConfirmTotal`). The doc comments explain the reasoning in each case.
+- **Naming convention:** Prometheus counter names follow `<domain>_<subject>_total`; the `_total` suffix is mandatory for counters per Prometheus convention.
+- **Read path is external:** the only way these values surface is through the `GET /observability/metrics/overview` endpoint resolving by metric name off the registry — no code in this module or its neighbors calls `.get()` or `.getValues()`.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/invoicing/services/credit-breakdown.ts
-sha256: ddffff86c87f615e82b357d867df2a2f884c9eb9a1dcec4dad3bc2bc774d7f25
-generated_at: 2026-10-14T16:08:37.627165+00:00
+sha256: 113ff892d61a54a4508570fcfa5f149119dd8209dc4800277aca8e95144cdd26
+generated_at: 2026-10-29T04:13:45.814243+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Computes the VAT/tax breakdown for a partial credit note by reusing the same tax function the original invoice used. It exists as a thin service-layer adapter so the invoicing **domain** layer never imports from the sibling `orders` module directly.
+Extracts the VAT figures for a partial credit note by running its credit-share lines through the `orders` tax function. It is the single seam where credit-share data meets tax calculation, and it exists as a separate service file (rather than living in `domain/`) because it must import from the `orders` module—a boundary the `invoicing/domain` folder is not allowed to cross.
 
 ## Key elements
 
-- **`creditBreakdownOf(lines, currency)`** — the sole export. Accepts the `CreditLine[]` produced by the credit-share logic plus the invoice currency, maps each line into the item shape `orderTaxBreakdown` expects (quantity, unit price, tax rate, `requiresShipping: false`), passes no shipping cost, and returns an `OrderTaxBreakdown`. It performs no delivery or mutation of its own; the result is folded into the rate rows by the caller.
+- **`creditBreakdownOf(lines, currency)`** — the only export. Accepts the `CreditLine[]` produced by `creditShares` plus the invoice currency, maps each line into a tax item (forcing `requiresShipping: false`), and delegates to `orderTaxBreakdown` with `shippingCost: undefined`. Returns an `OrderTaxBreakdown`.
 
 ## Relationships
 
-- **`src/modules/invoicing/domain/index.ts`** — type-only import of `CreditLine` (re-exported from the domain barrel).
-- **`src/modules/invoicing/domain/credit-shares.ts`** — produces the `CreditLine[]` that is fed into this function; this file is deliberately kept *outside* that domain module to respect the no-cross-module-import rule.
-- **`src/modules/orders/index.ts`** → **`src/modules/orders/domain/tax.ts`** — provides `orderTaxBreakdown` and the `OrderTaxBreakdown` type used as the return value.
-- **`src/modules/invoicing/services/issue-credit-note.ts`** — expected consumer; calls `creditBreakdownOf` and merges the returned breakdown into the credit-note rate rows.
+- **`src/modules/invoicing/domain/index.ts`** — imports `asTaxItems` and the `CreditLine` type from this barrel.
+- **`src/modules/invoicing/domain/credit-shares.ts`** — produces the `CreditLine` values that feed into `creditBreakdownOf`; this file is kept outside that module to avoid a domain→sibling-module import.
+- **`src/modules/invoicing/domain/tax-items.ts`** — defines `asTaxItems`, the adapter that shapes credit lines into the tax-item structure.
+- **`src/modules/orders/index.ts`** / **`src/modules/orders/domain/tax.ts`** — source of `orderTaxBreakdown` and the `OrderTaxBreakdown` type, the actual tax computation this file wraps.
+- **`src/modules/invoicing/services/issue-credit-note.ts`** — the service that consumes `creditBreakdownOf` when assembling a credit note.
 - **`src/modules/invoicing/tests/unit/credit-breakdown.test.ts`** — unit tests for this module.
 
 ## Notes
 
-- The file lives in `services/`, **not** `domain/`, specifically because `orderTaxBreakdown` belongs to the `orders` module and a domain folder is not permitted to import a sibling module.
-- `shippingCost` is always passed as `undefined`; credit notes carry no shipping component.
-- `requiresShipping` is hardcoded to `false` on every mapped item — the tax function uses it only to decide whether to apply shipping tax, which is irrelevant here.
+- `requiresShipping` is hard-coded to `false` and `shippingCost` to `undefined` because delivery costs are already folded into the per-rate rows of the credit shares; no line in a credit note ships independently.
+- The module docblock links to `docs/modules/invoicing.md#issuing-a-document` for broader context.

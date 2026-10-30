@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/controllers/write-entity-translations.ts
-sha256: 43136615378c7908d514ef43515dea33bd03742d6de96c3c2d61b2a3d630263a
-generated_at: 2026-10-15T10:42:53.028637+00:00
+sha256: fcf2f6bd06c93251c311415a8eb34c9390806f0f65a2c102d0f5a407a37e7c30
+generated_at: 2026-10-29T04:20:41.125628+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin Express controllers for `PUT` and `PATCH /locales/translations/:entityType/:id`. Each handler validates a Zod body schema, extracts the entity params, delegates to the corresponding `localeService` method, and formats the response. The two routes share a single internal factory so the only differences are the schema, the service call, and the operation name used in error logs.
+Thin HTTP adapters for `PUT` and `PATCH /locales/translations/:entityType/:id`. Each handler validates the path param and body, then delegates to `localeService.replaceEntityTranslations` or `localeService.updateEntityTranslations`. The file exists to keep the two endpoints' shared request-parsing, auth-context extraction, and error-shaping logic in one place via a generic builder.
 
 ## Key elements
 
-- **`writeEntityTranslations`** (internal factory) — Builds an Express handler from a Zod schema, a service write function, and an operation name. Handles param extraction (`entityType`, `id`), body parsing, caller-context extraction, and uniform success/rejection/error response plumbing.
-- **`replaceEntityTranslations`** (export) — `PUT` handler. Uses `ReplaceEntityTranslationsBody` and calls `localeService.replaceEntityTranslations`. Full-replace semantics: stored locales/fields not present in the body are removed.
-- **`upsertEntityTranslations`** (export) — `PATCH` handler. Uses `UpsertTranslationsBody` and calls `localeService.upsertEntityTranslations`. RFC 7396 merge semantics: `null` deletes a field; absent keys are left untouched.
+- **`writeEntityTranslations`** (internal) — Generic builder. Accepts a Zod schema, a service-call function, and an operation name; returns an Express handler that: extracts `entityType`/`id` from params, enforces a numeric id via `requireId`, parses the body against the schema, invokes the service call with `callerContextOf(request)`, and routes the result through `successResponse` or `refused`. Errors are funnelled to `catchAs(response, operation)`.
+- **`replaceEntityTranslations`** (exported) — `PUT` handler. Full-replace semantics: any stored locale not named in the body is deleted; any field a sent locale omits is cleared.
+- **`updateEntityTranslations`** (exported) — `PATCH` handler. Merge semantics (RFC 7396): objects merge field-by-field, `null` deletes a field, absent keys are left untouched.
 
 ## Relationships
 
-- **`src/modules/locales/routes.ts`** — Imports and mounts `replaceEntityTranslations` / `upsertEntityTranslations` on the `/locales/translations/:entityType/:id` routes.
-- **`src/modules/locales/services/index.ts`** — Source of the `localeService` object whose `replaceEntityTranslations` and `upsertEntityTranslations` methods are the actual write operations.
-- **`src/modules/locales/services/translations.ts`** — Defines the `EntityTranslationsResult` type used as the success payload.
-- **`src/infrastructure/http/controller.ts`** — Provides `parseBody`, `refused`, and `catchAs` used for request validation and error handling.
-- **`src/infrastructure/http/ids.ts`** — Provides `requireId` for validating the `:id` route param.
-- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf` to extract auth/caller metadata for the service call.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse` and the `ResponseSuccess` / `ResponseReject` types.
-- **`src/infrastructure/i18n/index.ts`** — Provides `t` for localising the "entity not found" error message.
-- **`src/types/index.ts`** (re-exported from `src/types/auth-context.ts`) — Supplies `CallerContext`, `MergeTranslationsRequest`, and `UpsertTranslationsRequest` types.
+- **`@infrastructure/http/controller`** — supplies `parseBody`, `refused`, and `catchAs`, which form the request-validation → response-dispatch → error-capture pipeline used by the builder.
+- **`@infrastructure/http/ids`** — `requireId` validates the `:id` path param and short-circuits with a 404 (i18n-ised message) when the id is malformed.
+- **`@infrastructure/http/request`** — `callerContextOf` extracts the authenticated caller context from the Express request to pass into the service layer.
+- **`@infrastructure/http/response`** — `successResponse` writes the 200 body; `ResponseSuccess`/`ResponseReject` types shape the service-return union.
+- **`@infrastructure/i18n`** — `t` localises the entity-not-found error message.
+- **`../services` / `../services/translations`** — `localeService.replaceEntityTranslations` and `localeService.updateEntityTranslations` are the actual business-logic calls; `EntityTranslationsResult` is the return type both handlers resolve.
+- **`@types`** — `CallerContext`, `ReplaceEntityTranslationsRequest`, `UpdateEntityTranslationsRequest` type the auth context and the two request shapes.
+- **`src/modules/locales/routes.ts`** — registers these two exported handlers on their respective method/path combinations.
 
 ## Notes
 
-- Both routes are admin-only (per the docstrings); no additional RBAC check is performed here beyond whatever the router/middleware enforces.
-- The `successResponse` call for `upsertEntityTranslations` intentionally does **not** wrap the payload in an extra `<EntityTranslations>` envelope — the service already returns wire-shaped rows. See `get-entity-translations.ts` docblock for the full rationale.
-- The PUT/PATCH semantic split mirrors the one used in `write-locale-entries.ts` for its bulk-import pair; if you change one convention, check the other.
+- PUT and PATCH differ *only* in schema and service call; the builder guarantees they share identical id-validation, body-parsing, auth extraction, and error handling.
+- The PATCH `successResponse` intentionally does **not** wrap the payload in an extra `<EntityTranslations>` envelope — the rows are already in wire shape by the time they reach the controller (see `get-entity-translations.ts` docblock for the full rationale).
+- The replace/merge split mirrors the one in `write-locale-entries.ts` for bulk imports; keep both in sync if the semantic contract changes.

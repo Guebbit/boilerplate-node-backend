@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/openapi.yaml
-sha256: 6b53877971cba4f6aa3762e154d9c480ce0bf394f0046e265b9dd5d0b0756779
-generated_at: 2026-10-15T11:26:52.833153+00:00
+sha256: bba0798f3b0740a4b364edc9fce60086250452f48c45c606d0fae19c18102826
+generated_at: 2026-10-29T05:07:24.218625+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.1.0 module contract for the payments domain. It declares every HTTP endpoint the payments module exposes (method listing, payment/refund queries, the attention queue, intent creation), the module-specific error vocabulary, and the `payments` slice of the account data export. A bundler merges this file into the shop's root OpenAPI document; removing the module removes its paths and export section.
+OpenAPI 3.1.0 contract for the payments module. Declares the module's operations (payment methods, payment lifecycle, staff list/search), its custom error-code vocabulary, and the slice it contributes to the account data export. Serves as the single source of truth for both server implementation and client SDK generation.
 
 ## Key elements
 
-- **`x-error-codes`** — Seven module-scoped error codes (`PAYMENT_DECLINED`, `PAYMENT_IN_FLIGHT`, `PAYMENT_NOT_CONFIRMABLE`, `PAYMENT_NOT_REFUNDABLE`, `PAYMENT_REFUND_EXCEEDS_REMAINING`, `PAYMENT_ORDER_NOT_PAYABLE`, `PAYMENT_CARD_NOT_AVAILABLE`) with HTTP status and human description.
-- **`x-personal-data`** — Defines the `payments` array (items: `ExportPayment`) that the bundler injects into `POST /account/export`.
-- **`GET /payments/methods`** — Public, no auth. Returns which payment methods (`card`, `bank_transfer`) are configured for this deployment; empty list means checkout is off.
-- **`GET /payments`** — Staff listing (`payments.any.read`). Supports pagination, sort, `displayStatus`, `method`, `provider`, date/amount range, `orderId`, `reference` filters. Exposes provider refs and failed-refund reasons not available to payers.
-- **`POST /payments/search`** — Body-variant of the above; tagged `x-alias-of: listPayments`.
-- **`GET /payments/refunds`** — Staff refund listing across all payments; read-only (mutations go through the refund/cancel write path).
-- **`GET /payments/attention`** — Staff queue of unresolved payment problems (stuck refunds, manual refunds owed, stock-commit owed, post-cancel refund owed). Oldest-first, 100-row cap per source. Amount mismatches are excluded (they live in audit, not stored state).
-- **`POST /payments/intent`** *(truncated in source)* — Creates or refreshes a payment intent for a `pending` order. Idempotent by design (no `Idempotency-Key` needed); 201 = created, 200 = refreshed. Rate-limited per caller (429).
+- **`x-error-codes`** — Module-level extension listing every payment-specific error (e.g. `PAYMENT_DECLINED`, `PAYMENT_IN_FLIGHT`, `PAYMENT_DISPUTED`, `PAYMENT_REFUND_EXCEEDS_REMAINING`) with its HTTP status and a human-readable description. Shared responses (409, 422, etc.) remain generic; this map carries the *meaning*.
+- **`x-personal-data`** — Declares the `payments` array (items: `ExportPayment`) that the bundler injects into `AccountExportResponse` for `POST /account/export`.
+- **`paths./payments/methods` (GET)** — Public endpoint; returns the configured payment methods so the frontend hard-codes none.
+- **`paths./payments` (GET)** — Staff list with rich filtering (display status, method, provider, amount range, disputed flag, RF transfer reference, etc.). Returns `PaymentsResponse` rows that include `actions`, `orderNumber`, `email`, and provider refs.
+- **`paths./payments` (POST)** — Creates or refreshes a payment intent from the caller's pending order. 201 = created, 200 = already existed (refresh). Rate-limited via a shared `paymentIntentLimiter` budget with the sync endpoint.
+- **`paths./payments/search` (POST)** — `x-alias-of: listPayments`; same semantics as `GET /payments` but with filters in a JSON body (`SearchPaymentsRequest`).
+- **`tags: Payments`** — Groups all operations under one tag with a descriptive summary.
+- **Referenced schemas** (defined in the `components` section, truncated in view): `Payment`, `PaymentMethodsResponse`, `PaymentsResponse`, `CreatePaymentRequest`, `SearchPaymentsRequest`, `PaymentSort`, `PaymentDisplayStatus`, `PaymentMethodKind`, `ExportPayment`.
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — `$ref` targets for shared parameters (`PageParam`, `PageSizeParam`), the `Id` schema, and standard error responses (`InternalError`, `Unauthorized`, `Forbidden`, `ValidationError`). This file contributes nothing to the root; it only consumes from it.
+- **`shared/contracts/openapi.root.yaml`** — All shared, cross-module artifacts are pulled from here via relative `$ref` (`../../../shared/contracts/openapi.root.yaml`):
+  - Parameters: `PageParam`, `PageSizeParam`
+  - Schemas: `Id`
+  - Responses: `Unauthorized`, `Forbidden`, `ValidationError`, `NotFound`, `Conflict`, `TooManyRequests`
+  - Headers: `Location`
+
+  This keeps generic HTTP semantics centralized while the module file only adds payment-specific meaning.
 
 ## Notes
 
-- `security: []` on `GET /payments/methods` is intentional — it is pre-purchase public information, mirroring `GET /delivery/methods`.
-- `x-alias-of` is a custom extension (not standard OpenAPI) used to signal that `searchPayments` and `listPayments` share one handler.
-- The attention endpoint deliberately excludes amount mismatches; do not add them there — they are audit rows (`payment.amount_mismatch`), not document state.
-- The file content shown is truncated; the `POST /payments/intent` description and any subsequent paths/schemas are not visible in this excerpt.
+- **201 vs 200 on `POST /payments`:** 201 means a new intent was created; 200 means the order already had an intent and it was merely refreshed. No `Idempotency-Key` header is required because the DB enforces one-payment-per-order.
+- **`x-alias-of` extension:** Non-standard; used by tooling to treat `searchPayments` as a body-based variant of `listPayments` rather than a separate operation.
+- **RF transfer reference matching:** `transferReference` accepts spaces and arbitrary case (e.g. `RF13 2EY8 H44V JAVZ KX80 JRL`); an invalid reference yields an empty result set, not an error.
+- **Error-code map is authoritative for semantics:** The HTTP status codes in `x-error-codes` (mostly 409, some 422) map to the shared `Conflict` / `ValidationError` responses, but the *which* error a caller should branch on is this module's `x-error-codes` list, not the response body structure.
+- The file is truncated in this view; additional paths (confirmation, sync, refunds, disputes) are implied by the error-code entries and the tag description.

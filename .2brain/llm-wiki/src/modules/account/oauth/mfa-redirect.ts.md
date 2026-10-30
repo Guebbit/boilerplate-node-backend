@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/oauth/mfa-redirect.ts
-sha256: 32a56c8e2e839aa7a2c9d263ef9b65e6dd32e726008ea2ff0b3a075289f82a02
-generated_at: 2026-10-14T08:42:53.389787+00:00
+sha256: 9f47967659640969064e352d36990b0efa524f1c18eef5e2481ed588f748c7e9
+generated_at: 2026-10-29T02:36:51.316171+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Manages a single HTTP cookie (`oauth_mfa_challenge`) that carries an MFA login-challenge token across an OAuth provider redirect. Because placing the challenge in the query string would expose it in browser history and `Referer` headers, it is transmitted as a cookie instead. This lets the two `POST /account/login/2fa*` endpoints serve both password-originated logins (challenge in the JSON body) and OAuth-originated logins (challenge in the cookie) through the same code path.
+Provides a single-purpose cookie (`__Host-oauth_mfa_challenge`) for carrying the `buildLoginChallenge` token across an OAuth provider redirect. The cookie exists so the challenge is never exposed in a URL query string (where it would persist in browser history and `Referer` headers) while still letting `POST /account/login/2fa` and `POST /account/login/2fa/send` serve both password-originated and OAuth-originated logins through the same endpoints.
 
 ## Key elements
 
-- **`MFA_CHALLENGE_COOKIE`** — the cookie name constant (`'oauth_mfa_challenge'`); single-attempt, cleared after the challenge is consumed.
-- **`createMfaChallengeCookie(response, challenge, expiresAt)`** — Sets the cookie on the OAuth redirect response. Computes `maxAge` from the challenge's own `expiresAt` (not a fixed TTL), because a delivered-method challenge lives twice as long as a device challenge. Spreads `secureCookieOptions()` for transport security.
-- **`destroyMfaChallengeCookie(response)`** — Clears the cookie; called once the challenge has been spent (success *or* failure).
-- **`readMfaChallengeCookie(request)`** — Returns the challenge string from the incoming request, or `undefined` if the cookie is absent.
+- **`MFA_CHALLENGE_COOKIE`** (private constant) — the cookie name: `__Host-oauth_mfa_challenge`. The `__Host-` prefix enforces `Secure`, `Path=/`, and no `Domain`.
+- **`createMfaChallengeCookie(response, challenge, expiresAt)`** — sets the cookie on the provider-redirect response. `maxAge` is derived from the challenge's own `expiresAt` (delivered-method challenges outlive device ones), not a fixed TTL.
+- **`destroyMfaChallengeCookie(response)`** — clears the cookie after the challenge is consumed (success *or* failure), enforcing single-use.
+- **`readMfaChallengeCookie(request)`** — reads the cookie back on the incoming 2FA endpoint request; returns `undefined` when absent (i.e. the caller falls back to the `challenge` body field used by password logins).
 
 ## Relationships
 
-- **`src/infrastructure/http/cookies.ts`** — provides `cookieOf`, the low-level cookie reader used by `readMfaChallengeCookie`.
-- **`src/modules/account/session/cookies.ts`** — provides `secureCookieOptions`, which supplies the `httpOnly`/`secure`/`sameSite` flags applied when setting and clearing the cookie.
-- **`src/modules/account/controllers/get-oauth-callback.ts`** — the OAuth callback that calls `createMfaChallengeCookie` on the redirect `Response` before sending the user to the provider.
-- **`src/modules/account/controllers/post-login-2fa.ts`** and **`post-login-2fa-send.ts`** — call `readMfaChallengeCookie` when the request body omits `challenge`, falling back to the cookie for OAuth-originated logins.
+- **`src/infrastructure/http/cookies.ts`** — `cookieOf` is used by `readMfaChallengeCookie` to extract the value from the request.
+- **`src/modules/account/session/cookies.ts`** — `hostCookieOptions` supplies the shared `__Host-` cookie attribute defaults (secure, sameSite, path) for both set and clear operations.
+- **`src/modules/account/controllers/get-oauth-callback.ts`** — the caller of `createMfaChallengeCookie`; it redirects to the OAuth provider and sets the cookie on that redirect response.
+- **`src/modules/account/controllers/post-login-2fa.ts`** / **`post-login-2fa-send.ts`** — call `readMfaChallengeCookie` as a fallback when the request body omits `challenge`; call `destroyMfaChallengeCookie` after the token is spent.
 
 ## Notes
 
-- The cookie is **single-attempt by design**: the consuming endpoint must call `destroyMfaChallengeCookie` regardless of whether validation succeeds. Forgetting to clear it would allow replay.
-- `maxAge` is computed as `expiresAt − now` and clamped to ≥ 0, so a stale or already-expired challenge produces a zero-lifetime cookie rather than a negative one.
-- The challenge value is stored in **plaintext** in the cookie (not hashed). Security relies on the `secure`/`httpOnly`/`sameSite` flags from `secureCookieOptions` and the short, challenge-specific lifetime.
+- The cookie is intentionally **single-attempt**: both success and failure paths must call `destroyMfaChallengeCookie`. Forgetting the destroy on an error path would leave a live credential in the client.
+- `maxAge` is computed as `expiresAt − now` with a `Math.max(0, …)` guard, so a stale or already-expired `expiresAt` yields a zero-lifetime cookie rather than a negative value.
+- Because the challenge is a *plaintext credential*, the `__Host-` prefix (implicit `Secure` + no `Domain`) is load-bearing; do not replace `hostCookieOptions` with ad-hoc options without preserving those invariants.

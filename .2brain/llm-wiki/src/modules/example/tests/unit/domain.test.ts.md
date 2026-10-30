@@ -1,7 +1,7 @@
 ---
 source: src/modules/example/tests/unit/domain.test.ts
-sha256: d75462b81a33f2c39138006748062751d1386e6c5ffd568cf695ab509f0ef936
-generated_at: 2026-10-14T15:48:27.286785+00:00
+sha256: 86fcb64993591cc9c8cb15d0758771bf403a24d6ac7be3dc6d6b58985cef1e39
+generated_at: 2026-10-29T03:58:10.917262+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the example domain's lifecycle rules: which status transitions are legal, when `publishedAt` gets stamped, and the body-length ceiling. Pure logic assertions with no database or network involvement.
+Unit tests for the example module's domain (lifecycle) rules: status transition validity, the `publishedAt` stamping policy, body-length ceiling, and per-status action availability. The file exists to pin down the pure, database-free logic in `src/modules/example/domain` so that transition or stamping regressions are caught before they reach integration or UI layers.
 
 ## Key elements
 
-- **`describe('initialExampleStatus')`** — Asserts the constant is `ExampleStatus.draft` (nothing is public by default).
-- **`describe('canTransition')`** — Table-driven (`it.each`) checks of the state machine: four allowed transitions, two forbidden ones (you archive a published example rather than revert to draft; you cannot un-archive to published), and self-transitions for all statuses (supports idempotent PUT).
-- **`describe('isPublished')`** — Verifies that only `ExampleStatus.published` satisfies the predicate across all enum values.
-- **`describe('shouldStampPublishedAt')`** — Confirms the stamp fires on first transition to `published` when the field is empty, is never overwritten once set, and is skipped for `draft`/`archived` writes.
-- **`describe('fitsBodyLength')`** — Boundary tests: accepts a body exactly at the ceiling, rejects one character over.
+- **`describe('initialExampleStatus')`** — asserts the default status is `ExampleStatus.draft`.
+- **`describe('canApply')`** — table-driven tests for the allowed and disallowed `(event, status)` pairs (publish, archive, unarchive across draft / published / archived).
+- **`describe('statusAfter')`** — verifies the resulting status for each valid transition.
+- **`describe('isPublished')`** — confirms only `published` returns true.
+- **`describe('shouldStampPublishedAt')`** — verifies the stamp is set once on first publish, never overwritten, and not applied to draft/archived writes.
+- **`describe('fitsBodyLength')`** — boundary tests: exactly-at-ceiling is accepted, one-over is refused.
+- **`describe('exampleActionsFor')`** — checks the action-availability map for each status given edit permissions, and that a non-editing caller gets all actions `false`.
 
 ## Relationships
 
-- **`src/modules/example/domain/index.ts`** (via `../../domain` import) — The module under test. Exports `canTransition`, `fitsBodyLength`, `initialExampleStatus`, `isPublished`, and `shouldStampPublishedAt`, all consumed here.
-- **`src/modules/example/domain/lifecycle.ts`** — Implementation home for the transition and stamping logic exercised by these tests.
-- **`src/types/index.ts`** (via `@types` import) — Source of the `ExampleStatus` enum used throughout the assertions.
+- **`src/modules/example/domain/index.ts`** — the barrel this file imports from (`../../domain`). All tested symbols (`canApply`, `exampleActionsFor`, `fitsBodyLength`, `initialExampleStatus`, `isPublished`, `shouldStampPublishedAt`, `statusAfter`) resolve through this re-export.
+- **`src/modules/example/domain/lifecycle.ts`** — the implementation module behind the barrel; the tests exercise the transition and stamping logic that lives there (indirectly, via the barrel import).
+- **`src/types/index.ts`** — provides the `ExampleStatus` enum used throughout the test expectations.
 
 ## Notes
 
-- Transition tests are table-driven with `it.each` to keep each case a single line; add new allowed/forbidden pairs there rather than writing new `it` blocks.
-- The self-transition case iterates `Object.values(ExampleStatus)` — if a new status is added to the enum, it is automatically covered.
-- `fitsBodyLength` is inclusive at the ceiling (`len === max` passes, `len === max + 1` fails); the function signature is `(body: string, max: number) => boolean`.
+- Tests are table-driven with `it.each` and `as const` tuples; when adding a new status or event, extend the arrays rather than adding individual `it` blocks.
+- The domain is explicitly "no database" (per the file's module docblock). Do not mock a persistence layer here; only pure functions are in scope.
+- `exampleActionsFor` tests always pass `{ update: true, delete: true }` except the final case, which verifies the all-false path for a caller without edit rights. The permission flags are independent of the status-based lifecycle flags.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/stats/services/figures.ts
-sha256: bae8fb7b893d74f43b89b3253058b3789a3a05bbee0723ed006f470e9990276a
-generated_at: 2026-10-15T12:04:07.605881+00:00
+sha256: ecf9553058564f50032b75475902f531612a2c40501e5565ebb24852b4ac4751
+generated_at: 2026-10-29T05:56:04.033518+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure data structures and functions that turn raw per-bucket money/count sums into the published sales-figures contract. All arithmetic stays in minor units until `figuresOf` converts to decimals, guaranteeing that the sum of bucket figures equals the sum of the whole.
+Pure computation layer that turns raw money-and-count sums (kept in minor units) into the published decimal figures for a single currency bucket. It exists so that summing buckets always equals summing the whole, and so the minor-unit → decimal conversion happens exactly once, at the boundary.
 
 ## Key elements
 
-- **`RawFigures`** (interface) — one bucket, one currency: order/unit counts plus six invoiced and six credited `Money` fields.
-- **`Figures`** (interface) — the decimal-denominated values the stats contract exposes (netSales, totalSales, averageOrderValue, etc.).
-- **`emptyRawFigures()`** — identity value (all zeros / `NO_MONEY`) for starting an accumulation.
-- **`addRawFigures(a, b)`** — field-by-field addition; uses `addMoney` for every `Money` field.
-- **`figuresOf(raw, currency)`** — derives `Figures` from `RawFigures`; computes net sales, total sales, and AOV, then converts to decimals via `toDecimalAmount`. `discounts` is hardcoded to `0` (not yet modelled).
-- **`rateOf(part, whole)`** — safe division returning 0 when `whole` is 0.
+- **`RawFigures`** (interface) — One currency bucket's raw sums: order/unit counts plus invoiced and credited Money (goods, shipping, tax, gross) in minor units.
+- **`Figures`** (interface) — The published contract in decimals: orders, units, gross/net sales, shipping, taxes, total, refunds, AOV, etc.
+- **`emptyRawFigures()`** — Zero-valued `RawFigures` (all counts 0, all Money `NO_MONEY`).
+- **`addRawFigures(a, b)`** — Field-by-field addition of two `RawFigures` using `addMoney` for Money fields and plain `+` for counts.
+- **`figuresOf(raw, currency)`** — Derives a `Figures` object from a `RawFigures`, subtracting credited from invoiced, then converting each Money value to a decimal via `toDecimalAmount(…, currency)`. `discounts` is hard-coded to `0` (no discount concept yet). `averageOrderValue` uses `averageMoney(invoicedGoods, orders)`.
+- **`rateOf(part, whole)`** — Safe division; returns `0` when `whole` is not positive.
 
 ## Relationships
 
-- **`src/shared-kernel/money.ts`** — sole import source. Provides `Money`, `NO_MONEY`, `addMoney`, `subtractMoney`, `averageMoney`, and `toDecimalAmount`. Every money operation in this file goes through those helpers.
-- **`src/modules/stats/services/breakdowns.ts`** — consumes this module's exports (`RawFigures`, `emptyRawFigures`, `addRawFigures`, `figuresOf`) to build per-bucket stats.
-- **`src/modules/stats/services/sales.ts`** — consumes the same exports for the top-level sales summary.
-- **`src/modules/stats/tests/unit/figures.test.ts`** — unit-tests every export in this file.
+- **`src/domain-primitives/money.ts`** — All Money arithmetic (`addMoney`, `subtractMoney`, `averageMoney`), the `NO_MONEY` sentinel, the `Money` type, and `toDecimalAmount` are imported from this primitive. `figuresOf` depends entirely on these for correct minor-unit handling.
+- **`src/modules/stats/services/sales.ts` / `breakdowns.ts`** — The module docstring identifies these as the "owning modules" that produce the raw money and counts handed to `figuresOf` and `addRawFigures`. They are the primary consumers of this file's exports.
+- **`src/modules/stats/tests/unit/figures.test.ts`** — Unit tests for every export in this file.
 
 ## Notes
 
-- `discounts` in `Figures` is always `0`; the field exists in the contract but no discount data is sourced yet.
-- `figuresOf` takes an ISO-4217 `currency` code solely to drive `toDecimalAmount`'s decimal-place selection; no other logic depends on the code.
-- `rateOf` is a general-purpose guard (not specific to figures) and is exported for reuse by neighbours that compute percentages.
-- The module is a `@module` (no default export); all public API is named exports.
+- All Money fields in `RawFigures` are **minor units** (e.g. cents, pence). Decimal conversion happens only inside `figuresOf`, using the caller-supplied ISO-4217 `currency` code to pick the right scale.
+- `discounts` is always `0` in `Figures`; the subtraction formula for `netSales` accounts for this (gross − reversals, no discount term).
+- `averageOrderValue` divides `invoicedGoods` by `orders` via `averageMoney`; if `orders` is 0 the primitive is expected to handle the edge case (see `money.ts`).
+- Definitions of terms (sale date, "paid orders only", Shopify vs. WooCommerce naming) live in `docs/modules/stats.md#definitions`, not in this file.

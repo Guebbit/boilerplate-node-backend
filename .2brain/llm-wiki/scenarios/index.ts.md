@@ -1,7 +1,7 @@
 ---
 source: scenarios/index.ts
-sha256: 856d6923aefd4d12a5ff5aa8cc617e9fcda606947bfb5ce6dc9ff396160c3b8b
-generated_at: 2026-10-14T06:58:45.636743+00:00
+sha256: 749d3bf768b89018f992ac143d64347b2f1a2c03d0625c6c692aa42be3c698f9
+generated_at: 2026-10-29T01:23:31.762534+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,41 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Central registry of all named, whole-database scenarios this repo can seed. It defines the `Scenario` shape (seed → drive → subjects), exposes a single `buildScenario` entry point, and lets callers (`apply.ts`, `support/demo.ts`) index one table instead of hand-rolling per-scenario conditionals. Every file in the `scenarios/` folder imports its own dependencies directly so a production image can drop the entire folder without anything under `src/` noticing.
+The scenario registry. It collects every named, whole-database state the repo can seed (`blank` plus the generated scenario fixtures) into a single `SCENARIOS` table and exposes `buildScenario` as the one entry point that seeds a scenario and optionally drives its history flows. It exists so that adding a new scenario touches exactly this file (plus its generated fixture), and so the entire `scenarios/` folder can be stripped from a production image without anything under `src/` noticing.
 
 ## Key elements
 
-- **`SCENARIOS`** – `Record<string, Scenario>` table mapping `"shop"` and `"blank"` to their `{ seed, drive?, subjects }`. The single place a new scenario is registered.
-- **`ScenarioName`** – `keyof typeof SCENARIOS`; the closed set of valid names.
-- **`DEFAULT_SCENARIO`** – `"shop"`; the fallback when no name is supplied.
-- **`isScenarioName(name)`** – type-guard narrowing an unvalidated string to `ScenarioName`, so callers avoid a manual `as` cast.
-- **`buildScenario(name, app?)`** – the one-call lifecycle: seed → drive (against a loopback listener, human-challenge disabled) → backdate. Returns merged subject ids (pinned + flow-produced). Throws if a drive-capable scenario is given without an Express app.
-- **`seedShop`** (internal) – seeds the access model first, then all `shopModules` entries via `runInWaves(asWaveEntries(shopModules))`, guaranteeing `products` waits for `locales`.
-- **`shopModules`** – re-exported from `./shop-modules` so external consumers import it from here.
+- **`Scenario` (interface)** — shape of one registry entry: `seed` (writes starting rows into an empty DB), optional `drive` (drives HTTP flows against a base URL and returns extra produced subjects), and `subjects` (pinned name → row-id map).
+- **`SCENARIOS` (const)** — the registry table built by spreading `scenarioFixtures` and adding the `blank` entry. Satisfies `Record<string, Scenario>`.
+- **`ScenarioName` (type)** — `keyof typeof SCENARIOS`; the set of valid scenario names.
+- **`isScenarioName` (type guard)** — narrows an untrusted `string` to `ScenarioName` via `Object.hasOwn`, so callers need no `as` cast.
+- **`scenarioOr` (internal)** — returns `preferred` if it is a known scenario, otherwise falls back to `'blank'`.
+- **`DEFAULT_SCENARIO` (exported const)** — `scenarioOr('shop')`; resolves to `'shop'` when the generated fixtures carry one, else `'blank'`. Derived, so removing the shop scenario requires no edit here.
+- **`buildScenario` (exported function)** — the main consumer-facing API. Seeds the named scenario, then (if `drive` exists and an `Express` app was supplied) runs the flows over a loopback listener with the human-challenge provider disabled. Merges pinned `subjects` with flow-produced extras. Throws if a driving scenario is called without an app.
+- **`shopModules` (re-export)** — re-exported from `./shop-modules` so downstream consumers import it from the registry.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `scenarios/shop-modules.ts` | Supplies `shopModules` (fixture table) and `asWaveEntries` (wave graph). |
-| `scenarios/waves.ts` | Supplies `runInWaves`, the sequential-wave executor. |
-| `scenarios/accounts.ts` | Supplies `seedAccessModel`, the first step of `seedShop`. |
-| `scenarios/blank.ts` | Supplies `seedBlank` for the `blank` scenario. |
-| `scenarios/subjects.ts` | Supplies `SHOP_SUBJECTS` (pinned name→id map). |
-| `scenarios/flows/loopback.ts` | Supplies `withLoopbackServer`, the temporary HTTP listener for drive. |
-| `scenarios/support/no-human-challenge.ts` | Supplies `withoutHumanChallenge`, disabling the challenge provider during drive. |
-| `scenarios/flows/shop-history.ts` | Supplies `driveShopHistory` and the `ShopHistory` type. |
-| `scenarios/flows/backdate.ts` | Supplies `backdateHistory`, moving orders into the past after drive. |
-| `scenarios/seed.ts` | Supplies the `SeedOutcome` type used in signatures. |
-| `scenarios/check.ts` | Compile-time twin: validates every `shopModules` key against `enabledModules` in `src/modules.ts`. `index.ts` cannot perform this check itself due to eslint boundary rules. |
-| `scenarios/apply.ts` | Primary consumer; indexes `SCENARIOS` and calls `buildScenario`. |
-| `scenarios/support/demo.ts` | Consumes `SCENARIOS` to walk and display scenario metadata. |
-| `tests/integration/access.test.ts` | Exercises seeded access-model rows via `buildScenario`. |
-| `tests/integration/scenarios/shop.test.ts` | Drives the full shop scenario end-to-end. |
+- **`scenarios/blank.ts`** — provides `seedBlank`, the seed function for the `blank` entry.
+- **`scenarios/scenarios.generated.ts`** — provides `scenarioFixtures`, spread into `SCENARIOS`.
+- **`scenarios/flows/loopback.ts`** — provides `withLoopbackServer`, used by `buildScenario` to mount a throwaway listener for flow driving.
+- **`scenarios/support/no-human-challenge.ts`** — provides `withoutHumanChallenge`, wrapped around the drive step to disable the challenge provider during scripted flows.
+- **`scenarios/seed.ts`** — provides the `SeedOutcome` type used in the `Scenario.seed` signature.
+- **`scenarios/shop-modules.ts`** — source of the re-exported `shopModules`.
+- **`scenarios/apply.ts`** — indexes `SCENARIOS` directly (documented in the module comment) to apply a scenario by name.
+- **`scenarios/support/demo.ts`** — walks `SCENARIOS` to drive the demo profile.
+- **`scenarios/check.ts`** — holds a compile-time twin of the module registry and cross-checks `shopModules` names against `enabledModules`; this file cannot perform that check because ESLint boundaries restrict `src/modules.ts` access to `apply.ts` / `run-server.ts` / `check.ts`.
+- **`tests/integration/access.test.ts`**, **`tests/integration/scenarios/shop.test.ts`** — integration tests that consume `buildScenario` / `DEFAULT_SCENARIO` to seed and drive scenarios.
 
 ## Notes
 
-- **Dependency boundary:** only `apply.ts`, `run-server.ts`, and `check.ts` may import `src/modules.ts`. That is why the `shopModules` ↔ `enabledModules` name-consistency check lives in `check.ts`, not here.
-- **`blank` has no `drive`**, so `buildScenario("blank")` works without an Express app—pass `app` as `undefined`.
-- **Products start at `onHand: 0`.** A seeded-but-undriven shop has an empty catalogue; inventory only appears after the drive/backdate cycle in `buildScenario`.
-- **Caller owns the empty database.** `seed` assumes a clean slate; `buildScenario` does not drop tables itself.
+- **One-way dependency.** Every file in `scenarios/` imports its module's repository, models, and factories directly; nothing under `src/` imports back into this folder. A production build can omit the folder entirely.
+- **ESLint boundary.** This file deliberately does *not* import `src/modules.ts`. The `shopModules`-vs-`enabledModules` cross-check lives in `check.ts` for that reason.
+- **`app` is optional but conditionally required.** `buildScenario` accepts `app?: Express`; it throws at call time if the scenario has a `drive` function and no app was passed. Scenarios with no history (e.g. `blank`) need no app.
+- **`drive` resolves extras, not the full subject set.** Pinned `subjects` are merged with whatever `drive` returns; backdating of written rows must happen inside `drive` before it resolves.
+- **`DEFAULT_SCENARIO` is derived, not hardcoded.** It calls `scenarioOr('shop')`, so deleting or renaming the shop scenario in the generated fixtures automatically shifts the default to `blank` with no edit to this file.

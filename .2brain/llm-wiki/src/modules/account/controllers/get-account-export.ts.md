@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/get-account-export.ts
-sha256: b2d5901e5e84faeb4b527faea11fbd278dea79bbfbd6a9297d7aaa84133d07df
-generated_at: 2026-10-14T08:30:12.191499+00:00
+sha256: e3d0345252a82b4aef342a20c1914a2060668740e7bba153e169bf24995abb88
+generated_at: 2026-10-29T02:26:28.674214+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP controller for `GET /account/export/:id`. Streams the caller's own finished export back as a JSON file attachment. Exists so the page opened from a mailed link can deliver the export file directly to the owner without ever buffering the document in memory.
+HTTP controllers for the account-export endpoints: one returns the status of the caller's export job, the other streams the finished export file as a JSON download. They exist to separate the "is my export ready?" poll from the actual file transfer, and to enforce that the file is always owned by the authenticated caller.
 
 ## Key elements
 
-- **`getAccountExport`** (default and only export) — Express handler. Validates the `:id` param via `requireId`, pulls `userId` from `request.authContext`, calls `openOwnExport`, then pipes the resulting stream into the Express `Response`.
-- **Response headers** — Sets `Content-Type: application/json; charset=utf-8`, `Content-Disposition: attachment; filename="account-export.json"`, and `Cache-Control: private, no-store` before streaming begins.
-- **Error path** — If `response.headersSent` is already true (stream started, client hung up), logs a warning and calls `response.destroy()`. Otherwise delegates to `catchAs(response, 'getAccountExport')`.
+- **`getAccountExportStatus`** – `GET /account/export`. Calls `readOwnExport(userId)`; returns the status payload via `successResponse` or a `404` (i18n message) when no export exists. No fresh-auth requirement; the response carries only dates/state, no personal data.
+- **`getAccountExport`** – `GET /account/export/file`. Calls `openOwnExport(userId, callerContextOf(request))` to obtain a readable stream, then pipes it to the Express response via `node:stream/promises` `pipeline`. Sets `Content-Disposition: attachment`, `Content-Type: application/json`, and `Cache-Control: private, no-store`. The body is the raw `AccountExportResponse` document (no envelope). Errors after headers are sent are handled by logging and destroying the socket; earlier errors go through `catchAs`.
 
 ## Relationships
 
-- **`src/modules/account/routes.ts`** — Mounts this handler on the `/account/export/:id` route, wrapped in `requireFreshAuth` which populates `request.authContext`.
-- **`src/modules/account/services/export.ts`** — Provides `openOwnExport(userId, exportId, callerContext)`, which performs the ownership query and returns a readable stream (or `null` if not found / not owned).
-- **`src/infrastructure/http/ids.ts`** — `requireId` validates and extracts the route param; returns `undefined` (and sends a 404) for malformed IDs before any service call.
-- **`src/infrastructure/http/request.ts`** — `callerContextOf(request)` extracts the caller context object passed into the service.
-- **`src/infrastructure/http/response.ts`** — `rejectResponse` sends the standard error envelope for the 404 (no-stream) case.
-- **`src/infrastructure/http/controller.ts`** — `catchAs` formats and sends the standard error envelope when headers have not yet been sent.
-- **`src/infrastructure/i18n/index.ts` / `context.ts`** — `t()` resolves the `account.export.not-found` message.
-- **`src/infrastructure/adapters/logger.ts`** — Emits a `warn` log when a download is aborted mid-stream.
+- **`src/modules/account/services/export.ts`** – source of `readOwnExport` (status lookup) and `openOwnExport` (stream open); the service's ownership query is the authorization gate.
+- **`src/modules/account/routes.ts`** – mounts these two handlers on their respective paths; the file route additionally carries `requireFreshAuth`.
+- **`src/infrastructure/http/response.ts`** – provides `successResponse` / `rejectResponse` for the status endpoint's envelope.
+- **`src/infrastructure/http/controller.ts`** – provides `catchAs`, the shared error-to-response helper.
+- **`src/infrastructure/http/request.ts`** – provides `callerContextOf` to extract the caller identity for the export service.
+- **`src/infrastructure/i18n/index.ts`** (re-exports `context.ts`) – provides `t()` for the `account.export.not-found` message.
+- **`src/infrastructure/adapters/logger.ts`** – `logger.warn` for aborted in-flight downloads.
 
 ## Notes
 
-- The response body is **not** wrapped in the project's usual envelope; the raw document *is* the response. A saved file contains only the export data.
-- Streaming uses `pipeline` from `node:stream/promises`, which applies backpressure and destroys both streams on error. This is intentional: the file may be arbitrarily large.
-- The 404 for "not found / not owner" is indistinguishable to the caller from a genuinely missing export (same message, same status) — there is no "exists but not yours" branch.
-- `request.authContext!` is asserted non-null because the `requireFreshAuth` middleware on the route guarantees it; the `!` is load-bearing, not decorative.
+- The file endpoint intentionally bypasses the `successResponse` envelope: the downloaded file must be *exactly* the export document, so no wrapper keys appear.
+- An account has at most one live export, so neither handler takes an export ID parameter.
+- `pipeline` (not `stream.pipe`) is used so that backpressure is honoured and both ends are destroyed on early close; the promise rejects if the client hangs up mid-download.
+- Once headers have been flushed, the only possible error response is `response.destroy()` — there is no way to send a JSON error body.
+- The download filename (`account-export-${requestedDay}.json`) is set server-side via Express's `attachment()` helper; the client cannot choose it.

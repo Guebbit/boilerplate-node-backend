@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/services/holds.ts
-sha256: 38760c12b21bcb89b4244fa582a7e4577498dc45afd2c1ecab794ecd1d06b8d0
-generated_at: 2026-10-14T15:30:22.205324+00:00
+sha256: 39924fc88753953f5241622c115b7a55eb7ded694b04ee29cd3d33e8fdf5f9ac
+generated_at: 2026-10-29T03:40:24.784969+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the two staff-facing acts that stop or resume a fulfillment order: **holding** (with a Shopify-style reason and optional note) and **releasing**. Both acts run inside a Mongoose transaction, enforce optimistic-concurrency via a revision check, and are gated behind the delivery "rank rule" before any state change is committed.
+Implements the hold and release lifecycle for a fulfillment order. Staff can put an order on hold (with a Shopify-style reason code and optional notes) or release it from hold. The file wraps each operation in a Mongoose transaction, enforces preconditions (order still in-flight, fulfillment order in a holdable/releasable state), performs the state write, fires progress and announcement side-effects, records an audit entry, and returns the fulfillment order view.
 
 ## Key elements
 
-- **`HoldInput`** (exported interface) – shape of the hold request: `reason` (excludes `awaiting_stock`) and optional `note`.
-- **`holdFulfillmentOrder`** (exported) – public entry point for placing a hold. Delegates to the shared `guarded` wrapper with the `holdAct` transaction.
-- **`releaseFulfillmentOrder`** (exported) – public entry point for clearing a hold. Delegates to `guarded` with the `releaseAct` transaction.
-- **`guarded`** (module-private) – common orchestration: loads the fulfillment order and its parent order (read-only, outside the transaction), checks the rank rule via `orderService.outrankedRefusalFor`, runs the act, records an audit entry, and shapes the success response through `viewFulfillmentOrder`.
-- **`holdAct` / `releaseAct`** (module-private) – the in-transaction work: read-then-write via `fulfillmentOrderRepository.claim` (optimistic revision), update status through `statusOfLines`, set or unset `holdReason`/`holdNote`, call `reportProgress`, then `announceHeld`/`announceReleased`.
-- **`readForHold` / `isWorked`** (module-private) – shared pre-checks: the fulfillment order and parent order must exist and the order must be in `paid` or `processing` status.
+- **`HoldInput`** – Staff-facing input: `reason` (excludes `awaiting_stock`), optional `note` (internal), optional `message` (buyer-facing).
+- **`isWorked`** – Guards that the parent order is still awaiting goods (not delivered/cancelled) before allowing a hold or release.
+- **`holdAct`** – Transactional core: reads the fulfillment order + parent order, validates state, writes the held status/reason/timestamps via `fulfillmentOrderRepository.claim` (optimistic-concurrency on `revision`), then calls `reportProgress` and `announceHeld`.
+- **`releaseAct`** – Transactional core for the inverse: validates releasability, clears `holdReason`/`heldAt`/`holdNote`/`holdMessage`, restores line-derived status, then calls `reportProgress` and `announceReleased`. Reads the reason code from the pre-write document for the return value.
+- **`guarded`** – Shared wrapper: runs the act inside `runAct`, records a success audit entry (reason code only, never free text), fetches the fresh parent order, and shapes the response via `viewFulfillmentOrder`.
+- **`holdFulfillmentOrder`** *(exported)* – Public entry point to hold an order.
+- **`releaseFulfillmentOrder`** *(exported)* – Public entry point to release an order.
 
 ## Relationships
 
-- **`./act`** – `runAct` wraps each act in a Mongoose transaction; `refuse` / `refuseMissing` produce the 409 / 404 rejection objects.
-- **`../repository`** – `fulfillmentOrderRepository.findInSession` (read in session) and `.claim` (conditional update with revision) are the only write paths.
-- **`../domain`** – `isHoldable`, `isReleasable`, and `statusOfLines` supply the domain rules that gate state transitions and compute the new line status.
-- **`../audit`** – `deliveryAuditActions` provides the two audit action constants (`ADMIN_FULFILLMENT_ORDER_HELD`, `ADMIN_FULFILLMENT_ORDER_RELEASED`) recorded via `recordAudit`.
-- **`./announce`** – `announceHeld` / `announceReleased` write a timeline entry on the parent order for the staff actor.
-- **`./progress`** – `reportProgress` refreshes the order's aggregate progress after the status change.
-- **`./actions`** – `viewFulfillmentOrder` shapes the domain document into the API response view (including the caller's available `actions`).
-- **`@infrastructure/http/response`** – `generateSuccess` / `generateReject` and the `ResponseSuccess` / `ResponseReject` types define the envelope.
-- **`@infrastructure/i18n`** – `t()` translates the 404 messages for missing fulfillment order / order.
-- **`@modules/orders`** – `orderService` is used to read the parent order, check rank, and re-read the fresh order for the response view.
+- **`services/act.ts`** – Provides the transaction runner (`runAct`), the in-transaction reader (`readWithOrder`), and the early-return helper (`refuse`).
+- **`services/announce.ts`** – `announceHeld` / `announceReleased` fire post-commit notifications (e-mail, timeline events) within the same session.
+- **`services/progress.ts`** – `reportProgress` updates the parent order's progress after the hold/release write.
+- **`services/actions.ts`** – `viewFulfillmentOrder` shapes the response payload.
+- **`repository.ts`** – `fulfillmentOrderRepository.claim` performs the optimistic-concurrency write.
+- **`model.ts`** – `FulfillmentOrderDocument` type used throughout.
+- **`domain/index.ts`** (re-exports `domain/fulfillment.ts`) – `isHoldable`, `isReleasable`, `statusOfLines` supply the state-machine predicates and line-status computation.
+- **`audit.ts`** – `deliveryAuditActions` provides the action enum values for the audit log.
+- **`@infrastructure/observability/audit.ts`** – `recordAudit` writes the structured audit entry.
+- **`@infrastructure/http/response.ts`** – `generateSuccess` and the `ResponseSuccess`/`ResponseReject` types shape the API response.
+- **`@modules/orders`** – `isAwaitingGoods` (lifecycle check), `orderService.getById` (fresh parent order fetch), `OrderDocument` type.
 
 ## Notes
 
-- **`awaiting_stock` is asymmetric by design.** It can only be set and cleared by the stock-allocation flow, never by staff. `HoldInput` enforces this at the type level (`Exclude<FulfillmentHoldReason, 'awaiting_stock'>`); `releaseFulfillmentOrder` will also 409 if the current hold reason is `awaiting_stock` (via `isReleasable`). This is a consistency guard for the stock ledger, not a permission rule.
-- **Two-phase check.** The pre-transaction `guarded` step and the in-transaction `holdAct`/`releaseAct` both verify holdability/releasability. The in-transaction check is the authoritative one; the pre-check exists only to fail fast with a 404 before opening a session.
-- **Optimistic concurrency.** `fulfillmentOrderRepository.claim` compares `revision`; a `null` return means another actor won the race and the act returns 409.
-- **Audit is recorded only on success**, inside `guarded`, after the transaction commits. Refused acts produce no audit entry here.
+- **`awaiting_stock` is off-limits to staff.** It is set and released exclusively by the stock-allocation subsystem. A manual release of such a hold would ship goods the stock ledger never counted out, so `HoldInput.reason` is typed as `Exclude<FulfillmentHoldReason, 'awaiting_stock'>`.
+- **Audit metadata omits free text.** The operator log ships to Loki unhashed; only the reason *code* is recorded, never `holdNote` or `holdMessage`.
+- **`releaseAct` captures the reason before the write.** After `claim` clears the fields, the reason is no longer on the returned document; it is read from the pre-write `fulfillmentOrder` and returned in the `Changed` record.
+- **Optimistic concurrency.** Both acts pass `fulfillmentOrder.revision` to `claim`; a stale revision causes the write to fail and the act short-circuits with a 409.

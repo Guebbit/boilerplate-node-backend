@@ -1,7 +1,7 @@
 ---
 source: src/modules/stats/controllers/respond.ts
-sha256: a109abee6797f8861b024720791da3ed30c894492dcaf0ebeb3386e9c260f342
-generated_at: 2026-10-15T12:02:51.446836+00:00
+sha256: ea828cf95bab67b6bca20a51edbc87cd5c1b2caf36a88806d8bed0242baa2047
+generated_at: 2026-10-29T05:54:57.389352+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides the single shared handler factory (`statsHandler`) that every stats read endpoint uses. It encapsulates the common flow—read the query string, validate it against a Zod schema, resolve the date range against the shop's timezone, invoke a caller-supplied composer, and shape the HTTP response—so that sibling controllers (e.g. `get-stats.ts`) only supply the schema and the composer.
+Provides the shared handler factory for all stats read endpoints. It encapsulates the common flow — parse the query, validate the period against the shop's timezone, delegate to a composer, and shape the response — so individual stats controllers only supply their schema and business logic.
 
 ## Key elements
 
-- **`periodFields`** — Zod shape (`from`, `to` as non-empty strings) that every stats query must include.
-- **`intervalField`** — A `z.preprocess`-wrapped optional enum (`'day' | 'week' | 'month'`). Treats blank query-string values as absent via `blankToUndefined`.
-- **`statsHandler(name, schema, run)`** — Generic factory returning an Express handler. It:
-  1. Reads and validates the query from the `search` surface using `parseBody`.
-  2. Calls `resolvePeriod(query)`; on a refusal, returns a 422 with an i18n key `stats.range.${refusal}`.
-  3. Delegates to `run(period, query, request)`, piping success through `successResponse` and errors through `catchAs`.
-  4. Wraps the whole thing in `namedHandler` for logging/module-surface registration.
+- **`periodFields`** — Zod shape with `from` and `to` (non-empty strings). Exported so other schemas in the module can spread it into their own query validators.
+- **`intervalField`** — Optional Zod field for the `interval` query param. Preprocesses blank strings to `undefined` (via `blankToUndefined`) before checking against the `StatsInterval` enum.
+- **`statsHandler(name, schema, run)`** — Factory returning an Express handler. Steps it performs internally:
+  1. Reads the search query via `readInput` / `parseBody`.
+  2. Calls `resolvePeriod(query)`; on refusal, responds 422 with an i18n message (`stats.range.<reason>`).
+  3. Invokes the caller-supplied `run(period, query, request)` composer.
+  4. Wraps the result in `successResponse`, or routes rejections through `catchAs`.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — Consumes `namedHandler`, `parseBody`, and `catchAs` for handler registration, schema-validated input parsing, and uniform error capture.
-- **`src/infrastructure/http/request.ts`** — Calls `readInput(request, { surface: 'search' })` to extract the query-string object.
-- **`src/infrastructure/http/response.ts`** — Uses `successResponse` and `rejectResponse` for the two terminal reply paths.
-- **`src/infrastructure/http/schemas.ts`** — Uses `blankToUndefined` as the preprocessor for `intervalField`.
-- **`src/infrastructure/i18n/index.ts`** — Imports `t` to localise refusal messages by key.
-- **`src/modules/stats/services/range.ts`** — Imports `resolvePeriod` (and the `Period` type) to translate raw `from`/`to` into a shop-local period or a typed refusal.
-- **`src/modules/stats/controllers/get-stats.ts`** — Expected consumer: passes its own schema and composer into `statsHandler` to build a concrete endpoint.
+- **`@infrastructure/http/controller.ts`** — Supplies `namedHandler`, `parseBody`, and `catchAs`, the three building blocks this factory composes.
+- **`@infrastructure/http/request.ts`** — `readInput` extracts the validated search params from the Express request.
+- **`@infrastructure/http/response.ts`** — `successResponse` and `rejectResponse` shape the final JSON envelope.
+- **`@infrastructure/http/schemas.ts`** — `blankToUndefined` powers the `intervalField` preprocessing.
+- **`@infrastructure/i18n`** — `t` localises the 422 refusal message.
+- **`../services/range.ts`** — `resolvePeriod` converts the raw `from`/`to`/`interval` into a shop-local `Period` or a typed refusal.
+- **`@types`** — `StatsInterval` enum constrains the `interval` field.
+- **`./get-stats.ts`** (sibling controller) — Presumed consumer of `statsHandler`, `periodFields`, and `intervalField` to define a concrete endpoint.
 
 ## Notes
 
-- The handler reads from the **`search`** surface (query string), not the request body, despite using `parseBody` internally—that function is a generic "validate an input object" helper, not body-specific.
-- `intervalField` is intentionally *not* part of `periodFields`; consumers that don't need bucketing simply omit it from their schema.
-- The `run` composer receives the raw Express `Request` as its third argument, so it can reach headers or cookies if needed without threading them separately.
-- A validation failure in `parseBody` returns `undefined` from the handler (no explicit response), relying on `parseBody`'s internal rejection path.
+- The `run` callback receives the raw Express `request` as its third argument, giving composers access to anything outside the validated query (e.g., auth context).
+- `resolvePeriod` is synchronous and returns a discriminated union (`refusal` vs `period`); the handler checks for the `refusal` key. There is no async validation step here.
+- The module JSDoc explicitly states "only the schema and the composer differ" — new stats reads should go through `statsHandler` rather than re-implementing the parse → resolve → respond pipeline.

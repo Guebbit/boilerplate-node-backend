@@ -1,7 +1,7 @@
 ---
 source: scripts/testing/measure-demo-strip.ts
-sha256: 0815451332ed1b90db09bd67f72be7dfd19a2fa2086225bf1f091780687c0b21
-generated_at: 2026-10-15T09:48:21.792268+00:00
+sha256: b8fb95c7b428b7a3d9ee4d5b48db5597225b5f26dedb3f54c54a7693315f24c3
+generated_at: 2026-10-29T01:45:27.228129+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Diagnostic script that measures how far "a module is removable" actually is. It applies a removal **recipe** (`shop` or `locales`) to a scratch copy of the checkout, regenerates, then runs `ts-check`, the cross-cutting test suite, and `docs:build` against what remains. Every failure is a finding (new coupling); the script itself is not the removal command. CI runs it as the `demo-strip-measure` job.
+Measures how removable a given module group is by applying a removal **recipe** to a scratch copy of the repository, then running the standard post-removal checks (regenerate, type-check, cross-cutting tests, docs build). A failing check is the *finding*—it identifies residual coupling. This is a measurement harness, not the removal command itself (`demo:remove`); it is invoked via `npm run measure:demo-strip [-- --recipe shop|locales]` and runs as the `demo-strip-measure` CI job.
 
 ## Key elements
 
-- **`SCRATCH`** — Constant; the scratch copy lives under `os.tmpdir()/demo-strip-measure`, deliberately outside `REPO_ROOT` to avoid `fs.cpSync` source-inside-destination errors.
-- **`Check` / `CHECKS`** — Interface and ordered list of the four commands run after removal: `regenerate` (with `--no-sync`), `ts-check`, `test:cross-cutting`, `docs:build`.
-- **`Recipe`** — Interface with `apply()` (mutates the scratch tree) and `describe()` (human-readable summary for the report).
-- **`runInScratch`** — Runs a command in the scratch tree; **throws** on failure because a recipe that can't apply is a broken measurement, not a finding.
-- **`RECIPES`** — Map keyed by the `--recipe` CLI value. `shop` shells out to `scripts/scaffold/demo-remove.ts` inside the scratch copy; `locales` calls `removeModules` directly.
-- **`run`** — Runs a single `Check`; **never throws** — a failing check *is* the measurement result.
-- **`recipeName` / `recipe`** — Parses `--recipe` via `flagValue`, defaults to `shop`, validates against known keys.
-- **Main flow** — Announce → `assembleScratchCopy` → `recipe.apply()` → run all checks → print PASS/FAIL summary → set `process.exitCode` (0 or 1).
+- **`SCRATCH`** — temp-directory path (`os.tmpdir()/demo-strip-measure`) where the scratch copy is assembled; deliberately outside `REPO_ROOT` to avoid `fs.cpSync` source/destination overlap.
+- **`Check`** (interface) — a label, command, and args describing one post-removal verification step.
+- **`CHECKS`** — ordered array of four checks: `regenerate`, `ts-check`, `test:cross-cutting`, `docs:build`.
+- **`Recipe`** (interface) — `apply()` to perform the removal in the scratch tree, and `describe()` for the report line.
+- **`RECIPES`** — map keyed by `--recipe` value; `shop` shells out to `scripts/scaffold/demo-remove.ts` via `npx tsx`, `locales` calls `removeModules` directly.
+- **`runInScratch`** — runs a command in the scratch dir and **throws** on failure (a failed recipe application is a broken measurement, not a finding).
+- **`run`** — runs one `Check` in the scratch dir and **returns a boolean**; never throws (a failure is the measurement result).
+- **Main flow** — resolves recipe name (default `shop`), assembles scratch copy, applies recipe, runs all checks, prints a PASS/FAIL summary, sets `process.exitCode` to 0 or 1.
 
 ## Relationships
 
-- **`scripts/cli.ts`** — Imports `flagValue` to read the `--recipe` argument from the CLI.
-- **`scripts/modules-on-disk.ts`** — Imports `REPO_ROOT` as the source directory for the scratch copy and for resolving demo module names.
-- **`scripts/scaffold/demo-remove-modules.ts`** — Imports `removeModules`, used directly by the `locales` recipe.
-- **`scripts/testing/demo-module-names.ts`** — Imports `readDemoModuleNames` to enumerate shop/example modules for the `shop` recipe's description string.
-- **`scripts/testing/scratch-copy.ts`** — Imports `assembleScratchCopy` (builds the temp copy) and `runIn` (executes commands inside it); used by both `runInScratch` and `run`.
+- **`scripts/cli.ts`** — imports `flagValue` to read the `--recipe` CLI argument.
+- **`scripts/modules-on-disk.ts`** — imports `REPO_ROOT` as the source for the scratch copy and for resolving demo module names.
+- **`scripts/scaffold/demo-remove-modules.ts`** — imports `removeModules`, used by the `locales` recipe to delete the module folder and its registry lines.
+- **`scripts/testing/demo-module-names.ts`** — imports `readDemoModuleNames` to enumerate the module names for the `shop` recipe's description string.
+- **`scripts/testing/scratch-copy.ts`** — imports `assembleScratchCopy` (copies `REPO_ROOT` into `SCRATCH`) and `runIn` (executes a command in a given directory, returns success boolean).
 
 ## Notes
 
-- **Throws vs. returns:** `runInScratch` throws on failure (recipe application must succeed to be a valid measurement); `run` returns a boolean (check failure is the data point). Confusing the two inverts the script's purpose.
-- **`process.exitCode`, not `process.exit()`:** Lets `console.info` output flush before the process ends. The exit code is what CI's job square reads.
-- **`shop` recipe delegation:** Invokes `npx tsx scripts/scaffold/demo-remove.ts` *inside* the scratch copy so that relative paths resolve to the scratch root, not the real checkout.
-- **`regenerate --no-sync`:** The first check deliberately skips network sync to keep the measurement local and deterministic.
-- **Unknown recipe is a hard error:** Lists valid names in the message; there is no "run all recipes" mode in this script.
+- **Two failure semantics:** `runInScratch` throws if a recipe cannot be applied (the measurement is invalid); `run` returns `false` if a post-removal check fails (the measurement result). Confusing these would mask findings or crash on expected failures.
+- **Scratch location:** must be outside the repo tree. A path like `<repo>/tmp/` would make `fs.cpSync` see the destination as a subdirectory of its own source and refuse to copy.
+- **Shop recipe indirection:** it does not import the removal logic directly; it shells out to `scripts/scaffold/demo-remove.ts` via `npx tsx` inside the scratch copy, so `__dirname` resolves to the scratch root.
+- **`process.exitCode` vs `process.exit()`:** the script sets `exitCode` rather than calling `exit()` so that pending `console` output can flush before the process terminates.
+- **All checks always run:** even if `regenerate` fails, `ts-check`, `test:cross-cutting`, and `docs:build` still execute against whatever the failed regenerate left behind, because the aggregate of failures is the useful signal.

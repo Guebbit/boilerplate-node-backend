@@ -1,26 +1,41 @@
 ---
 source: src/modules/notifications/config.ts
-sha256: 74b674ae5dba2b108dfca885ea36d0f6c173d5e854e1f74f05ecf04f3bb739ab
-generated_at: 2026-10-15T10:49:21.989749+00:00
+sha256: 11fbb7bd63f409cddcf20fadedff16bbc2fd03d40188fb7403ae0777c78f0704
+generated_at: 2026-10-29T04:27:23.990315+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/notifications/config.ts
 
 ## Purpose
-Declares the notifications module's configuration schema. Currently exposes a single knob — the maximum number of notifications a user can retain — so that the value is centrally defined, validated, and documented rather than scattered across service code.
+
+Declares the single configuration surface for the notifications module: retention caps for user and staff inboxes, staff notice lifetime, and the time-based thresholds that drive the daily digest and various staff workflow reminders. All values are typed integers with a minimum of 1 and sensible defaults, making the module's tunable knobs discoverable in one place.
 
 ## Key elements
-- **`notificationsConfig`** (export) — The config object created via `defineConfig`. Namespaced under `'notifications'` and exposes one field:
-  - `NODE_NOTIFICATIONS_MAX_PER_USER` — An `int` field with `default: 100` and `min: 1`. Controls per-user notification retention.
+
+- **`notificationsConfig`** — The sole export. A `defineConfig` object named `"notifications"` with the following fields:
+  - `NODE_NOTIFICATIONS_MAX_PER_USER` (default 100) — Cap on how many notifications a regular user retains.
+  - `NODE_NOTIFICATIONS_STAFF_MAX_PER_USER` (default 200) — Separate, higher cap for staff so a refund burst can't evict their own messages.
+  - `NODE_NOTIFICATIONS_STAFF_TTL_DAYS` (default 30) — Lifetime of a staff work notice before it expires.
+  - `NODE_STAFF_TRANSFER_DUE_HOURS` (default 24) — Hours a transfer sits before the digest counts it as overdue.
+  - `NODE_STAFF_HOLD_OPEN_DAYS` (default 3) — Days a hold remains open before being flagged.
+  - `NODE_STAFF_RETURN_DECISION_DAYS` (default 3) — Days for a return decision before the digest nudges.
+  - `NODE_STAFF_UNSHIPPED_DAYS` (default 3) — Days unshipped before appearing in the digest.
+  - `NODE_STAFF_TRACKING_MISSING_HOURS` (default 24) — Hours with no tracking update before a reminder.
+  - `NODE_DELIVERY_UNDELIVERED_REMINDER_DAYS` (default 14) — Days undelivered before a reminder fires.
 
 ## Relationships
-- **`src/infrastructure/config/define.ts`** — Provides `defineConfig`, the function used to build the typed config object from a name + shape declaration.
-- **`src/infrastructure/config/fields.ts`** — Provides the `int` field validator that enforces type, default, and minimum constraint on the single field.
-- **`src/modules/notifications/module.ts`** — The module entry point that registers or wires `notificationsConfig` into the app's configuration registry.
-- **`src/modules/notifications/services/inbox.ts`** — Consumes `NODE_NOTIFICATIONS_MAX_PER_USER` to enforce the per-user retention limit when reading/writing a user's inbox.
+
+- **`src/infrastructure/config/define.ts`** — Supplies `defineConfig`, the factory that validates and names the config block.
+- **`src/infrastructure/config/fields.ts`** — Supplies the `int` field descriptor used to type every entry (enforces integer + `min: 1`).
+- **`src/modules/notifications/module.ts`** — Registers `notificationsConfig` so the module loader knows which config slice this module consumes.
+- **`src/modules/notifications/services/inbox.ts`** — Reads `NODE_NOTIFICATIONS_MAX_PER_USER` and `NODE_NOTIFICATIONS_STAFF_MAX_PER_USER` to enforce retention caps and `NODE_NOTIFICATIONS_STAFF_TTL_DAYS` for expiration.
+- **`src/modules/notifications/services/digest.ts`** — Reads the time-based `NODE_STAFF_*` and `NODE_DELIVERY_*` thresholds to decide which items are overdue and included in the daily digest.
+- **`src/modules/notifications/services/staff.ts`** — Reads staff-specific thresholds (TTL, hold/return/unshipped/tracking) to drive work-notice lifecycle logic.
 
 ## Notes
-- The file intentionally exposes exactly one field; the docblock calls it "the inbox's one knob." If additional settings are needed, they belong here rather than in service-level constants.
-- The `NODE_` prefix on the field name signals it is an environment-overridable value (see `docs/tools/configuration.md` referenced in the header).
-- `min: 1` means the value can never be zero or negative — a user must always retain at least one notification.
+
+- Every field is `min: 1`; a value of 0 is invalid and will be rejected at config-load time.
+- The staff cap (`STAFF_MAX_PER_USER`) is intentionally separate from the user cap so that a high-volume user (e.g. a refund storm) cannot push a staff member's own notifications out of their window.
+- The `NODE_STAFF_*` and `NODE_DELIVERY_*` keys look like they belong to a broader "staff" or "delivery" domain, but they are scoped here because the daily digest is the consumer that acts on them.
+- See `docs/tools/configuration.md` for operational guidance on overriding these values in deployment environments.

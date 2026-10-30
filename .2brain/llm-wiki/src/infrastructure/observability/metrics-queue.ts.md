@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/observability/metrics-queue.ts
-sha256: f4898c56379b869cbef664cf74e49ab2c00321d30c64f3aef684625e300a2bef
-generated_at: 2026-09-23T17:49:06.586216+00:00
+sha256: 9d0e01b2bb4b7e55284cb193c5e98f20d1ec7adc8b548f77dd1fd8e8c4d2c2db
+generated_at: 2026-10-29T02:10:37.538577+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the sole Prometheus counter for dead-letter queue activity in the system. It exists so that parked jobs (permanent rejections or exhausted retries) are observable as a metric rather than a one-off log line, enabling alerting on a sustained dead-letter rate.
+Defines the single Prometheus counter that makes dead-lettered queue jobs visible in metrics. Without it, a parked job is only observable via a transient log line; with it, a queue that keeps rejecting or exhausting retries becomes a measurable, alertable signal.
 
 ## Key elements
 
-- **`queueJobsDeadLetteredTotal`** (exported `Counter`) — Prom metric `queue_jobs_dead_lettered_total`, labelled by `queue` (bounded to `WORKER_CHANNELS` values). Increments each time a job is parked in a `<queue>.dead` destination. Registered against the shared `metricsRegistry`.
+- **`queueJobsDeadLetteredTotal`** (exported `Counter`) — Counts jobs parked in `<queue>.dead` (permanent rejection or exhausted retries). Registered against the shared `metricsRegistry`. The `queue` label is bounded by construction: names come from `WORKER_CHANNELS`, never from request data. A rate above zero is itself the alert (`QueueJobsParked` in `prometheus.alert-rules.yaml`); no threshold is layered on top.
 
 ## Relationships
 
-- **`./metrics-registry`** — Provides the `metricsRegistry` instance that this counter registers against, matching the pattern every other module's `metrics.ts` file follows.
-- **`src/infrastructure/adapters/queue.ts`** — The queue adapter is the expected caller that increments this counter when a job is dead-lettered (the file's doc comment frames the counter as the visibility mechanism for that action).
-- **`tests/unit/infrastructure/adapters/queue.test.ts`** — Unit tests for the queue adapter; the only test neighbor in the graph, implying the counter's increment path is exercised there.
+- **`./metrics-registry`** — Provides the shared `metricsRegistry` instance this counter registers with, ensuring it appears alongside all other module metrics in the same Prometheus scrape target.
+- **`@infrastructure/observability/metric-config`** — Supplies `counterConfig`, a helper that normalizes common counter options (type, help-text prefix, etc.) so each module's counter stays consistent.
+- **`@infrastructure/observability/metrics.generated`** — Provides `infrastructureMetricData.queueJobsDeadLetteredTotal`, the machine-generated definition (name, description, label set) consumed by `counterConfig`.
+- **`src/infrastructure/adapters/queue.ts`** — The queue adapter that increments this counter when a job is dead-lettered (the only consumer of the metric in the codebase).
+- **`tests/unit/infrastructure/adapters/queue.test.ts`** — Verifies the counter increments correctly when the queue adapter parks a job.
 
 ## Notes
 
-- The label value space is intentionally bounded (only `WORKER_CHANNELS` names, never request-derived data) to keep the metric series finite.
-- The intended alert is a **rate > 0** on this counter (rule `QueueJobsParked` in `prometheus.alert-rules.yaml`), not a threshold on an absolute value. No other component reads `<queue>.dead` on its own.
-- See `docs/tools/prometheus.md` for the broader metrics conventions.
+- The doc comment explicitly states the label cardinality guarantee: queue names originate from the static `WORKER_CHANNELS` list, so no unbounded label explosion is possible.
+- This file is intentionally minimal (one counter). If you need a new queue metric, follow the same pattern: add a definition to `metrics.generated.ts`, then register here.
+- The alert fires on rate > 0, not on a threshold. Do not add a secondary "high rate" alert expecting this metric to be near-zero in steady state.

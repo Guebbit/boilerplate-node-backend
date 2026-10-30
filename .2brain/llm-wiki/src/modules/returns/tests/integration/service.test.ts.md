@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/tests/integration/service.test.ts
-sha256: 462a7b53b3e90dedc90ecfbc6f2c3cb7a723db4c3596acb88ec583cee790b842
-generated_at: 2026-10-15T12:00:41.264241+00:00
+sha256: aea1b56552bb4951f8a9f5d40e3006641c70bf0a58c278fd2577bc4df9e94846
+generated_at: 2026-10-29T05:49:34.077355+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the returns service (`createReturn`, `approveReturn`, `declineReturn`, etc.) run against a real database. The goal is to verify conditional writes and tenant scoping end-to-end: a withdrawal genuinely cancels the order and refunds the payment, a return on shipped goods writes real lines, and concurrent staff decisions race correctly. The only things mocked are the mail queue and the audit event emitter.
+Integration tests for `returnService` run against a real database. The file verifies the service's conditional writes (order cancellation, refund calculation, line-item scoping) and its tenant/role scoping, without mocking any domain logic. Only the mail queue and the audit emitter are stubbed. It covers withdrawals before dispatch, goods excluded under Art. 16, and concurrent staff decisions.
 
 ## Key elements
 
-- **`orderIn(status)`** — Helper that creates a fresh customer (unique email), two products, and an order at the given `OrderStatus`; if the target is `shipped`/`delivered`, it drives the order there via `carryOrderTo`. Returns a bundle of entities for assertions.
-- **`deliveredOrder()`** — Wraps `orderIn(OrderStatus.delivered)` and sets a 7-day `withdrawUntil` window.
-- **`orderWithExcluded(carriedTo?)`** — Builds an order containing one `noWithdrawal` product (engraved mug) and one normal product, for Art. 16 exclusion tests.
-- **`buyer(user)`** — Shorthand for `asCustomer(user.id)` caller context.
-- **"a withdrawal before dispatch" suite** — Verifies order cancellation, refund amounts (0 vs. 70), single email, domain-event ordering via outbox, idempotency guard, 404 for foreign/admin callers, and reason restrictions.
-- **"goods excluded from the right of withdrawal (Art. 16)" suite** — Verifies excluded lines are dropped from auto-generated returns and that naming an excluded line yields a 422.
-- **`jest.mock('@infrastructure/adapters/mailer')`** — Replaces `enqueueEmail` with a jest.fn; assertions check call count and template name (`'returns.notice'`).
-- **`jest.mock('@infrastructure/observability/audit')`** — Full module replacement (not a spy) that intercepts `emitAuditEvent` while keeping `buildAuditEvent` and other exports intact.
-- **`registerCheckoutModules([paymentsModule, returnsModule])`** — Called in `beforeEach` so the service can resolve the payment and return repositories.
+- **`orderIn(status)`** — helper that creates a fresh customer, two products, and an order at the given `OrderStatus`; if the status is `shipped`/`delivered` it routes through `carryOrderTo` so real shipment rows exist, then clears setup emails.
+- **`deliveredOrder()`** — wraps `orderIn(OrderStatus.delivered)` and extends the withdrawal window by 7 days.
+- **`orderWithExcluded(carriedTo)`** — creates an order containing one normal item and one `noWithdrawal` item, optionally carried to delivered.
+- **`onlyExcludedOrder()`** — creates a paid order whose sole line is an excluded item.
+- **`describe('a withdrawal before dispatch')`** — verifies order cancellation, refund amounts (0 vs. full), single email, domain-event ordering via outbox, idempotency, cross-customer 404, missing-staff-permission 404, 422 on missing statement fields, and rejection of non-withdrawal reasons.
+- **`describe('goods excluded from the right of withdrawal (Art. 16)')`** — verifies that `noWithdrawal` lines are excluded from refunds and that an order of only excluded lines cannot be withdrawn.
+- **Mocks** — `enqueueEmail` (mailer) is jest-mocked to capture calls; `emitAuditEvent` is *replaced* (via `auditPortMock`) because the real `recordAudit` closes over its own module instance and cannot be spied on.
 
 ## Relationships
 
-- **`@kernel/events`** — `onDomainEvent` registers listeners to capture `RETURN_REQUESTED` / `RETURN_CLOSED`; `resetDomainEvents` runs in `afterEach`.
-- **`@kernel/outbox`** — `settleOutboxNudges()` flushes the outbox so domain events are dispatched before assertions.
-- **`@infrastructure/adapters/mailer`** — The sole external I/O mock; tests assert exact call counts and template identifiers.
-- **`@infrastructure/observability/audit`** — Replaced wholesale (see Notes); `mockEmitAuditEvent` is used to assert audit payloads.
-- **`@modules/orders/tests/factories`** — Provides `createOrder`, `readOrder`, `toOrderItem`, `markOrderPaidAt`, `setWithdrawUntil`, `forceOrderStatus`.
-- **`@modules/delivery/tests/factories`** — `carryOrderTo` advances an order to shipped/delivered through the real delivery pipeline.
-- **`@modules/products/tests/factories`** — `createProduct` with optional `noWithdrawal` flag.
-- **`@modules/access/index`** — `assignRole` used to grant staff permissions for approve/decline tests.
-- **`@modules/payments/module`** — Registered so withdrawal tests can trigger a real refund path.
-- **`@modules/returns/events`** — `RETURN_CLOSED`, `RETURN_REQUESTED` constants for event-listener assertions.
-- **`@modules/returns/audit`** — `returnsAuditActions` imported for audit-action assertions.
-- **`@kernel/access/tenant`** — `DEPLOYMENT_TENANT_ID` used in tenant-scoping setup.
+- **`src/modules/returns/module.ts`** — `returnsModule` is imported and registered as a checkout module in `beforeEach`.
+- **`src/modules/returns/events.ts`** — `RETURN_REQUESTED` and `RETURN_CLOSED` are used with `onDomainEvent` to assert event ordering.
+- **`src/modules/returns/audit.ts`** — `returnsAuditActions` is imported (referenced in audit assertions).
+- **`src/kernel/events.ts`** — `resetDomainEvent` and `onDomainEvent` manage the in-memory event bus lifecycle.
+- **`src/kernel/outbox.ts`** — `settleOutboxNudges` flushes the outbox relay so queued emails and events are delivered before assertions.
+- **`src/kernel/access/tenant.ts`** — `DEPLOYMENT_TENANT_ID` provides the default tenant scope.
+- **`src/infrastructure/adapters/mailer.ts`** — fully mocked; tests assert call count and template name (`returns.notice`).
+- **`src/infrastructure/observability/audit.ts`** — replaced with `auditPortMock` from `@tests/ports`; tests assert which audit actions fire.
+- **`src/modules/orders/tests/factories.ts`** — supplies `createOrder`, `readOrder`, `toOrderItem`, `setWithdrawUntil`, `setConformityUntil`, `markOrderPaidAt`.
+- **`src/modules/delivery/tests/factories.ts`** — `carryOrderTo` advances an order to `shipped`/`delivered` through the real delivery path.
+- **`src/modules/products/tests/factories.ts`** — `createProduct` (including `noWithdrawal` flag).
+- **`src/modules/payments/module.ts`** — registered alongside `returnsModule` so refund side-effects execute.
+- **`src/modules/access/tests/factories.ts`** — `seedMembership` provisions staff role/permission rows.
+- **`src/modules/orders/index.ts`** — `orderService` is imported (used in cross-module assertions).
 
 ## Notes
 
-- **Audit mock is a replacement, not a spy.** `recordAudit` closes over the audit module's own `emitAuditEvent`, so a `jest.spyOn` on the imported function would not intercept the internal call. The mock re-implements `recordAudit` to route through the injected `emitAuditEvent` fn.
-- **Distinct email per customer.** The users collection enforces one row per email, so the `customers` counter ensures a unique address for every `createUser` call.
-- **Clear mailer after delivery setup.** `mockEnqueueEmail.mockClear()` is called after `carryOrderTo` so that shipped/delivered notification mails don't pollute the assertion that exactly one return-notice mail was sent.
-- **Events ride the outbox.** Domain events are not dispatched synchronously; tests must call `await settleOutboxNudges()` before asserting on `onDomainEvent` listeners.
-- **`it.each` over statuses.** The withdrawal-before-dispatch suite parametrises `pending`, `paid`, `processing` to confirm the same invariants hold at every pre-dispatch state.
+- **Audit mock is a replacement, not a spy.** The comment in the file explains that `recordAudit` closes over its own module-level `emitAuditEvent`, so a plain `jest.spyOn` would not intercept it. The mock is swapped via `jest.requireActual('@tests/ports').auditPortMock()`.
+- **Distinct emails per customer.** A module-level `customers` counter ensures every `createUser` call gets a unique email, because the users collection enforces one row per email.
+- **`settleOutboxNudges()` is required before asserting side-effects.** Both emails and domain events ride the outbox relay; calling it without flushing yields no observable calls.
+- **Setup emails are cleared after `carryOrderTo`.** The shipping/delivery confirmation emails belong to fixture setup, not to the behaviour under test, so `mockEnqueueEmail.mockClear()` runs immediately after.
+- **The file is truncated** (the Art. 16 describe block continues beyond the visible portion), so additional test cases around partial exclusions and concurrent staff decisions are present but not fully shown here.

@@ -1,7 +1,7 @@
 ---
 source: tests/integration/app-health.test.ts
-sha256: 43aa3450e78340d18f34361026a1553e342b35f8cb74899ca55189df8cda1ae9
-generated_at: 2026-10-15T12:43:34.200033+00:00
+sha256: d083b6442431639a8d78bf9c672297846e8fbb41dedff6fbc1ceeecdacb78269
+generated_at: 2026-10-29T06:52:04.033441+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the system health endpoints (`/`, `/livez`, `/readyz`) and the `/observability/*` routes. They exercise the **real** application assembled in `src/app.ts` via the shared supertest harness, deliberately avoiding a privately-built Express app so that middleware-stack mismatches cannot mask regressions. A test database is provisioned (the SSE events route requires an admin session); Redis is intentionally not started because none of these routes need it.
+Integration tests for the root `/` endpoint and the `/livez` / `/readyz` liveness/readiness probes. They exercise the real application exported from `src/app.ts` through the shared supertest harness, verifying welcome-payload shape, 404 handling, request-id semantics, and the readiness lifecycle across booting → listening → draining phases.
 
 ## Key elements
 
-- **`setupTestDb()`** (module-level) — seeds an in-memory/test database before any test runs.
-- **`describe('System routes')`** — asserts `GET /` returns a welcome payload with an `x-request-id` header, unknown paths 404, and that the server always generates its own request ID (logging any client-supplied ID beside it as `clientRequestId`). Also covers the trusted-ingress override and the malformed-UUID replacement rule.
-- **`describe('GET /livez')`** — confirms the endpoint returns 200 with an empty body *while* `/readyz` is still 503, locking in the liveness semantic ("process is alive, may not be ready").
-- **`describe('GET /readyz')`** — drives the readiness phase directly via `markServerListening()` / `markServerDraining()` and asserts 503 → 200 → 503 transitions, plus that `/livez` stays 200 during draining.
-- **`describe('Observability routes')`** —
-  - `/observability/metrics`: authenticates with a bearer token read from `currentEnvironment().NODE_METRICS_TOKEN`; asserts Prometheus text exposition.
-  - `/observability/events`: logs in as an admin to obtain a `__Host-session` cookie, then reads the SSE stream via a custom supertest `parse` that destroys the socket after the first `data:` chunk.
-  - `/observability/{health,metrics/overview,audit}`: asserts 401 (not 404/500) to prove auth middleware is mounted on the path.
+- **`describe('System routes')`** — covers `GET /` (200 + `x-request-id` header + `{ status: "ok" }` body), 404 for unknown paths, server-generated request-id vs. client-supplied id (asserted via a `logger.log` spy on the access-log line), trusted-ingress adoption of the client id, and replacement of a malformed (non-UUID) `x-request-id`.
+- **`describe('GET /livez and GET /readyz across the process lifecycle')`** — a single `it` that sequentially asserts: `/readyz` → 503 while booting, `/livez` → 200 while booting; `markServerListening()` → `/readyz` 200; `markServerDraining()` → `/readyz` 503 while `/livez` remains 200.
+- **`setupTestDb()`** — called at module top level; provisions a database because session-cookie auth (used by observability routes) requires a user row.
+- **`api()`** — the supertest client wrapping the real app; used for every request in the file.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `tests/support/http.ts` | Provides the `api()` supertest helper used for every request. |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` is called at module load to create the test database. |
-| `src/infrastructure/runtime/readiness.ts` | `markServerListening()` and `markServerDraining()` are called to transition the process through readiness phases. |
-| `src/infrastructure/adapters/logger.ts` | `logger.log` is spied on to capture the structured access-log payload and assert `clientRequestId` is recorded. |
-| `src/infrastructure/config/store.ts` | `currentEnvironment()` supplies `NODE_METRICS_TOKEN` for the metrics bearer header. |
-| `src/modules/users/tests/factories.ts` | `createAdminUser()` + `PLAIN_PASSWORD` create the admin account used to obtain a session cookie for the SSE test. |
-| `tests/support/environment.ts` | `setEnvironment({ NODE_TRUSTED_INGRESS: 'true' })` enables the trusted-ingress code path in one test. |
+- **`tests/support/http.ts`** — provides `api()`; its harness imports and mounts the real app from `src/app.ts` and skips auto-start under `NODE_ENV=test`, which is why the process begins in the *booting* phase.
+- **`src/infrastructure/runtime/readiness.ts`** — the test calls `markServerListening()` and `markServerDraining()` to advance the one-way readiness state machine and observe the corresponding `/readyz` status codes.
+- **`src/infrastructure/adapters/logger.ts`** — the request-id test spies on `logger.log` to inspect the access-log structured payload (`requestId`, `clientRequestId` fields).
+- **`tests/support/environment.ts`** — `setEnvironment({ NODE_TRUSTED_INGRESS: 'true' })` flips the flag that lets the app adopt a client-supplied request id.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` seeds the test database before any test runs.
 
 ## Notes
 
-- **Test ordering is load-bearing.** The `/readyz` "still booting" case must run *first* in its `describe` block; a later case that calls `markServerListening()` would otherwise leave the process in a listening state and make the 503 assertion pass by accident. Similarly, the `/livez` block runs before any `markServerListening` call.
-- **SSE stream handling.** Because `EventSource` cannot set custom headers, the test authenticates with a session cookie (mirroring the frontend's `withCredentials` approach). The infinite stream is terminated by calling `stream.destroy()` after the first `data:` chunk arrives; supertest's `buffer(true)` + custom `parse` collects whatever was received.
-- **Request-ID validation test** uses a plain non-UUID string (`'not-a-uuid'`) rather than a CR/LF injection string, because Node's HTTP client rejects the latter before it reaches the server. The shape check is what actually guards the log-injection vector.
-- The file's own docblock explicitly warns that driving a privately-assembled Express app (rather than the one in `src/app.ts`) is the primary anti-pattern to avoid.
+- The readiness lifecycle test is intentionally a **single** `it` block. Because the readiness phase only moves forward and the suite may run shuffled, splitting it into separate cases would make them order-dependent.
+- Redis is deliberately **not** started; none of the routes exercised here require it.
+- The malformed `x-request-id` test uses an ordinary non-UUID string rather than CR/LF, because Node's HTTP client already rejects literal CR/LF in header values. The assertion targets the server-side shape check that guards against log-injection for values a client can actually send.
+- The app's auto-start is suppressed under `NODE_ENV=test` (see `tests/support/http.ts` docblock), so the process always begins in the *booting* phase; the test must explicitly call `markServerListening()` to reach the *listening* state.

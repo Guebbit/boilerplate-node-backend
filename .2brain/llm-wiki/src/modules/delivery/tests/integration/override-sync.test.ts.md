@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/tests/integration/override-sync.test.ts
-sha256: a1ca575e8efcb68d7a8691415556ae44c5324c81a08a82b0297d215bb8b323d6
-generated_at: 2026-10-14T15:36:19.724094+00:00
+sha256: e9839974e196f5eb293be6478d9f24d18b46be157bc2f927082c06b9ea09ad4a
+generated_at: 2026-10-29T03:46:46.472808+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the delivery module's reaction to an admin status-override event. Verifies that forwarding an order to `shipped` or `delivered` causes all remaining fulfillment records to be closed at the override's own timestamp (the one `withdrawUntil` was counted from), marked `forced: true`, with **no** email sent and **no** public `shipment.*` domain event emitted. Also covers idempotent re-delivery of the same override event and confirms that a backward override (to `processing`) leaves fulfillment records untouched.
+Integration tests for the delivery module's reaction to an admin status override that moves an order *forward* (to `shipped` or `delivered`). They verify that the override's event causes the delivery module to close out all remaining fulfillment lines as a single **forced** shipment at the override's own timestamp, without emitting any public `shipment.*` domain event or sending a customer email.
 
 ## Key elements
 
-- **`processingOrder()`** – fixture helper: creates a 3-unit order in `processing` state, reserves and commits inventory, seeds a fulfillment order.
-- **`override(orderId, to)`** – calls `orderService.overrideStatus` as an admin, then `settleOutboxNudges()` so the delivery module hears the event.
-- **`overriddenAt(orderId)`** – reads the override's timestamp from the order's timeline row (`lastOverrideOf`).
-- **`describe('an override forward to shipped')`** – three cases: full-remainder forced shipment (no mail, no public event, correct `shippedAt`, fulfillment closed); partial-shipment remainder (only unshipped units, single inventory deduction); idempotency (second call to `syncWithOverride` is a no-op).
-- **`describe('an override forward to delivered')`** – two cases: all shipments get `deliveredAt` equal to the override instant and `withdrawUntil` is recalculated from that same instant; backward override to `processing` leaves fulfillment orders open and no shipments created.
-- **Mailer mock** – `enqueueEmail` from `@infrastructure/adapters/mailer` is globally mocked; every assertion expects it was **not** called.
+- **`processingOrder()`** – fixture: creates a 3-unit order in `processing` status, reserves + commits inventory, and ensures a fulfillment order exists.
+- **`override(orderId, to)`** – calls `orderService.overrideStatus` as admin, then flushes outbox nudges so the delivery module actually receives the event.
+- **`overriddenAt(orderId)`** – reads the timestamp from the order's last override timeline row (the "anchor instant").
+- **`describe('an override forward to shipped')`** – three cases:
+  - ships every remainder as one `forced: true` shipment stamped with the override instant, sends no mail, emits no `SHIPMENT_SHIPPED`/`SHIPMENT_DELIVERED` events.
+  - ships only the *unshipped* remainder (2 of 3) and decrements inventory exactly once.
+  - idempotency: a second call to `deliveryService.syncWithOverride` is a no-op.
+- **`describe('an override forward to delivered')`** – two cases:
+  - delivers all shipments at the override instant; `withdrawUntil` is computed from that same instant; no customer email.
+  - an override *back* to `processing` leaves fulfillment records untouched (no shipments created).
 
 ## Relationships
 
-- **`src/modules/delivery/services/override-sync.ts`** – SUT under test; `syncWithOverride` is called directly in the idempotency case.
-- **`src/modules/delivery/services/ship.ts`** – `shipFulfillmentOrder` creates a partial shipment *before* the override to test remainder logic.
-- **`src/modules/delivery/events.ts`** – `SHIPMENT_SHIPPED` / `SHIPMENT_DELIVERED` are subscribed via `onDomainEvent` to assert they are **not** announced.
-- **`src/modules/delivery/module.ts`** – `deliveryModule.subscribe()` wires the module's event handlers in `beforeEach`.
-- **`src/modules/delivery/services/index.ts`** – barrel re-export used to import `shipFulfillmentOrder` and `syncWithOverride`.
-- **`src/modules/delivery/tests/factories.ts`** – `fulfillmentOrdersOf`, `shipmentsOf` test helpers.
-- **`src/modules/orders/index.ts` / `services/index.ts`** – `orderService` triggers the override and reads order state.
-- **`src/modules/orders/domain/withdrawal.ts`** – `withdrawUntilFrom` used to verify deadline recalculation.
-- **`src/modules/orders/tests/factories.ts`** – `createOrder`, `toOrderItem`, `lastOverrideOf`.
-- **`src/modules/inventory/index.ts` / `services/index.ts`** – `inventoryService` for reserve, commit, and movement assertions.
-- **`src/kernel/events.ts`** – `markDomainEventsWired`, `onDomainEvent`, `resetDomainEvents` manage the in-test event bus.
-- **`src/kernel/outbox.ts`** – `settleOutboxNudges` flushes the outbox so delivery hears the override.
-- **`src/infrastructure/adapters/mailer.ts`** – mocked; never expected to be called in any test.
+- **`@kernel/events`** – `resetDomainEvents` / `markDomainEventsWired` / `onDomainEvent` set up the in-process event bus for assertions on (and against) `SHIPMENT_SHIPPED` / `SHIPMENT_DELIVERED`.
+- **`@kernel/outbox`** – `settleOutboxNudges` flushes the outbox so the delivery module's subscriber fires synchronously within the test.
+- **`@modules/delivery/module`** – `deliveryModule.subscribe()` wires the module's event handlers each test.
+- **`@modules/delivery/events`** – provides the `SHIPMENT_SHIPPED` / `SHIPMENT_DELIVERED` constants used in event assertions.
+- **`@modules/delivery/services`** – `deliveryService.shipFulfillmentOrder` (to pre-ship a partial line) and `deliveryService.syncWithOverride` (direct idempotency check).
+- **`@modules/delivery/tests/factories`** – `fulfillmentOrdersOf`, `shipmentsOf` read delivery-state for assertions.
+- **`@modules/orders` / `@modules/orders/services`** – `orderService.overrideStatus`, `orderService.getById`; `withdrawUntilFrom` from the withdrawal domain used to assert the deadline.
+- **`@modules/orders/tests/factories`** – `createOrder`, `toOrderItem`, `lastOverrideOf` for fixture setup and timeline reads.
+- **`@modules/inventory` / `@modules/inventory/services`** – `reserveForOrder`, `commitForOrder`, `listMovements` to verify stock is decremented exactly once.
+- **`@infrastructure/adapters/mailer`** – mocked (`enqueueEmail`) to assert no customer email is enqueued by the override path.
+- **`@modules/products/tests/factories`** – `createProduct`, `countersOf` for stock assertions.
+- **`@modules/users/tests/factories`** – `createUser` for order ownership.
 
 ## Notes
 
-- **Timestamp semantics:** `shippedAt` / `deliveredAt` on override-generated shipments are set to the override row's `at` value, **not** `Date.now()`. Tests assert exact equality with `overriddenAt(orderId)`.
-- **`forced: true`** flag distinguishes override-generated shipments from operator-initiated ones; shipment numbering continues sequentially (1, 2, …).
-- **Silent by design:** the override path intentionally emits no public `shipment.*` events and sends no email. The `announced` array must remain empty.
-- **`settleOutboxNudges()` is mandatory** after `overrideStatus`; without it the delivery module never receives the event and the test would hang or fail.
-- **Idempotency guard:** calling `syncWithOverride` a second time with the same `(orderId, status, at)` must not create a duplicate shipment — this is the explicit contract being tested.
+- The central contract under test: the override's timeline row timestamp (`row.at`) is the single instant used for `shippedAt`, `deliveredAt`, *and* `withdrawUntil`—not the wall-clock time of the test.
+- `forced: true` distinguishes override-created shipments from operator-initiated ones; shipment numbering continues (e.g. 1, 2) rather than resetting.
+- The mailer mock is cleared in `beforeEach`; the delivered-override test additionally clears it after the partial-ship mail so only the override path is observed.
+- `deliveryModule.subscribe()` is called in every `beforeEach`; forgetting this (or `markDomainEventsWired()`) silently breaks event delivery.

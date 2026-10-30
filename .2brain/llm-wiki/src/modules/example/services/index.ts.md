@@ -1,7 +1,7 @@
 ---
 source: src/modules/example/services/index.ts
-sha256: ee9dd715687846468b8e41f3b41f7c6cbbb57880948acb13bc9e8a0deb198943
-generated_at: 2026-10-15T10:30:54.760761+00:00
+sha256: 5cdbb866bb1ef8f8daec2949a0f38738a7e8efa9692ed94afed483bf19d7480a
+generated_at: 2026-10-29T03:55:51.800026+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Service-layer façade for the `example` module. It re-exports the individual capability functions (CRUD + cover) and bundles them into a single `exampleService` object, giving controllers one stable entry point while allowing optional capabilities to live in their own files.
+Barrel (facade) for the example module's service layer. It aggregates the per-capability sub-services (CRUD, cover, status transitions) into a single exported object so that controllers and the module barrel have exactly one door to call through, rather than reaching into individual function exports.
 
 ## Key elements
 
-- **`exampleService`** — exported object (`{ create, getById, getPublishedById, search, update, remove, setCover }`). The canonical public surface; controllers are expected to call through this rather than the bare re-exports.
-- **Re-exports from `./crud`** — `create`, `getById`, `getPublishedById`, `remove`, `search`, `update`. These are the basic CRUD operations.
-- **Re-export from `./cover`** — `setCover`. An optional capability kept in its own file.
-- **Barrel exports** — the individual `export { … }` lines make the names available to `src/modules/example/index.ts` and to tests that import them directly.
+- **`exampleService`** (object export) — the sole public surface of the service layer. Contains:
+  - `create`, `getById`, `search`, `updateById`, `removeById` — re-exported from `./crud`
+  - `setCover` — re-exported from `./cover`
+  - `publishById`, `archiveById`, `unarchiveById` — re-exported from `./transition`
 
 ## Relationships
 
-- **Consumed by all example controllers** (`post-example`, `get-example`, `get-examples`, `update-example`, `delete-example`, `put-example-cover`) — each imports `exampleService` (or, for tests, the bare functions) and delegates to it.
-- **Re-exports from `./crud.ts` and `./cover.ts`** — the actual implementation lives in those sibling files; this file adds no logic.
-- **Re-exported by `src/modules/example/index.ts`** — the module barrel surfaces the service names outward.
-- **Imported by tests** (`service.test.ts`, `capabilities.test.ts`) — integration tests exercise the service through this entry point.
+- **Controllers** (`post-example`, `get-example`, `get-examples`, `update-example`, `delete-example`, `put-example-cover`, `post-example-event`) — import `exampleService` and invoke its methods; they never import the sub-service files directly.
+- **`src/modules/example/index.ts`** — the module-level barrel; re-exports `exampleService` to consumers outside the module.
+- **`services/crud.ts`, `services/cover.ts`, `services/transition.ts`** — the actual implementations this file re-exports; they are not meant to be imported by callers directly.
+- **`tests/integration/service.test.ts`, `tests/integration/capabilities.test.ts`** — exercise `exampleService` as the integration entry point.
 
 ## Notes
 
-- The module doc comment states explicitly that controllers should call through `exampleService`, **not** the bare re-exported functions. The bare exports exist so the module barrel can publish the names and so tests can grab a single function in isolation.
-- The service is designed as a *folder*: adding a new optional capability means dropping a new file (e.g. `./notify.ts`) alongside `crud.ts`, then wiring it into the `exampleService` object here. No other controller or module code changes.
+- Convention (stated in the file header): controllers call **through** `exampleService` and never import the bare functions from `./crud`, `./cover`, or `./transition`. If you find a direct import of a sub-service file outside this barrel, it is a violation.
+- Each optional capability keeps its own file in the `services/` folder; adding a new capability means adding a file here and extending the `exampleService` object — no new barrel or naming convention is introduced.
+- The file exports nothing else; there is no named re-export list for the individual functions.

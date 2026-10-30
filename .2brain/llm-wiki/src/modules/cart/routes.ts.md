@@ -1,41 +1,39 @@
 ---
 source: src/modules/cart/routes.ts
-sha256: d724bd3b9b24fd81d4af8946a69c3d4e7b912d8ecb8a362a61ec9ff15705d63e
-generated_at: 2026-10-14T15:10:27.350968+00:00
+sha256: 22274d439e5bc1ac8f9860ba45a8f96731b76ac9c81b574c47be38f5fb6e7dd7
+generated_at: 2026-10-29T03:23:43.124134+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/cart/routes.ts
 
 ## Purpose
-The Express route table for the cart domain. It wires the shared auth/authorization middleware chain, per-route security controls (fresh-auth, second permission, rate limiter, idempotency, cache invalidation), and the individual cart controller handlers onto a single `Router` instance. Every HTTP request under the cart path passes through this file before reaching a controller.
+
+Defines the Express router for all cart endpoints (read, mutate, merge, reorder, checkout). Every route is authenticated and scoped to the caller's own basket via the `update:Cart` permission; `POST /checkout` additionally demands a fresh session with `checkout:Cart`.
 
 ## Key elements
-- **`router`** (exported) — the Express `Router` that `module.ts` mounts.
-- **Router-level middleware** — `getAuth` → `isAuth` → `requirePermission('cart.self.update')` applied to every cart route; restricts access to shopper roles only.
-- **`POST /checkout`** — the heaviest chain: `requireFreshAuth('critical')` → `requirePermission('cart.self.checkout')` → `checkoutLimiter` → `idempotencyKey` → `invalidateCache(['products'])` → `postCheckout`. The only route that busts the products response cache and the only one requiring a fresh session + a second permission.
-- **`POST /merge`** — `mergeLimiter` → `idempotencyKey` → `postCartMerge`. Limiter sits before idempotency so a burst of retries is still counted.
-- **`POST /reorder/:orderId`** — `postReorder`; copies an existing order back into the cart.
-- **`GET /summary`** — `getCartSummary`.
-- **`GET /`** — `getCart`.
-- **`POST /`** — `postCart` (add/set item).
-- **`DELETE /all`** — `clearCart`; mounted above `/:productId` to prevent Express from matching `"all"` as a product id.
-- **`DELETE /`** — `deleteCartItem`; body-carried `productId`; alias of `DELETE /:productId`.
-- **`PUT /shipping-method`** — `putCartShippingMethod`; mounted above `/:productId` for the same literal-segment reason.
-- **`PUT /:productId`** — `putCartItem` (set quantity).
-- **`DELETE /:productId`** — `deleteCartItem` (canonical remove-by-id).
+
+- **`router`** (exported `Express.Router`) — the single public export; mounted by the cart module.
+- **Router-level middleware** — `getAuth`, `isAuth`, `requirePermission('update', 'Cart')` applied to every route via `router.use`.
+- **`POST /cart/checkout`** — layered chain: `requirePermission('checkout','Cart')` → `requireFreshAuth('critical')` → `checkoutLimiter` → `idempotencyKey` → `invalidateCache(['products'])` → `postCheckout`. The only route that touches the product response cache.
+- **`POST /cart/merge`** — `mergeLimiter` → `idempotencyKey` → `postCartMerge`; folds a guest cart into the caller's.
+- **`POST /cart/reorder`** — copies a prior order back into the cart (`postReorder`).
+- **`GET /cart/summary`**, **`GET /cart`** — read endpoints (`getCartSummary`, `getCart`).
+- **`POST /cart/items`**, **`PATCH /cart/items/:productId`**, **`DELETE /cart/items/:productId`**, **`DELETE /cart/items`** (clear all) — line-level mutations under the `/items` collection.
+- **`PUT /cart/shipping-method`** — set or clear the shipping method.
 
 ## Relationships
-- **`src/kernel/middlewares/authorizations.ts`** — source of `getAuth`, `isAuth`, `requireFreshAuth`, `requirePermission`; the entire auth chain for this router.
-- **`src/infrastructure/http/middlewares/cache.ts`** — `invalidateCache` is called on the checkout route to bust the `products` cache after stock is spent.
-- **`src/infrastructure/http/middlewares/idempotency.ts`** — `idempotencyKey` on checkout and merge prevents duplicate orders or double-quantity adds on retry.
-- **`src/modules/cart/rate-limits.ts`** — exports `checkoutLimiter` and `mergeLimiter`, applied per-route before the idempotency middleware.
-- **`src/modules/cart/controllers/*.ts`** (10 files) — each provides one handler function invoked by a route in this file.
-- **`src/modules/cart/module.ts`** — consumer; mounts `router` at the cart path in the app.
+
+- **`src/modules/cart/module.ts`** — mounts this router under the cart path prefix.
+- **`src/modules/cart/controllers/*`** (all eleven controllers listed) — each is the terminal handler for one route; this file only wires them to paths and middleware.
+- **`src/kernel/middlewares/authorizations.ts`** — provides `getAuth`, `isAuth`, `requireFreshAuth`, `requirePermission` used at both router level and per-route.
+- **`src/infrastructure/http/middlewares/cache.ts`** — `invalidateCache(['products'])` is invoked on checkout so downstream product reads reflect spent stock.
+- **`src/infrastructure/http/middlewares/idempotency.ts`** — `idempotencyKey` guards checkout and merge against duplicate side-effects on retry.
+- **`src/modules/cart/rate-limits.ts`** — exports `checkoutLimiter` and `mergeLimiter`, applied before idempotency so rejected callers never consume a ledger entry.
 
 ## Notes
-- **Route order is load-bearing.** `/all`, `/shipping-method`, and `/summary` must be registered before `/:productId`; Express matches in declaration order and would otherwise treat those literal segments as product ids.
-- **Two permission keys govern this module:** `cart.self.update` (all routes) and `cart.self.checkout` (checkout only). No other permissions are referenced here.
-- **Middleware ordering on checkout is deliberate:** permission checks run before the limiter (a refused caller never consumes quota), and the limiter runs before `idempotencyKey` (a replayed request still counts against the rate limit).
-- **`DELETE /` and `DELETE /:productId`** share the same handler (`deleteCartItem`); the former reads `productId` from the request body, the latter from the URL. They are functionally equivalent.
-- **Checkout is the only route that invalidates a response cache.** No other cart mutation touches `products` or `orders` caches.
+
+- Middleware order on `/checkout` is intentional and documented inline: permission check before fresh-auth (refused callers are not challenged), limiter before idempotency (retries still count toward the cap), idempotency before cache invalidation (a replayed request still invalidates once).
+- `PATCH /items/:productId` updates an existing line only; it never creates one. Use `POST /items` to add.
+- `DELETE /cart/items` (no param) clears the entire cart; `DELETE /cart/items/:productId` removes a single line.
+- The file header documents that `update:Cart` and `checkout:Cart` are the only keys this module declares (see `shared/authorization-keys.yaml`).

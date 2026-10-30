@@ -1,7 +1,7 @@
 ---
 source: src/modules/addresses/repository.ts
-sha256: a0f37bb4cfdb36ac2e5105ba867838fae46a72bbf8e44c4d60c06233849753a4
-generated_at: 2026-10-14T14:53:00.363428+00:00
+sha256: 92dd53b37ed6889fb847f08a94a0030372a7926971a9c75c02061d44c9d36eb0
+generated_at: 2026-10-29T03:09:25.322546+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,40 +9,44 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Data-access layer for the per-user address book. Encapsulates all CRUD against `addressBookModel`, handles PII encryption/decryption at the boundary, enforces the "exactly one default" invariant and the max-entries cap, and exposes a uniform repository interface to `service.ts`. Most writes are read-modify-write (load → mutate → `save()`); only `addEntry` is a single atomic pipeline update.
+Per-user address book repository. It exposes CRUD operations over a single Mongoose document per user (`items` is a DocumentArray) and enforces two cross-array invariants atomically: the book holds at most `addressBookMax` entries and exactly one entry is the default. All PII fields are encrypted at rest and decrypted before the document is returned to callers.
 
 ## Key elements
 
-- **`ADDRESS_BOOK_FULL`** — sentinel string (`'address-book-full'`) returned by `addEntry` when the book is at `addressBookMax()` capacity; signals "nothing written" without throwing.
-- **`appendEntryPipeline(item, claimsDefault)`** — builds a MongoDB aggregation-pipeline update that atomically appends an entry, demotes any existing default, and promotes the first entry of an empty book to default. Used exclusively by `addEntry`.
-- **`decryptBook(book)`** — decrypts every item in-place via `Object.assign` (preserves Mongoose DocumentArray methods) and returns the same document.
-- **`addressBookRepository`** — the sole export. Extends the base `Repository` (from `create-repository`) with:
-  - `reencrypt(spec, dryRun?)` — delegated to `reencryptOf(addressBookModel)`.
-  - `create(data)` — override of the factory; encrypts items then decrypts on return.
-  - `findByUserId(userId)` — single-document read, returns `null` if absent.
-  - `addEntry(userId, entry, attemptsLeft?)` — upsert via `appendEntryPipeline`; cap enforced in the query filter; retries on duplicate-key race (up to 3 attempts).
-  - `updateEntry(userId, addressId, changes)` — RMW; encrypts changed fields; `null`/`undefined` clearing via `clearedOrValue`.
-  - `setDefault(userId, addressId)` — RMW; demotes all, promotes target; idempotent.
-  - `removeEntry(userId, addressId)` — RMW; promotes oldest remaining to default if the removed one held it.
-  - `deleteByUserId(userId, session?)` — hard delete, optionally within a transaction session.
+- **`ADDRESS_BOOK_LIMIT_REACHED`** — sentinel string returned (not thrown) by `addEntry` when the book is full.
+- **`appendEntryPipeline(item, claimsDefault)`** — builds a single aggregation-pipeline update that appends an entry, demotes the current default if the new entry claims it, and makes the first entry of an empty book the default. Uses `$literal` to prevent `$`-prefixed user text from being interpreted as a field path.
+- **`decryptBook(book)`** — in-place decrypts every item via `Object.assign` (preserves DocumentArray prototype methods).
+- **`loadEntry(userId, addressId)`** — fetches the book and the matching entry, or `null` (404-equivalent).
+- **`addressBookRepository`** — the exported object. Extends the generic `Repository` (from `create-repository`) with:
+  - `reencrypt` — delegates to `reencryptOf(addressBookModel)`.
+  - `create` — overrides the factory's `create`; encrypts items then decrypts (used by seeding, not by `addEntry`).
+  - `findByUserId` — one query + decrypt.
+  - `addEntry` — single `findOneAndUpdate` with the pipeline; cap enforced by the filter (`items.<max-1>` must not exist); duplicate-key collision resolved by re-read + retry (max 3 attempts).
+  - `updateEntry` — load-modify-save; nullable fields (`label`, `phone`) cleared via `clearedOrValue`; PII fields re-encrypted with the entry's `_id` as AAD.
+  - `setDefault` — idempotent pointer move; demotes all other entries in the same `save()`.
+  - `removeEntry` — splices the entry; if it was the default, promotes the oldest remaining entry.
+  - `deleteByUserId` — removes the whole document (accepts an optional `ClientSession`).
 
 ## Relationships
 
-- **`./model`** — imports `addressBookModel` (Mongoose model), `applyAddressBookTransform` (wire mapping), and the `AddressBookDocument` type.
-- **`./pii`** — imports `encryptAddressItem`, `encryptAddressField`, `decryptAddressItem` for field-level AAD encryption.
-- **`./config`** — imports `addressBookMax()` to drive the cap filter and full-check.
-- **`@infrastructure/persistence/create-repository`** — imports the `createRepository` factory, `toObjectId` helper, and the `Repository`/`Wire` type contracts.
-- **`@infrastructure/persistence/changes`** — imports `clearedOrValue` to map `null` → `$unset`-compatible `undefined` for nullable fields (`label`, `phone`).
-- **`@infrastructure/persistence/mongo-errors`** — imports `isDuplicateKey` to distinguish upsert-on-existing from a true insert race in `addEntry`.
-- **`@infrastructure/security/reencrypt`** — imports `reencryptOf` and its spec/report types for the reencrypt endpoint.
-- **`@types`** — imports `AddressInput` and `UpdateAddressRequest` (API-level input shapes).
-- **`scenarios/addresses.ts`** — integration-test scenario that exercises the repository through `service.ts`.
+- **`src/modules/addresses/model.ts`** — provides `addressBookModel` (the Mongoose model) and `applyAddressBookTransform` (used by the `createRepository` factory).
+- **`src/modules/addresses/pii.ts`** — source of all encryption/decryption helpers and the `REQUIRED_PII_FIELDS` list.
+- **`src/modules/addresses/config.ts`** — provides `addressBookMax()` used in the add filter and cap check.
+- **`src/modules/addresses/service.ts`** — primary consumer; calls the repository methods and maps the decrypted document to wire types.
+- **`src/infrastructure/persistence/create-repository.ts`** — supplies the `Repository` type, `createRepository` factory, `toObjectId`, and `Wire` helper.
+- **`src/infrastructure/persistence/changes.ts`** — `clearedOrValue` distinguishes "field absent" from "field set to null" for nullable PII fields.
+- **`src/infrastructure/persistence/mongo-errors.ts`** — `isDuplicateKey` identifies the upsert-collision path in `addEntry`.
+- **`src/infrastructure/security/reencrypt.ts`** — `reencryptOf`, `ReencryptSpec`, `ReencryptReport` back the `reencrypt` method.
+- **`src/types/index.ts`** — `AddressInput`, `UpdateAddressRequest` shape the public API.
+- **`scenarios/addresses.ts`** — seeding scenarios call `create` directly with plaintext fixtures, bypassing `addEntry`.
 
 ## Notes
 
-- **RMW vs. pipeline.** Every write *except* `addEntry` is load-mutate-save. The "one default" invariant spans the whole array, so no single `$set`/`$pull` is sufficient. Mongoose's optimistic versioning (`__v`) is the only concurrency guard for these paths; the caller must retry on `VersionError`.
-- **Cap in the filter, not a pre-read.** `addEntry` checks `items.<max-1>: { $exists: false }` in the query itself so mongod evaluates it under the document lock. A separate `countDocuments` would allow a burst of concurrent adds to overshoot.
-- **Explicit type annotation.** The repository's type is written out by hand because Mongoose's generics exceed TS's serialization limit at an export boundary (TS7056). Do not rely on inference here.
-- **`phone: null` → `undefined`.** Unlike `label` (which goes through `clearedOrValue`), `phone` is explicitly mapped to `undefined` before assignment because `clearedOrValue` is only applied to `label`.
-- **`_id` generated before encryption.** The entry's `_id` must exist before `encryptAddressItem` runs, because it is included in every field's AAD (authenticated data). Re-encrypting after the fact would break verification.
-- **`Object.assign`, not array replacement, in `decryptBook`.** Replacing the items array would detach the DocumentArray's Mongoose methods. Since none of these paths call `.save()` on the decrypted return value, the document is effectively read-only after decryption.
+- **Read-modify-write, not `$set`/`$pull`.** The "exactly one default" invariant spans the whole array, so `updateEntry`, `setDefault`, and `removeEntry` all load the document, mutate in memory, and `save()`. Mongoose's optimistic versioning is the concurrency guard (the loser retries manually).
+- **`addEntry` is the exception** — it must be one atomic pipeline update so the size cap holds under concurrent adds. The filter `items.<max-1>: { $exists: false }` is evaluated by mongod while it holds the document lock.
+- **`$literal` is mandatory** in the pipeline. Without it, any user-supplied string beginning with `$` (e.g. a label of `$items`) would be treated as a field path.
+- **Duplicate-key disambiguation.** A filter miss on an existing book causes the upsert to hit the unique `userId` index; the code re-reads to tell "book is full" from "first-insert race," then retries up to 3 times.
+- **Every returned document is decrypted.** Callers (service wire mapping, checkout snapshot) always see plaintext and never need to decrypt themselves.
+- **`Object.assign` over array replacement.** `decryptBook` mutates each subdocument in place so Mongoose's DocumentArray methods remain intact; the document is not `.save()`-ed again after decryption.
+- **Explicit return type on the export.** Mongoose generics are too large for TS to serialize an inferred type at an export boundary (TS7056); the type is written out by hand.
+- **`createdAt` in the pipeline** uses `$ifNull: ['$createdAt', '$$NOW']` because pipeline upserts have no `$setOnInsert`.

@@ -1,7 +1,7 @@
 ---
 source: scripts/mutation/run-diff.ts
-sha256: b6f5e98161f11e168ead1862a214d98d19a66dd910e0addba691c35e956664b0
-generated_at: 2026-10-15T09:43:15.468691+00:00
+sha256: 6b6006cacfc923c184fbd4b8d833e9146bc1ea55beca37c89812dbd4adb5d25d
+generated_at: 2026-10-29T01:39:23.483823+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Runs Stryker mutation testing scoped to the files changed in the current branch (diffed against `origin/main` or a `--base` ref), then grades the result against the per-file baseline ratchet. It exists to give reviewers a fast, actionable mutation score in minutes rather than waiting for the weekly full sweep.
+Entry point for `npm run mutation`. Runs a Stryker mutation test scoped to the whole files a branch changed (relative to `origin/main` or a `--base` ref), grades the result against the per-file baseline ratchet, then overlays the partial report onto whatever full-sweep report is already on disk so the report stays whole.
 
 ## Key elements
 
-- **`base`** — Git ref to diff against; read from `--base` flag, defaults to `origin/main`.
-- **`changedFiles(baseCommit)`** — Runs `git diff --name-only --diff-filter=ACMR <base>...HEAD` to list added, changed, modified, and renamed files.
-- **`baseCommit`** — Merge base between `base` and HEAD, obtained via `mergeBase`. If undefined (git cannot resolve), the script exits 0 immediately.
-- **`files`** — Intersection of `changedFiles` and the project's mutable scope, computed by `changedMutable(changedFiles, mutableFiles())`. If empty, exits 0.
-- **`grade()`** — Spawns `scripts/mutation/check-baseline.ts` (the ratchet) and returns its exit code. Stryker's own non-zero exit (`thresholds.break`) is deliberately ignored.
-- **`runStryker(...)` call** — Executes Stryker with `--mutate <files>` and `--force`. On completion, exits with the ratchet's verdict (or 1 if aborted for OOM).
+- **`base`** – Git ref to diff against; defaults to `origin/main`, overridable via `--base` CLI flag.
+- **`changedFiles(baseCommit)`** – Runs `git diff --name-only --diff-filter=ACMR <base>...HEAD` to list every touched file (added, changed, modified, renamed).
+- **`baseCommit`** – Result of `mergeBase(base, …)`; `undefined` when git can't determine it (script exits 0).
+- **`files`** – Intersection of changed files and the mutable scope (`changedMutable`); if empty, script exits 0.
+- **`grade()`** – Spawns `scripts/mutation/check-baseline.ts` (the per-file ratchet) and returns its exit code. Stryker's own non-zero exit is deliberately ignored.
+- **`readStrykerReport(file)`** – Reads and parses a Stryker JSON report from disk.
+- **`previous`** – The report on disk *before* this run (if any), captured with its mtime.
+- **`keepReportWhole()`** – If a prior report exists and Stryker wrote a new one, calls `overlayReport` to merge, then re-renders `index.html` via `renderHtml`.
+- **`runStryker({ … })`** – Final call; passes `--mutate <files> --force`. On OOM abort exits 1; otherwise grades, overlays, and exits with the ratchet's code.
 
 ## Relationships
 
-- **`scripts/cli.ts`** — Imports `flagValue` to parse the `--base` CLI flag.
-- **`scripts/git-base.ts`** — Imports `mergeBase` to resolve the fork point between the base ref and HEAD.
-- **`scripts/modules-on-disk.ts`** — Imports `REPO_ROOT` as the working directory for all subprocess calls.
-- **`scripts/mutation/mutate-scope.ts`** — Imports `changedMutable` (filters changed files to those in mutation scope) and `mutableFiles` (the full mutable file set).
-- **`scripts/mutation/stryker-run.ts`** — Imports `runStryker`, which wraps the Stryker invocation with per-worker heap caps and concurrency limits shared across all entry points.
+- **`scripts/mutation/baseline.ts`** – Imports `REPORT_PATH` (canonical location of the JSON report on disk).
+- **`scripts/mutation/ci/merge.ts`** – Imports `overlayReport`, `renderHtml`, and the `StrykerReport` type for merging partial reports.
+- **`scripts/mutation/stryker-run.ts`** – Calls `runStryker` so the run inherits the shared worker heap cap and concurrency settings.
+- **`scripts/mutation/mutate-scope.ts`** – Imports `changedMutable` and `mutableFiles` to filter the diff to in-scope files.
+- **`scripts/git-base.ts`** – Imports `mergeBase` to resolve the fork-point commit.
+- **`scripts/modules-on-disk.ts`** – Imports `REPO_ROOT` for all `cwd` and path operations.
+- **`scripts/cli.ts`** – Imports `flagValue` to read `--base` from argv.
+- **`scripts/fail-script.ts`** – Imported as the `.catch` handler on the `runStryker` promise.
 
 ## Notes
 
-- **Whole files, not line ranges.** Stryker supports `--mutate 'file.ts:10-40'`, but this script mutates entire files so scores compare directly against `mutation-baseline.json`, which is recorded per-file.
-- **Never updates the baseline.** `--update` is intentionally not forwarded. A partial (diff-scoped) run recorded as the baseline would erase scores for every file it did not measure. The weekly full sweep owns baseline writes.
-- **Exits 0 on "nothing to do."** If there is no resolvable merge base or no mutable files changed, the script exits 0 rather than failing—by design, it must not block a caller (e.g., CI) for reasons unrelated to code quality.
-- **Stryker's own exit code is discarded.** `thresholds.break` fires on the diff's average percentage, which is noisy for a small set of mutants. The ratchet in `check-baseline.ts` is the sole pass/fail verdict.
+- **`--update` is never forwarded** to `check-baseline.ts`; a partial diff run can refresh scores but can never overwrite or erase the baseline.
+- **Stryker's exit code is intentionally discarded.** The ratchet (`check-baseline.ts`) is the sole verdict; Stryker's `thresholds.break` firing on the diff's average is not a failure here.
+- **Must go through `runStryker`**, not a bare `npx stryker`. Direct invocation bypasses the per-worker `--max-old-space-size` cap and concurrency limit, which has previously caused silent OOM or incorrect results.
+- **Exits 0 (not an error)** in two cases: no resolvable base commit, or zero mutable files in the diff. Both mean "nothing to measure," not a failure.

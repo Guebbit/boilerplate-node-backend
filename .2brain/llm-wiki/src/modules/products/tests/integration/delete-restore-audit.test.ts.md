@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/tests/integration/delete-restore-audit.test.ts
-sha256: 8adf7de88b3bc82f9afff2fd4c6eae778cdc295ef36ea9288dfad70b503812f7
-generated_at: 2026-10-15T11:47:37.953857+00:00
+sha256: e978525e97754d3975ac717651d961372fab4542510b1ba24a60ad643e80dbb6
+generated_at: 2026-10-29T05:32:09.647409+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that pin the audit-logging contract for `productService.removeById` and `productService.restoreById`. They verify that the correct `ADMIN_PRODUCT_DELETED` / `ADMIN_PRODUCT_RESTORED` events are emitted from the **service layer** (not a controller) with the expected fields, and that no event fires when no caller context is supplied.
+Integration tests that pin the audit-emission contract of `productService.removeById` and `productService.restoreById` after the audit logic was relocated from the delete/restore controllers into the service layer. They verify that `ADMIN_PRODUCT_DELETED` and `ADMIN_PRODUCT_RESTORED` events still land with the expected fields, and that no event is emitted when no caller context is supplied.
 
 ## Key elements
 
-- **`jest.mock('@infrastructure/observability/audit', …)`** — Replaces the entire audit port module. The mock spreads the real module's exports, swaps `emitAuditEvent` for a `jest.fn()`, and rewrites `recordAudit` to call `buildAuditEvent` then the mock emitter (skipping emission when `context` is falsy).
-- **`setupTestDb()`** — Boots the test database before any test runs.
-- **`describe('removeById')`** — Three cases: soft-delete audit with `hardDelete: false`, hard-delete audit with `hardDelete: true`, and no-context no-audit.
-- **`describe('restoreById')`** — Two cases: successful restore audit, and no-context no-audit.
-- **`observePort(auditPort.emitAuditEvent)`** — Captures the mock call history as a spy for assertions (from `tests/support/ports.ts`).
+- **`describe('removeById')`** — three tests: soft-delete audit (`hardDelete:false`), hard-delete audit (`hardDelete:true`), and the no-context no-op case.
+- **`describe('restoreById')`** — two tests: successful restore audit and the no-context no-op case.
+- **`jest.mock('@infrastructure/observability/audit', …)`** — replaces the entire audit module with `auditPortMock()` from `tests/support/ports` rather than spying.
+- **`observePort(auditPort.emitAuditEvent)`** — creates a per-test spy on the mocked port's `emitAuditEvent` function.
+- **`callerContextAs('admin')`** — supplies an admin caller context; omitting it exercises the no-audit path.
+- **`productsAuditActions`** — action-name constants (`ADMIN_PRODUCT_DELETED`, `ADMIN_PRODUCT_RESTORED`) imported from the products audit module.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/products/services/index.ts` | Source of `productService` — the system under test. |
-| `src/modules/products/audit.ts` | Provides the `productsAuditActions` enum values asserted in expectations. |
-| `src/infrastructure/observability/audit.ts` | Fully **mocked**; the test asserts against its `emitAuditEvent` and `buildAuditEvent` exports. |
-| `src/modules/products/tests/factories.ts` | Supplies `createProduct()` to seed a product row before each scenario. |
-| `tests/support/callers.ts` | Supplies `callerContextAs('admin')` to build a valid caller context. |
-| `tests/support/ports.ts` | Supplies `observePort` to read mock call history. |
-| `tests/support/setup-test-db.ts` | Supplies `setupTestDb` for database lifecycle. |
+- **`src/modules/products/services/index.ts`** — source of `productService`, the unit under test.
+- **`src/modules/products/audit.ts`** — exports `productsAuditActions` (the action constants asserted in expectations).
+- **`src/infrastructure/observability/audit.ts`** — the real audit port; fully mocked out at module level so no actual persistence or side-effect occurs.
+- **`tests/support/ports.ts`** — provides `auditPortMock()` (the mock implementation) and `observePort()` (the spy factory).
+- **`tests/support/callers.ts`** — provides `callerContextAs` to fabricate an admin caller.
+- **`tests/support/setup-test-db.ts`** — initialises the in-memory test database before all tests.
+- **`src/modules/products/tests/factories.ts`** — `createProduct` factory used to seed a product row per test.
 
 ## Notes
 
-- **Port replacement, not spying.** The module docblock and inline comment explain that `jest.spyOn` cannot intercept `emitAuditEvent` because a CommonJS namespace import exposes a non-configurable getter. The full rationale is cross-referenced in `orders/tests/integration/create-audit.test.ts`.
-- **`recordAudit` guard.** The mock's `recordAudit` implementation early-returns when `context` is `null`/`undefined`, mirroring the production contract that audit events require a caller context.
-- **Layer assertion.** The file's module-level JSDoc ties these tests to "rule 1" in `docs/theory/module-lifecycle.md`: write-path audit rows must be emitted by the service, not the controller.
+- The audit module is **replaced** (`jest.mock` + factory), not spied on (`jest.spyOn`). The inline comment explains why: a CommonJS namespace import exposes a non-configurable getter that `jest.spyOn` cannot redefine. See `orders/tests/integration/create-audit.test.ts` for the fuller rationale.
+- When no caller context is passed, the service must emit **no** audit event at all — this is an intentional contract, not an edge case.
+- The file header references `docs/theory/module-lifecycle.md` (rule 1) as the architectural justification for auditing living in the service layer rather than the controller.

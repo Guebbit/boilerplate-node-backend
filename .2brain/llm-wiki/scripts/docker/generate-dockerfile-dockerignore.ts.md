@@ -1,7 +1,7 @@
 ---
 source: scripts/docker/generate-dockerfile-dockerignore.ts
-sha256: b09c063a68690809eed93bf57d39850b152bb11e67a1edcce514a590782f1af7
-generated_at: 2026-10-15T09:39:14.376265+00:00
+sha256: babafd1d6c4b5049320d753e1be107163cc12e1a96432439deea45703cfd4744
+generated_at: 2026-10-29T01:33:13.528863+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Generates `docker/Dockerfile.dockerignore` from the root `.dockerignore` to eliminate manual drift. Docker and Buildah use a `<dockerfile-name>.dockerignore` file **instead of** (not merged with) the root `.dockerignore`, so a hand-maintained copy will inevitably fall out of sync. The script derives the override automatically, applying one deliberate edit: keeping `.git` included.
+Generates `docker/Dockerfile.dockerignore` from the root `.dockerignore`, removing the need to hand-maintain a second copy. Docker and Buildah look for a `<dockerfile-name>.dockerignore` next to the Dockerfile and use it **instead of** (not merged with) the root file. The one deliberate difference from the root: the `.git` exclusion is dropped, because `npm run complete` (run inside this image by the `gate` service and `container-gate` CI job) includes `lint`, and the `local/comment-links` ESLint rule shells out to `git ls-files` and hard-crashes without a `.git` directory.
 
 ## Key elements
 
-- **`SOURCE`** — Path to the root `.dockerignore` (the input).
-- **`TARGET`** — Path to `docker/Dockerfile.dockerignore` (the output).
-- **`HEADER`** — A multi-line comment block prepended to the generated file, documenting the purpose, the `.git` exception, and the "do not hand-edit" policy.
-- **`blocksOf(content)`** — Splits a `.dockerignore` body into blank-line-separated blocks so a section can be dropped atomically.
-- **`derive()`** — Reads the root file, drops the block whose comment starts with `# Version control` (which contains the `.git` entry), and returns `HEADER` + remaining blocks.
-- **`writeOrCheck(TARGET, next, …)`** — Writes the derived content to `TARGET`, or in `--check` mode reports drift without rewriting (used by `npm run complete`).
+- **`SOURCE`** — resolved path to the root `.dockerignore`; the single input.
+- **`TARGET`** — resolved path to `docker/Dockerfile.dockerignore`; the output.
+- **`HEADER`** — multi-line comment string prepended to the generated file, documenting the purpose, the `.git` exception, and the generation provenance.
+- **`blocksOf(content)`** — splits file content into blank-line-separated blocks for whole-unit filtering.
+- **`derive()`** — reads the root file, drops any block whose first line is `# Version control`, and returns the header plus the remaining blocks.
+- **`next`** — module-level constant holding the derived content (computed once at load).
+- **`writeOrCheck(TARGET, next, …)`** — writes the file in `regenerate` mode or reports drift in `--check` mode (used by `complete`).
 
 ## Relationships
 
-- **`scripts/modules-on-disk.ts`** — Imports `REPO_ROOT` to anchor the `SOURCE` and `TARGET` paths relative to the repository root.
-- **`scripts/contracts/generated-file.ts`** — Imports `writeOrCheck`, the shared helper that either writes a generated file or performs a drift check, and supplies the "how to regenerate" message shown on drift.
+- **`scripts/contracts/generated-file.ts`** — supplies `writeOrCheck`, the shared helper that either writes the target or diffs against it and reports drift. This file is a consumer of that contract.
+- **`scripts/modules-on-disk.ts`** — supplies the `REPO_ROOT` constant used to build absolute paths for `SOURCE` and `TARGET`.
 
 ## Notes
 
-- The `.git` exclusion is removed by dropping the block that begins with `# Version control`, not by filtering the literal `.git` line. If the root file's comment wording changes, the filter silently stops working and `.git` will be excluded — breaking the `local/comment-links` ESLint rule (which shells out to `git ls-files`).
-- `docker/Dockerfile.production` faces the same `git ls-files` issue but sidesteps it by never invoking `lint`; this Dockerfile runs `npm run complete` unmodified, so it must keep `.git`.
-- The generated file is explicitly marked "Do not hand-edit" in its own header; the regeneration command is `npm run docker:dockerignore` (or the full `npm run regenerate`).
+- The filter is comment-based (`startsWith('# Version control')`), not path-based. If the root `.dockerignore` ever renames that section header, the `.git` lines would silently remain in the generated file.
+- The script is a top-level executable (`tsx` shebang); it is not imported as a module. All logic runs at import time via the `next` constant.
+- `docker/Dockerfile.production` has the same `.git` gap but avoids it by never running `lint`; this Dockerfile's image must run `npm run complete` unmodified, so keeping `.git` in is non-negotiable here.

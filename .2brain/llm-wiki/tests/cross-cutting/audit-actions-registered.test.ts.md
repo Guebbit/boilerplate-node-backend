@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/audit-actions-registered.test.ts
-sha256: 7fd81fc6247fb2bc068837000438a84f1ae5be8119b605d51eb8f6d5d4b6cda2
-generated_at: 2026-09-23T19:53:11.568421+00:00
+sha256: 03d3c71c0e8e58ae7547feb0de6fbbb671b64572f4ee5371f07f0c6b74765709
+generated_at: 2026-10-29T06:43:15.400591+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Verifies at compile time that every auditing module's `declare module` augmentation actually contributes its actions to the app-wide `AuditAction` union. It imports one representative action per module and asserts each equals its expected wire-value string, so a missing or broken augmentation is caught as a type error rather than surfacing later at `emitAuditEvent` call sites.
+Verifies that every auditing module's actions are registered in the app-wide `AuditAction` union via their `declare module` augmentation. The check is enforced at **type-check time** (the static imports must resolve against the union) and at **runtime** (each action's string value matches its expected wire format). It exists to catch a missing `declare module` augmentation that would otherwise let the owning module compile in isolation while silently breaking every `emitAuditEvent` call site.
 
 ## Key elements
 
-- **`REGISTERED`** – A `[module, action, expectedWireValue]` tuple array holding exactly one action per auditing module (7 entries). Serves as the data for `it.each`.
-- **`describe('audit actions register in the app-wide union')`** – Single test block; `it.each(REGISTERED)` iterates the tuples and asserts `action === expected`.
-- **Static imports of `*AuditActions` constants** – One per module (`accountAuditActions`, `cartAuditActions`, etc.). These are the mechanism that forces TypeScript to resolve the `declare module` augmentation against `AuditAction`.
-- **`import type { AuditAction }`** – Pulls the union type from the observability layer, establishing the type context for the narrowing check.
+- **`REGISTERED`** — Tuple array (`[module: string, action: AuditAction, expected: string][]`) holding one representative action per module alongside its expected dotted wire value (e.g. `'auth.login'`). Serves as the single source of test cases.
+- **Static imports of `*AuditActions` constants** — One per module (`accountAuditActions`, `cartAuditActions`, `ticketsAuditActions`, `localeAuditActions`, `ordersAuditActions`, `productsAuditActions`, `usersAuditActions`). These are required (not dynamically discovered) so TypeScript can narrow each literal against the `AuditAction` union at compile time.
+- **`import type { AuditAction }`** — Pulls the app-wide union from `@infrastructure/observability/audit`; the type annotation on `REGISTERED` is what makes a non-member action a compile error.
+- **`it.each(REGISTERED)`** — Runtime assertion that each action's string value equals the expected wire format; the type-level membership check is orthogonal and handled by `tsc`.
 
 ## Relationships
 
-- **`src/infrastructure/observability/audit.ts`** – Source of the `AuditAction` union type and the `emitAuditEvent` API that ultimately depends on these augmentations.
-- **`src/modules/{account,cart,feedback,locales,orders,products,users}/audit.ts`** – Each exports its module-specific action constants and contains the `declare module` augmentation that adds those constants to `AuditAction`. This test is the only cross-cutting file that statically imports all seven.
+- **`src/infrastructure/observability/audit.ts`** — Provides the `AuditAction` union type that all module actions must extend.
+- **`src/modules/{account,cart,tickets,locales,orders,products,users}/audit.ts`** — Each exports its module's action constants (e.g. `accountAuditActions`) *and* a `declare module` augmentation that contributes those keys to the shared union. This test is the integration point that ties all seven back to the infrastructure type.
 
 ## Notes
 
-- **Compile-time only.** Jest does not type-check; the real guard is `tsc`/IDE. At runtime this test simply compares strings, which would pass even if the augmentation were removed.
-- **Static imports are intentional.** Unlike the sibling `audit-actions.test.ts` (a structural/disk sweep), this file names every module explicitly because TypeScript can only narrow a literal against the union when the import is statically typed. Dynamic or glob-based imports would defeat the check.
-- **One action per module is sufficient.** Proving a single constant belongs to the union is enough to confirm the augmentation is in effect; the remaining actions in that module rely on the same augmentation block.
+- **Jest does not type-check.** The primary guarantee (that the action is a valid `AuditAction` member) is enforced only by `tsc`/IDE tooling. The `expect(action).toBe(expected)` assertion merely confirms the runtime string value. A CI step that runs `tsc --noEmit` is essential for this test to be meaningful.
+- **One action per module is sufficient for the membership proof**, but it does not verify that *every* action a module owns is registered. Exhaustive coverage lives in the structural sweep (`audit-actions.test.ts`), which this file's doc comment explicitly contrasts with.
+- **Static imports are intentional.** Replacing them with a dynamic `import()` or a filesystem scan would lose the compile-time narrowing that makes a missing augmentation a hard error rather than a silent runtime failure.

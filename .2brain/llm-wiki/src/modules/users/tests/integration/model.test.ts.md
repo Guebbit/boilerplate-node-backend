@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/tests/integration/model.test.ts
-sha256: f95010dc8dab2f225cd2870606c72d4dbacb57f134a65ee5ad3fe65f203f0733
-generated_at: 2026-10-15T12:14:15.217446+00:00
+sha256: 5c9129525089468ac245c2e517e38906f9997e78b035961f90e43eb6cdd33158
+generated_at: 2026-10-29T06:21:22.107343+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite (run against a real in-memory DB) that asserts two model-level invariants: credentials never appear in any serialized user payload, and email is treated case-insensitively from write through lookup. It exercises the repository, the service layer, and the `toJSON` transform together so that a regression in any single layer is caught.
+Integration tests that verify two independent safeguards against credential leakage in user responses: Mongoose `select: false` (prevents loading) and `applyUserTransform` (strips at serialization). Also asserts email case-normalisation and the exact shape of the serialised User contract.
 
 ## Key elements
 
-- **`expectNoCredentials(payload)`** – Assertion helper: JSON-serializes the payload and fails if it contains the string `"password"` or a bcrypt prefix (`$2b$`). Used as the final gate on every response-shape test.
-- **`withCredentials()`** – Shorthand for `createUser()`; seeds a user with a password hash.
-- **`describe('email is case-insensitive')`** – Verifies lowercasing on create, case-insensitive `findForLogin`, unique-index rejection of case-duplicate emails, and parity with `normalizeEmail`.
-- **`describe('select: false (the safety net)')`** – Confirms `findById`, `findOne`, and `findAll` omit `password`, while `findByIdWithCredentials` still returns it.
-- **`describe('applyUserTransform (the contract boundary)')`** – Verifies `toJSON()` strips credentials, `_id`, `__v`; emits exactly the OpenAPI `User` key set; keeps `active` independent of `deletedAt`; defaults `active` to `true`; exposes `deletedAt`; maps lean arrays via `userService.search`; normalizes single lookup via `userService.getById`.
+- **`expectNoCredentials(payload)`** — Serialises a value to JSON and asserts it contains neither the string `password` nor the bcrypt prefix `$2b$`. Used as a universal response-shape guard.
+- **`withCredentials()`** — Thin wrapper over `createUser()` that documents the intent: "a user as the credential-exposure tests seed one."
+- **`describe('email is case-insensitive')`** — Three tests: mixed-case input is stored lowercase, login lookup is case-insensitive, and the unique index rejects case-only duplicates.
+- **`describe('user credential exposure')`** — Two nested blocks:
+  - *`select: false (the safety net)`* — Confirms `findById`, `findOne`, `findAll` (lean) omit `password`, while `findByIdWithCredentials` still returns it.
+  - *`applyUserTransform (the contract boundary)`* — Verifies `toJSON()` strips credentials, maps `_id` → `id`, drops `__v`, emits exactly the OpenAPI `User` key set (`active`, `createdAt`, `email`, `id`, `locale`, `updatedAt`, `username`, `verifiedAt`), keeps `active` independent of `deletedAt`, and works correctly on lean lists via `userService.search` and single lookups via `userService.getById`.
 
 ## Relationships
 
-- **`src/modules/users/repository.ts`** – Primary SUT; `findById`, `findOne`, `findAll`, and `findByIdWithCredentials` are called directly to probe the `select: false` guard.
-- **`src/modules/users/services/index.ts`** – `findForLogin`, `search`, and `getById` are exercised to confirm the service layer preserves the same invariants (lean mapping, credential stripping, email normalization).
-- **`src/infrastructure/persistence/normalize-email.ts`** – `normalizeEmail` is unit-asserted alongside the schema cast to guarantee the two code paths agree on trim + lowercase behavior.
-- **`src/modules/users/tests/factories.ts`** – `createUser` is the sole seeding mechanism for all tests in this file.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` is invoked at module scope to provision the in-memory MongoDB instance.
-- **`tests/support/stub.ts`** – `asStub` provides a typed cast for asserting on lean (plain-object) results without `any`.
+- **`src/modules/users/repository.ts`** — Imports `userRepository`; exercises `findById`, `findOne`, `findAll`, and `findByIdWithCredentials` to validate the `select: false` guard.
+- **`src/modules/users/services/index.ts`** — Imports `userService`; calls `findForLogin` (case-insensitive lookup), `search` (lean list transformation), and `getById` (single-document normalisation).
+- **`src/modules/users/tests/factories.ts`** — Imports `createUser` to seed documents with known credentials for every test case.
+- **`tests/support/setup-test-db.ts`** — Imports and calls `setupTestDb()` at module scope, initialising the in-memory/fixture DB before any test runs.
+- **`tests/support/stub.ts`** — Imports `asStub` for a type-safe cast of `items[0]` when asserting the `id` field on a lean result.
 
 ## Notes
 
-- The file imports `userService` in two styles (`import * as userService` and `import { userService as userServiceObject }`) to exercise both namespace and named access paths.
-- The `toJSON()` allowlist test hard-codes the expected key set (`active`, `createdAt`, `email`, `id`, `locale`, `updatedAt`, `username`, `verifiedAt`). Adding or removing a field from the `User` DTO will break this test.
-- `role` is deliberately **absent** from the user document; it is owned by `@modules/access`. Do not add it here.
-- `active` and `deletedAt` are independent booleans/dates, not derivable from each other; the test matrix covers all four combinations.
-- The test is integration-level (real Mongoose + in-memory DB), not a unit test with mocked repository calls.
+- `setupTestDb()` runs at module import time (top-level call), not inside a `beforeAll`. It executes once when Jest loads the file.
+- The two credential guards are tested **independently** because `.lean()` bypasses Mongoose's `toJSON` hook; `applyUserTransform` must therefore work on plain objects, not just hydrated documents.
+- The exact key-set assertion (`Object.keys(...).toSorted()`) is the authoritative check that the serialised shape matches the OpenAPI `User` contract. Adding or removing a field without updating this list will break the test.
+- `role` is explicitly **not** on this document; it lives in `@modules/access` and is passed as a parameter to `presentUser`. This test guards against accidental re-introduction of a `role` column.
+- `active` and `deletedAt` are orthogonal booleans, not a single derived flag. The four-combination matrix test enforces that independence.

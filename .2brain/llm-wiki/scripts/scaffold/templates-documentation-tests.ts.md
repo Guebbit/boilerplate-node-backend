@@ -1,7 +1,7 @@
 ---
 source: scripts/scaffold/templates-documentation-tests.ts
-sha256: 87246ed20771642721d4f4cd87a795cb4d34388859dc20771d9560c79035387f
-generated_at: 2026-10-14T07:31:53.518552+00:00
+sha256: 625800ca5e67fd1d9e8644f3782819067f30ca25fb357720ceaa46bf8fe11097
+generated_at: 2026-10-29T01:44:42.794834+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides four string-template functions that generate the documentation page and the initial test files for a newly scaffolded module. Called by the scaffold pipeline to emit ready-to-edit Markdown and TypeScript test scaffolds that follow the project's conventions (plain template literals, no backticks in generated comments).
+Provides the string templates that the module scaffolder emits as a new module's documentation page and its companion test suite (unit, integration, and contract). Each export is a pure function that interpolates `ModuleNames` (and optionally `ScaffoldOptions`) into a template literal, so the scaffolder can write complete, runnable files without any runtime code generation.
 
 ## Key elements
 
-- **`documentationPage(names, options)`** — Returns the `docs/modules/<kebab>.md` page: a "tip" summary box, graph-marker comments (`module-graph:<kebab>:start/end`), a "The story" TODO section, a Mermaid flowchart of the request pipeline (auth → permission → controller → service → repository → entity), and links to related pages. Uses `options.summary` and `options.audit` to interpolate content.
-- **`routesTest(names)`** — Returns a Jest unit test asserting: exact endpoint set and order, every route sits below the identity gate with a `requirePermissionGuard`, and `GET /` uses `privateNoCache` rather than a Redis `setCache`.
-- **`factoriesTest(names)`** — Returns a Jest unit test for `make<Entity>`: defaults populate `name`, optional `notes` is absent by default, and explicit overrides win.
-- **`serviceTest(names)`** — Returns a Jest integration test (real DB via `setupTestDb`) covering: trim-on-create, search, merge semantics (omitted fields preserved, `null` clears), 404 for unknown ids on update/remove, and delete-then-search-returns-empty.
+- **`documentationPage(names, options)`** — Returns the Markdown wiki page for `docs/modules/<kebab>.md`. Includes a "tip" summary block (uses `options.summary`), graph-regeneration markers (`module-graph:<kebab>:start/end`), a permissions block, a narrative "story" section, and a Mermaid pipeline diagram (conditionally adds an audit-note via `options.audit`).
+- **`routesTest(names)`** — Returns a Jest test asserting the CRUD route table: exact endpoint list and order, every route sits below the identity gate and carries `requirePermissionGuard`, and the list endpoint is never Redis-cached.
+- **`factoriesTest(names)`** — Returns a Jest test for `make<Entity>`: defaults are applied, overrides win, and absent optional fields remain absent.
+- **`domainTest(names)`** — Returns a Jest test for `<entityCamel>ActionsFor`, verifying it echoes back exactly the permission keys the caller holds.
+- **`serviceTest(names)`** — Returns a Jest integration test (real DB via `setupTestDb`) covering create-trim, list, read, merge-vs-null update, 404 semantics, and delete.
+- **`contractTest(names)`** — Returns a Jest contract test that exercises each HTTP route end-to-end (status codes, headers, body shape) against `openapi.yaml`; deliberately omits bare 401/403 cases (delegated to the shared authorization sweep).
 
 ## Relationships
 
-- **`scripts/scaffold/names.ts`** — Supplies the `ModuleNames` type (`kebab`, `entity`, `family`) that all four templates interpolate into their output strings.
-- **`scripts/scaffold/options.ts`** — Supplies the `ScaffoldOptions` type (`summary`, `audit`) consumed by `documentationPage` to tailor the generated page.
-- **`scripts/scaffold/plan.ts`** — Upstream orchestrator that imports these four exports and writes their returned strings to disk as part of the scaffold plan execution.
+- **`scripts/scaffold/names.ts`** — Consumes the `ModuleNames` type (provides `kebab`, `entity`, `entityCamel`, `basePath` spellings) used by every template for interpolation.
+- **`scripts/scaffold/options.ts`** — Consumes the `ScaffoldOptions` type; only `documentationPage` reads from it (`summary`, `audit`), while the test templates depend solely on names.
 
 ## Notes
 
-- All templates are plain backtick template literals; any backtick that must appear in the *generated* output is escaped as `` \` `` (visible in the documentation page's code-fence examples).
-- The documentation page includes `<!-- module-graph:...:start/end -->` HTML comments that an external `docs:graph` process fills in—do not remove them or the graph renderer will skip the module.
-- `serviceTest` depends on test helpers (`asReject`, `asSuccess`, `MISSING_ID`, `setupTestDb`) that must already exist in the repo before the generated test compiles.
-- The route test asserts a **fixed** five-endpoint REST shape; if a module legitimately deviates, the generated test must be edited after scaffolding.
+- All exports are **pure string builders**—no side effects, no file I/O. The calling scaffolder (in `plan.ts`) is responsible for writing the returned text to disk.
+- Module docstring states a hard convention: *no backticks in generated comments*. Template literals use `\`` escapes where the generated code itself contains backticks (e.g., the contract test's error-message template literal).
+- The docs page intentionally leaves several `TODO` sections ("Breaks if you change", "The story") for the human author to fill in post-scaffold.
+- The Mermaid diagram in `documentationPage` is the only place `options.audit` is read; if audit is off the service node simply omits the annotation.
+- Test templates assume a fixed CRUD surface (`GET /`, `GET /:id`, `POST /`, `PUT /:id`, `PATCH /:id`, `DELETE /:id`). Scaffolding a non-CRUD module would require editing the generated test, not the template.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/index.ts
-sha256: 13c3e221d6a4acf8839f2af0ec3eeacab1b68645f485c82bd69b71324052bbd1
-generated_at: 2026-09-23T19:40:02.070357+00:00
+sha256: 3a74afade6274293d41eabce0f37b59ba2c2e2572ecdd546206824769aca5193
+generated_at: 2026-10-29T06:27:05.987155+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Public barrel for the webhooks module. It is the **only** import surface permitted to sibling modules (enforced per `docs/theory/strategic-ddd.md` §5). It re-exports the module's public API without executing any side-effects.
+Public barrel (the sole import surface) for the webhooks module. Sibling modules import only from this file, never from its internal sub-modules, per the strategic-DDD rule documented in `docs/theory/strategic-ddd.md` §5.
 
 ## Key elements
 
-- **`export * from './services'`** — re-exports all service-level functions/classes (delivery orchestration, retry logic, etc.).
-- **`export * from './domain'`** — re-exports domain events, aggregates, and value objects.
-- **`export * from './emails'`** — re-exports email/notification helpers tied to webhook lifecycle.
-- **`export type * from './model'`** — re-exports **type-only** declarations (interfaces, type aliases) from the persistence model layer.
+- `export * from './services'` — re-exports the webhooks service API.
+- `export * from './domain'` — re-exports domain logic (entities, value objects, etc.).
+- `export * from './events'` — re-exports event definitions/payloads.
+- `export type * from './model'` — re-exports **types only** (no runtime values) from the model layer.
 
-The file exports no values of its own and defines no runtime code.
+No functions, classes, or side-effecting code are defined here; the file is purely a re-export facade.
 
 ## Relationships
 
-- **`src/modules/webhooks/services/index.ts`**, **`src/modules/webhooks/domain/index.ts`**, **`src/modules/webhooks/emails.ts`**, **`src/modules/webhooks/model.ts`** — direct re-export sources; this barrel is their sole public façade.
-- **`scripts/ops/sweep-webhook-retries.ts`** — operational script that consumes services exposed through this barrel to sweep pending webhook retries.
-- **`tests/unit/infrastructure/adapters/mailer-templates.test.ts`** — unit test that imports email template helpers from this barrel to assert rendered output.
+- **Re-exports** from `./services/index.ts`, `./domain/index.ts`, `./events.ts`, and `./model.ts` (type-only). These are the internal sub-modules this barrel aggregates.
+- **Consumed by** `src/modules/notifications/module.ts` and `src/modules/notifications/tests/integration/staff.test.ts`, which import webhooks symbols exclusively through this barrel.
+- **Not** re-exported: `secrets.ts` (signing/encrypting delivery secrets) and `module.ts` (manifest entry that wires the domain-event subscription and queue consumer). Both remain internal to the module.
 
 ## Notes
 
-- **`module.ts` is intentionally NOT re-exported here.** It declares the domain-event subscription and the queue consumer on its own manifest entry; neither runs at import time. Siblings must not (and cannot) pull these through the barrel.
-- **`secrets.ts` is internal by design.** Signing/encrypting a delivery secret is module-private; it is deliberately absent from this barrel.
-- The `model` re-export uses `export type *` (type-only). Importing a value from `./model` via this barrel will fail at compile time.
-- See `docs/modules/webhooks.md` for the module's full design narrative.
+- `export type *` on `./model` means consumers can import *type names* from the barrel but cannot import any runtime values (e.g., class instances, enums-as-values) from `model.ts`. Use a direct import if you need a value.
+- The module's manifest entry (`module.ts`) performs no work at import time; side effects (event subscription, queue consumer startup) are registered there, not here.
+- `secrets.ts` is deliberately excluded from the barrel. If a sibling appears to need it, that's a design signal to revisit, not to add it to this file.

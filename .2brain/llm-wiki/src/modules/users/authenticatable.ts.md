@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/authenticatable.ts
-sha256: 6cf47ff2b589cda312fed93f667ae926413fe066849792544ec24909b32b7483
-generated_at: 2026-10-15T12:06:19.365879+00:00
+sha256: 0b0bcb10918e8c25486b9cbe7fae70ac758ece0bc5adaff3b8b1b9b01a8ae4be
+generated_at: 2026-10-29T06:10:41.251224+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the single canonical rule for "may this account authenticate?" in two equivalent forms: a MongoDB filter for query-time lookups and a boolean predicate for documents already in hand. By deriving both from the same logic, query paths and in-memory checks cannot diverge on the state of a banned or soft-deleted account.
+Defines the single source of truth for "may this account authenticate?" as a matched pair: a Mongo filter for queries and a predicate for documents already loaded. This guarantees that a path that *queries* for an account and a path that *checks* an in-hand document can never disagree about a banned or soft-deleted account.
 
 ## Key elements
 
-- **`AUTHENTICATABLE_FILTER`** (`const`, object) — The Mongo filter clause: `{ active: { $ne: false }, deletedAt: null }`. Applied by login-adjacent lookups so that a document with no `active` field is treated as enabled, and soft-deletion is matched explicitly (missing *or* null) rather than relying on driver defaults.
-- **`isAuthenticatable(user)`** (function) — Predicate twin of the filter for a user document already loaded (refresh, token mint, OAuth address match). Returns `true` when `active !== false` and `deletedAt` is falsy. Accepts a `Pick<UserDocument, 'active' | 'deletedAt'>`.
+- **`AUTHENTICATABLE_FILTER`** (`{ active: { $ne: false }, deletedAt: null } as const`) — The Mongo clause applied to every login-adjacent lookup. Uses `$ne: false` (not `true`) so documents lacking an `active` field still pass; spells out `deletedAt: null` rather than relying on driver-`undefined` semantics.
+- **`isAuthenticatable(user)`** — Predicate twin of the filter for an account loaded *without* the filter (refresh token validation, token mint, OAuth match by address). Returns `true` when `active !== false` and `deletedAt` is falsy.
+- **`isRestorable(user, now?)`** — Determines whether an owner-scheduled deletion can still be undone: account is not banned, `deletedBy` is `'owner'`, a `purgeAt` exists, and `purgeAt > now`. A banned account is refused regardless; one past `purgeAt` is left to the purge job.
 
 ## Relationships
 
-- **`./model`** (`src/modules/users/model.ts`) — Imports the `UserDocument` type used in the predicate's parameter signature.
-- **`src/modules/users/services/lookups.ts`** — Primary consumer; the doc comment states the filter is "the clause every login-adjacent lookup filters on."
-- **`src/modules/account/services/oauth.ts`** — Referenced in the predicate's doc comment as a caller path ("an OAuth match by address").
-- **`src/modules/users/tests/integration/authenticatable.test.ts`** — Integration tests exercising the filter/predicate equivalence.
+- **`src/modules/users/model.ts`** — Imports the `UserDocument` type; the predicates operate on `Pick<UserDocument, …>` subsets.
+- **`src/modules/users/repository.ts`** — Consumes `AUTHENTICATABLE_FILTER` in account lookups.
+- **`src/modules/users/services/index.ts`** — Aggregates user services that rely on these checks.
+- **`src/modules/account/controllers/post-login.ts`**, **`post-login-2fa.ts`**, **`get-oauth-callback.ts`** — Login and OAuth entry points that gate on `isAuthenticatable` / the filter.
+- **`src/modules/account/services/login.ts`**, **`oauth.ts`** — Service layer performing the authenticatable check during credential or OAuth validation.
+- **`src/modules/account/services/deletion-sign-in.ts`** — Uses `isRestorable` to decide whether a sign-in should restore a soft-deleted account.
+- **`src/modules/users/tests/integration/authenticatable.test.ts`** — Integration tests covering the filter and predicate behavior.
+- **`src/modules/users/tests/integration/scheduled-deletion.test.ts`** — Exercises `isRestorable` against purge-schedule scenarios.
 
 ## Notes
 
-- **`$ne: false` vs. `true`**: `active` is checked with `$ne: false` deliberately — a document *missing* the field is considered enabled. Switching to `{ active: true }` would lock out legacy documents that never set the field.
-- **`deletedAt: null` vs. `undefined`**: The filter spells out `null` to match both a missing field and an explicit `null` value. Using `undefined` would depend on a MongoDB driver default and is intentionally avoided.
-- **Equivalence contract**: The filter and the predicate are stated to "answer alike on every state." Any change to one must be mirrored in the other (and in the integration test).
+- The filter deliberately uses `{ $ne: false }` for `active`. Do not "simplify" it to `active: true` — that would silently lock out documents that never received an `active` field.
+- `deletedAt: null` in the filter is a deliberate choice over `undefined`; it matches both a missing field and an explicit `null` without depending on driver defaults.
+- `isRestorable` accepts an optional `now` parameter (defaults to `new Date()`), making the check testable against a fixed clock.

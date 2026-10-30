@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/module.ts
-sha256: 09ec30c2be8e4c6bf31bdc93b6ac31ee9d23e677eabe5d09a2e6d697a6bc43d7
-generated_at: 2026-10-15T12:19:20.085596+00:00
+sha256: 4233cfc60aaf4ddea227aac444e6cf2aa553462e49b4105ac8761c5d66e3aca7
+generated_at: 2026-10-29T06:27:51.397896+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module manifest for the outbound webhooks module. It declares the module's identity (name, routes, locales), registers its queue consumer for webhook delivery, wires its services (event subscription, catalogue, re-encryption) into the kernel registry lifecycle, and configures the secret-ring / retention settings. It exists so that removing this single file fully detaches the webhook queue consumer and event subscriptions without leaving dangling references in `app/`.
+Module manifest for the **outbound webhooks** feature: subscription management, delivery log, and the admin API surface. It reacts to every domain event that a registered module declares in its `publicEvents` entry (resolved via `kernel/registry`) through the domain-event bus, and it owns the queue consumer that performs actual deliveries. The file exists so that deleting the webhooks module removes its consumer, routes, config, and event subscriptions in one place—nothing in `app/` references the channel directly.
 
 ## Key elements
 
-- **`onRegistered(modules)`** – Lifecycle callback invoked by the kernel registry *after* all modules are known. Resolves every module's `publicEvents` declarations via `resolvePublicEvents`, calls `subscribeToWebhookEvents` and `registerWebhookCatalogue`, and logs a warning if no message broker is configured (deliveries then rely on the per-minute retry sweep).
-- **Default export (`AppModule`)** – The module manifest object: `name`, `basePath: '/webhooks'`, `routes` (from `./routes`), `locales`, `templates`, `onRegistered`, `consumers`, `config`, `reencrypt`, `personalData: 'none'`.
-- **`consumers[0]`** – Declares the `WORKER_CHANNELS.WEBHOOK_DELIVER` queue consumer with `handler: processDeliveryJob`, `schema: WebhookDeliverJobPayloadSchema`, and `prefetch: 5`.
+- **`onRegistered(modules)`** (private) — lifecycle hook that runs after all modules are registered. Calls `webhooksService.subscribeToWebhookEvents(resolvePublicEvents(modules))` to wire event subscriptions, registers the webhook catalogue, and logs a warning if no message broker is configured (deliveries then rely on the per-minute retry sweep job).
+- **`export default { … } satisfies AppModule`** — the manifest object with:
+  - `mounts` — mounts `./routes` router at `/webhooks`.
+  - `jobs` — registers cron/retry jobs from `./jobs`.
+  - `consumers` — declares a single consumer on `WORKER_CHANNELS.WEBHOOK_DELIVER` with `prefetch: 5`, schema-validated payload (`WebhookDeliverJobPayloadSchema`), and handler `webhooksService.processDeliveryJob`.
+  - `config` — slices in `webhooksConfig` (secret-ring key, retention, demo-sink gate).
+  - `reencrypt` — `webhooksService.reencryptWebhookSecrets` for at-rest re-encryption of signing-secret rings.
+  - `personalData` — a `webhookOwnership` section whose `collect` returns `undefined` (nothing appears in account exports) and whose `erase` calls `webhooksService.forgetOwner`.
 
 ## Relationships
 
-- **`@kernel/registry`** – Provides the `AppModule` type (satisfied by the default export), `resolvePublicEvents` (called in `onRegistered`), and the registry machinery that invokes `onRegistered` and dispatches queue consumers.
-- **`@infrastructure/adapters/logger`** – Imported for the no-broker warning in `onRegistered`.
-- **`@infrastructure/adapters/queue`** – `isQueueEnabled` gates the warning; the adapter's `handleDelivery` performs schema validation before invoking `processDeliveryJob`.
-- **`./services`** – Source of `subscribeToWebhookEvents`, `processDeliveryJob`, `registerWebhookCatalogue`, and `reencryptWebhookSecrets`.
-- **`./routes`** – Provides the `router` for the admin HTTP surface under `/webhooks`.
-- **`./config`** – Supplies `webhooksConfig` (secret-ring key, retention, demo-sink gate) via the `config: [webhooksConfig.slice]` entry.
-- **`src/modules/users/openapi.yaml`** – Context for the `ownerUserId` field on subscriptions (points at an operator, not a data-subject export).
-- **`asyncapi.yaml` / `asyncapi.internal.yaml`** – Event-contract specs for the public and internal webhook events this module reacts to.
+- **`kernel/registry.ts`** — imports `resolvePublicEvents` and the `AppModule` type; the `onRegistered` hook is invoked by the registry after all modules are known.
+- **`infrastructure/adapters/queue.ts`** — imports `isQueueEnabled` for the no-broker warning; the queue adapter's `handleDelivery` performs the schema check referenced in the consumer's comment.
+- **`infrastructure/adapters/logger.ts`** — imports `logger` for the `onRegistered` warning.
+- **`types/index.ts`** — imports `WORKER_CHANNELS.WEBHOOK_DELIVER` and `WebhookDeliverJobPayloadSchema`.
+- **`./routes`**, **`./services`**, **`./config`**, **`./jobs`** — imported and wired into the manifest (mount, service methods, config slice, job list).
+- **`modules.ts`** — the top-level module registry that loads this manifest.
+- **`modules/users/openapi.yaml`** — contextual: the `ownerUserId` pointer on a subscription references a user-account record owned by the `users` module; this module stores only the pointer, never a copy.
+- **`tests/unit/module.test.ts`** — unit-tests the manifest structure and lifecycle.
+- **`tests/integration/reencrypt.test.ts`** — integration-tests the `reencrypt` hook.
+- **`tests/cross-cutting/webhook-event-producers.test.ts`** — verifies that other modules' `publicEvents` declarations are correctly consumed through this module's subscription path.
 
 ## Notes
 
-- **Timing of `onRegistered` is load-bearing.** `resolvePublicEvents` needs the *full* module list, which only exists by the `onRegistered` phase. Running it at `subscribe()` time would miss late-registered modules. The same pattern applies to the `locales` lookup.
-- **No guard before the queue handler.** The queue adapter already rejects jobs missing required fields via the `schema` before calling `processDeliveryJob`; a redundant check here would be dead code.
-- **`prefetch: 5` is intentional.** Delivery is a single signed POST (I/O-bound). A dead endpoint's hard timeout must not cause a burst of jobs to queue up serially.
-- **`personalData: 'none'` is a deliberate declaration.** `ownerUserId` is a pointer to a `users` record, never a copy; no email or other personal data is stored in this module.
+- `onRegistered` (not `subscribe()`) is used to collect `publicEvents` because the full enabled-module list only exists after registration completes; the same pattern applies to `locales`' translatables lookup.
+- The consumer has no separate guard before `processDeliveryJob`—the `schema` field in the consumer definition already rejects malformed payloads at the queue layer, so a redundant check would be dead weight.
+- `prefetch: 5` is deliberate: deliveries are I/O-bound signed POSTs, and a dead endpoint's timeout must not serialize a burst of jobs.
+- `personalData.collect` intentionally returns `undefined` so the section never appears in a `POST /account/export` response; only `erase` (forgetting the owner pointer) is meaningful.
+- The `asyncapi.yaml` / `asyncapi.internal.yaml` files in this directory are the public and internal event schemas that producers and consumers of this module's channel should conform to.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/example/controllers/post-example.ts
-sha256: b03cc00fb79e25b850b7a825e09ed789fe621fd307b69e303f7d02baf938fdae
-generated_at: 2026-10-14T15:41:01.067757+00:00
+sha256: 95daab4309f9a27484eb6099d5c2de8249b20be9ebf5925aabcd49af681a9cc5
+generated_at: 2026-10-29T03:51:51.044531+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Controller handler for `POST /examples`. Validates the request body against the generated Zod schema, delegates to `exampleService.create`, and returns `201 Created` with a `Location` header on success.
+Handles `POST /examples` by validating the request body against a generated Zod schema (with whitespace trimming), delegating to the example service, and responding with `201` + a `Location` header. It is the HTTP entry point for the "create example" operation.
 
 ## Key elements
 
-- **`postExample`** (exported) — The HTTP handler, wrapped in `namedHandler('postExample', …)`. Steps in order:
-  1. Reads raw input via `readInput(request, { surface: 'create' })`.
-  2. Parses it against `CreateExampleBody`; bails early if parsing fails (response already sent by the helper).
-  3. Calls `exampleService.create(body, callerContextOf(request))`.
-  4. On a `refused` result, short-circuits (helper sends the appropriate status).
-  5. On success, calls `createdResponse` with the new entity, its `Location` (`/examples/{id}`), and an optional message.
-  6. Catches any thrown error via `catchAs(response, 'postExample')`.
+- **`createTrimmedBody`** – Local schema constant. Extends `CreateExampleBody` (from `@api/schemas.zod`) so that `title` and `body` are trimmed before validation. This means a whitespace-only string becomes a field-level 422 rather than passing through as an empty string.
+- **`postExample`** – The exported named handler. Parses the body with `createTrimmedBody`, calls `exampleService.create(body, callerContextOf(request))`, then either:
+  - responds with `201` + `Location: /examples/<id>` via `createdResponse`, or
+  - short-circuits on a `refused` result, or
+  - surfaces an error through `catchAs(response, 'postExample')`.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** — supplies `namedHandler`, `parseBody`, `refused`, and `catchAs` (the four structural helpers that shape every controller in this codebase).
-- **`@infrastructure/http/request`** — supplies `readInput` (extracts the raw payload) and `callerContextOf` (derives auth/tenant context for the service call).
-- **`@infrastructure/http/response`** — supplies `createdResponse` (serialises the 201 body + `Location` header).
-- **`../services`** (`src/modules/example/services/index.ts`) — provides `exampleService`, whose `.create` performs the actual domain logic.
-- **`src/modules/example/routes.ts`** — registers `postExample` on the `POST /examples` route.
+- **`src/infrastructure/http/controller.ts`** – Supplies the handler plumbing: `namedHandler` (names the handler for observability), `parseBody` (schema validation + response on failure), `refused` (service-level rejection check), `catchAs` (async error formatting).
+- **`src/infrastructure/http/request.ts`** – Supplies `readInput` (extracts the raw body for a given surface) and `callerContextOf` (derives caller identity for the service call).
+- **`src/infrastructure/http/response.ts`** – Supplies `createdResponse`, which writes the `201` status, JSON body, and `Location` header.
+- **`src/infrastructure/http/schemas.ts`** – Supplies `trimmedInto`, a schema helper that wraps an existing Zod string field with a `.transform` that trims whitespace before validation.
+- **`src/modules/example/routes.ts`** – Registers `postExample` on the `POST /examples` route.
+- **`src/modules/example/services/index.ts`** – Exports `exampleService`, whose `.create()` method performs the actual persistence and returns a `{ data, refused? }` result.
 
 ## Notes
 
-- `parseBody` returns `undefined` **and** has already written the error response when validation fails; the handler must `return Promise.resolve()` to avoid falling through to the service call. This is the standard guard pattern across all create controllers.
-- The `surface: 'create'` argument to `readInput` is a hint for logging/middleware that this payload is expected for a creation action — it does not alter parsing behaviour.
-- The caller context is extracted from the request envelope (not the body) and passed as the second argument to `exampleService.create`, so the body schema does not include identity fields.
+- The trimming is applied *before* Zod's own validation runs (via `.extend` + `.transform`), so `"   "` fails as an empty string rather than passing as a valid 3-char string. This is an intentional UX choice documented in the inline comment.
+- `parseBody` returns `undefined` on validation failure and has already written the error response; the handler must `return` early in that case (it does).
+- The `catchAs` call tags the error context with the handler name `'postExample'` for log correlation.
+- The `readInput` call passes `{ surface: 'create' }`, which likely selects a specific input extraction strategy for create-vs-update semantics.

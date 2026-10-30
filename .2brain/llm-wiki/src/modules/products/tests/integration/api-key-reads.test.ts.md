@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/tests/integration/api-key-reads.test.ts
-sha256: 995d3b1dcddc45874a5ea412ef92c58f1ec1fa564a248d2e1bcc005cbffc5aa7
-generated_at: 2026-10-15T11:47:14.408301+00:00
+sha256: 3b1e0bef5ef1e2919869cceb468339476da6a01f67bc6f327b40bc0fa581ba86
+generated_at: 2026-10-29T05:31:42.466765+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that verify an API key (`sk_…` secret) inherits the same read-visibility semantics as a session credential: a key scoped with `products.any.read` sees drafts and soft-deleted products, while a key without that scope sees only the published catalogue. Also asserts that the cache-scope predicate correctly distinguishes elevated callers from guests to prevent wider results from being stored under a guest cache key.
+Integration tests verifying that `sk_...` API-key credentials produce the same read-visible data as an equivalent session: soft-deleted and draft product rows, the `translations` field, and cache-scope isolation relative to the anonymous guest.
 
 ## Key elements
 
-- **`bearerOf(secret)`** – Formats a secret into the `Authorization: Bearer …` header value.
-- **`titlesAt(secret)`** – Hits `GET /products`, unwraps `body.data.items`, and returns a sorted array of product titles for assertion convenience.
-- **`describe("GET /products/:id with an api key")`** – Three cases: soft-deleted visible to `products.any.read` key (200), soft-deleted hidden from a non-product-scoped key (404), published product visible to any authenticated key (200).
-- **`describe("GET /products with an api key")`** – Two cases: draft + live both listed for `products.any.read` key; only live listed for a key lacking that scope.
-- **`describe("the cache scope of a key caller")`** – Two pure-function assertions that `hasAnonymousReadScope(callerScope, callerAs(…))` is `false` for an admin caller and `true` for a customer caller.
+- **`bearerOf(secret)`** – formats a secret into the `Authorization: Bearer …` header value.
+- **`titlesAt(secret)`** – performs a `GET /products` list call and returns the sorted array of item titles from the `{ items: [{ title }] }` envelope.
+- **`describe('GET /products/:id with an api key')`** – three cases: a key with `display:Product` gets 200 on a soft-deleted product; a key without it gets 404; a key with unrelated scope still gets 200 on a published product.
+- **`describe('GET /products/:id: translations follow read:Translation')`** – three cases: key with `read:Translation` sees `translations`; guest does not; a prior keyed request must not seed the guest's cached entry; keyed response carries a `private` cache-control header.
+- **`describe('GET /products with an api key')`** – two cases on the list endpoint: `display:Product` key sees both draft and live; a key with only `read:User` sees only live.
+- **`describe('the cache scope of a key caller')`** – two unit-level assertions that `hasAnonymousReadScope(productService.callerScope, caller)` is `false` for an admin caller and `true` for a customer caller.
 
 ## Relationships
 
-- **`src/kernel/access/query.ts`** – Provides `hasAnonymousReadScope`, the predicate tested in the cache-scope block to ensure elevated callers don't share the guest cache entry.
-- **`src/modules/products/services/index.ts`** – Exports `callerScope`, the scope-resolver function whose behavior is exercised by the cache-scope tests.
-- **`src/modules/products/services/read.ts`** – The read service behind the `GET /products` and `GET /products/:id` endpoints; these tests exercise its filtering logic end-to-end.
-- **`src/modules/products/tests/factories.ts`** – Supplies `createProduct` for seeding products with specific `active` / `deletedAt` states.
-- **`tests/support/callers.ts`** – Supplies `callerAs` to construct simulated caller objects for the cache-scope assertions.
-- **`tests/support/credentials.ts`** – Supplies `credentialHolding` to mint an API key secret bound to a specific permission list.
-- **`tests/support/http.ts`** – Supplies the `api()` supertest-style client used for all HTTP assertions.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` is called once at module top level to prepare the test database before any suite runs.
+- **`src/kernel/access/query.ts`** – provides `hasAnonymousReadScope`, used directly in the cache-scope block to confirm the product service's `callerScope` distinguishes privileged from anonymous callers.
+- **`src/modules/products/services/index.ts`** – provides `productService`; the test reads its `callerScope` property to assert cache-scope behavior.
+- **`src/modules/products/tests/factories.ts`** – provides `createProduct`, the sole way test products (published, draft, soft-deleted) are seeded.
+- **`tests/support/callers.ts`** – provides `callerAs(scope)`, used to construct a caller object for the `hasAnonymousReadScope` assertions.
+- **`tests/support/credentials.ts`** – provides `credentialHolding(scopes)`, mints an `sk_` key with the given scope set for each HTTP test.
+- **`tests/support/http.ts`** – provides the `api()` request helper (supertest-style) used for every `GET` call.
+- **`tests/support/setup-test-db.ts`** – provides `setupTestDb()`, called once at module top to initialise the in-memory database before any test runs.
 
 ## Notes
 
-- `setupTestDb()` is invoked at the module top level (not in `beforeAll`/`beforeEach`), so all tests in this file share a single database instance; tests must be self-contained in what they seed.
-- The cache-scope tests are pure unit assertions (no HTTP round-trip) embedded in an otherwise integration-level file; they guard against a cache-pollution regression where a `products.any.read` answer would be written under the anonymous guest cache key.
-- The file's doc comment explicitly states the design contract: `callerScope(request.caller)` is the single resolution point shared by both sessions and API keys, so tests here validate that contract rather than key-specific code.
+- `setupTestDb()` is invoked at the top level of the module (not inside a `beforeAll`), so it runs exactly once for the whole file.
+- The translations tests rely on request *ordering*: the keyed request is issued before the guest request to prove the guest cache entry is not polluted. Tests are sequential by default in the runner.
+- The list-endpoint tests assume the response body wraps results as `{ items: [...] }`; the `titlesAt` helper casts to that shape and will throw at runtime if the contract changes.
+- The cache-scope block (`describe('the cache scope…')`) is a pure unit assertion (no HTTP, no DB) co-located here for topical proximity rather than as a separate unit-test file.

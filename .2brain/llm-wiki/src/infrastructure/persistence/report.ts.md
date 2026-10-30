@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/persistence/report.ts
-sha256: fa2e58cd8c33576cd6c28df29432174db0450b063524f25cb2b4da4142ff1d7e
-generated_at: 2026-10-14T08:10:54.381305+00:00
+sha256: 541b6b602d03baa9303a1ac8afa0db37966638dcce2c5240af1207fe801085dc
+generated_at: 2026-10-29T02:13:30.479602+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Shared MongoDB aggregation helpers for grouped reads (date-bucketed stats). Defines the window shape (`ReportWindow`) and the `$dateTrunc` builder (`bucketOf`) that every stats owner composes into its own pipeline. Lives in `infrastructure/persistence` because it emits MongoDB operator expressions directly; the domain modules consume it without needing to know about `$dateTrunc` details.
+Shared building blocks for MongoDB grouped (bucketed) reads used across multiple domain modules. It defines the window/bucket vocabulary (`ReportWindow`, `ReportInterval`) and the single `$dateTrunc` expression builder (`bucketOf`) so that every module that needs to aggregate data by day, week, or month in a given IANA zone composes its pipeline the same way.
 
 ## Key elements
 
-- **`ReportInterval`** (type) — `'day' | 'week' | 'month'`. The set of bucket sizes a grouped read can request.
-- **`ReportWindow`** (interface) — Describes *what* to read: a half-open `[from, to)` instant window, the desired `interval`, and the IANA `timeZone` in which bucket boundaries are cut (local midnight).
-- **`bucketOf(field, window)`** (const, returns object) — Builds the `$dateTrunc` expression for a given date field. Spreads `startOfWeek: 'monday'` **only** when `interval === 'week'`; otherwise the key is omitted from the expression entirely.
+- **`ReportInterval`** (type) — union of `'day' | 'week' | 'month'`; the three bucket sizes a grouped read may request.
+- **`ReportWindow`** (interface) — half-open instant window (`from` inclusive, `to` exclusive) plus `interval` and `timeZone`. Describes *what* a grouped read is asked about.
+- **`bucketOf(field, window)`** (const) — returns the `$dateTrunc` aggregation expression for a given date field. Emits `startOfWeek: 'monday'` only when `interval` is `'week'`.
 
 ## Relationships
 
-- **Repositories** (`invoicing/repository.ts`, `payments/repository.ts`, `returns/repository.ts`) — Compose `bucketOf` into their aggregation pipelines to produce date-bucketed group keys, and pass a `ReportWindow` as the time-bounding parameter.
-- **Stats services** (`invoicing/services/stats.ts`, `orders/services/stats.ts`, `payments/services/stats.ts`, `returns/services/stats.ts`) — Construct or normalize a `ReportWindow` before delegating to the owning repository; they do not call `bucketOf` themselves.
-- **`src/modules/stats/services/range.ts`** — Sits alongside as the higher-level range/validation concern; `ReportWindow` is the *output* shape that range logic feeds into.
-- **`tests/unit/infrastructure/persistence/report.test.ts`** — Unit-tests `bucketOf` output shape (including the conditional `startOfWeek` spread).
+- **`src/modules/stats/services/range.ts`** — constructs `ReportWindow` objects (resolving the user-supplied range into `from`/`to`/`interval`/`timeZone`) that are passed down into the repositories below.
+- **`src/modules/invoicing/repository.ts`**, **`src/modules/payments/repository.ts`**, **`src/modules/returns/repository.ts`** — import `bucketOf` and `ReportWindow` to build their respective `$group` pipelines for grouped reads (e.g. invoiced / paid / returned totals per bucket).
+- **`src/modules/invoicing/services/stats.ts`**, **`src/modules/payments/services/stats.ts`**, **`src/modules/returns/services/stats.ts`**, **`src/modules/orders/services/stats.ts`** — the service layer that orchestrates a `ReportWindow` through `src/modules/stats/services/range.ts` and then delegates to the owning repository.
+- **`tests/unit/infrastructure/persistence/report.test.ts`** — unit tests for `bucketOf` output shape (presence/absence of `startOfWeek`, correct `unit`, `timezone` passthrough).
 
 ## Notes
 
-- The module doc comment references `toMinorUnits` from `@shared-kernel/money` for reading Decimal128 sums, but that function is **not** defined or re-exported here — it is a consumer-side concern.
-- `startOfWeek: 'monday'` is deliberately conditional; passing it for `day` or `month` would be invalid to MongoDB. The spread pattern (`...(cond ? {…} : {})`) is the convention to follow if a new conditional key is ever added.
-- `from` / `to` are **instants** (absolute `Date` values), not zone-local times. The zone only affects where bucket *boundaries* land, not the window endpoints.
+- The window is **half-open** (`from` included, `to` excluded). Callers must not assume inclusive end.
+- `startOfWeek` is hard-coded to Monday. If a business requirement ever demands Sunday-starting weeks, this is the single place to change.
+- The file is deliberately **not** stats-specific; the doc comment and module name avoid tying it to any one module. Add new grouped-read consumers by importing `bucketOf` rather than re-implementing `$dateTrunc`.
+- Money in MongoDB is `Decimal128`, so `$sum` over it is exact — no floating-point rounding is needed at the aggregation layer. Conversion to minor units happens downstream via `toMinorUnits` (`@domain-primitives/money`), not here.

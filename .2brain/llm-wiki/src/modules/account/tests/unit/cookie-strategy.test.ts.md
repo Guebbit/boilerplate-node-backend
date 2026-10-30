@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/unit/cookie-strategy.test.ts
-sha256: e97e3130d71e1faef55e3268ab38381ccef3e3e00d9ad1275893974c0f42e4b3
-generated_at: 2026-10-15T10:14:13.078332+00:00
+sha256: f1b79bc1fb89bff490fc45a0dd6233cc5092a074a044cfff6daf8a4374209f9d
+generated_at: 2026-10-29T03:03:57.376603+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit-level tests for the `cookie` session-mode adapter (`cookie-strategy.ts`). Verifies three surfaces — credential extraction from a request, resolution of a presented session id, and issuance of a new session — with the session store, user service, and proof resolver all replaced by mocks. End-to-end behavior against a real store is covered separately in `../integration/session-modes.test.ts`.
+Unit tests for the `cookie` mode session strategy adapter (`cookie-strategy.ts`). They verify three operations in isolation: credential extraction from a request (`credentialOf`), bearer/cookie resolution against the session store (`resolveBearer` / `resolveCookie`), and session minting (`issue`). The session store, account read, and proof resolver are all replaced with mocks; their real behaviour is covered by `../integration/session-modes.test.ts`.
 
 ## Key elements
 
-- **`credentialOf` suite** — asserts the strategy picks the `ses_` bearer token, reads the scheme case-insensitively, falls back to the `Cookie` header when the bearer is a JWT, and returns `undefined` when neither is present.
-- **`resolveBearer` / `resolveCookie` suite (parameterized via `describe.each`)** — covers malformed ids, JWT-shaped credentials (treated as revoked), lookup-by-hash (never by raw id), cross-mode rows, expired rows, proof delegation to `resolveProof`, missing-proof fallback (`authTime: 0`, `amr: []`), inactive-account short-circuit, the 60-second `touch` throttle, and resilience to `touch` failure.
-- **`issue` suite** — validates user-not-found, two-factor enforcement (`SecondFactorRequiredError`), stale-proof rejection (`StaleProofError`), `authTime` truncation to seconds, and the stored row shape.
-- **`liveRow(overrides?)`** — factory that builds a well-formed `NewSessionRow` fixture with a live 1-hour expiry and `amr: ['pwd']`.
-- **`insertedRow()`** — pulls the last argument passed to `sessions.insert` for assertions.
-- **`beforeEach`** — resets all mocks, sets `rolesOf` to resolve a customer, configures `NODE_SESSION_TIME_SHORT` / `NODE_SESSION_TIME_LONG`, and gives default resolutions to repository and user-service doubles.
+- **`describe('credentialOf')`** — asserts the strategy picks the `ses_`-shaped Bearer token over a cookie, is case-insensitive on the scheme, falls back to the cookie when the Bearer is a JWT, and returns `undefined` when neither is present.
+- **`describe.each(['resolveBearer', 'resolveCookie'])`** — parameterised suite run against both resolution paths. Covers: malformed rejection (no store hit), JWT-as-revoked, lookup-by-digest (never raw id), unknown id → revoked, wrong-mode row → revoked, past-expiry → expired, valid row → proof delegated to `resolveProof`, missing-proof defaults (`authTime: 0, amr: []`), inactive account → `ok: undefined` with no `touch`, 1-minute `touch` cooldown, and resilience when `touch` rejects.
+- **`describe('issue')`** — minting guards: user-not-found rejection, `SecondFactorRequiredError` when 2FA is armed but proof lacks the factor, `StaleProofError` when proof predates `tokensValidAfter`, and `authTime` storage in seconds (truncated from ms).
+- **`USER_ID`, `SHOPPER`, `SOME_ID`** — shared fixtures: a fixed account id, its resolved context object, and a well-formed-but-never-minted `ses_…` id.
+- **`sessions`, `users`, `proof`** — typed mock handles created via `asStub`, giving typed access to the jest mocks.
+- **`insertedRow()`** — reads the argument of the last `sessions.insert` call as a `NewSessionRow`.
+- **`liveRow(overrides?)`** — factory producing a valid `cookie`-mode session row (1 h expiry) with optional overrides.
+- **Module mocks** — `jest.mock` for `@modules/users`, `@modules/account/repository`, `@modules/account/session/auth-context` (fully replaced), and `@modules/access`.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `session/cookie-strategy.ts` | System under test; all public methods (`credentialOf`, `resolveBearer`, `resolveCookie`, `issue`) are exercised. |
-| `session/auth-context.ts` | `resolveProof` is fully mocked; tests assert it is called with `(userId, { authTime, amr })` and that its return drives the `{ ok }` result. |
-| `session/mint-guard.ts` | Imports `SecondFactorRequiredError` and `StaleProofError` for `issue`-path rejection assertions. |
-| `session/config.ts` | Imports `RefreshTokenExpiryTime` (used in the truncated portion for expiry assertions). |
-| `account/repository.ts` | `sessionRepository` is partially mocked (all CRUD + family methods); typed via `asStub`. |
-| `users/services/index.ts` | `userService.findAuthenticatableById` and `touchLastActive` are mocked. |
-| `access/index.ts` / `access/service.ts` | `rolesOf` is mocked to resolve `{ tenant: 'customer', platform: null }`. |
-| `infrastructure/security/hash-token.ts` | `hashToken` is the **real** implementation, used to compute the expected digest passed to `findByHash`. |
-| `tests/strategy-doubles.ts` | Provides `cookieSet`, `recordingResponse`, and `requestWith` test helpers. |
-| `tests/support/stub.ts` | `asStub<T>` casts mock objects back to their typed interfaces. |
-| `tests/support/environment.ts` | `setEnvironment` seeds `NODE_SESSION_TIME_*` for expiry calculations. |
+- **`src/modules/account/session/cookie-strategy.ts`** — the system under test; every assertion targets its exported `cookieStrategy` object.
+- **`src/modules/account/session/mint-guard.ts`** — source of `SecondFactorRequiredError` and `StaleProofError`, asserted in `issue` tests.
+- **`src/modules/account/session/auth-context.ts`** — `resolveProof` is the sole export mocked; tests verify *whether* it is called and with what arguments, not its semantics.
+- **`src/modules/account/repository.ts`** — `sessionRepository` methods are spied on; `findByHash`, `insert`, `touch` are the primary doubles.
+- **`src/modules/users/index.ts`** — `userService.findAuthenticatableById` and `touchLastActive` are stubbed for `issue` / resolve tests.
+- **`src/modules/access/index.ts`** — `accessService.rolesOf` is stubbed to return a neutral (tenant-less, platform-less) role set.
+- **`src/infrastructure/security/hash-token.ts`** — `hashToken` is used to confirm the strategy hashes the id before store lookup.
+- **`src/modules/account/tests/strategy-doubles.ts`** — provides `requestWith`, `recordingResponse`, and `cookieSet` helpers shared with other strategy tests.
+- **`src/types/index.ts`** — supplies the `RememberTier` type used in issue assertions.
+- **`tests/support/environment.ts`** — `setEnvironment` seeds `NODE_SESSION_TIME_SHORT` / `NODE_SESSION_TIME_LONG` for deterministic TTL calculations.
+- **`tests/support/stub.ts`** — `asStub` gives typed mock handles over plain `jest.fn()` replaces.
 
 ## Notes
 
-- `jest.resetAllMocks()` (not `clearAllMocks`) is used in `beforeEach` so leftover resolutions from one case cannot leak into the next.
-- The `@modules/users` and `@modules/account/repository` mocks use `jest.requireActual` spread to preserve non-targeted exports; only specific methods are replaced with `jest.fn()`.
-- `@modules/account/session/auth-context` is replaced wholesale (no `requireActual`) because `resolveProof` is the only export the strategy calls.
-- The strategy's `touch` throttle (≥ 60 s since last stamp) is a non-obvious behavior: a successful resolve does **not** guarantee a write.
-- Cross-mode rows (a `jwt` row presented to the `cookie` resolver) are treated as **revoked**, not as a lookup failure — this is a deliberate security boundary, not a bug.
-- `hashToken` is intentionally **not** mocked; tests assert the strategy hashes the id before any store call, which is a core invariant.
+- `beforeEach` calls `jest.resetAllMocks()` (not `clearAllMocks`) so that any resolution set in a prior case cannot leak into the next; the comment in the file calls this out explicitly.
+- The `auth-context` mock is **total** (not a partial spread) because the test's contract is "was the resolver asked?" — anything beyond that belongs to integration tests.
+- `SOME_ID` is deliberately a valid *shape* (`ses_` + 43 chars) that no row holds; it exercises the lookup path without coupling to a real mint.
+- The resolve suite is written once and replayed over both `resolveBearer` and `resolveCookie` via `describe.each`, so any divergence between the two paths fails both parameter rows.
+- The `touch` cooldown test sets `lastUsedAt` to "now" (no call), then to 61 s ago (one call), then to `undefined` (one call) — confirming the boundary is strictly > 60 s.

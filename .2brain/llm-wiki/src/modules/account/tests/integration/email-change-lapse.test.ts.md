@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/integration/email-change-lapse.test.ts
-sha256: 27e5d6f25c454cc016a97e556f67948b03ad7481196fda735bed9f6c721a8a33
-generated_at: 2026-10-14T09:09:13.389548+00:00
+sha256: 07cde0fa858cd5e91f66ea10c66e10aa3eed000deffc32305bb3b4c5bedfdab1
+generated_at: 2026-10-29T02:55:06.651424+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the nightly sweep `reapLapsedPreviousEmails`, which clears a user's `previousEmail` once the email-change undo token has expired or no longer exists. The suite verifies the exact boundary: the account is cleared *only* when it holds a previous address **and** has no live `email-change-undo` token.
+Integration tests for the nightly sweep `reapLapsedPreviousEmails`, which clears a user's `previousEmail` field once the undo token that would restore it is either expired or entirely absent. The suite verifies the sweep's boundary conditions: it acts only on lapsed or missing undo tokens, ignores other token types, and never touches the current email or a pending change.
 
 ## Key elements
 
-- **`setupTestDb()`** — top-level call that prepares a fresh test database before any test runs.
-- **`UNDO`** — constant set to the literal string `'email-change-undo'`; intentionally hard-coded (not imported from a shared constant) so a rename of the token type fails this suite loudly.
-- **`changedAccount(username, undoTtlMs?)`** — helper that creates a user, sets `previousEmail` via `userRepository.updateMany`, and optionally plants an `UNDO`-type token with the given TTL. A *negative* TTL simulates an already-expired token; `undefined` means no token is planted at all.
-- **`previousEmailOf(id)`** — reads the user back and returns the stored `previousEmail` (or `undefined` if cleared).
-- **`describe('reapLapsedPreviousEmails')`** — five test cases covering:
-  1. Clears `previousEmail` when the undo token is expired (negative TTL).
-  2. Clears it when no undo token exists at all.
-  3. **Keeps** it while the undo token is still live (positive TTL), asserting the sweep returns `0`.
-  4. Not fooled by a live token of a *different* type (`'email-change'` vs `'email-change-undo'`)—still clears.
-  5. Leaves `email` and `pendingEmail` untouched when a pending change is in flight.
+- **`UNDO`** — constant `'email-change-undo'`; the exact `verificationtokens.type` string for the undo link. Spelled out (not imported from a shared const) so a rename surfaces as a loud test failure.
+- **`changedAccount(username, undoTtlMs?)`** — sets up a user with a `previousEmail` already stored; optionally plants an undo token with the given TTL (negative = already expired, `undefined` = no token). Returns the created user.
+- **`previousEmailOf(id)`** — reads back the stored `previousEmail` via `userRepository.findByIdWithCredentials`; resolves `undefined` when cleared.
+- **`describe('reapLapsedPreviousEmails')`** — five test cases covering: expired token → cleared; missing token → cleared; live token → preserved; live token of a *different* type → still cleared; and a `pendingEmail` / current `email` left untouched by the sweep.
 
 ## Relationships
 
-- **`src/modules/account/services/index.ts`** — re-exports `reapLapsedPreviousEmails`, the function under test.
-- **`src/modules/account/services/previous-email-cleanup.ts`** — the implementation module that the services barrel re-exports from.
-- **`src/modules/account/tests/factories.ts`** — provides `plantToken`, used to create verification tokens with a specific type and TTL.
-- **`src/modules/users/repository.ts`** — the `userRepository` used for `updateMany` (setting/clearing `previousEmail`, `pendingEmail`) and `findByIdWithCredentials` (reading back).
-- **`src/modules/users/tests/factories.ts`** — provides `createUser` and re-exports `userRepository` for test setup.
-- **`tests/support/setup-test-db.ts`** — provides `setupTestDb` for database initialization.
+- **`src/modules/account/services/index.ts`** — imports `accountService`, whose `reapLapsedPreviousEmails()` method is the sole system under test.
+- **`src/modules/account/tests/factories.ts`** — provides `plantToken` used to seed verification tokens (undo and other types) with controlled TTLs.
+- **`src/modules/users/tests/factories.ts`** — provides `createUser` for provisioning fresh users and `userRepository` for direct DB updates and assertions.
+- **`src/modules/users/repository.ts`** — `userRepository` is used both to set `previousEmail`/`pendingEmail` in fixtures and to read stored credentials in assertions.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the in-memory (or temp) database before the suite runs.
 
 ## Notes
 
-- The `UNDO` constant is deliberately **not** imported from a shared types module; it is inlined so that a rename of the token-type string causes a test failure rather than silently testing the wrong token type.
-- A negative `ttlMs` passed to `plantToken` is the convention in this codebase for simulating an already-expired token; `undefined` skips token creation entirely.
-- The test that checks a different token type (`'email-change'`) still allows cleanup—only the exact `email-change-undo` type acts as a "live undo" guard.
+- The sweep's return value is asserted as a count (`toBe(1)`, `toBe(0)`) rather than just checking side-effects, which couples the test to the implementation's "number of rows updated" contract.
+- The "not fooled by a live token of another type" test confirms the sweep filters on the exact `type` string; any future rename of the undo token type without updating `UNDO` here will break the suite intentionally.
+- `changedAccount` uses `userRepository.updateMany` (not a service method) to set `previousEmail`, deliberately bypassing the domain layer to simulate a post-change state.

@@ -1,26 +1,30 @@
 ---
 source: src/modules/account/controllers/post-account-export.ts
-sha256: 4e56dbdab0dd2057216c9e03fd2b648ad2340fa6fa83e9eef9567dd81c3621ba
-generated_at: 2026-10-15T09:54:29.605074+00:00
+sha256: f891b9037b461a274cf4fb0e3b041c40da59f06457a16f7b6a2f2a3bc7542a71
+generated_at: 2026-10-29T02:29:11.762108+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/account/controllers/post-account-export.ts
 
 ## Purpose
-Thin Express handler for `POST /account/export`. It extracts the caller's id from auth context, delegates to `requestExport`, and writes a `202` response carrying the export's `id` and `status`. All real work lives in the export service; this file only adapts HTTP to that call.
+
+Thin Express controller for `POST /account/export`. It extracts the caller's ID from the auth context, delegates to `requestExport`, and returns a `202` with the export status and a `Location` header. All real work (building the export file, mailing a link) happens asynchronously in the service layer.
 
 ## Key elements
-- **`postAccountExport(request, response)`** — the sole export. Reads `request.authContext.id`, calls `requestExport(id, callerContextOf(request))`, then either short-circuits via `refused` or sends a `successResponse` with the result's `data`, `status`, and `message`. Errors are funneled to `catchAs(response, 'postAccountExport')`.
+
+- **`postAccountExport(request, response)`** — The sole export. Reads `request.authContext!.id`, calls `requestExport(id, callerContextOf(request))`, sets `Location: /account/export`, and responds via `successResponse`. Uses `refused` for early-exit refusal paths and `catchAs` for the catch handler.
 
 ## Relationships
-- **`src/modules/account/services/export.ts`** — source of `requestExport`; the actual async export-creation logic. Imported directly (not via the account-service barrel) by design.
-- **`src/modules/account/routes.ts`** — mounts `postAccountExport` on the `/account/export` route and attaches `requireFreshAuth` middleware upstream, guaranteeing `authContext` is present.
-- **`src/infrastructure/http/controller.ts`** — provides `catchAs` (uniform error serialization) and `refused` (early-return for rejected results).
-- **`src/infrastructure/http/request.ts`** — provides `callerContextOf`, which packages request metadata forwarded into the service call.
-- **`src/infrastructure/http/response.ts`** — provides `successResponse`, the standard 2xx writer.
+
+- **`src/infrastructure/http/controller.ts`** — Supplies `catchAs` (error → HTTP mapping) and `refused` (domain-refusal → HTTP response) helpers.
+- **`src/infrastructure/http/request.ts`** — Supplies `callerContextOf(request)` to pass through caller metadata to the service.
+- **`src/infrastructure/http/response.ts`** — Supplies `successResponse` used to emit the final `202` body.
+- **`src/modules/account/routes.ts`** — Registers this handler on `POST /account/export`, with `requireFreshAuth` middleware guaranteeing a populated `authContext`.
+- **`src/modules/account/services/export.ts`** — Provides `requestExport`, the business-logic entry point that actually schedules the export.
 
 ## Notes
-- The file deliberately bypasses the account-service barrel; the module docblock points to that barrel's own docblock for the rationale (data-export stays out of `accountService`).
-- No validation logic lives here — `requireFreshAuth` on the route is the only identity gate. If you need a new guard, it belongs in `routes.ts`, not in this handler.
-- The response is always `202 Accepted` (or a refusal/error); the export file itself is produced asynchronously and delivered by email, so no polling endpoint is expected from this route.
+
+- `requestExport` is imported **directly** from `../services/export`, not via the `accountService` barrel. The docblock states the data-export service is intentionally kept out of that barrel.
+- `request.authContext!` uses a non-null assertion; safety is guaranteed by the `requireFreshAuth` route middleware, not by a runtime check here.
+- The response is `202 Accepted` with a `Location` header (RFC 9110 §15.3.3), not a direct file download — the client is expected to poll or await the emailed link.

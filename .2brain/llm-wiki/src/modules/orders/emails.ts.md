@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/emails.ts
-sha256: b0e52e25b919598a78003b7bd1683c931cd2e8fb2e7e3fdacb972255d8da6402
-generated_at: 2026-10-15T11:03:55.103324+00:00
+sha256: c105eec1129395807430ddb2400465b4ea0dca0187d00b1a0ea44a0d0ae958b3
+generated_at: 2026-10-29T04:41:53.983534+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Resolves all order-related email copy into finished, localized strings. The language is passed in as an argument; the output is ready-to-interpolate text that the mailer's template engine only plugs into a layout. Follows the same "copy lives here, template only interpolates" rule as `@modules/account/emails`. Invoice document copy is deliberately *not* here (it lives in `@modules/invoicing/emails.ts`).
+Holds the full resolved copy (finished strings) for every email the orders module sends. Each function takes a locale and order data, produces translated text with all placeholders filled, and returns it as structured data the mailer's template engine can interpolate. The file is the single source of truth for order-module email wording, mirroring the convention in `@modules/account/emails`.
 
 ## Key elements
 
-- **`OrderLines`** (interface) — Structural subset of an order: line items with `title`, `price`, `quantity`, optional `requiresShipping` / `noWithdrawal` flags, plus `shippingCost` and `currency`. Kept narrow so both email builders and tests can pass a two-line fixture without a full `OrderDocument`.
-- **`totalOf`** — Delegates to `orderTotal` from `./domain` using explicit fields (not spread) so it works with hydrated Mongoose documents.
-- **`addressLine`** — Joins a `ReturnAddress` into a single comma-separated line, skipping absent fields.
-- **`withdrawalCase`** — Classifies the order as `'goods'` (at least one shipped line is withdrawable), `'digital'` (all withdrawable lines are digital), or `'none'` (Art. 16 excludes every line).
-- **`withdrawalForm`** (private) — Builds the 9-row model withdrawal form (Annex I(B)) with the trader pre-filled.
-- **`goodsEffects`** (private) — Adds the goods-specific effects: refund hold, send-back address/deadline, postage payer, diminished-value note (Annex I(A) notes 4 & 5).
-- **`withdrawalNotice`** (export) — Assembles the full right-of-withdrawal notice required by CRD Art. 6(1)(h), 8(7), Annex I: heading, terms, effects, and form. Returns empty `effects`/`form` when all lines are excluded.
-- **`orderConfirmEmail`** (export) — Builds the "order received, awaiting payment" email (`EmailContent`). Includes per-line copy, total, link, and the full withdrawal notice. Sent at creation; the order is still `pending`.
-- **`bankTransferInstructionsEmail`** (export) — Alternative to `orderConfirmEmail` for `bank_transfer` checkout: beneficiary, IBAN, BIC, reference, deadline (via `Intl.DateTimeFormat`), total, and withdrawal notice.
+- **`OrderLines`** (interface) — Structural minimum an email needs from an order: per-line quantity, product title/price, shipping flags, optional backorder/preorder fields, shipping cost, and currency. Deliberately narrower than `OrderDocument` so tests can pass a two-line fixture.
+- **`WithdrawalNotice`** (interface) — Shape of the right-of-withdrawal block: heading, terms, effects, form (each a string array; `effects`/`form` are empty when they don't apply).
+- **`withdrawalNotice(locale, order, orderId)`** (exported) — Builds the full CRD Art. 6/8/Annex I withdrawal notice. Classifies the order as `goods`, `digital`, or `none` via the private `withdrawalCase` helper, then assembles terms, effects, and the model form (Annex I(B)).
+- **`orderConfirmEmail(locale, name, order, orderId)`** (exported) — Builds the "order received, awaiting payment" email. Renders each line individually (per-line copy can't be a single pre-set string), appends a delivery promise where relevant, computes the total via `orderTotal`, and embeds the withdrawal notice.
+- **`cardHoldExpiredEmail(locale, order)`** (exported) — Notification for a lapsed `card` payment hold (30-min reservation expired, customer never finished checkout).
+- **`STATUTORY_DAYS`** (const, 14) — The legal return/refund window used in copy.
+- **`withdrawalCase`** (private) — Returns `'goods' | 'digital' | 'none'` based on whether any withdrawable line ships or is all digital.
+- **`withdrawalForm`** (private) — The nine rows of the Annex I(B) model form with the trader identity filled in.
+- **`goodsEffects`** (private) — Send-back address, postage payer, and diminished-value note (Annex I(A) notes 4–5).
+- **`longDate`** (private) — Formats a `Date` in the shop's timezone using `Intl.DateTimeFormat`, avoiding the UTC-evening-before problem.
+- **`linePromise`** (private) — Produces the delivery-promise sentence for backordered or preorder lines; returns `undefined` for ready-now items.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/mailer.ts`** — Imports the `EmailContent` type; every builder returns this shape.
-- **`src/infrastructure/i18n/index.ts` / `context.ts`** — Imports `translator(locale)` to resolve every string key.
-- **`src/modules/orders/config.ts`** — Imports `orderFrontendLink`, `returnAddress`, `returnPostagePayer`, `shopIdentity`, `withdrawalPeriodDays`, and the `ReturnAddress` type.
-- **`src/modules/orders/domain/index.ts`** (re-exporting `rules.ts`, `totals.ts`) — Imports `isExcludedFromWithdrawal`, `isShippedItem`, `orderTotal` for classification and arithmetic.
-- **`src/modules/orders/index.ts`** — Re-exports this module's public API.
-- **`src/modules/orders/services/notify.ts`** / **`services/cancel.ts`** — Downstream callers that pass hydrated order documents into the builders.
-- **`src/modules/orders/tests/unit/emails.test.ts`** / **`withdrawal-notice.test.ts`** — Unit tests for the builders and `withdrawalNotice`.
-- **`src/modules/payments/emails.ts`** / **`src/modules/returns/emails.ts`** — Sibling modules following the identical copy-owns-strings pattern.
+- **`src/infrastructure/adapters/mailer.ts`** — Imports the `EmailContent` type that every builder returns.
+- **`src/infrastructure/i18n/index.ts` / `context.ts`** — Imports `translator` for all copy resolution.
+- **`src/domain-primitives/money.ts`** — Imports `formatMoney` to render every amount as a locale-formatted string.
+- **`src/modules/orders/config.ts`** — Imports `orderFrontendLink` (builds the order-page URL) and `withdrawalPeriodDays` (shop-configured window).
+- **`src/modules/orders/domain/index.ts`** (re-exports from `rules.ts`, `totals.ts`, `withdrawal.ts`) — Imports `isExcludedFromWithdrawal`, `isShippedItem`, and `orderTotal` for classification and the authoritative total.
+- **`src/modules/orders/index.ts`** — Barrel that re-exports this module's public API.
+- **`src/modules/orders/services/notify.ts`** / **`cancel-mail.ts`** — Sibling services that call these builders when dispatching mail.
+- **`src/modules/payments/emails.ts`** — Handles the `bank_transfer` placed-order email; this file explicitly does not cover that case.
+- **`src/modules/orders/tests/unit/emails.test.ts`** / **`withdrawal-notice.test.ts`** — Unit tests exercising the builders with fixture `OrderLines` objects.
 
 ## Notes
 
-- **Product titles are pre-resolved.** `item.product.title` arrives already in the order's frozen checkout locale (`resolveSnapshotProducts`). Neither builder re-translates; they only interpolate. Passing a different locale for the *recipient* does not change line-item titles.
-- **No spread on order objects.** `totalOf` and the builders destructure explicit fields rather than `{ ...order }` because callers (e.g. `notify.ts`) may pass a hydrated Mongoose document whose schema paths are prototype getters a spread silently drops.
-- **`bic` in `bankTransferInstructionsEmail` is intentionally `undefined`-able, not conditionally spread.** The template guards on `typeof bic !== "undefined"`, and a bare key keeps the data object a plain literal that `tests/cross-cutting/mail-copy.test.ts` can read statically.
-- **Date formatting uses `Intl.DateTimeFormat`.** No third-party date library; consistent with the repo's node-stdlib-first rule.
-- **`STATUTORY_DAYS = 14`** is the legal floor for return/reimbursement windows regardless of any longer shop-offered period.
-- **Order confirm ≠ order confirmed.** The email is "received, awaiting payment" because the order is always `pending` at send time; `bankTransferInstructionsEmail` is sent *instead* of it for that payment method.
+- **Product titles are pre-resolved.** They arrive in the order's frozen locale (see `OrderDocumentItem.locale` / `resolveSnapshotProducts`). Neither builder here re-resolves them; they only interpolate.
+- **"Awaiting payment", never "confirmed."** Every order this file renders for is still `pending` at send time. A `bank_transfer` order's placed-order mail is the `transferInstructionsEmail` from `@modules/payments`, not this file.
+- **Total comes from `orderTotal`.** The email quotes the order's canonical total (shipping included) rather than re-summing line items.
+- **Dates use the shop's timezone.** `longDate` explicitly formats with `shopTimezone()` so a staff-entered day doesn't shift to the previous evening in UTC.
+- **`OrderLines` is structural, not `OrderDocument`.** This keeps the builders testable with minimal fixtures and avoids coupling email rendering to the full domain entity.
+- **Invoice copy lives elsewhere.** The invoice document's own email text is in `@modules/invoicing/emails.ts`, not here.
+- **All amounts are locale-formatted strings** via `formatMoney(locale, value, currency)` — never bare numbers in the output data.

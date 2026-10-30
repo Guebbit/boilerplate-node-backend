@@ -1,32 +1,29 @@
 ---
 source: src/modules/returns/audit.ts
-sha256: 9a0fc8f72cb8b5d8517e5ed2454379c3d7f278fc59b095c3a26dd7f6e50f2b52
-generated_at: 2026-10-15T11:50:53.143193+00:00
+sha256: 53bc4c6f01611339a4003268732eeec0ecc9e0de6df00e8be033b4e4bfcd6970
+generated_at: 2026-10-29T05:35:37.474174+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/returns/audit.ts
 
 ## Purpose
-Declares the set of audit action strings that the returns module can emit and registers them into the global audit action map via TypeScript module augmentation. This centralises the action identifiers so that services and controllers fire consistent, type-safe audit events without re-declaring the strings.
+
+Defines the set of audit action strings emitted by the returns module and registers them in the infrastructure audit type map via TypeScript module augmentation. This keeps the returns module's audit vocabulary in one place so every service that records an event uses a stable, typed identifier.
 
 ## Key elements
-- **`returnsAuditActions`** — A `const` object of five action strings, keyed by event:
-  - `ADMIN_RETURN_VIEWED` — staff opened a return's detail view
-  - `RETURN_REQUESTED` — a customer initiated a return
-  - `ADMIN_RETURN_APPROVED` — staff approved the return
-  - `ADMIN_RETURN_DECLINED` — staff declined the return
-  - `ADMIN_RETURN_RECEIVED` — staff marked the return as physically received
-- **`declare module '@infrastructure/observability/audit'`** — Augments `AuditActionMap` with a `returns` property typed as the union of all values in `returnsAuditActions`, making the actions available to the shared audit/logging infrastructure.
+
+- **`returnsAuditActions`** – A `const` object of seven string literals (e.g. `RETURN_REQUESTED`, `ADMIN_RETURN_CLOSED`). The `admin.` prefix distinguishes staff-only actions from customer-facing ones.
+- **Module augmentation (`declare module '@infrastructure/observability/audit'`)** – Extends `AuditActionMap` with a `returns` key whose type is the union of all action strings, giving callers compile-time safety.
 
 ## Relationships
-- **`services/receive.ts`** — Emits `ADMIN_RETURN_RECEIVED` when a return is marked received.
-- **`services/decide.ts`** — Emits `ADMIN_RETURN_APPROVED` or `ADMIN_RETURN_DECLINED` depending on the staff decision.
-- **`controllers/get-return-by-id.ts`** — Emits `ADMIN_RETURN_VIEWED` when staff open a return's detail page.
-- **`tests/integration/service.test.ts`** — Asserts that the expected audit actions are fired by the services listed above.
-- All of the above import `returnsAuditActions` (or rely on the augmented `AuditActionMap`) to keep action strings consistent.
+
+- **`services/cancel.ts`, `services/close.ts`, `services/decide.ts`, `services/receive.ts`, `services/outcome.ts`** – Each service imports `returnsAuditActions` and passes the relevant action string when it records an audit event (e.g. `decide.ts` fires `ADMIN_RETURN_APPROVED` or `ADMIN_RETURN_DECLINED`; `cancel.ts` fires `ADMIN_RETURN_CANCELED`).
+- **`controllers/get-return-by-id.ts`** – Fires `ADMIN_RETURN_VIEWED` when staff open a return detail.
+- **`tests/integration/service.test.ts`** – Asserts that the correct audit action strings are emitted by the services above.
 
 ## Notes
-- Actions prefixed with `admin.` are restricted to staff-only flows; the `RETURN_REQUESTED` action (no `admin.` prefix) is the sole customer-facing event.
-- The augmentation pattern (rather than a shared enum) mirrors the convention established in `modules/account/audit.ts`; each module owns its own action namespace to avoid cross-module coupling.
-- The `as const` on `returnsAuditActions` is what gives the augmentation a literal-union type; removing it would widen `AuditActionMap['returns']` to `string`.
+
+- The `admin.` prefix is a naming convention, not a runtime gate; authorization is enforced elsewhere.
+- The augmentation pattern (rather than a shared enum) mirrors `modules/account/audit.ts`; see that file for the rationale.
+- Action strings are the source of truth for downstream audit-log filtering; renaming one here is a breaking change for any query or dashboard that references the old string.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/tests/unit/rates.test.ts
-sha256: b144d4ea6988b2eae2d744428cb7aedb25cbd68ca8b12e82f1824c8a5b999751
-generated_at: 2026-10-15T10:29:18.282429+00:00
+sha256: 07f02a306bfceec57a083e8ce4f36cf9e248211722f69d85cff760ca6d8a06dd
+generated_at: 2026-10-29T03:50:04.531702+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the pure shipping-rate domain functions in `../../domain/rates`. They verify the static `SHIPPING_METHODS` table and the three pricing/lookup helpers without any database or mocking, since the pricing rule is deterministic over committed data. The file's header explicitly contrasts this with `tests/integration/service.test.ts`, which exists because shipment *persistence* needs a real DB.
+Unit tests for the shipping-rates domain module. Every case exercises pure functions over the committed `SHIPPING_METHODS` table — no mocks, no database. The file exists separately from the integration test (`tests/integration/service.test.ts`) because the pricing rules themselves have no I/O dependency and can be verified in isolation.
 
 ## Key elements
 
-- **`describe('SHIPPING_METHODS')` (currency block)** — Iterates JPY, EUR, KWD and asserts every `price` and `freeAbove` value in the table passes `fitsCurrency`, catching rates that would round at charge time.
-- **`describe('SHIPPING_METHODS')` (invariant block)** — Guards committed data: non-negative prices, `tracked`/`requiresAddress` are real booleans (not `undefined`), and address is required for every method except `pickup`.
-- **`describe('findShippingMethod')`** — Confirms exact-object lookup by id and `undefined` for an id the shop does not offer.
-- **`describe('priceShipping')`** — Covers flat-rate-below-threshold, free-at/above-threshold, no-threshold (express), and pickup-at-zero as distinct from "no method".
-- **`describe('methodFitsWeight')`** — Boundary tests for `maxWeight` (5000 passes, 5001 fails), absence of a range (pickup always fits), and `minWeight` (tested via an inline object, since no shipped method declares one).
+- **`describe('SHIPPING_METHODS')` (currency)** — Iterates JPY, EUR, KWD and asserts every `price` and `freeAbove` value fits within that currency's minor unit via `fitsCurrency`, catching rates that would round at charge time.
+- **`describe('findShippingMethod')`** — Confirms lookup by id returns the expected object and returns `undefined` for an unoffered id.
+- **`describe('priceShipping')`** — Verifies flat-rate charging below threshold, zero at/above threshold, flat rate when no threshold exists, and that pickup always prices at 0 (distinct from "no method found").
+- **`describe('methodFitsWeight')`** — Covers open-range (pickup), `maxWeight` boundary (express 5000/5001), and `minWeight` boundary using an inline object (no shipped method declares `minWeight` today).
+- **`describe('SHIPPING_METHODS')` (table invariants)** — Canaries: all prices ≥ 0, `tracked` and `requiresAddress` are real booleans (not `undefined`), and address is required for standard/express but not pickup.
+- **`describe('cheapestStandardShipping')`** — Confirms it returns the standard flat rate for small orders, 0 above the free threshold, and excludes pickup ("collection, not delivery").
 
 ## Relationships
 
-- **`src/modules/delivery/domain/rates.ts`** — The module under test. Imports `findShippingMethod`, `priceShipping`, `methodFitsWeight`, and the `SHIPPING_METHODS` table.
-- **`src/shared-kernel/money.ts`** — Supplies `fitsCurrency`, used to assert that every rate/threshold is expressible in the currency's minor units.
+- **`src/modules/delivery/domain/rates.ts`** — The module under test. Provides `SHIPPING_METHODS`, `findShippingMethod`, `priceShipping`, `methodFitsWeight`, and `cheapestStandardShipping`.
+- **`src/domain-primitives/money.ts`** — Provides `fitsCurrency`, used to validate that table values are representable in the minor units of a given currency.
 
 ## Notes
 
-- Two separate `describe('SHIPPING_METHODS')` blocks exist (currency fit vs. structural invariants). Both target the same export but serve different guard purposes; they are not accidentally duplicated.
-- The `minWeight` test deliberately builds an inline object (`{ id: 'heavy', …, minWeight: 1000 }`) rather than reading from `SHIPPING_METHODS`, so the boundary rule stays covered even though no current method declares a minimum.
-- The `tracked` and `requiresAddress` boolean checks are canaries for downstream consumers (the shipping-code gate and checkout address rule) that would silently misbehave if the flag were `undefined`.
+- The `minWeight` boundary test constructs its method object inline rather than reading from `SHIPPING_METHODS`, because no shipped method currently declares a `minWeight`; the test intentionally stays green even if that changes.
+- The boolean-flag canary tests (`typeof … === 'boolean'`) exist to catch a missing property that would surface downstream as `undefined` in the shipping-door or checkout logic, not as a clean refusal.
+- `cheapestStandardShipping` deliberately returns the standard rate, not pickup's 0, because pickup is a collection point, not a delivery service.

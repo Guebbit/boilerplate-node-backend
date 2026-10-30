@@ -1,7 +1,7 @@
 ---
 source: src/modules/api-keys/services/index.ts
-sha256: 7b0704715bbb3f21c4e9ac8c5748cad031638e7f8a5d3d5a8c8b3e5e2869b841
-generated_at: 2026-10-14T15:01:14.601007+00:00
+sha256: 1c99a912276fc9d58dc4e97f3483d6898df867fa9a43283eced6532c2f82a5e2
+generated_at: 2026-10-29T03:14:52.519492+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel (index) file for the api-keys services layer. It re-exports the CRUD functions from `api-keys.ts` under a single namespaced object and surfaces the credential resolver from `resolver.ts`, giving controllers and the module installer one stable import point.
+Barrel module for the `api-keys` service layer. It re-exports the CRUD operations from `api-keys.ts` and the credential resolver from `resolver.ts` under a single, consistently-named `apiKeysService` object so that callers have exactly one entry point instead of reaching into individual service files.
 
 ## Key elements
 
-- **`apiKeysService`** — exported object bundling `listApiKeys`, `mintApiKey`, and `revokeApiKey` (mapped from the internal `list`, `mint`, `revoke` functions in `./api-keys`). Controllers call through this object rather than importing bare functions.
-- **`resolveApiKeyCredential`** — re-export of `fromBearerToken` from `./resolver`; used to extract an API-key credential from a request's `Authorization` header.
-- **`findOwnApiKeys`** — re-exported from `./api-keys`; retrieves keys belonging to a specific user.
-- **`revokeAllMintedBy`** — re-exported from `./api-keys`; bulk-revokes all keys minted by a given entity.
+- **`apiKeysService`** (exported const object) — the sole public export. Maps descriptive method names to their implementations:
+  - `listApiKeys` → `apiKeys.list`
+  - `getApiKey` → `apiKeys.get`
+  - `mintApiKey` → `apiKeys.mint`
+  - `revokeApiKey` → `apiKeys.revoke`
+  - `findOwnApiKeys` → `apiKeys.findOwnApiKeys`
+  - `revokeAllMintedBy` → `apiKeys.revokeAllMintedBy`
+  - `resolveApiKeyCredential` → `fromBearerToken` (from `resolver.ts`)
 
 ## Relationships
 
-- **Consumed by** `controllers/list-api-keys.ts`, `controllers/mint-api-key.ts`, and `controllers/revoke-api-key.ts` — each controller imports the relevant method from `apiKeysService` (or the direct re-exports) rather than reaching into `./api-keys` directly.
-- **Wraps** `services/api-keys.ts` — all CRUD logic lives there; this file only renames and re-exports.
-- **Re-exports from** `services/resolver.ts` — the `CredentialResolver` that `module.ts` (in `src/modules/api-keys/index.ts`) installs into the kernel.
+- **`services/api-keys.ts`** — source of all CRUD methods (`list`, `get`, `mint`, `revoke`, `findOwnApiKeys`, `revokeAllMintedBy`). This file imports the whole module and re-exposes selected members.
+- **`services/resolver.ts`** — provides `fromBearerToken`, the credential-resolution function installed into the kernel. Re-exported here as `resolveApiKeyCredential`.
+- **`controllers/get-api-key.ts`**, **`controllers/list-api-keys.ts`**, **`controllers/mint-api-key.ts`**, **`controllers/revoke-api-key.ts`** — all call through `apiKeysService` rather than importing `api-keys.ts` or `resolver.ts` directly.
+- **`src/modules/api-keys/index.ts`** — the module root; registers the service with the kernel and wires the controllers.
 
 ## Notes
 
-- The internal function names (`list`, `mint`, `revoke`) are intentionally renamed to longer, self-descriptive names on export (`listApiKeys`, `mintApiKey`, `revokeApiKey`). Don't import by the short names from this file.
-- Per the in-code comment, controllers should call through `apiKeysService` and never import the bare functions from `./api-keys` directly; this file is the single public surface.
-- The resolver (`fromBearerToken`) is a *credential extraction* utility, not a CRUD operation — it is exposed separately from `apiKeysService` because it has a different call-site (kernel credential resolution) and different shape.
+- The doc comment states controllers and sibling modules should call through `apiKeysService` and *never* the bare functions from `api-keys.ts` or `resolver.ts` directly. Treat this file as the only import path for service operations.
+- The resolver is imported as a single named function (`fromBearerToken`), not as a namespace, which differs from the `* as apiKeys` pattern used for the CRUD file.

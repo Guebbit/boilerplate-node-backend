@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/services/messages.ts
-sha256: 8814d068e58d6acab14c67bc13da2e67d3131ba1c35ebf0dbbce9995cb6b958d
-generated_at: 2026-10-15T10:46:23.414129+00:00
+sha256: 642e8de8acdbb9b09258cae9f7e07e78d3e3585864142a2964c96a994bc04903
+generated_at: 2026-10-29T04:24:22.033718+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Two read functions that expand flat locale rows into message trees via `buildMessageTree`: one serves a single frontend app's downloadable overrides to clients, the other serves the backend app's full overlay (grouped by language) to the API's own i18n provider. They differ only in which app's keyspace they read and how they handle inactive languages.
+Provides the two read paths for stored locale copy: `readMessages` serves a frontend app's downloadable overrides to a client, and `readApiOverrides` rebuilds the API's own backend overlay. Both expand flat `key/value` rows through `buildMessageTree` but differ in which app's keyspace they serve. A third entry point, `readLocaleOverlay`, bundles the backend overrides with the active/inactive language lists into a single atomic refresh for the i18n provider.
 
 ## Key elements
 
-- **`readMessages(tag, app?)`** — Looks up a language by tag, verifies it is active, then lists entries for the given (or default) frontend app and returns `{ locale, revision, messages }` wrapped in `generateSuccess`. Returns a 404 (`languageNotFound()`) if the app is a backend app, the language is missing, or the language is inactive.
-- **`readApiOverrides()`** — Lists **all** backend-app rows, groups them by locale, and calls `buildMessageTree` per locale. Deliberately includes inactive languages. Catches per-locale build errors and logs a warning instead of throwing, so one malformed dictionary does not abort the whole refresh. Returns a plain `Record<string, Record<string, unknown>>`.
+- **`readMessages(tag, app?, includeInactive?)`** — Looks up one language and returns its frontend-app entries as `{ locale, revision, messages }`. Returns `languageNotFound()` (404) for unknown tags, inactive languages, or non-frontend apps. The `includeInactive` flag lets staff callers preview drafts.
+- **`readApiOverrides()`** — Lists all backend-app entries, groups them by locale, and builds a `Record<locale, tree>`. Includes inactive languages by design. Wraps each locale's `buildMessageTree` in a try/catch so one malformed dictionary is logged (via `logger.warn`) and skipped without aborting the rest.
+- **`readLocaleOverlay()`** — `Promise.all` over `readApiOverrides`, `localeRepository.listActiveTags`, and `localeRepository.listInactiveTags`; returns the combined `LocaleOverlay` object. Ensures copy and the served-language list come from the same refresh.
 
 ## Relationships
 
-- **`./keys.ts`** — Both functions call `buildMessageTree` to turn flat `{ key, value }` rows into a nested object.
-- **`./languages.ts`** — `readMessages` calls `languageNotFound()` for every failure path (unknown tag, inactive, wrong app).
-- **`../apps.ts`** — Provides `frontendApp()` (default param), `backendApp()` (used by `readApiOverrides`), and `isFrontendApp()` (guard in `readMessages`).
-- **`../repository.ts`** — `localeRepository.findByTag` fetches the language row; `localeEntryRepository.listEntries` / `listEntriesByApp` fetch the flat key–value rows.
-- **`@infrastructure/http/response`** — `generateSuccess` wraps the 200 body in `readMessages`; the `ResponseSuccess` / `ResponseReject` types shape the return type.
-- **`@infrastructure/adapters/logger`** — `logger.warn` in `readApiOverrides`'s catch block when a locale's keys cannot form a tree.
-- **`@types`** — `LocaleMessages` and `LocaleApp` types imported for signatures.
-- **`./index.ts`** — Re-exports this module so callers import from the services barrel.
+- **`src/modules/locales/services/keys.ts`** — Calls `buildMessageTree` in both read functions to flatten rows into nested objects.
+- **`src/modules/locales/services/languages.ts`** — Imports `languageNotFound` as the 404 response factory.
+- **`src/modules/locales/apps.ts`** — Imports `frontendApp`, `backendApp`, and `isFrontendApp` to determine which keyspace a read targets.
+- **`src/modules/locales/repository.ts`** — Uses `localeRepository.findByTag`, `localeRepository.listActiveTags`, `localeRepository.listInactiveTags`, `localeEntryRepository.listEntries`, and `localeEntryRepository.listEntriesByApp` for all data access.
+- **`src/infrastructure/i18n/index.ts`** — Imports the `LocaleOverlay` type (the return shape of `readLocaleOverlay`); that module is the consumer.
+- **`src/infrastructure/http/response.ts`** — Imports `generateSuccess` and the `ResponseSuccess` / `ResponseReject` types to shape `readMessages` output.
+- **`src/infrastructure/adapters/logger.ts`** — Calls `logger.warn` in the per-locale catch block of `readApiOverrides`.
+- **`src/types/index.ts`** — Imports `LocaleMessages` and `LocaleApp` types.
+- **`src/modules/locales/services/index.ts`** — Barrel file; re-exports the three functions above for module consumers.
 
 ## Notes
 
-- **Inactive-language policy differs per function.** `readMessages` 404s inactive languages (avoids leaking that a draft exists). `readApiOverrides` *includes* them on purpose — `active` gates public visibility, not internal copy, and excluding them would silently revert backend strings mid-translation.
-- **Per-locale error isolation in `readApiOverrides`.** A key that is simultaneously a string leaf and a group node causes `buildMessageTree` to throw; the `try/catch` is scoped per locale so remaining locales still load.
-- **Stryker suppression.** The catch block is wrapped in `// Stryker disable all` / `// Stryker restore all` to prevent mutation testing from flagging the dead-path warning.
-- **`eslint-disable-next-line no-restricted-syntax`** is used on the `for…of` loops in `readApiOverrides` because the project otherwise bans `for…of`; the override is intentional there.
+- Inactive languages are treated as 404 (not 403 or empty 200) in `readMessages` to avoid leaking that a draft translation exists.
+- `readApiOverrides` deliberately includes inactive languages: `active` governs public visibility, but the backend should not silently revert its own copy mid-translation.
+- The `for…of` loop in `readApiOverrides` carries an `eslint-disable-next-line no-restricted-syntax` comment; the try/catch is intentional and scoped per locale.
+- Stryker mutation-testing annotations (`Stryker disable all` / `restore all`) wrap the logger call in the catch block to suppress mutation noise on defensive logging.

@@ -1,7 +1,7 @@
 ---
 source: scripts/contracts/fragments.ts
-sha256: 43d14168c77ec65daccb9aad3b56a53dd2242dc645c21383082e5a3380e04ae9
-generated_at: 2026-10-15T09:37:24.849622+00:00
+sha256: b5c99f1fd4f4b7e07900f713a473a73e7d4667731869a42e32598d8a5f971a4d
+generated_at: 2026-10-29T01:30:33.639156+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single read-only access point for the build steps to load a module's on-disk contract files (`openapi.yaml` and `authorization.yaml`). Exists so that every build step shares one typed shape for those files instead of each redeclaring a partial interface.
+Provides the single typed read path for module contract fragment files (`openapi.yaml` and `authorization.yaml`). Build steps call these readers instead of each declaring their own throwaway type for the subset of keys they inspect.
 
 ## Key elements
 
-- **`OpenApiFragment`** — interface describing the subset of `openapi.yaml` the build steps care about (`tags`, `paths`, `components.schemas`, `x-error-codes`, `x-personal-data`). All fields optional.
-- **`AuthorizationFragment` / `AuthorizationKey`** — minimal shape of `authorization.yaml` (an array of `{key, subject, module}`).
-- **`DeclaredTag`**, **`DeclaredSection`** — per-entry types used inside the fragment interfaces.
-- **`readOpenApiFragment(file)`** — reads and YAML-parses a single file into `OpenApiFragment`; an empty file yields `{}`.
-- **`readModuleFragment(modulesRoot, module)`** — convenience wrapper that joins `modulesRoot/module/openapi.yaml` and delegates to `readOpenApiFragment`.
-- **`readAuthorizationFragment(file)`** — reads and parses an `authorization.yaml`; returns `{ keys: [] }` if the file does not exist.
+- **`DeclaredTag`** — shape of one entry under a fragment's top-level `tags:`.
+- **`DeclaredSection`** — one export section a module declares for `POST /account/export` (`required`, `schema`).
+- **`OpenApiFragment`** — the `openapi.yaml` subset the build cares about (`tags`, `paths`, `components.schemas`, `x-error-codes`, `x-personal-data`); every key optional because a fragment may declare any subset.
+- **`AuthorizationRule`** — one rule entry from `authorization.yaml` (`action`, `subject`, `module`).
+- **`AuthorizationSet`** — one permission set from `authorization.yaml` (`name`, `module`, `rules`).
+- **`AuthorizationFragment`** — the parsed `authorization.yaml` shape (`rules`, `sets`).
+- **`readOpenApiFragment(file)`** — reads and parses a single `openapi.yaml` file; an empty file yields `{}`.
+- **`readModuleFragment(modulesRoot, module)`** — convenience wrapper that joins the path to `<modulesRoot>/<module>/openapi.yaml` and delegates to `readOpenApiFragment`.
+- **`readAuthorizationFragment(file)`** — reads an `authorization.yaml`; returns `{ rules: [], sets: [] }` when the file is absent or a key is missing.
 
 ## Relationships
 
-- **`scripts/contracts/openapi-bundle.ts`** — calls `readModuleFragment` to collect per-module OpenAPI fragments before merging them into the bundled spec.
-- **`scripts/contracts/authorization-bundle.ts`** — calls `readAuthorizationFragment` to gather `AuthorizationKey` entries across modules.
-- **`scripts/contracts/personal-data-assembly.ts`** — reads `OpenApiFragment['x-personal-data']` to assemble the personal-data export contract.
-- **`scripts/contracts/root-assembly.ts`** — consumes the combined outputs of the above bundles, ultimately sourced through this file's readers.
-- **`scripts/scaffold/apply.ts`** — reads fragments (via `readModuleFragment` / `readAuthorizationFragment`) to validate or transform a newly scaffolded module's contract files.
-- **`scripts/scaffold/demo-remove-authorization.ts`** — reads an `AuthorizationFragment` to locate and remove a demo authorization key.
+- **`scripts/contracts/openapi-bundle.ts`** — consumes `OpenApiFragment`, `DeclaredTag`, and `readModuleFragment` to collect per-module OpenAPI fragments into a bundle.
+- **`scripts/contracts/authorization-bundle.ts`** — consumes `AuthorizationFragment`, `AuthorizationRule`, `AuthorizationSet`, and `readAuthorizationFragment` to assemble the authorization bundle.
+- **`scripts/contracts/personal-data-assembly.ts`** — reads `x-personal-data` sections (`DeclaredSection`) from `OpenApiFragment` to build the personal-data export manifest.
+- **`scripts/contracts/root-assembly.ts`** — uses fragment types to compose the root contract from per-module fragments.
+- **`scripts/scaffold/apply.ts`** — writes scaffolded fragment files that conform to these interfaces.
+- **`scripts/scaffold/demo-remove-authorization.ts`** — demo that removes authorization entries, operating against the `AuthorizationFragment` shape.
 
 ## Notes
 
-- **No caching by design.** Every call hits `fs.readFileSync`. The module doc comment explicitly states that a module-keyed cache would "answer for the wrong one" when tests supply scratch trees under the same module name.
-- **Empty-file tolerance.** `readOpenApiFragment` treats a zero-byte (or whitespace-only) YAML file as `{}`; `readAuthorizationFragment` treats a *missing* file as `{ keys: [] }`. Callers need not check existence before calling.
-- **Partial types.** The interfaces intentionally cover only the keys the build pipeline reads. A fragment file may contain many more OpenAPI fields; those are simply ignored by the type.
+- **No caching by design.** Both readers hit the filesystem every call. The module doc comment states the reason explicitly: tests feed scratch trees, and a module-keyed cache would return the wrong module's data.
+- **`readAuthorizationFragment` tolerates a missing file** (returns empty arrays), whereas `readOpenApiFragment` will throw if the path does not exist — callers must ensure the file is present before calling it.
+- YAML parsing uses the `yaml` package's YAML 1.2 loader; the `as` casts narrow the loader's `any` return. An empty YAML file parses to `null`, which `readOpenApiFragment` coalesces to `{}`.
+- The `paths` key in `OpenApiFragment` is typed shallowly (only `tags` per operation) — the build steps only need that field, so the type intentionally does not model the full OpenAPI operation object.

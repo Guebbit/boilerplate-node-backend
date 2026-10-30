@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/refresh.ts
-sha256: ae709b7ebcf2d11bd1337ab1194606a146429089771906b19474f04b03d0b93d
-generated_at: 2026-10-14T08:52:52.607569+00:00
+sha256: 2efefa3314473b9881aacfc8262348a570274e845a4cd79526a7f4acff88774a
+generated_at: 2026-10-29T02:44:19.238299+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the refresh-token exchange: it calls the underlying rotation (in `../session/jwt`) to swap a presented refresh token for a fresh access/refresh pair, and records the outcome — success, missing token, invalid token, or token-reuse detection — as a structured audit event. Exists so the controller layer can delegate "do the swap and tell the observability layer what happened" in one call.
+Implements the refresh-token exchange endpoint logic: given a (possibly absent) refresh cookie value, it rotates the session via `rotateRefreshToken`, records an audit row for every outcome (success, missing token, invalid token, idle-expired session, or reuse of an already-rotated token), and rethrows the error so the controller can shape the HTTP response. The rotation itself is delegated to `../session/jwt`; this file is the orchestration, audit, and metrics layer around it.
 
 ## Key elements
 
-- **`refreshAccessToken(refreshToken, context)`** (exported) — Accepts the refresh cookie value (or `undefined`) and a `CallerContext`. Returns a `Promise<RotatedSession>` (new access token, new refresh token, cookie `maxAge`). On the error path it re-throws after recording the audit entry.
-- **`MissingRefreshTokenError`** (local) — Sentinel error thrown when the cookie is absent, so the single `.catch` can distinguish "no token" from "token was invalid" via the `metadata.reason` field without the happy path branching twice on the token.
+- **`refreshAccessToken(refreshToken: string | undefined, context: CallerContext): Promise<RotatedSession>`** — The sole export. Resolves with the new `{ accessToken, refreshToken, refreshMaxAge }` triple on success; rejects with the original error on failure. All audit and metrics bookkeeping happens in a single `.catch` so the happy path stays branch-free.
+- **`MissingRefreshTokenError`** (local) — Marker error thrown when the refresh cookie is absent, so the `catch` block can distinguish "no token" from "bad token" without the caller branching twice.
+- **`failureReason(error)`** (local) — Maps a failure to the `metadata.reason` string written into the audit row: `'missing_token'`, `'session_idle'`, or `'invalid_token'`.
+- **`authRefreshReuseTotal`** (from `../metrics`) — Counter incremented only when `TokenReuseError` is caught.
 
 ## Relationships
 
-- **`../session/jwt`** — Source of `rotateRefreshToken` (the actual JWT rotation), `TokenReuseError` (thrown when a previously-rotated token is replayed), and the `RotatedSession` return type.
-- **`../audit`** — Provides the `accountAuditActions` enum values (`AUTH_TOKEN_REFRESHED`, `AUTH_REFRESH_TOKEN_REUSE_DETECTED`) used in the audit records.
-- **`../metrics`** — Provides `authRefreshReuseTotal`, incremented exclusively in the token-reuse branch.
-- **`@infrastructure/observability/audit`** — `recordAudit` is the sole sink for all audit events in this file.
-- **`@types` / `src/types/auth-context.ts`** — Supplies the `CallerContext` type (carries actor identity, role, request metadata) passed into `recordAudit`.
-- **`../services/index.ts`** — Barrel file; re-exports `refreshAccessToken` so controllers import from `services/index` rather than reaching into individual service files.
+- **`../session/jwt`** — Source of the actual rotation (`rotateRefreshToken`) and the error types this file inspects (`TokenReuseError`, `TokenRejection`). The `RotatedSession` return type also comes from here.
+- **`@infrastructure/observability/audit`** — `recordAudit` is called on both success and failure paths to write the audit trail.
+- **`../audit`** — Provides the action constants (`AUTH_TOKEN_REFRESHED`, `AUTH_REFRESH_TOKEN_REUSE_DETECTED`) used in audit records.
+- **`../metrics`** — Provides `authRefreshReuseTotal`, incremented on reuse detection.
+- **`@types` / `src/types/auth-context.ts`** — Supplies the `CallerContext` type that carries caller identity for audit.
+- **`src/modules/account/services/index.ts`** — Barrel that re-exports this module's public API to consumers.
 
 ## Notes
 
-- **Reuse vs. invalid is intentionally distinct.** A replayed (already-rotated) token is audited as `AUTH_REFRESH_TOKEN_REUSE_DETECTED` with the offending `userId` populated, rather than being lumped into `invalid_token`. The code comments flag this as a materially different security fact for whoever reads the audit trail.
-- **`actorRole` is always `anonymous` on failure.** The request never carried a verified access token, so admin status cannot be cheaply determined; the code prefers omitting a potentially-wrong role over guessing.
-- **The error is re-thrown.** This function does not swallow failures; the controller is responsible for translating the thrown error into an HTTP response.
-- **No branching in the happy path.** The missing-token case is modelled as a rejected promise up front so the success `.then` runs unconditionally for any token that was actually present.
+- **Reuse vs. ordinary failure are audited differently.** Reuse (`TokenReuseError`) gets its own action, carries the resolved `actorUserId`, and omits `metadata.reason`. Ordinary failures get `actorUserId: 'anonymous'` (no verified access token was ever presented) and a `metadata.reason` string.
+- **`actorRole` is intentionally left at its default (`anonymous`)** in the reuse case: the request never carried a verified access token, so admin status is unknown and guessing would misrepresent the audit fact.
+- **The function rethrows the error** after recording audit/metrics. It does not swallow or transform the error; the caller (controller/presenter) is responsible for the HTTP status and body.
+- **`failureReason` does not handle `TokenReuseError`** — that path is branched on separately in the `.catch` and never reaches the `metadata.reason` field.

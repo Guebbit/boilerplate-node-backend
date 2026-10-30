@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/write-routes-are-guarded.test.ts
-sha256: 1a693317b93b1e998042a586bacca639ff5d6999448106c09b5c21236b7bf7e4
-generated_at: 2026-10-15T12:42:17.400021+00:00
+sha256: 2fe7122add8a0204d28653e2662d7fd4c2fb88f521d3d5bd7d3fc87a0c76ee5e
+generated_at: 2026-10-29T06:51:19.188722+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-App-wide cross-cutting test that asserts every write route (POST, PUT, PATCH, DELETE) across all routed modules is authenticated and behind a `requirePermission` key by default. It exists so a new module inherits this guarantee automatically—rather than requiring each module to restate the invariant in its own `routes.test.ts`—and so any deliberate exemption is recorded in one central, reasoned list.
+App-wide invariant test: every state-changing route (POST, PUT, PATCH, DELETE) must be behind both an identity guard and a `requirePermission` key, unless explicitly listed in `WRITE_EXCEPTIONS`. It exists so that a new routed module inherits the guarantee automatically instead of relying on each module to restate it in its own `routes.test.ts`.
 
 ## Key elements
 
-- **`WRITE_METHODS`** — A `Set` of the four state-changing HTTP methods this guard applies to.
-- **`WriteException`** — Interface for an exempt-route entry: `{ requiresAuth: boolean; reason: string }`. `requiresAuth: false` means no session at all; `true` means authenticated but deliberately keyless.
-- **`WRITE_EXCEPTIONS`** — The registry of all exempt write routes, keyed as `` `${module} ${METHOD} ${path}` ``. Each entry carries a human-written `reason`. This is the single place every deliberate exception is listed.
-- **`writesOn(router)`** — Helper that calls `effectiveRouteTable` and filters to write methods, returning an array of `` `${METHOD} ${path}` `` signatures.
-- **`describe('every write route is guarded by default')`** — The test block. Visible tests include:
-  - *Module coverage*: asserts `ROUTED_MODULES` keys match the set of directories under `MODULES_ROOT` that contain a `routes.ts`, so a new module cannot slip past the guard.
-  - *No stale exceptions*: asserts every `WRITE_EXCEPTIONS` key for a deployed module still corresponds to a mounted write route.
-  - A per-module loop (truncated) that checks each write route's middleware chain for the expected guards.
-- **Jest mocks** (cache, route-flag, upload, rate-limit) — Wired through mock factories exported from `@tests/routes` to keep the route-table inspection pure.
+- **`WRITE_METHODS`** — `Set` of the four state-changing HTTP methods the guard applies to.
+- **`WriteException`** — interface with `requiresAuth: boolean` and `reason: string`; `false` means no session is needed at all (login, token-in-request, machine webhook), `true` means authenticated but deliberately keyless (caller's own resource).
+- **`WRITE_EXCEPTIONS`** — the single, exhaustive record of every write route exempt from the default, keyed `` `${module} ${METHOD} ${path}` ``. Each entry carries a human-readable `reason`.
+- **`writesOn(router)`** — helper that pulls all write-route signatures (`"METHOD /path"`) from an Express router via `effectiveRouteTable`.
+- **`describe('every write route is guarded by default', …)`** — the test suite. Notable cases:
+  - Auto-discovers every module directory under `MODULES_ROOT` that contains a `routes.ts` and asserts the set matches `ROUTED_MODULES` (minus `@`-suffixed extra mounts), so a new module cannot go unchecked.
+  - Asserts no stale entries remain in `WRITE_EXCEPTIONS` (every listed route is still mounted and still a write).
+  - For every write route *not* in the exception list, asserts both an identity guard and a `requirePermission` guard are present.
 
 ## Relationships
 
-- **`tests/support/paths.ts`** — Provides `MODULES_ROOT`, the filesystem path scanned to discover all module directories that define a `routes.ts`.
-- **`tests/support/routed-modules.ts`** — Provides `ROUTED_MODULES`, the map from module name to its mounted Express `Router`. This is the subject of every assertion in this file.
-- **`tests/support/routes.ts`** — Provides `effectiveRouteTable`, `guardsOn`, and `identityGuardIndex` used to inspect a router's middleware chain, as well as the `cacheMock`, `routeFlagMock`, `storageMock`, and `securityMock` factories consumed by the `jest.mock` declarations.
+- **`tests/support/paths.ts`** — supplies `MODULES_ROOT`, the filesystem root used to enumerate module directories.
+- **`tests/support/routed-modules.ts`** — supplies `ROUTED_MODULES`, the map of module name → mounted Express router that the test iterates over.
+- **`tests/support/routes.ts`** — supplies `effectiveRouteTable` (flatten a router's route table), `guardsOn` / `identityGuardIndex` (inspect which middleware guards a route has), and the mock factories (`cacheMock`, `routeFlagMock`, `storageMock`, `securityMock`) used in the `jest.mock` calls to stub infrastructure middleware.
 
 ## Notes
 
-- `WRITE_EXCEPTIONS` is intentionally large: most writes are user-scoped (wishlist, address book, session management) rather than staff actions, so the list is "every write that deliberately needs no key" plus a handful that need no session. It is not a short allowlist.
-- `requiresAuth: false` is reserved for two specific patterns: no session exists yet (login, signup, password-reset request) or a token in the request body/header is itself the credential (emailed confirm/reset/verify links, payment-provider webhook, 2FA challenge step, refresh-token minting).
-- The stale-exception test only validates keys whose module name appears in `ROUTED_MODULES`; a module removed at build time (e.g. via `demo:remove`) is silently skipped.
-- Adding a new write route without a guard will fail this suite on the first run, even if the module has no `routes.test.ts` of its own.
+- The exception list is the *complement* of the guard: a write not listed here **must** have both auth and a permission key. It is long by design — most writes are "own-resource" (cart, wishlist, sessions) rather than staff actions.
+- `requiresAuth: false` does **not** mean unauthenticated-by-choice; it means the credential is something other than a session (emailed token, refresh cookie, provider webhook signature, or simply "no session exists yet").
+- Keys containing `@` in `ROUTED_MODULES` (e.g. `name@/basePath`) represent extra mounts on an existing module, not separate modules; the discovery test filters them out.
+- Infrastructure middleware (cache, route-flag, upload, rate-limit) is mocked out via `jest.mock` pointing at helper factories in `@tests/routes`, so the test inspects the guard chain without exercising those layers.

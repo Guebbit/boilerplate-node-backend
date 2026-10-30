@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/presenter.ts
-sha256: 7880120b9338b06498a48e59cc85bbdb0a6817e7677fea6d9ee884f3964a8107
-generated_at: 2026-10-15T11:05:48.788492+00:00
+sha256: bfd3720cdf9eb02e17f315a09beec2c37a70fbb73c026d9dc144b941a86d165b
+generated_at: 2026-10-29T04:44:09.412277+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Transforms stored Mongoose documents into the public `Order` / `OrderTimelineEntry` wire contracts. It is the single translation point between the persistence layer (`model.ts`) and the API surface, and it enforces audience-based visibility rules (buyer vs. staff) on timeline data.
+The single presentation layer that converts order storage documents into the wire-format `Order` contract and its timeline entries. It exists so that callers (services, routes) never shape raw Mongo documents by hand; this file is the one place the storage model becomes the API-facing type.
 
 ## Key elements
 
-- **`presentOrder(document: OrderDocument): Order`** — Casts the document's `.toJSON()` output to the `Order` type. The cast is necessary because the Mongoose `toJSON` overload returns a generic shape the compiler cannot narrow to `Order` on its own.
-- **`presentTimelineEntry(event: OrderEventDocument, audience: 'buyer' | 'staff'): OrderTimelineEntry`** — Maps a single stored timeline row to the wire shape. Conditionally includes `actor` (staff only) and `text` (only when present).
-- **`presentTimeline(events: readonly OrderEventDocument[], audience: 'buyer' | 'staff'): OrderTimelineEntry[]`** — Filters the full event array by audience (staff sees all; buyer only sees rows where `isBuyerVisible(event.type)` is true) and maps each surviving row through `presentTimelineEntry`.
+- **`presentOrder(document: OrderDocument): Order`** — Returns `document.toJSON()` cast to the `Order` contract. The cast is required because the Mongoose schema's `toJSON` overload does not resolve to this module's `Order` type.
+- **`presentTimelineEntry(event: OrderEventDocument, reader: 'buyer' | 'staff'): OrderTimelineEntry`** — Formats one stored event row for the given audience. `actor` is included only when `reader === 'staff'` **and** the document carries one; `text` is included only when truthy (conditional spread keeps the wire shape clean).
+- **`presentTimeline(events: readonly OrderEventDocument[], reader: 'buyer' | 'staff'): OrderTimelineEntry[]`** — Filters the full event list by audience (staff: all rows; buyer: only rows where `isBuyerVisible(event.type)` is true), then maps each through `presentTimelineEntry`.
 
 ## Relationships
 
+- **`src/modules/orders/domain/index.ts`** — Imports `TIMELINE_AUDIENCE` and `isBuyerVisible`, used for the `audience` field and the buyer-visibility filter respectively. (The symbols are defined in `domain/timeline.ts` and re-exported through the domain barrel.)
+- **`src/modules/orders/model.ts`** — Imports the `OrderDocument` and `OrderEventDocument` types that this presenter consumes.
 - **`src/types/index.ts`** — Source of the `Order` and `OrderTimelineEntry` wire types that this module produces.
-- **`src/modules/orders/model.ts`** — Source of `OrderDocument` and `OrderEventDocument`, the input shapes consumed by every function here.
-- **`src/modules/orders/domain/index.ts`** — Provides `isBuyerVisible`, the single visibility predicate used in `presentTimeline` to gate buyer-facing rows.
-- **`src/modules/orders/services/scope.ts`** — Downstream consumer; its `withActions` pipeline builds on `presentOrder` to resolve live line data and merge caller permissions.
+- **`src/modules/orders/services/actions.ts`** — The module docblock notes that `withActions` (in `services/scope.ts`) builds on this presenter's output, resolving each line's live state and merging caller-permitted actions into the result.
 
 ## Notes
 
-- The `as Order` cast in `presentOrder` is intentional and documented: Mongoose's `Document['toJSON']` overload hides the concrete shape from the type system. The same pattern is used in `products/presenter.ts` (`presentProduct`).
-- Audience filtering is two-tiered: *which rows* a buyer sees is decided by `isBuyerVisible` (domain logic in `domain/`), and *which fields* appear on a row are decided inline in `presentTimelineEntry` (e.g. `actor` is stripped for buyers). Do not add further filtering here; extend the domain predicate instead.
-- `presentTimeline` preserves stored order; it does not sort.
+- The `as Order` cast in `presentOrder` is intentional and necessary: the compiler cannot see through the Mongoose schema's `toJSON` overload to reach the `Order` contract. The same pattern is documented in `products/presenter.ts`.
+- `presentTimelineEntry` uses conditional spreads (`...(reader === 'staff' && event.actor ? … : {})`) so that absent fields are **omitted** from the JSON rather than emitted as `undefined`, keeping the wire payload minimal.
+- Buyer visibility is determined solely by `event.type` via the `isBuyerVisible` predicate from the domain module; the presenter does not inspect `event.data` or any other field for the filter.

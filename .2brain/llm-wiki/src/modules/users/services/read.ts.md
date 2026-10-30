@@ -1,28 +1,39 @@
 ---
 source: src/modules/users/services/read.ts
-sha256: 8126fab722dc835935a2cdbe989bef60f3544fe5e43d978eb13d6b18fe474b54
-generated_at: 2026-10-15T12:10:59.867201+00:00
+sha256: c7e8acfa21acf363d81599eefc6347555b877d173667410e06f75fcdfdfb9684
+generated_at: 2026-10-29T06:17:52.092637+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/users/services/read.ts
 
 ## Purpose
-Read-only service layer for user lookups used by the admin panel. It wraps the user repository to provide search, single-fetch by ID, and find-by-email operations, returning either DTO-friendly (`UserWire`) or full-document (`UserDocument`) shapes depending on the caller's needs.
+Read-side service for the users module. Exposes admin search, single-document retrieval, staff-contact resolution for notifications, and the conversion of persisted user documents into the API `User` contract (role + permitted actions). It sits between the repository/persistence layer and the HTTP handlers, keeping write-mutation logic in `actions.ts`.
 
 ## Key elements
-- **`search(filters?)`** — Queries users via `userRepository.search`. Accepts an optional `SearchUsersRequest` and returns `{ items: UserWire[], meta: PaginatedMeta }`. Returns the wire/DTO shape, not the raw document.
-- **`getById(id?)`** — Fetches a single user by ID through `userRepository.findById`. Short-circuits to `Promise.resolve(undefined)` when `id` is falsy; otherwise resolves to `UserDocument | undefined`.
-- **`findByEmail(email)`** — Fetches a user by email via `userRepository.findOneWithCredentials`. Returns `UserDocument | undefined | null`. Deliberately loads credentials (see Notes).
+- **`search(filters?)`** — Paginated user search for the admin panel. Delegates to `userRepository.search`, injecting a derived scope (see below). Returns `{ items: UserWire[], meta: PaginatedMeta }`.
+- **`searchScopeOf(filters)`** *(private)* — Builds a MongoDB scope object for `purchaseHold` (must be unexpired *now*) and `purchaseHoldReview` (flag present), or `undefined` if neither is set.
+- **`getById(id?)`** — Fetches one `UserDocument` by id; resolves to `undefined` when id is falsy or not found.
+- **`staffContacts(ids)`** — Narrows a list of account ids to those who are live, enabled, and have an authenticator app, returning `{ id, email, locale }` tuples for notification dispatch.
+- **`toUserContract(user, caller)`** — Resolves a single `UserDocument` into the `User` API contract: fresh role lookup via `accessService.rolesOf`, staff-role check, and `userActionsFor`.
+- **`toUserContracts(rows, caller)`** — Batch counterpart for a page of `UserWire` rows. Uses `rolesOfMany` + `staffHoldersAmong` (two queries) to avoid per-row lookups.
+- **`findByEmail(email)`** — Finds a user by email, **including credentials**, returning `UserDocument | undefined | null`.
+- **`StaffContact`** — Exported interface: `{ id, email, locale }`.
 
 ## Relationships
-- **`src/modules/users/repository.ts`** — All three functions delegate to `userRepository` (`search`, `findById`, `findOneWithCredentials`).
-- **`src/modules/users/model.ts`** — Provides the `UserDocument` and `UserWire` type contracts used in signatures.
-- **`src/types/index.ts`** — Supplies `SearchUsersRequest`, the filter shape accepted by `search`.
-- **`src/infrastructure/persistence/search.ts`** — Supplies `PaginatedMeta`, the pagination metadata returned alongside search results.
-- **`src/modules/users/services/index.ts`** — Re-exports these functions as the public API of the users service.
+- **`@modules/users/repository`** — Primary data source; calls `search`, `findById`, `findStaffContacts`, `findOneWithCredentials`.
+- **`@modules/users/presenter`** — `presentUser` shapes documents into wire/API contracts; called by both `toUserContract` and `toUserContracts`.
+- **`@modules/users/services/actions`** — `userActionsFor` computes the caller-specific action set embedded in each `User` contract.
+- **`@modules/access`** — `accessService.rolesOf` / `rolesOfMany` / `staffHoldersAmong` supply current role and staff-holder data.
+- **`@kernel/access/tenant`** — `DEPLOYMENT_TENANT_ID` scopes every role lookup to the deployment tenant.
+- **`@infrastructure/i18n`** — `getDefaultLocale` fills in a locale fallback in `staffContacts`.
+- **`@types`** — `Caller`, `SearchUsersRequest`, `User` types consumed across the module.
+- **`@infrastructure/persistence/search`** — `PaginatedMeta` type for the search response envelope.
+- **`@modules/notifications/services/{digest,staff}`** — Upstream consumers of `staffContacts` (noted in its docstring as the recipient list for notices).
 
 ## Notes
-- `search` returns `UserWire` (DTO), while `getById` and `findByEmail` return the full `UserDocument`. Callers needing the raw document should use the latter two.
-- `findByEmail` uses `findOneWithCredentials` specifically so that password/token fields (normally hidden by `select: false`) are populated. The documented callers (reset-request, delete-request) immediately attach a token to the returned document and would break if those fields were absent.
-- The `active` field in search filters is a plain boolean column handled by `searchable.booleans`; it is independent of `deletedAt` and should not be conflated with soft-delete logic.
+- `purchaseHold: true` is a **point-in-time** question (hold not yet expired), so it is encoded as a `scope` clause (`$gt: new Date()`) rather than a stored-column filter. `purchaseHoldReview` is the opposite: it asks whether the *flag* persists regardless of hold expiry. Both can combine in one scope.
+- `active` is intentionally **not** part of the scope; it is a plain searchable boolean handled by the repository's `searchable.booleans`, independent of `deletedAt`.
+- `findByEmail` deliberately bypasses the repository's default `select: false` for credentials because the immediate callers (reset-request, setup-request) write a token onto the returned document.
+- `toUserContracts` takes `UserWire[]` (the lean rows `search` already produces), not `UserDocument[]`, to avoid re-mapping.
+- `staffContacts` **silently drops** any id that fails the live/enabled/authenticator checks — callers should not expect a 1:1 mapping back to the input list.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/example/metrics.ts
-sha256: c64f00d8bdd62d7475f539c17111d8cd6b49e0c60f301cc1d18bb547b4f826ea
-generated_at: 2026-10-15T10:30:45.267502+00:00
+sha256: a0ecdda6e5cd98757d59a67f0d596c4fc86b83173b961be0a44c577ba2f68271
+generated_at: 2026-10-29T03:53:22.460058+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,19 +9,19 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Prometheus counters owned by the example module and registers them on the shared observability registry. The file is intentionally self-contained: removing it (and the corresponding `.inc()` call at the usage site) fully disables module metrics with no other cleanup needed.
+Declares the Prometheus counter(s) owned by the `example` module and registers them on the shared metrics registry. Currently exposes a single counter tracking how many examples have been created, giving operators a basic usage signal for the module.
 
 ## Key elements
 
-- **`exampleCreatedTotal`** (`Counter`) — A Prometheus counter (`example_created_total`) that tracks the total number of examples created. Registered directly against the shared `metricsRegistry`.
+- **`exampleCreatedTotal`** (exported `Counter`) — A `prom-client` counter named `example_created_total` with help text "Total examples created." Registered on `metricsRegistry`. Incremented (via `.inc()`) by module code to record each successful example creation.
 
 ## Relationships
 
-- **`src/infrastructure/observability/metrics-registry.ts`** — Provides the shared `metricsRegistry` instance; this counter is pushed into it at definition time, making it part of the process-wide metrics collection.
-- **`src/modules/example/services/crud.ts`** — The expected call-site for `exampleCreatedTotal.inc()`. That file increments the counter when an example is successfully created.
+- **`src/infrastructure/observability/metrics-registry.ts`** — Provides the shared `metricsRegistry` instance. This file registers its counter against it so the counter is collected alongside every other module's metrics.
+- **`src/modules/example/services/crud.ts`** — Expected caller of `exampleCreatedTotal.inc()` when an example is created. This file does not import that module; the increment lives in the service layer.
 
 ## Notes
 
-- This file is documented as *optional*. The module still functions correctly without it; you only lose the single "is anyone using this module?" signal.
-- Follows the Prometheus naming convention `<domain>_<subject>_total` for counters.
-- See `docs/tools/observability.md` for the broader metrics/observability conventions used across the repo.
+- The file's own doc comment acts as a deletion guide: if the module stops counting anything, remove this file *and* the corresponding `.inc()` call in the service.
+- Prometheus naming convention used: `<domain>_<subject>_total` for counters. Follow this pattern if adding further counters here.
+- Reference for the broader observability setup: `docs/tools/observability.md`.

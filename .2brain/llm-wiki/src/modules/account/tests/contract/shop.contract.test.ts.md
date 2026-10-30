@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/contract/shop.contract.test.ts
-sha256: 3f1d577284fffd07d52a0d645dc1e570a0ce9e72d5472167cf453ece359ecea2
-generated_at: 2026-10-14T09:05:43.806934+00:00
+sha256: c452a40b653e2ee9e6524ab2b094e2ffc0c676e53ff633339d9b96c35e130933
+generated_at: 2026-10-29T02:52:32.715756+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,41 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests covering the shop-touching slices of the `/account` surface: the personal-data export (orders + payments) and the address snapshot carried by a checkout. The file is deliberately isolated so that removing the shop from the account module takes exactly this file with it, with no cross-cutting edits.
+Contract tests for the shop-facing slices of `POST /account/export`: orders, payments, invoicing, cart, shipments, fulfillment orders, and the checkout address snapshot. It is deliberately isolated from the rest of the `/account` contract so that removing the shop module takes exactly this file with it.
 
 ## Key elements
 
-- **`EXPORTED_SESSION_KEYS`** – `Set<string>` (`id`, `createdAt`, `expiration`, `lastUsedAt`, `device`). Used to assert that an exported session carries *only* metadata and never a credential.
-- **`describe('POST /account/export')`** – Two tests:
-  - Verifies a 202→200 export response contains the caller's profile, a created order, the linked payment (including `orderId`), and exactly one session whose keys match `EXPORTED_SESSION_KEYS`.
-  - Verifies that another user's order does **not** appear in the export (isolation check).
-- **`describe('the address book at checkout')`** – One test that creates an address, adds a product to the cart, sets a shipping method, runs `checkoutAs`, and asserts both `shippingAddress` and `billingAddress` on the 201 response carry the expected snapshot fields.
-- **`setupTestDb()`** – Called at module top level to prepare the test database before any test runs.
+- **`EXPECTED_EMPTY_SECTIONS`** – Sorted list of export sections the rich seed intentionally leaves empty. Currently `[]`; any new unfillable section should be named here so it is noticed.
+- **`EXPORTED_SESSION_KEYS`** – Whitelist (`id`, `createdAt`, `expiration`, `lastUsedAt`, `device`) of the only session metadata an export may expose; anything else fails the test.
+- **`describe('POST /account/export', …)`** – Main suite. Covers:
+  - Caller-owned data returned with correct 202→200 handshake and no cross-account leakage.
+  - Zero `null` values across a fully-populated account (via `nullPathsIn`).
+  - Invoice / credit-note field shape (`currency`, `grandTotal`, `issuedAt`, `number`, `orderId`) and exact cart-line content.
+  - Shipment tracking code and held-fulfillment-order note in the export.
+  - Isolation: another user's order never appears.
+- **`describe('the address book at checkout', …)`** – (truncated in source) Verifies the address snapshot carried by a checkout.
+- **`afterEach` hook** – Calls `settleInlineExports()` then `emptyFileSandbox()` to flush background export builds and clean the sandbox.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** – Imported as a side-effect; likely sets up shared contract-test expectations or interceptors.
-- **`tests/support/setup-test-db.ts`** – Provides `setupTestDb`, the database reset/seed called once before all tests.
-- **`tests/support/http.ts`** – Provides `api` (supertest-style client) and `authenticateAs` (bearer-token login for the `user` fixture).
-- **`tests/support/checkout-as.ts`** – `checkoutAs(bearer)` drives the full checkout flow used in the address-snapshot test.
-- **`tests/support/account-export.ts`** – `requestAndDownloadExport(bearer)` issues the 202 polling→200 download sequence.
-- **`tests/support/callers.ts`** – `asCustomer(userId)` builds the caller identity passed to `createIntent`.
-- **`src/modules/users/tests/factories.ts`** – `createUser` builds the "stranger" fixture for the isolation test.
-- **`src/modules/products/tests/factories.ts`** – `createProduct` supplies a purchasable item for both export and checkout tests.
-- **`src/modules/orders/tests/factories.ts`** – `createOrder` and `toOrderItem` build the order/item fixtures.
-- **`src/modules/payments/index.ts`** – Re-exports `createIntent`, used to fabricate a payment linked to the order.
-- **`src/infrastructure/http/response.ts`** – `ResponseSuccess<Payment>` type used to unwrap the intent creation result.
-- **`src/types/index.ts`** – `Payment` type for the same unwrap.
-- **`src/modules/account/tests/contract/support.ts`** – `loginWithCookie` performs a cookie-based login and returns the resulting bearer token (distinct from `authenticateAs` in http.ts).
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/account/tests/contract/support.ts` | Provides `loginWithCookie`, the shared auth helper for these tests. |
+| `src/modules/account/services/export.ts` | Exports `settleInlineExports`, awaited in `afterEach` to drain background export work. |
+| `src/infrastructure/http/response.ts` | Type-only import of `ResponseSuccess` for narrowing payment intents. |
+| `src/modules/access/index.ts` | `accessService.ensureTenant` and `DEPLOYMENT_TENANT_SLUG` seed the tenant before a fully-populated export test. |
+| `src/modules/addresses/tests/factories.ts` | `giveAddress` creates the user's address row. |
+| `src/modules/delivery/index.ts` | `deliveryService.holdFulfillmentOrder` is called to create a held fulfillment record. |
+| `src/modules/delivery/tests/factories.ts` | `carryOrderTo` advances an order to *shipped*; `fulfillmentOrdersOf` reads the resulting fulfillment row. |
+| `src/modules/example/tests/factories.ts` | `createExample` seeds an "example" collection row. |
+| `src/modules/invoicing/index.ts` | `invoicingService.findInvoiceForOrder` / `findCreditNotesForOrder` poll for async invoice creation. |
+| `src/modules/notifications/tests/factories.ts` | `createNotification` seeds a notification row. |
+| `src/modules/orders/tests/factories.ts` | `createOrder`, `forceOrderStatus`, `toOrderItem` build order fixtures. |
+| `src/modules/payments/index.ts` | `paymentService.createIntent` / `confirmPayment` create and settle payments. |
 
 ## Notes
 
-- The file imports `@tests/contract` for its side-effects only (no named binding); any change to that setup file's import path will silently break this test's preconditions.
-- `createIntent` is imported from the payments module's **index** (`@modules/payments`), not directly from `services/intent.ts`; the index is the public surface.
-- The comment on the payments assertion calls out `paymentService.findOwnPaymentsForExport` (in `payments/services/retention.ts`) as the *only* code path exercised here for pagination — a regression in that walker surfaces solely in this test.
-- `loginWithCookie` (local support) and `authenticateAs` (shared http support) both produce bearer tokens but are used in different describes; they may differ in how the session is seeded. Don't swap them casually.
+- The comment on the payments assertion flags that `paymentService.findOwnPaymentsForExport` (in `payments/services/retention.ts`) is the **only** code path this test exercises for paginated payment reads; a broken page-walk surfaces nowhere else.
+- The session export invariant ("never a credential") is enforced structurally via `EXPORTED_SESSION_KEYS` rather than by asserting the absence of specific secret fields, so a new leaked field is caught automatically.
+- `settleInlineExports` is async; forgetting the `afterEach` cleanup will leak sandbox files into subsequent tests.
+- The file is intentionally the **only** contract-test file that imports shop/delivery/invoicing/payments factories. When the shop module is extracted, delete this file and its `support.ts` sibling; no other test file should need changes.

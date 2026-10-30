@@ -1,7 +1,7 @@
 ---
 source: src/modules/analytics/module.ts
-sha256: fec59283af38bad777f05b3321201bbb49cdc2f040497ce83606d86dff3eca1f
-generated_at: 2026-10-14T14:55:06.860949+00:00
+sha256: 173943fa4db02b1da755cb8dd4ec8af60887ab233012116462288ddbfacef6a9
+generated_at: 2026-10-29T03:11:27.529373+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module manifest for the browsing-event relay. It exposes `POST /analytics/events`, a single stateless endpoint through which a browser reports UI-level activity (page opens, searches) that the response cache otherwise hides from the server. Those events are forwarded to an analytics provider via the shared consent gate. Business-fact events (cart, checkout, order, payment, signup, login) are explicitly **not** accepted here; they are emitted by the owning service.
+Module manifest that wires the analytics browsing-event relay into the kernel. It mounts the `/analytics` route, registers the declared browser events (product page opened, search made, etc.) with the analytics service after all modules are known, and marks the module as stateless. Business-fact events (cart, checkout, order, payment, signup, login) are explicitly out of scope here.
 
 ## Key elements
 
-- **`onRegistered(modules)`** — lifecycle hook called after all enabled modules are known. Calls `resolveBrowserEvents(modules)` from the kernel registry to collect the browser events declared by every other module, then passes the result to `registerBrowserEvents`. This indirection exists because the relay cannot statically import the modules that own the events.
-- **Default export** — the `AppModule` manifest:
-  - `name: 'analytics'`, `basePath: '/analytics'`
-  - `routes: router` (imported from `./routes`)
-  - `onRegistered` hook as above
-  - `personalData: 'none'` — the module is stateless; events are forwarded and never stored in-app.
+- **`onRegistered(modules)`** — Called by the kernel after all modules are registered. Calls `resolveBrowserEvents(modules)` to collect the events each enabled module declares, then hands them to `analyticsService.registerBrowserEvents`.
+- **Default export (`AppModule`)** — The manifest object: name `"analytics"`, one mount at `/analytics` using the local `router`, the `onRegistered` hook, and `personalData: 'none'` (no local persistence).
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — provides the `resolveBrowserEvents` helper and the `AppModule` type used to satisfy the manifest. The relay depends on the kernel to discover declared events at registration time rather than importing owning modules directly.
-- **`src/modules.ts`** — the top-level module registration list where this analytics module is enabled and, during the `onRegistered` phase, passes the full module array to the analytics hook.
-- **`src/modules/analytics/routes.ts`** — supplies the Hono (or equivalent) `router` instance that defines the `POST /events` handler; the manifest simply re-exports it under the `/analytics` base path.
-- **`src/modules/analytics/services/relay.ts`** — implements `registerBrowserEvents`, the function that wires collected browser-event descriptors to the consent-gated forward-to-provider logic.
+- **`src/kernel/registry.ts`** — Source of `resolveBrowserEvents` (resolves the browser events declared across modules) and the `AppModule` type that the manifest satisfies.
+- **`src/modules/analytics/routes.ts`** — Provides the `router` that is mounted at `/analytics`.
+- **`src/modules/analytics/services/index.ts`** — Provides `analyticsService`, the target of `registerBrowserEvents`.
+- **`src/modules.ts`** — Aggregates this manifest with other module manifests for the kernel to load and invoke `onRegistered`.
 
 ## Notes
 
-- The relay is deliberately **stateless** (`personalData: 'none'`). If you need to persist or inspect forwarded events, that belongs outside this module.
-- The `onRegistered` pattern means event discovery is **registration-order dependent**: a module must be enabled before the analytics hook fires, or its declared browser events will be missed.
-- Do **not** add business-fact event handlers here. The module's contract is UI/activity telemetry only; business facts are the responsibility of the emitting service.
+- The relay deliberately avoids importing the modules that own the events it relays. It receives them via the `onRegistered` callback so the dependency direction stays kernel → analytics, not analytics → feature modules.
+- `personalData: 'none'` is a contract: this module forwards events to an external provider and stores nothing locally. Do not add persistence without re-evaluating that field.
+- The manifest uses `satisfies AppModule` rather than a type annotation, preserving the literal shape of the object for consumers while still enforcing the interface.

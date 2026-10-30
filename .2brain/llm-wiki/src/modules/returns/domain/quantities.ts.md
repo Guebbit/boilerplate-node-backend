@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/domain/quantities.ts
-sha256: 9b3952d4565e4afc76fd63f4493e0869fc35974a262cf108a49200bff964af89
-generated_at: 2026-10-15T11:52:46.997414+00:00
+sha256: c5f5b5cbd3b75987006109e02e183981379678552ce85e3bb78b1d54a6a85e69
+generated_at: 2026-10-29T05:37:40.695817+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure functions that compute how much of an order can still be returned and validate a customer's requested lines against that remainder. Keeping this logic database-free makes the core "what can come back" rule unit-testable in isolation.
+Pure, side-effect-free functions that answer "how much of this order can still come back?" and "does this return consume the last unit?" They encode the business rules for returnable quantity, line validation, and whole-order completion so that services and domain projections can rely on them without touching a database.
 
 ## Key elements
 
-- **`ProductQuantity`** (interface) — A single line: `productId: string` + `quantity: number`.
-- **`wireLines`** — Normalises heterogeneous lines (ObjectId or string) into `ProductQuantity[]` keyed by string id.
-- **`returnableLinesOf`** — Filters an order's items, excluding goods marked as non-withdrawable (Art. 16), and maps the rest to `ProductQuantity[]`.
-- **`returnableQuantities`** — Subtracts all already-returned lines from the ordered lines, returning a `Map<string, number>` of per-product remaining units (floored at 0).
-- **`LinesVerdict`** (type) — Discriminated union: `{ ok: true; lines }` or `{ ok: false; reason: 'nothing-returnable' | 'unknown-product' | 'too-many' }`.
-- **`checkRequestedLines`** — Validates requested lines (or defaults to "everything remaining" when `undefined`/empty). Summs duplicate product ids, rejects unknown products or over-requests.
-- **`takesLastUnit`** — Returns `true` when `accountedFor` covers every ordered unit across all products; used to decide which act triggers a shipping refund.
+- **`ProductQuantity`** — interface for a single line: `{ productId: string; quantity: number }`.
+- **`wireLines`** — normalises heterogeneous line arrays (ObjectId or string IDs) into `ProductQuantity[]` with string keys.
+- **`quantitiesByProduct`** — folds an array of lines into a `Map<string, number>` summing quantities per product.
+- **`returnableLinesOf`** — given generic order items and an `isExcluded` predicate, returns the non-excluded lines as `ProductQuantity[]` (Art. 16 exclusion).
+- **`returnableQuantities`** — subtracts already-returned lines from ordered lines; returns `Map<string, number>` clamped at zero.
+- **`LinesVerdict`** — discriminated union: `{ ok: true; lines }` or `{ ok: false; reason: 'nothing-returnable' | 'unknown-product' | 'too-many' }`.
+- **`checkRequestedLines`** — validates a customer's requested lines against remaining quantities; `undefined`/empty request means "take everything still returnable."
+- **`takesLastUnit`** — returns `true` when the supplied lines account for every ordered unit per product (used to decide whether a refund covers shipping).
 
 ## Relationships
 
-- **`domain/index.ts`** — Re-exports every symbol in this file so services import from the domain barrel.
-- **`services/create.ts`** — Calls `wireLines`, `returnableLinesOf`, `returnableQuantities`, and `checkRequestedLines` to resolve the final lines when creating a return.
-- **`services/cancel-remainder.ts` / `services/cancellation-refund.ts`** — Use `takesLastUnit` to determine whether a cancellation accounts for the last unit and therefore owns the shipping refund.
-- **`services/receive.ts`** — Consumes `returnableQuantities` to verify received goods against what was still returnable.
-- **`services/options.ts`** — Reads `returnableQuantities` / `checkRequestedLines` to surface what a customer *could* request.
-- **`services/outcome.ts` / `services/projection.ts`** — Reference `ProductQuantity` and `takesLastUnit` when projecting the post-return state.
-- **`domain/accounting.ts`** — Works alongside this file for the financial side (amounts); this file handles the *quantity* side.
-- **`tests/unit/domain.test.ts`** — Direct unit tests for every export in this file.
-- **`delivery/tests/unit/fulfillment.test.ts`** — Exercises `takesLastUnit` in the context of a delivery fulfilment scenario.
+- **`src/modules/returns/domain/index.ts`** — barrel file; re-exports the public API of this module for the rest of the domain.
+- **`src/modules/returns/services/create.ts`**, **`src/modules/returns/services/receive.ts`** — call `checkRequestedLines` to freeze the final line set for a return.
+- **`src/modules/returns/services/cancel-remainder.ts`**, **`src/modules/returns/services/cancel-right.ts`** — use `returnableQuantities` / `takesLastUnit` to compute what a cancellation covers and whether it closes the order.
+- **`src/modules/returns/services/cancellation-refund.ts`** — relies on `takesLastUnit` to determine whether shipping is refunded by this cancellation.
+- **`src/modules/returns/services/projection.ts`**, **`src/modules/returns/services/options.ts`**, **`src/modules/returns/services/outcome.ts`** — consume `returnableQuantities` or `returnableLinesOf` to project or present returnable state.
+- **`src/modules/returns/domain/status-projection.ts`** — domain-level sibling that composes these quantity results into a status view.
+- **`src/modules/returns/domain/accounting.ts`** — sibling domain module handling the monetary side; this module supplies the quantity inputs it needs.
+- **`src/modules/returns/tests/unit/domain.test.ts`** — unit-tests every exported function in this file.
+- **`src/modules/delivery/tests/unit/fulfillment.test.ts`** — exercises `takesLastUnit` (or its callers) in the context of delivery/fulfilment scenarios.
 
 ## Notes
 
-- All product-id comparisons go through `String(id)`. When passing ObjectIds from the database, always run them through `wireLines` or `returnableLinesOf` first; comparing a raw ObjectId to a string will silently fail.
-- `returnableQuantities` floors at 0 per product (`Math.max(0, …)`), so over-returns in earlier documents won't produce negative remainders.
-- `checkRequestedLines` with `requested === undefined` or `[]` means "all that remains" — this is the default withdrawal path, not an error case.
-- `takesLastUnit` compares against **ordered** quantity, not returnable quantity. An excluded (Art. 16) line therefore prevents the order from ever being "whole," which is intentional: the shipping refund for that line is never triggered.
+- All product IDs are **stringified** at the boundary (`wireLines`, `returnableLinesOf`). Downstream code should only ever see `string` IDs; the `ProductIdLike` interface exists solely to accept `ObjectId`-shaped values at the entry point.
+- `returnableQuantities` clamps at **zero** via `Math.max(0, …)`; it never returns negative numbers. Callers must not rely on a negative value to signal over-return.
+- `checkRequestedLines` treats `undefined` and `[]` identically ("take all that remains"). A non-empty request that sums to zero per product still enters the explicit-validation branch.
+- `takesLastUnit` compares against **ordered** quantity, not returnable quantity. A product excluded under Art. 16 therefore prevents the order from ever being "whole," which is intentional.
+- The module is intentionally free of imports beyond its own interfaces — no database, no services, no side effects — making it trivially unit-testable and safe to import anywhere.

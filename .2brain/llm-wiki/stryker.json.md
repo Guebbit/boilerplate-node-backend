@@ -1,7 +1,7 @@
 ---
 source: stryker.json
-sha256: 8ae13a825864a0b1ea172b796cdd30cddf8807ca79bfe8f367eecbb030ff2642
-generated_at: 2026-09-23T19:50:38.405463+00:00
+sha256: b5947a6691366437ad32764dc6b7ce95bed62f9526b8ef21ddb018f568a59158
+generated_at: 2026-10-29T06:37:16.908296+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Stryker mutation-testing configuration for this repository. It defines which source files are mutated, how Jest is invoked during mutation runs, where reports are written, and what thresholds gate the result. It exists so that CI (and local runs) can execute a consistent, incremental mutation-testing pass without hard-coding options elsewhere.
+Configuration file for [Stryker Mutator](https://stryker-mutator.io/), a mutation-testing framework. It defines which source files to mutate, which Jest test suite to run against each mutant, how results are reported, and what performance/threshold limits apply. It is consumed by the CI mutation-testing workflow.
 
 ## Key elements
 
-- **`mutate`** — Globs targeting `src/infrastructure/**`, `src/kernel/**`, and `src/modules/*/**` `.ts` files; explicitly excludes per-module `index.ts` barrels and all module-level `tests/` directories.
-- **`testRunner` / `jest`** — Uses a custom Jest project (`jest.config.mutation.js`) with `enableFindRelatedTests` on; a `testPathIgnorePatterns` list strips contract, fuzz, cluster, and cross-cutting tests from the mutation run.
-- **`incremental` + `incrementalFile`** — Enables incremental mutation analysis; the baseline state is persisted to `tmp/reports/stryker-incremental.json`.
-- **`thresholds`** — High: 80 %, Low: 60 %, `break: null` (score is reported but never fails the build on its own).
-- **`reporters`** — `html`, `clear-text`, `progress`, `json`; HTML and JSON reports land under `tmp/reports/mutation/`.
-- **`concurrency: 4` / `maxTestRunnerReuse: 1`** — Runs 4 mutations in parallel but spawns a fresh Jest process for each, avoiding cross-mutation state leakage.
-- **`timeoutMS: 30000`** — Per-mutation test timeout.
-- **`dryRunTimeoutMinutes: 20`** — Upper bound for the initial (unmutated) test pass.
-- **`ignorePatterns`** — Prevents Stryker from scanning `tmp/`, `dist/`, `docs/`, `.claude/`.
+- **`testRunner` / `jest` block** — Uses Jest in `custom` project type, pointing at a dedicated `jest.config.mutation.js`. `enableFindRelatedTests: true` limits execution to tests that actually touch the mutated file.
+- **`testPathIgnorePatterns`** — Excludes contract tests, fuzz tests, integration journeys, cluster tests, broker tests, and Claude worktree artifacts from the mutation run.
+- **`mutate` glob list** — Targets `src/infrastructure`, `src/kernel`, `src/domain-primitives`, and `src/modules/*/**`. Explicitly excludes `*.generated.ts`, module `index.ts` barrels, and module-internal `tests/`.
+- **`incremental: true` + `incrementalFile`** — Only mutates files changed since the last recorded baseline (`tmp/reports/stryker-incremental.json`), speeding up repeated runs.
+- **`coverageAnalysis: "perTest"`** — Computes test coverage per individual test case rather than per file, improving precision of related-test selection.
+- **`reporters`** — Emits HTML (`tmp/reports/mutation/index.html`), JSON (`mutation.json`), clear-text, and progress output.
+- **`thresholds`** — `high: 80`, `low: 60`, `break: null`. The `null` break value means thresholds are advisory only and will **not** cause the process to exit non-zero.
+- **`concurrency: 4`, `timeoutMS: 30000`, `maxTestRunnerReuse: 1`** — Runs 4 mutants in parallel, kills a run after 30 s, and restarts the Jest process after every single mutant (prevents cross-mutant state leakage).
+- **`dryRunTimeoutMinutes: 20`** — Caps the initial full test-suite run before mutation begins.
 
 ## Relationships
 
-- **`github/workflows/mutation.yml`** — The CI workflow reads this file (via the default Stryker config discovery) to run mutation testing on pull requests / pushes. Thresholds and reporters configured here determine what the workflow publishes as artifacts.
+- **`github/workflows/mutation.yml`** — The CI workflow that invokes Stryker Mutator in the repository. It reads this file (the default config path) to drive the mutation-testing job, uploads the HTML/JSON reports as artifacts, and (given `break: null`) treats the run as a reporting step rather than a gate.
 
 ## Notes
 
-- `break` is explicitly `null`, so a score below the low threshold does **not** fail the CI step by itself; any hard gating must be enforced in the workflow script or by a separate check.
-- The Jest `testPathIgnorePatterns` here are _additive_ to whatever `jest.config.mutation.js` defines; if a new test category is added to the project, it must also be excluded here to avoid slowing mutation runs.
-- `maxTestRunnerReuse: 1` means every single mutation gets a clean Jest instance—intentional for isolation, but it increases wall-clock time compared to reusing the runner.
-- The `incrementalFile` lives under `tmp/`, which is also in `ignorePatterns`; the file is meant to be ephemeral (CI artifact) and not committed.
+- The mutation run uses a **separate** Jest config (`jest.config.mutation.js`) from the project's normal Jest setup. Changes to one do not automatically affect the other.
+- `break: null` means a mutation score below 60 % will **not** fail CI. If you expect a hard gate, change it to `60`.
+- `maxTestRunnerReuse: 1` is intentionally low: it trades speed for isolation, ensuring no shared state between mutants. Raising it will speed things up but may hide mutants that only survive because of leaked state.
+- The `incremental` baseline lives in `tmp/`, which is also in `ignorePatterns`. Deleting `tmp/` resets the incremental baseline and forces a full mutation pass on the next run.

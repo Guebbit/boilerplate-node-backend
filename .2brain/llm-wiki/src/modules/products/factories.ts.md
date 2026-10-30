@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/factories.ts
-sha256: aa683dadadba356d8d26266e66cfe9a76fcdb41765fa1fe13706c526cd854458
-generated_at: 2026-10-15T11:41:56.671917+00:00
+sha256: 14558de77af887c1fa7778b0eb229d8b1143eaf76de3927773b088fa99a40d9c
+generated_at: 2026-10-29T05:26:25.864322+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Builds product fixtures (catalogue rows) for the `shop` scenario and for any test that needs a seedable product document. It placeholderes only the required `title` and `price` fields and leaves every other field to Mongoose's own `default:`, so downstream readers (e.g. `tests/integration/scenarios/shop.test.ts`) see real serializer output rather than hand-guessed values.
+Builds a single product fixture row for the `shop` scenario's catalogue (`scenarios/products.ts`) and for any test that needs a seeded product document. It fills only the two required fields (`title`, `price`) with placeholders and leaves every other field to the Mongoose schema's `default:` values, so downstream reads go through the real serializer rather than a hardcoded guess.
 
 ## Key elements
 
-- **`ProductOverrides`** — Type a caller may use to pin specific fields. Derived from the generated `Product` via `OverridesFor<Product>` so it stays in sync with the contract automatically.
-- **`ProductFixture`** — Type representing a product ready for `productRepository.create`. `_id`, `title`, and `price` are required (non-optional); everything else is optional.
-- **`makeProduct(overrides?)`** — The single exported factory function. Fills `title` (`'Test Product'`) and `price` (`9.99`) as defaults, applies `identityOf` for id/timestamps, converts `deletedAt`/`releaseDate` via `toDate`, and removes any `undefined` keys with `stripUndefined` before returning.
+- **`ProductOverrides`** (type) — Alias for `OverridesFor<Product>`; describes which fields a caller may pin. Derived from the generated `Product` type so contract changes stay in sync.
+- **`ProductFixture`** (type) — `Partial<ProductDocument> & Pick<ProductRecord, '_id' | 'title' | 'price'>`. The three factory-set fields are *required* (not optional), allowing callers to read `fixture.title` without a non-null assertion.
+- **`makeProduct`** (const, factory fn) — Accepts an optional `ProductOverrides` object. Destructures out identity/date fields, applies `identityOf` and `toDate`, injects placeholder `title: 'Test Product'` and `price: 9.99`, spreads any remaining overrides, and runs the result through `stripUndefined`. Returns a `ProductFixture` ready for `productRepository.create`.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/factories.ts`** — Provides `identityOf`, `toDate`, and the `OverridesFor` utility that underpin the type and identity logic.
-- **`src/infrastructure/object-guards.ts`** — Provides `stripUndefined`, used to strip undefined keys so Mongoose defaults apply.
-- **`src/modules/products/model.ts`** — Source of the `ProductDocument` and `ProductRecord` types that shape `ProductFixture`.
-- **`src/types/index.ts`** — Source of the `Product` type from which `ProductOverrides` is derived.
-- **`scenarios/products.ts`** — Primary consumer; calls `makeProduct` to seed the shop scenario catalogue.
-- **`src/modules/products/tests/unit/factories.test.ts`** — Unit-tests `makeProduct` directly.
-- **`src/modules/products/tests/factories.ts`** — Test helper that likely re-exports or wraps this factory for other test suites.
-- **`src/modules/products/tests/integration/repository.test.ts`** — Integration test that uses the fixture via `productRepository.create`.
+- **`src/infrastructure/persistence/factories.ts`** — Provides `identityOf`, `toDate`, and the `OverridesFor` generic used by both exports.
+- **`src/infrastructure/object-guards.ts`** — Provides `stripUndefined`, which removes any `undefined` values from the assembled fixture before it is returned.
+- **`src/modules/products/model.ts`** — Source of the `ProductDocument` and `ProductRecord` types used in `ProductFixture`.
+- **`src/types/index.ts`** — Source of the `Product` type that `ProductOverrides` is derived from.
+- **`scenarios/products.ts`** — Primary consumer; calls `makeProduct` to populate the shop catalogue fixture.
+- **`src/modules/products/tests/unit/factories.test.ts`** — Unit tests exercising `makeProduct` behavior.
+- **`src/modules/products/tests/integration/repository.test.ts`** — Integration test that consumes the produced fixtures through the repository.
+- **`src/modules/products/tests/factories.ts`** — Test-scoped factory helpers that build on or alongside this module.
 
 ## Notes
 
-- `available` and `currency` are accepted in `ProductOverrides` but **silently ignored** — they are not schema paths. Pin `onHand`/`reserved` for availability, or `NODE_DEFAULT_CURRENCY` (via `withEnvironment`) for currency.
-- Because `ProductFixture` marks `_id`, `title`, and `price` as required (not optional), callers can access `fixture.title` without a non-null assertion.
-- The spread order in `makeProduct` is: identity defaults → `title`/`price` placeholders → caller overrides (with undefined stripped). A caller-supplied `title` or `price` will override the placeholder.
+- `available` and `currency` are *accepted* in overrides but **silently ignored** — they are not Mongoose schema paths. Use `onHand`/`reserved` for stock and the `NODE_DEFAULT_CURRENCY` environment override for currency instead.
+- Date fields (`createdAt`, `updatedAt`, `deletedAt`, `releaseDate`, `restockDate`) are coerced through `toDate`; pass `null`/`undefined` to leave them unset rather than passing a string that `toDate` can't handle.
+- The `...stripUndefined` call at the end means any override explicitly set to `undefined` is removed from the final object rather than serialized as a key with an `undefined` value.

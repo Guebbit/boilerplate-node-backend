@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/observability/analytics/none.ts
-sha256: 8dd2ec50b5ae2ba25cdd99114665eff1b1d8e4e77500545989e8fb592aa56b14
-generated_at: 2026-09-23T17:47:52.969620+00:00
+sha256: 08b0d82b04a9b6537ccd1ad6faccfb689230f0cf6f75cb80681ac97c7885db95
+generated_at: 2026-10-29T02:08:16.310768+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A no-op analytics provider that implements the `AnalyticsProvider` port by doing nothing. It exists so that opting out of analytics collection is an explicit, stated choice (via `NODE_ANALYTICS_PROVIDER=none`) rather than a side effect of missing credentials or an unconfigured provider.
+Provides the no-op `AnalyticsProvider` implementation, selected via `NODE_ANALYTICS_PROVIDER=none`. It exists to make "collects nothing" an explicit, stated configuration choice rather than an accidental side effect of blank credentials (which the other providers treat as a misconfiguration and warn about).
 
 ## Key elements
 
-- **`noneAnalyticsProvider`** (exported const) — the only export; a plain object satisfying the `AnalyticsProvider` type.
-    - `name` — the literal string `'none'`, used as the provider identifier.
-    - `capture()` — deliberately empty; performs no work.
-    - `configured()` — always returns `true`, because "collect nothing" _is_ the configuration; there is no unconfigured state for this provider.
-    - `shutdown()` — returns an already-resolved `Promise<void>`; no cleanup is needed.
+- **`noneAnalyticsProvider`** — the sole export; satisfies the `AnalyticsProvider` port with empty behavior:
+  - `name` — the string `'none'`.
+  - `capture()` — deliberately empty; records nothing.
+  - `forget()` — resolves immediately; no data held, so nothing to erase.
+  - `configured()` — always returns `true`; "collecting nothing" *is* this provider's entire configuration.
+  - `shutdown()` — resolves immediately; nothing to tear down.
 
 ## Relationships
 
-- **`src/infrastructure/observability/analytics/index.ts`** — imports the `AnalyticsProvider` type from this module. The `noneAnalyticsProvider` object is typed against that interface, which is defined (or re-exported) in `index.ts`.
+- **`src/infrastructure/observability/analytics/index.ts`** — imports the `AnalyticsProvider` type from this file; the index module (which performs provider selection based on `NODE_ANALYTICS_PROVIDER`) exports `noneAnalyticsProvider` as one of the selectable options.
 
 ## Notes
 
-- Unlike the other two analytics providers (which warn at startup when selected but unconfigured), this provider is intentionally silent. The distinction is deliberate: an empty config on the real providers is almost always an accident, whereas choosing `'none'` is not.
-- There is no runtime branching or conditional logic here; the object is a static, stateless literal.
+- `configured()` unconditionally returns `true`. This is intentional: the other two providers use `configured()` to detect an "accidentally blank credentials" state and emit a warning. The none-provider must never trigger that path, since its silence *is* the configured state.
+- See `docs/tools/analytics.md` for the broader provider-selection documentation.

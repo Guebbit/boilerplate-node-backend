@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/persistence/money-field.ts
-sha256: 46863b9416647a8c22ae3d0dfddb6c3dfea8b938d3f1ccd618ca74361267d586
-generated_at: 2026-10-14T08:10:00.059839+00:00
+sha256: b914e09f25ea462de37a00c9763b5564a1ea10b12368fe2157c3561eff71093d
+generated_at: 2026-10-29T02:13:20.337487+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Bridges the gap between MongoDB's `Decimal128` storage (required for exact money) and the application's plain `number` wire format. Provides the Mongoose schema-path definition, a lean-query post-hook, and a recursive `toJSON` transform so that every layer above persistence sees an ordinary `number`, regardless of how the document was read.
+Bridges MongoDB's `Decimal128` (the on-disk representation of monetary values) and the plain `number` that every layer above persistence expects. It provides a reusable Mongoose schema-path factory, a recursive Decimal128→number reviver, and a query middleware so that neither hydrated documents, lean queries, nor serialised output ever leak a raw `Decimal128` object to application code.
 
 ## Key elements
 
-- **`moneyPath(options?)`** – Returns a Mongoose schema-path definition that stores `Decimal128`, casts a written `number` on save, and exposes a `number` via a getter. Accepts `required`, `nonNegative`, and `default`.
-- **`moneyPlugin(schema)`** – Mongoose plugin that registers `post` hooks on `find`, `findOne`, `findOneAndUpdate`, `findOneAndDelete`, and `findOneAndReplace`; when the query was called with `.lean()`, it runs `reviveDecimals` on the result in place.
-- **`reviveDecimals(value)`** – Recursively walks plain objects and arrays, replacing every `Decimal128` with its `number` equivalent **in place**; returns the same reference.
-- **`decimalToNumber(value)`** – Converts a single `Decimal128` (or already-numeric) value to `number`; returns `undefined` for absent fields.
-- **`MoneyPathOptions`** – Interface: `{ required?, nonNegative?, default? }`.
-- Internal: `isDecimal128`, `isWalkable`, `isWritableAmount`, `DECIMAL128_FOR_NUMBER_FIELD` (type-narrowing cast for Mongoose's `type` field).
+- **`decimalToNumber(value)`** — Single-value converter. Returns the decimal `number` for a `Decimal128` or an already-numeric value; `undefined` for anything else (e.g. a missing field).
+- **`reviveDecimals(value)`** — In-place, recursive walk that replaces every nested `Decimal128` with its `number` equivalent. Handles plain objects and arrays; ignores `ObjectId`, `Date`, `Buffer`, etc.
+- **`moneyPath(options?)`** — Factory returning a Mongoose path definition. Sets `type: Decimal128`, a `get` that calls `decimalToNumber`, a finite/non-negative validator, and an optional `default`. Options: `required`, `nonNegative`, `default`.
+- **`moneyPlugin(schema)`** — Registers a `post` hook on `find`, `findOne`, `findOneAndUpdate`, `findOneAndDelete`, `findOneAndReplace`. When the query was `.lean()`, it runs `reviveDecimals` on the result.
+- **`MoneyPathOptions`** (interface) — `required`, `nonNegative`, `default` fields accepted by `moneyPath`.
+- Internal helpers: `isDecimal128` (checks the `_bsontype` tag), `isWalkable` (plain-object/array guard), `isWritableAmount` (finite + optional ≥ 0 check).
 
 ## Relationships
 
-- **`src/infrastructure/persistence/serialize.ts`** – Calls `reviveDecimals` as its `toJSON` transform so serialized documents emit numbers.
-- **`src/modules/invoicing/model.ts`, `orders/model.ts`, `payments/model.ts`, `products/model.ts`, `returns/model.ts`** – Each defines one or more monetary fields using `moneyPath` and registers `moneyPlugin` on its schema.
-- **`src/modules/payments/repository.ts`** – Reads and writes payment documents whose money fields are governed by this module; relies on the `number` contract for all arithmetic.
-- **`tests/integration/persistence/money-field.test.ts`** – Integration tests exercising write/read round-trips and lean-query behavior.
-- **`tests/unit/infrastructure/persistence/money-field.test.ts`** – Unit tests for `decimalToNumber`, `reviveDecimals`, and the validation logic.
+- **`src/infrastructure/persistence/serialize.ts`** — The module docstring identifies `reviveDecimals` as the transform the serializer applies during `toJSON`, so serialize.ts imports it to handle non-lean document serialisation.
+- **`src/modules/{invoicing,orders,payments,products,returns}/model.ts`** — Each domain model's Mongoose schema defines its monetary fields (price, total, amount, etc.) via `moneyPath`, consuming the exported factory and its options.
+- **`src/modules/payments/repository.ts`** — Uses lean queries against the payments schema; the `moneyPlugin` post-find hook ensures the numbers it reads back are plain `number`s rather than `Decimal128`.
+- **`tests/unit/infrastructure/persistence/money-field.test.ts`** — Unit tests for `decimalToNumber`, `reviveDecimals`, `moneyPath` validation, and `moneyPlugin` lean-revival.
+- **`tests/integration/persistence/money-field.test.ts`** — Integration tests exercising the full write→read cycle (hydrated getter, lean hook, toJSON path) against a real MongoDB instance.
 
 ## Notes
 
-- No setter is needed on `moneyPath`; Mongoose natively casts a written `number` to `Decimal128`.
-- Aggregation results are deliberately **not** hooked — a `$sum` pipeline keeps its `Decimal128` precision until the caller explicitly reads it as minor units.
-- `isDecimal128` checks the `_bsontype` property rather than `instanceof`, avoiding breakage when two copies of the BSON library are present.
-- `reviveDecimals` mutates the document in place and returns the same object; it does not clone.
-- The `DECIMAL128_FOR_NUMBER_FIELD` cast is the single, documented place where `Decimal128` is coerced to `NumberConstructor` to satisfy Mongoose's type definitions for `number`-typed fields.
+- `isDecimal128` checks the `_bsontype` property string rather than using `instanceof`, so it works regardless of which copy of the BSON library constructed the value (avoids dual-package issues).
+- The `DECIMAL128_FOR_NUMBER_FIELD` cast exists because Mongoose's type definitions only accept `Number` for a `number`-typed document field; the cast is confined to this one spot.
+- Aggregation pipelines are intentionally **not** hooked by `moneyPlugin`. A `$sum` on `Decimal128` values stays exact; the caller is expected to read the result as minor units.
+- The validation error message is a function (not a string) because Mongoose's function-form receives `{ path }`; the `{PATH}` token only works in string messages.
+- `reviveDecimals` mutates the input object in place and also returns it—callers should be aware it is not a pure/immutable operation.

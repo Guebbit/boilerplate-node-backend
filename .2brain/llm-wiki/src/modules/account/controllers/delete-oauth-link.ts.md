@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/delete-oauth-link.ts
-sha256: a7c6183646aacdc0f3298633f76cb0f8a673035ede30f182281d09a3e28a1db7
-generated_at: 2026-10-14T08:29:45.447720+00:00
+sha256: d6235d0c05c8d71a9250b84336c1644a620db08a030ad09f2069f537488a9c02
+generated_at: 2026-10-29T02:26:07.220413+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter that exposes `DELETE /account/oauth/links/{provider}`. It extracts the caller's account ID, provider name, and caller context from the request, delegates to `accountService.unlinkOAuthProvider`, and translates the boolean result into a 200 or 404 JSON response.
+Thin HTTP adapter that handles `DELETE /account/oauth/links/{provider}`. It delegates the actual unlinking to `accountService.unlinkOAuthProvider` and, on success, returns the caller's *current* list of remaining OAuth links.
 
 ## Key elements
 
-- **`deleteOAuthLink`** (exported const) — The sole handler. Accepts Express `Request<{ provider: string }>` and `Response`. Calls `accountService.unlinkOAuthProvider(accountId, provider, callerContext)`, then:
-  - `removed === false` → 404 with i18n key `account.oauth.link-not-found`
-  - `removed === true` → 200 with i18n key `account.oauth.link-removed` and an `undefined` body
-  - Any thrown error is routed to `catchAs(response, 'deleteOAuthLink')`
+- **`deleteOAuthLink(request, response)`** — the sole export. Reads the provider name from `request.params`, the user id from `request.authContext`, and the caller context; calls the service; responds 404 (i18n `account.oauth.link-not-found`) if the link did not exist, or 200 with the reshaped links list if it did.
 
 ## Relationships
 
-- **`src/modules/account/services/index.ts`** — Source of `accountService.unlinkOAuthProvider`, the actual business logic (returns a boolean indicating whether a link existed and was removed).
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse` / `rejectResponse` used to shape the JSON envelope.
-- **`src/infrastructure/http/controller.ts`** — Provides `catchAs`, the uniform error-to-response helper.
-- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf`, which extracts IP/UA context for the service call.
-- **`src/infrastructure/i18n/index.ts`** — Provides `t` for internationalized message strings.
-- **`src/modules/account/routes.ts`** — Registers this handler on the `DELETE /account/oauth/links/:provider` path and wraps it with a fresh-session guard (removing a credential is treated as an identity change).
+- **`@infrastructure/http/response`** — `successResponse` / `rejectResponse` shape the HTTP reply.
+- **`@infrastructure/http/controller`** — `catchAs` wraps the promise chain for uniform error handling.
+- **`@infrastructure/http/request`** — `callerContextOf` extracts IP/UA metadata passed to the service layer.
+- **`@infrastructure/i18n`** — `t` resolves the 404 message key.
+- **`@modules/account/services`** — `accountService.unlinkOAuthProvider` and `accountService.listOAuthLinks` perform the domain work.
+- **`@modules/account/presenter`** — `presentOAuthLinks` maps raw link records to the wire shape.
+- **`@types`** — `OAuthLinks` is the declared response body type.
+- **`@modules/account/routes.ts`** — mounts this handler on the `DELETE /account/oauth/links/:provider` path (alongside a fresh-session guard).
 
 ## Notes
 
-- `request.authContext!.id` is accessed with a non-null assertion; the session middleware upstream is expected to have populated it.
-- The route is gated by a **fresh-session guard** (not visible in this file, enforced in `routes.ts`), meaning the user must re-authenticate immediately before unlinking.
-- The success body is explicitly `undefined` (`successResponse<undefined>`)—clients should rely on the 200 status and message string rather than a payload.
-- Errors are not individually mapped; `catchAs` handles all thrown exceptions uniformly.
+- `request.authContext!` uses a non-null assertion; the controller assumes an upstream auth middleware has already populated it. It will throw at runtime if the route is reached unauthenticated.
+- The fresh-session guard mentioned in the doc-comment lives in **routes.ts**, not here.
+- The 200 body is the *full remaining* links list (fetched in a second service call), not the single removed entry — a deliberate convention so the client's local state stays in sync.

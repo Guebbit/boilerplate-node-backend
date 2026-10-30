@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/services/settlement.ts
-sha256: c17b52af3751d3719abd328e0485a6a12f2211dd752cd61b99e5d31c753768f8
-generated_at: 2026-10-15T11:32:12.771690+00:00
+sha256: 00563bc6c4d7ad290854023bed1bf1b5dca470554d6e1f6f0b9d2d6cac63b602
+generated_at: 2026-10-29T05:14:01.155250+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The single reconciliation point for payment settlement. All entry paths—browser-driven confirm/sync and provider webhook delivery—funnel into `settlePayment` so that money is reconciled in exactly one place. This prevents two divergent code paths from committing inventory twice.
+The single reconciliation point for payment success. Whether the signal arrives via a browser-driven confirm/sync poll or a provider webhook, both paths funnel into this file's settlement logic so that money is reconciled exactly once. It handles both the happy path (provider confirms the frozen payment) and the mismatch path (provider reports a success whose amount, currency, or payment id disagrees with what was frozen), ensuring the order is either marked paid or cancelled with a refund opened atomically.
 
 ## Key elements
 
-- **`Settlement`** (interface) — the result shape returned to callers: the updated `PaymentDocument`, an `orderLost` flag (money arrived but order can no longer be paid), and a `transitioned` flag (did *this* call perform the write, or did a racing call win?).
-- **`receiptMismatch`** — compares the provider's `succeeded` report (amount, currency, paymentId) against the frozen payment. Returns the list of disagreeing fields; uses `toMinorUnits` so float noise is not a false mismatch.
-- **`refundLostPayment`** — puts the money back when the order is no longer payable. Writes a durable `markRefundOwed` marker *before* attempting the refund; logs and swallows failures, leaving the `ORDER_REFUND_OWED` retry sweep to finish.
-- **`cancelMismatchedOrder`** — cancels the order after a provider mismatch; falls back to `refundLostPayment` if the cancel is refused; logs and swallows throws, relying on reservation expiry as the final safety net.
-- **`settleMismatch`** — records the *arrived* figures (not the frozen ones) so the refund returns what was actually collected, cancels the order, increments a mismatch metric, records an audit entry, and returns a `Settlement` with `orderLost: true`.
-- **`SettlementOutcome`** (type) — the in-transaction decision: `replay` (already settled), `paid`, or `lost`.
-- **`settleWithin`** — the one atomic step inside a DB transaction: conditional `succeeded` write (gated on `SUCCESS_SETTLEABLE_PAYMENT_STATUSES`), order `paid` transition + stock-hold commit, timeline and outbox rows. Database-only; no provider calls or mail so a driver re-run on transient error is safe.
-- **`systemContext`** — builds a `CallerContext` under `SYSTEM_ACTOR` for non-request settlement paths (analytics consent off).
-- **`settlePayment`** *(below truncation)* — the public entry point referenced in the module doc; orchestrates the success/mismatch branches.
+- **`Settlement`** (interface) — the result shape returned to callers: the updated payment document, an `orderLost` flag (money arrived after the order could no longer be paid), and a `transitioned` flag (whether *this* call's write landed vs. losing the race to a concurrent caller).
+- **`receiptMismatch`** — compares the provider's reported `amountReceived`, `currency`, and `paymentId` against the frozen payment fields. Amounts are compared in minor units to eliminate float noise. Returns the list of disagreeing fields.
+- **`returnMismatchedMoney`** — post-commit follow-up for a mismatch: cancels the order via `orderService.cancelForPaymentMismatchById`, then calls `performRefund`. Both steps are fire-and-log; failures are retried by reservation expiry and the refund sweep respectively.
+- **`settleMismatch`** — the full mismatch settlement: within one transaction, conditionally overwrites the payment status to `succeeded` (recording what actually arrived), opens a refund record, enqueues a `PAYMENT_AMOUNT_MISMATCH` outbox event, and marks the order's money received. After commit, emits analytics, records audit, and kicks off `returnMismatchedMoney`.
+- **`SettlementOutcome`** (type) — discriminated union for what the atomic transaction decided: `replay` (someone else already settled), `paid` (order moved to paid), or `lost` (order no longer payable; refund opened).
+- **`settleWithin`** — the one atomic database step for the success branch: conditionally writes `succeeded`, calls `orderService.markPaid` (which also commits the stock hold), or—when the order has moved past payment—opens a refund. Database-only by design; the Mongoose session driver may re-run the callback on transient errors, so no external I/O is allowed inside.
+- **`settlePayment`** (implied main export, referenced in the module doc) — the public entry point both the confirm/sync endpoint and the webhook handler call.
 
 ## Relationships
 
-- **`@kernel/permissions`** — uses `SYSTEM_ACTOR` and `callerForSubject` to act under a system identity when no HTTP request is behind the settlement.
-- **`@kernel/outbox`** — enqueues outbox events (`enqueueOutboxEvent`, `nudgeOutbox`) after the settlement transaction commits so downstream consumers (invoicing, notifications) fire exactly once.
-- **`@infrastructure/runtime/database`** — wraps the settlement step in `withTransaction` to make the payment write, order move, and stock commit atomic.
-- **`@modules/orders`** (config / lifecycle) — calls `orderService.markPaid`, `orderService.cancelById`, `orderService.markRefundOwed` / `clearRefundOwed`; reads `isPayable`, `paymentSettled`, `bankTransferHoldHours`.
-- **`@modules/inventory`** — imports `inventoryService` to commit the stock hold as part of the paid transition.
-- **`@infrastructure/observability/audit`** — calls `recordAudit` for mismatch and settlement events.
-- **`@infrastructure/observability/analytics`** — emits analytics events via `emitAnalyticsEvent` / `buildAnalyticsBase`.
-- **`@infrastructure/http/response`** — uses `generateSuccess` / `generateReject` to shape the HTTP reply from a `Settlement`.
-- **`@infrastructure/i18n`** — imports `t` for user-facing error messages.
-- **`@infrastructure/adapters/logger`** — structured error logging in mismatch, refund-failure, and cancel-failure paths.
+- **`src/domain-primitives/money.ts`** — `toMinorUnits` is used by `receiptMismatch` to compare amounts without float artifacts.
+- **`src/modules/orders/services/index.ts` / `src/modules/orders/index.ts`** — imports `orderService` and `paymentSettled`. Calls `orderService.markPaid`, `orderService.cancelForPaymentMismatchById`, and `orderService.markMoneyReceived` within the settlement transaction.
+- **`src/modules/orders/domain/lifecycle.ts`** — the order state machine that `markPaid` and `cancelForPaymentMismatchById` advance; the "lost" branch fires when the order has already left the payable window.
+- **`src/kernel/outbox.ts`** — `enqueueOutboxEvent` persists domain events (`PAYMENT_AMOUNT_MISMATCH`, `PAYMENT_SUCCEEDED`) inside the same transaction; `nudgeOutbox` triggers delivery after commit.
+- **`src/kernel/permissions.ts`** — `systemCallerContext('Payment')` provides the actor identity for audit records written during mismatch handling.
+- **`src/infrastructure/runtime/database.ts`** — `withTransaction` wraps the settlement writes so payment status, order move, refund record, and outbox rows commit atomically.
+- **`src/infrastructure/observability/analytics/index.ts`** — `emitAnalyticsEvent` / `buildAnalyticsBase` fire post-commit analytics (e.g., `paymentAmountMismatchTotal`).
+- **`src/infrastructure/observability/audit.ts`** — `recordAudit` logs the mismatch event with expected vs. received figures.
+- **`src/infrastructure/adapters/logger.ts`** — `logger.error` records mismatch details and non-fatal cancel/refund failures.
+- **`src/infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` types shape the HTTP answer the caller builds from the `Settlement` result.
+- **`src/infrastructure/i18n/index.ts`** — `t` for localized user-facing messages in responses.
+- **`src/modules/payments/analytics.ts`** — `paymentsAnalyticsEvents` supplies the event descriptors emitted on settle.
 
 ## Notes
 
-- **Race safety:** the `updateStatusIfIn` gate (status must be in `SUCCESS_SETTLEABLE_PAYMENT_STATUSES`, which excludes `succeeded`) is the idempotency lock. A webhook retry or a duplicate confirm sees `null` and reports `replay` / `transitioned: false` without side-effects.
-- **Marker-before-action:** `refundLostPayment` writes `markRefundOwed` *before* calling `performRefund`. Nothing retries this call itself, so a throw with no durable note would lose the refund.
-- **Mismatch writes the *arrived* amount:** `settleMismatch` overwrites the frozen figures with what the provider actually collected, so the subsequent refund returns the real amount, not the expected one.
-- **`settleWithin` is DB-only by contract:** the module doc explicitly forbids provider calls or mail inside the transaction callback because the driver re-runs it on transient errors.
-- **Stryker annotations:** `// Stryker disable all` / `restore all` wrap the error-logging `catch` blocks so mutation testing does not flag them.
-- **`transitioned` is caller-facing:** a `false` value means "a racing call already did the work; respond that the payment is settled but take no further action." The `orderLost` flag is the one signal the payment status alone cannot convey to the client.
+- **Exactly-once guarantee** relies on the conditional write gate: `updateStatusIfIn` checks membership in `SUCCESS_SETTLEABLE_PAYMENT_STATUSES` (which excludes `succeeded`). A racing webhook and a confirm poll both attempt the write; only one sees `recorded === true`. The loser returns `{ transitioned: false }` and does no further work.
+- **`settleWithin` is deliberately database-only.** The Mongoose session driver re-invokes the transaction callback on a transient network error. Any provider API call, email, or other side effect inside it would fire twice. All external I/O (refund to provider, analytics, audit) happens *after* `.then()` on the committed session.
+- **Mismatch recording overwrites the frozen figures.** `settleMismatch` writes `amountReceived` / `currency` from the provider into the payment document (if present) so the subsequent refund returns what was actually collected, not what was originally requested.
+- **`orderLost` ≠ `transitioned`.** A late payment can transition the payment to `succeeded` *and* still be lost (order was already shipped/cancelled). The caller must check `orderLost` to refuse the client, regardless of the payment's `displayStatus`.
+- **Stryker mutation-test disable blocks** surround the error-path `.catch` handlers in `returnMismatchedMoney` and the mismatch logger call, indicating those paths are intentionally "best-effort" and covered by downstream sweeps rather than direct retry.

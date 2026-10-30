@@ -1,7 +1,7 @@
 ---
 source: scripts/docs/marker-block.ts
-sha256: 7eab689e35aa1c11478b982706633190dc238d18c15110722ca34738db118988
-generated_at: 2026-09-27T13:56:14.840480+00:00
+sha256: 79892144e50288978be147a71f79df83eb3a93c2fb03103868087f552f7fb2cb
+generated_at: 2026-10-29T01:36:05.445966+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Shared utility that replaces the content between `<!-- name:start -->` / `<!-- name:end -->` HTML-comment markers inside a Markdown docs page. Every doc generator that keeps a machine-generated section within an otherwise hand-written page uses this module so that only the block between the pair is rewritten while all surrounding prose stays intact.
+Shared write-or-report logic for every doc generator in the `regenerate` pipeline. Each generator produces a body of Markdown and needs to splice it between a pair of HTML-comment markers (`<!-- name:start -->` / `<!-- name:end -->`) inside an otherwise hand-written page. This module handles the read, splice, prettier-format, and write-or-detect-drift cycle so no generator has to duplicate that boilerplate.
 
 ## Key elements
 
-- **`MarkerBlock`** (interface) — Describes one generated block: the `start` marker, the `end` marker, and the `body` string to place between them.
-- **`MarkerPageOptions`** (interface) — Bundles everything `applyMarkerBlocks` needs: file path, repo root, the ordered list of blocks, a log label, `checkOnly` flag, and human-readable drift/rerun hints for `--check` mode.
-- **`applyMarkerBlocks`** (async function, the sole export that does work) — Reads the target page, replaces each marker pair in sequence, formats the result with the page's Prettier config, then either writes the file (normal mode) or reports drift and returns exit code 1 (`checkOnly` mode). Returns `0` when the page is clean or was updated, `1` when a marker pair is missing or drift is detected.
+- **`MarkerBlock`** (interface) — Describes one generated block: its `start` marker string, `end` marker string, and the `body` to place between them.
+- **`MarkerPageOptions`** (interface) — Bundles everything a single generator call needs: target `file` path, repo `root`, the ordered list of `blocks`, a log `label`, a `checkOnly` flag (CI mode), and a human-readable `driftSubject` for the failure message.
+- **`applyMarkerBlocks`** (async function, the sole runtime export) — Reads the page, replaces each block in order between its markers, runs the whole page through Prettier (resolving the page's own config), then either writes the file (normal mode) or prints a drift warning and returns exit code 1 (`checkOnly`). Returns `0` on success/no-change, `1` on missing markers or drift.
 
 ## Relationships
 
-- **`scripts/docs/generate-module-graph.ts`** (`docs:graph`) — Calls `applyMarkerBlocks` to write its generated graph block.
-- **`scripts/docs/generate-role-matrix.ts`** (`docs:roles`) — Calls `applyMarkerBlocks` to write its role-matrix block.
-- **`scripts/docs/generate-dependency-map.ts`** (`docs:dependencies`) — Calls `applyMarkerBlocks` to write its dependency-map block.
-- **`scripts/docs/generate-rate-limit-budgets.ts`** (`docs:rate-limits`) — Calls `applyMarkerBlocks` to write its rate-limit-budget block.
+All seven neighbors are doc generators that import `applyMarkerBlocks` (and the two interfaces) to write their respective sections into Markdown pages:
 
-All four pass `checkOnly: true` when invoked from `complete` and `checkOnly: false` when run as a standalone `npm run docs:*` script.
+- `generate-module-graph.ts`, `generate-role-matrix.ts`, `generate-dependency-map.ts`, `generate-rate-limit-budgets.ts`, `generate-audit-actions.ts`, `generate-jobs.ts`, `generate-persona-tables.ts` — each constructs its own `MarkerBlock[]` and calls `applyMarkerBlocks` with a distinct `label`. They are the sole consumers of this module.
 
 ## Notes
 
-- Blocks are applied **in array order** via successive `indexOf` searches on the already-mutated string. If two blocks share a marker name, the first occurrence wins — marker names must be unique per page.
-- Prettier formatting runs **before** the equality check, because the `complete` pipeline also runs `prettier --check` over `docs/`. Skipping this step would make the two checks disagree on the same file.
-- The function reads/writes synchronously (`readFileSync` / `writeFileSync`); only the Prettier `format` call is awaited.
-- The `root` option exists solely to produce a repo-relative path in log output; it is not used for file resolution.
+- Blocks are spliced **sequentially** on a mutating string; each subsequent block's markers must still be locatable after prior replacements. Blocks must not overlap.
+- Prettier is applied to the **entire page** after all splices, not just the inserted bodies. This keeps the file consistent with the `prettier --check` that `complete` runs over `docs/`.
+- The no-op check compares the **formatted** result to the **original raw** read, so a page that is already correctly formatted and whose blocks are unchanged will not be rewritten.
+- A missing marker pair is a hard error (exit 1) even in write mode — the file is left untouched.
+- In `checkOnly` mode (used by CI's `complete` step), the error message tells the developer to run `npm run regenerate` and commit; no file is written.

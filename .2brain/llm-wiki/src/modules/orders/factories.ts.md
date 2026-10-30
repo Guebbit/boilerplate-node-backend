@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/factories.ts
-sha256: 7a69f0018bbe3bfadf9fd559c2c2b4127b907f49d3e71b9e5022a889187698d1
-generated_at: 2026-10-15T11:04:21.557722+00:00
+sha256: d7f8ea8d701e09e492d3a1f597d1b083bf6febe3a7b2baf1065e2bd2a2ee4bfb
+generated_at: 2026-10-29T04:42:22.772683+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Test-fixture builder that constructs a complete `OrderDocument` ready for `orderRepository.create`. It exists so tests can pin specific order fields while the factory fills in identity, defaults, and the embedded product snapshot — without ever storing derived values (totals, `transferInstructions`) or catalogue-only fields (`onHand`, `reserved`) that the order schema has no path for.
+Test-fixture factory that builds a Mongoose-ready `Order` document (an `OrderFixture`) from a caller's partial overrides. It translates contract-level shapes (string IDs, ISO date strings, product snapshots as embedded data) into the persistence shape (`Types.ObjectId`, `Date` objects, embedded `FrozenOrderLineProduct`) so tests can call `orderRepository.create` without hand-assembling documents.
 
 ## Key elements
 
-- **`OrderSnapshotInput`** — Type for a product snapshot as it appears inside an order line. Requires `id`, `title`, `price`; replaces `taxClass` with a resolved `taxRate`; drops `onHand`/`reserved`.
-- **`OrderLineInput`** — One order line: the snapshot plus `quantity`. `locale` is optional (defaults to `getDefaultLocale()`). Derived wire fields (`current`, `taxAmount`, `netAmount`) are excluded.
-- **`OrderOverrides`** — The caller-facing override type for `makeOrder`. Excludes derived/stored-only fields (`totalItems`, `totalQuantity`, `totalPrice`, `transferInstructions`); adds `transferReference` (not part of the `Order` contract) and replaces `items` with `OrderLineInput[]`.
-- **`OrderFixture`** — The return type: `Partial<OrderDocument> & { _id }`, i.e. a document the repository can insert directly.
-- **`toSnapshot`** *(internal)* — Converts an `OrderSnapshotInput` into a `FrozenOrderLineProduct`, mapping `id → _id`, ISO strings → `Date`, and stripping undefined keys.
-- **`nextOrderNumber`** *(internal)* — Monotonic `{year}-{seq}` counter so two fixtures in the same test run never collide.
-- **`makeOrder`** — The main factory. Accepts `OrderOverrides`, fills identity (`_id`, timestamps), defaults `email`/`currency`/`orderNumber`/`locale`, maps items through `toSnapshot`, and passes through all optional fields via `stripUndefined` so "not stated" stays absent rather than becoming `null`.
+- **`OrderSnapshotInput`** — Type for the product-as-placed snapshot. Drops `onHand`/`reserved` (no path in the embedded schema), replaces `taxClass` with a resolved `taxRate`, requires `id`/`title`/`price`.
+- **`OrderLineInput`** — One order line: a `OrderSnapshotInput` product, `quantity`, and an optional `locale`. Derived/derived-on-wire fields (`current`, `taxAmount`, `netAmount`) are excluded.
+- **`OrderOverrides`** — What a caller may pin when building an order. Drops `items` (replaced by `OrderLineInput[]`) and the three totals (`totalItems`, `totalQuantity`, `totalPrice`) which are serialization-time derivations, not stored columns.
+- **`OrderFixture`** — Output type: `Partial<OrderDocument>` with a required `_id`.
+- **`toSnapshot`** — Converts `OrderSnapshotInput` → `FrozenOrderLineProduct`; maps `id` to `Types.ObjectId`, ISO strings to `Date`, strips undefined.
+- **`nextOrderNumber`** — Module-level counter producing `1999-NNNNNN` order numbers (see Notes).
+- **`makeOrder`** — The exported factory. Destructures `OrderOverrides`, fills identity/defaults, maps items through `toSnapshot`, and returns an `OrderFixture`.
 
 ## Relationships
 
-- **`@infrastructure/i18n`** (`getDefaultLocale`) — Supplies the default `locale` for order lines when the caller omits it.
-- **`@infrastructure/persistence/factories`** (`identityOf`, `toDate`, `OverridesFor`) — Reuses the shared identity/timestamp helpers and the `OverridesFor<T>` metatype to derive `OrderSnapshotInput` and `OrderOverrides` from the generated `Product`/`Order` contracts.
-- **`@infrastructure/object-guards`** (`stripUndefined`) — Ensures omitted optional fields are absent (not `undefined` keys) in the final document.
-- **`@types`** — Imports the contract types `Id`, `Order`, `OrderItem`, `Product`.
-- **`./model`** — Imports `FrozenOrderLineProduct` (the embedded schema shape) and `OrderDocument`.
-- **`./config`** — Imports `shopCurrency` as the default currency.
-- **`./tests/factories.ts`** — Re-exports or consumes this factory for broader test setups.
-- **`./tests/unit/factories.test.ts`** — Unit-tests the factory's output shape and defaults.
-- **`src/modules/delivery/tests/unit/fulfillment.test.ts`** — Consumes orders built by this factory as input fixtures.
+- **`@infrastructure/i18n`** — Imports `getDefaultLocale` to default the `locale` on each order line when the caller omits it.
+- **`@infrastructure/persistence/factories`** — Reuses `identityOf`, `toDate`, and the `OverridesFor<T>` helper for id/date coercion and the override-picking pattern.
+- **`@infrastructure/object-guards`** — Uses `stripUndefined` to guarantee that unspecified optional fields remain absent in the document rather than being written as `undefined`.
+- **`./model`** — Imports `FrozenOrderLineProduct` and `OrderDocument` types that define the embedded schema and the top-level document shape.
+- **`@modules/shop`** — Imports `shopCurrency` to supply the default `currency` when the caller does not pin one.
+- **`@types`** — Imports `Id`, `Order`, `OrderItem`, `Product` for type derivation of the input/override types.
+- **`src/modules/orders/tests/factories.ts`** / **`factories.test.ts`** — Downstream test helpers that consume `makeOrder` and its types.
+- **`src/modules/delivery/domain/fulfillment.ts`** / **`fulfillment.test.ts`** — Delivery-fulfilment logic and its tests operate on order lines (backordered quantity, promise dates) that this factory can express.
 
 ## Notes
 
-- `status` is deliberately **not** defaulted here. The Mongoose model declares `default: OrderStatus.pending`; duplicating that default in the factory is a drift risk. Omit it and the model handles it.
-- Shipping fields (`shippingMethod`, `shippingCost`, `shippingAddress`) are passed through with **no** default. A `null`/absent value means "not chosen" (e.g. `pickup`), which is distinct from a zero-cost shipping method. `stripUndefined` preserves that distinction.
-- `onHand`/`reserved` are structurally impossible on the embedded product snapshot (the schema has no path for them). Pinning them in a fixture would silently drop on write — they are excluded from the type to prevent that.
-- `taxClass` is replaced by `taxRate` in the snapshot: an order line freezes the *resolved* rate at placement time, not the class it was derived from (mirrors `freezeOrderLines` behaviour).
-- `orderNumberSequence` is a module-level mutable counter. It is not reset between tests; two factories in the same process will always produce distinct numbers, but the sequence is not shared across processes.
-- The file is a **test-only** factory (lives under `src/modules/orders/` but is consumed by test files and other modules' tests). It is not imported by application runtime code.
+- **Order-number year is 1999 on purpose.** No real order carries that year, so the unique `orderNumber` index never collides between fixtures and live data in the same test run.
+- **`status` is intentionally *not* defaulted here.** The Mongoose model already carries `default: OrderStatus.pending`; repeating that default in the factory would create a second source of truth.
+- **Shipping/payment fields are pass-through, never defaulted.** This preserves the semantic distinction between "no shipping method chosen" (fields absent) and "pickup" (a real method priced 0). A factory-supplied default would erase that difference.
+- **Snapshot timestamps are carried explicitly.** Mongoose subdocuments stamp `createdAt`/`updatedAt` on their own insert regardless of the parent's `{ timestamps: false }`; passing the catalogue row's dates through `toDate` ensures the snapshot is dated to the product row, not to the order's creation.
+- **`taxRate` replaces `taxClass`.** An order line freezes the *resolved* VAT rate at placement time; the tax class it originated from is not part of the embedded snapshot.

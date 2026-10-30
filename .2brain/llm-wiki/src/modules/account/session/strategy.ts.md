@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/session/strategy.ts
-sha256: 872ad2ae34ec99f7fef4a7bfb788ac85af427ee04e0469c0b57d330a51f1a04d
-generated_at: 2026-10-15T10:09:00.291225+00:00
+sha256: 8033a6ae4ab765f80b452b6a21e78b09d606a76fdb3019a8382840983ac86960
+generated_at: 2026-10-29T02:50:13.918395+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,41 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the **port** (the `SessionStrategy` interface) through which all higher-level code mints, resolves, and manages user sessions, without needing to know whether the deployment uses JWT or cookie mode. The single entry point is `activeStrategy()`, which returns the concrete adapter selected at process start via `NODE_SESSION_MODE`. Every caller (login, 2FA, reauth, password change, resolver) goes through this one function.
+Defines the **port** (interface) that every session-mode implementation must satisfy, and exposes `activeStrategy` as the single entry point the rest of the codebase uses to mint, resolve, rotate, and list sessions. Callers (login controllers, 2FA handlers, the resolver, SSE streams) never reference a concrete strategy; they call `activeStrategy()` and work against `SessionStrategy`. This is what lets the deployment flip between `jwt` and `cookie` mode without touching application logic.
 
 ## Key elements
 
-- **`activeStrategy(): SessionStrategy`** — Returns `cookieStrategy` or `jwtStrategy` based on `getSessionMode()`. Read per call so a config change (test, restart) is honoured immediately.
-- **`SessionStrategy` interface** — The port. Methods:
-  - `issue` — Mint a session at login; sets credential on the response; enforces 2FA (`amr`) and stale-proof (`provedAt`) checks.
-  - `snapshot` — Capture the caller's current session fields (tier, family, device, expiry) *before* a destructive change, so `remint` can preserve them.
-  - `reissue` — Replace the caller's session after a step-up (reauth, password change).
-  - `remint` — Re-mint after an event that killed *all* sessions (e.g. 2FA change); never fails the response.
-  - `resolveBearer` / `resolveCookie` — Validate a token or cookie and return a `Resolution<AuthContext>`.
-  - `watchCookie` — Resolve an SSE-stream cookie and pin its session family across rotations.
-  - `credentialOf` — Return the raw credential (cookie value or `ses_…` id) the caller presents on this request.
-  - `list` — Return the account's live sessions, marking the caller's own.
-- **`SessionRequest`** — Minimal Express request slice a strategy reads (`cookies`, `headers`, `sessionVia`).
-- **`SESSION_TRANSPORTS` / `SessionTransport`** — `'cookie' | 'bearer'`; controls how `issue` delivers the credential.
-- **`IssueOptions`** — `remember`, `amr`, `provedAt`, optional `transport`.
-- **`SessionSnapshot`** — Fields carried from the old session into `remint`.
-- **`IssuedSession`** — Response shape: optional `token` (JWT) or `sessionToken` (`ses_…` bearer id).
-- **`ReissueOptions`** — `amr` + optional `snapshot`.
+- **`SessionStrategy` (interface)** — The contract: `issue`, `snapshot`, `reissue`, `remint`, `resolveBearer`, `resolveCookie`, `watchCookie`, `credentialOf`, `list`, plus `mode` and `cookieAuthenticates` discriminators. Both `jwt-strategy.ts` and `cookie-strategy.ts` implement it.
+- **`activeStrategy()` (function)** — Reads `getSessionMode()` on every call (not cached) and returns either `jwtStrategy` or `cookieStrategy`.
+- **`SESSION_TRANSPORTS` / `SessionTransport`** — The two ways a `cookie`-mode login can hand its credential back to the client: set an HttpOnly cookie (`'cookie'`) or return a `ses_…` id in the body (`'bearer'`). `jwt` mode always sets a refresh cookie and returns an access token; the transport field is ignored.
+- **`IssueOptions`** — What a login passes: `remember` tier, `amr` proof array, `provedAt` epoch-ms (becomes OIDC `auth_time`), optional `transport`.
+- **`ReissueOptions` / `SessionSnapshot`** — Carried across a session-replacing event (password change, factor change) so the new session inherits the old one's persistence tier, family id, timestamps, and device label.
+- **`IssuedSession`** — The wire-level credential fields a login or re-mint response carries: `token` (JWT access) and/or `sessionToken` (`ses_…` id).
+- **`SessionRequest`** — A `Pick<Request, 'cookies' | 'headers' | 'sessionVia'>` slice so strategies don't need the full Express request.
 
 ## Relationships
 
-- **`./cookie-strategy.ts`** & **`./jwt-strategy.ts`** — The two adapter implementations returned by `activeStrategy()`.
-- **`./config.ts`** — Provides `getSessionMode()` and the `RefreshTokenExpiryTime` type used in `IssueOptions`/`SessionSnapshot`.
-- **`../session-mode.ts`** — Supplies the `SessionMode` type that `SessionStrategy.mode` and the mode comparison rely on.
-- **`src/kernel/authentication.ts`** — Source of the `Resolution` and `StreamWatch` types used in the interface's resolve/watch signatures.
-- **Controllers** (`post-login`, `post-2fa-confirm`, `post-password-change`, `delete-2fa`, `delete-2fa-method`) — Call `activeStrategy().issue()`, `.reissue()`, or `.remint()` to mint/replace sessions.
-- **`./resolver.ts`** — Calls `activeStrategy().resolveBearer()` / `.resolveCookie()` to authenticate incoming requests.
-- **`../services/sessions.ts`** — Calls `activeStrategy().list()` and `.credentialOf()` for the session-management UI.
-- **`tests/factories.ts`** — Constructs `SessionRequest` / `IssueOptions` fixtures for strategy tests.
+- **`./config.ts`** — `activeStrategy` calls `getSessionMode()` each invocation to pick the implementation.
+- **`./jwt-strategy.ts` / `./cookie-strategy.ts`** — The two concrete `SessionStrategy` implementations returned by `activeStrategy`.
+- **`../session-mode.ts`** — Provides the `SessionMode` type used in the strategy's `mode` discriminator.
+- **`@kernel/authentication`** — Contributes the `Resolution` and `StreamWatch` types used in the `resolve*` and `watchCookie` return signatures.
+- **Controllers (`post-login`, `post-2fa-confirm`, `post-2fa-disable`, `post-2fa-method-remove`, `post-password-change`)** — All obtain a strategy via `activeStrategy()` and call `issue`, `reissue`, `remint`, or `snapshot`; none import a concrete strategy.
+- **`./resolver.ts`** — Uses `activeStrategy().resolveBearer` / `resolveCookie` / `watchCookie` to authenticate incoming requests and SSE streams.
+- **`services/sessions.ts`** — Calls `activeStrategy().list` / `credentialOf` for the account session-list endpoint.
+- **`tests/factories.ts`** — Imports the `SessionStrategy` interface (and related types) to build mock strategies in unit tests.
 
 ## Notes
 
-- `activeStrategy()` is intentionally **not** frozen at import time; it re-reads `getSessionMode()` on every call so tests or hot-reloads that flip the mode take effect without a restart.
-- A session row always belongs to the mode that issued it. Switching `NODE_SESSION_MODE` signs everyone out because the other adapter won't recognise the rows.
-- `remint` must **never** throw into the HTTP response: the destructive change (e.g. 2FA deletion) has already committed, so a failed re-mint returns an empty `IssuedSession` rather than an error.
-- `provedAt` is captured *before* the password/OTP/OAuth check begins; the mint compares it against the account's epoch to reject stale proofs.
+- `activeStrategy` is a **function**, not a const: it re-reads the mode on every call so a test that mutates the config (or a process restart with a different `NODE_SESSION_MODE`) is picked up without a stale import-time binding.
+- `remint` **never rejects**: the destructive change (e.g. factor removal) already committed, so a failed re-mint resolves to an empty `IssuedSession` `{}` rather than erroring. Callers must tolerate that.
+- `provedAt` is the epoch-ms at which the proof *began* (before hash lookup, OTP check, or OAuth exchange). The mint rejects it if the account's epoch has since advanced (`StaleProofError`).
+- `watchCookie` is distinct from `resolveCookie`: it is used by SSE streams and preserves the session *family* across rotations/re-proofs, whereas `resolveCookie` is a one-shot check.
+- A session row's `mode` field is set at issue time; a row issued under `jwt` cannot be resolved under `cookie` or vice-versa. Switching `NODE_SESSION_MODE` signs out every existing session.

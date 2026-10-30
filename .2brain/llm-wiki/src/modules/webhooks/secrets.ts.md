@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/secrets.ts
-sha256: 7d5d4c6b3182cbb8901eae7f771e9ef2fd4ed8fb41a7537c212816ba45740c7c
-generated_at: 2026-10-15T12:20:33.676067+00:00
+sha256: da9979bc439854d8e36fa869446960f12ed65f4c66a8d69d5ce89129e974e49b
+generated_at: 2026-10-29T06:29:10.005463+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides the secret-ring lifecycle operations (mint, rotate, drop) and the encrypt/decrypt helpers that keep webhook signing secrets at rest. The actual AES-256-GCM encryption is delegated to the shared versioned-secret infrastructure; this file adds the domain-specific binding, ring-entry shape, overlap-window expiry logic, and Standard-Webhooks-format secret generation on top.
+Secret-ring encryption at rest and the ring operations built on it (mint, rotate, drop). Delegates actual AES-256-GCM encryption to `versioned-secret` under a versioned key ring from config, and keeps plaintext secrets in memory only for the duration of a single mint response or one delivery-attempt signature.
 
 ## Key elements
 
-- **`generatePlaintextSecret`** (private) – Returns `whsec_` + 32 random bytes in base64, matching the Standard-Webhooks encoding expected by consumer signing libraries.
-- **`ringSecretBinding(entryId)`** – Builds the `SecretBinding` (`purpose: 'webhook-secret'`, `aad: entryId`) used for both encryption and re-encryption. The entry `id` is the AAD because the parent subscription may not have a stable `_id` yet at mint time.
-- **`encryptRingSecret(plaintext, entryId)`** – Encrypts a secret into its stored ciphertext via `encryptVersionedSecret` with the webhook key ring.
-- **`decryptRingSecret(stored, entryId)`** – Decrypts a stored ciphertext; throws on malformed format, wrong key, or auth-tag mismatch.
-- **`mintRingSecret()`** – Generates a fresh `WebhookSecretRingEntry` (with `id`, `ciphertext`, `createdAt`) and returns it alongside the one-time plaintext for the HTTP response.
-- **`liveRingEntries(ring, now?)`** – Filters the ring (oldest-first) to entries still in force: the newest never expires; an older one expires once its successor has been live longer than the overlap window (`NODE_WEBHOOK_SECRET_OVERLAP_HOURS`).
-- **`activeRingSecrets(ring, now?)`** – Returns every live entry's decrypted plaintext, preserving ring order (oldest first) so the `webhook-signature` header lists the soon-to-retire secret first and the active one last.
-- **`removeRingSecret(ring, id)`** – Drops a single entry by id (the "second half of rotation").
+- **`generatePlaintextSecret`** (internal) – produces a Standard-Webhooks-compatible secret: `whsec_` + 32 random bytes, base64-encoded.
+- **`ringSecretBinding(entryId)`** – returns the `SecretBinding` (purpose `"webhook-secret"`, AAD = entry id) used by both encrypt and decrypt. Also the binding a re-encryption job rewraps under.
+- **`encryptRingSecret(plaintext, entryId)`** – encrypts a secret for storage via `encryptVersionedSecret` with the shared key ring.
+- **`decryptRingSecret(stored, entryId)`** – reverses the above; throws on malformed format, wrong key, or auth-tag mismatch.
+- **`mintRingSecret()`** – generates a new `WebhookSecretRingEntry` (random UUID + ciphertext + timestamp) and returns it alongside the one-time plaintext.
+- **`liveRingEntries(ring, now?)`** – filters a ring (oldest-first) to entries still in force: the newest never expires; an older one retires once its successor has been live for the overlap window (`NODE_WEBHOOK_SECRET_OVERLAP_HOURS`).
+- **`retiringRingSecrets(ring, now?)`** – from the live entries, returns the superseded ones with their computed `retiresAt` timestamp (successor's `createdAt` + overlap). The newest is excluded.
+- **`activeRingSecrets(ring, now?)`** – decrypts all live entries in ring order (oldest first), which matches the `webhook-signature` header ordering for consumers.
+- **`removeRingSecret(ring, id)`** – drops a single entry by id (second half of rotation, after all consumers have switched).
 
 ## Relationships
 
-- **`src/infrastructure/security/versioned-secret.ts`** – Supplies `encryptVersionedSecret`, `decryptVersionedSecret`, and the `SecretBinding` type that underpin all crypto in this file.
-- **`src/modules/webhooks/config.ts`** – Provides `getWebhookEncryptionKeyRing` (the key ring, backed by `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY`) and `getWebhookSecretOverlapMs` (the overlap window in milliseconds).
-- **`src/modules/webhooks/model.ts`** – Defines `WebhookSecretRingEntry`, the stored shape (id, ciphertext, createdAt) used throughout this module.
-- **`src/modules/webhooks/services/attempt.ts`** – Calls `activeRingSecrets` to obtain the plaintexts used to sign a delivery attempt's `webhook-signature` header.
-- **`src/modules/webhooks/services/reencrypt.ts`** – Re-encrypts stored ciphertexts under a new key version; rewraps using the same `ringSecretBinding` contract.
-- **`src/modules/webhooks/services/subscriptions.ts`** – Orchestrates mint/rotate/drop by calling `mintRingSecret`, `liveRingEntries`, and `removeRingSecret` during subscription lifecycle operations.
-- **`src/modules/webhooks/tests/unit/secrets.test.ts`** – Unit tests covering each exported function in isolation.
-- **`src/modules/webhooks/tests/integration/*.test.ts`** – Integration suites (delivery, re-encryption, subscription lifecycle, sweep) that exercise these functions through service-level flows.
+- **`src/infrastructure/security/versioned-secret.ts`** – provides `encryptVersionedSecret`, `decryptVersionedSecret`, and the `SecretBinding` type that this module wraps.
+- **`src/modules/webhooks/config.ts`** – source of `getWebhookEncryptionKeyRing` (the key ring) and `getWebhookSecretOverlapMs` (the retirement window).
+- **`src/modules/webhooks/model.ts`** – defines the `WebhookSecretRingEntry` shape used throughout.
+- **`src/modules/webhooks/services/attempt.ts`** – consumer of `activeRingSecrets` to obtain plaintexts for signing a delivery.
+- **`src/modules/webhooks/services/reencrypt.ts`** – rewraps stored ciphertexts under a new key version; depends on `ringSecretBinding` to reproduce the AAD.
+- **`src/modules/webhooks/services/subscriptions.ts`** – calls `mintRingSecret` / `removeRingSecret` during subscription rotation.
+- **`src/modules/webhooks/services/actions.ts`** – higher-level webhook actions that trigger ring mutations.
+- **`src/modules/webhooks/tests/unit/secrets.test.ts`** and the integration tests (`delivery.test.ts`, `fan-out.test.ts`, `reencrypt.test.ts`, `subscription-lifecycle.test.ts`, `sweep.test.ts`, `delivery-log.test.ts`) – exercise the exported functions in isolation and end-to-end.
+- **`scenarios/webhooks.ts`** – test scenario fixtures that set up rings and secrets for integration tests.
 
 ## Notes
 
-- The plaintext secret is intentionally short-lived: it exists in memory only during the HTTP response (mint) or for the duration of a single delivery attempt (signing). `WebhookSubscriptionDocument.secrets` never stores it.
-- Ring order is semantically significant: oldest-first matches the order consumers see in the `webhook-signature` header (retiring secret first, active secret last).
-- The entry `id` (not the subscription id) is the AAD binding because a subscription may lack a stable `_id` at the moment its first secret is minted. Any re-encryption path must pass the same `entryId`.
-- `liveRingEntries` uses the *successor's* `createdAt` (not the entry's own) to decide expiry, so the overlap window is measured from when the replacement went live.
+- The `entryId` is used as AAD (not the parent subscription id) because a subscription's `_id` may not yet exist when its first secret is minted.
+- Ring order is **oldest first** everywhere; this is intentional so that the `webhook-signature` header lists the soonest-to-retire secret first and the newest last, matching Standard-Webhooks consumer expectations.
+- `activeRingSecrets` will decrypt entries that are live but already superseded (within the overlap window); it does not skip them—only fully expired ones are excluded.
+- The plaintext returned by `mintRingSecret` is meant to be handed to the caller **exactly once** (HTTP response); it is never persisted.

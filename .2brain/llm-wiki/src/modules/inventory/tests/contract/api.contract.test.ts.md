@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/tests/contract/api.contract.test.ts
-sha256: a20354a5de517f36330d118d0aa4328a1a57ffdad7887ff0385c8ad7f77bcee5
-generated_at: 2026-10-15T10:36:54.620944+00:00
+sha256: 4452a998317f931a50de6bdb8c0cb46d7be95543d2edbb44fb323c1447843872
+generated_at: 2026-10-29T04:05:47.642136+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for every `/inventory` HTTP endpoint. Each test pins the response shape, status code, and error body for a specific branch (200, 401, 403, 404, 409, 422) so that API changes that break the documented contract fail loudly in CI. Business-rule logic (e.g. reservation expiry math) is intentionally left to the unit suite; this file only asserts what a client can observe over HTTP.
+Contract tests that pin the HTTP-level behaviour of every `/inventory` endpoint — status codes, response shapes, pagination metadata, and error envelopes — without re-testing the business rules themselves. Each test exercises one reachable branch (200, 403, 404, 409, 422) so that a change to the API surface is caught before it reaches a consumer. The transitions' internal invariants are intentionally left to the unit suite.
 
 ## Key elements
 
-- **`describe('GET /inventory/levels')`** — asserts the paginated board response shape (`data.items[]` with `onHand`/`reserved`/`available`, `data.meta` with `totalItems`/`totalPages`), the `lowOnly=true` filter, and paging.
-- **`describe('GET /inventory/movements')`** — asserts the ledger response (empty and populated), filtering by `productId` and `reason`, and that `meta.totalItems` reflects all matching rows rather than the current page.
-- **`describe('POST /inventory/receipts')`** — asserts the 200 response echoes updated counters, plus 404 (unknown product) and 422 (invalid body) error shapes.
-- **`describe('POST /inventory/adjustments')`** — asserts 200 (both directions), 409 with `INVENTORY_BELOW_RESERVED` error code, and 422 for a zero delta with `VALIDATION_ERROR` + field detail.
-- **`describe('POST /inventory/reservations/sweep')`** — asserts the 200 response body is exactly `{ expired: 0 }` when nothing is due.
-- **`describe('GET /inventory/preorders')`** — asserts the preorder-allowance listing shape and that a non-admin caller receives 403.
-- **`describe('PUT /inventory/levels/:productId/preorder-limit')`** — asserts 200, 404, 422 (parametrised over three bad bodies), and 403 for a user without the warehouse role.
+- **`describe('GET /inventory/levels')`** — list endpoint: full read, `lowOnly=true` filter, and `page`/`pageSize` pagination (asserts `meta.totalItems` / `meta.totalPages`).
+- **`describe('GET /inventory/levels/{productId}')`** — single-product read; 404 for missing *and* malformed IDs; 403 for the `user` role.
+- **`describe('GET /inventory/movements')`** — ledger: empty state, pagination, `reason` filter, `productId` filter; asserts `onHandDelta` / `reservedDelta` shape.
+- **`describe('POST /inventory/levels/{productId}/receive')`** — delivery: 200 with updated counters, 404 for unknown product, 422 for `quantity: 0`.
+- **`describe('POST /inventory/levels/{productId}/adjust')`** — correction: 200 (negative delta), 409 with `INVENTORY_BELOW_RESERVED` when delta would drop below reserved, 422 with `VALIDATION_ERROR` for `delta: 0`.
+- **`describe('POST /inventory/reservations/sweep')`** — idempotent no-op returns `{ expired: 0 }`.
+- **`describe('GET /inventory/preorders')`** — reads pre-order allowance rows (`backorderLimit`, `left`, `ordered`, etc.).
+- **`describe('PATCH /inventory/levels/:productId')`** — sets `backorderLimit`; returns the updated level object.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** — imported for side effects (`import '@tests/contract'`); provides the shared contract-assertion helpers that give the `toMatchObject` / error-code checks their meaning.
-- **`tests/support/http.ts`** — supplies `api()` (the HTTP client wrapper) and `authenticateAs(role)` used by every test to obtain a bearer token.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module top to (re)initialise an isolated test database before the suite runs.
-- **`src/modules/products/tests/factories.ts`** — `createProduct()` seeds a product row with configurable `onHand`, `reserved`, `title`, and `releaseDate` so each test starts from a known state.
-- **`tests/support/ids.ts`** — exports `MISSING_ID`, a well-known non-existent identifier used to exercise 404 branches without hard-coding a magic string.
+- **`tests/support/contract.ts`** — imported as a side-effect (`import '@tests/contract'`); likely registers global contract-matchers or response-shape helpers used by `toMatchObject` assertions throughout.
+- **`tests/support/http.ts`** — supplies `api()` (supertest-style request helper), `authenticateAs` (role-based bearer token), and `authenticateAsRole` (imported but not exercised in the visible tests).
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called once at module scope to seed/reset a test database before any test runs.
+- **`tests/support/ids.ts`** — provides `MISSING_ID`, a deterministic non-existent ObjectId used to trigger 404 branches.
+- **`src/modules/products/tests/factories.ts`** — `createProduct` seeds a product document (with optional `onHand`, `reserved`, `releaseDate`) so inventory tests don't depend on a real product service.
 
 ## Notes
 
-- The file is a `@module` (no named exports); it is meant to be run as a side-effecting test file, not imported elsewhere.
-- `setupTestDb()` is called synchronously at the top of the file, before any `describe` block, so the database is ready before the first test executes.
-- The 403 tests use `authenticateAs('user')` to verify role gating; the 401/403 "keep counters off a customer's screen" behaviour mentioned in the header is exercised here via the `preorders` and `preorder-limit` endpoints.
-- `it.each` is used for the preorder-limit 422 cases; the three bad bodies are `preorderLimit: -1`, `preorderLimit: 1.5`, and an empty object.
+- The file is a **contract** test, not a unit test. The header comment explicitly states that transition rules (e.g. "delta can't go below reserved") are covered in the unit suite; here only the *HTTP envelope* (status code, error code string, field names) is asserted.
+- `authenticateAsRole` is imported but has no visible usage in the truncated content — it may be used in the omitted tail of the file or imported for future 401-path tests mentioned in the header.
+- `setupTestDb()` runs at **module load time**, not inside a `beforeAll`; all tests in the file share the same seeded database state.
+- The 403 test uses role `'user'` (customer); the header also mentions 401, but no 401 assertion appears in the visible portion.
+- Pagination assertions consistently check that `meta.totalItems` reflects the *filtered* total, not the page slice — a deliberate contract choice to let clients compute "there is more to load."

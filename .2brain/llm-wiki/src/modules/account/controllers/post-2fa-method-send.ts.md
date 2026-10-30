@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/post-2fa-method-send.ts
-sha256: 31441880cc8d43e8168d162a7c61e428c2cccb18761a7c3a2ad70cb0cf779163
-generated_at: 2026-10-14T08:33:15.534488+00:00
+sha256: 45a36c2e738fab244f8b18ffc4d48133eea5f1e427a43bbd10ca62db8444ffd4
+generated_at: 2026-10-29T02:28:53.141717+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter for `POST /account/2fa/methods/{method}/send`. It validates the `method` path parameter, delegates to `twoFactorService.sendMethodCode`, and maps the result to a standard HTTP success or error response. It exists to keep the service layer free of Express-specific concerns.
+Thin HTTP adapter for `POST /account/2fa-methods/{method}/send`. Parses the path parameter, delegates to `twoFactorService.sendMethodCode`, and maps the result (or refusal) to an Express response. It exists so the route layer stays declarative while business logic lives in the service.
 
 ## Key elements
 
-- **`post2faMethodSend`** (exported) — The sole controller handler. Accepts Express `Request`/`Response`, parses `request.params.method` with the `SendTwoFactorMethodCodeParams` Zod schema, calls `twoFactorService.sendMethodCode(id, method, callerContext)`, and responds with either a `200` success (body: `TwoFactorDelivery`, i18n message `account.two-factor.code-sent`) or a structured error via `refused`/`rejectValidation`/`catchAs`.
+- **`post2faMethodSend(request, response)`** — the sole export. Reads the caller's account id from `request.authContext`, validates `request.params` against `SendTwoFactorMethodCodeParams`, calls the service, and responds with `200` + `TwoFactorDelivery` on success or the standard refusal/error paths.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — Imports `rejectValidation`, `refused`, and `catchAs` for uniform error-response handling.
-- **`src/infrastructure/http/request.ts`** — Imports `callerContextOf` to extract the caller's IP/user-agent context for the service call.
-- **`src/infrastructure/http/response.ts`** — Imports `successResponse` to build the 200 JSON envelope.
-- **`src/infrastructure/i18n/index.ts`** — Imports `t` to translate the `account.two-factor.code-sent` message.
-- **`src/modules/account/services/index.ts`** — Imports `twoFactorService`, whose `sendMethodCode` method performs the actual code-generation and delivery.
-- **`src/modules/account/routes.ts`** — Registers this handler at the `/account/2fa/methods/:method/send` route (with upstream auth and rate-limit guards).
-- **`src/types/index.ts`** — Supplies the `TwoFactorDelivery` type used as the success-response payload shape.
+- **`src/modules/account/services/index.ts`** — source of `twoFactorService.sendMethodCode`, the actual business logic this controller wraps.
+- **`src/modules/account/routes.ts`** — registers `post2faMethodSend` as the handler for the `POST /account/2fa-methods/:method/send` route (and enforces the auth / budget guards mentioned in the JSDoc).
+- **`src/infrastructure/http/controller.ts`** — provides the shared helpers `parseBody`, `refused`, and `catchAs` used to keep the controller body minimal.
+- **`src/infrastructure/http/request.ts`** — `callerContextOf(request)` extracts the IP/UA context passed into the service.
+- **`src/infrastructure/http/response.ts`** — `successResponse` formats the 200 payload.
+- **`src/types/index.ts`** — defines the `TwoFactorDelivery` type used in the response generics.
 
 ## Notes
 
-- `request.authContext!` uses a non-null assertion: the controller assumes the route middleware has already resolved and attached auth context. If a route is mounted without that middleware, this will throw at runtime rather than returning a clean 401.
-- The doc comment explicitly states that "fresh critical auth and the per-account delivery budget" are **route-level guards**, not enforced inside this controller.
-- The handler uses a `.then`/`.catch` promise chain rather than `async`/`await`, consistent with the project's controller convention.
+- Despite the name `parseBody`, it is applied to `request.params`, not `request.body` — it's a generic Zod-validation helper reused for path/query/body.
+- The JSDoc explicitly states that "fresh critical auth and the per-account delivery budget are the route's own guards," so neither is checked here; if a caller reaches this function without those guards, the service itself is the last line of defense.
+- The handler uses a promise `.then/.catch` chain rather than `async/await`; follow that style when editing.

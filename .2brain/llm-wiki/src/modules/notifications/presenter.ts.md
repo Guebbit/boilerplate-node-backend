@@ -1,7 +1,7 @@
 ---
 source: src/modules/notifications/presenter.ts
-sha256: 7eef9eac54f2c9795b334976517121b597b5055ab44aa7992b2ba1e3d2cdf810
-generated_at: 2026-10-15T10:50:51.739003+00:00
+sha256: d426ff9b7780cebae29e6ca3318fa865ce638fd381e79d1182a3fa8d6657b7e7
+generated_at: 2026-10-29T04:29:23.912833+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Presentation layer that maps internal `NotificationDocument` objects (and arrays) to the exact wire shape declared by `openapi.yaml`. The output is constructed field-by-field rather than serialized, guaranteeing that no field outside the contract can leak into a response.
+The single mapping layer that converts internal `NotificationDocument` records into the wire shape declared by `openapi.yaml`. It is a build (not a serialize) so that any field absent from the contract simply does not appear in the output.
 
 ## Key elements
 
-- **`NotificationsView`** (exported interface) — The `NotificationsResponse` envelope from the contract: `{ items: Notification[] }`.
-- **`presentNotification`** (exported) — Converts a single `NotificationDocument` into the contract's `Notification` type. Sets `id` (stringified `_id`), spreads the code/params body, maps `severity`, conditionally includes `readAt` (ISO string), and serializes `createdAt`.
-- **`presentNotifications`** (exported) — Maps an array of documents through `presentNotification` and wraps the result in `NotificationsView`.
-- **`bodyOf`** (module-private) — Switches on `notification.code` to return the correctly-typed `NotificationBody` variant, preserving the `code` + `params` pairing that the discriminated union enforces.
+- **`NotificationsView`** (exported interface) — the top-level response shape (`{ items: Notification[] }`) matching the `NotificationsResponse` contract.
+- **`bodyOf`** (private function) — switch on `notification.code` that re-reads `code` + `params` as the specific union member of `NotificationBody`. The exhaustive switch is what keeps the compiler verifying the pairing; a plain destructure would collapse the union.
+- **`presentNotification`** (exported) — maps one `NotificationDocument` to a contract `Notification`. Spreads `bodyOf` into the result, stringifies `_id`, ISO-stringifies date fields, and conditionally includes `readAt` only when it is present.
+- **`presentNotifications`** (exported) — maps an array of documents to a `NotificationsView`.
 
 ## Relationships
 
-- **`src/types/index.ts`** — Source of the `Notification` type that `presentNotification` returns and `NotificationsView` references.
-- **`src/modules/notifications/model.ts`** — Provides `NotificationDocument` (input) and `NotificationBody` (internal return of `bodyOf`).
-- **`src/modules/notifications/index.ts`** — Re-exports the public API of this module (and its siblings) to the rest of the app.
-- **`src/modules/notifications/services/inbox.ts`** — Expected consumer: fetches documents and hands them to `presentNotifications` before returning the HTTP response.
-- **`src/modules/notifications/tests/unit/presenter.test.ts`** — Unit tests for the mapping functions in this file.
+- **`src/modules/notifications/model.ts`** — provides the `NotificationDocument` and `NotificationBody` types this file reads.
+- **`src/types/index.ts`** — provides the `Notification` type that this file produces.
+- **`src/modules/notifications/services/inbox.ts`** — consumes `presentNotifications` / `presentNotification` to shape HTTP responses.
+- **`src/modules/notifications/index.ts`** — re-exports the public API of this module.
+- **`src/modules/notifications/tests/unit/presenter.test.ts`** — unit-tests the mapping functions.
 
 ## Notes
 
-- `readAt` is **omitted** (not set to `null`) when unread. The comment states the stream's payload format cannot express `null`, so the field is simply absent.
-- `bodyOf` uses an explicit `switch` rather than destructuring `{ code, params }` because the latter would drop the discriminant pairing the `NotificationBody` union relies on; the compiler would no longer verify that `params` matches `code`.
-- `id` is always a string (`String(notification._id)`), even though the document's `_id` may be an `ObjectId`.
+- `readAt` is **omitted** (not set to `null`) when the notification is unread. The comment in the file attributes this to the stream payload not being able to express `null`.
+- Adding a new notification code requires a new `case` in `bodyOf`; the switch is exhaustive, so the compiler will flag the omission.
+- The module is deliberately a pure function set with no I/O; all side effects (fetching documents, sending responses) live in the service layer.

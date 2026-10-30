@@ -1,7 +1,7 @@
 ---
 source: tests/integration/scenarios/demo-restore.test.ts
-sha256: 1d4184597f0d52a075578442503c8c90ede0afb490910d01bd980f5ced0f7270
-generated_at: 2026-10-15T12:52:51.029988+00:00
+sha256: c389922f0866d3980f529f6de288a88a183e53c1e638368655e6c515d756aada
+generated_at: 2026-10-29T07:02:00.235637+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite that exercises `restoreScenario('blank')` against a real database. It verifies three properties: the restore seeds only the named accounts/memberships/locales (no shop data), the unique `users_email` index survives a restore, and the process-lifetime deployment-tenant cache is not stranded after a restore. The last two cases drive real HTTP (`/account/signup`, `/account/abilities`) because the defects they close live in the index and the cached tenant id, not in the helper's internals.
+Integration test suite that exercises `restoreScenario('blank')` against a real database. It verifies three invariants of a restore: (1) it seeds exactly the named accounts, memberships, and locales with no shop data; (2) it preserves unique indexes (duplicate signup still returns 409); and (3) it does not strand the process-lifetime deployment-tenant cache.
 
 ## Key elements
 
-- **`setupTestDb()`** — provisions a clean per-suite database (called once at module scope).
-- **`describe('the blank scenario')`** — calls `restoreScenario('blank')` directly as a function; asserts the seeded user emails match exactly `seedCredentials`, that `membershipModel` and `localeModel` have documents, and that `productModel` and `orderModel` are empty.
-- **`describe('a restore never loses an index')`** — restores, then issues two `POST /account/signup` calls with the same email via `api()`; asserts the second returns **409** and only one user row exists (proving `users_email`'s unique index survived).
-- **`describe('a restore never strands the tenant cache')`** — restores **twice** (cache is process-lifetime), authenticates as `admin` via `authenticateAs`, and asserts `GET /account/abilities` returns `tenantId === DEPLOYMENT_TENANT_ID`.
+- **`describe('the blank scenario')`** — asserts that after `restoreScenario('blank')`, the set of user emails equals exactly the keys in `seedCredentials`, memberships and locales exist, and products/orders are zero.
+- **`describe('a restore never loses an index')`** — calls `restoreScenario('blank')` (which internally uses `emptyDatabase()`, not `dropDatabase()`), then issues two duplicate signups over HTTP and expects a 409 on the second.
+- **`describe('a restore never strands the tenant cache')`** — calls `restoreScenario('blank')` twice, then hits `GET /account/abilities` as admin and asserts the returned `tenantId` matches `DEPLOYMENT_TENANT_ID`.
+- **`setupTestDb()`** — top-level call that initialises the test database connection before any test runs.
 
 ## Relationships
 
 - **`scenarios/support/demo.ts`** — imports `restoreScenario`, the function under test.
-- **`scenarios/accounts.ts`** — imports `seedCredentials`; the test treats this map as the single source of truth for "exactly which logins should exist."
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` isolates each suite on a fresh database.
-- **`tests/support/http.ts`** — `api()` and `authenticateAs()` provide the Supertest-style HTTP client and bearer-token helper used by the two HTTP-driven cases.
-- **`src/modules/users/model.ts`** — `userModel` is queried for email distinctness and row counts.
-- **`src/modules/products/model.ts` / `src/modules/orders/model.ts`** — `productModel` / `orderModel` are asserted to be empty after a `blank` restore.
-- **`src/modules/locales/model.ts`** — `localeModel` count is asserted > 0.
-- **`src/modules/access/model.ts`** — `membershipModel` count is asserted > 0 (roles live in shared YAML; only memberships are seeded).
-- **`src/kernel/access/tenant.ts`** — `DEPLOYMENT_TENANT_ID` is the expected value in the `/account/abilities` response.
-- **`src/modules/users/tests/factories.ts`** — `PLAIN_PASSWORD` is the password used in signup requests.
+- **`scenarios/accounts.ts`** — imports `seedCredentials` as the single source of truth for which emails must (and only must) exist after a blank restore.
+- **`tests/support/setup-test-db.ts`** — provides `setupTestDb` to configure the test database.
+- **`tests/support/http.ts`** — provides `api` (HTTP client) and `authenticateAs` (bearer-token helper) for the two HTTP-driven tests.
+- **`src/kernel/access/tenant.ts`** — imports `DEPLOYMENT_TENANT_ID` to assert the tenant cache is consistent post-restore.
+- **`src/modules/users/model.ts`** — imports `userModel` for email-distinct and count assertions.
+- **`src/modules/products/model.ts` / `src/modules/orders/model.ts`** — imports `productModel` / `orderModel` to assert absence of shop data.
+- **`src/modules/locales/model.ts`** — imports `localeModel` to assert locales were seeded.
+- **`src/modules/access/model.ts`** — imports `membershipModel` to assert role memberships exist.
+- **`src/modules/users/tests/factories.ts`** — imports `PLAIN_PASSWORD` for the signup payloads.
 
 ## Notes
 
-- The first case calls `restoreScenario` as a **function**, not over HTTP. The HTTP route is a thin wrapper mounted only by `scenarios/run-server.ts`; this suite deliberately does not boot that server.
-- The index-preservation test relies on `emptyDatabase()` (used inside `restoreScenario`) rather than `dropDatabase()`. A full drop would also remove the index build, masking the defect.
-- The tenant-cache test restores **twice** on purpose: the first restore may coincidentally populate the cache correctly; the second proves the cache still agrees after a state change.
-- Roles are no longer stored as documents; the shared YAML holds presets. The test therefore asserts `membershipModel` rows exist, not a `roleModel` count.
-- `toSorted()` is used (ES2023+); the project targets a Node runtime that supports it.
+- The blank-scenario seeding test calls `restoreScenario` directly (not over HTTP) because the HTTP route is a thin wrapper mounted only by a dev server this suite does not boot. The index and tenant-cache tests deliberately go over real HTTP to exercise the actual defect surface (a unique index, a cached tenant id).
+- The index test relies on `emptyDatabase()` rather than `dropDatabase()`; a drop would remove index definitions and mask the regression the test guards against.
+- The tenant-cache test calls `restoreScenario` **twice** because the cache in `resolveDeploymentTenantId` is process-lifetime; the property under test is that a second restore still agrees with the cached value, not merely that the first one populated it.
+- `seedCredentials` is treated as the authoritative account list; the test uses a set-equality check (sorted emails) rather than a fixed count so it keeps working if a new account is added.

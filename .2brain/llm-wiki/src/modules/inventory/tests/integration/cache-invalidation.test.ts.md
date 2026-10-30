@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/tests/integration/cache-invalidation.test.ts
-sha256: 6482b08e8d3cf9705f562d777c0a6bb7b255dc4cdd049ba4b70f1c2cd05f1311
-generated_at: 2026-10-14T16:01:03.790959+00:00
+sha256: 1a8cedc0f7eeb0742c443839771ca78840382675b8a3cd509af37336cb500b73
+generated_at: 2026-10-29T04:06:45.524526+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test that asserts every stock-writing operation (receipt, adjustment, reservation sweep, return restock) calls `invalidateCacheTagsLogged` with the `'products'` tag. It guards against a regression where a cached `GET /products/:id` response would keep serving a stale `available` count until the TTL expired.
+Integration test verifying that every stock-mutating operation in `inventoryService` (receive, adjust, reservation sweep, return restock) triggers a cache invalidation on the `'products'` tag. It exists to catch regressions where a write path forgets to clear the catalogue's response cache, which would leave `GET /products/:id` and list endpoints serving stale `available` counts until TTL expiry.
 
 ## Key elements
 
-- **`describe('the products cache tag, cleared where stock is written')`** – single suite with four `it` blocks, one per stock-write path.
-- **`jest.mock('@infrastructure/adapters/cache', …)`** – factory mock that spreads `requireActual` and replaces `invalidateCacheTagsLogged` with a `jest.fn` resolving `undefined`. All other cache exports remain real.
-- **`anOrderId()`** – module-level helper returning a unique 24-char hex string (MongoDB ObjectId shape) per call.
-- **`setupTestDb()`** – invoked at module scope to prepare the test database before any test runs.
-- **`beforeEach`** – calls `mockClear()` on the mocked `invalidateCacheTagsLogged` so each assertion is isolated.
+- **`anOrderId()`** — module-level counter that yields a syntactically valid 24-char hex order ID per call.
+- **`jest.mock('@infrastructure/adapters/cache', …)`** — replaces only `invalidateCacheTagsLogged` with a `jest.fn` (resolving `Promise.resolve()`), keeping all other exports via `requireActual`.
+- **`setupTestDb()`** — initialises a real test database (not an in-memory stub) so the service exercises its actual persistence path.
+- **`describe('the products cache tag, cleared where stock is written')`** — four `it` blocks, one per write path:
+  - *receive*: `inventoryService.receive` → asserts `invalidateCacheTagsLogged` called with `['products']`.
+  - *adjust*: `inventoryService.adjust` → same assertion.
+  - *sweep*: sets `NODE_RESERVATION_TTL_MINUTES` to `'0'` via `withEnvironmentOverrides` so the hold is instantly stale, then runs `runReservationSweep()` and asserts invalidation.
+  - *return restock*: wraps `restockReturnedLines` in `withTransaction`, then calls `refreshStockCacheForProducts`; asserts the same tag was invalidated.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/cache.ts`** – the module under test; `invalidateCacheTagsLogged` is the single function being verified. The entire module is mocked at the `jest.mock` level.
-- **`src/modules/inventory/services/index.ts`** – barrel re-export; the test imports `reserveForOrder`, `runReservationSweep`, `receive`, `adjust`, `restockReturnedLines`, and `refreshStockCacheForProducts` from here.
-- **`src/modules/inventory/services/admin.ts`** – expected origin of `receive` and `adjust`.
-- **`src/modules/inventory/services/reserve.ts`** – expected origin of `reserveForOrder`.
-- **`src/modules/inventory/services/sweep.ts`** – expected origin of `runReservationSweep`.
-- **`src/modules/inventory/services/returns.ts`** – expected origin of `restockReturnedLines`.
-- **`src/modules/products/tests/factories.ts`** – supplies `createProduct`, the sole way a product document enters the test DB.
-- **`tests/support/environment.ts`** – supplies `withEnvironment`, used in the sweep test to force `NODE_RESERVATION_TTL_MINUTES=0` so the hold is instantly expired.
-- **`tests/support/setup-test-db.ts`** – supplies `setupTestDb` for database lifecycle.
+- **`src/modules/inventory/services/index.ts`** — the system under test; all four operations are methods on `inventoryService`.
+- **`src/infrastructure/adapters/cache.ts`** — the module mocked; only `invalidateCacheTagsLogged` is replaced, the rest is loaded verbatim.
+- **`src/infrastructure/runtime/database.ts`** — provides `withTransaction`, used to scope the return-restock test.
+- **`src/modules/products/tests/factories.ts`** — `createProduct` builds a fixture product with a given `onHand` count.
+- **`tests/support/environment.ts`** — `withEnvironmentOverrides` temporarily sets `NODE_RESERVATION_TTL_MINUTES` for the sweep test.
+- **`tests/support/callers.ts`** — `testCallerContext` supplies the caller identity required by service methods.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb` seeds the real test database once per module.
 
 ## Notes
 
-- The cache module is **replaced via `jest.mock` factory**, not spied on. A comment in the file explains that `jest.spyOn` fails because the CommonJS namespace import exposes a non-configurable getter. If you add a new export from `cache.ts` and the test breaks, check this mock's spread first.
-- The **return test** calls `refreshStockCacheForProducts([productId])` *after* `restockReturnedLines`. The assertion therefore validates the refresh helper, not the restock itself. If `restockReturnedLines` is later changed to invalidate directly, this test still passes but the `refresh` call becomes redundant.
-- The **sweep test** depends on the TTL env var being `"0"`; it does not use a timer or fake clock. The `withEnvironment` helper restores the previous value after the `await` block.
-- `orderCounter` is **not reset** between tests; each generated ID is unique for the duration of the Jest worker process.
+- The mock uses `jest.mock` rather than `jest.spyOn` because a CommonJS namespace import exposes a non-configurable getter that `jest.spyOn` cannot redefine (see `tests/support/ports.ts`).
+- The return-restock path is the only one that calls `refreshStockCacheForProducts` explicitly; the other three rely on the service internally triggering invalidation. The test asserts the same observable contract (`invalidateCacheTagsLogged` called with `['products']`) regardless of which mechanism fires.
+- The sweep test uses a zero-minute TTL window, so the hold is expired the instant it is taken — no real waiting is needed.

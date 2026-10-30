@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/get-my-abilities.ts
-sha256: 6488ad4618f34aaeeb657f1f4fcccb2fa7ee9269398a166daef2c2c2231157ae
-generated_at: 2026-10-14T08:30:54.078873+00:00
+sha256: 684bd9e4ff9eb92da1aab5fce9c2d05f5cf80efd80e741f9f55f6a3558694e62
+generated_at: 2026-10-29T02:26:53.625595+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Handler for `GET /account/abilities`. It publishes the server's enforced CASL permission rules for the caller in **both** scopes (tenant and platform) so the client can render UI affordances (enable/disable/grey-out) without maintaining its own copy of policy. It changes no authorization behavior — every request is still re-evaluated server-side.
+Handler for `GET /account/abilities`. Publishes the server's CASL permission rules (in wire format) for the authenticated caller across **both** tenant and platform scopes, so clients can render UI affordances (grey-out, hide) from a single authoritative source instead of each inventing its own guess. The endpoint is strictly read-only; every actual authorization decision is still re-evaluated server-side on each request.
 
 ## Key elements
 
-- **`getMyAbilities(request, response)`** (exported) — Builds the caller's ability in each scope, packs the rules, and returns a single JSON body containing `tenant` rules, `platform` rules, `grantableRoles`, a `version` fingerprint, and `subjects`. Handles the anonymous (no `authContext`) case by substituting `anonymousCaller()` for tenant scope and an empty array for platform.
-- **`rulesFor(caller)`** (private) — Wraps `buildAbility(caller)` and runs the result through CASL's `packRules`, producing the compact tuple-per-rule wire format the frontend unpacks with `unpackRules`.
-- **`modelVersion`** (module-level const) — Computed once via `permissionModelVersion` over the declared `PERMISSION_KEYS`. Changes only when the key *set* changes (add/remove/rename), not when a role is edited. Serves as the client's cache-invalidation signal.
+- **`getMyAbilities`** (exported) — Express handler. Resolves the caller in tenant and platform scopes, packs each scope's rules, and returns a JSON body containing `tenant` rules, `platform` rules, `grantableRoles`, `secondFactorRequired`, a `version` fingerprint, the `subjects` vocabulary, and an optional `tenantId`.
+- **`rulesFor`** (module-local) — Takes a caller argument for `buildAbility`, constructs a CASL `Ability`, and serializes its rules via `packRules` into a compact tuple array.
+- **`modelVersion`** (module-local) — A stable fingerprint computed by `permissionModelVersion` over the IDs in `PERMISSION_RULES`. Changes only when the rule set itself changes, not when a role's assignment changes; lets clients invalidate a cached copy of the model.
 
 ## Relationships
 
-- **`src/kernel/permissions.ts`** — Source of `anonymousCaller`, `callerInScope`, `permissionModelVersion`, `PERMISSION_KEYS`, and `PERMISSION_SUBJECTS`. This file is a pure consumer of that model; it never mutates it.
-- **`src/kernel/ability.ts`** — Provides `buildAbility`, the single function that turns a caller object into a CASL `Ability`. `rulesFor` delegates to it.
-- **`src/modules/access/index.ts`** — Re-exports `grantableRoles`, which this handler calls to include the set of roles the caller *could* assign in tenant scope (empty for anonymous).
-- **`src/modules/account/routes.ts`** — The route table that maps `GET /account/abilities` to this handler.
-- **`src/infrastructure/http/response.ts`** — Supplies `successResponse`, the single response helper used here.
-- **`src/types/auth-context.ts`** — Defines `AuthContext`, the shape read off `request.authContext` to scope the caller.
+- **`@kernel/ability`** (`buildAbility`) — Called inside `rulesFor` to materialize a CASL `Ability` for the given caller.
+- **`@kernel/permissions`** — Source of `anonymousCaller`, `callerInScope`, `permissionModelVersion`, `staffRoleWithheld`, `PERMISSION_RULES`, and `PERMISSION_SUBJECTS`; the single source of truth for the permission model.
+- **`@modules/access`** (index barrel → `services/grants.ts`) — Provides `grantableRoles`, which lists roles the caller may assign in tenant scope.
+- **`@infrastructure/http/response`** (`successResponse`) — Uniform success-wrapper used to shape the HTTP reply.
+- **`@types`** (`AuthContext`) — Types the `request.authContext` object the middleware attaches.
+- **`routes.ts`** (same module) — Mounts this handler at the `GET /account/abilities` path.
 
 ## Notes
 
-- **No nulls in the contract.** `tenantId` is omitted entirely (spread pattern) rather than set to `null`; `platform` is `[]` rather than `null` for callers with no shop. The response shape is uniform for every caller.
-- **Two scopes, one response.** A request is always evaluated in exactly one scope, but the *client* navigates across both (shop screens read tenant keys, the health dashboard reads `platform.*` keys). Both lists are published so the client never has to guess which key gates a button.
-- **`modelVersion` ≠ role version.** Bumping a role's permissions does *not* change `modelVersion`. Only adding, removing, or renaming a key in `PERMISSION_KEYS` does. A client that caches by this value therefore knows when the *shape* of the model changed vs. just who the caller is.
-- **`grantableRoles` mirrors the 409 guard.** The same function that produces the `409` on a disallowed grant also populates this field, so the "what can I grant" list and the "what will the server accept" check cannot drift apart.
+- The response shape is **identical for every caller type** (authenticated user, API key, anonymous): `platform` is `[]` rather than `null` when there is no platform scope; `tenantId` is **absent** (not `null`) when the caller has no shop; `grantableRoles` is `[]` for anonymous callers.
+- `modelVersion` is a *fingerprint of the rule set*, not a per-role version. Renaming or swapping a rule changes it; reordering the same set or editing a role does not. Clients should compare it to detect a genuinely different model.
+- `packRules` / `unpackRules` (CASL) is the wire format contract: the frontend must call `unpackRules` to reconstruct an `Ability` identical to the server's.
+- The endpoint deliberately answers for anonymous callers (`guest` role) rather than requiring authentication, so a public client still gets a well-formed response.

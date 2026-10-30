@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/controllers/post-return.ts
-sha256: acbf5c3f59f1ec813fc800d87b77e3fefaf1708bcd971946a9f6f455ad87576a
-generated_at: 2026-10-15T11:52:00.407983+00:00
+sha256: befd97d59027871ec2410d7878c3bac60de509f8ae149afcca852b49a6cee869
+generated_at: 2026-10-29T05:36:49.963212+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP handler for `POST /returns`. Opens a return request, or (when the body carries `reason: "withdrawal"`) exercises the EU 14-day withdrawal right. In every successful case the endpoint responds `201` with a `Location` header pointing at the new resource — there is no plain-`200` path.
+HTTP handler for `POST /returns`. Opens a return record and responds **201 Created** with a `Location` header. The same endpoint doubles as the EU 14-day withdrawal button (distinguished only by `reason: "withdrawal"` in the body); in that case the return is closed at birth if it reaches the order before dispatch, canceling the order.
 
 ## Key elements
 
-- **`postReturn`** (exported) – Express handler. Parses and validates the request body against `CreateReturnBody`, reads the authenticated caller from `request.authContext` (populated by an upstream `isAuth` middleware), delegates to `returnService.createReturn`, then resolves the created entity through `returnService.withActions` and emits a localized status message.
+- **`postReturn(request, response)`** — sole export; the Express handler for `POST /returns`.
+  - Validates the body against the `CreateReturnBody` Zod schema via `parseBody`.
+  - Converts `requestedAt` (ISO string) to a `Date` before delegating to the service.
+  - Reads the authenticated caller from `request.authContext!` (set upstream by `isAuth`).
+  - Calls `returnService.createReturn(body, authContext, callerContext)`.
+  - On success, augments the entity with `returnService.withActions(...)` and sends a 201 with `Location: /returns/:id`.
+  - On rejection, delegates to `refused()`; on thrown error, delegates to `catchAs(response, 'postReturn')`.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** – supplies `parseBody` (zod validation) and `catchAs` (error → HTTP mapping) used on every code path.
-- **`@infrastructure/http/response`** – supplies `createdResponse` (201 + `Location`) and `rejectResponse` (4xx with error array).
-- **`@infrastructure/http/request`** – supplies `callerContextOf` to extract the caller identity passed into the service.
-- **`@infrastructure/i18n`** – supplies `t()` to pick the correct status message (`requested`, `withdrawn`, or `remainder-cancelled`) before the 201 body.
-- **`../services`** (`src/modules/returns/services/index.ts`) – the sole domain dependency; calls `returnService.createReturn` and `returnService.withActions`.
-- **`@types`** (`src/types/index.ts`) – imports the `Return` type used as the generic parameter of `createdResponse`.
-- **`../routes`** (`src/modules/returns/routes.ts`) – registers `postReturn` as the handler for the `POST /returns` route (this file is a leaf; routes.ts is the importer).
+- **`src/infrastructure/http/controller.ts`** — source of `parseBody`, `refused`, and `catchAs` helpers used for validation, rejection, and error mapping.
+- **`src/infrastructure/http/request.ts`** — provides `callerContextOf(request)` to extract the acting user/IP for audit context.
+- **`src/infrastructure/http/response.ts`** — provides `createdResponse`, the 201 + `Location` writer.
+- **`src/modules/returns/routes.ts`** — registers `postReturn` as the handler for the `POST /returns` route.
+- **`src/modules/returns/services/index.ts`** — exports `returnService`, whose `createReturn` and `withActions` methods perform the domain work.
+- **`src/types/index.ts`** — source of the `Return` entity type used to type the 201 response body.
 
 ## Notes
 
-- The non-null assertion `request.authContext!` is safe only because `isAuth` middleware runs before this handler; removing that middleware from the route chain will surface as a runtime crash, not a compile error.
-- "Closed at birth" is a domain concept: a withdrawal that arrives before dispatch cancels the order and the return is immediately `closed`. A *remainder* cancellation (partial shipment already left) is a distinct `kind: "cancellation"` and gets its own i18n key.
-- The endpoint is deliberately idempotent-by-design at the HTTP level (always 201), so clients can retry without distinguishing "created" from "already closed".
-- `src/infrastructure/i18n/context.ts` does not appear directly in this file's imports; it is a transitive dependency reached through the `@infrastructure/i18n` barrel.
+- The withdrawal path is **not** a separate route; it is the same handler gated entirely by the `reason` field in the request body.
+- `request.authContext!` uses a non-null assertion — the file assumes `isAuth` middleware has already populated it; calling the handler without that middleware will crash at runtime rather than fail gracefully.
+- `requestedAt` is optional in the schema; when absent the service is expected to use its own timestamp.
+- The controller never returns 200 — it is always 201 (or a 4xx from `refused`/`catchAs`).

@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/adapters/filesystem.ts
-sha256: cc76d785d02782905c4981f70306761ff2e026a1d15458975cb06eb46af06aa7
-generated_at: 2026-10-14T07:43:48.086228+00:00
+sha256: 0584f2b875a60b11787c4c11f0d872c58e95b827e0d5bfaae553443ef0312d4f
+generated_at: 2026-10-29T01:53:56.272901+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Low-level, dependency-light filesystem helpers (cross-mount move, safe delete, age-based and reference-based directory sweeps) that every other disk-touching adapter builds on, so none of them re-implement the `EXDEV` fallback, the log-and-swallow delete, or the `readdir`/`stat`/`unlink` sweep individually.
+Shared, dependency-light filesystem primitives that every other disk-touching adapter builds on: a cross-mount move, two flavors of non-throwing delete, an atomic write, and two directory-sweep helpers (age-based and reference-based). Exists so no other adapter re-derives the EXDEV fallback, the log-and-swallow pattern, or the `readdir`/`stat`/`unlink` sweep independently.
 
 ## Key elements
 
-- **`moveFile(source, destination)`** — Moves a file via `rename`; on `EXDEV` (different mount) falls back to `copyFile` + `unlink`. Throws on genuine failure — a failed move means uploaded bytes are not where the DB expects them.
-- **`deleteFile(filePath)`** — Deletes via `@guebbit/js-toolkit`'s `deleteFile` with an error callback that routes to `logger.error`. Never throws; designed for post-multer-upload cleanup where a failed delete must not turn into a 500.
-- **`unlinkIfPresent(filePath, message, fields)`** — Deletes a file; treats `ENOENT` as a silent success (returns `false`). Logs a warning only for unexpected errors. Used by sweeps where concurrent deletion is normal.
-- **`toPosixPath(value)`** — Replaces every `\` with `/`. Safe because upload filenames are random hex.
-- **`ReapResult`** — `{ checked: number; reaped: number }` shape returned by both sweep functions.
-- **`reapDirectory(root, cutoffMs, label)`** — Age-based sweep: deletes files directly under `root` whose `mtime ≤ cutoffMs`. A missing directory is logged at `info` and reported as zero results. Subdirectories are left alone.
-- **`pruneUnreferenced(root, keep, minAgeMs?)`** — Reference-based sweep: deletes files under `root` whose basename is **not** in the `keep` set. Respects `minAgeMs` grace period (by `mtime`) so a just-promoted file whose row hasn't been saved yet survives the sweep.
+- **`moveFile(source, destination)`** — Atomic `rename` with an EXDEV-only fallback to `copyFile` + `unlink`. **Throws** on any non-EXDEV error; a failed move means the client's bytes are lost.
+- **`deleteFile(filePath)`** — Wraps `@guebbit/js-toolkit`'s `deleteFile` with an error callback that logs at `error` level. Never throws. Used for cleanup of multer uploads after a failed request.
+- **`unlinkIfPresent(filePath, message, fields)`** — Unlink that treats `ENOENT` as success (returns `false`, no log). Logs a warning for other errors. Returns a `Promise<boolean>` indicating whether a file was actually removed.
+- **`writeFileAtomically(target, write)`** — Writes to a random-hex `.tmp` sibling, then `rename`s over `target`. Cleans up the temp file and rethrows on failure.
+- **`toPosixPath(value)`** — `replaceAll('\\', '/')`. Not `path.posix.normalize`, which would leave backslashes alone.
+- **`ReapResult`** — `{ checked: number; reaped: number }` returned by both sweep functions.
+- **`reapDirectory(root, cutoffMs, label)`** — Deletes files whose `mtime ≤ cutoffMs`. Missing directory is a no-op (logged at `info`). Files only; subdirectories untouched.
+- **`pruneUnreferenced(root, keep, minAgeMs?)`** — Deletes files whose basename is **not** in the `keep` set. Optional `minAgeMs` grace period protects very new files. Missing directory is a no-op.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/logger.ts`** — Imports `logger`; used by `deleteFile` (error-level) and `unlinkIfPresent` / `reapDirectory` / `pruneUnreferenced` (warn / info).
-- **`scripts/ops/reap-quarantine.ts`** — Calls `reapDirectory` for quarantine retention.
-- **`src/infrastructure/adapters/mail-spool.ts`** — Calls `reapDirectory` (exposed as `reapSpooled`) for spool retention.
-- **`scripts/ops/reap-orphaned-images.ts`** — Calls `pruneUnreferenced` to remove promoted images and thumbnails no longer named by any record.
-- **`src/infrastructure/http/middlewares/upload.ts`** — Stages uploads on tmpfs (the cross-mount case `moveFile` handles) and relies on `deleteFile` to clean up multipart files after a failed request.
-- **`src/infrastructure/adapters/document-store.ts`, `export-store.ts`, `image-store.ts`, `remote-image.ts`** — Consume the shared helpers (move, delete, sweep) rather than re-deriving the `EXDEV` / log-and-swallow / sweep logic.
+- **`logger.ts`** — Direct import. `deleteFile`, `unlinkIfPresent`, `reapDirectory`, and `pruneUnreferenced` all route their error/warning logs through the shared logger.
+- **`upload.ts` (middleware)** — The staging path for incoming uploads; `moveFile` is the natural target for persisting a staged upload, and `deleteFile` cleans up the temp file when validation fails after multer has written it.
+- **`document-store.ts`, `image-store.ts`, `export-store.ts`, `remote-image.ts`** — Adapters that read/write files on disk; each relies on `moveFile`, `writeFileAtomically`, or `deleteFile` rather than importing `node:fs/promises` directly for those operations.
+- **`mail-spool.ts`** — Caller of `reapDirectory` for its spooled-message retention sweep (`reapSpooled`).
+- **`orphaned-images.ts`** — Caller of `pruneUnreferenced` for the `reap:orphaned-images` job, passing the set of basenames still referenced by image rows.
+- **`jobs.ts`** — Schedules the retention/reaper jobs that ultimately invoke `reapDirectory` and `pruneUnreferenced`.
 
 ## Notes
 
-- `moveFile` **throws**; `deleteFile` and `unlinkIfPresent` **never throw**. Pick the right one — a failed move is a real error, a failed cleanup is a log line.
-- The error passed to `logger.error` in `deleteFile` is intentionally nested, not spread, so `redactFormat` → `serializeError` controls whether container paths leak into production logs.
-- `reapDirectory` and `pruneUnreferenced` only operate on **files** directly under the given root; subdirectories are never touched (none of the stores create them).
-- `pruneUnreferenced`'s `minAgeMs` guard is a safety net for the race where a file is promoted but its row hasn't been committed yet — it is **not** a general age-based policy.
-- Stryker mutators are disabled on the log-only lines so mutation testing doesn't flag them as dead code.
+- `moveFile` **throws**; `deleteFile` and `unlinkIfPresent` do **not**. Choosing the wrong one for a cleanup path is a common mistake.
+- The EXDEV fallback is copy-then-unlink (not unlink-then-copy) so a crash between the two leaves a stale staged file rather than losing the upload.
+- `deleteFile` logs the full `Error` object as a nested field (not spread), relying on the logger's `serializeError` / `redactFormat` to keep container paths out of production output.
+- `reapDirectory` and `pruneUnreferenced` both treat a missing directory (`ENOENT` on `readdir`) as "nothing to do," not an error — a store that never wrote anything is the expected initial state.
+- `toPosixPath` is safe only because upload filenames are random hex and can never contain a backslash; do not repurpose it for arbitrary user-supplied paths.
+- `pruneUnreferenced`'s `minAgeMs` default is `0`, meaning no grace period; the orphaned-images caller passes a positive value to avoid deleting a file promoted in the same instant before its DB row is saved.

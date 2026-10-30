@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/tests/unit/schema-contract.test.ts
-sha256: db5708222388e2e210059c73eaa4f0845cc16b5a6a74f1a5955aa826a6755f98
-generated_at: 2026-10-15T12:25:07.007227+00:00
+sha256: 455ff7b2ca9be75350ad63012dd186b55c1537269a5281f0b16990f8aa2207ae
+generated_at: 2026-10-29T06:33:12.756319+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Validates the *declarations* of the two webhook Mongoose schemas (`webhookSubscriptionSchema`, `webhookDeliverySchema`) by inspecting the schema objects directly—required paths, defaults, enums, index specs, index options, and TTL—without ever creating or saving a document. This catches regressions (dropped `required`, flipped defaults, detached TTL, accidental unique/sparse flags) that a document-level integration test, which only ever exercises valid fixtures, would miss.
+Validates the *declarations* of `webhookSubscriptionSchema` and `webhookDeliverySchema` (required paths, defaults, sub-schema options, index specs, index options, enums, timestamps) by reading the Mongoose schema objects directly. This exists because integration tests that only ever save valid fixtures cannot detect a dropped `required`, a flipped default, or a TTL index silently detached from its config source.
 
 ## Key elements
 
-- **`DELIVERY_RETENTION_SECONDS`** – module-level constant; reads `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS` from the current environment and converts to seconds. Used to assert the TTL index value against the configured policy rather than a hardcoded literal.
-- **`describe('webhookSubscriptionSchema')`** – asserts required fields (five), defaults (`enabled: true`, `consecutiveFailures: 0`, `secrets: []`), `secrets` sub-schema options (`_id: false`), ring-entry required fields, two index specs, no unique/sparse options, and `timestamps: true`.
-- **`describe('webhookDeliverySchema')`** – asserts required fields (seven), absence of outcome/lease fields, defaults (`attempt: 1`, `status: 'pending'`), the `status` enum (four values, no `failed`), seven index specs, index options (TTL on `createdAt_1`, unique on `subscriptionId_1_eventId_1`), TTL direction, and `timestamps: true`.
+- **`DELIVERY_RETENTION_SECONDS`** — module-level constant computed from `currentEnvironment().NODE_WEBHOOK_DELIVERY_RETENTION_DAYS` (fallback `30`), converted to seconds. Used to assert the TTL index value so the test tracks config changes automatically.
+- **`describe('webhookSubscriptionSchema')`** — asserts required paths (`consecutiveFailures`, `eventTypes`, `tenant`, `url`), absence of an `enabled` field, `consecutiveFailures` default `0`, `secrets` default `[]`, `secrets` sub-schema `_id: false`, ring-entry required paths, two compound indexes (both non-unique/non-sparse), and `timestamps: true`.
+- **`describe('webhookDeliverySchema')`** — asserts required paths, absence of outcome/lease fields (`responseCode`, `durationMs`, `error`, `nextAttemptAt`, `leaseToken`, `leaseExpiresAt`), `attempt` default `1`, `status` default `'pending'`, the four-value `status` enum, all seven index specs, `createdAt_1` carrying `expireAfterSeconds` (TTL), `subscriptionId_1_eventId_1` being the sole unique index, ascending `createdAt` direction for the TTL index, and `timestamps: true`.
 
 ## Relationships
 
-- **`src/modules/webhooks/model.ts`** – source of the two schema objects under test (`webhookSubscriptionSchema`, `webhookDeliverySchema`).
-- **`tests/support/schema.ts`** – provides the introspection helpers (`requiredPaths`, `defaultOf`, `enumOf`, `indexSpecs`, `indexOptionSpecs`, `optionsOf`, `subSchema`) that this file uses to read schema declarations without instantiating documents.
-- **`src/infrastructure/config/store.ts`** – `currentEnvironment()` supplies `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS`, which feeds the TTL assertion.
+- **`src/modules/webhooks/model.ts`** — source of `webhookSubscriptionSchema` and `webhookDeliverySchema`, the two objects under test.
+- **`tests/support/schema.ts`** — provides the assertion helpers (`requiredPaths`, `defaultOf`, `subSchema`, `optionsOf`, `enumOf`, `indexSpecs`, `indexOptionSpecs`) that read Mongoose schema internals in a test-friendly format.
+- **`src/infrastructure/config/store.ts`** — provides `currentEnvironment()` so the TTL assertion is tied to the live config value rather than a hardcoded literal.
 
 ## Notes
 
-- The TTL assertion is tied to the environment variable, not a literal, so changing `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS` moves both the schema default and the test together.
-- The TTL index must be **ascending** (`createdAt_1`); a descending variant on the same field (present in two compound indexes) would silently never expire documents.
-- Neither subscription index is unique—the per-tenant cap is enforced in application code (`services/subscriptions.ts`), not at the database level.
-- The `secrets` sub-schema sets `_id: false` because the application mints its own `id` per entry; an auto-assigned Mongoose `_id` would create a redundant identity.
-- The delivery `status` enum intentionally omits `failed`; a retryable failure returns to `pending`, and only `exhausted` is terminal.
+- The TTL index on `createdAt` **must** be ascending (`createdAt_1`). The same field appears descending in two compound indexes; confusing the directions yields a TTL index that never deletes.
+- `secrets` entries have `_id: false` because `secrets.ts` mints its own `id` before save; a Mongoose-auto-generated `_id` would be a redundant second identity.
+- No `enabled` boolean exists on the subscription schema — "enabled" is inferred from the *absence* of `disabledAt`/`autoDisabledAt`.
+- The only unique index across both schemas is `subscriptionId_1_eventId_1` on delivery; the subscription-level cap is enforced by application logic (`services/subscriptions.ts`), not the database.

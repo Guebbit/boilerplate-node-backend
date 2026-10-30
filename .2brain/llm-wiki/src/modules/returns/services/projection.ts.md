@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/services/projection.ts
-sha256: 7fcde70cb6d4ca49dee5b2f86389b239b90619729cb89cdd3f2b3f9292c684fe
-generated_at: 2026-10-15T11:57:56.922859+00:00
+sha256: a4eff05aa0ab26aadfe93e547d4e42cf530345c90a67d29e62908e1fad800fc0
+generated_at: 2026-10-29T05:44:26.698435+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Keeps an order's `returnStatus` field in sync with the actual state of its returns. Because the `orders` module cannot import from `returns`, this file reads back the returns after each state-changing move (create, decide, receive, close), computes the correct status word via the domain projection, and writes it back through `orders`' own service API.
+Keeps the `returnStatus` field on an `Order` in sync with the actual returns attached to it. Because the `orders` module cannot import the `returns` module, this file acts as a one-way reporter: after any return state change, it reads the current returns, derives the correct status word, and pushes it into the order via `orderService`. It is idempotent and fire-and-forget—failures are logged, never thrown, since the next state change re-stamps the value.
 
 ## Key elements
 
-- **`syncReturnStatus(orderId: string): Promise<void>`** — The sole export. Fetches all returns and the order in parallel, projects the new status (excluding cancellation lines and withdrawal-excluded lines from the returnable set), and calls `orderService.markReturnStatus`. Never rejects; failures are logged and swallowed.
+- **`syncReturnStatus(orderId: string): Promise<void>`** — The sole export. Fetches the order's returns and the order itself in parallel, filters out cancellation lines (which are excluded from "returnable" quantities), computes the projected status via `projectReturnStatus`, and calls `orderService.markReturnStatus`. Resolves on success or after logging an error; never rejects.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/logger.ts`** — Logs an error when the status report fails.
-- **`src/modules/orders/index.ts`** — Barrel import providing `orderService` (fetch order, report status) and `isExcludedFromWithdrawal` (filter non-returnable items).
-- **`src/modules/orders/domain/withdrawal.ts`** — Source of `isExcludedFromWithdrawal`, used to exclude certain goods from the returnable-quantity calculation.
-- **`src/modules/orders/services/index.ts`** — Provides `orderService.getById` and `orderService.markReturnStatus`.
-- **`src/modules/returns/repository.ts`** — `returnRepository.findByOrderId` reads all returns for the target order.
-- **`src/modules/returns/domain/index.ts`** — Barrel import for `projectReturnStatus`, `returnableLinesOf`, `returnableQuantities`, and `wireLines`.
-- **`src/modules/returns/domain/status-projection.ts`** — Implements `projectReturnStatus`, the core "returns → status word" logic.
-- **`src/modules/returns/domain/quantities.ts`** — Implements `returnableQuantities` / `returnableLinesOf`.
-- **`src/modules/returns/services/create.ts`**, **`decide.ts`**, **`receive.ts`**, **`close.ts`**, **`cancel-remainder.ts`** — Callers; each invokes `syncReturnStatus` after mutating a return's state.
+- **`src/modules/orders/index.ts`** — Imports `orderService` (to read the order and write the status) and `isExcludedFromWithdrawal` (to determine which items are returnable).
+- **`src/modules/orders/domain/withdrawal.ts`** — Origin of `isExcludedFromWithdrawal`.
+- **`src/modules/orders/services/index.ts`** — Origin of `orderService`.
+- **`src/modules/returns/repository.ts`** — Calls `returnRepository.findByOrderId` to load the order's returns.
+- **`src/modules/returns/domain/index.ts`** — Imports `projectReturnStatus`, `returnableLinesOf`, `returnableQuantities`, `wireLines` (re-exported from the submodules below).
+- **`src/modules/returns/domain/status-projection.ts`** — Provides `projectReturnStatus`, the pure function that maps return data + quantities to a status word.
+- **`src/modules/returns/domain/quantities.ts`** — Provides `returnableLinesOf` and `returnableQuantities`.
+- **`src/infrastructure/adapters/logger.ts`** — Logs the error in the catch path.
+- **Caller services** (`create.ts`, `decide.ts`, `receive.ts`, `close.ts`, `cancel.ts`, `cancel-remainder.ts`) — Each invokes `syncReturnStatus` after its respective state transition so the order's `returnStatus` stays current.
 
 ## Notes
 
-- **Idempotent by design.** Recomputing from the full returns set means repeated calls converge to the same value; no delta tracking.
-- **Failures are logged, never thrown.** The projection reports a fact already decided; the next state-changing move re-stamps it. This is intentional — callers can fire-and-forget.
-- **Cancellation lines are subtracted, not added.** Cancellation returns' wire lines are passed as the `cancelled` parameter so they reduce (rather than count toward) the returnable quantity, preventing a pre-shipment cancellation from blocking an order from reaching `returned`.
-- **Stryker mutation-testing suppression** wraps the `logger.error` call (`Stryker disable/restore`), so that code path is excluded from mutation coverage.
+- The catch block carries `// Stryker disable all` / `// Stryker restore all` annotations to exclude the logging-only code from mutation testing (a dead mutation there would be a false positive).
+- Cancellation returns are extracted and passed separately into `returnableQuantities` so that units cancelled before shipping do not prevent the order from reaching a `returned` status.
+- The function is safe to call redundantly: the same set of returns always yields the same status word, so concurrent or repeated calls are harmless.

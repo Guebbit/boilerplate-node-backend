@@ -1,7 +1,7 @@
 ---
 source: scenarios/run-server.ts
-sha256: 4907be607d15760800eff8cec867fcbd572c8aa21c1e41b5e65b0cf05d315961
-generated_at: 2026-10-15T09:34:11.498545+00:00
+sha256: cf3475dfa49358dabfe8b46a2cb0b93e2f5e9bf63a321942edc3eaa61d3133d3
+generated_at: 2026-10-29T01:25:11.027478+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Entry point for the **demo profile** (`npm run demo`): boots the real application against an ephemeral in-memory MongoDB, seeds it from the `shop` scenario, and serves the API on `NODE_PORT`. It exists so the paired frontend dev server and e2e suite can run against a live, self-contained instance without Docker, Redis, or a message broker.
+Entry point for the demo profile (`npm run demo`). Boots the real application against an in-memory MongoDB (or an externally supplied one), seeds the `shop` scenario, and serves on `NODE_PORT`. Eliminates Docker, Redis, and broker dependencies by forcing them off. Serves as the backing server for the paired frontend's dev server and e2e suite.
 
 ## Key elements
 
-- **`DOTENV`** — reads `.env` into a plain object via `node:util` `parseEnv` (never `dotenv/config`), isolating the file's values so they can be compared against the shell.
-- **`shellValue(key)`** — returns the value only if the *shell* set it (i.e. it differs from what `.env` supplied), otherwise `undefined`.
-- **`REQUIRED_DEFAULTS`** — record of env vars the profile fills when neither shell nor `.env` provides one (token secrets, PII/encryption keys, shop config, CORS origins, `DEMO_BANK_TRANSFER`).
-- **`FORCED_ABSENT`** — list of external-service vars (Redis, RabbitMQ) blanked to `''` so `dotenv/config` in `src/app.ts` cannot re-hydrate them from `.env`.
-- **`FORCED_MAIL_TRANSPORT`** — pins `NODE_MAIL_TRANSPORT` to `'outbox'` so the e2e suite's `GET /__test/emails` always works.
-- **`SCRIPTED_RATE_LIMITS`** (from `./rate-limits`) — unconditional rate-limit overrides for the throwaway profile.
-- **`waitUntilListening(port)`** — polls `GET /` (60 s timeout) as a readiness signal; valid because `createApp().start()` seeds before opening the socket.
-- **Boot sequence (top-level)** — `startEphemeralMongo` → SIGTERM/SIGINT cleanup handlers → `installEnvironment` (defaults + forced-absent + rate-limits + mail transport) → database URI rewrite to `/demo` → `NODE_URL` derivation from the actual port → app creation and listen (truncated).
+- **`DOTENV`** — Reads `.env` in isolation via `node:util`'s `parseEnv`; never uses `dotenv/config` so real secrets in the file don't leak into `process.env`.
+- **`shellValue(key)`** — Distinguishes values set by the shell (or a CI runner) from those merely present because `.env` was loaded into `process.env` by `development-doubles`.
+- **`REQUIRED_DEFAULTS`** — Fallback env map (token secrets, PII keys, shop config, CORS origins, SMTP sender, etc.) that lets a bare checkout boot without any `.env`.
+- **`FORCED_ABSENT`** — Keys (Redis, RabbitMQ) blanked to `''` to defeat `dotenv/config`'s "only fill if absent" semantics later in `src/app.ts`.
+- **`FORCED_MAIL_TRANSPORT`** — Unconditionally set to `'outbox'` so the e2e suite's `GET /__test/emails` endpoint always works.
+- **`waitUntilListening(port)`** — Polls `GET /` until the server responds (60 s timeout). Valid as a "ready" signal because `createApp().start()` seeds before listening.
+- **Boot sequence** (module-level, no wrapper): `startEphemeralMongo` → SIGTERM/SIGINT handlers → `installEnvironment` (defaults + forced-absent + rate limits + mail transport + `NODE_DB_URI` + `NODE_URL`) → app start.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `scenarios/rate-limits.ts` | Imports `DEMO_BANK_TRANSFER` and `SCRIPTED_RATE_LIMITS` for the profile's forced rate-limit and bank-transfer settings. |
-| `scenarios/support/demo-clock.ts` | Imports `installDemoClock` / `registerDemoClock` for deterministic time during seeding. |
-| `scenarios/support/ephemeral-mongo.ts` | Imports `startEphemeralMongo`; the returned handle is used for the DB URI and for `stop()` on shutdown. |
-| `scenarios/support/ephemeral-mongod.ts` | Imports `startInProcessMongod`, passed as the in-process strategy argument to `startEphemeralMongo`. |
-| `src/infrastructure/config/store.ts` | Imports `currentEnvironment` and `installEnvironment` to write all profile config into the singleton store before the app reads it. |
-| `src/infrastructure/runtime/mongoose-boot.ts` | Side-effect import (no named binding) to apply Mongoose defaults before any schema is built. |
+- **`scenarios/rate-limits.ts`** — Imports `DEMO_BANK_TRANSFER` (spread into `REQUIRED_DEFAULTS`) and `SCRIPTED_RATE_LIMITS` (overridden unless the shell set its own).
+- **`scenarios/support/demo-clock.ts`** — Imports `installDemoClock`, `registerDemoClock` for deterministic time in the demo.
+- **`scenarios/support/ephemeral-mongo.ts`** — Calls `startEphemeralMongo` to obtain a disposable Mongo URI; also provides the `mongo.stop()` cleanup used by the signal handlers.
+- **`scenarios/support/ephemeral-mongod.ts`** — Passes `startInProcessMongod` as the `startInProcess` option so `ephemeral-mongo` can launch an in-process `mongod` when no external URI is given.
+- **`src/infrastructure/config/store.ts`** — Calls `installEnvironment` (twice: initial config, then `NODE_DB_URI`) to write the fully-resolved environment into the config store before the app reads it.
+- **`src/infrastructure/runtime/mongoose-boot.ts`** — Side-effect import before any Mongoose model loads, to apply Mongoose defaults at schema-build time.
 
 ## Notes
 
-- **`.env` is parsed in isolation.** The file deliberately avoids `import 'dotenv/config'` so it can *compare* shell values against file values (`shellValue`) and selectively override. `src/app.ts` still runs `dotenv/config` later, which is why `FORCED_ABSENT` uses `''` rather than `delete` — `dotenv` will not overwrite a key that is already present, even as an empty string.
-- **Loopback by default.** `NODE_HOST` defaults to `127.0.0.1` because tokens are signed with a public, hard-coded secret and the control surface can wipe the database. Override with `NODE_HOST=0.0.0.0` only if you need remote access.
-- **`NODE_URL` is always derived**, never defaulted to `:3000`. It is built from `NODE_PORT` at runtime so OAuth `redirect_uri` and emailed password-reset links point at the correct instance when multiple ports are running.
-- **Multiple instances share an external Mongo.** Pointing `NODE_TEST_MONGO_URI` at a persistent Mongo makes all instances share the `demo` database; the in-memory path does not. The doc comment warns not to combine the two unintentionally.
-- **Cleanup on signal.** SIGTERM/SIGINT handlers call `mongo.stop()` to remove the ~200 MB in-process data directory; failure to stop is logged but still exits.
-- **`NODE_CORS_ORIGIN`** defaults to both `:8080` (dev server) and `:8085` (e2e preview); a `.env` value is respected so a non-default frontend port isn't silently overridden.
+- `FORCED_ABSENT` keys are set to empty string, **not deleted**. `src/app.ts` later runs `import 'dotenv/config'`, which will re-populate any absent key from `.env`; an already-present (even empty) key is left alone. All downstream readers treat `''` as unset.
+- The database name is always forced to `/demo` regardless of the Mongo source, giving a stable name across restarts when using an external URI.
+- `NODE_URL` is **always** derived from the actual listening port; it is never read from `.env` or `process.env`, preventing stale single-instance URLs from breaking OAuth redirects and emailed links.
+- SIGTERM/SIGINT handlers call `mongo.stop()` (removes ~200 MB temp data dir) before `process.exit(0)`. Without them, an in-memory instance's data directory leaks on every boot.
+- `NODE_HOST` defaults to `127.0.0.1` because the demo uses public, hard-coded token/PII keys and a control surface that can wipe the database. Override with `NODE_HOST=0.0.0.0` for cross-device access.

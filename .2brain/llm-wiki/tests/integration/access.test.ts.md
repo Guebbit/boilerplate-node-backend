@@ -1,7 +1,7 @@
 ---
 source: tests/integration/access.test.ts
-sha256: 776468016e2b5da5952c02905f8b9cccc2743dd2cc621a1b267708b37ad7bfab
-generated_at: 2026-10-15T12:43:03.862396+00:00
+sha256: 127aa8766115f2d7d81369248506f2ed4fed39912840ab5e9e8c9b4635ed36e2
+generated_at: 2026-10-29T06:51:50.438143+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test for the cross-module authorization invariant: a role is stored **only** in the membership row (access module) and never mirrored onto the user document (users module). It verifies the demo seed (`seedAccessModel`) places the right roles in the right scopes and that re-seeding is idempotent. It lives at the repo-level integration path rather than inside the access module because it asserts a rule that spans two modules and depends on the demo scenario seeding both.
+Verifies the cross-module authorization invariant that a role is stored **only** in the membership row and never mirrored onto the user document. It also asserts the demo seed's concrete role assignments (dual-job root, single-role staff, roleless operator) and that re-seeding is idempotent. Module-scoped writers (`assignRole`, `revokeRole`, audit trail) are intentionally **not** tested here; they live in `src/modules/access/tests/integration/access.test.ts`.
 
 ## Key elements
 
-- **`seedUsers()`** – one-liner that calls `shopModules.users.seed()` to create user rows (needed only by the final test case).
-- **`describe('the seeded model')`** – four test cases:
-  - *root has two jobs* – asserts `SEED_ADMIN_ID` holds both `platform/operator` and `tenant/admin`; asserts `SEED_USER_ID`, `SEED_EDITOR_ID`, `SEED_MODERATOR_ID` each hold exactly one tenant role.
-  - *staff roles + operator isolation* – asserts manager/warehouse/support each get their one tenant role; asserts `SEED_OPERATOR_ID` holds **only** `platform/operator` with no tenant membership.
-  - *idempotency* – calls `seedAccessModel()` twice and confirms membership count is unchanged.
-  - *single source of truth* – after seeding both users and access, asserts the membership row carries the role while `userRepository.findById` returns a user document with **no** `role` field (checked via `asStub`).
+- **`seedUsers()`** – local helper that calls `shopModules.users.seed()` to populate user rows where a test needs them.
+- **`describe('the seeded model')`** – four integration tests:
+  1. *Root dual-role placement* – confirms `SEED_ADMIN_ID` holds `platform/operator` **and** `tenant/admin`; confirms customer has no role, editor/moderator hold exactly one tenant role each.
+  2. *Staff role assignments* – confirms manager/warehouse/support each map to their named shop role; confirms `SEED_OPERATOR_ID` holds only `platform/operator` (no tenant scope).
+  3. *Idempotency* – calls `seedAccessModel()` twice, asserts membership count is still 2.
+  4. *Single-source-of-truth* – seeds users **and** access, then asserts the membership carries `role: 'admin'` while the user document's `role` field is `undefined`.
 
 ## Relationships
 
-- **`scenarios/accounts.ts`** – source of all `SEED_*` ID constants and the `seedAccessModel` function under test.
-- **`scenarios/index.ts`** – provides `shopModules` whose `.users.seed()` creates the user rows for the last case.
-- **`src/modules/access/index.ts`** – exports `membershipIn` and `membershipsOf`, the read-only query API used to assert seeded state.
-- **`src/modules/access/service.ts`** – implementation behind those query functions (and the writers `assignRole`/`revokeRole` that this file deliberately does **not** test).
-- **`src/kernel/access/tenant.ts`** – supplies `DEPLOYMENT_TENANT_ID` for scope-qualified lookups.
-- **`src/modules/users/repository.ts`** – the `findById` call in the final case proves the user document carries no role.
-- **`src/modules/users/tests/factories.ts`** – provides the `userRepository` instance used in that same final case.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` runs once at module load to prepare a clean database.
-- **`tests/support/stub.ts`** – `asStub` is used to safely read a possibly-absent field (`role`) on the user document and assert it is `undefined`.
+| Neighbor | Interaction |
+|---|---|
+| `scenarios/accounts.ts` | Source of all `SEED_*` id constants and the `seedAccessModel()` function under test. |
+| `scenarios/index.ts` | Provides `shopModules` whose `.users.seed()` populates user rows for test 4. |
+| `src/kernel/access/tenant.ts` | Supplies `DEPLOYMENT_TENANT_ID`, the tenant key used in every `membershipIn` call. |
+| `src/modules/access/index.ts` | Exports `accessService` — the system under test (`membershipsOf`, `membershipIn`). |
+| `src/modules/users/repository.ts` | The user repository whose `findById` is called in test 4 to prove the document has no `role`. |
+| `src/modules/users/tests/factories.ts` | Provides the `userRepository` instance used in that assertion. |
+| `tests/support/setup-test-db.ts` | `setupTestDb()` is called at module top-level to prepare a clean test database. |
+| `tests/support/stub.ts` | `asStub` is used in test 4 to safely type-cast the user document and read its optional `role` field. |
 
 ## Notes
 
-- The header comment explicitly directs module-scoped writer tests (`assignRole`, `revokeRole`, audit trail) to `src/modules/access/tests/integration/access.test.ts`. This file is the residue: the cross-module rule plus the demo seed that exercises it.
-- The final test asserts **absence** of a field, not merely a specific value. `asStub` is used so the assertion is "the key does not exist (or is undefined)" rather than a truthy/falsy check.
-- Scope values (`'platform'` vs `'tenant'`) are string literals matched exactly; they are not imported constants beyond `DEPLOYMENT_TENANT_ID` for the tenant scope.
+- This file is deliberately **not** the access module's integration suite; it exists solely because the "role lives in one place" rule spans two modules and cannot be asserted from either module's own test file.
+- Test 4 is the load-bearing assertion: it seeds users *before* the access model so that `seedAccessModel` cannot accidentally overwrite a `role` field on the user doc.
+- The `asStub` cast is a test-side escape hatch to read a field the production type does not declare (by design); it does not imply the field exists at runtime.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/tests/integration/minimise.test.ts
-sha256: b42cb587793e0a57a3031a2206a5a9b62728f9966178e90b9f71cd3dbc5bbd4c
-generated_at: 2026-10-15T12:14:00.005711+00:00
+sha256: 38792d222ed8f33b6cdb29d9104e22a9eba1ad33dd0d76c91dbf2b0b3db5bf64
+generated_at: 2026-10-29T06:21:08.696630+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,43 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test for the inactivity-minimisation feature, exercised through the real module wiring (registry + event bus). Verifies that an account quiet past the cutoff loses its address book, has its orders' PII clock started, retains its login and orders, and is stamped so a rerun is a no-op — and that a failed hook prevents the stamp so the next run retries.
+Integration test for the inactivity-minimisation flow: it verifies that accounts quiet past a configurable window lose their address book, start the PII clock on their orders, retain login credentials and order records, and receive an `inactivityMinimisedAt` stamp. It also covers edge cases (banned accounts, idempotent reruns, re-activation cycles, and hook-failure retry).
 
 ## Key elements
 
-- **`makeInactive(id, extra?)`** — Backdates a user's `createdAt` (via `overwriteImmutable`) to `LONG_AGO` (2020-01-01) so the account falls past the inactivity cutoff. Accepts extra fields (e.g. `active: false`, `lastActiveAt`).
-- **`addressesOf(userId)`** — Wraps `addressesGet` to return just the array of addresses for assertions.
-- **`clockOf(orderId)`** — Reads `anonymizeAfter` from the order via `orderRepository`.
-- **`isMinimised(userId)`** — Checks whether the `inactivityMinimisedAt` field exists on the user document.
-- **`inactiveCustomerWithOrder(name)`** — Composite fixture: creates a customer, gives them an address, creates one paid order with a product, then backdates the account. Returns `{ user, orderId }`.
-- **`describe('inactivity minimisation')`** — Six test cases:
-  1. Happy path: drops addresses, starts PII clock, keeps login/orders, stamps account.
-  2. Banned account (`active: false`) is minimised the same way.
-  3. Rerun is a no-op (`minimised: 0`, clock unchanged).
-  4. Active account is left untouched.
-  5. "Boomerang": a minimised account that became active and quiet again is minimised a second time.
-  6. A failing `minimise` hook in a registered module causes `failed: 1` and the account is **not** stamped (retry semantics).
+- **`inactiveCustomerWithOrder(name)`** — shared fixture: creates a customer, attaches an address, creates a paid order, and backdates the account so it qualifies as inactive.
+- **`makeInactive(id, extra?)`** — utility that overwrites `createdAt` (via `overwriteImmutable`) and optionally other fields to simulate inactivity.
+- **`daysAgo(days)`** — returns a `Date` N days before the current moment, used as the minimisation cutoff.
+- **`addressesOf` / `clockOf` / `isMinimised`** — read helpers that assert post-conditions on addresses, order PII clocks, and the minimisation stamp.
+- **`describe('inactivity minimisation', …)`** — six `it` blocks covering: happy-path minimisation, banned accounts, rerun idempotency, active-account no-op, boomerang (re-minimisation after reactivation), and hook-failure (no stamp written so the next run retries).
 
 ## Relationships
 
-- **`src/modules/users/services/index.ts`** — Calls `userService.minimiseInactiveBefore(cutoff)`, the system under test.
-- **`src/modules/users/tests/factories.ts`** — `createUser` builds the account fixture.
-- **`src/modules/users/model.ts`** — `userModel` is used directly for backdating (`overwriteImmutable`) and for asserting the `inactivityMinimisedAt` stamp.
-- **`src/modules/users/module.ts`** — `usersModule` is registered (in the failure test it is paired with a fake module via `registerModules`).
-- **`src/modules/users/repository.ts`** — `userRepository.findById` reloads the user to assert email is preserved.
-- **`src/modules/addresses/module.ts`** — `addressesModule` is registered in `beforeEach` via `registerCheckoutModules`.
-- **`src/modules/addresses/index.ts`** — `addressesGet` is used to assert the address book was dropped.
-- **`src/modules/addresses/tests/factories.ts`** — `giveAddress` attaches an address in fixtures.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `toOrderItem`, `markOrderPaidAt` build the paid-order fixture.
-- **`src/modules/orders/repository.ts`** — `orderRepository.findById` reads the PII clock (`anonymizeAfter`).
-- **`src/modules/products/tests/factories.ts`** — `createProduct` supplies the order line item.
-- **`src/kernel/registry.ts`** — `registerModules` is called directly in the hook-failure test to swap in a module whose `minimise` hook rejects.
-- **`src/kernel/events.ts`** — `resetDomainEvents` runs in `afterEach` to isolate the event bus between tests.
-- **`tests/support/checkout-modules.ts`** — `registerCheckoutModules` sets up the standard module list for the happy-path tests.
+- **`@kernel/registry` (`registerModules`)** — used in the hook-failure test to inject a synthetic module whose `personalData.minimise` hook rejects, proving the stamp is not applied on partial failure.
+- **`@kernel/events` (`resetDomainEvents`)** — called in `afterEach` to clear the event bus between tests.
+- **`@tests/checkout-modules` (`registerCheckoutModules`)** — called in `beforeEach` to wire up the addresses module alongside users for the full minimisation pipeline.
+- **`@modules/addresses/module` (`addressesModule`)** — registered so its `personalData.minimise` hook participates in the flow.
+- **`@modules/addresses` (`addressService`)** — used to read back the user's address list after minimisation.
+- **`@modules/addresses/tests/factories` (`giveAddress`)** — seeds an address for the test user.
+- **`@modules/orders/tests/factories`** — provides `createOrder`, `toOrderItem`, `markOrderPaidAt`, and `orderRepository` to build and inspect the paid order whose PII clock is asserted.
+- **`@modules/products/tests/factories` (`createProduct`)** — supplies a product for the order line-item.
+- **`@modules/users/services` (`userService`)** — the system under test; `minimiseInactiveBefore` is the method exercised.
+- **`@modules/users/model` (`userModel`)** — used directly by `makeInactive` and `isMinimised` to manipulate/inspect the raw document.
+- **`@modules/users/module` (`usersModule`)** — registered in the hook-failure test so the users module's own hook runs alongside the failing one.
+- **`@modules/users/tests/factories` (`createUser`, `userRepository`)** — user creation fixture and read-back repository.
 
 ## Notes
 
-- `createdAt` is normally immutable; the tests bypass this with `overwriteImmutable: true`. Any production code that relies on `createdAt` being stable should be aware of this test-only escape hatch.
-- The hook-failure test calls `registerModules` **directly** (not via `registerCheckoutModules`), replacing the entire registry with a fake module + `usersModule`. This is intentional to isolate the failure path.
-- The "boomerang" test manually overwrites `inactivityMinimisedAt` to an old date to simulate that the account was active and then quiet again after the first minimisation — the service logic presumably compares `lastActiveAt` against `inactivityMinimisedAt` to decide re-eligibility.
-- `LONG_AGO` is a fixed 2020-01-01 timestamp, not a relative offset; the `daysAgo(30)` cutoff is relative. This guarantees the account is always past the cutoff regardless of when the suite runs.
+- `createdAt` is treated as immutable by Mongoose; the test bypasses this with `{ overwriteImmutable: true }` to backdate the account. This is the only reason `makeInactive` uses a raw `updateOne` rather than a service method.
+- The hook-failure test replaces the module registry mid-test (via `registerModules`) instead of using `registerCheckoutModules`, so it is the only test that does **not** go through the standard checkout wiring.
+- The "boomerang" test manually sets `inactivityMinimisedAt` to an old date *and* sets a recent `lastActiveAt` to simulate a user who was minimised, reactivated, and then went quiet again—verifying that a second minimisation is permitted once the stamp is older than the new inactivity window.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/notifications/routes.ts
-sha256: 801c2b4d8850556f12d93c295ca0ae5f18ad42c20025631f2b5f214004ef806c
-generated_at: 2026-10-15T10:51:16.584630+00:00
+sha256: 9a3681403e47c7934f90da43db3be660f229c52c01a5bb8306fe6c61bfd7414a
+generated_at: 2026-10-29T04:29:52.092838+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Express route table for the notifications inbox (`/notifications`). It wires five endpoints to their controllers, applies the two permission keys (`read` and `delete`) per route, and places the SSE stream on a separate cookie-authenticated path ahead of the shared bearer chain.
+Defines the Express router mounted at `/notifications`, wiring each HTTP method and path to its controller with the appropriate authentication and permission middleware. All routes are scoped to the authenticated caller (an inbox is personal); no route is public.
 
 ## Key elements
 
-- **`router`** (exported) — `express.Router` instance; the single public export of this file.
-- **Route order** — Five routes are registered in a deliberate sequence:
-  - `GET /stream` — SSE stream; uses `requireAllowedOrigin` + `requirePermissionViaCookie(NOTIFICATIONS_READ_KEY)`, declared **before** the `router.use(getAuth, isAuth)` line so it does not enter the bearer chain.
-  - `GET /` — list notifications; bearer + `NOTIFICATIONS_READ_KEY`.
-  - `POST /read-all` — mark all read; bearer + `NOTIFICATIONS_READ_KEY`.
-  - `POST /dismiss-all` — remove all; bearer + `notifications.self.delete`.
-  - `DELETE /:id` — remove one; bearer + `notifications.self.delete`.
-- **`NOTIFICATIONS_READ_KEY`** — imported from `get-notifications-stream` controller; the single "read" permission key used by the stream, list, and read-all routes.
+- **`router`** (exported `Router`) — the single public export; the module's route table.
+- **`GET /stream`** — SSE endpoint for live notifications. Authenticated via cookie (`requirePermissionViaCookie('read', 'Notification')`) and origin-checked (`requireAllowedOrigin`). Sits *above* the shared bearer-auth chain because `EventSource` cannot send a bearer header.
+- **`router.use(getAuth, isAuth)`** — shared middleware applied to every subsequent route; enforces a valid bearer token.
+- **`GET /`** — list the caller's notifications (`read` permission).
+- **`POST /read-all`** — mark all notifications as read (`read` permission; only mutates `readAt`, does not change membership).
+- **`DELETE /`** — remove all notifications (`delete` permission; changes set membership).
+- **`GET /:id`** — fetch a single notification by id (`read` permission). Placed after literal paths to avoid shadowing `/stream` or `/read-all`.
+- **`DELETE /:id`** — remove a single notification by id (`delete` permission).
 
 ## Relationships
 
-- **`src/kernel/middlewares/authorizations.ts`** — supplies all four auth middlewares (`getAuth`, `isAuth`, `requirePermission`, `requirePermissionViaCookie`) applied to every route.
-- **`src/infrastructure/http/middlewares/origin.ts`** — supplies `requireAllowedOrigin`, applied only to the `/stream` route to block cross-origin `EventSource` connections.
-- **`src/modules/notifications/controllers/get-notifications-stream.ts`** — provides the `getNotificationsStream` handler **and** the `NOTIFICATIONS_READ_KEY` constant.
-- **`src/modules/notifications/controllers/get-notifications.ts`** — provides the `getNotifications` handler for `GET /`.
-- **`src/modules/notifications/controllers/post-read-all.ts`** — provides the `postReadAll` handler.
-- **`src/modules/notifications/controllers/post-dismiss-all.ts`** — provides the `postDismissAll` handler.
-- **`src/modules/notifications/controllers/delete-notification.ts`** — provides the `deleteNotification` handler.
-- **`src/modules/notifications/module.ts`** — consumer that mounts the exported `router` under `/notifications`.
-- **`src/modules/notifications/tests/unit/routes.test.ts`** — unit tests exercising this route table.
+- **`src/kernel/middlewares/authorizations.ts`** — supplies `getAuth`, `isAuth`, `requirePermission`, and `requirePermissionViaCookie`, the four auth/permission middleware used on every route.
+- **`src/infrastructure/http/middlewares/origin.ts`** — supplies `requireAllowedOrigin`, applied only to the SSE stream to prevent cross-origin `EventSource` connections.
+- **`src/modules/notifications/controllers/*`** (six files) — each controller is the terminal handler for one route; this file delegates all business logic to them.
+- **`src/modules/notifications/module.ts`** — mounts `router` into the application's Express app at the `/notifications` prefix.
+- **`src/modules/notifications/tests/unit/routes.test.ts`** — unit-tests the route table (path, method, middleware ordering, permission keys).
 
 ## Notes
 
-- **Order is load-bearing.** `/stream`, `/read-all`, and `/dismiss-all` are literal path segments that must be registered before `/:id`. If `/:id` came first, `DELETE /dismiss-all` would be parsed as an id.
-- **Two auth paths coexist.** The stream authenticates via refresh cookie (no bearer token); everything below `router.use(getAuth, isAuth)` expects a bearer token. The stream is intentionally placed above that line.
-- **`NOTIFICATIONS_READ_KEY` lives in the stream controller**, not in a dedicated constants file. Both `get-notifications.ts` and this routes file import it from there.
+- The SSE stream route is deliberately ordered **before** `router.use(getAuth, isAuth)`. If reordered below it, the bearer middleware would reject the cookie-only `EventSource` request.
+- Two permission keys are declared for this module: `read` (list, stream, mark-read, get one) and `delete` (remove one or all). `read-all` uses `read` because it only sets a timestamp; `DELETE /` uses `delete` because it removes rows.
+- `/:id` routes are registered last so Express matches literal segments (`/stream`, `/read-all`) first and does not interpret them as an `id` parameter.

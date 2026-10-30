@@ -1,7 +1,7 @@
 ---
 source: src/modules/example/tests/unit/routes.test.ts
-sha256: 79c2bb31a880df6a162a41a7cc52c098ac67f09afaf22c4c8166aaacc4d0c9c8
-generated_at: 2026-10-15T10:31:32.758754+00:00
+sha256: e296029ae24c01eca3a915f114d2f60e351f324fd241ba970991e236e5aad762
+generated_at: 2026-10-29T03:58:43.483362+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit test that pins down the **structural invariants** of the example route table: the exact set and order of mounted endpoints, which routes sit above vs. below the positional auth gate (`getAuth` / `isAuth`), and the relative ordering of middleware in specific chains. It exists because the auth boundary is purely positional — a route placed on the wrong side of `router.use(getAuth, isAuth)` compiles fine and fails silently — so the test encodes that constraint as executable assertions rather than relying on types.
+Unit tests for the example module's route table. They assert the exact set and order of mounted endpoints, verify the positional auth-guard boundary (which routes are open-read vs. keyed), and check middleware chain ordering on write endpoints. Because the guard split is defined purely by its position relative to `router.use(getAuth, isAuth)`, these tests encode that ordering as an invariant.
 
 ## Key elements
 
-- **`jest.mock` (× 3)** — stubs `cache`, `rate-limit`, and `upload` middlewares by delegating to `cacheMock()`, `securityMock()`, `storageMock()` exported from the test-support module, so the real middleware never loads.
-- **`import { router }` from `@modules/example/routes`** — the single unit under test.
-- **`describe('what is mounted')`** — asserts `routeSignatures(router)` equals the exact 9-element array, locking both membership and order.
-- **`describe('the positional guard')`** — uses `guardsOn` / `identityGuardIndex` to verify `GET /published/:id` has no `getAuth` or `requirePermissionGuard`; all other 8 routes do. Also asserts the public route is index 0 and `POST /search` precedes `GET /:id`.
-- **`describe('what runs before the write')`** — uses `chainOf` to assert middleware ordering: budget-check before controller (`POST /`), and `uploads` → `upload.image` → controller (`PUT /:id/cover`).
+- **`describe('what is mounted')`** — asserts `routeSignatures(router)` returns exactly the 11 documented endpoint signatures in order.
+- **`describe('the positional guard')`** — verifies `getAuth` is present on every route; `identityGuardIndex(guards)` is `-1` (absent) only on `GET /:id`; `requirePermissionGuard` appears on every route except `GET /:id`. Also pins `GET /:id` as the first signature and `POST /search` before `PUT /:id`.
+- **`describe('what runs before the write')`** — for `POST /`, asserts the `example-create` controller is not the last handler (budget check precedes it). For `PUT /:id/cover`, asserts `uploads` → `upload.image` → controller ordering.
+- **Middleware mocks** — `jest.mock` for `cache`, `rate-limit`, and `upload` middlewares, each delegating to a factory in `tests/support/routes.ts`, applied *before* the `router` import so the router is built with stubs.
 
 ## Relationships
 
-- **`src/modules/example/routes.ts`** — the file under test; this file imports its `router` export and makes all assertions against it.
-- **`tests/support/routes.ts`** — supplies the four assertion helpers (`chainOf`, `routeSignatures`, `guardsOn`, `identityGuardIndex`) and the three mock factories used by the `jest.mock` calls. The file's JSDoc explicitly points to this module for the positional-guard rationale.
+- **`src/modules/example/routes.ts`** — the module under test; this file imports `{ router }` from it and asserts on the resulting handler chain.
+- **`tests/support/routes.ts`** — provides the structural-inspection helpers (`routeSignatures`, `guardsOn`, `chainOf`, `identityGuardIndex`) used throughout, as well as the mock factories (`cacheMock`, `securityMock`, `storageMock`) referenced in the `jest.mock` calls.
 
 ## Notes
 
-- **Auth is positional, not declarative.** There is no per-route "public" flag; the only boundary is the `router.use(getAuth, isAuth)` line. The tests therefore check *position* (index, guard presence) rather than a route property. If a new public route is added, it must be inserted *above* the gate and the "public route first" assertion updated.
-- **`jest.requireActual` on the test-support path.** The mocks resolve to the *test* module, not the real middleware packages, to avoid pulling infrastructure code into the unit-test graph.
-- **`chainOf` assertions check relative order, not exact membership.** Only the relative positions of named handlers are asserted; the rest of the chain (logging, response shaping, etc.) is intentionally unconstrained.
+- Guard placement is **positional**, not name-based: the tests rely on `identityGuardIndex` returning `-1` to mean "no identity guard at all" (open read), and `≥ 0` to mean the guard sits somewhere in the chain (keyed route). A route typed on the wrong side of `router.use(getAuth, isAuth)` will pass type-checking but fail these tests.
+- The assertion that `POST /search` precedes `PUT /:id` guards against Express matching the literal word "search" as an `:id` parameter.
+- `chainOf` returns the full handler array per route; the "controller is last" check uses `chain.length - 1` as a proxy for the terminal handler, so any post-controller middleware (e.g., audit logging) would break the assertion.

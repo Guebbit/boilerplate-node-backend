@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/services/admin.ts
-sha256: 078cf2d2cdb31aae2d9956bc97b2fc1b13d64764e24a78df599c13bd312e80af
-generated_at: 2026-10-15T10:35:41.904049+00:00
+sha256: 9ea735bb2a62d579ecff431b1d1853b5d803798f0100627eb1ee23a27a379d9c
+generated_at: 2026-10-29T04:02:52.385078+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Operator-facing stock writes: receiving supplier deliveries, applying stocktake corrections, and setting preorder limits. Exists to centralize the "back-office" mutations that change inventory counters, each with its own audit trail and failure semantics, while delegating the actual row-level math to the shared `transition` and `allocate` services.
+Operator-facing stock write operations: receiving a delivery, correcting stock after a stocktake, and setting the backorder allowance. It is the "back-office" counterpart to the customer-facing allocation path, ensuring every write is transactional, audited, and reflected in the catalogue cache.
 
 ## Key elements
 
-- **`receive(productId, quantity, note?, context?)`** — exported. Records a delivery (positive quantity), then atomically allocates the incoming units to paid preorders (oldest payment first). Returns the fresh `InventoryLevel` or 404 if the product is unknown.
-- **`adjust(productId, delta, note?, context?)`** — exported. Applies a signed stocktake correction. Refuses with 409 if the result would fall below the current `reserved` count; 404 if the product doesn't exist. Never allocates.
-- **`setPreorderLimit(productId, preorderLimit, context?)`** — exported. Updates the preorder allowance for a product. Does **not** write a ledger row (no stock movement); audited under `ADMIN_PREORDER_LIMIT_SET`.
-- **`AdminStockTransition`** (interface) — shared parameter bag that lets `receive` and `adjust` differ only in `reason`, `onFailure`, `allocates`, `auditAction`, `buildAuditMetadata`, and `successMessageKey`.
-- **`applyAdminStockTransition`** (private) — common implementation: validates product existence → applies transition (or `receiveAndAllocate`) → reads back the level → audits → returns success/reject.
-- **`receiveAndAllocate`** (private) — wraps `applyTransition` + `allocateWithin` in a single DB transaction; after commit, nudges the outbox relay and syncs the stock cache.
-- **`levelFor`** (private) — reads the product's `InventoryLevel` row and shapes it into the response DTO (or `null` if no row exists).
+- **`receive(productId, quantity, note, context)`** — exported. Records an incoming delivery (always positive quantity) and, in the same transaction, allocates the new units to the oldest paid preorders. Returns the updated `InventoryLevel` or a 404.
+- **`adjust(productId, delta, note, context)`** — exported. Applies a signed stocktake correction. Refuses (409) if the result would drop below reserved units; otherwise returns the updated level or 404.
+- **`setBackorderLimit(productId, backorderLimit, context?)`** — exported. Sets or clears the per-product backorder cap. Not a stock movement (no ledger row); audited via `auditChanges` diff.
+- **`applyAdminStockTransition(config)`** — internal. Shared pipeline for `receive`/`adjust`: product existence check → apply transition (optionally with allocation) → failure branch → read-back → audit → response.
+- **`receiveAndAllocate(reason, productId, quantity, note)`** — internal. Wraps `applyTransition` + `allocateWithin` inside a single `withTransaction`; after commit, nudges the outbox and refreshes the stock cache.
+- **`levelFor(productId, title)`** — internal. Reads a product's level row and runs it through `presentInventoryLevel`; returns `null` if no row exists.
+- **`AdminStockTransition`** — interface describing the per-operation parameters that differentiate `receive` from `adjust` (failure handler, allocation flag, audit metadata builder).
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `modules/inventory/services/transition.ts` | Calls `applyTransition` (row-level counter math) and `syncStockCache` (post-commit cache refresh). |
-| `modules/inventory/services/allocate.ts` | Calls `allocateWithin` to assign incoming units to waiting preorders inside the same transaction. |
-| `modules/inventory/repository.ts` | Uses `stockLevelRepository.findByProductId` and `.setPreorderLimit` for direct reads/writes. |
-| `modules/inventory/audit.ts` | Reads `inventoryAuditActions` enum values to tag each audit record. |
-| `modules/products/index.ts` | Calls `productService.findByIdRaw` to verify product existence and retrieve the title. |
-| `infrastructure/http/response.ts` | Uses `generateSuccess` / `generateReject` to shape HTTP responses. |
-| `infrastructure/i18n/index.ts` | Uses `t()` for all user-facing message strings. |
-| `infrastructure/observability/audit.ts` | Calls `recordAudit` after every successful write. |
-| `infrastructure/runtime/database.ts` | Uses `withTransaction` to guarantee receive + allocate are atomic. |
-| `kernel/outbox.ts` | Calls `nudgeOutbox()` after a delivery commits to wake the relay. |
-| `services/index.ts` | Re-exports the three public functions. |
-| `tests/integration/*.test.ts` | Exercises `receive`, `adjust`, and `setPreorderLimit` end-to-end (cache invalidation, preorder allocation, general service behavior). |
+- **`services/transition.ts`** — calls `applyTransition` (core stock counter mutation) and `refreshStockCache` (catalogue sync).
+- **`services/allocate.ts`** — calls `allocateWithin` to distribute newly-arriving units to waiting preorders within the same transaction.
+- **`repository.ts`** — reads/writes `InventoryLevel` rows via `stockLevelRepository` (`findByProductId`, `setBackorderLimit`).
+- **`audit.ts` (module-local)** — pulls `inventoryAuditActions` constants (`ADMIN_STOCK_RECEIVED`, `ADMIN_STOCK_ADJUSTED`, `ADMIN_BACKORDER_LIMIT_SET`) for audit records.
+- **`presenter.ts`** — calls `presentInventoryLevel` to shape the domain level into the API response form.
+- **`infrastructure/runtime/database.ts`** — wraps the receive+allocate pair in `withTransaction` for atomicity.
+- **`infrastructure/observability/audit.ts`** — calls `recordAudit` after every successful write.
+- **`infrastructure/observability/audit-changes.ts`** — calls `auditChanges` in `setBackorderLimit` to record a field-level diff.
+- **`infrastructure/http/response.ts`** — builds `ResponseSuccess` / `ResponseReject` via `generateSuccess` / `generateReject`.
+- **`infrastructure/i18n/index.ts`** — uses `t` for localized error messages.
+- **`kernel/outbox.ts`** — calls `nudgeOutbox` post-commit to wake the outbox relay.
+- **`modules/products/index.ts`** — calls `productService.findByIdRaw` for the pre-write existence check and for disambiguating 404 vs 409 in `adjust`'s failure path.
 
 ## Notes
 
-- **Existence check is pre-write.** `applyAdminStockTransition` calls `productService.findByIdRaw` *before* touching the level row. This prevents creating an orphan level row + ledger entry for an unknown product (especially relevant for `receive`, whose transition guard accepts any row).
-- **`adjust` disambiguates 404 vs 409 via re-read.** The transition guard covers both "product missing" and "would go below reserved." The `onFailure` callback re-queries the product to report the correct status code.
-- **Only `receive` touches the outbox and stock cache.** `adjust` and `setPreorderLimit` do not call `nudgeOutbox()` or `syncStockCache()`—they leave cache coherence to the caller or a subsequent event.
-- **`setPreorderLimit` is not a stock movement.** It writes no ledger row; lowering the limit below outstanding preorders is explicitly allowed (existing orders stand, only new ones are blocked).
-- **`context` is optional everywhere.** Omitted in tests to skip audit emission; production callers pass it through from the HTTP request scope.
+- `adjust` with a **positive** delta also triggers allocation (`allocates: true`), matching the invariant that any increase in `available` must serve waiting paid preorders first.
+- The `onFailure` callback on `adjust` re-reads the product to distinguish "product deleted between check and write" (404) from "correction would go below reserved" (409). `receive` omits this callback because its only guard is product existence.
+- `setBackorderLimit` intentionally does **not** call `applyTransition` or write a ledger row — it is a configuration change, not a stock movement, and is audited with a field diff instead.
+- The `context` parameter is required on `receive` and `adjust` (a stock write without an actor is untraceable) but optional on `setBackorderLimit` (tests omit it to skip the audit emit).
+- Non-transactional side effects (`nudgeOutbox`, `refreshStockCache`) are deferred to **after** the transaction commit via the `.then` chain on `receiveAndAllocate`.

@@ -1,7 +1,7 @@
 ---
 source: src/kernel/staff-read.ts
-sha256: 8e4c618f8c49863ef0707c4c990f22c29355950d80c030e4ea70f6a5f67d9888
-generated_at: 2026-10-14T08:24:43.740167+00:00
+sha256: 3a2a4647285e91d11716623945594881cbb2c9d336c6cd52af2adad95f98d2cd
+generated_at: 2026-10-29T02:21:04.218159+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides a single audit-recording helper for the case where a staff member (holder of a resource's wide-read key, e.g. `orders.any.read`) reads **another** person's record. It exists to give a uniform, low-friction call site in detail-fetch controllers so that the `admin.<resource>.viewed` event is emitted consistently without each controller duplicating the "is this staff?" / "is this their own record?" checks.
+Records a single audit entry (`admin.<resource>.viewed`) when a staff member reads another person's record via a detail endpoint. It deliberately does **not** fire for a customer reading their own record or for list/page reads, so the log captures only the entry that names a specific record by a caller who is "staff" for that resource.
 
 ## Key elements
 
-- **`StaffReadTarget` (interface)** – Describes what was read: the permission `key` that identifies "staff" for the resource, the `AuditAction` to log, the `targetType` / `targetId`, and an optional `ownerId` used to suppress self-reads.
-- **`recordStaffRead(request, target)` (function, exported)** – The sole call-site. Returns early (no-op) when the caller lacks `target.key` or when `target.ownerId` equals `caller.id`. Otherwise calls `recordAudit` with the caller context and a `success` outcome.
+- **`StaffReadTarget`** (interface) — bundles the wide-read permission key (e.g. `display:Order`), the `AuditAction` to write, the resource type/id, and an optional `ownerId` used for the self-read guard.
+- **`recordStaffRead(request, target)`** (function, main export) — returns early if the caller is missing, lacks the target's wide-read key in their held rules, or the record belongs to the caller. Otherwise delegates to `recordAudit` with a fixed `outcome: 'success'`.
 
 ## Relationships
 
-- **`src/kernel/ability.ts`** – Imports `heldKeys` to test whether the caller holds the wide-read key.
-- **`src/infrastructure/http/request.ts`** – Imports `callerContextOf` to build the audit context from the Express `Request`.
-- **`src/infrastructure/observability/audit.ts`** – Imports `recordAudit` and the `AuditAction` type; this file is the *consumer* of the audit sink.
-- **`src/modules/invoicing/controllers/get-order-invoice.ts`**, **`src/modules/orders/controllers/get-order-item.ts`**, **`src/modules/returns/controllers/get-return-by-id.ts`**, **`src/modules/users/controllers/get-user-item.ts`** – Detail-fetch controllers that call `recordStaffRead` after the auth guard to emit the staff-viewed event.
+- **`src/kernel/ability.ts`** — provides `heldRules(caller)` used to check whether the caller holds the target's wide-read permission key.
+- **`src/infrastructure/http/request.ts`** — provides `callerContextOf(request)` to extract the caller's identity/context for the audit record.
+- **`src/infrastructure/observability/audit.ts`** — provides `recordAudit` (the audit sink) and the `AuditAction` type.
+- **Controllers** (`get-order-item.ts`, `get-order-invoice.ts`, `get-order-credit-note.ts`, `get-return-by-id.ts`, `get-ticket-by-id.ts`, `get-user-item.ts`) — each calls `recordStaffRead` after fetching a detail record, passing the resource-specific key, action, type, id, and owner id.
 
 ## Notes
 
-- **Detail reads only.** By design this helper is intended for single-record endpoints; list endpoints are expected *not* to call it, to avoid one audit entry per page.
-- **`ownerId` is optional.** When the controller doesn't know the owner (e.g. a shared resource), omit `ownerId`; the self-read suppression is then skipped and the read is always recorded (provided the key check passes).
-- **The function is deliberately side-effect-free for non-staff callers.** It never throws and never logs — it simply returns — so callers need no `if` guard around the call.
+- Only detail reads are audited; list/page endpoints intentionally do **not** call this function to avoid one entry per page.
+- `ownerId` is optional: when omitted the self-read guard is skipped, so the entry is always written (provided the key check passes).
+- The function is fire-and-forget (`void` return); it does not throw and does not alter the response.
+- Module docs point to `docs/theory/defences/authentication.md` for the broader "staff vs. owner" access model.

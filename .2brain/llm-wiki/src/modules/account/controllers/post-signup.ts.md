@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/post-signup.ts
-sha256: d3e90cb210be6a76b8ad1850d34e2e1013459a6d87184c72f1bd7c0c231cf778
-generated_at: 2026-10-15T09:56:16.593312+00:00
+sha256: 8fd729a8a05868cbc0a645d9440bbf76c4d756f2e54d9e2607231aad3c00745f
+generated_at: 2026-10-29T02:32:39.962667+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter for `POST /account/signup`. It extracts the request body, delegates to `accountService.signup`, then shapes the HTTP response (201 or 4xx) and — on genuine success — issues a session cookie and fires the verification email. It exists to keep the Express routing layer free of business logic and to make the "refused by antibot policy" path byte-identical in the response body to a real signup.
+HTTP controller for `POST /account/signup`. It is a thin adapter that destructures the JSON body, delegates all business logic to `accountService.signup`, then maps the result onto one of three HTTP responses: a validation failure (422), an antibot-rung-2 refusal (201, body-identical to success), or a genuine registration (201 + session cookies). No images or file uploads are handled here.
 
 ## Key elements
 
-- **`postSignup`** (exported) — The single controller handler. Destructures `request.body` with defaults, calls `accountService.signup`, branches on `data.isNew` to distinguish antibot refusal from a created account, then either responds with a forged 201 or issues a real session via `issueSession` and sends the verification email (fire-and-forget).
-- **`SIGNUP_LOCATION`** (module-private const) — Always `'/account'`; set as the `Location` header on every 201 so the refused path and the real path share the same header.
+- **`postSignup(request, response)`** — The sole export. Reads `request.body` (typed `SignupRequest | undefined`), defaults every field to `''`/`false` so a missing body yields the same 422 as empty fields, calls `accountService.signup`, then branches on the result.
+- **`SIGNUP_LOCATION`** — Constant `'/account'`. Used as the `Location` header on every 201 so the header never reveals a user id.
+- **Antibot (rung-2) branch** — Detected via `data.isNew` (Mongoose document still unsaved). Logs via `logAntibotRefusal`, increments `authSignupTotal{status='refused'}`, and returns a 201 whose body is byte-identical to a real signup (no `Set-Cookie` is the only differentiator).
+- **Success path** — Increments `authSignupTotal{status='success'}`, fires `accountService.sendVerificationEmail` as fire-and-forget (errors logged, never re-thrown), then calls `issueSession` to set session cookies before responding 201.
+- **`proof`** — Built inline as `{ amr: [AMR.password], provedAt: Date.now() }` and passed to `issueSession`; establishes that the new account's authentication proof is its password.
 
 ## Relationships
 
-- **`src/modules/account/services/index.ts`** — Calls `accountService.signup` for the core logic and `sendVerificationEmail` (fire-and-forget) after a successful creation.
-- **`src/modules/account/session/session.ts`** — Calls `issueSession` to set the session cookie on genuine success; the refused path skips this, so the *only* observable difference is the missing `Set-Cookie`.
-- **`src/modules/account/domain/session-proof.ts`** — Imports `AMR` to stamp the initial session proof as `{ amr: [AMR.password], provedAt: … }`.
-- **`src/modules/account/metrics.ts`** — Increments `authSignupTotal` on every terminal path (`success`, `failure`, `refused`).
-- **`src/infrastructure/http/response.ts`** — Uses `createdResponse` for 201s and `rejectResponse` for 4xx errors.
-- **`src/infrastructure/http/errors.ts`** — Uses `rejectDatabaseError` in the `.catch` to map unexpected DB failures to a safe 500.
-- **`src/infrastructure/http/request.ts`** — Calls `callerContextOf(request)` to pass IP/user-agent context into the service and the email sender.
-- **`src/infrastructure/http/middlewares/antibot-log.ts`** — Calls `logAntibotRefusal` on the rung-2 branch so the refusal is auditable.
-- **`src/modules/users/index.ts`** — Calls `userService.toUser(data, role)` to shape the response body into the public `User` type.
-- **`src/modules/access/index.ts`** — Imports `SIGNUP_DEFAULT_ROLE`; used directly (no membership lookup) because self-service signup can only ever grant that one role by construction.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/account/services/index.ts` | Calls `accountService.signup` and `accountService.sendVerificationEmail`. |
+| `src/modules/account/session/session.ts` | Calls `issueSession(request, response, data.id, proof)` on success. |
+| `src/modules/account/metrics.ts` | Increments `authSignupTotal` with `status` label (`success` / `failure` / `refused`). |
+| `src/modules/account/domain/session-proof.ts` | Imports `AMR.password` for the session proof object. |
+| `src/modules/users/index.ts` | Calls `userService.toAccount(data, null)` to shape the response body (role is always `null`). |
+| `src/infrastructure/http/response.ts` | Uses `rejectResponse` (422) and `createdResponse<Account>` (201). |
+| `src/infrastructure/http/errors.ts` | Calls `rejectDatabaseError` in the `.catch` handler. |
+| `src/infrastructure/http/request.ts` | Calls `callerContextOf(request)` to derive client context passed to the service. |
+| `src/infrastructure/http/middlewares/antibot-log.ts` | Calls `logAntibotRefusal` in the rung-2 branch. |
+| `src/infrastructure/adapters/logger.ts` | Logs the verification-email queuing failure. |
+| `src/types/index.ts` | Consumes `Account` and `SignupRequest` type definitions. |
+| `src/modules/account/routes.ts` | Imports `postSignup` and mounts it on the `POST /account/signup` route. |
 
 ## Notes
 
-- **`request.body` is typed `| undefined`.** Express 5 leaves `body` unset when no parser matched the content-type; multer also passes through non-multipart bodies untouched. The controller guards with `?? {}` and defaults every field, so an absent body produces the same 422 as an empty body rather than a thrown error.
-- **Antibot "rung 2" indistinguishability.** When `data.isNew` is still `true` after `signup`, the address was refused by email policy but *no row was written*. The controller still returns a 201 with a valid `User` body, the same `Location` header, and the same `SIGNUP_DEFAULT_ROLE` — deliberately omitting the session cookie and the verification email. The body is byte-identical; only the missing `Set-Cookie` and the suppressed email differ. This is intentional: rung 2 is off by default, and the 409 for a taken address already leaks existence.
-- **No session before verification.** The issued session marks the user as `unverified`; the role model permits browsing and blocks only `cart.self.checkout`, so requiring a second login before the user reaches that state would add friction without security gain.
-- **`termsAccepted` defaults to `false`.** A request with no body "accepted nothing," matching the semantics of an explicit empty submission.
+- **Indistinguishability by design.** The antibot-refusal 201 is intentionally byte-identical to a real signup 201 in the response body; the only leak is the absence of `Set-Cookie` headers. The `Location` header is the same constant for both. Rung 2 is off by default.
+- **`request.body` is `| undefined`.** Express 5 leaves `body` unset when no parser matched the content-type, and multer calls `next()` untouched on non-multipart bodies. The controller destructures with a `?? {}` guard and defaults every field so the failure mode is a uniform 422, not a throw.
+- **No access token in the response.** The session is cookie-only. The frontend obtains its access token via `POST /account/refresh` after receiving the 201, mirroring the OAuth-callback flow.
+- **`data.isNew` is the antibot signal.** Mongoose leaves `isNew` true until `.save()` succeeds. A `true` value in the controller means rung 2 refused the address and no account was persisted.
+- **Role is always `null`.** Self-service signup grants no role; `userService.toAccount(data, null)` is called with `null` in both the success and refusal branches.

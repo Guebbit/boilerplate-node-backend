@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/presenter.ts
-sha256: e201c1d87a5a9e69d8f78e6d454a363b5d39ae82a643b1d8081ae895f267152b
-generated_at: 2026-10-15T11:54:22.479751+00:00
+sha256: cef15ded3e7319b1b9da97d55ab65935669d6d6104298d436c98df7ce74bb50b
+generated_at: 2026-10-29T05:39:50.245287+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,19 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A single-purpose adapter that converts a stored `ReturnDocument` into the `Return` wire contract. It exists so that the document's internal shape (MongoDB `_id`, native dates) is translated to the external shape (`id`, ISO strings) in exactly one place, keeping the rest of the codebase free of manual field mapping.
+Single responsibility: convert a `ReturnDocument` (as stored in the database) into the `StoredReturn` shape that the API contract expects, before the read service layers on caller-specific `actions`.
 
 ## Key elements
 
-- **`presentReturn(document: ReturnDocument): Return`** — Calls `document.toJSON()` (which handles the `_id` → `id` rename and date-to-ISO-string conversion) and casts the result to `Return`. The cast is required because TypeScript cannot infer that `toJSON()`'s return matches the `Return` interface.
+- **`StoredReturn`** (type export) — `Omit<Return, 'actions'>`. Represents the return document in wire form minus the action list the read service adds later.
+- **`presentReturn`** (function export) — Takes a `ReturnDocument`, calls its `.toJSON()` method (which renames `_id` → `id` and serialises dates to ISO strings), and casts the result to `StoredReturn`.
 
 ## Relationships
 
-- **`src/modules/returns/model.ts`** — Supplies the `ReturnDocument` type that `presentReturn` accepts. The document's `toJSON()` method (defined there or its base class) performs the actual field transformation.
-- **`src/types/index.ts`** — Supplies the `Return` interface that `presentReturn` returns. This is the public contract callers see.
-- **`src/modules/returns/services/read.ts`** — Consumes `presentReturn` to produce base `Return` objects, then layers `actions` on top before handing results to the caller.
+- **`src/modules/returns/model.ts`** — Supplies the `ReturnDocument` type that `presentReturn` accepts as input.
+- **`src/types/index.ts`** — Supplies the `Return` type used to derive `StoredReturn`.
+- **`src/modules/returns/services/read.ts`** — Downstream consumer; calls `presentReturn` first, then augments the result with `actions` to fulfil the full `Return` contract.
+- **`src/modules/returns/repository.ts`** — Upstream producer; fetches `ReturnDocument` instances from storage that flow into `presentReturn`.
 
 ## Notes
 
-- The `as Return` cast is intentional, not a workaround for a bug: `toJSON()` returns a structural type that TypeScript cannot automatically narrow to `Return`. Remove the cast only if the model's return type is explicitly annotated as `Return`.
-- This file is deliberately minimal. If you need to add computed fields or conditional logic, that belongs in `services/read.ts`, not here.
+- The `as StoredReturn` cast exists because `document.toJSON()` returns a loosely-typed shape the compiler can't reconcile with `Return` on its own. The runtime transform is real (field rename, date serialisation) but invisible to the type system, so the cast is load-bearing, not a shortcut.
+- This file intentionally does **not** produce a full `Return`; the `actions` field is always absent here by design.

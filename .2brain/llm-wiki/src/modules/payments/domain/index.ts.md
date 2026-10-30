@@ -1,28 +1,31 @@
 ---
 source: src/modules/payments/domain/index.ts
-sha256: 118f0e2187b6fa8fc48097249909383df7998076350efdd42beea5fdb18a8118
-generated_at: 2026-10-15T11:25:04.750569+00:00
+sha256: d5f0d42cd0da296bf201a3517fe55b78543576734a116758475e4b28a2c2c4f2
+generated_at: 2026-10-29T05:04:59.888187+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/payments/domain/index.ts
 
 ## Purpose
-Barrel file for the payments domain layer. It re-exports the pure status vocabulary and display-status helpers so that consumers (presenter, services, repository) import from a single entry point rather than reaching into individual domain files. The domain layer is lint-guaranteed free of Express, Mongoose, and every other tier.
+
+Barrel file that re-exports every public symbol of the payments **domain layer** — pure status vocabulary, dispute predicates, bank-transfer reference helpers, and display-label logic — so callers can import from a single path (`payments/domain`) without reaching into individual sub-modules. The header doc block states the contract: no Express, Mongoose, or framework-tier imports are permitted here (enforced by lint).
 
 ## Key elements
-- **`CONFIRMABLE_PAYMENT_STATUSES`, `SETTLEABLE_PAYMENT_STATUSES`, `SUCCESS_SETTLEABLE_PAYMENT_STATUSES`, `REAPABLE_PAYMENT_STATUSES`, `REFUNDABLE_PAYMENT_STATUS`, `OPEN_REFUND_STATUSES`** — Re-exported from `./lifecycle`. These are the six status constants that define which payment states permit confirm, settle, success-settle, reap, refund, and open-refund transitions respectively.
-- **`displayStatusOf`, `displayStatusFilter`** — Re-exported from `./display-status`. `displayStatusOf` maps a payment record to its display label; `displayStatusFilter` returns the query that selects payments by that label.
-- **`DisplayStatusInput`** — Re-exported type from `./display-status`; the input shape accepted by the display-status functions.
+
+- **`./lifecycle` re-exports** — The core status sets (`CONFIRMABLE`, `IN_FLIGHT`, `SETTLEABLE`, `SUCCESS_SETTLEABLE`, `REAPABLE`, `REFUNDABLE`), provider constant (`MANUAL_PROVIDER`), and predicate/helper functions for refunds (`mayBeCanceled`, `refundDueBy`, `exceedsRemaining`, `exceedsBy`, `nextRefundAttemptAt`), money-movement guards (`owesBuyerAnotherWay`, `MONEY_DID_NOT_MOVE_FAILURES`), and refund-failure classification (`isFinalFailure`, `isReversed`, `FINAL_REFUND_FAILURES`, `UNCLEAR_REFUND_FAILURES`).
+- **`./disputes` re-exports** — Open/lost chargeback predicates (`isOpenDispute`, `hasOpenDispute`, `hasOpenChargeback`, `lostToChargebacks`, `lostChargebackCovers`, `hasDecidedDispute`), the `openDisputeFilter` query builder, and the `DisputeFacts` / `DisputablePayment` types.
+- **`./transfer-reference` re-exports** — `buildReference` / `parseReference` for the RF creditor reference on bank-transfer payments.
+- **`./display-status` re-exports** — `displayStatusOf` (label computation) and `displayStatusFilter` (query behind a label), plus the `DisplayStatusInput` type.
 
 ## Relationships
-- **`src/modules/payments/domain/lifecycle.ts`** — Source of all six status-constant exports; this file is the public surface for them.
-- **`src/modules/payments/domain/display-status.ts`** — Source of `displayStatusOf`, `displayStatusFilter`, and `DisplayStatusInput`.
-- **`src/modules/payments/index.ts`** — Upstream barrel that re-exports this domain index alongside presenter, repository, and service exports, giving external consumers a single `payments` import.
-- **`src/modules/payments/presenter.ts`, `repository.ts`, `services/*.ts`** — Consumers that import status constants or display-status helpers through this file (or through `payments/index.ts`).
-- **`src/modules/payments/tests/unit/display-status.test.ts`** — Unit test that exercises `displayStatusOf` / `displayStatusFilter` via this barrel.
+
+- **Re-exports from** `lifecycle.ts`, `disputes.ts`, `transfer-reference.ts`, and `display-status.ts` — the four files that actually implement the domain rules.
+- **Consumed by** `src/modules/payments/index.ts` (module-level barrel), `presenter.ts`, `repository.ts`, and every service under `services/` (`announce`, `deadline`, `disputes`, `intent`, `list`, `notify`, `refund-settlement`), which import domain vocabulary and predicates through this file rather than from the sub-modules directly.
+- **Test double** `scenarios/support/doubles/payments/fake.ts` mirrors the same export surface so tests can swap the real domain for a stub.
 
 ## Notes
-- The file contains no logic of its own — it is purely a re-export surface. All behavior lives in `./lifecycle` and `./display-status`.
-- The domain folder exists because the status vocabulary is six entries wide, exceeding the project's threshold for a scattered constant (see `docs/theory/domain-layer.md` for the rule).
-- Lint enforces that nothing in this directory imports Express, Mongoose, or other-tier modules; adding such an import here would break that guarantee.
+
+- The file contains **no logic of its own** — it is purely a re-export barrel. Changes to the public API surface live in the four sub-modules; this file only adds or removes `export … from` lines.
+- The doc comment references `docs/theory/domain-layer.md` for the rationale behind the folder layout (status vocabulary width > threshold ⇒ dedicated `domain/` folder).
+- Because the domain layer is lint-guaranteed free of framework imports, any new export added here must also satisfy that constraint at the source sub-module.

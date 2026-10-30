@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/security/breached-passwords/index.ts
-sha256: 5b45d3a4d4d2797edaf25bac302d77ef9d579ec039dc61282305cbc459a23031
-generated_at: 2026-10-15T09:51:03.572929+00:00
+sha256: 0535ef610b09ede04fb2e0eeccc31f2aa56e03da0a0a07da2add08942e52bec5
+generated_at: 2026-10-29T02:15:36.738259+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides breached-password checking exclusively for password **set** paths (signup, change, reset). Two independent rungs — a bundled in-memory list and the HIBP k-anonymity range API — are consulted in order. Both rungs **fail open** (any error accepts the password), and the check is never performed on login, where refusing would confirm a guess to an attacker and lock out the legitimate user.
+Provides breached-password rejection for all password-**set** paths (signup, change, reset). It combines two independent checks — a bundled static list and the HIBP k-anonymity range API — and deliberately never runs on login, where a rejection would confirm a guess to an attacker and lock out the affected user. Both rungs fail open: any infrastructure error results in the password being accepted.
 
 ## Key elements
 
-- **`bundledList`** (module-level `Set<string>`) — loaded once from `list.txt` via `readFileSync` at import time; exact, case-sensitive membership check.
-- **`isInBundledBreachList(password)`** — synchronous, zero-network check against `bundledList` (rung 1).
-- **`checkHibpRange(password)`** — asynchronous HIBP k-anonymity lookup (rung 2). Sends only the 5-char SHA-1 prefix; matches the suffix locally. Bounded by `AbortSignal.timeout`, capped body read, `redirect: 'error'`, and the `Add-Padding` header. Returns `{ breached, count? }`.
-- **`checkPasswordBreach(password)`** — orchestrates both rungs: short-circuits on a rung-1 hit; skips rung 2 if its feature flag is off. The shared primitive behind both the enforcing and advisory callers.
-- **`assertPasswordNotBreached(password)`** — the entry point every password-set path calls. Returns `ResponseErrorItem[]` (empty array = accepted). Never reveals *which* rung matched.
-- **`parseRangeLine`** (internal) — parses one `SUFFIX:COUNT` line from a HIBP range response.
+- **`bundledList`** (module-private `Set`) — loaded once at import time from `shared/rules/breached-passwords.txt`; exact, case-sensitive match.
+- **`isInBundledBreachList(password)`** — Rung 1. Synchronous, no network. Returns `true` if the password is in the bundled set.
+- **`checkHibpRange(password)`** — Rung 2. Sends only the 5-char SHA-1 prefix to `api.pwnedpasswords.com/range/…`; matches the suffix locally. Uses `AbortSignal.timeout` and `redirect: 'error'`. Returns `{ breached, count? }`; on any failure logs a warning and resolves `{ breached: false }`.
+- **`checkPasswordBreach(password)`** — Orchestrates both rungs in order (Rung 1 short-circuits; Rung 2 only if enabled in config and Rung 1 missed). Shared by the enforcing helper and the advisory endpoint.
+- **`assertPasswordNotBreached(password)`** — The function every password-set path calls. Returns `ResponseErrorItem[]` (empty = acceptable). Uses `t('validation.password-breached')` for the message; never reveals which rung fired.
+- **`parseRangeLine`** (module-private) — Parses one `<suffix>:<count>` line from a HIBP response.
 
 ## Relationships
 
-- **`@infrastructure/security/config`** — reads `breachedPasswordsConfig()` for the two feature flags (`NODE_PASSWORD_BREACH_LIST`, `NODE_PASSWORD_BREACH_HIBP`) and the HIBP timeout (`NODE_PASSWORD_BREACH_HIBP_TIMEOUT_MS`).
-- **`@infrastructure/http/read-capped-body`** — uses `readCappedText` and `DEFAULT_BODY_CAP_BYTES` to bound the HIBP response body.
-- **`@infrastructure/http/response`** — imports `fieldError` and the `ResponseErrorItem` type to build the standard error-shape returned to callers.
-- **`@infrastructure/i18n`** — uses `t('validation.password-breached')` for the user-facing error message.
-- **`@infrastructure/adapters/logger`** — logs a warning (`logger.warn`) when the HIBP call fails and the password is accepted.
-- **`src/modules/account/services/signup.ts`**, **`password-reset.ts`**, **`password.ts`** — call `assertPasswordNotBreached` on their respective password-set paths.
-- **`src/modules/account/controllers/post-password-check.ts`** — advisory endpoint; calls `checkPasswordBreach` and is the only caller that reads the `count` field.
+- **`@infrastructure/config/shared-rules/load`** — supplies `SHARED_RULES_DIRECTORY`, the base path for the bundled `.txt` file.
+- **`@infrastructure/i18n`** — provides `t()` for the user-facing breach error string.
+- **`@infrastructure/adapters/logger`** — `logger.warn` is called when the HIBP lookup fails (fail-open path).
+- **`@infrastructure/security/config`** — `breachedPasswordsConfig()` gates each rung and provides the HIBP timeout.
+- **`@infrastructure/http/response`** — `fieldError` and the `ResponseErrorItem` type shape the return value of `assertPasswordNotBreached`.
+- **`@infrastructure/http/read-capped-body`** — `readCappedText` + `DEFAULT_BODY_CAP_BYTES` bound the HIBP response read.
+- **`src/modules/account/services/signup.ts`**, **`password.ts`**, **`password-reset.ts`** — callers of `assertPasswordNotBreached` on their respective password-set flows.
+- **`src/modules/account/controllers/post-password-check.ts`** — the advisory endpoint that calls `checkPasswordBreach` directly and reads the optional `count` field.
 - **`tests/unit/infrastructure/security/breached-passwords/index.test.ts`** — unit tests for this module.
 
 ## Notes
 
-- **Fail-open contract:** every error path in `checkHibpRange` resolves to `{ breached: false }`. A HIBP outage must never block signup/reset. The `.catch` block is wrapped in `// Stryker disable/restore all` to suppress mutation-testing noise.
-- **`__dirname`, not `import.meta.url`:** the file must work under both `tsx` and Jest (ts-jest CommonJS target), where `import.meta` is a syntax error. Same rationale as `i18n/catalog.ts`.
-- **Case-sensitive exact match** on the bundled list: `password1!` ≠ `Password1!` (breach corpora distinguish case).
-- **`list.txt` is generated** by `scripts/security/refresh-breached-passwords.ts`; it is a static file in the same directory, not fetched at runtime.
-- **HIBP privacy:** only the first 5 hex chars of the SHA-1 hash leave the process; `Add-Padding: true` prevents response-size fingerprinting of the prefix.
-- **`redirect: 'error'`:** a redirect is treated as a failure rather than followed, to avoid hitting an untrusted host.
+- The bundled list file must stay byte-identical with the PHP twin; it is regenerated by `scripts/security/refresh-breached-passwords.ts`.
+- `redirect: 'error'` on the `fetch` call means a 3xx from HIBP is treated as a failure (fail open), not followed.
+- The `Stryker disable/restore all` comments around the `.catch` block suppress mutation-testing in the fail-open path, since that path is intentionally a no-op.
+- Rung 2 is only reached when `NODE_PASSWORD_BREACH_HIBP` is truthy; Rung 1 is gated by `NODE_PASSWORD_BREACH_LIST`. Both can be independently disabled per deployment.
+- The `count` field in the return value is only consumed by the advisory endpoint; the enforcing paths discard it.

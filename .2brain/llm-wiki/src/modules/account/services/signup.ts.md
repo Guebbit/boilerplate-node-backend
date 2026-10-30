@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/signup.ts
-sha256: c341b88dd35a9070d4b5273882a35d7cc4533d45fec30eea9eebd6b1747aa8d4
-generated_at: 2026-10-14T08:54:17.052127+00:00
+sha256: de5f5786f9ae57b658f34232719b633a4430487c909dfd3fb19b8fce8e58a6ea
+generated_at: 2026-10-29T02:45:06.831508+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the `POST /account/signup` endpoint logic: validates submitted fields, runs anti-automation gates (breached-password corpus, email policy), then atomically creates the user account and its default `unverified` role in a single database transaction. Exports the `signup` handler and the `SignupInput` shape consumed by the route layer.
+Implements the `POST /account/signup` handler. Validates the submitted fields, runs a sequential guard chain (breached-password check → anti-automation email policy → email-taken lookup + account creation), and records the outcome in audit and analytics. Returns a `ResponseSuccess<UserDocument>` or `ResponseReject` envelope.
 
 ## Key elements
 
-- **`SignupInput`** (interface) — flat object holding `email`, `username`, `password`, `passwordConfirm`, `analyticsConsent` (optional), and `termsAccepted` (required `true`). Chosen over positional args because optional fields and booleans make ordering fragile.
-- **`guardBreachedPassword`** (private) — calls `assertPasswordNotBreached`; returns a 422 `ResponseReject` on a hit, `undefined` to continue. Runs first because a breached password is terminal on its own.
-- **`guardEmailPolicy`** (private) — calls `checkEmailPolicy`; on a `'refused'` verdict returns a **decoy** `ResponseSuccess` built from an *unsaved* document via `userService.buildSignupDecoy`, so a scraping script sees a normal success. Returns `undefined` to continue.
-- **`createAccountIfEmailFree`** (private) — checks `userService.emailTaken`; on a free email, runs `withTransaction` to call `userService.registerSelfService` then `assignDefaultRole` (hard-coded `'tenant'` scope, no role name — structurally limited to `unverified`). Catches DB errors into `rejectDatabaseEnvelope('auth', …)`.
-- **`signup`** (exported) — orchestrates the pipeline: Zod validation (including `parseFormBoolean` pre-processing for `termsAccepted` and `analyticsConsent`), then the three gates in order (breach → antibot → create), finally records an audit entry and an analytics event. Distinguishes a real signup from the decoy via `result.data.isNew`.
+- **`SignupInput`** (exported interface) — flat object holding email, username, password, passwordConfirm, optional `analyticsConsent`, and required `termsAccepted`.
+- **`guardBreachedPassword`** (private) — queries the breach corpus; returns a 422 reject or `undefined` to pass.
+- **`guardEmailPolicy`** (private) — calls the anti-automation adapter; on a *refused* verdict returns a decoy `ResponseSuccess` wrapping an **unsaved** Mongoose document (never persisted). Returns `undefined` to pass.
+- **`createAccountIfEmailFree`** (private) — the single DB round-trip: checks email uniqueness, registers the user, enqueues if pending, or returns a 409 reject.
+- **`signup`** (exported function) — orchestrates Zod validation, the three-guard chain, then post-processing (audit record, analytics event). The first guard to produce a result short-circuits the chain.
 
 ## Relationships
 
-- **`@infrastructure/adapters/antibot`** — calls `checkEmailPolicy` in `guardEmailPolicy`.
-- **`@infrastructure/security/breached-passwords`** — calls `assertPasswordNotBreached` in `guardBreachedPassword`.
-- **`@infrastructure/runtime/database`** — uses `withTransaction` to make account creation + role assignment atomic.
-- **`@infrastructure/http/response`** — `generateSuccess`, `generateReject`, `validationErrors` shape every return value.
-- **`@infrastructure/http/errors`** — `rejectDatabaseEnvelope` converts thrown DB errors into a standard reject envelope.
-- **`@infrastructure/http/request`** — `parseFormBoolean` decodes multipart `"true"`/`"false"` strings before Zod sees them.
-- **`@infrastructure/http/schemas`** — `optionalBooleanSchema` re-used for `analyticsConsent`.
-- **`@infrastructure/i18n`** — `t` for translated error messages; `getCurrentLocale` captured at signup time and stored on the user for later async work (queued emails, nightly jobs).
-- **`@infrastructure/observability/analytics`** — `emitAnalyticsEvent` + `buildAnalyticsBase` fire on successful signup.
-- **`@infrastructure/observability/audit`** — `recordAudit` logs both success and failure (including the decoy refusal).
-- **`@kernel/access/tenant`** — supplies `DEPLOYMENT_TENANT_ID` for the role-assignment scope.
-- **`@modules/access`** — `assignDefaultRole` grants the starting role inside the same transaction.
+- **`@infrastructure/adapters/antibot`** — calls `checkEmailPolicy(email)` for the rung-2 anti-automation gate.
+- **`@infrastructure/security/breached-passwords`** — calls `assertPasswordNotBreached(password)` as the first guard.
+- **`@infrastructure/http/response`** — builds all success/reject envelopes (`generateSuccess`, `generateReject`, `validationErrors`).
+- **`@infrastructure/http/errors`** — wraps uncaught DB errors via `rejectDatabaseEnvelope`.
+- **`@infrastructure/http/request`** — uses `parseFormBoolean` to decode multipart boolean fields before Zod validation.
+- **`@infrastructure/http/schemas`** — reuses `optionalBooleanSchema` for the `analyticsConsent` field.
+- **`@infrastructure/i18n`** — calls `t()` for user-facing messages and `getCurrentLocale()` to stamp the user's signup language.
+- **`@infrastructure/observability/analytics`** — emits `USER_SIGNED_UP` event on successful creation.
+- **`@infrastructure/observability/audit`** — writes an `AUTH_SIGNED_UP` audit record (success or failure) on every path.
+- **`../analytics`** — imports the `accountAnalyticsEvents` constant map.
+- **`../audit`** — imports the `accountAuditActions` constant map.
+- **`../consent-record`** — calls `analyticsAnswer()` and `termsAcceptance()` to shape the consent data stored on the document.
+- **`./index`** (services barrel) — re-exports `signup` and `SignupInput` for route handlers.
 
 ## Notes
 
-- **Decoy detection via `isNew`:** The antibot "refused" path returns a document that was never `.save()`-d, so Mongoose `isNew` stays `true`. The audit block uses this to write `outcome: 'failure'` and skip the analytics event. This is the *only* way to tell a decoy apart from a real signup after the pipeline resolves.
-- **`termsAccepted` is not optional:** The schema uses `z.preprocess(parseFormBoolean, z.literal(true))` — absent or `"false"` is a 422. This is intentionally stricter than the `PUT/PATCH /account` endpoints, where the field is genuinely optional.
-- **`analyticsConsent` absent → stored as `false`:** Unlike update routes where absent means "leave it alone," signup has no prior value, so `undefined` and explicit `false` are equivalent.
-- **Role grant is name-locked:** `assignDefaultRole` takes no role-name parameter in the self-service path, making it structurally impossible for a normal signup to grant anything other than the deployment default (`unverified`).
-- **Locale is snapshotted at signup:** `getCurrentLocale()` is written to the user document so that later work without a request context (queued welcome email, nightly jobs) can still use the correct language.
+- **Decoy detection via `Document#isNew`:** the anti-automation path returns a `ResponseSuccess` whose `data` is a Mongoose document that was never `.save()`-d. The code detects this with `result.data.isNew === true` and records the audit entry as a failure. This is the only path that produces an unsaved document; all genuine successes have `isNew === false`.
+- **Guard order is load-bearing:** breached-password check runs first so a bad password is rejected before any network/DB I/O. Email-policy (decoy) runs second. DB creation runs last. The first non-`undefined` result is returned.
+- **`termsAccepted` is `z.literal(true)`, not a boolean:** the schema rejects `false`, absent, and any non-`true` value with a dedicated i18n message. `analyticsConsent` is `optionalBooleanSchema` (absent → `undefined` → stored as `false`).
+- **`locale` is captured at signup** so downstream queued jobs (welcome email, nightly tasks) can render in the user's language without needing an `Accept-Language` header.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/controllers/post-ship-fulfillment-order.ts
-sha256: 35ec32aa8dd8c3b9009d27e8c6ff023dbb50650ba87367322bdb517faf7aaf13
-generated_at: 2026-10-14T15:21:46.657332+00:00
+sha256: 993a05cbd42fae3df04e61042dbaccb2206b9a49fdc2b0201abee539d7385a53
+generated_at: 2026-10-29T03:32:33.750072+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express route handler for `POST /delivery/fulfillment-orders/:id/shipments`. Validates the incoming request (id presence, body schema), delegates the "cut a shipment" operation to the delivery service, and maps the result to an appropriate HTTP response (201 with the created `Shipment`, or a rejection/error status).
+HTTP controller handler for `POST /delivery/fulfillment-orders/:id/shipments`. It validates the incoming request (path ID, body schema) and delegates the business logic of cutting a shipment from a fulfillment order to the delivery service layer, then maps the result to a `201 Created` response.
 
 ## Key elements
 
-- **`postShipFulfillmentOrder(request, response)`** (exported) — The sole export. Synchronous Express handler that:
-  1. Extracts and validates the `:id` route param via `requireId`.
-  2. Parses and validates the JSON body against the `ShipFulfillmentOrderBody` Zod schema.
+- **`postShipFulfillmentOrder`** (exported) — Express route handler. Sequence:
+  1. Extracts the `:id` path param via `requireId`; early-returns `Promise.resolve()` on failure.
+  2. Validates `request.body` against the `ShipFulfillmentOrderBody` Zod schema via `parseBody`; early-returns on failure.
   3. Calls `deliveryService.shipFulfillmentOrder(id, body, authContext, callerContext)`.
-  4. On success, returns `201 Created` with the new `Shipment` and a `Location`-style header to the parent order (`/delivery/order/:orderId`).
-  5. On rejection or thrown error, delegates to `refused` / `catchAs` for a standard error response.
+  4. On success, sends `201` with the `Shipment` payload and a `Location` header pointing to `/delivery/shipments/:id`.
+  5. Catches all downstream errors via `catchAs(response, 'postShipFulfillmentOrder')`.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** (`catchAs`, `parseBody`, `refused`) — provides the shared guard-and-error utilities that shape every controller in the project.
-- **`@infrastructure/http/ids`** (`requireId`) — validates the `:id` route parameter and emits a 404 with the `delivery.fulfillment-order-not-found` code if absent.
-- **`@infrastructure/http/request`** (`callerContextOf`) — extracts caller metadata (e.g. API key, user id) from the request for audit/logging passed to the service.
-- **`@infrastructure/http/response`** (`createdResponse`) — builds the 201 response envelope including the `Location` header.
-- **`../services`** (`deliveryService`) — the domain service that performs the actual shipment-cutting logic; this controller contains no business rules.
-- **`@types`** (`Shipment`) — the return shape used to type the 201 response body.
-- **`src/modules/delivery/routes.ts`** — imports this handler and binds it to the `POST /delivery/fulfillment-orders/:id/shipments` route.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/delivery/routes.ts` | Registers `postShipFulfillmentOrder` as the handler for the `POST …/shipments` route. |
+| `src/modules/delivery/services/index.ts` | Provides `deliveryService.shipFulfillmentOrder`, the core domain operation. |
+| `src/infrastructure/http/controller.ts` | Supplies `parseBody`, `refused`, and `catchAs` (shared validation/error helpers). |
+| `src/infrastructure/http/ids.ts` | Supplies `requireId` for safe path-param extraction. |
+| `src/infrastructure/http/request.ts` | Supplies `callerContextOf` to derive the caller's context for the service call. |
+| `src/infrastructure/http/response.ts` | Supplies `createdResponse` to shape the `201` reply. |
+| `src/types/index.ts` | Provides the `Shipment` type used in the response generic. |
 
 ## Notes
 
-- On validation failure the function returns `Promise.resolve()` (not a plain `return`) to keep the return type consistent as `Promise<void>` for Express's async-handler expectation.
-- The `Location`-style header points to the **parent order**, not the shipment itself—consumers should follow that link for order-level state.
-- The Zod schema `ShipFulfillmentOrderBody` is imported from `@api/schemas.zod`, which is *not* listed in the local graph neighbors but is a hard dependency for type-safe body parsing.
+- The handler follows the standard "validate → delegate → respond" pattern shared across other controllers in this module; it contains no business logic itself.
+- Early-return uses `Promise.resolve()` (not `response.send`) so the Express async contract is satisfied without a `200`.
+- The `authContext` comes from `request.authContext` (set upstream by middleware), while `callerContextOf(request)` provides a separate, derived context object — both are passed to the service.

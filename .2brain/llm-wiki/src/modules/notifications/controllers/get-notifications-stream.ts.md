@@ -1,28 +1,31 @@
 ---
 source: src/modules/notifications/controllers/get-notifications-stream.ts
-sha256: 629dd9311d665e07878e351fa54814333cb82b2eddf56576d7e95aec46fd13e1
-generated_at: 2026-10-15T10:49:41.622618+00:00
+sha256: d575984b360e28c354992c792a93aa65cec188cc79aeb0a6a50a57f202d21731
+generated_at: 2026-10-29T04:27:56.457955+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/notifications/controllers/get-notifications-stream.ts
 
 ## Purpose
-Controller for `GET /notifications/stream`. Opens the caller's Server-Sent Events (SSE) stream and wires a periodic permission recheck to the same cookie that authenticated the initial request. Exists as a separate handler because SSE clients (`EventSource`) cannot send an `Authorization` header, so this route uses cookie-based auth rather than the standard bearer-token path.
+
+Controller for `GET /notifications/stream`. It validates that the caller was authenticated via the refresh cookie (since `EventSource` cannot send an `Authorization` header) and then delegates to the notifications service to open a Server-Sent Events stream for that user's notifications.
 
 ## Key elements
-- **`NOTIFICATIONS_READ_KEY`** (`'notifications.self.read'`) — Exported constant for the permission key this route guards on. Exported from this file (not from `routes.ts`) because the handler needs the string *value* for the recheck predicate, not merely a guard reference.
-- **`getNotificationsStream`** — Request handler. Validates that `request.authContext` and `request.sessionRecheck` are present (set by the upstream `requirePermissionViaCookie` middleware); if either is missing, responds 401 via `rejectResponse`. Otherwise delegates to `streamNotifications(response, user.id, recheckFn)`.
+
+- **`getNotificationsStream`** (exported function) — Express handler. Reads `request.authContext` and `request.sessionRecheck` (both set upstream by `requirePermissionViaCookie`), returns a `401` with an i18n message if either is missing, otherwise calls `notificationsService.stream(response, user.id, recheckFn)`.
 
 ## Relationships
-- **`services/stream.ts` / `services/index.ts`** — Calls `streamNotifications`, which owns the actual SSE lifecycle (headers, heartbeat, teardown).
-- **`kernel/middlewares/authorizations.ts`** — Imports `stillHoldsKeyViaCookie`, passed as the recheck predicate so the stream re-validates the cookie every 30 s.
-- **`infrastructure/http/response.ts`** — Uses `rejectResponse` for the 401 early-return path.
-- **`infrastructure/i18n/index.ts`** — Uses `t` to localise the 401 error message.
-- **`routes.ts`** — Mounts this handler behind `requirePermissionViaCookie` but deliberately *not* behind `isAuth`.
-- **`tests/unit/get-notifications-stream.test.ts`** — Unit-tests the handler's auth-check and delegation logic.
+
+- **`src/modules/notifications/routes.ts`** — mounts this handler on the `GET /notifications/stream` route behind `requirePermissionViaCookie` (not behind `isAuth`).
+- **`src/modules/notifications/services/index.ts`** — provides `notificationsService`, whose `.stream()` method performs the actual SSE setup and periodic permission recheck.
+- **`src/kernel/middlewares/authorizations.ts`** — supplies `stillHoldsRuleViaCookie`, the recheck callback passed into the service so the stream can be revoked if the cookie's permission lapses.
+- **`src/infrastructure/http/response.ts`** — supplies `rejectResponse` for the `401` failure path.
+- **`src/infrastructure/i18n/index.ts` / `context.ts`** — supplies `t()` for the localized error message.
+- **`src/modules/notifications/tests/unit/get-notifications-stream.test.ts`** — unit tests exercising the controller's auth-check and delegation logic.
 
 ## Notes
-- The route is intentionally outside `isAuth` (bearer-token guard). `request.authContext` / `request.sessionRecheck` are therefore read *without* a `!` assertion; absence is treated as fail-closed (401).
-- The 30-second recheck cadence is configured inside `streamNotifications`; the controller only supplies the predicate (`stillHoldsKeyViaCookie(request, NOTIFICATIONS_READ_KEY)`).
-- Do not move `NOTIFICATIONS_READ_KEY` into `routes.ts` — the handler needs the literal value at runtime, while `routes.ts` only needs it as a guard token.
+
+- The route is **deliberately not** behind `isAuth` (which expects a bearer token). Consequently the code reads `request.authContext` and `request.sessionRecheck` without non-null assertions and treats their absence as a fail-closed `401`.
+- The 30-second recheck interval is configured inside `services/stream.ts`, not here; this file only supplies the predicate (`stillHoldsRuleViaCookie(request, 'read', 'Notification')`).
+- The `request` object is captured in the recheck closure, so the original cookie/session state at stream-open time is what's re-validated each tick.

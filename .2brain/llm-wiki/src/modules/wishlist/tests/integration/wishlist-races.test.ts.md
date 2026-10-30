@@ -1,7 +1,7 @@
 ---
 source: src/modules/wishlist/tests/integration/wishlist-races.test.ts
-sha256: 2233d93c21798c7c447f3a7513ee91b5551c2784e160c1d87bce6cbb8a39f1ed
-generated_at: 2026-10-15T12:28:43.943323+00:00
+sha256: 753273c1ff1ea5765974ab9c0d6a5a1051d8908ac74d35b08aa7d2bcc8896cab
+generated_at: 2026-10-29T06:36:10.351928+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that pin down the concurrency guarantees of the wishlist endpoints. They verify two distinct atomicity claims: (1) `$addToSet` on `items.productId` makes the line-level write idempotent regardless of interleaving, and (2) the `upsert` filter `{ userId }` is an exact match on the unique index key, so the document-level race resolves to a single insert. The tests exist to catch regressions—e.g. swapping `$addToSet` for `$push`, or adding a condition to the upsert filter—that would break one guarantee without breaking the other.
+Integration tests that pin down the concurrency invariants of the wishlist endpoints. The file validates two distinct race classes—**RW1** (duplicate lines from concurrent saves of the same product, guarded by `$addToSet`) and **RW2** (duplicate wishlist documents from concurrent first-saves via `upsert`)—plus a mixed save/move-to-cart interleaving. Each test fires `RACE_SIZE` concurrent requests and asserts on final database state, not just HTTP status codes.
 
 ## Key elements
 
-- **`describe('RW1 — concurrent saves of the SAME product')`** — fires N identical `PUT /wishlist/:productId` requests; asserts all return 200, exactly one wishlist document exists, and it holds exactly one line for that product.
-- **`describe('RW1 — concurrent saves of DIFFERENT products')`** — fires N `PUT` requests each targeting a distinct product; asserts all return 200, one wishlist document, and N distinct lines. Exists because the single-product case cannot distinguish a correct set-append from a duplicate-losing implementation.
-- **`describe('RW2 — the FIRST save, raced')`** — starts from a guaranteed-empty wishlist (fresh account), races N first-time saves of one product; asserts zero 409s, all 200s, and exactly one document. The explicit 409 count is the safety net for the losing-upsert → E11000 → 409 path.
-- **`describe('a save and a move-to-cart on the same line')`** — pre-seeds one saved line, then races N alternating `PUT /wishlist/:id` and `POST /wishlist/:id/move-to-cart` calls; asserts no 5xx, no second document, and at most one line. Deliberately does **not** assert cart quantity (see Notes).
+- **`setupTestDb()`** — called at module scope; resets the test database before the suite runs.
+- **`describe('RW1 — concurrent saves of the SAME product')`** — N racers save the same `productId`; asserts exactly one wishlist document with one line, all responses `200`.
+- **`describe('RW1 — concurrent saves of DIFFERENT products')`** — N racers each save a distinct product; asserts one wishlist with N lines. Exists because the same-product variant cannot distinguish a working `$addToSet` from a broken `$push` that merely deduplicates.
+- **`describe('RW2 — the FIRST save, raced')`** — all racers hit an empty account (no wishlist yet), so every `upsert` is a live insert. Asserts zero `409`s, all `200`, and exactly one document. The `409` count is asserted explicitly because `E11000` → `409` would slip past `expectNoServerErrors`.
+- **`describe('a save and a move-to-cart on the same line')`** — even-indexed racers save, odd-indexed racers move-to-cart. Asserts no second wishlist, at most one line, and `200 + 404 = RACE_SIZE`. Deliberately does **not** assert cart quantity (see Notes).
 
 ## Relationships
 
-- **`tests/support/race.ts`** — supplies `raceN` (concurrent execution), `RACE_SIZE` (fan-out count), `countStatus` (per-status tally), and `expectNoServerErrors` (≥500 guard). Every test in this file uses all four.
-- **`tests/support/http.ts`** — supplies `api` (supertest-style request builder) and `authenticateAs` (creates a fresh user + bearer token). `authenticateAs` is what guarantees the RW2 test starts from an empty wishlist.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` resets the database before the suite runs.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` mints the product documents the tests reference.
-- **`src/modules/wishlist/model.ts`** — `wishlistModel` is used for direct Mongoose assertions (document count, line count, line contents) that the HTTP layer alone cannot express.
+- **`tests/support/race.ts`** — supplies the entire concurrency harness: `raceN` (fire N promises), `RACE_SIZE` (default racer count), `countStatus` (tally by code), `expectNoServerErrors` (assert no 5xx).
+- **`tests/support/http.ts`** — supplies `api` (supertest-style HTTP client) and `authenticateAs` (creates a fresh user + bearer token).
+- **`tests/support/setup-test-db.ts`** — supplies `setupTestDb` for per-module DB reset.
+- **`src/modules/products/tests/factories.ts`** — supplies `createProduct` to produce the product IDs under contention.
+- **`src/modules/wishlist/model.ts`** — supplies `wishlistModel` (Mongoose model) for direct MongoDB assertions on document count, line count, and `productId` values after the race settles.
 
 ## Notes
 
-- **RW2 must start from an empty wishlist.** Once the document exists, `upsert` is never consulted and the document race is unreachable. `authenticateAs` guarantees a fresh account with no prior wishlist.
-- **409 is asserted by value, not via `expectNoServerErrors`.** A losing upsert surfaces as E11000 → 409, which is below 500 and would silently pass the 5xx-only check.
-- **The save + move-to-cart test does not assert cart quantity.** N concurrent moves of one saved line all read "saved" and increment the cart N times. Fixing that would contradict the `openapi.yaml` description and is a cross-repo contract change, out of scope here.
-- **Pair with `cart-races.test.ts`.** The cart's second upsert step filters `{ userId, 'items.productId': { $ne } }`, which is *not* an exact unique-index match, so it loses the document race. The wishlist's exact `{ userId }` filter is the structural difference these tests pin down.
+- **RW2 requires an empty wishlist.** `authenticateAs` creates a fresh account with no wishlist, so the `upsert` filter `{ userId }` is a live insert attempt. If the document already exists, `upsert` is never consulted and the race is gone.
+- **`409` is a contract-relevant status here.** A regression in the `upsert` filter (e.g., adding a non-exact condition) would cause losers to surface `E11000` → `409`, which is below 500 and invisible to `expectNoServerErrors`. The `countStatus(results, 409)` assertion is the only guard.
+- **Cart quantity is intentionally unasserted** in the save/move-to-cart test. `wishlistService.moveToCart` reads "is it saved" before removing the line, so N concurrent moves of one saved line can each increment the cart. Closing that gap would require changing the shared `openapi.yaml` contract across multiple repos and is out of scope for this file.
+- **Sibling file:** `cart-races.test.ts` applies the same reasoning pattern to the cart repository, which uses a non-exact filter (`{ userId, 'items.productId': { $ne } }`) and therefore *does* lose under `upsert`. The wishlist's exact-equality filter on `userId` (the unique index key) is what keeps RW2 safe.

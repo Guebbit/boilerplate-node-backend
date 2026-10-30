@@ -1,7 +1,7 @@
 ---
 source: src/modules/addresses/tests/factories.ts
-sha256: 70e02c6938b6fd6d0179976f3f4770f421f3ccdf08c495a339facd6407431f40
-generated_at: 2026-10-15T10:19:14.177716+00:00
+sha256: 4d5cb0eb1b11e3bac2f46aef20dabbaab2414ca2c2b59f7fcdad61538058042f
+generated_at: 2026-10-29T03:10:14.420759+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,19 +9,19 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides a one-liner helper that seeds a test account with a default billing address, so that checkout and cart tests can focus on their actual subject (totals, stock, concurrency, etc.) instead of failing on the `CART_BILLING_ADDRESS_REQUIRED` guard.
+Test-helper module that seeds a single default address into an account's address book so that checkout-related tests in other modules don't fail on the `CART_BILLING_ADDRESS_REQUIRED` guard. It exists to keep those tests focused on their actual subject rather than on missing fixture data.
 
 ## Key elements
 
-- **`giveAddress(userId: string): Promise<void>`** — Calls `addressAdd` from the addresses service with a fixed Italian address (label "home", "Ada Lovelace", Modena IT) and resolves to `void`. After it resolves the account has exactly one address-book entry, which is its default.
+- **`giveAddress(userId: string): Promise<void>`** — Creates one address-book entry (label `"home"`, fixed persona "Ada Lovelace", Modena IT) via `addressService.create` and returns once the write is persisted. No further assertions or return value; callers `await` it for sequencing only.
 
 ## Relationships
 
-- **`src/modules/addresses/service.ts`** — The sole import; `addressAdd` is the service function that persists the entry.
-- **Cart / Users / Integration test files** (e.g. `src/modules/cart/tests/integration/stock.test.ts`, `tests/integration/concurrency/checkout-interleavings.test.ts`, `src/modules/users/tests/integration/minimise.test.ts`, and ~10 others in the graph) — All import `giveAddress` as a setup step before exercising order-placement logic. This file exists *for* those tests; it is not exercised by the addresses module's own test suite.
+- **`src/modules/addresses/service.ts`** — Imports and calls `addressService.create` to persist the entry. This is the only production-code dependency.
+- **Cart integration/contract tests** (`checkout-expected-total`, `checkout-interleavings`, `line-availability`, `merge`, `preorder`, `product-removal-protects-orders`, `stock-flag`, `stock`, `totals`, `backorder`, `api.contract.test`, `shop.contract.test`, `minimise.test`) — Consumer side: these tests call `giveAddress` in their setup to guarantee the account under test has a billing address before asserting on order, stock, or cart behaviour.
 
 ## Notes
 
-- The address data is intentionally hard-coded and identical for every caller. There is no parameterisation; if a test needs a different address it should call `addressAdd` directly.
-- The function is a `Promise<void>` (not `Promise<address>`), so callers cannot inspect the saved record—treat it purely as a "make this precondition true" helper.
-- Because the module doc comment says "sibling's tests," do not add assertions or error handling here; it is setup, not a test fixture under the addresses module's own test ownership.
+- The address data is hard-coded; if a test specifically needs to assert on address fields, it must create its own entry rather than relying on this helper.
+- Because `create` makes the new entry the account's default, calling it multiple times for the same user will stack defaults — tests that need a specific "no default" or "multiple addresses" state should not use this helper.
+- The function swallows the created record (`.then(() => undefined)`); if a later test step needs the address id, it must query the address book independently.

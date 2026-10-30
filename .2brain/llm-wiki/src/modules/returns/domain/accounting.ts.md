@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/domain/accounting.ts
-sha256: cad77dec3190afe2446d834e669af7df4c7a7f2a4d0868898019c0333d20dcce
-generated_at: 2026-10-15T11:52:13.119847+00:00
+sha256: 0ad014f7795e7aef8b1ba684c43c9f118a61e2d300c1c67e0e03b2892a45fcb9
+generated_at: 2026-10-29T05:37:01.192906+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure accounting helper that answers two questions for the return/cancellation flow: *which units of this order are already settled* (cancelled pre-ship or received back) and *how much delivery has already been refunded*. Keeping this logic in a side-effect-free module makes the "shipping is refunded by whichever cancel or return takes the **last** unit" rule unit-testable without a database.
+Pure accounting logic that determines which order units are already settled (cancelled pre-ship or returned) and how much delivery has been refunded. It lets the "shipping is refunded by whichever cancel or return takes the last unit" rule be evaluated and tested without a database.
 
 ## Key elements
 
-- **`AccountedReturn`** (exported interface) — Minimal shape of a return as the accounting layer reads it: `kind`, `status`, `lines` (product/quantity), and an optional `shippingRefund` (present only when the return refunded delivery).
-- **`OrderAccounts`** (exported interface) — The result of tallying: `accountedFor` (settled `ProductQuantity[]`) and `shippingRefunded` (delivery already refunded, in decimal units).
-- **`isSettled`** (private) — Returns `true` for cancellations (always settled, "born closed") and for returns whose status is in `BACK_RETURN_STATUSES` (`received` or `closed`).
-- **`accountsOf`** (exported function) — Filters a list of `AccountedReturn[]` (the order's returns *excluding* the one being processed), sums their `shippingRefund` in the given currency's minor units via `addMoney`, and flattens their lines into `wireLines`. Returns an `OrderAccounts` value.
+- **`AccountedReturn`** (interface) – A return/cancellation expressed in terms accounting cares about: kind, status, remedy, line items, and any `shippingRefund` amount.
+- **`OrderAccounts`** (interface) – The aggregate result: `accountedFor` (settled units as `ProductQuantity[]`) and `shippingRefunded` (delivery already refunded, in decimal major units).
+- **`isSettled`** (private) – Decides whether a given `AccountedReturn` counts. Cancellations are always settled. Returns settle only when status is in `BACK_RETURN_STATUSES` *and* the buyer did **not** get the units back (repair/replacement).
+- **`accountsOf(returns, currency)`** (export) – Filters to settled returns, sums their `shippingRefund` via minor-unit money arithmetic, and flattens line items into `ProductQuantity[]`. Returns an `OrderAccounts`.
 
 ## Relationships
 
-- **`src/shared-kernel/money.ts`** — Provides `addMoney`, `toMinorUnits`, `toDecimalAmount`, and the `NO_MONEY` sentinel used for currency-safe arithmetic.
-- **`src/modules/returns/domain/lifecycle.ts`** — Supplies `BACK_RETURN_STATUSES` (the settled-status set) and the `ReturnKind` / `ReturnStatus` types.
-- **`src/modules/returns/domain/quantities.ts`** — Supplies `wireLines` (converts raw line arrays to `ProductQuantity[]`) and the `ProductQuantity` type.
-- **`src/modules/returns/domain/index.ts`** — Barrel file; re-exports this module so services can import via the domain entry point.
-- **`src/modules/returns/services/cancellation-refund.ts`** — Calls `accountsOf` to determine whether a new cancellation takes the last unit and thus the remaining delivery refund.
-- **`src/modules/returns/services/receive.ts`** — Calls `accountsOf` when a return is received, to apply the same last-unit rule.
-- **`src/modules/returns/tests/unit/domain.test.ts`** — Unit-tests `accountsOf` and the settled/last-unit logic in isolation.
+- **`@domain-primitives/money`** – Uses `NO_MONEY`, `addMoney`, `toMinorUnits`, `toDecimalAmount` for float-safe currency arithmetic.
+- **`./lifecycle`** – Imports `BACK_RETURN_STATUSES` and `handsUnitsBack` to gate settlement; imports `ReturnKind`, `ReturnRemedy`, `ReturnStatus` types.
+- **`./quantities`** – Imports `wireLines` to normalise line items into `ProductQuantity[]`; imports the `ProductQuantity` type.
+- **`./index.ts`** – Barrel re-exports this module's public API.
+- **`../services/cancellation-refund.ts`** and **`../services/receive.ts`** – Call `accountsOf` to determine whether the current operation claims the last unit and triggers a delivery refund.
+- **`../tests/unit/domain.test.ts`** – Unit-tests the settlement and tallying logic.
+- **`tests/contract/ownership-shop.contract.test.ts`** – Exercises the accounting rule end-to-end across ownership and shop flows.
 
 ## Notes
 
-- Delivery is always summed in **minor units** (integer cents/pence/etc.) via `addMoney`; the decimal conversion happens only at the boundary in the return value. Never treat `shippingRefunded` as a float.
-- `shippingRefund` on `AccountedReturn` is **optional** — it is absent for returns that did not include a delivery refund. `accountsOf` coalesces with `?? 0`.
-- `isSettled` is intentionally **not exported**; external code should rely on `accountsOf` rather than re-implementing the settled check.
-- The function accepts `returns` *excluding* the one currently being settled — callers are responsible for filtering it out before calling.
+- `accountsOf` expects the caller to **exclude** the return currently being settled from the input array; it does not filter that out itself.
+- `AccountedReturn.lines[].productId` is typed as `{ toString(): string }` rather than a plain `string`, so both raw string IDs and wrapper objects (e.g. ObjectId) are accepted.
+- `shippingRefund` is optional and may be absent when a return refunded no delivery; the code coalesces with `?? 0` before converting.
+- All money work goes through minor-unit integers internally; the public `shippingRefunded` field is in decimal major units.

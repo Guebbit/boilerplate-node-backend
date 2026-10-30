@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/services/ensure.ts
-sha256: 63c29bbc522590e7533cafafe96ab7f155953564e2b42fae1a0c70790628a4da
-generated_at: 2026-10-14T15:29:12.598090+00:00
+sha256: e3c4971012066d045a8e487bef4bb0cc2b62bb8ca1bb1e2520d941f90b06ab62
+generated_at: 2026-10-29T03:39:33.049728+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Creates fulfillment orders for a paid order, idempotently. It is the safety-net re-run of the same create logic that the `paid` event listener performs: because the outbox drops after its last retry, a missing fulfillment order would leave the order with no ship door at all. This file re-attempts the create on every read and `start` of a paid order, so the gap self-heals.
+Guarantees that a paid order has its fulfillment orders created. The normal creation path is the `paid` outbox listener, but this function re-runs the same idempotent create on every read and `start` of a paid order as a safety net—because the outbox stops retrying after its last attempt, and a missing fulfillment order would leave the order with no ship door.
 
 ## Key elements
 
-- **`ensureFulfillmentOrders(orderId)`** (exported) — The sole public entry point. Loads the order, checks it is in a fulfillable status, verifies no fulfillment orders already exist, groups its lines, and inserts them inside a single `withTransaction`. Idempotent via `insertIfAbsent` on `{ orderId, number }`. Also appends a `fulfillment_held` timeline entry once per preorder group and calls `reportProgress`.
-- **`groupableLinesOf(order)`** (module-private) — Maps an `OrderDocument`'s items into `GroupableLine[]` shapes for the grouping rule. Reads `preorder` and `releaseDate` from the frozen checkout snapshot, not from the live product.
-- **`FULFILLABLE`** (module-private) — A `ReadonlySet` of `OrderStatus.paid` and `OrderStatus.processing`. Any other status (shipped, delivered, cancelled, etc.) causes an early no-op.
+- **`ensureFulfillmentOrders(orderId)`** (exported) — Loads the order, checks it is awaiting goods, then verifies no fulfillment orders already exist. If none do, groups the order's lines and inserts the drafts one-by-one inside a single database transaction, appending a `fulfillment_held` timeline entry for any preorder group born on hold, and finally reports progress. Returns `undefined` (no-op) for missing, unpaid, cancelled, or already-dispatched orders.
+- **`groupableLinesOf(order)`** (internal) — Maps order items to the `GroupableLine` shape expected by `groupOrderLines`. Reads `preorder`, `releaseDate`, `noWithdrawal`, and backorder data from the **frozen checkout snapshot**, never from live product data.
 
 ## Relationships
 
-- **`src/modules/orders/index.ts`** — Imports `orderService` (getById, appendTimeline) and `isShippedItem`; imports the `OrderDocument` type from `src/modules/orders/model.ts`.
-- **`src/infrastructure/runtime/database.ts`** — Imports `withTransaction` to batch all inserts and the timeline write atomically.
-- **`src/modules/delivery/domain/index.ts`** (re-exports from `domain/fulfillment.ts`) — Imports `groupOrderLines` and the `GroupableLine` type for line grouping.
-- **`src/modules/delivery/repository.ts`** — Imports `fulfillmentOrderRepository` for `findByOrderId` and `insertIfAbsent`.
-- **`src/modules/delivery/services/progress.ts`** — Imports `reportProgress` to refresh the order's progress summary after creation.
-- **`src/modules/delivery/services/read.ts`** and **`src/modules/delivery/services/start.ts`** — Both call `ensureFulfillmentOrders` as a safety net on their respective paths (read of a paid order, start of a paid order), per the module doc comment.
+- **`src/modules/orders/index.ts` / `src/modules/orders/services/index.ts`** — Consumes `orderService.getById`, `orderService.appendTimeline`, `isShippedItem`, and `isAwaitingGoods`.
+- **`src/modules/orders/model.ts`** — Uses the `OrderDocument` type for its input parameter.
+- **`src/modules/orders/domain/lifecycle.ts`** — Provides `isAwaitingGoods` (status guard before creating).
+- **`src/modules/delivery/domain/index.ts` / `fulfillment.ts`** — Uses `groupOrderLines` and the `GroupableLine` type to partition order lines into fulfillment-order drafts.
+- **`src/modules/delivery/repository.ts`** — Calls `fulfillmentOrderRepository.findByOrderId` (existence check) and `fulfillmentOrderRepository.insertIfAbsent` (idempotent insert per draft).
+- **`src/infrastructure/runtime/database.ts`** — Wraps the insert + timeline + progress sequence in `withTransaction`.
+- **`src/modules/delivery/services/act.ts`** — Catches `ActRefusal` to treat a concurrent cancellation (read-then-cancel race) as a silent no-op rather than a failure.
+- **`src/modules/delivery/services/progress.ts`** — Calls `reportProgress` at the end of the transaction to update the order's shipping progress.
+- **`src/modules/delivery/services/index.ts`** — Barrel that re-exports `ensureFulfillmentOrders` to callers such as `read.ts` and `process.ts`.
 
 ## Notes
 
-- The transaction body inserts drafts **sequentially** (`for…of` + `await`), not in parallel, because a single session does not support concurrent operations.
-- `insertIfAbsent` is the idempotency guard: a retried listener, a concurrent read, or the safety net all converge to exactly one set of fulfillment orders.
-- Preorder hold is recorded **inside** the transaction (same session), so the timeline entry and the insert are atomic.
-- `groupableLinesOf` deliberately reads `preorder`/`releaseDate` from the item snapshot, not the current product, because payment can lag order by an arbitrary interval (e.g., bank transfer a week later).
+- **Frozen snapshot, not live product.** `groupableLinesOf` deliberately reads `preorder`, `releaseDate`, and `noWithdrawal` from the item's embedded `product` snapshot. A bank-transfer order can be paid weeks after checkout; live product data may have changed.
+- **Sequential inserts by design.** The `for…of` loop inside the transaction is intentional—`withTransaction`'s session does not support parallel operations.
+- **`ActRefusal` is swallowed, not re-thrown.** If the order is cancelled between the initial read and the insert, the transaction rolls back and the function resolves to `undefined`. This is intentional: a failing `paid` listener would block every subsequent event on the order, including the cancellation's own refund.
+- **Idempotency key is `{ orderId, number }`.** `insertIfAbsent` ensures a retried listener, a concurrent read, or a late safety-net run all produce exactly one set of fulfillment orders.

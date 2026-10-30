@@ -1,7 +1,7 @@
 ---
 source: src/modules/wishlist/controllers/post-move-to-cart.ts
-sha256: 9b9cb932153296620b45c6af865741cf4c3906d5c69f51ab24911b2a345d4e3d
-generated_at: 2026-10-15T12:25:52.861279+00:00
+sha256: 9725dd81738f4d7b55c4f6405f0444bedffbbab9582d7ca6cc419919dadaf60f
+generated_at: 2026-10-29T06:33:49.720242+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter that wires the `POST /wishlist/:productId/move-to-cart` route to the business logic in `wishlistService.wishlistMoveToCart`. It extracts the product ID from the URL, the user ID from the auth context, and the caller context, then delegates the actual "move one wishlist item into the cart" operation to the service layer.
+Thin HTTP adapter for `POST /wishlist/items/:productId/move-to-cart`. Extracts the authenticated user and product ID, delegates to `wishlistService.moveToCart`, and shapes the HTTP response (success or refusal). Contains no business logic itself.
 
 ## Key elements
 
-- **`postMoveToCart(request, response)`** — the sole export. Reads `productId` from the URL params (validated via `requireId`), pulls `userId` from `request.authContext!.id`, calls `wishlistService.wishlistMoveToCart`, and maps the result to an HTTP response.
-- **Early return on invalid ID** — if `requireId` fails (missing/malformed), a 404 is sent and the function exits before touching the service.
-- **`refused` check** — the service may return a non-throwing "refused" result; the controller inspects it before sending a success response.
-- **`catchAs`** — wraps the `.catch` path so unexpected errors are logged and converted to a structured error response under the `postMoveToCart` label.
+- **`postMoveToCart`** (exported function) — the route handler. Reads `request.authContext!.id` for the user, validates `productId` via `requireId`, calls `wishlistService.moveToCart(userId, productId, callerContextOf(request))`, then either rejects via `refused`, responds with `successResponse<WishlistResponse>(…, 200)`, or forwards to `catchAs(response, 'postMoveToCart')` on error.
 
 ## Relationships
 
-- **`src/modules/wishlist/service.ts`** — the controller's primary dependency; calls `wishlistService.wishlistMoveToCart(userId, productId, callerContext)` for all business logic.
-- **`src/infrastructure/http/ids.ts`** — provides `requireId` to validate and extract the `productId` param, emitting a 404 with the `wishlist.not-found` code on failure.
-- **`src/infrastructure/http/request.ts`** — provides `callerContextOf` to build a caller-context object passed into the service.
-- **`src/infrastructure/http/response.ts`** — provides `successResponse` to serialize the `WishlistResponse` payload into the HTTP body.
-- **`src/infrastructure/http/controller.ts`** — provides the `catchAs` error-catcher and the `refused` result-check helper.
-- **`src/modules/wishlist/routes.ts`** — the route file that registers `postMoveToCart` against the `POST /wishlist/:productId/move-to-cart` path.
-- **`src/types/index.ts`** — supplies the `WishlistResponse` shape used to type the success response payload.
+- **`src/modules/wishlist/service.ts`** — sole business-logic dependency; calls `wishlistService.moveToCart`.
+- **`src/modules/wishlist/routes.ts`** — registers this handler on the `POST /wishlist/items/:productId/move-to-cart` route.
+- **`src/infrastructure/http/ids.ts`** — provides `requireId` for path-parameter extraction and 404 short-circuit.
+- **`src/infrastructure/http/request.ts`** — provides `callerContextOf` (request metadata passed downstream).
+- **`src/infrastructure/http/response.ts`** — provides `successResponse` for the 200 JSON envelope.
+- **`src/infrastructure/http/controller.ts`** — provides `catchAs` (error-to-HTTP mapping) and `refused` (business-rejection short-circuit).
+- **`src/types/index.ts`** — supplies the `WishlistResponse` type used in the success payload.
 
 ## Notes
 
-- The controller is intentionally stateless and contains no business rules; all "move-to-cart" semantics (cart line creation/increment, wishlist removal, ordering of writes) live in the service.
-- `request.authContext!.id` uses a non-null assertion — the route is expected to sit behind auth middleware; if it is ever mounted unauthenticated this will throw.
-- The service's write order (cart first, wishlist second) is a deliberate recoverability choice documented in the controller's doc comment; do not swap it when refactoring.
+- Response order contract (documented in the docstring): the service writes to cart *before* removing from wishlist, so a failure at the removal step leaves the item in the cart (recoverable) rather than lost. The controller does not enforce or observe this ordering.
+- The handler is promise-chained (`.then`/`.catch`), not `async`/`await` — consistent with the project's controller convention.
+- Success returns **200**, not 201; the endpoint is a mutation of existing state, not a creation.
+- `request.authContext` is accessed with a non-null assertion; the route is expected to sit behind an auth middleware that guarantees its presence.

@@ -1,7 +1,7 @@
 ---
 source: tests/integration/persistence/lease.test.ts
-sha256: 0f736424869b58e59e519bd51d3aa87fb8420eadcd850ec9b44d3698166ffcce
-generated_at: 2026-10-15T12:49:56.679462+00:00
+sha256: 6c642591c45e718e65161caf95fa1e2952343bccf43d24e0c8ac922b144835b1
+generated_at: 2026-10-29T07:00:14.388370+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test for the lease-based mutual-exclusion primitive (`withLease`) and the job-outcome recording helpers (`recordJobOutcome`, `listLeaseSummaries`). It runs against a real MongoDB instance to verify the concurrency safety properties a scaled-up cron container depends on: single-winner acquisition, expired-lease re-acquisition, immediate release on throw, and contention resolution — plus the "never-block a future acquisition" invariant on outcome-only rows.
+Integration tests for the lease persistence layer, run against a **real** MongoDB instance (not a mock). The file verifies the mutual-exclusion semantics that make a scaled-up cron container safe: single-runner guarantee, expiry re-acquisition, crash-time release, and the "someone else has it" (resolve-`undefined`) contract on a lost race. It also exercises the job-health path (`recordJobOutcome`) and the Prometheus-facing summary query (`listLeaseSummaries`).
 
 ## Key elements
 
-- **`setupTestDb()`** — imported from `@tests/setup-test-db`; called once at module scope to spin up a real Mongo before any test runs.
-- **`waitForLeaseOwner(name)`** — local helper that polls `leaseModel.exists` (50 × 5 ms) to confirm a prior `withLease` acquisition has landed, avoiding a race with a fixed `setTimeout`.
-- **`describe('withLease', …)`** — six test cases covering: two-caller contention on a held lease, first-insert race (two simultaneous upserts), re-acquisition after expiry, immediate release when the body throws, `lastError`/`lastSuccessAt` recording on the same document, and "someone else has it" against an unexpired held lease (verifying the loser does not perturb the winner's document).
-- **`describe('recordJobOutcome', …)`** — three test cases: creates an immediately-acquirable row for a job that has never held a lease, records failure then success (clearing stale `lastError`), and preserves an existing `owner` via `$setOnInsert`.
-- **`describe('listLeaseSummaries', …)`** (two blocks) — verifies `lastRunAt` is reported for a never-succeeded job, and that a row untouched for ~400 days is still returned (no TTL on the collection; alerting depends on it being visible).
+- **`describe('withLease', …)`** — Five cases covering: held-lease contention, first-insert duplicate-key race, expired-lease re-acquisition, throw-releases-immediately, and `lastError`/`lastSuccessAt` bookkeeping on the same document.
+- **`describe('recordJobOutcome', …)`** — Verifies outcome-only upserts (no lease needed), error/success recording, and that `$setOnInsert` never overwrites an existing `owner`.
+- **`describe('listLeaseSummaries', …)`** *(two blocks)* — Confirms `lastRunAt` is populated for a never-succeeded job, and that a stale row (>400 days old) is still reported so the `job_last_success_timestamp_seconds` alert can fire.
+- **`setupTestDb()`** — Spins up a real Mongo for the suite; called once at module scope.
+- **`eventually(…)`** — Polling helper used to confirm the first lease document has landed before firing the second acquisition.
+- **`MINUTE_MS`** (60 000) — Shared TTL constant; long enough that no test expires by accident.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/lease.ts`** — the module under test. Imports `leaseModel`, `withLease`, `recordJobOutcome`, `listLeaseSummaries`.
-- **`tests/support/setup-test-db.ts`** — provides `setupTestDb()` which provisions the real MongoDB instance used by every case in this file.
+- **`src/infrastructure/persistence/lease.ts`** — The module under test. This file imports and exercises `leaseModel`, `withLease`, `recordJobOutcome`, and `listLeaseSummaries` directly.
+- **`tests/support/eventually.ts`** — Provides the `eventually` polling utility used to await the first lease document's existence before issuing a concurrent second call.
+- **`tests/support/setup-test-db.ts`** — Provides `setupTestDb`, which creates a throwaway Mongo database so tests hit real `findOneAndUpdate` / upsert semantics.
 
 ## Notes
 
-- Real MongoDB is required: the core property under test is what MongoDB does with a concurrent `findOneAndUpdate` upsert, which a mock cannot faithfully exercise.
-- `MINUTE_MS` (60 s) is used as the lease TTL throughout — deliberately long so that no case expires by accident during test execution.
-- The "throw releases immediately" test proves release happened by showing a subsequent acquisition succeeds *without* waiting for TTL expiry; it also asserts `lastError` was cleared on the next clean run.
-- The abandoned-row test uses `timestamps: false` to prevent Mongoose from stamping `updatedAt` with the current time, which would mask the deliberately old `lastSuccessAt`.
-- `recordJobOutcome` is described as the shared D9 path for all `docker/crontab` jobs (via `scripts/run-script.ts`), not limited to `withLease` callers — the tests enforce that it never blocks a subsequent `withLease` acquisition.
+- **Real Mongo is mandatory here.** The properties under test (concurrent `findOneAndUpdate` upserts, duplicate-key races) are engine-level behavior a mock cannot reproduce honestly.
+- Two separate `describe('listLeaseSummaries', …)` blocks exist (one for `lastRunAt`, one for stale-row retention); they are not merged.
+- The "abandoned row" test passes `{ timestamps: false }` to `updateOne` to prevent Mongoose from stamping `updatedAt` with the current time over the intentionally old value.
+- A losing caller must resolve `undefined` (not reject) and must not mutate the winner's document — both are asserted explicitly.
+- The file is truncated in the snapshot above; the last test body is cut off.

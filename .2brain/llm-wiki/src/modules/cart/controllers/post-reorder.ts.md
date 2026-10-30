@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/controllers/post-reorder.ts
-sha256: d2a1f6196fa6cc11f3a4db4f703a1a90aa50a6b08e2e285e1c33f5ab61cb9308
-generated_at: 2026-10-14T15:08:37.109183+00:00
+sha256: 505b3dacb7481fe9517f5e2c86f6f0093e8f5c6578f4faeaef7074a8ff834162
+generated_at: 2026-10-29T03:20:57.158227+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP adapter for `POST /cart/reorder/:orderId`. Validates the `orderId` path param, delegates to `cartService.reorderIntoCart`, and maps the result (or refusal) onto an Express response. It exists to keep route handling and business logic in separate layers.
+Thin HTTP adapter for `POST /cart/reorder`. Validates the request body, delegates to `cartService.reorderIntoCart`, and maps the result onto an Express response. All business logic lives in the service layer; this file only handles parsing, auth-context extraction, and status-code translation.
 
 ## Key elements
 
-- **`postReorder`** (exported) — The sole handler. Extracts and validates `orderId` via `requireId`, then calls `cartService.reorderIntoCart(authContext, orderId, callerContext)`. On success it sends `200` with a `CartResponse` body; on refusal it sends `409`; on thrown errors it delegates to `catchAs`.
+- **`postReorder`** (exported) — Express handler. Parses `{ orderId }` via `ReorderBody` (Zod), calls `cartService.reorderIntoCart` with the caller's auth context, then either sends a `refused` 409 (nothing left to add) or a `200` with a `ReorderResponse` payload.
 
 ## Relationships
 
-- **`src/modules/cart/routes.ts`** — Registers `postReorder` on the `POST /cart/reorder/:orderId` route.
-- **`src/modules/cart/services/index.ts`** — Source of `cartService.reorderIntoCart`, the business-logic call this controller wraps.
-- **`src/infrastructure/http/controller.ts`** — Provides the `catchAs` and `refused` helpers used for error/refusal response mapping.
-- **`src/infrastructure/http/ids.ts`** — Provides `requireId`, which validates the `orderId` param and short-circuits with a 404 if missing/invalid.
-- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf` to derive the caller context passed into the service.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse` for the 200 reply.
-- **`src/types/index.ts`** — Defines the `CartResponse` type used to type the success payload.
+- **`src/infrastructure/http/controller.ts`** — supplies `parseBody` (Zod validation → 422), `refused` (maps a service-level refusal to a 409), and `catchAs` (unified error handler).
+- **`src/infrastructure/http/request.ts`** — supplies `callerContextOf`, which extracts the caller's identity/locale context from the request for downstream service use.
+- **`src/infrastructure/http/response.ts`** — supplies `successResponse`, the canonical 2xx wrapper.
+- **`src/modules/cart/routes.ts`** — registers `postReorder` on the `POST /cart/reorder` route.
+- **`src/modules/cart/services/index.ts`** — provides `cartService.reorderIntoCart`, the actual reorder logic (reads an order, writes lines into the caller's cart).
+- **`src/types/index.ts`** — defines `ReorderRequest` and `ReorderResponse` used in the handler's type signature.
 
 ## Notes
 
-- The JSDoc states that lines whose product has left the catalogue are silently skipped, and an order with *nothing* left to add returns `409` (handled upstream in the service; the controller just surfaces the refusal via `refused`).
-- The function is a plain arrow, not a class method or async — promise chaining is used rather than `async/await`.
-- `request.authContext!` is asserted non-null; the route presumably guarantees auth middleware runs first.
+- A malformed `orderId` yields **422** (body-field validation failure), not 404 — the comment in the source calls this out explicitly.
+- An order where every line is `removed` or `capped` returns **409** via `refused`, not a 200 with empty data.
+- `request.authContext!` uses a non-null assertion; the route layer is expected to guarantee auth before this handler runs.
+- Each line in the response reports its disposition (`added`, `capped`, `removed`), mirroring the merge-controller pattern.

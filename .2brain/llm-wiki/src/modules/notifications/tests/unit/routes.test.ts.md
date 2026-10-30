@@ -1,7 +1,7 @@
 ---
 source: src/modules/notifications/tests/unit/routes.test.ts
-sha256: fb260cc26baecad7aaf6054383b9b0a4c571cad86ad647b3444801da1fcaeec4
-generated_at: 2026-10-15T10:53:34.406613+00:00
+sha256: ac9157ce98c7bf65a3d22501833948658b8f4c39fb1407e160b2cb72a9193b26
+generated_at: 2026-10-29T04:34:17.863319+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,19 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit test that pins down the notifications router's public contract: the exact set and order of mounted endpoints, and the authentication guard each one uses. It exists to catch silent regressions in route ordering (literal vs. parametric segments) and to enforce that the SSE stream is cookie-authenticated rather than bearer-guarded.
+Unit test for the notifications route table. Verifies that every route carries the correct authentication and authorization guards, and specifically that the SSE stream endpoint is gated by cookie-based permission rather than a bearer token — the one constraint an `EventSource` client cannot satisfy.
 
 ## Key elements
 
-- **`describe('notifications routes')`** — top-level suite; four assertions inside.
-- **Endpoint signature test** — asserts `routeSignatures(router)` returns exactly `GET /stream`, `GET /`, `POST /read-all`, `POST /dismiss-all`, `DELETE /:id` in that order.
-- **Bearer + permission guard test** (`.it.each`) — for every non-stream route, verifies both `isAuth` and `requirePermissionGuard` are present.
-- **Stream cookie-auth test** — asserts `GET /stream` carries `requirePermissionViaCookieGuard` and does **not** carry `isAuth`.
-- **Literal-before-parametric ordering test** — checks that `/dismiss-all` and `/read-all` indices are less than `/:id` in the route table.
+- **`it.each([...])` — "requires a bearer session and a key"** — Parameterized test asserting that `GET /`, `POST /read-all`, `DELETE /`, `GET /:id`, and `DELETE /:id` each include both `isAuth` and `requirePermissionGuard` in their guard chain.
+- **`it('authenticates the stream by cookie, not by bearer token')`** — Asserts `GET /stream` includes `requirePermissionViaCookieGuard` and explicitly does **not** include `isAuth`.
 
 ## Relationships
 
-- **`src/modules/notifications/routes.ts`** — the module under test; this file imports its exported `router` instance.
-- **`tests/support/routes.ts`** — provides the shared helpers `routeTable`, `routeSignatures`, and `guardsOn` used to introspect the router without issuing HTTP requests.
+- **`src/modules/notifications/routes.ts`** — Exports the `router` that is the system under test.
+- **`tests/support/routes.ts`** — Exports the `guardsOn(router, signature)` helper used to extract and inspect the guard chain for a given route method+path.
 
 ## Notes
 
-- Path aliases (`@tests/routes`, `@modules/notifications/routes`) are used instead of relative paths; keep them consistent when adding tests.
-- The stream test is the only one that asserts a guard is **absent** (`not.toContain('isAuth')`). If a future refactor adds a generic auth guard to all routes, this test will fail intentionally — the `EventSource` API cannot send an `Authorization` header, so bearer auth on the stream is a hard no.
-- The ordering test only checks two literal paths against `/:id`; it does not assert the full sequence. The full-order guarantee is covered by the signature-equality test above.
+- The negative assertion on the stream route (`not.toContain('isAuth')`) is intentional and load-bearing: a bearer guard would break SSE because `EventSource` cannot set the `Authorization` header. If a future refactor adds `isAuth` to `/stream`, this test will fail and signal a real regression, not a test error.
+- The module doc comment at the top restates the cookie-vs-bearer constraint; keep it in sync if the stream's auth strategy changes.

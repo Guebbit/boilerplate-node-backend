@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/tests/unit/service.test.ts
-sha256: 65f4700cc9382d5808ebc813223718e35ca889124abd84784e2e0583b991d6b7
-generated_at: 2026-10-15T10:49:15.511314+00:00
+sha256: 9d8c15da5dfef616b69e8040967f4f8ee9d3f7247f288a017070a7b97cfff142
+generated_at: 2026-10-29T04:27:13.622100+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the "pure" half of `localeService` — the tree builder, key-collision rules, manifest merge, RTL detection, and language-name helpers. These functions involve no database or HTTP, so they are asserted directly here rather than through the repository or contract suites.
+Unit tests for the pure, database-free half of `localeService`: the message-tree builder, key-collision detectors, capability manifest merge, RTL detection, and language naming. These functions are "decisions rather than plumbing" that fail silently when wrong, so they are asserted directly here. The write paths that call them are covered elsewhere (Mongo in `repository.test.ts`, HTTP in the contract suite).
 
 ## Key elements
 
-- **`language(overrides)`** — local factory that builds a minimal `LocaleDocument` from a tag plus optional overrides; the only fixture in this file.
-- **`describe('buildMessageTree')`** — verifies flat dotted-key → nested-object expansion, empty-input handling, deep nesting, and the two throw paths (leaf-before-group and group-before-leaf). Also asserts the `__proto__` pollution guard.
-- **`describe('findKeyCollision')`** — asserts ancestor/descendant collision detection, segment-boundary correctness (`a.bc` ≠ child of `a.b`), and that identical keys (duplicates) are *not* reported.
-- **`describe('findBatchCollision')`** — confirms intra-batch collision pairs are caught before any write.
-- **`describe('findDuplicateKey')`** — names a repeated key within a batch; returns `undefined` for distinct keys.
-- **`describe('findUnsafeKeySegment')`** — rejects `__proto__`, `constructor`, `prototype`, and empty segments (`a..b`, `a.`, `.a`); accepts ordinary dotted keys.
-- **`describe('mergeCapabilities')`** — covers static-only, dynamic-only, and both-tier languages; display-name fallback to tag; `active` flag passthrough for admin manifests; tag-order sorting; zero-entry default.
-- **`describe('isRightToLeft')`** — RTL for `ar`, `he`, `fa` (including region tags like `ar-EG`); LTR for `en`, `es`, `pt-br`.
-- **`describe('describeLanguage')`** — English name for admin, native name for picker, tag fallback for unknown tags.
+- **`buildMessageTree` suite** — Verifies flat dotted-key → nested-object expansion, empty-input → `{}`, arbitrary nesting depth, and that a key which would be both a string and a group **throws** (tested in both insertion orders). Also asserts a stored `__proto__` segment becomes an ordinary property rather than polluting the prototype chain.
+- **`findKeyCollision` suite** — Asserts ancestor/descendant collision detection, confirms `a.bc` is *not* a descendant of `a.b` (dot-boundary rule), and that an identical key is treated as a duplicate, not a collision.
+- **`findBatchCollision` suite** — Catches pairs that collide only with each other within a batch; passes internally consistent batches.
+- **`findDuplicateKey` suite** — Names a repeated key in a batch; returns `undefined` for distinct keys.
+- **`findUnsafeKeySegment` suite** — Rejects `__proto__`, `constructor`, `prototype`, and empty segments (`a..b`, `a.`, `.a`); accepts ordinary dotted keys.
+- **`mergeCapabilities` suite** — Covers static-only, dynamic-only, and both-tier languages; active/inactive flag pass-through; display-name fallback from stored row; tag-ordered output; zero-entry default. Uses the local `language()` factory and `BACKEND`/`FRONTEND` fixture constants.
+- **`isRightToLeft` suite** — Confirms `ar`, `he`, `fa` (and region variants like `ar-EG`) are RTL; `en`, `es`, `pt-br` are LTR.
+- **`describeLanguage` suite** — Names a language in the requested audience language; falls back to the raw tag for unknown codes.
+- **`language()` helper** — Local factory that spreads overrides onto a minimal `LocaleDocument` with `tag` as default `name`/`nativeName`.
 
 ## Relationships
 
-- **`src/modules/locales/services/index.ts`** — the system under test; `localeService` is imported and its methods are called throughout.
-- **`src/modules/locales/model.ts`** — supplies the `LocaleDocument` type used by the `language()` helper.
-- **`src/types/index.ts`** — provides `LocaleDirection` and `LocaleSource` enums referenced in assertions.
-- **`src/modules/locales/tests/unit/apps.fixture.ts`** — provides the `BACKEND` / `FRONTEND` app-identifier constants used in `mergeCapabilities` assertions.
+- **`src/modules/locales/services/index.ts`** — Primary subject under test; imports `localeService` from here.
+- **`src/modules/locales/model.ts`** — Provides the `LocaleDocument` type used by the local `language()` factory.
+- **`src/types/index.ts`** — Source of `LocaleDirection` and `LocaleSource` enum/union values referenced in assertions.
+- **`src/modules/locales/tests/unit/apps.fixture.ts`** — Supplies `BACKEND` and `FRONTEND` app-identifier constants used in `mergeCapabilities` expectations.
+- **`src/modules/locales/services/languages.ts`** — Likely home of `buildMessageTree`, `findKeyCollision`, `findBatchCollision`, `findDuplicateKey`, `findUnsafeKeySegment`, `isRightToLeft`, `describeLanguage`.
+- **`src/modules/locales/services/capabilities.ts`** — Likely home of `mergeCapabilities`.
+- **`src/modules/locales/controllers/create-locale.ts` / `activate-locale.ts`** — Downstream callers of the tested pure functions; their write paths are tested in integration/contract suites, not here.
+- **`scenarios/locales.ts`** — Contract-scenario fixtures that exercise the same service functions over HTTP.
 
 ## Notes
 
-- The file deliberately scopes itself to pure logic. Write-path coverage (Mongo) lives in `repository.test.ts`; HTTP-level coverage is in the contract suite.
-- The `buildMessageTree` collision tests assert **both** insertion orders because a silent drop would depend on order and could pass on one deployment and fail on another.
-- The `__proto__` test in `buildMessageTree` is a second-line defense: `findUnsafeKeySegment` is the write-time gate, but a row introduced via `scripts/ops/`, mongosh, or a legacy import must still be neutralised at read time.
-- `describeLanguage` returning the raw tag for an unknown language (e.g. `zz`) is intentional — it avoids a 500 when ICU data is absent in a given build.
-- The `language()` helper is file-local; it is not exported and not shared with other test files.
+- The file deliberately excludes any database interaction; if a test needs Mongo, it belongs in `repository.test.ts`.
+- `buildMessageTree` collision tests assert **both** insertion orders (leaf-then-group, group-then-leaf) because the two are separate code branches and a fix could silence only one.
+- The `__proto__` test is defense-in-depth: write-time validation (`findUnsafeKeySegment`) is the first gate; this test guards against rows that entered the collection via scripts, mongosh, or pre-check imports.
+- `findKeyCollision` appends a trailing dot before comparing (`a.b.` prefix) rather than calling `startsWith`, so `a.bc` is correctly *not* a descendant of `a.b`. The test documents this intent.
+- `mergeCapabilities` output is always **tag-sorted**, so two manifests differ only where data actually changed — relevant for diffing in CI or client caching.
+- The `active` flag on merged rows exists so the **admin** manifest can list inactive languages; non-admin callers never receive inactive rows from the repository.

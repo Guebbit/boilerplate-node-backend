@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/services/scope.ts
-sha256: 662c439308ad4e27d780ceef61c176757f31e96e7414c50393d68aec765bbb69
-generated_at: 2026-10-15T11:10:47.459586+00:00
+sha256: fc615748544f00bd1cc2bf8b76124b9591040295e462ec1e57af250bf717f15a
+generated_at: 2026-10-29T04:49:51.645227+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the authorization boundary for order reads and writes. It answers the three questions every other order service asks before acting: **who may read which orders** (`callerScope`, `cancelScope`), **which lifecycle column applies** (`actorOf`), and **what actions the caller is offered on the wire** (the `*Actions` helpers). It centralises scope filtering and refusal logic so that individual services (cancel, fulfill, etc.) don't re-derive permission rules.
+Defines the authorization boundaries for order reads and writes: which orders a caller may see (`callerScope`, `ownerScope`, `ownLiveScope`), which orders a caller may cancel (`cancelScope`), and which lifecycle column a caller is mapped to (`actorOf`). Every sibling service in this directory consults these functions before issuing a query, so the "who sees what" logic lives in exactly one place.
 
 ## Key elements
 
-- **`callerScope(context?)`** — Returns a MongoDB-style filter for *read* scoping (own vs. all, soft-deleted or not) via `accessibleFilter`. Returns `{}` (never `undefined`) for unrestricted roles.
-- **`cancelScope(authContext?, ownOnly?)`** — Returns the *write* scope for cancellation. Uses the `update` key, not the read key. For `ownOnly` (withdrawal) or a customer caller, restricts to the caller's own live orders.
-- **`outrankedRefusalFor` / `outrankedOrderRefusal`** — Produce a `403 OUTRANKED` `ResponseReject` when the order's buyer ranks at or above the caller. The id variant loads the order first, unless the caller is system/absent.
-- **`ownMoneyRefusalFor` / `ownMoneyOrderRefusal`** — Refusal for money-moving steps (record cash, refund, approve/receive return): the caller must not *be* the buyer, and the buyer must rank below the caller.
-- **`ownerScope(userId)`** — Filter for one account's orders **including** soft-deleted rows (used by data-export paths).
-- **`actorOf(authContext?)`** — Resolves the lifecycle column: `'system'` | `'admin'` | `'customer'`. Checks `isSystemActor` **before** any `holdsKey` call because `SYSTEM_ACTOR` carries an admin role internally.
-- **`startAndOverrideActions`** *(internal)* — Computes `start` (delivery) and `override` (order-override targets) for the actions payload. Uses `ORDER_EVENTS.start.from` membership, not `canTransition`, to avoid echo-write false positives.
-- **`withoutCancelOnceShipped`** *(internal)* — Strips `cancelled` from transitions and sets `cancel: false` once any fulfillment has shipped.
-- **`canRecordPayment`** *(internal)* — Gates the offline "record a payment" button on `isPayable(status)` + `payments.any.create` key.
-- **`holdsCheckout`** *(internal, truncated)* — Gates checkout-related actions on the caller holding the checkout key.
+- **`callerScope(context?)`** — Returns a query filter (always an object, `{}` for unrestricted roles) for which orders the caller may **read**. Delegates to `accessibleFilter(context, 'Order')`.
+- **`cancelScope(authContext, ownOnly?)`** — Returns the filter for which orders the caller may **cancel**. Distinct from `callerScope` because a role that reads all orders (`display:Order`) is not necessarily allowed to cancel. When `ownOnly` is true (withdrawal path) or the actor is `customer`, scope narrows to the caller's own live orders.
+- **`ownerScope(userId)`** — Filter for one account's orders by user id, **including** soft-deleted rows. Used when the caller already knows whose data to fetch (e.g. account export).
+- **`ownLiveScope(userId)`** — Same as `ownerScope` but adds `deletedAt: null`. The single canonical spelling of "this buyer's own live orders."
+- **`actorOf(authContext?)`** — Resolves the caller to an `OrderActor` (`'system' | 'admin' | 'customer'`) that selects the lifecycle column. Checks `isSystemActor` **before** any `holds()` call (see Notes).
 
 ## Relationships
 
-- **`@kernel/access/query` (`accessibleFilter`)** — The single source of "own AND still there" / "update-scope" filter compilation; both `callerScope` and `cancelScope` delegate to it.
-- **`@kernel/permissions` (`callerForSubject`, `isSystemActor`)** — Resolves the caller's effective keys for a subject and identifies the system sweep actor.
-- **`@kernel/ability` (`holdsKey`)** — Binary permission-key check used by `actorOf`, `startAndOverrideActions`, `canRecordPayment`, `holdsCheckout`.
-- **`@modules/access` (`outrankedRefusal`, `ownMoneyRefusal`)** — The two refusal rule functions that `refusalOnOrder` / `refusalOnOrderId` dispatch to.
-- **`../domain` (`orderActionsFor`, `ORDER_EVENTS`, `overridableTargetsFrom`, `isDigitalOnlyOrder`, `isPayable`, `canWithdraw`, `shipsAwaitedStock`, `OrderActor`)** — Domain logic for transitions, status rules, and actor typing that scope composes into wire actions.
-- **`../repository` (`orderRepository`)** — Used by `refusalOnOrderId` to load an order by id before applying a refusal, and by `ownerScope` to build the filter.
-- **`../model` (`OrderDocument`)** — Structural type for the `_id` / `userId` / `status` / `items` / `fulfillment` fields read throughout.
-- **`../presenter` (`presentOrder`)** and **`./current` (`resolveCurrentImages`)** — Imported for assembling the final wire response (actions + images) in the (truncated) `withActions` path.
-- **`@infrastructure/http/response` (`ResponseReject`)** — The typed 4xx rejection object returned by the refusal helpers.
-- **`services/cancel.ts`** — Consumes `cancelScope` and the refusal helpers to authorise cancellation and withdrawal writes.
+- **`@kernel/access/query` → `accessibleFilter`** — the single function that compiles a role's rules into a query filter; used by `callerScope` and `cancelScope`.
+- **`@kernel/ability` → `holds`** — permission-check primitive used inside `actorOf`.
+- **`@kernel/permissions` → `callerForSubject`, `isSystemActor`** — identity helpers; `isSystemActor` gates the system-actor branch in `actorOf`, `callerForSubject` supplies the subject for the `holds` check.
+- **`../repository` → `orderRepository`** — `ownerScope` delegates to `orderRepository.ownerScope(userId)`.
+- **`../domain` → `OrderActor`** — return type of `actorOf`; the value drives which column `lifecycle.ts` reads.
+- **`../domain/lifecycle.ts`** — consumes `actorOf`'s result to pick the `pending` / `cancelled` / `system` column rules.
+- **`./cancel.ts`** — primary consumer of `cancelScope` (and `actorOf`).
+- **`./read.ts`** — primary consumer of `callerScope`.
+- **`./export.ts`** — consumes `ownerScope` for account-level data exports.
+- **`./actions.ts`** — the "what may be done to one order" counterpart referenced in this module's docstring.
+- **`./index.ts`** — barrel re-export for the services directory.
 
 ## Notes
 
-- `callerScope` returns `{}`, never `undefined`. Both spread identically into a query, but `{}` is the honest "no conditions" shape and avoids a falsy-check pitfall at call sites.
-- `cancelScope` deliberately keys off the **update** permission, not the read permission. A warehouse operator with `orders.any.read` but not `orders.any.update` can see every order yet cannot cancel any.
-- `actorOf` checks `isSystemActor` **first**. Because `SYSTEM_ACTOR` internally carries `roles.tenant: 'admin'`, a `holdsKey(..., 'orders.any.update')` check alone would misclassify the reservation-sweep expiry as an admin and hand it the wider `cancelled` rule.
-- `startAndOverrideActions` checks `ORDER_EVENTS.start.from.includes(status)` instead of `canTransition(status, target, 'system')`; the latter returns `true` for an echo write (status already equals target), which would incorrectly advertise `start: true` on an already-processing order.
-- The `override` targets are further filtered by `shipsAwaitedStock` so no target that would 409 is ever offered.
-- `refusalOnOrderId` skips the DB read entirely when `context` is absent or `context.caller.system` is true — no refusal is possible for those paths.
+- **`actorOf` checks `isSystemActor` before `holds`.** `SYSTEM_ACTOR` carries `roles.tenant: 'admin'` so a naïve `holds(…, 'update', 'Order')` check would classify it as `'admin'` and hand it the wider `cancelled` rule — the exact race the `pending.cancelled` comment in `lifecycle.ts` describes. The identity check must come first.
+- **`callerScope` returns `{}`, never `undefined`.** Both spread identically into a query object, but `{}` is the honest "no conditions" shape.
+- **Read scope ≠ write scope.** `cancelScope` is a separate function by design; an operator with `display:Order` but not `update:Order` must not inherit the read filter for a write.
+- **`ownerScope` intentionally includes soft-deleted rows.** Use `ownLiveScope` when you need only live orders; never hand-build `deletedAt: null` in a sibling module.
+- **`cancelScope`'s `ownOnly` parameter** models the withdrawal right (buyer-only). It is never an operator's authority; passing it for a non-customer actor would be a logic error at the call site.

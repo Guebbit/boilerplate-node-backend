@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/unit/epoch.test.ts
-sha256: 51b5e901f0627659e382c7f19999898f00871367cb413231be6920e2390276fe
-generated_at: 2026-10-15T10:14:45.199447+00:00
+sha256: 17ad71ea3f0b3b5294976ba0f2981a7af0cd6ea34a7c78e24d20c03625f94cf3
+generated_at: 2026-10-29T03:04:18.369088+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the two epoch-predation predicates in `session/epoch`: `predatesSessionEpoch` (token-side, shared by the resolver and refresh path) and `proofPredatesEpoch` (login-proof side at the mint). The file pins down the boundary behavior of each so that a refactor or timezone change cannot silently alter which tokens/proofs are rejected.
+Unit tests for the two epoch-comparison predicates exported by the account domain module. They pin down the boundary semantics (inclusive vs. exclusive at the bump moment) and the `undefined`-epoch short-circuit for both the token path and the login-proof path.
 
 ## Key elements
 
-- **`describe('predatesSessionEpoch')`** — four cases around a fixed epoch (`2026-10-06T12:00:00.900Z`):
-  - `undefined` epoch → always `false`.
-  - Token second **before** epoch second → `true` (refused).
-  - Token second **equal to** epoch second → `false` (kept; "survives its own bump").
-  - Token second **after** epoch second → `false`.
-- **`describe('proofPredatesEpoch')`** — three cases with the same epoch:
-  - `undefined` epoch → always `false`.
-  - Proof timestamp **1 ms before** epoch (same second) → `true` (refused).
-  - Proof timestamp **equal to or after** epoch ms → `false`.
+- **`describe('predatesSessionEpoch')`** — Four cases exercising `predatesSessionEpoch(tokenSecond, epoch?)`:
+  - `undefined` epoch → always `false` (never refuses).
+  - Token one second *before* the bump → `true` (refused).
+  - Token in the *exact* second of the bump → `false` (caller survives its own bump).
+  - Token later → `false`.
+  - Note the input is in **seconds** (`Math.floor(epoch.getTime() / 1000)`).
+
+- **`describe('proofPredatesEpoch')`** — Three cases exercising `proofPredatesEpoch(proofMs, epoch?)`:
+  - `undefined` epoch → `false`.
+  - Proof **1 ms** before the bump (same second) → `true` (refused).
+  - Proof at exactly the bump or after → `false`.
+  - Note the input is in **milliseconds** (`epoch.getTime() ± 1`).
 
 ## Relationships
 
-- Imports and exercises `predatesSessionEpoch` and `proofPredatesEpoch` from `src/modules/account/session/epoch.ts`. No other module is touched.
+- **`src/modules/account/domain/epoch.ts`** — The module under test. This file imports `predatesSessionEpoch` and `proofPredatesEpoch` from that module via the relative path `../../domain/epoch` and asserts their return values. No other files are imported or mocked.
 
 ## Notes
 
-- The two functions operate at **different time granularities**: `predatesSessionEpoch` compares integer seconds (`Math.floor(epoch.getTime()/1000)`), while `proofPredatesEpoch` compares raw millisecond timestamps. This is intentional—tokens carry second-resolution stamps, proofs carry millisecond-resolution ones.
-- The boundary convention is **inclusive on the epoch side** for both functions: a value stamped *at* the epoch instant is kept, not refused. The test names call this out explicitly ("keeps a token stamped in the very second of the bump").
-- The fixed date is a future date (2026) chosen to be safely outside any realistic "current time" window, making the tests deterministic without mocks.
+- The two functions differ in **granularity**: `predatesSessionEpoch` compares at second resolution (a token stamped in the bump second is kept), while `proofPredatesEpoch` compares at millisecond resolution (a proof 1 ms before the bump is refused even though it falls in the same second). This asymmetry is intentional and is the core behavior these tests lock in.
+- The epoch fixture uses a future date (`2026-10-06`) with a non-zero millisecond (`.900`) to make the ms-boundary case unambiguous.
+- No mocks, spies, or async logic — purely synchronous pure-function assertions.

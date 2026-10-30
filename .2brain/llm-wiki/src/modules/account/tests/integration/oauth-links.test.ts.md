@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/integration/oauth-links.test.ts
-sha256: cf91315d13e91e707c97251d838e8cc602ed808ad5cea0e09d4d3930d12dd2b2
-generated_at: 2026-10-14T09:11:39.585764+00:00
+sha256: dfdfef70adce294addf3c0e27accbaa7396f76001906a032968d10fedade4103
+generated_at: 2026-10-29T02:57:45.954235+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the connected-accounts (OAuth links) API surface: listing linked providers, disconnecting a single provider under the reauth guard, and verifying that the password-reset confirmation email names the providers still attached to the account.
+Integration tests for the connected-accounts (OAuth provider) surface of the account module. Covers listing linked providers via `GET /account/oauth/links`, disconnecting one via `DELETE /account/oauth/links/{provider}`, reauth-freshness enforcement, cross-account isolation, and the content of the reset-confirm email that names still-connected providers.
 
 ## Key elements
 
-- **`mockOutbox`** – module-level array that captures every call to the mocked `enqueueEmail`; used to assert mail template and payload after a reset.
-- **`jest.mock('@infrastructure/adapters/mailer', …)`** – replaces `enqueueEmail` with a spy that pushes into `mockOutbox`; all other exports are preserved via `requireActual`.
-- **`linkedAccount()`** – creates a verified user, links Google and GitHub rows via `userRepository.linkOAuthAccount`, logs in through `POST /account/login`, and returns `{ user, bearer, cookie }` for subsequent calls.
-- **`linksOf(userId)`** – reads `oauthAccounts` straight from the repository (bypassing the API) so tests can assert DB ground truth.
-- **`resetFor(token)`** – thin wrapper that `POST`s to `/account/reset-confirm` with `REPLACEMENT_PASSWORD`.
-- **`describe('GET /account/oauth/links')`** – asserts the provider list + `connectedAt`, confirms no `providerId` leaks, empty list for password-only accounts, and 401 for anonymous.
-- **`describe('DELETE /account/oauth/links/{provider}')`** – covers single-provider removal, 404 on unknown provider, removal of the last sign-in method, the `REAUTH_REQUIRED` 401 when the session is stale, and cross-account isolation (404 + owner's links intact).
-- **`describe('the reset-confirm mail')`** – plants a reset token with `plantToken`, calls `resetFor`, then inspects `mockOutbox` for the `account.reset-confirm` template to confirm the provider names (or the "No Google or GitHub sign-in" phrasing).
+- **`mockOutbox`** – module-level array that captures every `enqueueEmail` call (template + data) so tests can assert mail content without a real transport.
+- **`linkedAccount()`** – helper that creates a verified user, links both `google` and `github` providers through `userRepository.linkOAuthAccount`, performs a password login, and returns the user, bearer token, and `__Host-session` cookie.
+- **`linksOf(userId)`** – reads stored `oauthAccounts` straight from the database (via `findByIdWithCredentials`) to assert DB-level state.
+- **`resetFor(token)`** – issues a `POST /account/password/reset/confirm` call with `REPLACEMENT_PASSWORD`.
+- **`describe('GET /account/oauth/links')`** – two tests: happy-path listing (and a `not.toContain('-subject')` assertion that `providerId` is never leaked) and empty-list + 401-for-anonymous.
+- **`describe('DELETE /account/oauth/links/{provider}')`** – five tests: disconnect-one-leave-other, 404 for already-disconnected, removal of the last sign-in method, reauth-freshness (401 `REAUTH_REQUIRED` after the sensitive window elapses), and cross-account 404.
+- **`describe('the reset-confirm mail')`** – two tests asserting the `account.reset-confirm` email names remaining providers ("Google, Github") or explicitly states none are connected.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `tests/support/http.ts` | Provides `api()` – the supertest-based HTTP client used for every request. |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` initialises the shared test database before the suite runs. |
-| `tests/support/environment.ts` | `setEnvironment({ NODE_MAIL_TRANSPORT: 'outbox' })` in `beforeEach` ensures the mock mailer is selected. |
-| `tests/support/clock.ts` | `freezeDate` / `advanceDate` drive the reauth-window test (advance past `reauthWindowSeconds('sensitive')`). |
-| `tests/support/cookies.ts` | `cookieHeader(login, '__Host-session')` extracts the session cookie from the login response. |
-| `src/kernel/config.ts` | `reauthWindowSeconds('sensitive')` sets the exact threshold the reauth test must exceed. |
-| `src/modules/users/tests/factories.ts` | `createUser`, `userRepository`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD` – user creation, OAuth-link insertion, and credential constants. |
-| `src/modules/account/tests/factories.ts` | `plantToken` seeds a password-reset token directly in the DB for the mail tests. |
-| `src/modules/users/repository.ts` | Consumed indirectly through the users factories (`userRepository.linkOAuthAccount`, `findByIdWithCredentials`). |
+- **`tests/support/http.ts`** (`api`) – every request in the file goes through the shared `api()` helper.
+- **`tests/support/setup-test-db.ts`** (`setupTestDb`) – called once at module scope to seed/reset the test database.
+- **`tests/support/environment.ts`** (`setEnvironment`) – sets `NODE_MAIL_TRANSPORT` to `'outbox'` in `beforeEach` so the mocked mailer captures output.
+- **`tests/support/clock.ts`** (`freezeDate`, `advanceDate`) – used in the reauth-freshness test to age the session past `reauthWindowSeconds`.
+- **`tests/support/cookies.ts`** (`cookieHeader`) – extracts the `__Host-session` cookie from the login response for the refresh-based reauth test.
+- **`src/kernel/config.ts`** (`reauthWindowSeconds`) – supplies the window duration (with `'sensitive'` tier) that the reauth test advances past.
+- **`src/modules/users/tests/factories.ts`** (`createUser`, `userRepository`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD`) – user creation, OAuth linking, and the two password constants used for login and reset.
+- **`src/modules/users/repository.ts`** (`userRepository`) – `linkOAuthAccount` and `findByIdWithCredentials` are called directly to set up and verify DB state.
+- **`src/modules/account/tests/factories.ts`** (`plantToken`) – seeds a one-time password-reset token so the reset-confirm endpoint can be exercised without the full token-issuance flow.
 
 ## Notes
 
-- The reauth test depends on the access token expiring *during* the frozen-clock window and then relying on the refresh cookie to mint a new token whose `auth_time` is still older than the window – this is why `freezeDate` is set *before* login and `advanceDate` is called *after*.
-- The assertion `expect(JSON.stringify(response.body)).not.toContain('-subject')` is a deliberate leak check: the `providerId` value is intentionally set to `google-subject` / `github-subject` so any accidental inclusion would be caught by a simple substring search.
-- `setupTestDb()` is called once at module scope (outside any `beforeEach`), while `mockOutbox` is reset in `beforeEach`; forgetting either will cause cross-test contamination.
+- `mockOutbox` is a module-level mutable array; `beforeEach` truncates it (`length = 0`) rather than reassigning, so the jest mock closure stays valid across tests.
+- The reauth test depends on `afterEach(() => jest.useRealTimers())`; if a test before it forgets to call `freezeDate`, the timer restore is a no-op but still safe.
+- The `REPLACEMENT_PASSWORD` import appears on two consecutive lines (a redundant duplicate); functionally harmless but a lint cleanup candidate.
+- The security assertion in the first GET test serialises the entire response body to JSON and greps for the literal `providerId` value (`-subject`), a deliberate guard against accidental leakage of the opaque provider identifier.

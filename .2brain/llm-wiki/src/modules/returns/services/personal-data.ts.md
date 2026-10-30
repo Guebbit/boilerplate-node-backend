@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/services/personal-data.ts
-sha256: e0f03afe4ef0267a5f62981ddd9c88f9c5e2ca2336ed45cde5eb155ea91aabe4
-generated_at: 2026-10-15T11:57:43.044182+00:00
+sha256: 80258ded6625365b7b30ee832f61c5b8293d587a82502e80bc58f755b584a40e
+generated_at: 2026-10-29T05:44:14.547642+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the returns module's contribution to the `POST /account/export` endpoint (registered as `personalData` in `module.ts`). Given a user ID, it resolves the user's order IDs, fetches all associated returns, and shapes them into the `ExportReturn` export format. It intentionally has no `erase` counterpart: a return is keyed by `orderId` and stores no `userId`, so once the orders module detaches the user link, no further unlinking is needed here.
+Provides the returns section of the `POST /account/export` endpoint (registered in `module.ts` as `personalData`). It retrieves and reshapes all return records belonging to a requesting user's orders into the `ExportReturn` shape. There is deliberately **no** `erase`/unlink function here: a return is keyed by `orderId` and stores no `userId`, so once `orders` breaks its own user link, the return is already unreachable. Returns are treated as legal/accounting records under Art. 17(3)(b)/(e) and are retained rather than erased.
 
 ## Key elements
 
-- **`collectPersonalData(userId: string): Promise<ExportReturn[]>`** — exported entry point. Calls `ownOrderIds(userId)` to get the account's order IDs, then `returnRepository.findByOrderIds(orderIds)`, and maps each `ReturnDocument` through `toExportReturn`.
-- **`toExportReturn(returned: ReturnDocument): ExportReturn`** — internal mapper. Selects `id`, `orderId`, `status`, `reason`, line items (`productId`, `quantity`, `title`), and conditionally includes `note`, `declineReason`, and `createdAt`. Deliberately omits any staff-member identifier.
+- **`toExportReturn`** *(internal, not exported)* — Maps a `ReturnDocument` to the `ExportReturn` wire shape. Conditionally includes optional fields (`note`, `declineReason`, `declineMessage`, `createdAt`) to avoid null/undefined keys. Deliberately omits the deciding staff member's id.
+- **`collectPersonalData(userId)`** *(exported)* — Resolves the user's order IDs via `orderService.ownOrderIds`, loads the matching returns with `returnRepository.findByOrderIds`, and maps each through `toExportReturn`. Returns `Promise<ExportReturn[]>`.
 
 ## Relationships
 
-- **`src/modules/orders/index.ts`** — imports `ownOrderIds`, which resolves a user's own order IDs (implemented in the orders module's read service). This is the sole mechanism for associating returns with a user.
-- **`src/modules/returns/repository.ts`** — imports `returnRepository` and calls `findByOrderIds` to load return documents.
-- **`src/modules/returns/model.ts`** — imports the `ReturnDocument` type used as the input to `toExportReturn`.
-- **`src/types/index.ts`** — imports the `ExportReturn` type that defines the export shape.
-- **`src/modules/returns/module.ts`** — wires `collectPersonalData` as the `personalData` section for the account-export endpoint.
-- **`src/modules/returns/services/index.ts`** — barrel file that re-exports `collectPersonalData`.
-- **`src/modules/returns/tests/integration/service.test.ts`** — integration tests exercise `collectPersonalData` end-to-end against the repository.
+- **`@modules/orders`** (`src/modules/orders/index.ts`, `src/modules/orders/services/index.ts`) — Imports `orderService` solely to call `ownOrderIds(userId)`, bridging the user→order→return lookup chain.
+- **`../repository`** (`src/modules/returns/repository.ts`) — Uses `returnRepository.findByOrderIds` as the data-access step.
+- **`../model`** (`src/modules/returns/model.ts`) — Imports the `ReturnDocument` type used by the mapper.
+- **`@types`** (`src/types/index.ts`) — Imports the `ExportReturn` type that defines the export wire shape.
+- **`../services/index.ts`** — Barrel that re-exports this file's public API.
+- **`../module.ts`** — Consumes `collectPersonalData` (and registers it) under the `personalData` key for the export endpoint.
+- **`../tests/integration/service.test.ts`** — Integration tests exercise `collectPersonalData`.
 
 ## Notes
 
-- **No erase/unlink exists by design.** Returns are an accounting/legal record of a consumer-rights act (Art. 17(3)(b)/(e) GDPR retention exemption, same rationale as the `invoicing` module documents). There is no `userId` column to scrub.
-- **`declineReason` is included in exports** because it is customer-facing content (mailed to the customer, visible on their `GET /returns`), not an internal-only field.
-- **Optional fields** (`note`, `declineReason`, `createdAt`) are spread conditionally (`...(x ? {…} : {})`) so the export JSON omits them entirely rather than emitting `null`/`undefined` keys.
-- **`toExportReturn` is not exported**; it is a pure mapping helper scoped to this file.
+- **No `erase`/`unlink` export.** This is intentional, not an omission. The retention rationale (Art. 17(3)(b)/(e), same exemption `invoicing` documents) is stated in the module-level JSDoc.
+- **Indirect lookup.** Returns are never queried by `userId` directly; the path is always `userId → orderIds → returns`. Any change to the order model's user linkage must keep `ownOrderIds` in sync.
+- **Optional-field spreading.** The mapper uses conditional object spreads rather than defaulting to `null`, so the JSON payload contains a key only when the value is truthy.

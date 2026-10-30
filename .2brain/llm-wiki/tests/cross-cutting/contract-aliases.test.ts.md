@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/contract-aliases.test.ts
-sha256: 9ec8e003e886d5dec6b2ccd8d261597173c9f15bdc48bf1f8b694cae83b286f7
-generated_at: 2026-09-23T19:54:28.685766+00:00
+sha256: 290a01000b938973b008bed06b6205a07c71fc19963b4d4c3f62d9a6812b1b81
+generated_at: 2026-10-29T06:44:10.994533+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Validates the `x-alias-of` OpenAPI extension in `openapi.yaml`, ensuring that every alias operation is a true interchangeable spelling of its canonical counterpart. It exists because the contract deliberately ships multiple operations for the same intent (e.g. `DELETE /users` vs `DELETE /users/{id}` vs `DELETE /users/{id}/hard`), and without enforcement the "switchable" claim would silently rot as responses drift apart.
+Validates the `x-alias-of` extension in `openapi.yaml`. When two operations express the same intent in different spellings (e.g. `DELETE /users/{id}` vs `DELETE /users/{id}/hard`), this test enforces that the annotation is honest: the alias must point at a real, non-alias, non-self operation whose success status code and response schema are identical. It exists so SDK authors can safely treat an alias as interchangeable with its canonical form.
 
 ## Key elements
 
-- **`operations`** – flattened array of every `{ route, method, operation }` tuple extracted from the parsed spec.
-- **`byOperationId`** – `Map<operationId, { route, method, operation }>` for O(1) canonical lookups.
-- **`successSchema(operation)`** – returns a JSON string of the `application/json` schema of the first `2xx` response; used to compare parseable payloads across aliases.
-- **`successStatus(operation)`** – returns the first `2xx` status code string (e.g. `"200"` vs `"201"`).
-- **`describe('operation aliases')`** – the test suite; six `it` blocks covering:
-    - Tripwire: spec actually parsed and aliases found.
-    - Referential integrity: every `x-alias-of` target exists by `operationId`.
-    - No alias-of-alias chains.
-    - No self-referential aliases.
-    - Alias and canonical return the same success status code.
-    - Alias and canonical return the same success response schema.
+- **`operations`** – Flat array of every HTTP operation in the spec, each tagged with its route, method, and operation object.
+- **`byOperationId`** – Map from `operationId` → operation entry, used to resolve the target of an `x-alias-of` reference.
+- **`aliases`** – Subset of operations that carry the `x-alias-of` extension.
+- **`successSchema(operation)`** – Serialises the `application/json` schema of the first 2xx response (ignoring prose descriptions) into a comparable JSON string.
+- **`successStatus(operation)`** – Returns the first 2xx status code string (e.g. `"200"`, `"201"`).
+- **`describe('operation aliases')`** block containing six assertions:
+  - Spec parsed correctly (sanity tripwire: >50 operations, >3 aliases).
+  - Every `x-alias-of` target exists in `byOperationId`.
+  - No alias points at another alias (no chains).
+  - No alias references itself.
+  - Alias and canonical share the same success status code.
+  - Alias and canonical share the same success response schema.
 
 ## Relationships
 
-No graph neighbors are recorded for this file. It is a leaf test that reads `openapi.yaml` (via a relative path) and depends only on `yaml`, `node:fs`, and `node:path`.
+No graph neighbors are recorded for this file. It is a leaf test that reads `openapi.yaml` directly via `node:fs` and has no project-internal imports.
 
 ## Notes
 
-- The spec is resolved relative to the test file's directory: `../../openapi.yaml`. If the test is moved, the path breaks silently (it would throw on read, but the tripwire assertion would never be reached).
-- `successSchema` only inspects the **first** `2xx` response and only the `application/json` content type. An alias that adds a second 2xx variant or changes the content type will not be caught.
-- The design explicitly avoids `deprecated: true` because orval emits warnings for deprecated operations, which would flag routes the API fully intends to keep. The `x-` extension is ignored by all code generators.
-- The test does **not** compare response descriptions (prose) — only the schema object. This is intentional: descriptions may legitimately differ while the payload shape stays the same.
-- Referenced rationale: `docs/theory/request-input.md` explains why multiple spellings exist; this file encodes the "which one is canonical" half of that argument.
+- **Why `x-alias-of` instead of `deprecated: true`?** The spec intentionally keeps both spellings; `deprecated` would cause code generators (orval) to emit warnings in the frontend. The `x-` extension is ignored by all generators and carries zero runtime cost.
+- **Schema comparison is structural, not textual.** `successSchema` compares only the JSON schema object, deliberately excluding human-readable `description` strings that legitimately differ between the two spellings.
+- **Status codes are compared separately from schemas.** A 201-vs-200 mismatch breaks a caller's branching logic even if the body schema is identical, so it gets its own assertion.
+- **The tripwire test** (`expect(operations.length).toBeGreaterThan(50)`) guards against a mis-parsed or wrong-path YAML making every other assertion pass vacuously.

@@ -1,7 +1,7 @@
 ---
 source: tests/integration/malformed-ids.test.ts
-sha256: 1f9c7efbfc25702e689571294b60a83fd2d5a3414c71a8518e326c2a265306b1
-generated_at: 2026-10-15T12:48:36.717536+00:00
+sha256: d585c1932880b216a234d36e229d96b180739db2ef8ca812ae5abfba4c2952c1
+generated_at: 2026-10-29T06:59:13.562107+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Spec-driven integration test that enforces the "malformed ID" contract rule on **every** route the OpenAPI spec declares: a path-segment ID not issued by this backend must return the identical 404 as an unknown ID, while a body or query ID in the same situation must return 422 `VALIDATION_ERROR` naming the offending field. The site list is derived from `openapi.yaml` at runtime, so a route added later is covered on its first run without any manual update here.
+Property-based integration suite that enforces the rule *"a malformed id has one answer per position, on every route the spec declares."* For every operation in `openapi.yaml` that carries an `Id` in a path parameter, body field, or query field, it asserts the correct, spec-documented response: a **404** (indistinguishable from an unknown id) for path sites, and a **422 `VALIDATION_ERROR`** naming the field for body/query sites. Because the sites are derived from the spec rather than hardcoded, any route added later is held to the rule on its first run.
 
 ## Key elements
 
-- **`MALFORMED`** – Array of values that satisfy the spec's `Id` schema (e.g. 24-char hex, 63-char strings) but were never issued by this backend; used as test inputs.
-- **`BAD_ID`** – First element of `MALFORMED`; sufficient single value for body/query assertions.
-- **`PATH_SITES` / `BODY_SITES` / `QUERY_SITES`** – Flat-mapped arrays of `(label, operation, parameter | segments)` tuples, one per declared ID site. Discovered via `spec-ids.ts` helpers over `listOperations()`.
-- **`validBodyFor(schema)`** – Samples a single spec-valid JSON body with `fast-check` (`fc.sample`, fixed seed 7).
-- **`send(operation, url, bearer, body)`** – Issues an authenticated HTTP request (via `api()` from `@tests/http`) and reduces the response to `{ status, body }`.
-- **`fillParameter(operation, world, parameter, value)`** – Builds a URL with exactly one path parameter overridden; uses a `SENTINEL` placeholder to exclude the target from `buildUrl`'s world-based filling.
-- **`documentedStatuses(operation)`** – Reads the OpenAPI spec to confirm the operation's documented response codes include the expected 404/422.
-- **Guard test** – Asserts minimum site counts (≥ 71 path, ≥ 19 body, ≥ 8 query) so a regression in spec-walk that silently loses ID recognition cannot let the sweeps pass vacuously.
-- **`jest.mock('@infrastructure/adapters/pdf')`** – Stubs `renderHtmlToPdf` to return a dummy buffer, avoiding a real browser dependency on the invoice route.
-- **`setupTestDb()`** – Initialises the test database fixture before any test runs.
+- **`MALFORMED`** – Five values that the spec's `Id` schema accepts syntactically but this backend never issued (short hex, dashes, wrong-length runs, etc.).
+- **`PATH_SITES` / `BODY_SITES` / `QUERY_SITES`** – Arrays of `(operation, field)` tuples built by walking the spec via `spec-ids.ts`. Multipart operations are excluded from body sites.
+- **`send(operation, url, bearer, body)`** – Authenticated Supertest call; returns a reduced `{ status, body }` tuple.
+- **`fillParameter(operation, world, parameter, value)`** – Builds a URL via `buildUrl` while replacing one path parameter with a sentinel, then swaps in the test value.
+- **`validBodyFor(schema)`** – Samples one spec-valid body with `fast-check` (fixed seed 7) so the request is otherwise well-formed.
+- **`documentedStatuses(operation)`** – Reads the response keys from `openapi.yaml` to assert the expected status is declared.
+- **Guard test** (`are found, so the sweeps below cannot pass by sweeping nothing`) – Asserts minimum site counts (≥ 71 path, ≥ 19 body, ≥ 8 query) so a silent spec-walking regression can't shrink the suite to zero.
+- **`describe.each` blocks** – One sub-suite per site; each asserts (1) the status is documented, and (2) the response matches the rule. Timeout: 60 s per case.
+- **`jest.mock` of `@infrastructure/adapters/pdf`** – Prevents the invoice route from needing a real browser.
 
 ## Relationships
 
-- **`tests/support/spec-ids.ts`** – Core dependency: provides `idPathParameters`, `idBodyFields`, `idQueryFields`, `fieldName`, `setPath`, and the `Segment` type that drive site discovery and body mutation.
-- **`tests/support/spec-walk.ts`** – Provides `listOperations`, `readSpec`, and the `Operation` / `SchemaNode` types used to enumerate and describe every operation.
-- **`tests/support/spec-world.ts`** – Provides `seedWorld` (creates realistic DB rows per user), `buildUrl` (fills path params from the world), `requiredHeadersOf`, `OBJECT_ID`, and the `World` type.
-- **`tests/support/http.ts`** – Provides the `api()` HTTP client and `authenticateAs` for obtaining bearer tokens.
-- **`tests/support/shopper-routes.ts`** – Provides `roleReaching(operation)` to pick the correct auth role (admin by default; customer for shopping routes where an admin holds no basket key).
-- **`tests/support/spec-arbitraries.ts`** – Provides `bodyArbitraryFor` to generate spec-conformant request bodies for arbitrary operations.
-- **`tests/support/setup-test-db.ts`** – Provides `setupTestDb` to initialise the in-memory/test database.
+- **`tests/support/spec-walk.ts`** – `listOperations` and `readSpec` enumerate the operations and let the guard test read documented statuses.
+- **`tests/support/spec-ids.ts`** – `idPathParameters`, `idBodyFields`, `idQueryFields`, `fieldName`, `setPath` locate every `Id` site and set/names the field under test.
+- **`tests/support/spec-world.ts`** – `seedWorld`, `buildUrl`, `requiredHeadersOf`, `OBJECT_ID` supply seeded rows and a valid base URL for each request.
+- **`tests/support/spec-arbitraries.ts`** – `bodyArbitraryFor` generates a spec-conformant body so the malformed id is the only fault.
+- **`tests/support/shopper-routes.ts`** – `roleReaching` selects the auth role that can legitimately reach each operation (admin by default; shopping routes are the exception).
+- **`tests/support/http.ts`** – `api` (Supertest agent) and `authenticateAs` (bearer-token acquisition) drive every HTTP call.
+- **`tests/support/problem.ts`** – `withoutInstance` strips volatile fields so the 404-body comparison is stable.
+- **`tests/support/setup-test-db.ts`** – `setupTestDb` initialises the in-memory database before any test runs.
 
 ## Notes
 
-- **Auth is admin by default.** The rationale (stated in the file header) is that a malformed-ID refusal is the controller's own validation, not a permission gate. The sole exception is shopping routes, where `roleReaching` switches to a customer role because an admin has no basket key.
-- **Rejection order matters.** The path-ID test explicitly checks that the 404 body is *identical* to the unknown-ID body, even when the request body would otherwise be invalid (422/409). This enforces that malformed-ID rejection precedes body validation.
-- **`fillParameter` sentinel trick.** `buildUrl` fills *all* path params from the world. To override a single param, the target is temporarily replaced with `SENTINEL`, removed from `pathParameters`, then restored after `buildUrl` returns.
-- **Minimum counts are intentionally > 1.** A spec-walk regression that still recognises *some* `Id` fields would pass a `≥ 1` check; the thresholds (71/19/8) catch partial regressions.
-- **Timeouts are 60 s per test** (set via the third argument to `it`) because each case seeds a fresh world and may hit multiple HTTP round-trips (one unknown + five malformed values for path sites).
+- The suite is **spec-driven, not route-driven**: it never lists endpoints. Coverage grows automatically when `openapi.yaml` gains a new `Id` reference, and a controller that forgets its check will surface as an unexpected 422/500 here instead of a 404.
+- All calls are made **as admin**, so a refusal is the controller's own logic, not a permission gate. Shopping routes are the one exception because an admin holds no basket key.
+- `fast-check` is used only for *sampling* one valid body (`fc.sample`, seed 7); the suite is not a full property-based search.
+- The guard-test counts (71 / 19 / 8) are floors, not exact targets; they exist to catch a spec-walker that silently stops recognising the `Id` schema while still finding a handful of sites.
+- Each `describe.each` case carries a 60-second timeout because it performs DB seeding plus one or more HTTP round-trips per malformed value.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/contract/api.contract.test.ts
-sha256: 78d5f124d7d8e5755bdcf321272e51df352a5cba7adffbcc0a13ea6498e12e8b
-generated_at: 2026-10-15T10:09:20.497766+00:00
+sha256: b4368bfa419a8822c6026617a037bbbabec6389d2053ff51cfdcdc58235b8fb3
+generated_at: 2026-10-29T02:50:47.451527+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,42 +9,42 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the self-service `/account` HTTP surface: login (remember-me tiers), signup, username ceiling, password change, session rotation, single-session logout, sessions listing, and email verification. They cover scenario branches that depend on multi-actor or stateful preconditions (a second account holding the same email, a revoked cookie, a spent token, someone else's session) — situations a generated-payload unit sweep cannot set up. Listing assertions check actual IDs, never just array lengths.
+Contract tests for the self-service `/account` HTTP surface: profile update, password change, single-session logout, session listing, and email verification. Unlike the unit suites' generated-payload sweep, these tests exercise state-dependent branches (a second account holding the email, a revoked cookie, a spent token, someone else's session) that no random payload can set up. Listing assertions check concrete IDs, never just array lengths.
 
 ## Key elements
 
-- **`setupTestDb()`** – one-time DB reset before the suite.
-- **`jest.mock('@infrastructure/adapters/mailer')`** – replaces `enqueueEmail` with a resolving mock so tests can read queued mail content.
-- **`readVerifyToken(userId)`** – checks whether a verify-token row exists for a user (only presence is checkable; the stored value is a `hashToken` digest).
-- **`verifyTokenFromMail()`** – extracts the plaintext `#token=` fragment from the most recently queued mail's `linkUrl`. The only way to recover the usable token because storage holds only a digest.
-- **`mailTo(to)`** – searches all queued mail calls for the envelope addressed to `to` (not just the last one, since an email-change queues two mails).
-- **`cookieMaxAge(response, name)`** – parses the `Max-Age` directive off a named `Set-Cookie` header.
-- **`inJwtMode()`** – pins `NODE_SESSION_MODE=jwt` for tests that exercise the access/refresh token pair specifically.
-- **`statusOfSession(cookie)`** – probes whether a session cookie is still alive (200 vs 401) using the mode-appropriate endpoint.
-- **`loginRemembering(remember?, email?)`** – performs a full login, returns `{ user, bearer, jwtCookie, headers }` shaped for the active session mode.
-- **`expectSessionCookies(response)`** – asserts both `__Host-session` and `isAuth` cookies are present with no `Max-Age` or `Expires` (browser-session semantics).
-- **Test suites** – `POST /account/login — remember me`, `the username ceiling`, `the "remember me" choice survives every re-mint`, and further suites (truncated in source) covering profile update, password change, logout, sessions, and email verification.
+- **`readVerifyToken(userId)`** — returns the stored digest (`tokenHash`) for an account's email-verification token, or `undefined`; used to assert token presence/absence.
+- **`verifyTokenFromMail()`** — extracts the plaintext `#token=` fragment from the last queued mail's `linkUrl`. Necessary because the token is a digest at rest and only exists in plaintext inside the emailed link.
+- **`mailTo(to)`** — searches *all* queued mail for one addressed to `to` (an email-change request queues two mails: notice to the old address, link to the new).
+- **`cookieMaxAge(response, name)`** — parses the `Max-Age` directive from a named `Set-Cookie` header.
+- **`inJwtMode()`** — pins `NODE_SESSION_MODE=jwt` via `setEnvironment`; used only in cases that assert on the access/refresh pair itself.
+- **`statusOfSession(cookie)`** — probes whether a session cookie is still alive: `POST /account/refresh` in `jwt` mode, `GET /account` in `cookie` mode.
+- **`loginRemembering(remember?, email?)`** — creates a user, logs in with an optional remember tier, and returns `{ user, bearer, jwtCookie, headers }` where `headers` are mode-appropriate for subsequent requests.
+- **`expectSessionCookies(response)`** — asserts both `__Host-session` and `isAuth` are set with no `Max-Age` and no `Expires`.
+- **`describe('POST /account/login — remember me')`** — verifies tier-based cookie sizing, browser-session default (no Max-Age), short access-token window, and 422 for an undeclared tier.
+- **`describe('the username ceiling')`** — enforces the 50-character username limit on signup (422 at 51, 201 at 50).
+- **`describe('the "remember me" choice survives every re-mint')`** — confirms that refresh rotation and other re-mint paths preserve the originally chosen session-cookie type (browser-session stays browser-session).
 
 ## Relationships
 
-- **`@infrastructure/adapters/mailer`** – mocked at module level; `enqueueEmail` calls are the sole observable channel for verification-token delivery.
-- **`@infrastructure/adapters/logger`** – imported as `logger` (used for test logging/diagnostic output).
-- **`@infrastructure/i18n`** – `translator` imported for assertion helpers around localized response strings.
-- **`@kernel/config`** – `reauthWindowSeconds` read to build timing expectations around re-authentication.
-- **`@modules/account/session/config`** – `getSessionMode`, `getExpiryTime`, `getAccessExpiryTime`, `RefreshTokenExpiryTime` drive tier assertions and mode-branching logic.
-- **`@modules/account/repository`** – `sessionRepository` imported for direct DB assertions on session rows.
-- **`@modules/account/services`** – `EMAIL_VERIFY_TOKEN_TYPE` constant used to query the correct token row.
-- **`./support`** (`tests/contract/support.ts`) – `loginWithCookie` helper for cookie-mode authentication in specific cases.
-- **`../factories`** (`tests/factories.ts`) – `plantToken`, `tokenRowOf` for seeding and reading token rows.
-- **`@modules/users/tests/factories`** – `createUser`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD`, `WEAK_PASSWORD`, `userRepository` for account and user fixtures.
-- **`@modules/users`** – `userService` imported for service-level assertions.
-- **`@tests/account-export`** – `requestAndDownloadExport` for the account-data-export endpoint test.
+- **`@infrastructure/adapters/mailer`** — Fully mocked via `jest.mock`; `enqueueEmail` is the sole observation point for all mail assertions. The real implementation is spread in via `jest.requireActual` so other exports remain intact.
+- **`@infrastructure/adapters/logger`** — Imported as `logger`; available for log assertions (or suppression) within test cases.
+- **`@infrastructure/i18n`** — `translator` imported; used to resolve localized strings asserted in response bodies.
+- **`@kernel/config`** — `reauthWindowSeconds` imported; used to validate timing windows in reauth-related assertions.
+- **`@modules/account/services`** — `EMAIL_VERIFY_TOKEN_TYPE` imported; passed to `tokenRowOf` to look up the correct token row.
+- **`@modules/account/services/export`** — `settleInlineExports` called in `afterEach` to flush background export jobs before the sandbox is swept.
+- **`@modules/account/session/config`** — `getSessionMode`, `getExpiryTime`, `getAccessExpiryTime` imported; all cookie-duration assertions compare against these source-of-truth accessors rather than raw env vars.
+- **`@modules/account/repository`** — `sessionRepository` imported; used to inspect or manipulate session rows directly (e.g., revoking a session mid-test).
+- **`@modules/account/tests/contract/support`** — `loginWithCookie` imported; a lighter login helper for cases that only need a cookie (no bearer).
+- **`@modules/account/tests/factories`** — `plantToken`, `tokenRowOf` imported; write and read token rows in the test DB without going through the service layer.
+- **`@modules/users/tests/factories`** — `createUser`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD`, `WEAK_PASSWORD`, `userRepository` imported; primary user-fabrication and password constants for every test in this file.
+- **`@modules/users`** — `userService` imported; used where a test needs to act through the public service API (e.g., deleting a user to free an email).
 
 ## Notes
 
-- **Mailer is `jest.mock`'d, not spied.** `jest.spyOn` cannot redefine the non-configurable getter a CommonJS namespace import exposes under the `swc` transform, so a full module mock is required.
-- **Verify token is unrecoverable from storage.** `verificationtokens.tokenHash` stores a one-way digest; the only plaintext copy lives in the emailed link's `#token=` fragment. Tests must read it from the mock mailer.
-- **`mailTo` is a search, not `at(-1)`.** An email-change request queues two mails (notice to old address + link to new address); reading only the last call would miss the notice.
-- **`verifyTokenFromMail` bypasses `observePort`.** That helper clears the mock's call history on hand-out, which would erase the very call being read.
-- **Cookie-mode `Max-Age` is approximate.** In `cookie` mode the value is "what is left of the row," so a second may already have elapsed; assertions use `toBeGreaterThan(expected - 5)` rather than strict equality.
-- **`inJwtMode()` is per-test, not per-suite.** Only tests that need the access/refresh pair pin the mode; all other cases run in whatever mode the surrounding suite uses (`npm run test:contract:cookie` runs them in cookie mode).
+- **Mailer is replaced, not spied.** `jest.mock` is used because `jest.spyOn` cannot redefine the non-configurable getter that a CommonJS namespace import exposes under `swc`. This matches the pattern used for audit/analytics ports elsewhere.
+- **`verifyTokenFromMail` bypasses `observePort`.** The `@tests/ports` helper clears mock call history on hand-out, which would erase the very `enqueueEmail` call the helper needs to read. It therefore accesses `mailerPort.enqueueEmail.mock.calls` directly.
+- **`mailTo` is a search, not a last-call read.** A `PATCH /account` email change queues two mails (old-address notice + new-address link); reading only `.at(-1)` would miss the notice.
+- **`afterEach` settles exports then sweeps the sandbox.** `settleInlineExports()` flushes any in-flight background export job; `emptyFileSandbox()` removes the resulting files. Omitting either leaks state into the next test.
+- **Tier assertions use `getExpiryTime`, not the raw env var.** The tier accessors carry code-side defaults, so an environment that never sets the variable still yields a correct expected value.
+- **`cookie` mode tolerates a 1-second drift.** In `cookie` mode the row's remaining lifetime may already be a second less than the tier's nominal expiry, so the upper bound is `expected` and the lower bound is `expected - 5`.

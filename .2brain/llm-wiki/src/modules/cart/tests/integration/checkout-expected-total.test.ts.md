@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/tests/integration/checkout-expected-total.test.ts
-sha256: 50f52f97efad5456a2131eaca0e353a659423e24ee40faf3582874e9bad5f3f4
-generated_at: 2026-10-14T15:14:38.392134+00:00
+sha256: 659babea514756dd047a84701a7911f01ecf2f712f8eb9ab88a9b33b34c91c72
+generated_at: 2026-10-29T03:27:04.385524+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,40 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for `POST /cart/checkout` that verify the **`expectedTotal` invariant**: the buyer is charged only the total the cart screen showed them, and any drift (price, shipping, or basket change) between read and checkout is refused with a `409 CART_TOTAL_CHANGED` carrying both the expected and actual totals. Tests also confirm that a refused checkout is fully clean (no order, no held stock, cart unchanged) and that a buyer can recover by re-submitting with the new total.
+Integration test verifying the `expectedTotal` invariant on `POST /cart/checkout`: the endpoint must reject any checkout where the named total differs from the cart's current total (price change, basket change, wrong currency), return **both** totals so the UI can prompt the buyer, and leave no side effects (no order, no held stock, cart intact). Also covers input validation (missing/malformed `expectedTotal` → 422) and priority (stock check runs before total check).
 
 ## Key elements
 
-- **`shopperWith(price, quantity?)`** — local helper that authenticates a user, assigns a shipping address, creates a product, adds it to the cart, and sets shipping to free pickup. Returns `{ bearer, product }`.
-- **`describe('POST /cart/checkout and the total the buyer was shown')`** — nine test cases:
-  - Happy path: total matches → `201`.
-  - Price bumped after read → `409`, `CART_TOTAL_CHANGED`, details include both `expected` and `actual` totals.
-  - Clean-state after refusal: `countOrders()` is 0, `countersOf` shows `reserved: 0`, cart still has 1 item.
-  - Two-step recovery: first `409`, then `201` when the buyer resubmits with the `actual` total from the error.
-  - Currency mismatch (same amount, `USD` vs `EUR`) → `409`.
-  - Basket mutated (extra line added) after read → `409`, actual amount reflects the new quantity.
-  - Missing `expectedTotal` → `422`.
-  - Malformed `expectedTotal` (negative, fractional, bad currency code, missing currency) → `422` (parameterized with `it.each`).
-  - Stock exhaustion + price change → `CART_INSUFFICIENT_STOCK` takes precedence over `CART_TOTAL_CHANGED`.
+- **`shopperWith(price, quantity)`** – local helper: authenticates a user, gives an address, creates a product with `onHand: 10`, adds it to the cart, and sets shipping to `pickup` (free). Returns `{ bearer, product }`.
+- **`describe('POST /cart/checkout and the total the buyer was shown')`** – nine cases:
+  - Happy path: correct total → 201, `totalPrice` matches.
+  - Price moved after read → 409 `CART_TOTAL_CHANGED` with `expected`/`actual` in `details`.
+  - Atomicity: after a 409, zero orders, `reserved` stock = 0, cart still holds the line.
+  - Buyer confirms: first attempt 409, second attempt with the `actual` from `details` → 201.
+  - Wrong currency (USD vs EUR, same amount) → 409.
+  - Basket changed (extra line added) → 409, `actual.amount` reflects new total.
+  - Missing `expectedTotal` field → 422.
+  - `it.each` of four malformed totals (negative, fractional, bad currency code, missing currency) → 422.
+  - Stock shortage takes priority: `CART_INSUFFICIENT_STOCK` is returned instead of `CART_TOTAL_CHANGED`.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `tests/support/http.ts` | `api()` and `authenticateAs()` for every HTTP request and user setup. |
-| `tests/support/checkout-as.ts` | `checkoutAs(bearer, { expectedTotal })` wraps the checkout POST; `shownTotal(bearer)` reads the cart's current total. |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` initialises the in-memory DB before the suite. |
-| `src/modules/addresses/tests/factories.ts` | `giveAddress(user.id)` ensures a default shipping address exists. |
-| `src/modules/products/tests/factories.ts` | `createProduct()` seeds the product; `countersOf()` asserts stock counters after refusal. |
-| `src/modules/orders/tests/factories.ts` | `countOrders()` asserts no order row was persisted. |
-| `src/modules/products/index.ts` / `…/services/index.ts` | `productService.updateById()` mutates price *directly* (bypassing the API) to simulate a concurrent price change. |
-| `src/modules/inventory/index.ts` / `…/services/index.ts` | `inventoryService.adjust()` reduces on-hand stock to test the stock-shortage precedence case. |
-| `tests/support/callers.ts` | `testCallerContext` supplies the actor context required by the product service call. |
+- **`tests/support/http.ts`** – `api()` and `authenticateAs()` provide the HTTP client and bearer-token auth used throughout.
+- **`tests/support/checkout-as.ts`** – `checkoutAs(bearer, { expectedTotal })` wraps the checkout POST; `shownTotal(bearer)` reads the cart's current total.
+- **`tests/support/setup-test-db.ts`** – `setupTestDb()` initializes a fresh database before the suite.
+- **`tests/support/callers.ts`** – `testCallerContext` supplies the caller identity for direct service calls.
+- **`src/modules/addresses/tests/factories.ts`** – `giveAddress` seeds the required shipping address.
+- **`src/modules/products/tests/factories.ts`** – `createProduct` seeds a product; `countersOf` reads inventory counters.
+- **`src/modules/products/index.ts`** → `productService.updateById` mutates price mid-test to simulate a race.
+- **`src/modules/inventory/index.ts`** → `inventoryService.adjust` depletes stock for the stock-priority test.
+- **`src/modules/orders/tests/factories.ts`** – `countOrders` asserts no order was persisted after a refused checkout.
 
 ## Notes
 
-- Tests hit the **real HTTP surface** (supertest-style `api()`), not in-process services, except for the deliberate mid-test mutations (`productService.updateById`, `inventoryService.adjust`) which simulate a concurrent write that would not bump the cart's version.
-- `expectedTotal` is **required**: omitting it yields `422`, not `409`.
-- The currency field is compared as a string (`EUR` ≠ `EURO`, `EUR` ≠ `USD`); amount alone is not sufficient.
-- The "confirm the new total" test demonstrates the intended client recovery loop: read `details.actual` from the `409` body and resend it.
-- Stock validation runs **before** total validation — a short line produces `CART_INSUFFICIENT_STOCK` even when the total is also stale.
+- Prices are integer cents in EUR (`2000` = €20.00). The API's `totalPrice` is returned in whole units (`20`, `24`).
+- The stock-priority test (`CART_INSUFFICIENT_STOCK` over `CART_TOTAL_CHANGED`) documents an ordering contract: if both violations exist, stock is reported first.
+- The "buyer confirms" test reads the `actual` value out of the 409 response body and replays it — the test does not hard-code the new price, keeping it resilient to pricing-logic changes.
+- `setupTestDb()` is called at module scope (outside `beforeEach`), so all cases share one database instance; isolation relies on unique product/user IDs from the factories.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/observability/tests/contract/api.contract.test.ts
-sha256: 0d55d7546738aac8ebdba2e1d0d1c9128d36831a965e7f066493ee97777ae6c9
-generated_at: 2026-10-15T10:56:54.633894+00:00
+sha256: ee8351c44ff6b2c449dfbe30e89508719400bc994fc17d5783caf39d66cd9599
+generated_at: 2026-10-29T04:36:46.265136+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the three JSON endpoints under `/observability` (health, metrics overview, audit). Because those responses are assembled field-by-field in application code rather than produced by a shared serializer, shape drift goes undetected by unit tests. This file pins the wire shape, vocabulary, and validation behavior each client codes against, including error responses (422, 401/403 bodies). `GET /events` (SSE) is intentionally out of scope; `stream.test.ts` owns frame content.
+Contract tests for the four `/observability` JSON endpoints (`/health`, `/metrics/overview`, `/audit`, `/events`). They pin the response shapes, field vocabularies, and error-body conventions that API clients code against, covering cases a serializer-level assertion would miss because the payloads are assembled field-by-field rather than through a shared serializer.
 
 ## Key elements
 
-- **`pollUntilAudited(bearer, query)`** — Repeatedly `GET /observability/audit` (up to 20 attempts, 25 ms apart) until a row appears. Exists because `audit-logs.record()` is fire-and-forget by design (`void` return, failures swallowed), so there is no awaitable boundary to assert against.
-- **`describe('GET /observability/health')`** — Asserts: 200 for admin; `dependencies.database.status` matches the live `connection.readyState`; all three dependencies use the same four-value vocabulary (`ready | connecting | unavailable | disabled`); top-level `status` folds to `ok`/`degraded` consistently; `telemetry.analytics` carries a `provider` string + `configured` boolean; `queues` is always an array (empty here since RabbitMQ is disabled); `jobs` reflects a seeded `leaseModel` document (name, `lastSuccessAt`, `lastError`).
-- **`describe('GET /observability/metrics/overview')`** — Asserts 200 and that counter rows (`http.totalRequests`, `auth.loginSuccess`, `business.checkoutSuccess`) are present as numbers even when the owning module is absent, preventing a 500 on module deletion.
-- **`describe('GET /observability/audit')`** — Asserts: 200 on empty log; filtered (`?outcome=failure`) log returns only matching entries with correct `meta.totalItems`/`meta.pageSize`; `pageSize=5000` → 422; unparseable `since` → 422; date-only `since` (no time) → 422; `outcome` outside `success|failure` → 422 (not a silent full-table match).
+- **`pollUntilAudited(bearer, query)`** — helper that polls `GET /observability/audit` via `eventually()` until the fire-and-forget audit entry is visible, then returns the final response. Exists because `audit-logs.record()` is intentionally void and non-awaitable in production.
+- **`describe('GET /observability/health')`** — asserts status 200, live database readiness, a single four-word dependency vocabulary (`ready|connecting|unavailable|disabled`) across `database`/`cache`/`queue`, an `ok|degraded` fold, `analytics.provider` (string) + `analytics.configured` (boolean), `queues` as an array, and `jobs` reflecting a real seeded `leaseModel` document (lastSuccessAt, lastError).
+- **`describe('GET /observability/metrics/overview')`** — asserts 200 and that counter keys exist with numeric values even when the owning module is absent (reports `0`, not a missing key).
+- **`describe('GET /observability/audit')`** — asserts 200 for empty and populated logs, `outcome` filter narrowing, `meta.totalItems`/`pageSize`, and 422 for out-of-range `pageSize`, unparseable or date-only `since`, and invalid `outcome` enum values.
+- **SSE section (truncated)** — reads `GET /events` only up to its first frame; frame-content assertions live in `stream.test.ts`.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** (`@tests/contract`) — Imported as a side-effect module; presumably registers OpenAPI schema validation so every response is checked against the published spec automatically.
-- **`tests/support/setup-test-db.ts`** (`setupTestDb`) — Called once at module top level to point `connection` at the test database before any test runs.
-- **`tests/support/http.ts`** (`api`, `authenticateAs`) — All HTTP calls go through the shared `api()` helper; `authenticateAs('admin')` mints a bearer token per test.
-- **`tests/support/cookies.ts`** (`setCookie`) — Imported for cookie-based auth paths (used in the truncated remainder of the file).
-- **`src/modules/users/tests/factories.ts`** (`createAdminUser`, `createUser`, `PLAIN_PASSWORD`) — Provide deterministic user records so auth assertions are reproducible.
-- **`src/infrastructure/runtime/database.ts`** (`connection`) — One test cross-checks `connection.readyState === 1` against the JSON `status` to prove the health snapshot reads the live driver, not a constant.
-- **`src/infrastructure/persistence/lease.ts`** (`leaseModel`) — A document is seeded directly via Mongoose to prove `jobHealth()` performs a real `find()` rather than returning a hard-coded `[]`.
-- **`src/infrastructure/config/store.ts`** (`currentEnvironment`) — Imported (likely used in the truncated portion for environment-conditional assertions).
-- **`src/modules/account/tests/unit/family-liveness.test.ts`** — A sibling contract test in the account module; shares the same `@tests/contract` + factory + `http` helper pattern.
+- **`tests/support/contract.ts`** — side-effect import (`import '@tests/contract'`) that registers global contract matchers used by the assertions.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the in-test database connection before any test runs.
+- **`tests/support/http.ts`** — provides `api()`, `authenticateAs()`, and `loginCompleting()` for issuing requests and obtaining bearer tokens.
+- **`tests/support/cookies.ts`** — `setCookie` imported for cookie-based auth setup.
+- **`tests/support/eventually.ts`** — `eventually()` drives the `pollUntilAudited` retry loop.
+- **`src/modules/users/tests/factories.ts`** — `createAdminUser`, `createUser`, `PLAIN_PASSWORD` seed the users that `authenticateAs('admin')` resolves against.
+- **`src/infrastructure/runtime/database.ts`** — `connection.readyState` is read directly in the health test to cross-check the reported `database.status`.
+- **`src/infrastructure/persistence/lease.ts`** — `leaseModel.create()` writes a real lease document so the health test can verify `jobs` is not a hard-coded empty array.
+- **`src/infrastructure/config/store.ts`** — `currentEnvironment` imported (likely used in the truncated SSE section or a skipped/conditional test).
 
 ## Notes
 
-- **Do not assert specific dependency values.** The test suite may run without Redis or RabbitMQ; only the four-word vocabulary and the `status` fold are environment-independent. Pinning a value (e.g. `status === 'ready'` for cache) would fail on a laptop.
-- **The audit polling helper is intentional, not a workaround.** Making `record()` awaitable to remove the race would trade a real production guarantee (a Mongo blip never surfaces as a 500 on login) for test convenience. The 20 × 25 ms loop is the documented cost.
-- **Empty-collection assertions are weak on their own.** The lease-seeding test exists specifically to distinguish a real `find()` from a hard-coded `[]`. If you add new "always-present array" fields, pair them with a seed-and-read test like this one.
-- **`@tests/contract` is a side-effect import** (no named bindings destructured). It likely attaches `expect(response).toMatchSchema()`-style matchers globally; removing the import will silently disable schema checks without a TypeScript error.
+- The audit-log sink is **void by contract**; `pollUntilAudited` polls rather than awaits. This is a deliberate test-side cost, not a bug — making `record()` awaitable would change production behaviour.
+- Dependency status values are **not** asserted to any specific value (e.g. `ready` for cache) because that depends on the local `.env`. Only the vocabulary set and the `ok`/`degraded` fold are checked.
+- The `jobs` test seeds a lease with `_id: 'observability-contract-test.seeded'` to distinguish a real `leaseModel` read from a hard-coded `[]`.
+- The metrics-overview test asserts that **absent counters yield `0`, not a missing key**, so the endpoint tolerates module deletion without a 500.
+- `import '@tests/contract'` is a bare side-effect import (no named bindings); it does not export anything used locally.

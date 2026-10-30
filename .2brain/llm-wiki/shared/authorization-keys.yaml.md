@@ -1,7 +1,7 @@
 ---
 source: shared/authorization-keys.yaml
-sha256: df5fbd87bf2e669bf29bcab80d8a4c59f8494167b45f5232c130868c1a6565d3
-generated_at: 2026-10-14T07:34:42.219850+00:00
+sha256: ab7201739d337f5ce0b6eab91440050e5a21becbfb7d78a86cbe4e035f3cd455
+generated_at: 2026-10-29T01:46:38.996240+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The generated, canonical registry of every authorization permission key, the action vocabulary, the scope definitions, and per-key metadata (conditions, step-up tier, `shopperOnly` flag) for the platform. It is produced by `npm run authorization:bundle` by splicing one fragment per owning module (`src/modules/<name>/authorization.yaml`) together with the root-level `core` keys. No key may be introduced here directly; the `--check` flag (wired into the `complete` script) fails the build if this bundle drifts from the fragments.
+Generated bundle of every permission rule and permission set in the system, spliced from per-module fragments (`src/modules/<name>/authorization.yaml`) by `npm run regenerate`. It is the single source of truth for the authorization vocabulary (actions, implies, scopes, step-up tiers) and the concrete rules that guards evaluate. Committed byte-identical in both `boilerplate-node-backend` and `boilerplate-php-laravel-backend`; `--check` (wired into `complete`) fails the build if the bundle drifts from its source fragments.
 
 ## Key elements
 
-- **`actions`** — The complete, closed vocabulary of verbs a key may use. Contains CASL's `read`, `create`, `update`, `delete` plus seven domain-specific additions (`checkout`, `sweep`, `override`, `start`, `receive`, `ban`, `export`). `write` and `manage` are deliberately absent. This list is the single source from which `npm run gen:api` emits `api/permission-actions.ts` for both backends and the frontend.
-- **`scopes`** — Defines the two exclusive scopes: `tenant` (bare keys) and `platform` (keys prefixed `platform.`). A caller resolves to exactly one; a bare key is never satisfied by a platform caller and vice versa.
-- **`keys`** (array) — Each entry declares: `key`, `module`, `subject` (singular CASL type), `action`, `scope`, `description`, and optionally `conditions`, `stepUp` (`critical` | `sensitive`), and `shopperOnly`. Key shape is always `<family>.<breadth>.<action>` with breadth (`self`/`any`) always explicit. No wildcards exist.
-- **`conditions`** (per key) — ABAC filter fragments compiled into the read query. Use `$caller.<field>` substitution; field names are model-level, not storage-level. Tenancy (`tenantId`) is injected by the resolver and never written here.
-- **`stepUp`** (per key) — Marks actions that require re-authentication within a time window (`NODE_REAUTH_TIME_CRITICAL` / `NODE_REAUTH_TIME_SENSITIVE`). Declared on the key, not the route.
-- **`shopperOnly`** (per key) — Excludes a key from the "holds every declared key" set so that `admin` remains unrestricted while the key is restricted to customer accounts.
+- **`actions`** — Closed vocabulary of all valid verbs (CASL CRUD plus domain-specific additions: `checkout`, `sweep`, `override`, `start`, `receive`, `ban`, `export`, `assign`, `display`, `admin`). `npm run gen:api` emits this into `api/permission-actions.ts` for both frontends. No `manage` or `write` wildcard exists.
+- **`implies`** — Maps staff actions to the plain actions they also satisfy (`display → read`, `admin → update, delete`). The ability engine emits each implied rule alongside the staff rule so a single query filter covers both.
+- **`scopes`** — The two mutually exclusive caller scopes: `tenant` (one shop) and `platform` (shared operational data). A caller resolves to exactly one; a rule's scope must match the caller's scope.
+- **`stepUp`** — Re-authentication tier windows in seconds (`critical: 300`, `sensitive: 900`). Rules opt in via `stepUp: critical|sensitive`. `npm run regenerate` writes `src/kernel/step-up.generated.ts` from these values. Environment variables override the defaults.
+- **`rules`** — The permission rules themselves. Each rule has `action`, `subject`, `module`, `scope`, optional `description`, optional `conditions` (ABAC filter fragments using `$caller.<field>` placeholders), optional `stepUp`, optional `credential` flag. Tenancy is injected by the resolver, never written here.
+- **Conditions** — ABAC filter fragments compiled *into* the query (not checked after). Field names are the model's vocabulary, not either storage's columns. `deletedAt: null` appears on narrow reads of soft-deletable subjects.
 
 ## Relationships
 
-- **`shared/authorization-roles.yaml`** — Defines roles (sets of keys assignable at runtime). Role assignment validates membership against the keys declared here; a key not present in this file cannot be granted. This file is the "permissions are code" side; the roles file is the "roles are data" side.
-- **`shared/authorization-conformance.yaml`** — Declares conformance rules (e.g. every tenant-scope key has a `platform.` counterpart where applicable, breadth consistency across a family, condition symmetry between `self` and `any` reads). It references the keys and actions defined here to validate structural invariants.
+- **`shared/authorization-roles.yaml`** — Roles are lists of permission sets by name; the sets and their constituent rules are declared here. A role file never re-declares a rule or action.
+- **`shared/authorization-conformance.yaml`** — Conformance checks validate that the rules declared in this file are consistent (e.g., every `implies` target exists, every condition field is mappable, every rule's scope is one of the two declared scopes).
 
 ## Notes
 
-- **Generated file — do not edit by hand.** Introduce or change keys in the owning module's `src/modules/<name>/authorization.yaml`, then re-run `npm run authorization:bundle`.
-- **Committed byte-identical** in `boilerplate-node-backend` and `boilerplate-php-laravel-backend`. Both repos exclude it from their formatters (`.prettierignore` / `dprint.json`) to prevent silent divergence.
-- **Breadth is mandatory in the key name.** There is no implicit default: an omitted `self`/`any` is treated as a bug.
-- **`deletedAt: null`** appears only on `self`-breadth reads of families that use soft-delete (Product, Order). It is intentionally absent on `any`-breadth reads (staff see soft-deleted rows) and on families with no soft-delete column (e.g. Payment).
-- **`manage` is not an action.** Without wildcards, a "manage everything in this family" grant has no single key to bind to; it must be expressed as the explicit set of keys.
-- **`write` was rejected** because it collapses create/update/delete, which the domain requires to be separable (e.g. a support agent may `update` a user but not `delete` one).
+- **Generated, never hand-edited.** `--check` fails CI if the bundle's bytes differ from re-splicing the fragments. Edit the owning module's `src/modules/<name>/authorization.yaml` instead.
+- **Formatter-excluded.** Both repos' formatters (Prettier / dprint) skip this file (`.prettierignore`, `dprint.json`). Two formatters over one shared artefact would silently fork the file.
+- **No wildcards, no `manage`.** The model explicitly forbids per-family or scope-wide wildcards. A rule names exactly one action on one subject.
+- **Roles are data, permissions are code.** A deployment may create roles at runtime (in `authorization-roles.yaml`) but may never invent a new rule; assignment validates against this file.
+- **`credential: false` and `stepUp` rules are not mintable.** A credential cannot re-authenticate, and a rule nothing checks grants nothing.
+- **`scope` is a field, not a naming convention.** The invariant — tenant rule never satisfied by platform caller and vice versa — is enforced by the field, not by subject naming.
+- **Subjects are singular CASL types** (`Order`, `Product`), distinct from the plural module folder names.

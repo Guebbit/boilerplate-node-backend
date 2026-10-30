@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/session/auth-context.ts
-sha256: f3ec34ee01ce8ca6b4a310bd383b801254e4e75e67fbfc889aaeed8a4b4d4f60
-generated_at: 2026-10-14T08:58:00.004155+00:00
+sha256: cd58edd77c5048397600c98e4d6bc10123d871b1140cbb775bf039a835f11772
+generated_at: 2026-10-29T02:47:02.323474+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Resolves a verified session proof (auth time + AMR methods) into the `AuthContext` that downstream guards read. This is the shared "what does the proof mean" step that both cookie and JWT session strategies funnel into, so account validity, epoch expiry, and current role membership are decided in exactly one place.
+Resolves a session's proof (auth timestamp + authentication methods) into the `AuthContext` that downstream guards consume. Both session modes (cookie and JWT) produce a `SessionProof`; this file is the single, shared layer that decides what a valid proof *means*—account still active, epoch not expired, current roles, fresh factor state. The mode decides how a credential becomes a proof; this file decides what a proof grants.
 
 ## Key elements
 
-- **`SessionProof`** (interface) — the minimal proof a session must carry: `authTime` (epoch seconds, copied forward on refresh) and `amr` (RFC 8176 method array).
-- **`resolveProof(userId, proof)`** (async function) — the sole public function. Looks up the account via a *scoped* query (`findAuthenticatableById`), rejects proofs older than the account's session epoch, reads roles fresh, and returns a fully-populated `AuthContext` or `undefined`.
+- **`SessionProof`** (interface) — The minimal proof a session must carry: `authTime` (epoch seconds of last real re-authentication, copied forward on refresh) and `amr` (readonly RFC 8176 method strings).
+- **`resolveProof(userId, proof)`** (exported const) — Async function returning `Promise<AuthContext | undefined>`. Looks up the account via `userService.findAuthenticatableById`, rejects if missing or if `authTime` predates the account's session epoch, then fetches current roles via `accessService.rolesOf` and assembles the full `AuthContext`. Returns `undefined` for any account that may not authenticate.
 
 ## Relationships
 
-- **`@modules/users` → `userService.findAuthenticatableById`** — fetches the user document in a way that excludes deactivated / soft-deleted accounts (scoped query, not `findById`).
-- **`./epoch` → `predatesSessionEpoch`** — refuses any proof whose `authTime` is before the user's `tokensValidAfter` watermark.
-- **`@modules/access` → `rolesOf`** — resolves the user's current role set for the deployment tenant; no fallback is applied here.
-- **`@kernel/access/tenant` → `DEPLOYMENT_TENANT_ID`** — fixed constant stamped into `AuthContext.tenantId`; never derived from the request.
-- **`@types` → `AuthContext`** — the return type this function produces; consumed by permission guards.
-- **`./jwt-strategy.ts` / `./cookie-strategy.ts`** — the two session modes that *produce* a `SessionProof` and then call `resolveProof` to obtain the caller context.
+- **`src/modules/users/services/index.ts`** (`userService.findAuthenticatableById`) — Source of the account record; scoped lookup that excludes deactivated/soft-deleted accounts on the *next* request, not just at login.
+- **`src/modules/account/domain/epoch.ts`** (`predatesSessionEpoch`) — Validates `proof.authTime` against the account's `tokensValidAfter`; a stale proof is indistinguishable downstream from a missing account.
+- **`src/modules/access/services/index.ts`** (`accessService.rolesOf`) — Supplies the live role set for the deployment tenant; no fallback, so `null` in a scope means genuinely no role there.
+- **`src/kernel/access/tenant.ts`** (`DEPLOYMENT_TENANT_ID`) — Fixed constant stamped into the returned `AuthContext.tenantId`; never derived from the request.
+- **`src/types/auth-context.ts`** (`AuthContext`) — The shape this function returns; consumed by permission guards.
+- **`src/modules/account/session/cookie-strategy.ts`** / **`jwt-strategy.ts`** — The two session modes that produce a `SessionProof` and delegate to `resolveProof` for the shared "what does this proof mean" step.
+- **`src/modules/account/tests/unit/cookie-strategy.test.ts`** / **`jwt-strategy.test.ts`** — Exercise the resolution path through each strategy.
 
 ## Notes
 
-- **Scoped lookup, not `findById`.** A deactivated or soft-deleted account is rejected on the very next request, not merely at its next login. Downstream code cannot distinguish "account gone" from "epoch expired" — both yield `undefined`.
-- **Roles are read fresh every request.** The user document carries no `role` field of its own; the membership table is the source of truth. `rolesOf` returning `null` for a scope is intentional and maps to the anonymous/empty baseline in `kernel/permissions.ts`.
-- **`analyticsConsent ?? false`.** The DB schema defaults the column, but the contract-derived TypeScript type does not know that, so the nullish coalescing is a necessary guard.
-- **`amr` is spread (`[...proof.amr]`)** into the returned context to hand out a plain mutable array rather than the caller's readonly reference.
-- **`twoFactorArmed`** is derived from `user.twoFactorEnabledAt !== undefined` and read fresh, so arming/removing a 2FA factor takes effect on the next request without requiring re-authentication.
+- `rolesOf` result is used as-is (no fallback). A `null` scope value means "no role in that scope" and is handled downstream by `keysInScope` (`kernel/permissions.ts`); this file never substitutes a default.
+- `amr` is spread (`[...proof.amr]`) into the result so the caller cannot mutate the session's original readonly array.
+- `twoFactorArmed`, `authenticatorArmed`, `verified`, and `analyticsConsent` are always read fresh from the user document, not from anything the session carries. A factor change or consent withdrawal applies on the very next request.
+- `analyticsConsent` is **conditionally present**: the key is omitted entirely until the account has given an answer, so a banner choice made before sign-in is not silently overridden.
+- The function intentionally returns `undefined` (not `null` or a sentinel object) for rejected accounts, making the "no caller" state a single, uniform value for guards to check.

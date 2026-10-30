@@ -1,7 +1,7 @@
 ---
 source: src/modules/api-keys/services/api-keys.ts
-sha256: fede2db690376cc2fd987b9be7b0b9e3c41a960a42b4e5f3d34b13032a13c310
-generated_at: 2026-10-15T10:20:42.996225+00:00
+sha256: 8251339f86271f7a66a6684825819d7d0d5aa9a3cd49ae615f302c51559c9ae7
+generated_at: 2026-10-29T03:14:45.022736+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,41 +9,43 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Service layer for credential (API key) CRUD: listing, minting, and revoking tenant-scoped API keys. Centralises permission validation at mint time, audit recording, email notifications, and the bulk-revoke path triggered by account-level events (logout-everywhere, password reset).
+Service layer for API-key (credential) CRUD: list, mint, and revoke. Enforces tenant scoping on every operation, validates that minted permissions are a subset of the minter's current holdings, records audit entries, and sends a one-time notification email to the minter. Sits between the HTTP route handlers (in `module.ts`) and the repository/presenter layers.
 
 ## Key elements
 
-- **`isMintable`** (internal) — checks four conditions before a key may be granted on a credential: declared in the key catalog, tenant-scoped, no step-up tier, and actually held by the caller (`heldKeys`).
-- **`latestExpiry`** — returns the maximum allowed expiry: one *calendar* year from `now` (via `setFullYear(+1)`), injectable clock for tests.
-- **`notifyMinted`** (internal) — fire-and-forget email to the minter after a successful mint; resolves the minter's address fresh, formats the expiry in the recipient's locale, enqueues via the mailer.
-- **`findOwnApiKeys`** — unpaginated full read of all keys a user minted (for account data export); uses `readAll` with `MAX_CONFIGURED_PAGE_SIZE`.
-- **`apiKeysDeleteByUserId`** — hard-delete hook for the `personalData.erase` account event; joins the caller's Mongoose transaction.
-- **`list`** — paginated, tenant-scoped listing of credentials, newest first; never returns a secret (model transform strips `hash`).
-- **`mint`** — validates `expiresAt` and `permissions` subset, generates the key (via `mintApiKey`), persists, records audit, fires notification email; returns the plaintext secret exactly once (201).
-- **`revoke`** — soft-revoke (sets `revokedAt`); idempotent (already-revoked → 200, not 404); tenant-mismatch → 404; records audit.
-- **`notifyRevoked`** (internal) — fire-and-forget email listing which keys stopped working and why.
-- **`revokeAllMintedBy`** — bulk-revokes every live key a user minted; called by the account module on wholesale session revocation; audited as a system act; mails the owner.
+- **`isMintable(id, caller)`** – Guards whether a permission rule may be assigned to a credential. Requires the rule to be declared, tenant-scoped, free of step-up, marked credential-compatible, and currently held by the caller.
+- **`latestExpiry(now?)`** – Returns one calendar year from `now` (clock injectable for tests). Used as the maximum accepted `expiresAt` at mint time.
+- **`notifyMinted(minterId, apiKey)`** – Fire-and-forget email to the minter. Resolves the minter's address fresh (never stored on the key), localises the expiry date, enqueues via the mailer. Failures log a warning but never reject the mint.
+- **`findOwnApiKeys(userId)`** – Unpaginated export of a user's own keys (metadata only; secret never included). Uses `readAll` with `MAX_CONFIGURED_PAGE_SIZE`.
+- **`apiKeysDeleteByUserId(userId, session)`** – Hard-delete hook for `personalData.erase`; participates in the caller's transaction.
+- **`withStatus(rows, context)`** – Enriches stored rows with a computed `status` (suspends keys whose minter can no longer authenticate) and per-row `actions`. Performs one distinct-minter lookup, not one per row.
+- **`list(context, filters)`** – Paginated tenant-scoped listing, newest first by default. Returns `items`, `meta`, and `maxExpiresAt`.
+- **`get(id, context)`** – Single-tenant credential fetch. Cross-tenant id is indistinguishable from a missing id (404).
+- **`mint(body, context)`** – Validates `expiresAt` ≤ `latestExpiry` and that every requested permission passes `isMintable`. Generates the key (`mintApiKey`), persists via repository, fires notification, records audit, and returns the plaintext secret once (201).
+- **`revoke(id, context)`** – Soft-revokes a credential. Idempotent: revoking an already-revoked key returns success, not 404.
 
 ## Relationships
 
-- **`@infrastructure/http/response`** — shapes all return values via `generateSuccess` / `generateReject` / `fieldError`.
-- **`@infrastructure/observability/audit`** — calls `recordAudit` on mint and revoke.
-- **`@infrastructure/adapters/mailer`** — calls `enqueueEmail` in both notification paths.
-- **`@infrastructure/adapters/logger`** — `logger.warn` on fire-and-forget email failures.
-- **`@infrastructure/i18n`** (`catalog`, `context`, `index`) — `t()` for user-facing messages; `getDefaultLocale()` as locale fallback in email formatting.
-- **`@infrastructure/persistence/search`** — `readAll` and `MAX_CONFIGURED_PAGE_SIZE` for the unpaginated export read.
-- **`@infrastructure/persistence/create-repository`** — `PaginatedResult` type for `list`.
-- **`@kernel/ability`** — `heldKeys` provides the caller's literal key set for `isMintable`.
-- **`@kernel/permissions`** — `findKey` resolves a key's declaration (scope, stepUp); `systemCallerContext` used by `revokeAllMintedBy`.
-- **`@modules/account`** (`domain/revocation`, `index`) — `SessionsRevokedReason` type parameterises `revokeAllMintedBy` and `notifyRevoked`.
-- **`@modules/api-keys/credentials`** — `mintApiKey` (key generation) and `displayIdOf` (human-readable prefix).
-- **`@modules/api-keys/audit`** — `apiKeysAuditActions` constants for audit log entries.
+- **`../credentials`** – `mintApiKey()` (key generation) and `displayIdOf()` (short human-readable prefix) are called during mint and email formatting.
+- **`../audit`** – `apiKeysAuditActions` supplies the action identifiers passed to `recordAudit`.
+- **`../emails`** – `apiKeyMintedEmail` and `apiKeysRevokedEmail` build the locale-aware email payload consumed by `enqueueEmail`.
+- **`../model`** – `ApiKeyDocument` type; the repository's stored shape that the presenter (`presentApiKey`) and status helper (`apiKeyStatus`) operate on.
+- **`../module`** – Registers these service functions as route handlers; the `CredentialResolver` middleware re-validates permissions on every authenticated request; the `personalData.erase` manifest calls `apiKeysDeleteByUserId`.
+- **`@infrastructure/observability/audit`** – `recordAudit` records mint and revoke events.
+- **`@infrastructure/http/response`** – `generateSuccess` / `generateReject` / `fieldError` shape all HTTP responses.
+- **`@infrastructure/i18n`** – `t()` for user-facing error strings; `getDefaultLocale()` as email fallback.
+- **`@infrastructure/adapters/mailer`** – `enqueueEmail` dispatches mint/revoke notifications.
+- **`@infrastructure/adapters/logger`** – Warns on non-fatal email failures.
+- **`@infrastructure/persistence/search`** – `readAll` and `MAX_CONFIGURED_PAGE_SIZE` power the unpaginated export.
+- **`@kernel/ability`** – `heldRules(caller)` returns the exact rule set the caller's ability was built from, used in `isMintable`.
+- **`@kernel/permissions`** – `findRule(id)` resolves a rule's declared scope/stepUp/credential flags; `systemCallerContext` (imported, likely used in revoke or internal paths).
 
 ## Notes
 
-- **Tenant scope is guaranteed by the route guard**, not by a check here: every key in the family is `scope: tenant`, so `caller.tenantId` is always set. No platform-scope branch exists in this file.
-- **`isMintable` deliberately uses `heldKeys` (literal keys)**, not `holdsKey`, because `holdsKey` collapses sibling keys (e.g. `orders.self.read` → `orders.any.read`) and would let a caller mint a broader key than they actually hold.
-- **`revoke` is intentionally unranked**: any admin in the tenant can revoke any tenant key, including another admin's. The only gate is the tenant check + the key's existence.
-- **Email failures never propagate.** Both `notifyMinted` and `notifyRevoked` catch and `logger.warn`; the mint/revoke itself has already committed.
-- **`findOwnApiKeys` is unpaginated by design** — it serves a one-time data-export, not a client-facing listing.
-- **`apiKeysDeleteByUserId` participates in the caller's Mongoose `ClientSession`**, so it rolls back if the surrounding hard-delete transaction fails.
+- **Cross-tenant reads are 404, not 403.** `get` and `list` treat another tenant's key as if it does not exist, avoiding key-ID enumeration.
+- **The plaintext secret is returned exactly once** (in the `mint` 201 response). All subsequent reads go through `presentApiKey`, which omits the hash/secret.
+- **Mint validation is two-layered.** `isMintable` checks at creation time; `module.ts`'s `CredentialResolver` re-checks on every request the key later makes, so a demoted minter cannot leave an over-privileged key behind.
+- **`latestExpiry` uses `setFullYear(+1)`**, not a fixed day count, to respect leap years and calendar semantics.
+- **`findOwnApiKeys` is deliberately unpaginated.** It is a one-time data-export operation, not a client-facing listing.
+- **Revocation is intentionally less privileged than other admin actions** (any tenant admin may revoke any tenant key), matching the "revoking only removes access" reasoning and aligning with Stripe/GitHub conventions.
+- **`notifyMinted` resolves the minter's email at send time**, never persisting it on the key document, so a later email change is reflected in future notifications.

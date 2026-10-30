@@ -1,43 +1,47 @@
 ---
 source: scripts/mutation/ci/merge.ts
-sha256: 7d4499966228b4747b2307ef2c180d50109ec7339b3b357665047099d0cd72af
-generated_at: 2026-10-01T12:32:34.362471+00:00
+sha256: 9c750957a7dca1eb141942aaf8256e29422f62ad6e137b08764749330f336ca1
+generated_at: 2026-10-29T01:38:40.048239+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # scripts/mutation/ci/merge.ts
 
 ## Purpose
-Folds Stryker mutation-test reports from multiple CI shards into a single unified report — one HTML page, one `mutation.json` for the ratchet baseline, and one GitHub-flavoured Markdown summary. It resolves slice-ignored mutants, re-keys per-report test IDs, detects files no finished shard covered, and renders the final artifacts.
+
+Folds the individual Stryker mutation-test reports produced by each shard in a GitHub sweep into a single unified report—one HTML page, one `mutation.json` for the ratchet, one summary on the run page. It also provides `overlayReport`, which layers a local partial run over an existing whole report so the on-disk artifact stays complete.
 
 ## Key elements
 
-- **`StrykerReport`** — the subset of Stryker's `mutation-testing-report-schema` this module reads/writes (`files`, `testFiles`, and pass-through fields).
-- **`ShardReport`** — one finished shard: its `CiShard` plan entry plus its `StrykerReport`.
-- **`MergeResult`** — the merged `StrykerReport` and the list of `incomplete` scope files.
-- **`incompleteFiles(scope, finished)`** — returns scope files whose line ranges were not fully covered by any finished shard's units (judged by line spans, not report contents).
-- **`mergeReports(finished, scope)`** — the main merge: collects mutants per file (first non-ignored report wins), re-keys test IDs to a canonical numbering, drops incomplete files, strips shard-specific `config`, and returns a `MergeResult`.
-- **`renderHtml(template, report)`** — swaps the `app.report = …` line in a shard's Stryker-generated `index.html` with the merged JSON; throws if the marker line is missing.
-- **`formatSummary({ report, incomplete, weakest })`** — produces the GitHub Markdown summary block (score, per-status table, weakest files, incomplete list).
-- **`tally(report)`** — counts mutants by status and computes the ratchet score (`(Killed + Timeout) / valid × 100`).
-- **`mutantKey`** (internal) — stable identity for a mutant across slices: `mutatorName|replacement|start-end` location.
-- **`skippedBySlice`** (internal) — true when a mutant is `Ignored` with `SLICE_IGNORE_REASON`.
-- **`mergeTests`** (internal) — deduplicates tests across reports into one list per test file, keyed by `file|name|line`, and returns per-report ID maps for remapping `coveredBy`/`killedBy`.
+- **`StrykerReport` / `ReportMutant` / `ReportTest`** — Typed subset of Stryker's `mutation-testing-report-schema` that this module reads and writes.
+- **`ShardReport`** — A finished shard: its `CiShard` plan entry plus its `StrykerReport`.
+- **`MergeResult`** — The merged `StrykerReport` plus a sorted list of `incomplete` files that were excluded.
+- **`incompleteFiles(scope, finished)`** — Returns scope files whose line ranges are not fully covered by any finished shard (judged by line spans, not report contents).
+- **`mergeTests(reports)`** — Re-keys every report's tests into one canonical list per test file (keyed by `file|name|line`) and returns per-report id-maps for remapping `coveredBy`/`killedBy`.
+- **`collectMutants(finished)`** — Walks all reports in order, recording each mutant's first non-skipped result per file.
+- **`mergeReports(finished, scope)`** — Main entry point. Combines tests, collects mutants, drops incomplete files, renumbers ids, strips the shard-local `config` field, and returns a `MergeResult`.
+- **`overlayReport(whole, partial)`** — Overlays a partial run's files onto a whole report; files present in the partial run take the new result, others are kept. Renumbers mutant and test ids the same way.
+- **`renderHtml(template, report)`** — Splices the merged JSON into a shard's `index.html` at the `app.report =` line, using Stryker's `<`-escape convention.
+- **`formatSummary({report, incomplete, weakest})`** — Produces the GitHub Markdown summary block (score, status table, weakest files).
+- **`mutantKey`** (internal) — Derives a stable mutant identity from `mutatorName|replacement|start-end location`, independent of Stryker's per-report `id`.
+- **`skippedBySlice`** (internal) — True when a mutant is `Ignored` with `statusReason === SLICE_IGNORE_REASON`.
 
 ## Relationships
 
-- **`scripts/mutation/ci/slice-ignorer.ts`** — provides the `SLICE_IGNORE_REASON` constant used to identify mutants that were not actually run in a given shard.
-- **`scripts/mutation/ci/waves.ts`** — provides the `CiShard`, `ScopeFile` types and the `spanOf` helper; `incompleteFiles` relies on `spanOf` to compute line coverage.
-- **`scripts/mutation/ci/cli.ts`** — the CI CLI entry point that orchestrates the sweep and calls `mergeReports`, `renderHtml`, and `formatSummary` to produce the final artifacts.
-- **`tests/unit/scripts/mutation/ci/merge.test.ts`** — unit tests exercising the merge, incomplete-detection, HTML rendering, and summary formatting logic.
-- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — tests the `waves` module whose types (`CiShard`, `ScopeFile`) and `spanOf` function this file depends on.
+- **`scripts/mutation/ci/slice-ignorer.ts`** — Imports `SLICE_IGNORE_REASON` to recognise mutants that a sibling shard intentionally skipped.
+- **`scripts/mutation/ci/waves.ts`** — Imports the `CiShard` and `ScopeFile` types and the `spanOf` helper (line-range of a shard unit) used by `incompleteFiles`.
+- **`scripts/mutation/run-diff.ts`** — Consumes `overlayReport` after a local diff run to keep the on-disk report whole (referenced in the `overlayReport` doc comment).
+- **`scripts/mutation/ci/cli.ts`** — Graph neighbor; the CI CLI layer that invokes `mergeReports`, `renderHtml`, and `formatSummary` after shards finish.
+- **`tests/unit/scripts/mutation/ci/merge.test.ts`** — Unit tests for the merge logic, incompleteness detection, and HTML rendering.
+- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — Tests the `spanOf`/`CiShard` helpers that `incompleteFiles` depends on.
 
 ## Notes
 
-- **First-report-wins for edge nodes:** a mutant that crosses a slice boundary appears in both neighbours' reports; the first report in the `finished` array is authoritative. The `finished` order must therefore be stable and meaningful.
-- **Incomplete files are dropped entirely**, not given a partial score — the ratchet keeps its old baseline for them. A file is also dropped if any mutant in it was skipped by every slice (`ran.size < seen.size`).
-- **Test IDs are not stable across shards.** Stryker numbers them per report, so `mergeTests` re-keys by `file|name|startLine` and `mergeReports` remaps `coveredBy`/`killedBy` arrays through the per-report ID maps.
-- **`config` is stripped** from the top-level merged report because it encodes only one shard's `--mutate` glob list.
-- **`renderHtml` is fragile:** it searches for a line starting with `app.report = ` and splices JSON into it. A Stryker version bump that changes the viewer layout will cause a thrown error.
-- **JSON escaping in `renderHtml`** uses Stryker's own `<` → `'<+"` substitution to prevent a `<` inside the JSON string from closing the surrounding `<script>` tag.
-- **Mutant identity** (`mutantKey`) deliberately excludes the `id` field, which is per-report and not comparable across shards.
+- **Mutant identity is structural, not id-based.** Stryker assigns per-report numeric ids, so this module keys mutants by `mutatorName|replacement|location` and renumbers them on output.
+- **Test ids are re-keyed by `file|name|line`.** The same test appearing in multiple shard reports collapses to one canonical entry; `coveredBy`/`killedBy` arrays are remapped through per-report id-maps.
+- **Incomplete files are excluded, not partial-scored.** If any scope file's lines are not fully covered by finished shards, it is dropped from the merged report entirely so the ratchet records nothing rather than a misleading partial score.
+- **First report wins for edge nodes.** A mutant that crosses a slice boundary appears in two shards; the first shard in the `finished` array provides the result.
+- **The `config` field is stripped** from the merged top level because it names only one shard's `--mutate` glob list.
+- **`renderHtml` is fragile by design.** It locates the `app.report =` line by string search and throws if a future Stryker release changes the template layout.
+- **JSON-in-HTML escaping** uses `replaceAll('<', '<"+"')` inside a `<script>` context to prevent premature tag closure.
+- Uses `toSorted` (ES 2023 non-mutating sort) throughout; the project targets a runtime that supports it.

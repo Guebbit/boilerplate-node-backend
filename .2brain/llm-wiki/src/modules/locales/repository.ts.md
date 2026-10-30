@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/repository.ts
-sha256: 2d2436e110ac52ae56581f93cf67ff0c604d7073fa9e6d61be7314e58e1a4747
-generated_at: 2026-10-15T10:44:38.972764+00:00
+sha256: becf7aef9e3a5722eee82c951c586cad7e268479643f57a3f4dfe1960174179d
+generated_at: 2026-10-29T04:22:14.938796+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,40 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Data-access layer for the locales module. Provides all query and write operations over the `locales` (languages) and `localeentries` collections, and enforces a single invariant: every write to entries atomically bumps the locale's `revision` counter, so no service call can mutate an entry without signalling to clients that their cached dictionary is stale.
+Repository layer over the `languages` and `localeentries` MongoDB collections. It centralises every read and write the locales module performs against the database and enforces one caller-invisible invariant: every mutation to an entry also atomically bumps the language's `revision` counter, so no service call can alter a dictionary without signalling clients to re-fetch.
 
 ## Key elements
 
-- **`EntryInput`** / **`ImportCounts`** / **`LocaleCascadeCounts`** — exported interfaces describing a single key/value write, bulk-import result counts, and cascade-delete counts respectively.
-- **`localeBase`** / **`entryBase`** — base CRUD/search repositories built via `createRepository`, with model-specific transforms and searchable-field definitions.
-- **`findByTag`** — normalized-tag lookup; the entry point every route in the module uses.
-- **`list`** — unpaginated language list sorted by tag (small set by construction).
-- **`countEntriesByLocale`** — single aggregation returning a `Map<locale, count>` of downloadable entries (frontend apps only).
-- **`listEntries`** / **`listEntriesByApp`** / **`listKeys`** / **`valuesByKey`** — read helpers scoped to `(locale, app)` or `app`, sorted for byte-stable builds.
-- **`bumpRevision`** — atomic `$inc` on the revision field; returns the new value.
-- **`currentRevision`** — read-only revision fetch for no-op writes.
-- **`createEntry`** / **`saveEntryValue`** / **`removeEntry`** — single-entry writes, each paired with a revision bump (or short-circuit if the value is unchanged).
-- **`importEntries`** — bulk upsert + optional `deleteMany` inside one `withTransaction`; diffs against existing values to skip no-op rows; bumps revision once (or not at all if nothing changed).
-- **`deleteLocaleCascade`** — removes entries and translations for a language before deleting the language row itself, preventing orphan rows.
+- **`localeBase` / `entryBase`** — Base CRUD/search repositories built via `createRepository`; `localeBase` supports exact tag + boolean active filters, `entryBase` supports combined text search over `key` + `value` and an exact `app` filter.
+- **`findByTag`** — Normalised single-language lookup; the entry point for most module routes.
+- **`listInactiveTags` / `listActiveTags`** — `distinct('tag')` queries that feed the public manifest's served/inactive partition.
+- **`list`** — Unpaginated, tag-sorted language listing (intentionally unbounded; a deployment has few languages).
+- **`countEntriesByLocale`** — Single `$group` aggregate over frontend-app entries only; populates the manifest's `entryCount`.
+- **`listEntries(locale, app)`** — All entries for one `(locale, app)` pair, key-sorted for byte-stable builds.
+- **`listEntriesByApp(app)`** — All entries for one app across languages, sorted `(locale, key)`; backs the override overlay.
+- **`listKeys(locale, app)`** — Key-only projection; used by the collision check on every write to avoid loading values.
+- **`bumpRevision(tag)`** — Atomic `$inc` on `revision`; returns the new value.
+- **`valuesByKey` / `currentRevision`** — Read helpers for import diffing and no-op responses.
+- **`createEntry` / `saveEntryValue` / `removeEntry`** — Single-entry writes, each paired with a revision bump. `saveEntryValue` short-circuits (returns current revision, no write) when the value is unchanged.
+- **`importEntries`** — Bulk upsert + delete in a single transaction (`withTransaction`). Computes a diff against existing rows so unchanged keys are neither written nor counted. `replace: true` also removes keys absent from the payload. Returns `ImportCounts` and the new revision.
+- **Interfaces** — `EntryInput` (key + value), `EntryChange` (key + nullable value), `ImportCounts` (created/updated/removed).
 
 ## Relationships
 
-- **`src/modules/locales/model.ts`** — source of `localeModel`, `localeEntryModel`, `translationModel`, all transform functions, and `normalizeTag`.
-- **`src/infrastructure/persistence/create-repository.ts`** — provides `createRepository` and the `Repository` type used to build `localeBase` and `entryBase`.
-- **`src/infrastructure/persistence/changes.ts`** — provides `setAndUnset` (imported for field-level write helpers).
-- **`src/infrastructure/runtime/database.ts`** — provides `withTransaction`, used by `importEntries` to keep the upsert and `deleteMany` atomic.
-- **`src/modules/locales/apps.ts`** — provides `frontendAppIds`, used to filter `countEntriesByLocale` to client-downloadable apps only.
-- **`src/modules/locales/services/entries.ts`**, **`languages.ts`**, **`translations.ts`**, **`keys.ts`**, **`messages.ts`**, **`capabilities.ts`** — consumer services that call into this repository's exported functions.
-- **`src/modules/locales/module.ts`** — wires this repository into the module's service graph.
-- **`src/modules/locales/tests/integration/model.test.ts`**, **`src/modules/locales/tests/factories.ts`** — integration tests and fixture factories exercising these queries.
-- **`scenarios/locales.ts`** — end-to-end scenario exercising the locales feature surface.
+- **`src/modules/locales/model.ts`** — Source of `localeModel`, `localeEntryModel`, document types, transform functions, and `normalizeTag`; all Mongoose models and serialisation live there.
+- **`src/infrastructure/persistence/create-repository.ts`** — Provides the `createRepository` factory and `Repository` type used to build `localeBase` and `entryBase`.
+- **`src/infrastructure/persistence/changes.ts`** — Imported (`setAndUnset`) for field-level change tracking in writes.
+- **`src/infrastructure/runtime/database.ts`** — Provides `withTransaction` (session management) used by `importEntries`.
+- **`src/infrastructure/i18n/index.ts`** — Supplies `getFallbackLocale` for fallback resolution in the (truncated) remainder.
+- **`src/modules/locales/apps.ts`** — Provides `frontendAppIds()` used to scope entry counts and queries to client-facing apps only.
+- **`src/modules/locales/module.ts`** — Wires this repository into the module's service layer and HTTP routes.
+- **`src/modules/locales/services/entries.ts`, `messages.ts`, `translations.ts`, `languages.ts`, `keys.ts`, `capabilities.ts`** — Service consumers that call the repository functions above.
+- **`scenarios/locales.ts`** — Integration/test scenarios exercising these queries end-to-end.
 
 ## Notes
 
-- **Deliberately non-transactional single writes:** `createEntry`, `saveEntryValue`, and `removeEntry` perform the entry write and the revision bump as two separate operations (rows-then-counter). A crash between them causes a client to under-fetch once; it never caches a stale dictionary as current.
-- **`importEntries` IS transactional:** the bulk upsert and `deleteMany` run in a single `withTransaction` because a partial replace would silently leave removed keys alive.
-- **Revision uses `$inc`, not read-modify-write:** concurrent imports each get their own bump; a read-modify-write would lose one, leaving a client believing it is current.
-- **`list` is unpaginated by design:** `findAll`'s default limit of 10 would silently truncate a small language manifest.
-- **`listEntries` filters by both `locale` and `app`:** apps share key names, so omitting the `app` filter would nest one app's keys over another's in a build output.
-- **`importEntries` skips unchanged rows:** avoids stamping `updatedAt` on re-sent identical values and avoids counting them as "updated."
-- **`deleteLocaleCascade` order matters:** entries and translations are deleted *before* the language row, so an interrupted cascade leaves a briefly-empty language rather than orphaned rows that a re-created language would silently inherit.
+- **Revision bump is deliberately non-transactional.** The two writes (row, then counter) are ordered so a crash between them causes at most one under-fetch by a client—never a stale dictionary served as current. This is the opposite of `importEntries`, which *is* transactional (D17e-2) because a partial upsert-or-delete would leave stale keys surviving a caller's exact-set contract.
+- **`list` is unpaginated on purpose.** `findAll`'s default limit of 10 would silently truncate a growing manifest.
+- **`bulkWrite` in `importEntries` bypasses Mongoose's global `maxTimeMS`.** Its size is bounded by the caller's request body; cutting a transaction's write short is considered worse than waiting.
+- **Text search on entries covers both `key` and `value` in one filter** rather than exposing separate `key=` / `value=` parameters, so a translator and a developer use the same search box.
+- **`saveEntryValue` is a no-op when the value is unchanged**, returning the current revision without touching the document—preventing spurious `updatedAt` stamps and unnecessary client re-downloads.

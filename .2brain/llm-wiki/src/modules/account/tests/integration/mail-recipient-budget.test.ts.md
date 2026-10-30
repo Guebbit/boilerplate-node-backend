@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/integration/mail-recipient-budget.test.ts
-sha256: 019fcb85173bc37b5746ead20780b9caa17465604107f68f02b18eb714718c0d
-generated_at: 2026-10-14T09:10:50.969515+00:00
+sha256: 206c63f1cb35c4b7f2e7573ee3f42c77c5f62c05b685cbac2550661fb6ec023f
+generated_at: 2026-10-29T02:57:12.627140+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the per-recipient mail rate limiter. Verifies that the daily budget is keyed to the **canonical mailbox** (not the raw string), covering both the "route door" (client-supplied address in signup/reset bodies) and the "service door" (server-chosen recipient in verification resend, pending-email resend, and email-change flows). Exists to prove the limiter stops a mail-bomb victim while leaving bystanders untouched.
+Integration test for the per-recipient mail rate-limit budget. It verifies that the limiter correctly caps the *recipient* mailbox (not the caller) across every code path that can target a stranger's inbox: the two body-addressed routes (signup, reset) and the three server-chosen-recipient services (verification resend, pending-email resend, email change). It also pins down the canonical-mailbox keying (e.g. `+tag` and Gmail-dot folding) that prevents a mail-bomb from bypassing the budget.
 
 ## Key elements
 
-- **`withBudget(limit, body)`** – Wraps a test body in `withEnvironment` so `NODE_MAIL_RECIPIENT_RATE_LIMIT_MAX` is set to `limit` for the duration.
-- **`routeBehindLimiter()`** – Builds a throwaway Express app with `mailRecipientLimiter` mounted on `POST /mail`; returns a 200 when the request passes.
-- **`post(app, body)`** – Minimal supertest helper; returns only the numeric status code.
-- **`describe('the route door — signup and reset')`** – Tests that the limiter fires on the 3rd request to the same canonical mailbox, that `+tag`/case variants collapse, that Gmail dots collapse (non-Gmail dots do not), that a `Retry-After` + `RATE_LIMITED` error is returned, and that bodies lacking a valid email pass through for validation.
-- **`describe('the service doors — the recipient is chosen by the server')`** – Tests that verification resend, pending-email resend, and email-change each charge the *recipient's* mailbox (not the caller's), that a refused change persists nothing, and that no-op changes (same or already-pending address) do not consume budget.
+- **`refusals()`** — Reads the `rate_limit_refusals_total` metric and extracts the value for `labels.budget === 'mail-recipient'`; used to assert that a refusal was actually recorded.
+- **`withBudget(limit, body)`** — Runs `body` with `NODE_MAIL_RECIPIENT_RATE_LIMIT_MAX` set to `limit` via environment overrides, giving each test a deterministic daily cap.
+- **`routeBehindLimiter()`** — Builds a throwaway Express app whose single `POST /mail` route is guarded by `mailRecipientLimiter`; calls `jest.resetModules()` first so the in-memory budget store starts fresh.
+- **`post(app, body)`** — Supertest helper that returns only the numeric status code.
+- **`describe('the route door — signup and reset')`** — Tests 429 after budget exhaustion, `+tag`/casing/Gmail-dot canonicalization, per-mailbox isolation, `Retry-After` header + `RATE_LIMITED` error code, and pass-through when the body has no valid address.
+- **`describe('the service doors — the recipient is chosen by the server')`** — Exercises `accountService.requestEmailVerificationFor`, `resendPendingEmailVerificationFor`, and `updateProfile` (email change) under the same budget; verifies metric increments, that refused changes persist no state, and that no-op changes (same as current or already-pending) do not consume budget.
 
 ## Relationships
 
-- **`src/modules/account/mail-budget.ts`** – Source of `mailRecipientLimiter`, the middleware under test. Imported dynamically after `jest.resetModules()` so the in-module budget store is fresh.
-- **`src/modules/account/services/index.ts`** – Provides `accountService` (`.requestEmailVerificationFor`, `.resendPendingEmailVerificationFor`) exercised in the service-door tests.
-- **`src/modules/account/services/profile.ts`** – Provides `updateProfile`, the email-change path tested for budget charging and no-op behavior.
-- **`src/modules/users/repository.ts`** – `userRepository.findByIdWithCredentials` is used to assert that a refused email change left no `pendingEmail` persisted.
-- **`src/modules/users/tests/factories.ts`** – `createUser` factory for seeding accounts with specific emails/verification state.
-- **`tests/support/environment.ts`** – `withEnvironment` scopes the `NODE_MAIL_RECIPIENT_RATE_LIMIT_MAX` env var to a single test.
-- **`tests/support/callers.ts`** – `testCallerContext` supplies a valid caller for service-level calls.
-- **`tests/support/response.ts`** – `asReject` narrows a result to its error shape for asserting status/`errors[0].code`.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb` is invoked at module load to prepare the test database.
+- **`src/modules/account/mail-budget.ts`** — Source of `mailRecipientLimiter`, the Express middleware under test in the route-door block.
+- **`src/modules/account/services/index.ts`** — Provides `accountService`, the object whose methods are the SUT in the service-door block.
+- **`src/infrastructure/observability/metrics-rate-limit.ts`** — Exports `rateLimitRefusalsTotal`, the Prometheus metric the test reads to confirm refusals were counted.
+- **`src/modules/users/repository.ts`** — `userRepository.findByIdWithCredentials` is used to assert a refused email change wrote nothing.
+- **`src/modules/users/tests/factories.ts`** — `createUser` seeds test accounts with specific email/verified states.
+- **`tests/support/environment.ts`** — `withEnvironmentOverrides` injects the budget limit per test.
+- **`tests/support/callers.ts`** — `testCallerContext` supplies the caller identity to `accountService` calls.
+- **`tests/support/response.ts`** — `asReject` unwraps the service-layer error object for assertions.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb` initialises the in-memory database before the suite runs.
 
 ## Notes
 
-- The budget store is **module-level state**; `jest.resetModules()` runs in `afterEach` *and* is called again inside `routeBehindLimiter` before the dynamic import. Forgetting either reset causes cross-test budget bleed.
-- Canonicalization rules tested: lowercase, `+tag` stripped, Gmail dots stripped. Non-Gmail dots are **not** stripped (`v.ictim@example.com` ≠ `victim@example.com`).
-- A body with no `email` field (or a non-string value like `5`) passes the limiter and is expected to be rejected downstream by validation—this test only asserts the limiter doesn't block it.
-- The `Retry-After` header value is asserted to be ≥ 1 (seconds), not an exact value.
+- The budget store is **module-scoped in-memory state**, so `routeBehindLimiter()` calls `jest.resetModules()` before re-importing `mail-budget`. The top-level `afterEach(jest.resetModules)` is a safety net but the explicit reset inside the helper is what makes each route-door test independent.
+- Canonicalisation is provider-specific: Gmail dots (`v.i.c.tim@gmail.com`) fold to one inbox, but dots at other providers (`v.ictim@example.com`) do **not**. Tests assert both directions.
+- A body with no parseable address (`{}` or `{ email: 5 }`) must pass *through* the limiter (status 200) so downstream validation can produce the proper error; the limiter does not reject on its own.
+- No-op email changes (setting `pendingEmail` to the already-pending or the current address) must not decrement the budget — the test sets budget to 1, performs one real change, then confirms two more "changes" still succeed.

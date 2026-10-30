@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/integration/order-tax-fields.test.ts
-sha256: f6440f0065df2ab6fe20246897b302df21536d634b2114b4bf5c5d911dcd97db
-generated_at: 2026-10-15T11:15:23.396988+00:00
+sha256: e1a2c092993d1823dd9a4db37a75a41dda0cd3c703f954931ecc3d8985ff10ff
+generated_at: 2026-10-29T04:54:49.577851+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test that verifies the `GET /orders/{id}` response includes a correct VAT breakdown — per-line `taxRate`, `taxAmount`, `netAmount` plus order-level `netTotal` and `taxTotal`. It guards against regressions where the order serialization drops or miscalculates tax fields.
+Integration test for `GET /orders/{id}` that asserts every order response carries a complete VAT breakdown—per-line `taxRate`, `taxAmount`, `netAmount` as well as order-level `netTotal` and `taxTotal`. It exists to pin the shape and arithmetic of the tax fields returned by the order read endpoint.
 
 ## Key elements
 
-- **`taxedLine(productId, price, taxRate)`** — local factory that shapes a frozen order line (product with `taxRate`, `quantity: 2`). Stands in for what the real `freezeOrderLines` step produces at checkout.
-- **`describe('GET /orders/{id} — the VAT fields on the response')`** — single test asserting concrete numeric values: `taxRate = 0.22`, `taxAmount = 7.18`, `netAmount = 32.62`, `netTotal = 32.62`, `taxTotal = 7.18`.
+- **`taxedLine(productId, price, taxRate)`** – local helper that shapes a frozen order line the way `freezeOrderLines` would produce it at checkout: a nested `product` object (id, title, price, taxRate) plus a `quantity`.
+- **Single test** (`publishes netTotal/taxTotal and every line tax field`) – creates a product (taxRate 0.22) and an order with one line (price 19.9 × qty 2), hits `GET /orders/{id}` as admin, and asserts:
+  - line `product.taxRate` = 0.22
+  - line `taxAmount` = 7.18
+  - line `netAmount` = 32.62
+  - order `netTotal` = 32.62
+  - order `taxTotal` = 7.18
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/orders/tests/factories.ts` | Provides `createOrder` to seed an order with the `taxedLine` fixture. |
-| `src/modules/products/tests/factories.ts` | Provides `createProduct` to create the product referenced by the order line. |
-| `tests/support/contract.ts` | Side-effect import; configures the contract/expect layer before assertions run. |
-| `tests/support/http.ts` | Supplies `api()` (HTTP client) and `authenticateAs` (admin bearer token). |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` initializes and tears down the in-memory test database. |
+- **`src/modules/orders/tests/factories.ts`** – provides `createOrder`, which builds the order fixture used in the test.
+- **`src/modules/products/tests/factories.ts`** – provides `createProduct`, used to seed a real product with a tax rate.
+- **`tests/support/http.ts`** – provides `api()` (supertest wrapper) and `authenticateAs('admin')` for the authenticated request.
+- **`tests/support/setup-test-db.ts`** – `setupTestDb()` resets/initialises the test database before the suite runs.
+- **`tests/support/contract.ts`** – imported as a side-effect (`import '@tests/contract'`), likely registering global expectations or typing helpers for the test environment.
 
 ## Notes
 
-- The file-level JSDoc explicitly scopes the boundary: this test covers the **order's** VAT fields only. The invoice document's VAT table is a separate concern tested in `src/modules/invoicing/tests/unit/emails.test.ts`.
-- `taxedLine` is a *test-local* shape, not a call into the production `freezeOrderLines` function. If the frozen-line shape changes in production, this helper must be updated manually.
-- Single test, single request — intentionally narrow; additional tax scenarios (e.g. zero-rate, multi-line) would extend this file or a sibling.
+- The module doc comment explicitly scopes the test: the *order response* VAT fields are in scope here; the *invoice document's* own VAT table is a separate concern owned by `src/modules/invoicing/tests/unit/emails.test.ts`.
+- Tax arithmetic follows the "tax-inclusive price" convention: `net = gross / (1 + rate)`, `tax = gross − net`. With price 19.9, qty 2, rate 0.22 → gross 39.80 → net 32.62 → tax 7.18.
+- The test runs as a single `it` block inside one `describe`; there is no parameterised matrix of rates. Adding a second tax rate requires a new test case, not a loop.

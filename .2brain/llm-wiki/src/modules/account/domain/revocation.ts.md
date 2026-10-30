@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/domain/revocation.ts
-sha256: 1bed67a3b75acb0e3b0a7c339ec6f7a2ddf3538e6fadae98d17c8bd8e85cf5b0
-generated_at: 2026-10-14T08:39:13.143451+00:00
+sha256: 21853cdef35fc6ce9306caa3dc32575ab392a19aca349090f6c3f3b124778927
+generated_at: 2026-10-29T02:33:53.018087+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A single, I/O-free lookup table that enumerates every cause by which an account's sessions can be terminated and specifies exactly what each cause does (epoch strategy, pending-link cleanup, subscriber announcement, caller re-mint, applicable session modes). All downstream consumers—services, event types, tests—derive their behavior and types from this table so the list of causes is declared in exactly one place.
+A single, I/O-free declaration of every way an account's sessions can end. Each cause is a row of behavior flags (epoch strategy, pending-link purge, event announcement, caller retention, session-mode scope). `services/revocation.ts` reads these flags to execute; the `account.sessions-revoked` event's reason type is derived from this table, so the list is defined in exactly one place.
 
 ## Key elements
 
-- **`RevocationRow`** – Interface describing the five behavioral dimensions of a single cause: `epoch` (`with-write` vs `own`), `pending` (purge one-time links/challenges), `announce` (emit `account.sessions-revoked`), `callerKeeps` (re-mint acting caller), `modes` (`both` vs `jwt`-only).
-- **`REVOCATION`** – `as const satisfies Record<string, RevocationRow>` object mapping seven causes (`password-change`, `password-reset`, `logout-all`, `email-change-confirm`, `email-change-undo`, `two-factor-change`, `refresh-reuse`) to their rows. This is the single source of truth.
-- **`RevocationCause`** – `keyof typeof REVOCATION`; the union of all cause strings.
-- **`SessionsRevokedReason`** – Conditional type that narrows `RevocationCause` to only those causes whose `announce` field is `true` (`password-reset`, `logout-all`, `email-change-undo`). Feeds the `account.sessions-revoked` event payload type.
-- **`announces(cause)`** – Type-guard that returns `cause is SessionsRevokedReason`, wrapping the `REVOCATION[cause].announce` lookup.
+- **`RevocationRow`** (interface) — the shape every cause must fill: `epoch` (`'with-write' | 'own'`), `pending`, `announce`, `callerKeeps`, `modes` (`'both' | 'jwt'`).
+- **`REVOCATION`** (const, `satisfies Record<string, RevocationRow>`) — the nine causes: `password-change`, `password-reset`, `logout-all`, `email-change-confirm`, `email-change-undo`, `two-factor-change`, `deactivation`, `deletion-scheduled`, `refresh-reuse`. `as const` preserves literal values so downstream types stay narrow.
+- **`RevocationCause`** (type) — `keyof typeof REVOCATION`; the union of all cause strings.
+- **`SessionsRevokedReason`** (type) — a conditional type over `RevocationCause` that keeps only causes whose `announce` flag is `true`. Used as the `reason` field of the `account.sessions-revoked` event.
+- **`announces`** (function) — type guard: `(cause: RevocationCause) => cause is SessionsRevokedReason`. Returns `REVOCATION[cause].announce`.
 
 ## Relationships
 
-- **`src/modules/account/domain/index.ts`** – Barrel file that re-exports `RevocationCause`, `SessionsRevokedReason`, `REVOCATION`, and `announces` so other modules import from the domain root.
-- **`src/modules/account/events.ts`** – The `account.sessions-revoked` event's reason payload type is derived from `SessionsRevokedReason`, ensuring the event can only carry a cause that actually announces.
-- **`src/modules/account/services/revocation.ts`** – Reads the `REVOCATION` rows to perform the actual I/O (epoch writes, pending-link purges, event emission) for a given cause.
-- **`src/modules/account/services/password.ts`** – Uses `REVOCATION['password-change']` and `REVOCATION['password-reset']` rows to drive post-mutation cleanup (pending purges, caller re-mint).
-- **`src/modules/api-keys/services/api-keys.ts`** – Subscribes to `account.sessions-revoked` and, for reasons in `SessionsRevokedReason`, revokes previously minted API keys.
-- **`src/modules/api-keys/emails.ts`** – Sends transactional email when a `SessionsRevokedReason` is announced.
-- **`src/modules/account/tests/unit/revocation-table.test.ts`** – Unit-tests the table's internal consistency (e.g., `refresh-reuse` is `jwt`-only).
-- **`src/modules/account/tests/integration/revocation-causes.test.ts`** – Exercises each cause end-to-end through the service layer.
+- **`services/revocation.ts`** — the primary consumer; reads `REVOCATION` rows to decide epoch handling, pending-link purge, and whether to emit the event.
+- **`events.ts`** — imports `SessionsRevokedReason` to type the `reason` discriminant on `account.sessions-revoked`.
+- **`domain/index.ts`** — barrel re-export of this module's public surface.
+- **`services/password.ts`** — triggers `password-change` / `password-reset` causes when a credential write occurs.
+- **`src/modules/api-keys/emails.ts`** — subscriber to `account.sessions-revoked`; acts on `announce: true` causes to revoke minted API keys.
+- **`tests/unit/revocation-table.test.ts`** — validates the table invariants (e.g. exactly one `refresh-reuse` row with `modes: 'jwt'`).
+- **`tests/integration/revocation-causes.test.ts`** — exercises each cause end-to-end through the service layer.
 
 ## Notes
 
-- The `satisfies` clause on `REVOCATION` enforces the `RevocationRow` shape while preserving the literal types needed for the `SessionsRevokedReason` conditional-type derivation. Removing `satisfies` would break the type narrowing.
-- `epoch: 'with-write'` means the epoch increment is a side-effect of the caller's own write (e.g., the password UPDATE); `epoch: 'own'` means `revokeFor` issues a separate write in its own transaction.
-- `refresh-reuse` is the only cause restricted to `jwt` mode—refresh-token replay detection does not exist in the opaque-session path.
-- Adding a new cause requires only a new key in `REVOCATION`; all types (`RevocationCause`, `SessionsRevokedReason`) and the service/test layers pick it up automatically.
+- `deactivation` and `deletion-scheduled` carry inline comments explaining that the epoch move is performed by the `users` module's own save, not by the revocation service; this row only governs the pending-link purge.
+- `refresh-reuse` is the sole cause scoped to `jwt` sessions; all others apply to both `jwt` and opaque sessions.
+- Adding a new cause with `announce: true` automatically widens `SessionsRevokedReason` (and thus the event's `reason` union) without editing `events.ts`—the conditional type picks it up.
+- `as const satisfies Record<string, RevocationRow>` is deliberate: `satisfies` checks conformance to the interface while `as const` keeps literal types for the derived `SessionsRevokedReason` conditional.

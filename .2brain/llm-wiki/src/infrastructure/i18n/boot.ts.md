@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/i18n/boot.ts
-sha256: d958da445d559ae8f339b129222207921d6cdb8ec34c7d15796cdd84f53a1a53
-generated_at: 2026-10-14T08:02:14.849219+00:00
+sha256: e82f3ada9ebcdafe4a2c1893b64d28458c665dad6d70572b83eda134508c7d36
+generated_at: 2026-10-29T02:06:17.297831+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Initialises the single global `i18next` instance shared by every entry point in the project. It accepts a pre-resolved list of locale directories and a target language, then wires up `lng`, `fallbackLng`, `supportedLngs`, and in-memory resources so that no backend adapter is needed.
+Provides the single shared entry point (`bootI18n`) that initialises the one global i18next instance used by every process in the codebase. It separates *how* locale directories are discovered (left to each caller) from *how* i18next is configured, so the HTTP server, ops scripts, and the test suite all boot identical i18next settings.
 
 ## Key elements
 
-- **`bootI18n(localeDirectories: string[], lng?: string): Promise<TFunction>`** — the sole export. Registers the supplied directories in the catalog, then calls `i18next.init` with the active locale, fallback, supported list, loaded resources, and `interpolation.escapeValue: false`. Returns the initialised `TFunction`.
-- `lng` defaults to `getDefaultLocale()`; callers that need a pinned language (e.g. jest's global setup) pass it explicitly.
-- Relies entirely on `./catalog` helpers (`registerLocaleDirectories`, `loadLocaleResources`, `listSupportedLocales`, `getDefaultLocale`, `getFallbackLocale`) for locale metadata and resource loading.
+- **`bootI18n(localeDirectories: string[], lng?: string): Promise<TFunction>`** — The sole export. Calls `registerLocaleDirectories` with the resolved paths, then `i18next.init` with `lng`, `fallbackLng`, `supportedLngs`, in-memory `resources`, and `interpolation.escapeValue: false`. Defaults `lng` to `getDefaultLocale()`; a caller may pin a specific language (e.g. `en` in tests).
 
 ## Relationships
 
-- **`src/infrastructure/i18n/catalog.ts`** — provides every locale-catalog function this file imports; `bootI18n` delegates all directory registration and resource loading to it.
-- **`src/infrastructure/i18n/index.ts`** — barrel re-export; consumers that import the i18n package pull `bootI18n` through this.
-- **`src/app.ts`** — production HTTP entry point; calls `bootI18n` during real server boot.
-- **`scripts/ops/reap-inactive-accounts.ts`**, **`scripts/ops/sweep-preorders.ts`**, **`scripts/ops/sweep-reservations.ts`** — standalone ops scripts that need `t()` outside the HTTP process; each resolves its own locale directories (e.g. a disk glob) and then calls `bootI18n`.
-- **`tests/support/setup.ts`** — jest global setup; calls `bootI18n` with a mock-safe directory list and pins `lng` to `en`.
+- **`src/infrastructure/i18n/catalog.ts`** — Supplies all five catalog functions (`getDefaultLocale`, `getFallbackLocale`, `listSupportedLocales`, `loadLocaleResources`, `registerLocaleDirectories`) that `bootI18n` calls to assemble the i18next configuration.
+- **`src/infrastructure/i18n/index.ts`** — Barrel module; re-exports `bootI18n` (and catalog helpers) for consumers.
+- **`src/app.ts`** — Production HTTP boot; calls `bootI18n` with module-registry-resolved directories before any route handler runs.
+- **`scripts/ops/run-job.ts`** — Non-HTTP ops entry point; calls `bootI18n` with a disk-globbed directory list to render email copy.
+- **`tests/support/setup.ts`** — Jest global setup; calls `bootI18n` with a mock-safe read and pins `lng` to `en`.
 
 ## Notes
 
-- Must be awaited before any code calls `t()` or installs Zod validation messages (`registerValidationMessages`), or translations will silently fall back.
-- `interpolation.escapeValue` is set to `false` deliberately: escaping happens once at the HTML sink, so plain-text contexts (e.g. email subjects) are not double-escaped.
-- Callers own *how* they discover locale directories (module registry, glob, mock read); this file only accepts the final absolute-path array.
-- See `docs/tools/i18n.md` for the broader i18n workflow.
+- **Ordering contract:** `bootI18n` must complete before any code calls `t()`. In particular, `registerValidationMessages()` (which wires Zod's error map through `t()`) depends on i18next being initialised first.
+- **`interpolation.escapeValue: false`** is intentional: HTML escaping happens once at the render sink, preventing double-escaping of names and keeping plain-text email subjects un-escaped.
+- Callers are responsible for resolving and passing *absolute* paths to directories that each contain `<locale>.json` files; this file performs no filesystem discovery itself.

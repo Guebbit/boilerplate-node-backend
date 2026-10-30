@@ -1,7 +1,7 @@
 ---
 source: src/modules/wishlist/tests/unit/routes.test.ts
-sha256: 727dace6166f6fa8149dde666d369e27ce75f124831cfd02fa487e0e6c3a7dc1
-generated_at: 2026-10-15T12:28:53.016010+00:00
+sha256: 07b4280e8b5ec8af547aaaccad688ac268d90c850e016d08e0ce0e81ac5f46cd
+generated_at: 2026-10-29T06:36:18.938493+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit test that pins down the wishlist router's contract: the exact set and order of endpoints, the auth guard on every route, the single permission guard (only on the move-to-cart write), and the declaration order that prevents a path-param collision between `/:productId/move-to-cart` and the bare `/:productId` routes.
+Unit test that locks down the wishlist router's public contract: the exact set and order of endpoints, the universal authentication requirement, and the single permission-guarded route. It exists so that structural changes to `routes.ts` (new endpoints, reordering, guard changes) are caught immediately and reviewed against the "wishlists are personal, not admin" design intent.
 
 ## Key elements
 
-- **`routeSignatures(router)`** – extracted from `@tests/routes`; flattens the router into an ordered array of `"METHOD /path"` strings for comparison.
-- **`guardsOn(router, signature)`** – extracted from `@tests/routes`; returns the guard names attached to a given route signature.
-- **`routeTable(router)`** – extracted from `@tests/routes`; returns the raw route definitions (used here to inspect `path` ordering directly).
-- **`router`** – the actual Hono router imported from `@modules/wishlist/routes`; the sole SUT.
-- **Four `it` blocks** inside `describe('wishlist routes')`:
-  1. Exact signature + order assertion.
-  2. `it.each` over all four signatures: each must include `isAuth`.
-  3. Filters signatures carrying `requirePermissionGuard`; asserts only `POST /:productId/move-to-cart` matches.
-  4. Index comparison proving `/:productId/move-to-cart` is declared before `/:productId`.
+- **`describe('wishlist routes')`** — suite wrapping three assertions on the imported `router`.
+- **"mounts exactly the documented endpoints, in the documented order"** — asserts `routeSignatures(router)` equals the four expected signatures in order (`GET /`, `POST /items`, `POST /items/:productId/move-to-cart`, `DELETE /items/:productId`).
+- **`it.each([...])('%s requires a session', …)`** — parametrized check that every route carries the `isAuth` guard.
+- **"is admin-free by design, and asks a key only where a basket is written"** — filters routes with `requirePermissionGuard` and asserts the sole match is `POST /items/:productId/move-to-cart`.
 
 ## Relationships
 
-- **`src/modules/wishlist/routes.ts`** — the file under test; provides the `router` that every assertion inspects.
-- **`tests/support/routes.ts`** — supplies the three introspection helpers (`routeTable`, `routeSignatures`, `guardsOn`) used throughout; imported via the `@tests/routes` alias.
+- **`src/modules/wishlist/routes.ts`** — system under test; the test imports its `router` export and inspects its route table and guard chain.
+- **`tests/support/routes.ts`** — provides the two helper functions used throughout: `routeSignatures(router)` (flattens a Hono/Express router into ordered `"METHOD /path"` strings) and `guardsOn(router, signature)` (returns the guard/middleware names attached to a given route).
 
 ## Notes
 
-- The ordering test (item 4) guards against a real routing bug: if `/:productId` is declared first, a request to `/:productId/move-to-cart` is captured by the shorter pattern and the product id becomes the literal string `"move-to-cart"`.
-- The file enforces an *admin-free* invariant: no route carries an admin/operator guard. The only permission guard present is the shopper's key on the basket-write endpoint.
-- The `@tests/routes` import alias resolves to `tests/support/routes.ts`, not a package — keep this in mind when tracing dependencies.
+- Route **order** is asserted, not just membership. Inserting a new route between two existing ones will fail this test even if the set is correct.
+- The permission-guard test encodes a business rule, not just a code check: the comment states that if an operator/admin view of another user's wishlist ever appears, this test should fail and the addition should be scrutinized.
+- `requirePermissionGuard` is the "key" (shopper's basket token) guard — it is distinct from `isAuth` (session). The test confirms the two are not conflated.

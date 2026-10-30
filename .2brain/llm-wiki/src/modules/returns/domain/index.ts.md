@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/domain/index.ts
-sha256: 3b42e49d69033f27c576a4aaa91188630df856ad1f9961205c97e8c4c4ceee8d
-generated_at: 2026-10-15T11:52:20.538091+00:00
+sha256: 3da3992d61b23f4e111a3e6bb37ba3618ad9cc1243233edc8e2acc4c9a4c3acb
+generated_at: 2026-10-29T05:37:10.122213+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel (re-export) file for the returns domain layer. It aggregates all public values and types from the five domain sub-modules into a single import surface, so consumers never need to reach into individual files. The file contains no logic of its own.
+Barrel file for the returns domain layer. It re-exports every public function, constant, and type from the sibling domain modules so that consumers (services, repository, external modules) can import from a single path (`../domain`) instead of reaching into individual files. It contains no logic of its own.
 
 ## Key elements
 
-- **Lifecycle re-exports** — status-set constants (`DECIDABLE_RETURN_STATUSES`, `RECEIVABLE_RETURN_STATUSES`, `CLOSABLE_RETURN_STATUSES`, `QUANTITY_HOLDING_RETURN_STATUSES`, `BACK_RETURN_STATUSES`), the `holdsReturnedGoods` predicate, `initialStatusFor`, and the `ReturnStatus` / `ReturnReason` / `ReturnKind` types (from `./lifecycle`).
-- **Quantities re-exports** — `returnableQuantities`, `returnableLinesOf`, `wireLines`, `checkRequestedLines`, `takesLastUnit`, and the `ProductQuantity` / `LinesVerdict` types (from `./quantities`).
-- **Status projection** — `projectReturnStatus` plus `ProjectedReturn` / `ProjectedReturnStatus` types (from `./status-projection`).
-- **Refund amounts** — `refundAmountFor`, `cancellationRefundFor`, `shippingStillOwed`, and the `RefundInputs` / `RefundBreakdown` / `RefundVerdict` / `CancellationInputs` types (from `./refund-amount`).
-- **Accounting** — `accountsOf` plus `AccountedReturn` / `OrderAccounts` types (from `./accounting`).
+- **Lifecycle exports** — `DECIDABLE_RETURN_STATUSES`, `RECEIVABLE_RETURN_STATUSES`, `CLOSABLE_RETURN_STATUSES`, `CANCELABLE_RETURN_STATUSES`, `QUANTITY_HOLDING_RETURN_STATUSES`, `BACK_RETURN_STATUSES`, `holdsReturnedGoods`, `handsUnitsBack`, `initialStatusFor`, plus types `ReturnStatus`, `ReturnReason`, `ReturnKind`, `ReturnRemedy` (from `./lifecycle`).
+- **Quantities exports** — `returnableQuantities`, `quantitiesByProduct`, `returnableLinesOf`, `wireLines`, `checkRequestedLines`, `takesLastUnit`, plus types `ProductQuantity`, `LinesVerdict` (from `./quantities`).
+- **Reasons exports** — `CONFORMITY_REASONS`, `WITHDRAWAL_WINDOW_REASONS`, `isGuaranteeReason`, `isReasonOpen`, `policyExceptionsOf`, `reasonsOpenAt`, plus type `FrozenDeadlines` (from `./reasons`).
+- **Statement exports** — `checkStatement`, plus types `Statement`, `StatementInput`, `StatementVerdict` (from `./statement`).
+- **Restock exports** — `resolveRestock`, plus types `RestockRequest`, `RestockVerdict` (from `./restock`).
+- **Status projection exports** — `projectReturnStatus`, plus types `ProjectedReturn`, `ProjectedReturnStatus` (from `./status-projection`).
+- **Refund-amount exports** — `refundAmountFor`, `cancellationRefundFor`, `shippingStillOwed`, plus types `RefundInputs`, `RefundBreakdown`, `RefundVerdict`, `CancellationInputs` (from `./refund-amount`).
+- **Accounting exports** — `accountsOf`, plus types `AccountedReturn`, `OrderAccounts` (from `./accounting`).
 
 ## Relationships
 
-- **Re-exports from** `lifecycle.ts`, `quantities.ts`, `status-projection.ts`, `refund-amount.ts`, and `accounting.ts` — the sole sources of every name listed above.
-- **Imported by** `src/modules/returns/index.ts` (feature-level barrel) and every service under `services/` (`create`, `decide`, `close`, `cancel-remainder`, `cancellation-refund`, `options`, `outcome`, `projection`) as well as `repository.ts`, giving them a single entry point to all domain rules.
+- **Re-exports from (downstream dependencies):** `./lifecycle`, `./quantities`, `./reasons`, `./statement`, `./restock`, `./status-projection`, `./refund-amount`, `./accounting` — all sibling files in `src/modules/returns/domain/`.
+- **Re-exported to (upstream consumers):** `src/modules/returns/index.ts` (module public API), `src/modules/returns/repository.ts`, and the services `cancel.ts`, `cancel-remainder.ts`, `cancel-right.ts`, `cancellation-refund.ts`, `close.ts` — all of which import domain rules through this barrel rather than reaching into individual files.
 
 ## Notes
 
-- The JSDoc header states the domain layer is "lint-guaranteed free of Express, Mongoose and every tier"; see `docs/theory/domain-layer.md` for the invariant's definition and enforcement.
-- Because this file is a pure re-export barrel, adding a new domain sub-module requires a corresponding `export … from '…'` line here for it to be reachable by the rest of the feature.
+- The module docstring explicitly states this layer is **pure rules only** and is lint-guaranteed to be free of Express, Mongoose, and every application tier. Do not add I/O or framework imports here.
+- Because this is a pure re-export file, any change to a sibling's public surface (renaming a function, adding a type) must be mirrored here, or upstream consumers will lose the symbol.
+- The split between value exports (constants, functions) and `export type` (interfaces, type aliases) is intentional and must be preserved if `isolatedModules` / `verbatimModuleSyntax` is enforced by the build.

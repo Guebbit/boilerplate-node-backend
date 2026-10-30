@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/services/timeline.ts
-sha256: 91b300b0bd15d18e8e790c9fe879865cbf98fff23245b85018fba435edea898d
-generated_at: 2026-10-15T11:12:09.259520+00:00
+sha256: 5916d67a7ddd661198087e0febcdf94d62d2dea81ef464616108594dc95d5bc1
+generated_at: 2026-10-29T04:50:42.791693+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,41 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Central write-and-read path for an order's event timeline. It provides the single door through which the `orders` module and any module that depends on it (payments, delivery, returns, invoicing) record what happened to an order, always inside the caller's transaction so the row commits atomically with the fact it describes. It also handles role-filtered reads, data-export collection, and data-hygiene operations (actor erasure, text retention scrubbing, hard-delete cleanup).
+Manages the append-only event log of an order: what happened to it, in order, readable by the buyer and by staff. It is the single write path for timeline rows — `orders` appends within its own transaction, while dependent modules (payments, delivery, returns, invoicing) call `appendTimeline` inside their own transaction. It also provides the read, export, scrub, and delete operations on those rows.
 
 ## Key elements
 
-- **`appendTimeline(orderId, entry, session)`** — Inserts one timeline row via `orderEventRepository.create` in the caller's Mongoose session. Normalises optional `actor`/`text` fields and defaults `at` to now.
-- **`appendTimelineAll(orderId, entries, session)`** — Sequentially appends multiple rows (oldest first) in the same session; serial because a transaction session cannot run parallel ops.
-- **`withTimeline(write, rows)`** — Higher-order helper returning a session-scoped function. Runs a conditional order write; if a document is returned, appends the rows built from that document. A lost race (null result) writes neither the order change nor the rows.
-- **`readTimeline(orderId, authContext)`** — Fetches events for one order and passes them through `presentTimeline` as `'staff'` or `'buyer'` view. Staff view is determined by the `orders.any.read` held key (not a CASL action).
-- **`collectTimelineOf(userId)`** — Gathers every timeline row across a user's own orders (full staff-presentation, including actor and free text) for the account-data-export endpoint.
-- **`clearTimelineActor(userId, session)`** — Nulls the actor reference on all rows written by an erased account; the rows themselves remain.
-- **`scrubTimelineText()`** — Unsets free-text on rows older than `orderEventTextRetentionDays`; logs the count when non-zero. Intended for the `scripts/ops/reap-orders.ts` sweep.
-- **`deleteTimelineOf(orderId)`** — Deletes all timeline rows belonging to a hard-deleted order.
-- **`readsEveryOrder(authContext)`** *(private)* — Returns true when the caller holds the `orders.any.read` key, gating the staff vs. buyer read view.
+- **`appendTimeline`** — Appends one timeline row via `orderEventRepository.create` in the caller's `ClientSession`. Accepts `TimelineEntryInput` (type, optional actor/text, `data` codes).
+- **`appendTimelineAll`** (private) — Appends an array of rows sequentially (no parallelism; session constraint + ordering guarantee).
+- **`withTimeline`** — Curried wrapper: runs a conditional status write, and only if it matched does it append the rows built from the returned document. A lost race writes neither.
+- **`readsEveryOrder`** (private) — Returns `true` when the caller's held rules include `display:Order` (checked via `heldRules`, not CASL action).
+- **`readTimeline`** — Fetches events for one order and returns them presented for `'staff'` or `'buyer'` audience depending on `readsEveryOrder`.
+- **`collectTimelineOf`** — Gathers all timeline rows across a user's own orders for `POST /account/export`. Uses `'buyer'` presentation but re-attaches `actor` when it equals the exporting user's id.
+- **`clearTimelineActor`** — Nulls the `actor` field for a given user (GDPR erasure).
+- **`scrubTimelineText`** — Unsets free-text on rows older than `orderEventTextRetentionDays`; logs the count.
+- **`deleteTimelineOf`** — Hard-deletes all rows for an order. Marked `@internal`; only the module's own order-removal path may call it.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/logger.ts`** — Logs the retention-scrub count in `scrubTimelineText`.
-- **`src/infrastructure/persistence/create-repository.ts`** — Uses `toObjectId` to convert the string `orderId` for the repository call.
-- **`src/kernel/ability.ts`** — Uses `heldKeys` to inspect the caller's held permission keys for the staff-read check.
-- **`src/kernel/permissions.ts`** — Uses `callerForSubject` to build the CASL subject from the auth context.
-- **`src/modules/orders/config.ts`** — Reads `orderEventTextRetentionDays` for the text-retention window.
-- **`src/modules/orders/domain/index.ts`** — Consumes the `TimelineEntryInput` type for all write functions.
-- **`src/modules/orders/model.ts`** — Consumes the `OrderDocument` type in `withTimeline`'s write signature.
-- **`src/modules/orders/presenter.ts`** — Delegates all read/collect presentation to `presentTimeline` and `presentTimelineEntry`.
-- **`src/modules/orders/repository.ts`** — All persistence goes through `orderEventRepository` (create, findByOrderId, findByOrderIds, clearActor, scrubTextBefore, deleteByOrderId).
-- **`src/modules/orders/services/cancel.ts`, `fulfillment.ts`, `override.ts`** — Sibling services in the same module; expected callers of `appendTimeline` / `withTimeline` within their own transactions.
-- **`src/modules/orders/services/index.ts`** — Barrel file that re-exports this module's public functions for the rest of the codebase.
-- **`src/modules/orders/module.ts`** — Module wiring; registers the service for the orders module's dependency graph.
+- **`src/modules/orders/repository.ts`** — All reads/writes go through `orderEventRepository` (`create`, `findByOrderId`, `findByOrderIds`, `clearActor`, `scrubTextBefore`, `deleteByOrderId`).
+- **`src/modules/orders/presenter.ts`** — `presentTimeline` and `presentTimelineEntry` shape raw events into `OrderTimelineEntry[]` for a given audience.
+- **`src/modules/orders/domain/index.ts`** — Supplies the `TimelineEntryInput` type that `appendTimeline` and `withTimeline` accept.
+- **`src/modules/orders/config.ts`** — `orderEventTextRetentionDays` drives the retention window in `scrubTimelineText`.
+- **`src/modules/orders/model.ts`** — `OrderDocument` is the return type of the write passed to `withTimeline`.
+- **`src/domain-primitives/time.ts`** — `DAY_MS` constant used in the retention-date calculation.
+- **`src/kernel/ability.ts`** — `heldRules` used by `readsEveryOrder` to check `display:Order`.
+- **`src/kernel/permissions.ts`** — `callerForSubject` builds the subject for the ability check.
+- **`src/infrastructure/adapters/logger.ts`** — `logger.info` in `scrubTimelineText`.
+- **`src/infrastructure/persistence/create-repository.ts`** — `toObjectId` for casting the string `orderId`.
+- **`src/modules/orders/jobs.ts`** — Caller of `scrubTimelineText` as the "second sweep" of `reap:orders`.
+- **`src/modules/orders/services/cancel.ts`** — Expected consumer of `appendTimeline` / `withTimeline` within its own transaction.
+- **`src/modules/orders/services/index.ts`** — Barrel re-export of this module's public API.
 
 ## Notes
 
-- **Two writers, one door:** `orders` appends inside its own transaction; external modules (payments, delivery, etc.) call `appendTimeline` inside *their* transaction. `orders` cannot subscribe to their events because they import it, making a listener a circular dependency.
-- **`withTimeline` is the preferred pattern** for conditional writes that should also record a timeline entry — it guarantees the rows only land when the write succeeds.
-- **Permission check uses held keys, not CASL actions.** `orders.self.read` and `orders.any.read` share a CASL action, so a CASL `can()` check would incorrectly grant the staff view to every buyer. The held-key check via `heldKeys` is the correct discriminator.
-- **`appendTimelineAll` is intentionally sequential.** Mongoose transaction sessions do not support parallel operations, and timeline ordering must be preserved.
-- **Text retention is separate from row retention.** `scrubTimelineText` removes only the free-text field; the row, its `type`, and its `data` codes persist indefinitely.
+- **No event listeners by design.** Dependent modules import `orders`, so `orders` cannot subscribe to their events (circular dependency). The "two writers, one door" pattern is the explicit alternative.
+- **Sequential appends.** `appendTimelineAll` loops with `await`; a Mongoose session does not support parallel writes, and row order must match the input order.
+- **Permission check uses `display:Order`, not `read:Order`.** The latter is a shared CASL action that buyers also hold; using it would leak staff-only rows.
+- **Export includes staff text but hides third-party actors.** The export is the buyer's *data*, not their *screen*. The CJEU *Pankki S* (C-579/21) citation in the doc-comment records the rationale for retaining the row while masking the actor.
+- **`data` field carries IDs/codes, never sibling free text.** Free text lives in the optional `text` field, which is the only thing `scrubTimelineText` removes.
+- **`deleteTimelineOf` is `@internal`.** It is deliberately excluded from `orderService`'s public surface to prevent cross-module misuse.

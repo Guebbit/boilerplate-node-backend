@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/services/close.ts
-sha256: a3d4cd54121d59c0617de544426d3ecfbc85b1398b8625f14d3cebbcf2204ed8
-generated_at: 2026-10-15T11:55:48.800404+00:00
+sha256: dbd290ea12485120e903136a5053627dfef0c5698b4cbc8b1fdc318139ebe06a
+generated_at: 2026-10-29T05:41:41.286251+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Transitions a return from `received` to `closed` after its refund has settled. Because the refund can complete synchronously (same request) or asynchronously (provider retry via the `PAYMENT_REFUNDED` listener), two different call sites reach this function; the conditional `claimStatus` move makes it idempotent so the second arrival is a no-op.
+Handles the transition of a return to `closed` status after its money has gone back. Provides two public entry points — `closeReturn` (automatic, tied to refund settlement) and `closeReturnByHand` (manual staff action when no refund occurred) — both built on a shared atomic claim-and-append operation that is safe under concurrent calls.
 
 ## Key elements
 
-- **`closeReturn(id: string): Promise<ReturnDocument | null>`** — sole export. Within one transaction it (1) atomically claims the status move to `closed` and stamps `closedAt`, (2) appends a `return_closed` entry to the order's timeline, and (3) emits the `RETURN_CLOSED` event via the outbox. After commit it syncs the return projection and emails the customer a "return closed" notice. Returns `null` when the return was not in a closable status (already closed or never received).
+- **`claimClosed`** (private) — Atomic step: calls `returnRepository.claimStatus` to move the return from a clicable status to `closed` within a caller-supplied transaction, then appends a `return_closed` timeline row to the order. Returns `null` if the return was not in a closable state (lost race).
+- **`closeReturn`** (exported, `@internal`) — Wraps `claimClosed` in `announceInTransaction` so the `returnClosedEvent` outbox message is written in the same transaction. Then syncs the return status on the order projection. Intended as a lower-level step for `receiveReturn` and the `PAYMENT_REFUNDED` listener; it checks state but never whether the refund actually settled.
+- **`closeReturnByHand`** (exported) — Staff-initiated close for returns where no refund will follow (canceled, external payment). Uses `withTransaction`, records an audit entry with optional note, syncs projection, and returns an HTTP success/reject response. Does **not** publish `returnClosedEvent`.
+- **`notClosable`** (private) — Builds the HTTP error response: 404 if the return doesn't exist, 409 with `RETURN_NOT_CLOSABLE` if it does but isn't in a closable status.
 
 ## Relationships
 
-- **`src/kernel/outbox.ts`** — `announceInTransaction` wraps the repository write and the `RETURN_CLOSED` event in a single database transaction, guaranteeing the event exists iff the close succeeded.
-- **`src/modules/orders/index.ts` / `services/index.ts`** — `orderService.appendTimeline` records the close on the order; `orderService.getById` fetches the order (needed to address the customer) before sending the mail.
-- **`src/modules/returns/repository.ts`** — `returnRepository.claimStatus` performs the conditional `received → closed` move; it is the concurrency guard that makes double-calling safe.
-- **`src/modules/returns/domain/lifecycle.ts` (via `domain/index.ts`)** — supplies `CLOSABLE_RETURN_STATUSES`, the set of statuses eligible for the close transition.
-- **`src/modules/returns/events.ts`** — provides the `RETURN_CLOSED` event name used in the outbox payload.
-- **`src/modules/returns/model.ts`** — `ReturnDocument` type returned to callers.
-- **`src/modules/returns/services/notify.ts`** — `mailReturnNotice` sends the customer-facing email after the transaction commits.
-- **`src/modules/returns/services/projection.ts`** — `syncReturnStatus` refreshes the read-model/projection for the order after the write.
-- **`src/modules/returns/services/receive.ts`** — calls `closeReturn` when a refund settles in the same request.
-- **`src/modules/returns/module.ts`** — its `PAYMENT_REFUNDED` listener calls `closeReturn` when an earlier-rejected refund later succeeds.
-- **`src/modules/returns/tests/integration/outbox.test.ts`** — integration test exercising the outbox emission path of this service.
+- **`@modules/returns/repository`** — `returnRepository.claimStatus` performs the conditional status move; `findById` is used for the 404/409 distinction in `notClosable`.
+- **`@modules/orders` (→ `orderService`)** — `appendTimeline` writes the `return_closed` event onto the order's timeline within the same transaction.
+- **`@kernel/outbox`** — `announceInTransaction` ensures `returnClosedEvent` is atomically persisted alongside the status change (used only by `closeReturn`, not `closeReturnByHand`).
+- **`@modules/returns/domain`** — `CLOSABLE_RETURN_STATUSES` defines which statuses are eligible for the conditional move (i.e., `received`).
+- **`@modules/returns/audit`** — `returnsAuditActions.ADMIN_RETURN_CLOSED` is the audit action code stamped in `closeReturnByHand`.
+- **`@infrastructure/observability/audit`** — `recordAudit` writes the staff audit row in the hand-close path.
+- **`@infrastructure/runtime/database`** — `withTransaction` supplies the Mongoose session for `closeReturnByHand`.
+- **`@infrastructure/i18n`** — `t` provides localized error messages (`returns.not-closable`, `returns.not-found`).
+- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` shape the HTTP payloads returned by `closeReturnByHand`.
+- **`src/modules/returns/services/projection`** — `syncReturnStatus` refreshes the denormalized return status on the order document after a successful close.
+- **`src/modules/returns/services/outcome`** — `returnClosedEvent` is the outbox payload describing the close.
+- **`src/modules/returns/module.ts`** — Registers the `PAYMENT_REFUNDED` listener that calls `closeReturn` asynchronously when a previously-refused refund later settles.
+- **`src/modules/returns/services/index.ts`** — Re-exports `closeReturn` and `closeReturnByHand` for external consumers.
 
 ## Notes
 
-- **Idempotency by design:** `claimStatus` filters on `CLOSABLE_RETURN_STATUSES`; if the return is already `closed` (or was never `received`), the claim returns `null` and no event, timeline row, or mail is produced. The two known callers (`receive.ts` and the `PAYMENT_REFUNDED` listener) can therefore fire in any order without double-acting.
-- **Post-commit side effects are best-effort:** `syncReturnStatus`, `orderService.getById`, and `mailReturnNotice` run *after* the transaction. A failure there does not roll back the close; the return is already `closed` in the database.
-- **`refundAmount` is nullable** on `ReturnDocument`; both the timeline entry and the event payload default it to `0` via `?? 0`.
-- The event's `aggregateId` is the **order** id (not the return id), consistent with the event being consumed by order-scoped subscribers.
+- **Idempotency via conditional move.** Both automatic paths (same-request refund and the async `PAYMENT_REFUNDED` listener) call the same `claimClosed`. Whichever arrives second gets `null` from `claimStatus` and does nothing — no duplicate timeline rows, no duplicate outbox events.
+- **`closeReturnByHand` deliberately omits the outbox event.** The `returnClosedEvent` email tells the customer "your money is back," which would be false in the hand-close case. The rationale lives only in the audit note and the timeline row.
+- **`closeReturn` is `@internal`.** Callers (`receiveReturn`, the module's listener) own the "refund settled" fact; this function only checks state, so it must not be published or invoked without that context.
+- **`syncReturnStatus` runs after the transaction commits** in both paths, so a projection failure does not roll back the return close.

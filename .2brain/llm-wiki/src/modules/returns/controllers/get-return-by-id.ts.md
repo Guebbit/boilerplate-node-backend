@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/controllers/get-return-by-id.ts
-sha256: e7959ff4eb4ebcf3bfeb698a5cccb4cde2f148b5d4f6d939bd86d291969b37d5
-generated_at: 2026-10-15T11:51:08.313599+00:00
+sha256: 9c5f2ab25ea9431728c8aef893f3f883b6ac9ba7c2976e3df22bc9a6cccdc4c9
+generated_at: 2026-10-29T05:35:53.958989+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Handles `GET /returns/:id`. Retrieves a single return for the authenticated caller, attaching the caller's available `actions`. A return on another user's order is indistinguishable from a nonexistent one (both return 404) to avoid leaking existence.
+Express route handler for `GET /returns/:id`. Resolves a single return by ID, enforces ownership (a return belonging to another user's order returns **404**, indistinguishable from a missing one), records a staff-read audit event, and replies with the return payload plus the caller's available `actions`.
 
 ## Key elements
 
-- **`getReturnById(request, response)`** — The sole export. Validates the `:id` param, delegates to `returnService.getReturn(id, authContext)`, records a staff-read audit entry on success, and sends a 200 with the `Return` payload.
+- **`getReturnById(request, response)`** — the sole export. Validates the `:id` path param, calls `returnService.getReturn(id, authContext)`, then either short-circuits on a refusal, records the audit, and sends `successResponse<Return>(…, 200)`, or delegates to `catchAs`.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** — Provides `catchAs` (uniform error → HTTP mapping in the `.catch` branch) and `refused` (converts a service-level refusal into an appropriate HTTP error response).
-- **`@infrastructure/http/ids`** — `requireId` extracts and validates the `:id` route param, short-circuiting with a 404 if missing.
-- **`@infrastructure/http/response`** — `successResponse` serialises the 200 body.
-- **`@kernel/staff-read`** — `recordStaffRead` logs an audit event (key `returns.any.read`) after a successful fetch.
-- **`@modules/returns/audit`** — Supplies the `returnsAuditActions.ADMIN_RETURN_VIEWED` action constant used in the audit record.
-- **`@modules/returns/services`** — `returnService.getReturn` performs the actual lookup and authorization check.
-- **`@modules/returns/routes`** — Wires this handler onto the `GET /returns/:id` route.
-- **`@types`** — Source of the `Return` type used in the response generic.
+- **`@infrastructure/http/controller`** — `catchAs` is the error handler passed to `.catch()`; `refused` checks the service result for an authorization-denied shape and writes the appropriate 4xx.
+- **`@infrastructure/http/ids`** — `requireId` extracts and validates the `:id` param, sending a 404 with the `returns.not-found` message if missing.
+- **`@infrastructure/http/response`** — `successResponse` formats the 200 body.
+- **`@kernel/staff-read`** — `recordStaffRead` logs an audit entry keyed `read:Return` after a successful read.
+- **`@modules/returns/audit`** — supplies `returnsAuditActions.ADMIN_RETURN_VIEWED`, the action constant recorded in the audit log.
+- **`@modules/returns/services/index`** — `returnService.getReturn` is the business-logic call that performs ownership check and data fetch.
+- **`@modules/returns/routes`** — registers `getReturnById` as the handler for `GET /returns/:id`.
+- **`@types/index`** — imports the `Return` interface used in the success response generic.
 
 ## Notes
 
-- Auth context (`request.authContext`) is assumed present; the `isAuth` middleware guarantees it upstream. The non-null assertion is safe by contract, not by runtime check.
-- The 404-for-other-users pattern is intentional: it prevents an attacker from probing whether a given return ID exists on another order.
-- The audit log fires *after* the service call succeeds but *before* the HTTP response is sent; if `successResponse` throws, the audit entry has already been recorded.
+- The non-null assertion on `request.authContext!` is safe only because the `isAuth` middleware runs before this handler; no runtime guard exists here.
+- Returning 404 (not 403) for someone else's return is an intentional anti-enumeration choice documented in the file's doc comment.
+- The promise chain uses `.then().catch()` rather than `async/await`, matching the module's broader controller convention.

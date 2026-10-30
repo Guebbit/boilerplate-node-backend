@@ -1,7 +1,7 @@
 ---
 source: src/types/server-image.ts
-sha256: 9c607e5e79d6ba881837c4bc184d714059090a1ae07ca862fd3012fa36e3dd13
-generated_at: 2026-10-15T12:30:16.724617+00:00
+sha256: 962aa56472bdc7383cdabf8cb3167cfce7b8660b4940899c7051c4c13430e65c
+generated_at: 2026-10-29T06:37:04.622493+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,19 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A single type-level utility that re-maps the `imageUrl` field of a request object to reflect the server's own decision (path string, `null` for removal, or absent for no change), decoupling the wire format from the upload pipeline's output.
+Defines the server-side shape of image fields on a write operation. It exists to separate "what the server actually stored" from "what the client sent," so service handlers receive a contract that can only be fulfilled by the upload pipeline, never by a raw request body.
 
 ## Key elements
 
-- **`WithServerImage<TRequest>`** — A mapped type that strips `imageUrl` from `TRequest` and replaces it with `imageUrl?: string | null`. The three states encode intent: a string path (set), `null` (remove), or `undefined`/absent (leave unchanged).
+- **`ServerImageFields`** — interface with three fields that change as a unit:
+  - `imageUrl?: string | null` — `null` means "remove the image"; absent means "leave it"; a string is a validated path produced by the upload pipeline.
+  - `thumbnailUrl?: string` — always server-set; the contract marks it `readOnly` for clients.
+  - `pendingImageKey?: string` — placeholder set when an image is still being processed (see `readUploadedImage`).
+
+- **`WithServerImage<TRequest>`** — mapped type: `Omit<TRequest, keyof ServerImageFields> & ServerImageFields`. Replaces any client-facing image fields on an arbitrary request type with the server-decided triple, so services type-safe against the pipeline's output.
 
 ## Relationships
 
-- **`src/types/index.ts`** — Re-exports `WithServerImage` so consumers can import it from the barrel.
-- **`src/modules/users/services/create.ts`** / **`src/modules/users/services/update.ts`** — Consume the type to type their service inputs, ensuring the `imageUrl` they receive is the post-validation path (or removal signal) produced by `readUploadedImage`, not the raw client payload.
+- **`src/types/index.ts`** — re-exports `ServerImageFields` and `WithServerImage` for the rest of the codebase.
+- **`src/modules/users/services/create.ts`** and **`src/modules/users/services/update.ts`** — accept a `WithServerImage<…>` request so user image fields are governed by this contract.
+- **`src/modules/products/services/translated-write.ts`** — same pattern for product writes.
+- **`src/infrastructure/adapters/image-store.ts`** — the upload pipeline that *produces* the values this type expects (paths, thumbnail, pending key) before they flow into the services above.
 
 ## Notes
 
-- The doc comment explicitly warns that this represents the *server's* view of the image, never the client body. If you see a raw request flowing through these services, it has already been transformed.
-- `imageUrl` is both optional (`?`) and nullable (`| null`)—the distinction is intentional: `undefined` means "don't touch the image," `null` means "delete it." Conflating the two will silently skip removal.
-- The string path is expected to come from `readUploadedImage` (the upload pipeline); this file does not validate or produce it.
+- The three `ServerImageFields` members are treated as an atomic group: the upload pipeline sets them together; they never change independently. Code that spreads or partially mutates this object should treat it as a unit.
+- `imageUrl` uses a tri-state (`string` | `null` | `absent`). Distinguishing `null` (delete) from `undefined` (leave unchanged) is the intended semantics—coalescing them with `??` or `||` will silently break one of the two.
+- `thumbnailUrl` and `pendingImageKey` are optional at the type level but are *always* server-authored; client code should never attempt to set them.

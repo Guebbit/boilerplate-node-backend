@@ -1,7 +1,7 @@
 ---
 source: src/modules/notifications/factories.ts
-sha256: d6fa3b20ecd2da5a9540024a264334b13f0f2cd797171e6c62f31bdce3675d4d
-generated_at: 2026-10-15T10:50:11.681963+00:00
+sha256: c75f226e92876a2a0fd6b10f40fe33d67467a4bea55454d9a7be6d9f44cec5fb
+generated_at: 2026-10-29T04:28:31.440964+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Test and seed factory that builds a `Partial<NotificationDocument>` ready for `notificationRepository.create`. It isolates the "how to construct a valid notification row" logic so tests and seeds don't repeat the shape and default wiring.
+Test/seed factory that builds a `NotificationDocument` ready for `notificationRepository.create`. It exists so that tests and seeds can construct realistic notification rows without hand-assembling every field, while staying out of the production barrel to avoid triggering the service-level cap and live-push side effects.
 
 ## Key elements
 
-- **`NotificationOverrides`** (interface) — the subset of fields a caller may vary. `userId` is required; `body`, `severity`, `readAt`, and `createdAt` are optional. `body` bundles `code` + `params` together to prevent mismatching one message's code with another's params.
-- **`makeNotification(overrides)`** (exported const) — returns a `Partial<NotificationDocument>` with sensible defaults (severity `warning`, a `cart-line-removed` body for a single "Blue mug" product). `userId` is wrapped in `new Types.ObjectId`. `readAt`/`createdAt` are conditionally spread so omitted keys are absent rather than `undefined`.
+- **`NotificationOverrides`** — The only required field is `userId` (24-char hex). Everything else is optional and defaults to sensible values (a single-product cart-line-removed body, `warning` severity, unread). The `staff` sub-object is the single switch that turns an "own message" into a work notice.
+- **`makeNotification(overrides)`** — Returns a `Partial<NotificationDocument>` (not a full doc; `id`, timestamps, etc. are left to the repository). Converts `userId` to a Mongoose `ObjectId`, applies the body/severity defaults, conditionally expands `staff` into `audience`/`tenantId`/`sets`/`dedupeKey`/`expiresAt`, and stamps `readAt`/`createdAt` only when explicitly provided.
 
 ## Relationships
 
-- **`src/modules/notifications/model.ts`** — source of the `NotificationBody` and `NotificationDocument` types that this factory shapes and returns.
-- **`src/modules/notifications/tests/factories.ts`** — the primary consumer; pulls `makeNotification` to build fixture rows inside notification tests.
+- **`src/modules/notifications/model.ts`** — Imports the `NotificationBody` and `NotificationDocument` types used for typing the overrides and return value.
+- **`src/modules/notifications/tests/factories.ts`** — Consumes `makeNotification` (and the `NotificationOverrides` type) to build fixture rows in the notification test suite.
 
 ## Notes
 
-- **Intentionally excluded from the barrel export.** The module doc comment states it is reachable only via `@modules/notifications/factories` because writing a row through the public service path would trip the cap / live-push enforcement the service layer enforces. Tests must import this path directly.
-- `userId` in the overrides interface is typed as `string` (24-char hex) and only becomes an `ObjectId` inside `makeNotification`; callers don't need to construct the `Types.ObjectId` themselves.
-- Defaults are baked into the factory (specific `productId`, English title) — tests that need a different body must supply the full `{ code, params }` pair, not just one field.
+- **Never reachable from the barrel.** The module docblock states it is intentionally kept out of the public export surface; import it via the `@modules/notifications/factories` path only.
+- **`dedupeKey` default is random.** When `staff` is set but no `dedupeKey` is supplied, a fresh ObjectId hex string is generated each call. Two calls with the same `tenantId`/`sets` will *not* dedupe against each other unless the caller passes an explicit key.
+- **`createdAt` pinning is a test-ordering tool.** Setting it is the documented way to control row age without sleeping between inserts; omitting it lets the repository stamp the real time.
+- **Staff expiry is hard-coded to 30 days** from `Date.now()` at call time; it is not configurable through the overrides.

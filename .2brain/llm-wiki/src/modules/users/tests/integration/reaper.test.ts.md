@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/tests/integration/reaper.test.ts
-sha256: 7c96c9eda751a2314d0bf72ba83ed0fdb0f4db90ce1a324ae98f2ee9adb4de23
-generated_at: 2026-10-15T12:14:29.296226+00:00
+sha256: cdbd97c81d25885316692328e7f8741b8fa19b1f06bbe1387346b2844e2a18c7
+generated_at: 2026-10-29T06:22:06.207243+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the inactivity reaper's three stages (warn → soft-delete → hard-delete). Verifies that only customer-level accounts are ever candidates—staff, admin, and platform-operator accounts are excluded at every stage—plus edge cases around grace periods, re-warnings after a return, API-key activity, and the `deletedBy` marker that distinguishes reaper soft-deletes from staff-initiated ones.
+Integration tests for the inactivity reaper — the three-stage process (warn → soft-delete → hard-delete) that takes long-idle **customer** accounts offline. The file's core invariant: staff, admin, and platform-operator accounts are never candidates at any stage, regardless of activity.
 
 ## Key elements
 
-- **`makeInactive(id, extra?)`** – Backdates `createdAt` (as a proxy for last activity) to a fixed 2020 date; uses `overwriteImmutable: true` + `timestamps: false` to bypass Mongoose's immutability guard on `createdAt`. Accepts extra fields to layer on stage-specific markers.
-- **`inactiveAccount(name, role?, platformRole?)`** – Creates a user via the factory, optionally assigns a platform role, then backdates it. Returns the created user.
-- **`describe("the inactivity reaper's candidates")`** – Covers the three finder methods (`findInactiveUnwarned`, `findWarnedStillInactive`, `findReaperSoftDeletedPastGrace`) across role exclusions, grace-period boundaries, re-warning after a return, already-warned dedup, disabled accounts, and staff soft-delete exclusion.
-- **`describe("who soft-deleted the account")`** – Confirms `userService.remove` with a system caller stamps `deletedBy: 'reaper'`, a staff caller leaves it unset, and `restoreById` clears it.
-- **`describe("API-key use counts as activity")`** – Verifies `lastApiKeyUseAt` suppresses candidacy in both warn and soft-delete stages, and that `touchApiKeyUse` throttles to one stamp per calendar day.
-- **`markerOf(id)`** – Reads the raw `deletedBy` field from the DB for assertions.
+- **`makeInactive(id, extra?)`** — Backdates a user's `createdAt` (treated as "last activity") via `userModel.updateOne` with `overwriteImmutable: true` so Mongoose doesn't strip the field.
+- **`inactiveAccount(name, role?, platformRole?)`** — Creates a user, optionally seeds a platform membership, then backdates it.
+- **`warnedUser(overrides, role?)`** — Creates a user, sets `inactivityWarnedAt`, and re-fetches the persisted document.
+- **`daysAgo(n)`** / **`emailsOf(accounts)`** — Small date and assertion helpers.
+- **`markerOf(id)`** — Reads the raw `deletedBy` field from the database.
+- **`describe("the inactivity reaper's candidates")`** — Verifies each of the three `userService.find*` queries returns only eligible customer accounts; also covers re-warning after a return, grace-period timing, and disabled accounts.
+- **`describe("who soft-deleted the account")`** — Asserts the `deletedBy: 'reaper'` marker is set by `softDeleteInactive` and cleared by `restoreById`.
+- **`describe("the reaper's soft delete refusals")`** — Confirms `softDeleteInactive` rejects unwarned accounts and any account holding a staff role.
+- **`describe("the reaper's hard delete")`** — Verifies `eraseInactive` erases a reaper-marked soft delete but returns `409` on a staff-made soft delete.
+- **`describe("API-key use counts as activity")`** — Ensures a recent `lastApiKeyUseAt` keeps an account out of the warning and soft-delete stages.
 
 ## Relationships
 
-- **`src/modules/users/services/index.ts`** – Primary SUT: calls `findInactiveUnwarned`, `findWarnedStillInactive`, `findReaperSoftDeletedPastGrace`, `remove`, `restoreById`, and `touchApiKeyUse`.
-- **`src/modules/users/model.ts`** – `userModel` used for raw `updateOne` (backdating) and `findById` (reading `deletedBy`).
-- **`src/modules/users/tests/factories.ts`** – `createUser` factory to seed accounts with a role.
-- **`src/modules/access/index.ts`** – `assignRole` to grant platform-level roles (e.g. `operator`).
-- **`src/kernel/permissions.ts`** – `systemCallerContext('User')` to simulate the reaper's own privileged caller.
-- **`tests/support/callers.ts`** – `callerContextAs('admin')` to simulate a staff-initiated delete.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` invoked at module top-level to reset the in-memory DB before the suite runs.
+- **`src/modules/users/services/index.ts`** — The system under test. All assertions target `userService.findInactiveUnwarned`, `findWarnedStillInactive`, `findReaperSoftDeletedPastGrace`, `softDeleteInactive`, `eraseInactive`, `removeById`, and `restoreById`.
+- **`src/modules/users/model.ts`** — Provides `userModel` for direct Mongoose updates (backdating, setting flags) and raw reads (`findById`, `markerOf`).
+- **`src/modules/users/tests/factories.ts`** — `createUser` factory for seeding test accounts with a given role.
+- **`src/modules/access/tests/factories.ts`** — `seedMembership` to attach a platform-level role (e.g. `operator`).
+- **`src/kernel/permissions.ts`** — `systemCallerContext('User')` constructs the caller context the reaper runs under.
+- **`tests/support/callers.ts`** — `callerContextAs('admin')` simulates a staff/admin caller for the refusal and staff-soft-delete tests.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the in-memory or throwaway database before all tests.
 
 ## Notes
 
-- `setupTestDb()` runs at import time (module scope), not inside a `beforeAll`; tests rely on the shared `LONG_AGO` / `NOW` constants rather than per-test isolation.
-- `createdAt` is used as the "last activity" clock throughout; the file's doc comment explains this is valid because the test accounts never refresh a session.
-- `emailsOf` uses `.toSorted()` (immutable) to keep the input array untouched.
-- The "stamps the use once a day" test hardcodes 2026 dates; it verifies calendar-day boundary logic in `touchApiKeyUse` without mocking `Date.now()`.
+- **Mongoose `createdAt` immutability**: `makeInactive` must pass `{ timestamps: false, overwriteImmutable: true }` or the update is silently dropped.
+- **Grace is measured from the warning, not from last activity**: a freshly-warned account is never soft-deleted even if its last activity is old.
+- **`deletedBy` is the reaper's fingerprint**: the hard-delete stage only erases rows where `deletedBy === 'reaper'`; a staff-initiated soft delete (no marker) is off-limits.
+- **Role filtering is exhaustive**: the first test seeds accounts with `customer`, `unverified`, no role, `manager`, `support`, `admin`, and platform `operator` to confirm only the first three pass.
+- **API-key activity is a first-class signal**: `lastApiKeyUseAt` is checked alongside `lastActiveAt` and `createdAt` when computing inactivity.

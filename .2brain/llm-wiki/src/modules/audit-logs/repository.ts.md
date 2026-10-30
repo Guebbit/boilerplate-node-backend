@@ -1,7 +1,7 @@
 ---
 source: src/modules/audit-logs/repository.ts
-sha256: 5009a639495d8266064f2463cc8f31e6a8cf7bd0b54afec438c619a5bb6fee26
-generated_at: 2026-10-14T15:05:17.435158+00:00
+sha256: b7a7968f64b2745dfa8f0b39ae0b75fb8224c83dedd6c9d939034c0cce8b414c
+generated_at: 2026-10-29T03:17:59.505182+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Read-only data access layer for the audit log collection. It exposes two operations — append one entry, read a filtered page — and deliberately omits any update or delete path. Expiry is handled by the model's TTL index, not by application code.
+Data-access layer for the audit log. Strictly append-and-read: one write entry point (`create`) and two read paths (filtered page search, keyset-cursor pagination for an actor's own entries). There is no update or delete by design — expiry is delegated to a Mongo TTL index on the model.
 
 ## Key elements
 
-- **`AuditLogSearchFilters`** — input shape for `search`; mirrors the query params on `GET /observability/audit` and `GET /audit`. `target` is the tenant-facing addition.
-- **`base`** (internal) — the shared `createRepository` factory result, configured with `applyAuditLogTransform` and four exact-match fields (`actorUserId`, `action`, `outcome`, `targetId`). Exact matching is intentional to prevent partial-string false positives (e.g. `'fail'` matching `'failure'`).
-- **`AUDIT_SORT`** — `{ timestamp: -1, _id: -1 }`. Not the shared `DEFAULT_SORT` because this model uses `timestamps: false`; the `_id` tiebreaker stabilises paging when multiple rows share a timestamp.
-- **`sinceScope`** — returns a `{ timestamp: { $gt: since } }` fragment (or `{}`). Kept out of the declared-filter path so the `Date` value is not coerced by the factory's `Number()` range handling.
-- **`OwnEntriesCursor` / `OwnEntriesPage`** — keyset-cursor types for paginating one actor's own entries (used by data export). `seen` carries `_id`s already returned at the boundary timestamp.
-- **`cursorAfter`** (internal) — computes the next cursor from a page of rows; merges `seen` ids carried from the prior cursor when the page did not advance past the same timestamp.
-- **`ownEntriesPage`** (internal) — one keyset page scoped to a single `actorUserId`. Uses `find` + `$lte`/`$nin` on the composite index instead of `countDocuments` + `skip`, keeping per-page cost constant.
-- **`auditLogRepository`** (exported) — the public surface: `{ create, search, sinceScope, ownEntriesPage }`. Intentionally narrower than the full base repository (no `save`, `deleteOne`, etc.) so the type system enforces append-and-read.
+- **`auditLogRepository`** (exported) — the sole public surface; exposes `create`, `search`, `sinceScope`, `ownOrderScope`, `ownEntriesPage`. Deliberately omits `save`/`deleteOne` so the type itself refuses edits.
+- **`AuditLogSearchFilters`** — interface mirroring the query params of `GET /observability/audit` and `GET /audit` (actor, action, outcome, since, target, ownOrder, page, pageSize).
+- **`AUDIT_SORT`** — `{ timestamp: -1, _id: -1 }`. Custom (not the shared `DEFAULT_SORT`) because the model sets `timestamps: false` and carries its own `timestamp` field; the `_id` tiebreaker prevents duplicate/missing rows across a paged read.
+- **`sinceScope` / `ownOrderScope`** — scope fragments (not declared filters) that are merged *after* `buildWhere`, so the `Date` and boolean values reach Mongo uncoerced.
+- **`OwnEntriesCursor` / `OwnEntriesPage`** — keyset-cursor types: `{ timestamp, seen: ObjectId[] }` and the page shape with an optional `next` cursor.
+- **`cursorAfter`** — computes the next cursor from a page of rows, carrying over already-seen ids at the same timestamp.
+- **`ownEntriesPage`** — reads one page of a single actor's entries via keyset cursor against the `{ actorUserId, timestamp }` index; no `countDocuments` or `skip`.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/create-repository.ts`** — supplies the `createRepository` factory that produces `base` (create + search pair with normalisation).
-- **`src/modules/audit-logs/model.ts`** — source of `auditLogModel` (Mongoose model + TTL index), `applyAuditLogTransform`, and the `AuditLogDocument` type.
-- **`src/modules/audit-logs/service.ts`** — primary consumer of `auditLogRepository`; orchestrates filter parsing and calls `create` / `search` / `ownEntriesPage`.
-- **`src/types/index.ts`** — provides the shared `AuditEntryItem` DTO type used throughout.
-- **`tests/integration/repository.test.ts`** — integration tests exercising the repository against a real Mongo instance.
-- **`tests/contract/audit.test.ts`** — contract tests validating the search/sort/filter behaviour.
-- **`tests/integration/incidents.test.ts`** — integration tests for incident-related audit queries that depend on this repository.
-- **`tests/unit/service.test.ts`** — unit tests that mock the repository surface exported here.
+- **`src/modules/audit-logs/model.ts`** — imports `auditLogModel` (the Mongoose model) and `applyAuditLogTransform` (doc → `AuditEntryItem` mapping). The model defines the schema, the TTL index, and `timestamps: false`.
+- **`src/infrastructure/persistence/create-repository.ts`** — provides the shared `createRepository` factory that yields the `create`/`search`/`normalize` pair scoped to the audit collection.
+- **`src/types/index.ts`** — source of the `AuditEntryItem` type used as the output shape.
+- **`src/modules/audit-logs/service.ts`** — upstream consumer; calls into `auditLogRepository` to fulfil audit-log use-cases.
+- **Tests** (`repository.test.ts`, `audit.test.ts`, `incidents.test.ts`, `service.test.ts`) — exercise this file's public surface at the unit, integration, and contract levels.
 
 ## Notes
 
-- The `outcome` filter is exact-match only. A partial match would make a filtered list silently disagree with adjacent aggregate counts.
-- `since` is passed as a *scope fragment* (merged after `buildWhere`) rather than a declared range filter, specifically to bypass the factory's `Number()` coercion which is correct for numeric bounds but wrong for `Date`.
-- `ownEntriesPage` reads the cursor *before* calling `base.normalize(rows)`, because normalisation mutates rows in place (rewrites `timestamp` to a string, removes `_id`) and the cursor logic needs the raw stored values.
-- The final export is a four-member object, not a re-export of `base`. Any accidental call to `base.save` or `base.deleteOne` from a consumer would be a compile error.
+- `since` and `ownOrder` are scope fragments, **not** declared filters. The shared `ranges` coerce bounds with `Number()`, which is correct for prices but wrong for dates; scopes bypass `buildWhere` entirely.
+- All four searchable fields are configured as **exact** matches. In particular, `outcome: 'fail'` will not match `'failure'` — a partial match would make a filtered view silently disagree with adjacent counts.
+- `ownOrder: false` translates to `{ 'metadata.ownOrder': { $ne: true } }` because the flag is only ever written as `true`; "not flagged" includes documents where the field is absent.
+- `ownEntriesPage` avoids the shared `search`'s count-then-skip pattern, which would cost O(n²) for a long actor trail. Each page is a single indexed range scan.
+- In `ownEntriesPage`, the cursor is computed **before** `base.normalize(rows)` because normalize rewrites rows in place (`timestamp` → string, `_id` removed) and the cursor needs the raw stored values.

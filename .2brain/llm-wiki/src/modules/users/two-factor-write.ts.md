@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/two-factor-write.ts
-sha256: 3d1b10744dd935f95cebb7c128f2f7922f4bb21d88e191542d85c3ed3280290d
-generated_at: 2026-10-15T12:17:08.708230+00:00
+sha256: 79872ac01d67e6fd0408d2cdce912fcbb54ebbad7d7e22b23284bd1518ec2b6b
+generated_at: 2026-10-29T06:24:34.849789+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the data shape (`TwoFactorWrite`) and planning logic for a single atomic 2FA state update on a user account. It exists to replace whole-array `save()`, which rewrites the entire `twoFactorMethods` array as loaded—causing stale TOTP step replay (RFC 6238 §5.2) and spurious version conflicts between concurrent requests. Instead, a request diffs its own loaded copy and emits only the fields it actually changed.
+Models a two-factor-authentication write as an explicit, per-field diff plan (`TwoFactorWrite`) and the MongoDB aggregation pipeline that applies it as a single atomic `updateOne`. It replaces a naive whole-array `$set` that would replay stale TOTP steps (RFC 6238 §5.2) and cause version-conflict failures when two requests touch different methods.
 
 ## Key elements
 
-- **`planTwoFactorWrite(user, options)`** – Main entry point. Diffs the Mongoose `UserDocument`'s modified paths against `TwoFactorWriteOptions` and returns a `TwoFactorWrite` plan (changed entries, added entries, dropped methods, account-level set/unset, conditional backup-code instructions).
-- **`settleTwoFactorWrite(user)`** – Called after the write lands; unmarks all modified paths and clears `$isNew` on subdocuments so the copy is considered current.
-- **`markEntryWritten(entry)`** – Unmarks a single entry's modified fields (used when another code path already persisted that entry).
-- **`isEmptyWrite(write)`** – Predicate: true when the plan carries no changes at all.
-- **`TwoFactorWrite`** (interface) – The plan: `changed` (per-entry set/unset by `_id`), `added` (whole new entries), `dropped` (method names or `'all'`), `set`/`unset` (account-level), `discardCodesIfDisarmed`, `mintCodes`.
-- **`TwoFactorWriteOptions`** (interface) – Caller-supplied additions beyond the loaded-copy diff: `dropped`, `discardCodesIfDisarmed`, `mintCodes`.
-- **`TwoFactorWriteOutcome`** (interface) – What the atomic update leaves in the document (`enabledAt`, `backupCodeSalt`, `backupCodeCount`).
-- **`MintedBackupCodes`** (interface) – A scrypt salt + digests pair for a freshly-minted backup-code set.
-- **`methodsAfter(write)`** (internal) – Builds the MongoDB aggregation-expression that computes the new `twoFactorMethods` array inside the single `updateOne` (drop → patch-by-`_id` → append).
-- **`ENTRY_FIELDS`** (const) – Whitelist of per-entry fields a write may touch; `lastUsedStep` is included but only ever unset.
+- **`ENTRY_FIELDS`** – const tuple listing every per-entry field a write may carry (except `_id`, `method`).
+- **`EntryChange`** – one existing entry's diff: its `_id`, fields to `$set`, fields to `$unset`.
+- **`TwoFactorWrite`** – the full plan: `changed`, `added`, `dropped` (method names or `'all'`), account-level `set`/`unset`, `discardCodesIfDisarmed`, optional `mintCodes`.
+- **`MintedBackupCodes`** – `{ salt, digests }` for a first set of backup codes.
+- **`TwoFactorWriteOutcome`** – values read back in the same atomic step (`enabledAt`, `backupCodeSalt`, `backupCodeCount`).
+- **`TwoFactorWriteOptions`** – caller-supplied extras: `dropped`, `discardCodesIfDisarmed`, `mintCodes`.
+- **`planTwoFactorWrite(user, options?)`** – diffs the loaded `UserDocument` into a `TwoFactorWrite`; partitions entries into added / changed / dropped and collects account-level modifications.
+- **`markEntryWritten(entry)`** – clears `directModifiedPaths` on a single subdocument so a subsequent plan won't re-send those fields.
+- **`settleTwoFactorWrite(user)`** – after a write lands, unmarks all modified paths and resets `$isNew` on every entry so the copy is clean for the next plan.
+- **`isEmptyWrite(write)`** – true when the plan would change nothing.
+- **`patched` / `methodsAfter`** (internal) – build the aggregation-pipeline fragments (`$mergeObjects`, `$unsetField`, `$filter`, `$map`, `$switch`) that the repository feeds into the atomic update.
 
 ## Relationships
 
-- **`src/modules/users/model.ts`** – Imports `UserDocument` and `TwoFactorMethodRecord` types; all interfaces in this file reference those shapes.
-- **`src/modules/users/repository.ts`** – Consumes the `TwoFactorWrite` plan (and `TwoFactorWriteOutcome`) to execute the single atomic `updateOne`; this file is the "planning" half of that pipeline.
-- **`src/modules/users/services/credentials.ts`** – Calls `planTwoFactorWrite` and `settleTwoFactorWrite` around its 2FA enrollment/revocation logic; the `user` argument it passes includes credentials state.
+- **`src/modules/users/model.ts`** – source of the `UserDocument` and `TwoFactorMethodRecord` types used throughout this file.
+- **`src/modules/users/repository.ts`** – consumes the `TwoFactorWrite` plan (and the pipeline fragments) to execute the single atomic `updateOne` and return a `TwoFactorWriteOutcome`.
+- **`src/modules/users/services/credentials.ts`** – calls `planTwoFactorWrite` to build the plan and `settleTwoFactorWrite` to mark the loaded copy as written after the repository confirms.
 
 ## Notes
 
-- **`lastUsedStep` is read-only for writes.** It appears in `ENTRY_FIELDS` but `settable()` returns `false` for it; only `claimTotpStep` (elsewhere) may set it. A write may only *unset* it.
-- **Mongoose internals via `Reflect`.** `$isNew`, `directModifiedPaths`, and `unmarkModified` are accessed with `Reflect.get/apply/set` because `TwoFactorMethodRecord` is typed as a plain record while the runtime value is a hydrated subdocument.
-- **`DERIVED_PATHS`** excludes `twoFactorEnabledAt` from the account-level `set`/`unset` diff; that field is derived in-database from the final array, not sent by the client.
-- **Requires MongoDB 5.0+** for the `$unsetField` aggregation operator used in `patched()`.
-- **`plain()`** normalises Mongoose array types to plain JS arrays before they enter the write plan, preventing driver-level type leakage into the update document.
+- `lastUsedStep` appears in `ENTRY_FIELDS` but is **only ever `$unset`** by this module; assigning a step is `claimTotpStep`'s sole responsibility.
+- `twoFactorEnabledAt` and `authenticatorEnabledAt` are in `DERIVED_PATHS` and are **excluded** from account-level `set`/`unset`; they are computed in-database from the method array at write time.
+- Mongoose subdocument internals (`$isNew`, `directModifiedPaths`, `unmarkModified`) are accessed via `Reflect` because the TypeScript type is the plain record, not the hydrated subdocument.
+- The pipeline uses `$unsetField`, which requires **MongoDB ≥ 5.0**.
+- `mintCodes` is conditional in-database: stored only if the account has no backup codes at the moment the write lands. `discardCodesIfDisarmed` is likewise a conditional instruction, not a direct `$unset`.
+- `literal()` wraps values that begin with `$` so the aggregation engine treats them as constants, not field paths.

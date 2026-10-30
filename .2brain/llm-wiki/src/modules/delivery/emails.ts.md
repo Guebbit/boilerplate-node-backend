@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/emails.ts
-sha256: 9fa6370e0292b40407a6c144faa13f62e3fe778ad759df99269a846c5b22eb9d
-generated_at: 2026-10-15T10:27:01.798270+00:00
+sha256: 38b56c44a163c1f2f8966e206557bda92045151e842518e515c7a2d2c240965e
+generated_at: 2026-10-29T03:34:34.865997+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Builds the finished-text email content for the three delivery notifications: shipment shipped, shipment delivered, and preorder delayed. Following the same convention as `@modules/account/emails`, the buyer's language is a parameter and every string is fully resolved before the mailer receives it — no template variables survive past this file.
+Resolves the copy for all delivery-related buyer emails into finished, fully-localized strings. Each exported function takes a locale and structured input, calls the i18n translator, and returns an `EmailContent` object ready for the mailer to send. Nothing is left to be resolved at render time — the language is an argument, the output is final text.
 
 ## Key elements
 
-- **`EmailLine`** — A single product line (title + quantity) as listed in an email.
-- **`ShippedEmailInput`** — Lines, optional `trackingCode`, and `remainingUnits` for the "on its way" email.
-- **`DeliveredEmailInput`** — Lines and optional `withdrawUntil` deadline for the "arrived" email.
-- **`PreorderDelayedEmailInput`** — Titles, `agreedAt`, optional `expectedAt`, `needsAnswer` flag, optional `answerBy`, and `orderUrl` for the preorder-delay email.
-- **`longDate`** (internal) — Formats a `Date` as a long date string in the given locale, always UTC.
-- **`lineTexts`** (internal) — Maps `EmailLine[]` to localized `"2 × Title"` strings via the i18n key `delivery.email-line`.
-- **`shipmentShippedEmail`** — Returns `EmailContent` for template `delivery.shipment-shipped`; includes tracking line only when a code exists and a "more to follow" line only when `remainingUnits > 0`.
-- **`shipmentDeliveredEmail`** — Returns `EmailContent` for template `delivery.shipment-delivered`; includes the withdrawal deadline line only when `withdrawUntil` is set.
-- **`preorderDelayedEmail`** — Returns `EmailContent` for template `delivery.preorder-delayed`; selects one of three i18n variants (`moved`, `ask-moved`, `ask-passed`) based on `needsAnswer` and whether `expectedAt` is present.
+- **`EmailLine`** — minimal line-item shape (`title`, `quantity`) used across all email inputs.
+- **`TrackingVariant`** — `'added' | 'corrected'`; selects a different subject/body when a tracking code is sent after the shipment already left.
+- **`ShippedEmailInput` / `DeliveredEmailInput` / `LostEmailInput` / `HoldNoticeEmailInput` / `FulfillmentDelayedEmailInput`** — input interfaces for each email; all carry only data, no resolved strings.
+- **`longDate(locale, date)`** (private) — formats a date long-style in the shop's timezone via `Intl.DateTimeFormat`.
+- **`lineTexts(t, lines)`** (private) — maps `EmailLine[]` to translated `"quantity × title"` strings.
+- **`shipmentShippedEmail`** — "on its way" email; optionally includes a tracking line, a "more to come" line, and variant-specific subject/body when the tracking code was added or corrected after departure.
+- **`shipmentDeliveredEmail`** — "arrived" email; on the final delivery also shows the withdrawal deadline (rendered in UTC per CRD Art. 9(2)(b)(i)).
+- **`shipmentLostEmail`** — lost/damaged-parcel email; includes reason-specific text, owed lines with expected date (when the shelf cannot re-cover), and an optional staff message.
+- **`holdNoticeEmail`** — hold-notice email (`check_address` or `delayed`); includes an optional staff message and a link to the order page.
+- **`fulfillmentDelayedEmail`** — "will be late" email; maps three internal states (`due` → `passed`, `expectedAt` present → `moved`, absent → `cleared`) to distinct template variants.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/mailer.ts`** — Imports the `EmailContent` return type; each exported function produces an object matching that shape (`template`, `subject`, `data`).
-- **`src/infrastructure/i18n/index.ts` / `context.ts`** — Imports `translator`; every string in the returned `data` is produced by calling the translator.
-- **`src/modules/delivery/index.ts`** — Re-exports this module's public API for the rest of the application.
-- **`src/modules/delivery/services/notify.ts`** — Consumes the three email builders to dispatch notifications.
-- **`src/modules/delivery/tests/unit/emails.test.ts`** — Unit-tests the three builders and the internal helpers.
-- **`tests/unit/infrastructure/adapters/mailer-templates.test.ts`** — Validates that the `data` keys and `template` names produced here match the mailer's template expectations.
+- **`src/infrastructure/adapters/mailer.ts`** — provides the `EmailContent` return type consumed by every builder.
+- **`src/infrastructure/i18n/index.ts`** (and `context.ts`) — provides `translator`, the sole i18n entry point used for all string resolution.
+- **`src/modules/shop/index.ts`** / **`src/modules/shop/service.ts`** — provides `shopTimezone()` used by `longDate`.
+- **`src/types/index.ts`** — provides `FulfillmentHeldParamsNotice` and `ShipmentLostReason` used in input interfaces.
+- **`src/modules/delivery/index.ts`** — re-exports these functions to the rest of the app.
+- **`src/modules/delivery/services/notify.ts`** — the service layer that calls these builders and hands the result to the mailer.
+- **`src/modules/delivery/tests/unit/emails.test.ts`** — unit tests for shipped, delivered, lost, and hold-notice emails.
+- **`src/modules/delivery/tests/unit/fulfillment.test.ts`** — unit tests covering `fulfillmentDelayedEmail`.
+- **`tests/unit/infrastructure/adapters/mailer-templates.test.ts`** — validates the mailer templates these emails reference (e.g. `delivery.shipment-shipped`).
 
 ## Notes
 
-- **`undefined` as "absent"**: Optional fields (`tracking`, `more`, `withdraw`, `answer`) are set to `undefined` (not `''`) so the mailer template's `typeof x !== "undefined"` guard renders the conditional block as absent. Do not substitute an empty string.
-- **UTC dates**: All date rendering uses `timeZone: 'UTC'` explicitly. The withdrawal deadline in particular is a UTC calendar day per CRD Art. 9(2)(b)(i); a local-time render could shift it to the prior day.
-- **Preorder-delay variant logic**: The `needsAnswer` + `expectedAt` pair drives which of three i18n key sets is used (`moved`, `ask-moved`, `ask-passed`). When `needsAnswer` is false, the "answer" slot always falls back to the `cancel-any-time` string.
-- **`lines` in preorder-delayed**: Unlike the other two emails (which use `lineTexts`), this email passes raw `string[]` titles through a spread (`[...input.titles]`) and lets the template handle presentation.
+- **`undefined` vs. missing key in template data:** In `shipmentShippedEmail`, `tracking` and `more` are set to `undefined` when absent; the template guards with `typeof x !== "undefined"`. In `shipmentLostEmail` and `holdNoticeEmail`, `message` is coerced with `?? ''` because the job crosses a message queue as JSON (dropping `undefined` keys) and the template reads the key unconditionally — a missing key would be a `ReferenceError`.
+- **Two different timezone conventions:** `longDate` uses `shopTimezone()` for buyer-facing dates (expected delivery, owed units), but `shipmentDeliveredEmail` renders the withdrawal deadline in **UTC** because it is a statutory calendar day (CRD). Mixing them up shifts the date by a day.
+- **`fulfillmentDelayedEmail` variant mapping is indirect:** the `reason` field (`'moved' | 'due'`) plus the presence of `expectedAt` together select one of three template keys (`passed`, `moved`, `cleared`). The `'due'` reason always maps to `passed` regardless of `expectedAt`.
+- **Follows the same convention as `@modules/account/emails`:** language is a parameter, output is finished text, the renderer does no further i18n lookup.

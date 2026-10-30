@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/unit/shop-time.test.ts
-sha256: 905c554916accdc8f2d2f80325a02c22630f3a0e5ed771387f4257449c32ab80
-generated_at: 2026-10-15T11:21:01.008868+00:00
+sha256: eff0f1897136698c906f0ddde4a09643ee85cb62b62a46e36c07db1aab52b8c5
+generated_at: 2026-10-29T05:00:44.635283+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the `shop-time` domain module. They pin down the two timezone-sensitive primitives that the orders module relies on to determine "which year does this order belong to" and "what UTC instant is local midnight in the shop's zone," ensuring that year-boundary and DST-transition edge cases are handled correctly.
+Unit tests for the `yearInZone` helper, verifying that a single UTC instant is attributed to the correct calendar year when viewed through a shop's IANA timezone—specifically around the year boundary where UTC and the local zone disagree.
 
 ## Key elements
 
-- **`describe('yearInZone', …)`** — verifies that `yearInZone(instant, tz)` returns the calendar year in the target zone even when UTC disagrees (e.g. `2026-12-31T23:30Z` → 2027 in Rome, 2026 in New York the next morning), and that it agrees with UTC when the zone *is* UTC.
-- **`describe('zonedStartOfDay', …)`** — verifies that `zonedStartOfDay(year, month, day, tz)` returns the UTC `Date` for local 00:00 in the target zone. Covers:
-  - Winter vs. summer offsets in Rome (1 h vs. 2 h behind UTC).
-  - DST spring-forward (2026-03-29) and fall-back (2026-10-25) boundaries in Rome.
-  - Zones behind UTC (New York), a half-hour offset (Kolkata, +5:30), and UTC itself.
+- **`describe('yearInZone')`** — top-level block; one suite, three specs.
+- **Rome boundary test** — asserts that `2026-12-31T23:30:00Z` is still 2026 in UTC but already 2027 in `Europe/Rome` (positive offset crosses into the new year).
+- **New York boundary test** — asserts that `2027-01-01T04:30:00Z` is already 2027 in UTC but still 2026 in `America/New_York` (negative offset lags behind).
+- **UTC identity test** — asserts `yearInZone` agrees with `getUTCFullYear()` when the zone is `UTC` itself, confirming no accidental offset is applied.
 
 ## Relationships
 
-- **`src/modules/orders/domain/shop-time.ts`** — the sole import target; this test file exercises `yearInZone` and `zonedStartOfDay` exported from that module. No other files are imported or produced.
+- **Imports** `yearInZone` from `src/modules/orders/domain/shop-time.ts` — the sole production dependency under test. No other modules are referenced.
 
 ## Notes
 
-- The tests use concrete future dates in 2026/2027 rather than "today-relative" values, making them deterministic and safe against the passage of time.
-- DST assertions are tied to specific IANA transition dates (Rome: Mar 29, Oct 25, 2026). If Europe changes its DST rules these tests will fail; that is intentional — they document the *expected* behaviour under the current IANA database.
-- `zonedStartOfDay` is called with numeric `(year, month, day)` arguments, not a `Date`, so the contract is "give me the instant for local midnight on that calendar date in that zone."
+- Tests use IANA zone identifiers (`Europe/Rome`, `America/New_York`) rather than fixed UTC offsets, so correctness depends on the runtime's IANA tz database. A zone with DST in late December/January (e.g. `Australia/Adelaide`) would shift the effective offset; these particular zones have a constant offset around the tested instants.
+- The two boundary cases are intentionally symmetric: one where the local year is *ahead* of UTC, one where it is *behind*, so a naïve implementation that only checks one direction is caught.
+- The `expect(instant.getUTCFullYear()).toBe(...)` lines in each boundary test are not redundant—they pin the UTC side of the comparison so a future change to the fixture date is immediately visible.

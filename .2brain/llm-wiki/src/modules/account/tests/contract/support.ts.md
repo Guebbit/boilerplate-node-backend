@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/contract/support.ts
-sha256: eb18f584a7c03edb83360f5049fee1c740d190d8a5fc65316192945c6827b70f
-generated_at: 2026-10-14T09:05:59.578280+00:00
+sha256: 119c90a35bd528783deae250b52123a368bc5b87d87817630c1f9290b7d3848d
+generated_at: 2026-10-29T02:52:42.471998+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Shared setup helpers for the account contract test suites. Abstracts away the dual-session-mode (`jwt` / `cookie`) branching so individual contract tests can log in, extract a bearer credential, and inspect AMR claims without repeating mode-specific logic.
+Shared setup helpers for the account contract test suites. Provides mode-agnostic login, token extraction, and `amr`-claim inspection so that `api`, `oauth`, `reauth`, and `shop` contract tests can authenticate and assert session state without duplicating session-mode logic.
 
 ## Key elements
 
-- **`loginWithCookie(overrides?)`** — Creates a user, POSTs to `/account/login`, and returns `{ user, bearer, jwtCookie }`. The bearer is the access token in `jwt` mode or the `ses_…` session id in `cookie` mode. Throws if login fails or no `__Host-session` cookie is set.
-- **`bearerIn(response)`** — Builds a `Bearer …` string from a login / re-proof / password-change response body. Prefers `data.token`, falls back to `data.sessionToken`.
-- **`claimedAmr(response, userId)`** — Returns the `amr` claim array the session recorded. In `jwt` mode decodes the token; in `cookie` mode reads the newest row from `sessionRowsOf(userId)`.
+- **`loginWithCookie(overrides?)`** — Creates a user (via `createUser`), POSTs `/account/login`, and returns `{ user, bearer, jwtCookie }`. The `bearer` string is the access token in `jwt` mode or the `ses_…` session id in `cookie` mode, always prefixed with `Bearer `. Throws if the response is non-200 or no `__Host-session` cookie is set.
+- **`bearerIn(response)`** — Extracts `Bearer <token|sessionToken>` from a login, re-proof, or password-change response body. Returns an empty-bearer string if neither field is present.
+- **`claimedAmr(response, userId)`** — Returns the `amr` claim array. In `jwt` mode decodes it from the access token via `jose.decodeJwt`; in `cookie` mode reads it from the newest session row via `sessionRowsOf`.
 
 ## Relationships
 
-- **`tests/support/http.ts`** — Source of the `api()` HTTP client used for the login POST.
-- **`tests/support/cookies.ts`** — Provides `setCookie` / `cookieValue` to extract the `__Host-session` cookie from the response.
-- **`src/modules/users/tests/factories.ts`** — Provides `createUser` and `PLAIN_PASSWORD` used by `loginWithCookie`.
-- **`src/modules/account/session/config.ts`** — `getSessionMode()` drives the `jwt` vs `cookie` branching inside `claimedAmr`.
-- **`src/modules/account/tests/factories.ts`** — `sessionRowsOf(userId)` supplies the database rows that `claimedAmr` reads in `cookie` mode.
-- **`api.contract.test.ts`, `oauth.contract.test.ts`, `reauth.contract.test.ts`, `shop.contract.test.ts`** — The contract suites that import these helpers for their shared login and assertion setup.
+- **`src/modules/account/session/config.ts`** — Imports `getSessionMode` to branch between `jwt` and `cookie` modes in `claimedAmr`.
+- **`src/modules/users/tests/factories.ts`** — Imports `createUser` and `PLAIN_PASSWORD` for user provisioning inside `loginWithCookie`.
+- **`tests/support/cookies.ts`** — Imports `setCookie` and `cookieValue` to parse and read the `__Host-session` cookie from the login response.
+- **`tests/support/http.ts`** — Imports `api` (supertest-style wrapper) to perform the login POST.
+- **`src/modules/account/tests/factories.ts`** — Imports `sessionRowsOf` for the cookie-mode `amr` lookup.
+- **Contract tests (`api`, `oauth`, `reauth`, `shop`)** — Primary consumers; each suite calls `loginWithCookie` and the extractors to set up and verify session state.
 
 ## Notes
 
-- The `__Host-session` cookie name is hardcoded; if the session cookie name changes, `loginWithCookie` must be updated.
-- In `cookie` mode the "bearer" is the opaque `ses_…` id, not a JWT — tests must not attempt to decode it.
-- `claimedAmr` in `cookie` mode is **async** (DB read) while in `jwt` mode it is effectively synchronous (local decode); callers must always `await`.
-- The bearer fallback in `loginWithCookie` (`token ?? cookieValue(jwtCookie)`) means the returned bearer may come from the cookie body rather than `response.body.data.token`.
+- `loginWithCookie` intentionally keeps **both** the bearer and the cookie (unlike `authenticateAs`, which drops the cookie). The cookie is what `current`, logout, and refresh operations depend on.
+- In `cookie` mode the access token is absent from the response body; the session id (`ses_…`) doubles as the bearer value because the server accepts `Authorization: Bearer ses_…` equivalently to the cookie.
+- `claimedAmr` requires a `userId` argument only for the cookie-mode DB lookup; it is unused in `jwt` mode but must still be passed.
+- `bearerIn` falls back to `sessionToken` when `token` is missing, covering both mode shapes without the caller branching.

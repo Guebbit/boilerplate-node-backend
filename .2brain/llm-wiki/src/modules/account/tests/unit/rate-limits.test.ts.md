@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/unit/rate-limits.test.ts
-sha256: e4e0dafc9d268596d72d50af77eb3bb6a3f49c176a8b64f03250bdc21795a5c2
-generated_at: 2026-10-14T09:22:09.556110+00:00
+sha256: 57fbaeb5b1505da8e54dbc7d18cc715f050124e25c95e0bf8cd1dcd34fae3c43
+generated_at: 2026-10-29T03:05:11.390852+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests that pin **relational invariants** between the account module's rate-limit budgets (credential, signup, reset, MFA challenge, MFA send, and signed-in code delivery). The tests assert orderings and fractional ceilings between budgets rather than locking any single numeric value, so individual budgets can be tuned freely as long as the relative structure holds.
+Unit test that pins the **ordinal relationships** between the account module's rate-limit budgets (credential, signup, reset, MFA) rather than their absolute values. It enforces invariants like "identity budget < global browsing budget / 5" and "identity ≤ address ≤ block" so that the budgets remain meaningful relative to one another, even if individual numbers are later tuned.
 
 ## Key elements
 
-- **`budget(namespace)`** — module-level helper that wraps `budgetIn(accountRateLimits, namespace)` to pull a budget config by its `namespace` string.
-- **`credentialLimiters`** (describe) — asserts `credentials-identity < DEFAULT_RATE_LIMIT_MAX / 5` and the ordering `identity < address < block`.
-- **`signupLimiters and resetRequestLimiters`** (describe) — same two invariants (identity ≪ global; block > address) applied to the `signup-*` and `reset-*` namespaces.
-- **`mfaChallengeLimiter and mfaSendLimiter`** (describe) — asserts challenge budget > send budget, both share the same `windowMs`, and that window is a concrete value (not the string `'shared'`).
-- **`the signed-in code-delivery budget`** (describe) — asserts `mfa-account-send` is keyed by the authenticated account, windowed at 3 600 000 ms (1 h), and its `defaultMax ≥ mfa-send.defaultMax`.
+- **`budget(namespace)`** — thin helper that calls `budgetIn(accountRateLimits, namespace)` to fetch a single declared budget by its string key.
+- **`describe('credentialLimiters')`** — asserts identity < global/5, and the triple ordering identity < address < block.
+- **`describe('signupLimiters and resetRequestLimiters')`** — same two invariants for signup and reset namespaces.
+- **`describe('mfaChallengeLimiter and mfaSendLimiter')`** — challenge budget > send budget; both windowed on the challenge lifetime (not the shared browsing window).
+- **`describe('the signed-in code-delivery budget')`** — `mfa-account-send` is keyed on the authenticated account, windowed to 3 600 000 ms (1 h), and ≥ the per-challenge send budget.
+- **`describe('the MFA budgets')`** — parameterised check that `mfa-challenge` and `mfa-send` both use `MFA_CHALLENGE_DELIVERED_TTL_MS` as their window.
 
 ## Relationships
 
-- **`src/modules/account/rate-limits.ts`** — the subject under test; provides the `accountRateLimits` array of budget declarations that every assertion reads from.
-- **`src/infrastructure/http/middlewares/rate-limit.ts`** — source of `DEFAULT_RATE_LIMIT_MAX`, used as the global ceiling against which per-module budgets are compared.
-- **`tests/support/rate-limit-budgets.ts`** — provides the `budgetIn` lookup helper used by the local `budget()` wrapper.
+- **`src/modules/account/rate-limits.ts`** — the module under test; provides `accountRateLimits` whose budgets are the assertions' subjects.
+- **`src/infrastructure/http/middlewares/rate-limit.ts`** — source of `DEFAULT_RATE_LIMIT_MAX`, the "global browsing budget" used as an upper-bound reference in every identity-budget assertion.
+- **`tests/support/rate-limit-budgets.ts`** — provides `budgetIn`, the shared helper that resolves a namespace key to its `{ defaultMax, windowMs, keyedBy }` tuple.
+- **`src/modules/account/services/two-factor-challenge.ts`** — source of `MFA_CHALLENGE_DELIVERED_TTL_MS`, the canonical challenge-lifetime constant the MFA windows must match.
 
 ## Notes
 
-- The file's header comment explicitly defers the **behavioural** property (requests actually being counted, keyed on identity/address/block, MFA challenge-less fallback) to `../integration/identity-rate-limit.test.ts`, because `no-restricted-imports` classifies `express-rate-limit` middleware as an integration concern. This file is purely structural/invariant.
-- All assertions are relational (`toBeLessThan`, `toBeGreaterThan`, `toBeGreaterThanOrEqual`). No test pins an absolute number, so bumping a single budget does not break the suite unless it violates an ordering or the `/5` ceiling.
-- The `'shared'` string check on `windowMs` guards against accidentally inheriting the global browsing window instead of the challenge-specific one.
+- The file header explicitly scopes itself to **structural/ordinal** assertions. Behavioural tests (actually sending requests through `express-rate-limit`) are deferred to `../integration/identity-rate-limit.test.ts` because `no-restricted-imports` treats that middleware as an integration concern.
+- All assertions use relational operators (`toBeLessThan`, `toBeGreaterThan`) so the suite passes regardless of the exact numeric values, as long as the relative ordering holds.
+- The `windowMs` checks for MFA budgets compare against a **code constant** (`MFA_CHALLENGE_DELIVERED_TTL_MS`), not a literal, to avoid duplicating the TTL in YAML or config.

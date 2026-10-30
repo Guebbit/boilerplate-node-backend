@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/post-pending-email-resend.ts
-sha256: e55780cb6a8cb8673a494251e5ab73edacbb1976ed6e3d48d185735d1abaa702
-generated_at: 2026-10-14T08:36:02.524923+00:00
+sha256: b7b4cba13b03482dc2f1d60252bbe0b21f47a7c0d1d64c0dd5703fc8e06d3560
+generated_at: 2026-10-29T02:31:33.202311+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter for `POST /account/pending-email/resend`. Extracts the authenticated user's ID and caller context, delegates to `accountService.resendPendingEmailVerificationFor`, and maps the service result onto an Express response. It exists to keep routing/transport concerns separate from the account service logic.
+Thin HTTP adapter for `POST /account/email-change/resend`. It extracts the authenticated caller's ID and delegates to `accountService.resendPendingEmailVerificationFor`, then maps the result (or rejection) onto the Express response. The controller itself contains no business logic.
 
 ## Key elements
 
-- **`postPendingEmailResend(request, response)`** — exported handler. Reads `request.authContext.id`, calls the service, then either rejects via `refused` or emits `successResponse` with `data`, `status`, and `message`. Errors are funneled through `catchAs(response, 'postPendingEmailResend')`.
+- **`postPendingEmailResend`** (exported) – Express controller handler. Reads `request.authContext.id`, calls the service with that ID plus caller context, then either short-circuits via `refused` or sends a `successResponse` with `result.data` and `result.status`. Errors are funnelled through `catchAs`.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** (`catchAs`, `refused`) — provides the standard error-catch and refusal-detection helpers used by every controller in this codebase.
-- **`@infrastructure/http/request`** (`callerContextOf`) — extracts the caller context (e.g. IP, user-agent) from the Express request to pass downstream.
-- **`@infrastructure/http/response`** (`successResponse`) — formats the success JSON envelope.
-- **`../services`** (`accountService`) — the business-logic layer; this controller is its sole HTTP entry point for the resend action.
-- **`src/modules/account/routes.ts`** — registers this handler on the `POST /account/pending-email/resend` route (protected by `isAuth`).
+- **`src/infrastructure/http/controller.ts`** – provides the `refused` guard (detects a "refused" result shape and ends the response) and `catchAs` (serialises a thrown/rejected error into a response).
+- **`src/infrastructure/http/request.ts`** – provides `callerContextOf`, which extracts IP/UA metadata from the incoming request for audit or rate-limiting purposes.
+- **`src/infrastructure/http/response.ts`** – provides `successResponse`, the standard 2xx envelope writer.
+- **`src/modules/account/services/index.ts`** – source of `accountService`, the domain service whose `resendPendingEmailVerificationFor` method performs the actual resend.
+- **`src/modules/account/routes.ts`** – registers this controller on the `POST /account/email-change/resend` route (upstream of the `isAuth` middleware that populates `request.authContext`).
 
 ## Notes
 
-- Authentication is **assumed** at this layer; `request.authContext` is non-null because `isAuth` middleware runs first. No null-check is performed here.
-- "Nothing pending" is **not** an error — the service returns a `resendAfter: 0` payload, which flows through the normal `successResponse` path.
-- Response shape intentionally mirrors `POST /account/verify-request` (seconds-countdown field) so front-end clients can share the same countdown logic.
+- `request.authContext!` is non-null-asserted; the `isAuth` middleware is expected to run before this handler. There is no runtime guard for a missing auth context.
+- A caller with **no pending email change** is *not* an error path: the service returns `resendAfter: 0` through the normal success branch, so the client simply sees no countdown.
+- The JSDoc notes the behaviour mirrors `POST /account/email-verification/resend`; the two endpoints share the same "resend + seconds-to-wait" response shape but target different pending actions (verification vs. change).

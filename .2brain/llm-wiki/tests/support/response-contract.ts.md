@@ -1,7 +1,7 @@
 ---
 source: tests/support/response-contract.ts
-sha256: 8a7f068aa20f161a943b865bedf6a94c4d3200dbe0c086574ed12156c283d56e
-generated_at: 2026-10-15T13:00:15.331913+00:00
+sha256: e669f029fdfd498f69b06ad39eecd935da08ead9eedf61f1db9f4b3c4004702f
+generated_at: 2026-10-29T07:10:18.444846+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Validates a captured HTTP response (from `supertest`) against the Zod schemas that `orval` generates from `openapi.yaml`. Each response is checked against the **exact** schema for its own status code, catching both undocumented status codes and body/shape mismatches. It throws a descriptive `Error` on contract violations rather than returning a result object.
+Judges a single captured HTTP response against the exact Zod schema that `orval.config.ts` generates for that operation's documented status code. Enforces body shape, required headers, RFC 9457 problem-media-type, absence of nulls, and the "no body on 204/304" rule. Exists so both the shared `afterEach` contract runner and the fuzz suite can validate responses against `openapi.yaml` without re-deriving the logic.
 
 ## Key elements
 
-- **`assertResponseMatchesContract(response: Response): void`** — The sole export. Resolves the operation from method + path, looks up the matching Zod schema, checks required headers, and `safeParse`s the body. Throws on any violation; silently returns for undeclared routes.
-- **`DECLARED_ROUTES`** — Module-level array built once via `listOperations()`. Each entry carries a compiled regex (params → `[^/]+`), the `operationId`, and a `paramCount` for specificity tie-breaking.
-- **`REQUIRED_HEADERS`** — Per-operation, per-status list of response headers the spec marks `required`, built once via `requiredResponseHeaders()`.
-- **`operationFor(method, pathname)`** — Filters `DECLARED_ROUTES` for matches, then sorts by `paramCount` ascending so the most specific (fewest `{param}` segments) route wins. Returns `undefined` for undeclared paths.
-- **`schemaFor(operationId, status)`** — Computes the export name (`PascalCase(operationId) + status + "Response"`), looks it up in `responseSchemaModule`, and narrows to `ZodType` via the `isZodType` guard.
-- **`responseSchemaModule`** — `{ ...responseSchemas }` spread to obtain an implicit index signature, enabling runtime string-key lookup over the namespace import.
-- **`pascalCase` / `isZodType`** — Small helpers for name computation and Zod type narrowing respectively.
+- **`DECLARED_ROUTES`** (module-level const) — Every operation from the spec, pre-compiled to `{method, regex, operationId, paramCount}`. Built once at import time.
+- **`REQUIRED_HEADERS`** (module-level const) — Per-operation, per-status list of headers the spec marks `required`, sourced from `spec-walk`.
+- **`responseSchemaModule`** (module-level const) — `{ ...responseSchemas }` spread giving a runtime-indexable `Record<string, unknown>` view of the generated Zod schemas (avoids the namespace-import no-index-signature problem).
+- **`operationFor(method, pathname)`** — Resolves a request to its `operationId`; picks the most specific match (fewest `{param}` segments) when a literal and a templated path both hit.
+- **`schemaFor(operationId, status)`** — Looks up `${PascalCase(operationId)}${status}Response` in the schema module; returns `zod.ZodType` or `undefined`.
+- **`assertProblemMediaType(response)`** — Throws if a 4xx/5xx with a JSON body is not `application/problem+json`. Skips `text/*` and empty bodies.
+- **`nullPathsIn(value, at)`** *(exported)* — Recursively collects dotted paths of `null` values in a parsed JSON body.
+- **`assertResponseMatchesContract(response)`** *(exported, main entry point)* — Orchestrates all checks: media-type, route resolution, status documentation, required headers, 204/304 body-empty, Zod `safeParse`, and null-absence. Throws a plain `Error` on any violation.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** — Calls `assertResponseMatchesContract` inside a shared `afterEach` hook, giving every standard test file automatic response-shape validation.
-- **`tests/fuzz/endpoints.fuzz.test.ts`** — Calls `assertResponseMatchesContract` directly once per generated request, *inside* the `fast-check` property function. This lets a mismatch trigger shrinking to the minimal failing input instead of surfacing asynchronously from an `afterEach`.
-- **`tests/support/spec-walk.ts`** — Supplies `listOperations`, `requiredResponseHeaders`, and the `HttpMethod` type that drive route resolution and header checks here.
+- **`tests/support/spec-walk.ts`** — Provides `listOperations`, `requiredResponseHeaders`, and the `HttpMethod` type used to build `DECLARED_ROUTES` and `REQUIRED_HEADERS`.
+- **`tests/support/contract.ts`** — Calls `assertResponseMatchesContract` from a shared `afterEach` hook across the contract test suites.
+- **`tests/fuzz/endpoints.fuzz.test.ts`** — Calls `assertResponseMatchesContract` directly inside each `fast-check` property function so mismatches shrink to the smallest failing input rather than surfacing from `afterEach`.
+- **`src/modules/account/tests/contract/shop.contract.test.ts`** — Indirect consumer via `contract.ts`; exercises the shop endpoint's documented responses.
+- **`tests/unit/support/response-contract.test.ts`** — Unit-tests the helpers in this file (route matching, null-path walking, media-type assertion).
 
 ## Notes
 
-- **204 handling:** A `204` must have an empty body (RFC 9110 §15.3.5). The check compares `response.text` to `''` rather than running the schema, because the generated schema is `void` and an empty `{}` parsed body would incorrectly fail.
-- **Text responses:** `supertest`/`superagent` only populate `.body` for JSON or urlencoded responses. `text/*` responses (e.g., Prometheus exposition) land in `.text`; the code branches on `response.type.startsWith('text/')` to pick the right source.
-- **Undeclared routes return silently:** A 404 for an unknown path is intentionally *not* a contract violation here — that assertion belongs to the dedicated 404-envelope test.
-- **Route tie-breaking:** When both a literal path (e.g., `/cart/shipping-method`) and a templated sibling (`/cart/{productId}`) match, the fewer-param route wins. This mirrors the app's own Express mounting order.
-- **`strict.response` in `orval.config.ts`:** Generated schemas use `.strict()`, so an extra field in the response body causes a parse failure rather than being silently stripped.
+- **Undeclared paths return silently.** If `operationFor` finds no match, the function returns without throwing. Asserting a 404 envelope for unknown paths is the contract test's own responsibility.
+- **`text/*` bodies bypass `.body`.** Superagent only populates `response.body` for JSON/urlencoded; a `text/plain` response (e.g., Prometheus exposition) lands in `.text`. The code selects the right field before `safeParse`.
+- **204 / 304 special-case.** Their generated schemas are `void`/`unknown`, which would pass an empty `{}`. The check is instead `response.text === ''`.
+- **Method casing.** Supertest reports the verb upper-case; `HttpMethod` and the spec walk use lower-case. The cast is safe because the app only issues the five methods the spec can declare.
+- **`{...responseSchemas}` spread.** Required because TypeScript gives a fresh object literal an implicit index signature but not the namespace import itself—without the spread, computed-key lookup wouldn't type-check.

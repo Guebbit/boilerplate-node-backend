@@ -1,7 +1,7 @@
 ---
 source: tests/support/credentials.ts
-sha256: 756ffaf704fe10882cd65d26fd40519ca5ab250e55f9538c74b9a035f2209160
-generated_at: 2026-10-15T12:57:29.067568+00:00
+sha256: 63208923a8bf8a7e16afcff0c39a893703319f04f8d7d0306f20befd3088beb8
+generated_at: 2026-10-29T07:07:12.422006+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Test-support helper that mints a **real** API-key credential through the production `mint` service (not a fixture) and resolves secrets back through the production `resolveCredential`. It exists so integration and cross-cutting tests can drive the full mounted chain—mint → store → resolve—with a secret the runtime will actually recognise.
+Provides two small helpers for integration and contract tests that need to drive the real API-key authentication chain: minting a genuine `sk_…` secret through the production `mint` service, and resolving a secret back through `resolveCredential`. Exists so tests can assert on caller context and guard behavior without hand-crafting secrets the resolver won't recognise.
 
 ## Key elements
 
-- **`credentialHolding(permissions: string[]): Promise<string>`** — Creates a verified admin user via `createUser`, builds a `TenantCallerContext` scoped to `DEPLOYMENT_TENANT_ID`, calls `mint` with the exact permission set, and returns the plaintext `sk_...` secret for use in an `Authorization: Bearer` header. Throws if `mint` fails.
-- **`credentialOf(secret: string): Promise<ResolvedCredential | undefined>`** — Wraps `resolveCredential` and unwraps the discriminated result: returns the resolved value on success, `undefined` on refusal. Lets tests assert directly on the caller without dealing with the `{ ok }` envelope.
+- **`credentialHolding(permissions: string[]): Promise<string>`** — Creates a verified admin user via the users factory, arms their authenticator, builds a `TenantCallerContext` scoped to `DEPLOYMENT_TENANT_ID`, calls the real `mint` with a 7-day expiry, and returns the plaintext secret (suitable for an `Authorization: Bearer` header). Throws if `mint` reports failure.
+- **`credentialOf(secret: string): Promise<ResolvedCredential | undefined>`** — Thin wrapper around `resolveCredential` that unwraps the `{ ok }` discriminated union: returns `resolution.ok` on success, `undefined` if the credential was refused.
 
 ## Relationships
 
-- **`src/kernel/authentication.ts`** — Source of `resolveCredential` and the `ResolvedCredential` type; `credentialOf` is a thin unwrapping wrapper around it.
-- **`src/kernel/access/tenant.ts`** — Provides `DEPLOYMENT_TENANT_ID`, the tenant the minter is enrolled under and the one `resolveCredential` re-reads at resolution time.
-- **`src/modules/api-keys/services/api-keys.ts`** — Source of `mint`; `credentialHolding` delegates the actual key-creation to this service.
-- **`src/modules/users/tests/factories.ts`** — Source of `createUser`, used to materialise the admin minter user.
-- **`src/types/auth-context.ts` / `src/types/index.ts`** — Provide the `TenantCallerContext` type used to shape the caller object passed to `mint`.
-- **Consumer tests** (`api-keys` integration tests, `api-key-reads.test.ts`, `cross-cutting/api-key-authentication.test.ts`, `cross-cutting/role-hierarchy.test.ts`, `integration/security-events.test.ts`) — Call `credentialHolding` to obtain a valid bearer secret and `credentialOf` to assert what the runtime resolves for that secret.
+- **`@kernel/access/tenant`** — imports `DEPLOYMENT_TENANT_ID` to set the minter's `tenantId` in the caller context.
+- **`@kernel/authentication`** — imports `resolveCredential` (used by `credentialOf`) and the `ResolvedCredential` type.
+- **`@modules/api-keys/services/api-keys`** — imports `mint`; credentials are created through the production minter, not a fixture.
+- **`@modules/users/tests/factories`** — imports `createUser` to produce the admin minter.
+- **`@types` (→ `src/types/auth-context.ts`)** — imports the `TenantCallerContext` type used to build the mint call context.
+- **`./authenticator`** — imports `armAuthenticator` to satisfy the TOTP requirement for staff-role mints.
+- **Consumer tests** (`api-keys.test.ts`, `revoked-by-account.test.ts`, `sessions-revoked-outbox.test.ts`, `api-key-authentication.test.ts`, `account-protection.test.ts`, `api-key-reads.test.ts`, `api.contract.test.ts` ×2, `abilities.test.ts`) — import these helpers to obtain a real secret for the `Bearer` header or to inspect the resolved caller.
 
 ## Notes
 
-- **Tenant-ID mismatch is a silent 403.** The caller context must use `DEPLOYMENT_TENANT_ID` (not a `TEST_TENANT_ID` alias). `createUser` writes the minter's membership under the deployment tenant, and `resolveCredential` re-reads live membership rather than trusting the mint-time snapshot. A mismatch mints successfully but resolves to zero permissions, surfacing as a 403 that looks like a guard bug.
-- **Exact-permission matching.** `mint` refuses a credential whose permissions are a superset of the caller's. Pass only the keys you intend the credential to hold.
-- **`credentialOf` never throws on refusal.** It returns `undefined` instead, so tests must check for `undefined` (or use `expect(...).toBeUndefined()`) rather than catching an error.
+- **`DEPLOYMENT_TENANT_ID` vs `TEST_TENANT_ID`:** The context must use `DEPLOYMENT_TENANT_ID` because `createUser` writes the minter's membership under that ID and `resolveCredential` re-reads membership at resolve time. Using the wrong ID mints successfully but resolves to zero permissions, surfacing as a 403 that looks like a guard bug.
+- The minter must be an **admin** with an **armed authenticator app**; `mint` rejects a superset of permissions, so the `permissions` array passed in is exactly what the credential will hold.
+- `credentialOf` intentionally collapses the failure case to `undefined` rather than exposing the `{ ok: false }` wrapper, so callers can `if (!cred)` without pattern-matching the union.

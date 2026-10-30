@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/tests/integration/preorder.test.ts
-sha256: b6e79cc9e19f92c171fc1b2808f17eca0a366ca9c45ef5a58a4576799cfef2d5
-generated_at: 2026-10-15T11:48:36.685356+00:00
+sha256: 207060ef4b305292d15e0535803e3486ef35e4a3a388f4e1368521c9d8622e22
+generated_at: 2026-10-29T05:33:11.626476+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the product preorder feature over HTTP. Verifies that a future `releaseDate` makes a product a derived preorder (never stored as a flag), that the date is bounded to one year ahead, that past dates read as released, and that any change to `releaseDate` writes a `product.release_date_changed` row into the outbox within the same transaction.
+Integration tests (over real HTTP + a real test database) for the product preorder feature: verifying that `preorder` is derived from `releaseDate` (never stored), that the date is bounded to one year ahead, and that editing the date announces `product.release_date_changed` through the outbox in the same transaction.
 
 ## Key elements
 
-- **`inDays(days)`** — helper that returns an ISO-8601 string `days` from now (positive = future, negative = past).
-- **`announced()`** — queries `outboxEventModel` for `PRODUCT_RELEASE_DATE_CHANGED` rows, sorted by `_id` (write order).
-- **`announcedPayloads()`** — maps those rows to their `payload` fields for assertion.
-- **`describe('GET /products/:id')`** — four tests confirming the derived `preorder` flag: true for future date, false for past date, false when `purchasable` is false, and that a preorder is never also flagged `lowStock`.
-- **`describe('PATCH /products/:id releaseDate')`** — five tests covering: setting then clearing with `null` (two outbox rows: `to` then `from`), moving from one date to another (single row with both `from` and `to`), no-op when the stored value is unchanged (zero rows), rejection of a date > 1 year ahead (422, no rows), and acceptance of a past date (200, `preorder: false`).
+- **`inDays(days)`** — returns an ISO-8601 string offset by *days* from now (positive = future, negative = past). Used as the client-side payload shape.
+- **`announced()`** — queries `outboxEventModel` for rows named `PRODUCT_RELEASE_DATE_CHANGED`, sorted by `_id` (write order), returned as lean objects.
+- **`announcedPayloads()`** — convenience wrapper that maps the above to just their `payload` fields.
+- **`describe('GET /products/:id')`** — four cases covering: future date ⇒ `preorder: true`; past date ⇒ `false`; off-sale (`purchasable: false`) ⇒ `false` regardless of date; low-stock flag is suppressed on preorders.
+- **`describe('PATCH /products/:id releaseDate')`** — five cases covering: set-then-clear round-trip and the two outbox payloads (`to`, then `from`); move from one future date to another produces a single `{from, to}` payload; setting the identical value writes no outbox row; a date > 1 year ahead is rejected (422, no outbox write); a past date is accepted and simply reads as released.
 
 ## Relationships
 
-- **`src/modules/products/tests/factories.ts`** — `createProduct` builds the product document (with optional `releaseDate`, `purchasable`, `onHand`) for each test.
-- **`src/kernel/outbox.ts`** — `outboxEventModel` is the Mongoose model used to read back event rows and assert they were (or were not) written.
-- **`src/modules/products/events.ts`** — `PRODUCT_RELEASE_DATE_CHANGED` constant identifies which outbox rows to query.
-- **`tests/support/http.ts`** — `api` provides the supertest-style HTTP client; `authenticateAsRole('editor')` supplies a bearer token for write tests.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` resets the test database once at module load.
+- **`tests/support/http.ts`** — provides the `api()` supertest agent and `authenticateAsRole('editor')` used for every HTTP request and bearer-token setup.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is invoked at module load to create/truncate the test database before any test runs.
+- **`src/modules/products/tests/factories.ts`** — `createProduct(...)` builds a product document with the fields under test (`releaseDate`, `purchasable`, `onHand`).
+- **`src/kernel/outbox.ts`** — `outboxEventModel` is the Mongoose model used to assert that the API wrote (or did not write) the expected outbox row(s).
+- **`src/modules/products/events.ts`** — exports the `PRODUCT_RELEASE_DATE_CHANGED` event-name constant matched against outbox rows.
 
 ## Notes
 
-- `setupTestDb()` is called at the **module top level**, not inside `beforeAll` — the DB is ready before any `describe`/`it` runs.
-- Preorder is a **derived** field computed at read time; the tests never assert a `preorder` column in the DB, only in the HTTP response body.
-- The "announces nothing when the instant is the one already stored" test guards against duplicate outbox writes on idempotent PATCHes.
-- Validation boundary is strictly > 365 days ahead → `422`; a past date is always accepted (reads as released).
-- Outbox rows are asserted in **write order** via `_id` sort (Mongoose ObjectId monotonicity), so the set-then-clear test expects `[{to}, {from}]` in that exact sequence.
+- `setupTestDb()` is a top-level side effect; the test file must be imported (or run) before any test that depends on the DB state it establishes.
+- The outbox assertions use `.lean().exec()` (Mongoose) and compare by `_id` order — the tests rely on write-order, not event sequencing.
+- Clearing `releaseDate` via `null` is expected to yield `undefined` (key absent) in the JSON response, not `null`; the test asserts this explicitly.
+- The "identical value" case is the key idempotency guard: no outbox row is written when the stored instant is unchanged, even though the HTTP call succeeds with 200.

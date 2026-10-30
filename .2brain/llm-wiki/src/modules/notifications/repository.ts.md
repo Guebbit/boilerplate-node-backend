@@ -1,7 +1,7 @@
 ---
 source: src/modules/notifications/repository.ts
-sha256: fa73785333ebaf4922a4a159b37f3e9d55a754c7c3ad6b22434b6975cb5aa006
-generated_at: 2026-10-15T10:51:06.130225+00:00
+sha256: 0306bc12d631a07744cebc3b196ef2bff5b8d4f83103f93a3626f7e0b1baa94b
+generated_at: 2026-10-29T04:29:42.046675+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Repository for the `notifications` collection. Extends the shared `createRepository` CRUD factory with the inbox-specific writes a caller actually performs (bulk insert, targeted delete, mark-read, cap-trim). Every operation is scoped by `userId` in the query itself, so cross-user access is structurally impossible rather than enforced by an application-level check.
+Domain-specific repository for the notifications collection. Extends the standard CRUD factory with every write and read an inbox actually performs, all keyed by `userId` so ownership isolation is a property of the query itself rather than a check a caller must remember.
 
 ## Key elements
 
-- **`NewNotification`** — input type for inserts; picks `userId`, `code`, `params`, `severity` from the document shape.
-- **`notificationRepository`** — the single exported const. Spreads `createRepository(notificationModel, { transform: applyNotificationTransform })` (giving `findById`, `create`, `updateById`, `deleteById`, `list`) and layers on:
-  - `listByUserId(userId)` — full inbox, newest first, no pagination (bounded by the cap).
-  - `insertMany(rows)` — bulk write in one round-trip with `ordered: false` so a single bad row doesn't abort the batch.
-  - `deleteOwned(userId, id)` — deletes one row only if it belongs to the caller; returns `false` for both "not found" and "not yours".
-  - `deleteAllOwned(userId)` — empties a user's inbox.
-  - `deleteByUserId(userId, session?)` — same as above but accepts a Mongoose `ClientSession` for participation in an account-deletion transaction.
-  - `markAllRead(userId, readAt)` — stamps `readAt` on rows where it is currently absent; already-read rows are untouched.
-  - `trimToNewest(userId, keep)` — removes everything older than the newest `keep` rows; returns the deleted `_id` strings.
+- **`NewNotification`** (type) — the subset of `NotificationDocument` a caller supplies to create a row (`userId`, `code`, `params`, `severity`).
+- **`NewStaffNotification`** (type) — extends `NewNotification` with required staff fields (`tenantId`, `sets`, `dedupeKey`, `expiresAt`). Always written as `audience: 'staff'`.
+- **`notificationRepository`** (const) — the sole runtime export. Spreads `createRepository(notificationModel, { transform: applyNotificationTransform })` and adds:
+  - `listOwn(userId)` — user's `own`-audience rows, newest first, cap-bounded.
+  - `listStaff(userId, tenantId?)` — `staff`-audience rows; `tenantId` narrows to one shop, omitted means all (data export).
+  - `insertMany(rows)` — bulk insert with `ordered: false` so one bad row doesn't abandon the batch.
+  - `insertStaffOnce(row)` — idempotent staff insert; returns `null` on duplicate-key (the unique `{userId, dedupeKey}` index is the arbiter).
+  - `findSummary(userId, dedupeKey)` — look up a recipient's summary row.
+  - `writeSummary(row, reappear)` — upsert a summary row; `reappear` unsets `readAt` so an unchanged count doesn't re-nag.
+  - `deleteSummaries(dedupeKey)` — removes all recipients' rows for a code; returns the affected `{id, userId}` pairs.
+  - `findOwned(userId, id)` / `deleteOwned(userId, id)` — single-row get/delete scoped to the caller; `null`/`false` covers both "missing" and "someone else's."
+  - `deleteByUserId(userId, session?)` — empty a user's inbox; accepts an optional Mongoose `ClientSession` for transactional use.
+  - `markAllRead(userId, readAt)` — stamps still-unread rows, preserving original `readAt` on already-read ones.
+  - `trimToNewest(userId, keep, audience)` — enforces the per-audience cap; returns the ids it removed so a live stream tab can reconcile.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/create-repository.ts`** — provides `createRepository` (the base CRUD spread), `toObjectId` (validation gate used in every filter), and the `Repository` / `Wire` types that shape the exported object.
-- **`src/modules/notifications/model.ts`** — supplies `notificationModel` (the Mongoose model) and `applyNotificationTransform` (field transform applied on reads via the base factory).
-- **`src/modules/notifications/services/inbox.ts`** — consumes `listByUserId`, `deleteOwned`, `deleteAllOwned`, `markAllRead`, and `trimToNewest` to implement inbox reads and user-initiated mutations.
-- **`src/modules/notifications/services/subscribers.ts`** — calls `insertMany` when a product-level event fans out one notification per affected user.
-- **`src/modules/notifications/tests/factories.ts`** — constructs `NewNotification` fixtures consumed by tests.
-- **`src/modules/notifications/tests/integration/service.test.ts`** — exercises the service layer end-to-end against this repository.
+- **`@infrastructure/persistence/create-repository`** — provides the base CRUD (`createRepository`, `Repository`, `Wire`) and the `toObjectId` guard used in every filter.
+- **`@infrastructure/persistence/mongo-errors`** — `isDuplicateKey` is checked inside `insertStaffOnce` to distinguish a dedupe hit from a real error.
+- **`./model`** — supplies `notificationModel` (the Mongoose model), `applyNotificationTransform` (the row serializer), and the `NotificationDocument` type.
+- **`./services/inbox`** and **`./services/subscribers`** — primary consumers; inbox calls the own-audience methods, subscribers call the staff/summary methods.
+- **`./tests/factories`** and **`./tests/integration/service.test.ts`** — exercise this repository in integration tests.
 
 ## Notes
 
-- **Ownership is a query property.** No method reads or deletes without a `userId` filter, so a foreign `userId` simply yields zero rows (→ 404 upstream) rather than requiring a post-query check.
-- **`toObjectId` throws on malformed input.** This is deliberate: a bad id is a 4xx, not a 500. Every method is `async` partly to make that throw surface as a rejection the caller maps to a status code.
-- **`deleteOwned` conflates "not found" and "not yours"** into the same `false`. The service layer treats both identically (404); do not expect the repository to distinguish them.
-- **`insertMany` is `ordered: false`.** One bad row fails alone; the rest still land. Callers must check the returned array length against the input if they need full-or-nothing semantics (they don't today).
-- **`trimToNewest` is two queries** (find-then-delete). It is not atomic; a concurrent insert between the two steps could leave a row above the cap for one tick.
-- **Explicit type annotation on `notificationRepository`** exists because Mongoose generics are too large for TS to infer across an export boundary (TS7056). Don't remove it in favour of `as const` or inference.
+- The return type is written out explicitly because Mongoose generics are too large for TypeScript to infer at an export boundary (TS7056).
+- Every method is `async` because `toObjectId` throws on a malformed id; that is what turns a bad caller input into a 4xx instead of a 500.
+- `deleteSummaries` and `trimToNewest` each perform a find-then-delete (two round trips) specifically to return the removed ids to the caller.
+- Staff writes always set `audience: 'staff'` inline in the mutation; the type makes it `Required` so a caller cannot omit it.
+- `insertMany` uses `ordered: false` — a single invalid row is skipped, the rest still land. This matters for bulk product-deletes that fan out one row per affected user.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/notifications/controllers/post-read-all.ts
-sha256: bcbc4cb48a97a63b979b80910525684c1c29a60bed262c94cbf4e21136be87ad
-generated_at: 2026-10-15T10:50:02.943047+00:00
+sha256: d4e2cef195219ce10874cc22cbca8310f1250b79334c58c8196f18b91042b044
+generated_at: 2026-10-29T04:28:10.304276+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter that exposes the `POST /notifications/read-all` endpoint. It extracts the authenticated user's ID from the request, delegates to the notifications service, and maps the result (or error) onto an Express response. Exists so route wiring stays decoupled from business logic.
+Thin HTTP adapter for `POST /notifications/read-all`. Receives the request, delegates to `notificationsService.readAll` with the authenticated user's ID, and returns a `204 No Content` on success. Exists to keep route wiring and service logic separate.
 
 ## Key elements
 
-- **`postReadAll(request, response)`** – The sole export. Calls `notificationsService.notificationsReadAll(request.authContext!.id)`, then either sends a 200 via `successResponse` (passing `result.data` and `result.message`) or routes the rejection through `catchAs(response, 'readAllNotifications')`.
+- **`postReadAll(request, response)`** — the sole export. Extracts `request.authContext!.id`, calls `notificationsService.readAll(id)`, sends `noContentResponse` on resolution, and funnels any rejection through `catchAs(response, 'readAllNotifications')`.
 
 ## Relationships
 
-- **`src/infrastructure/http/response.ts`** – Supplies `successResponse`, used to shape the 200 JSON reply.
-- **`src/infrastructure/http/controller.ts`** – Supplies `catchAs`, the shared error-to-HTTP translator.
-- **`src/modules/notifications/services/index.ts`** – Exports `notificationsService`, whose `notificationsReadAll` method contains the actual "mark all read" logic.
-- **`src/modules/notifications/routes.ts`** – Imports `postReadAll` and registers it on the `POST /notifications/read-all` route (the entry point that makes this file reachable over HTTP).
+- **`src/infrastructure/http/controller.ts`** — provides `catchAs`, the shared error-catch helper that converts a rejected promise into an HTTP error response and logs under the `'readAllNotifications'` label.
+- **`src/infrastructure/http/response.ts`** — provides `noContentResponse`, the helper that sends a bare `204` with no body.
+- **`src/modules/notifications/routes.ts`** — imports `postReadAll` and attaches it to the `POST /notifications/read-all` route (upstream consumer).
+- **`src/modules/notifications/services/index.ts`** — exports the `notificationsService` singleton whose `readAll(userId)` method performs the actual mark-as-read work.
 
 ## Notes
 
-- `request.authContext!` uses a non-null assertion, assuming upstream auth middleware has already populated it; no guard is present here.
-- The catch label is `'readAllNotifications'` (verb-noun), which differs from the export name `postReadAll`—search for the former when tracing error logs.
-- Success returns **200** with a body (`data` + `message`), not a 204/empty body.
-- Uses promise `.then/.catch` rather than `async/await`, consistent with the project's controller style.
+- `request.authContext!` is accessed with a non-null assertion; the controller assumes an upstream middleware has already populated it. If auth is missing, the call throws before the service is reached.
+- The service call returns a promise (`.then/.catch`), so the controller does **not** use `async/await`. Follow this pattern when adding sibling controllers in the module.
+- The `catchAs` label `'readAllNotifications'` is the identifier used in structured logging/correlation; keep it stable if you rename the route.

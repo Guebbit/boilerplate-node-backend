@@ -1,7 +1,7 @@
 ---
 source: scripts/contracts/client-collections-bundle.ts
-sha256: 702df9c3f59705174732aa1bf494be682d82138bcb1cd78e164913b51ba6b761
-generated_at: 2026-10-15T09:37:03.886808+00:00
+sha256: 2198e268ecf53956b4670b10ec9dfbca4f22afcf31c8f7c8580c9f158fc3c219
+generated_at: 2026-10-29T01:30:21.802721+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Configuration file that drives on-demand generation of four API client collections (Bruno, Insomnia, Mockoon, Postman) from the root `openapi.yaml`. It supplies the three repo-specific inputs the `@guebbit/openapi-runnable-collections` generator cannot derive on its own: which module owns which paths, which seeded values fill request bodies, and which authored probes demonstrate rejection. The generated files are `.gitignore`d; this file is the only committed artifact.
+Configuration layer that feeds the `@guebbit/openapi-runnable-collections` generator to produce four API-client collections (Bruno, Insomnia, Mockoon, Postman) on demand via `npm run contracts:bundle`. All four outputs are gitignored; this file exists so that a new module or a value change requires no edit here — module ownership, seed values, and rejection probes are all discovered from the filesystem at run time.
 
 ## Key elements
 
-- **`sections()`** — Maps `SECTION_ORDER` (from `openapi-bundle.ts`) to `{name, paths}` entries via `sectionPaths()`, dropping modules that own no paths (e.g. `access`).
-- **`values`** (a `ValueSources` object) — The complete value table: `byProperty` (ids, credentials, defaults), `byOperation` (admin login/signup bodies), `byFormat`, `pathParam` (resolves `id` by URL prefix), and `tokens` (seed facts as `{{token}}` strings for probes).
-- **`modulesDeclaringProbes(modulesRoot?)`** *(exported)* — Discovers which module directories contain a `probes.ts` via `modulesWith()`.
-- **`loadProbes()`** — Memoized; dynamically imports every discovered `probes.ts` and validates it exports a `probes` array.
-- **`generate()`** — Single call to `generateCollections()`; deliberately **not** memoized because `build-bundles.ts` writes `openapi.yaml` before calling this.
-- **`allProbes()`** *(exported)* — Returns the flattened list of probe-derived `CollectionRequest` objects (used by coverage checks).
-- **`collectionContent(tool)`** *(exported)* — Returns the rendered document text for a given tool; throws if the generator produced nothing for that tool.
-- **`ORDER_ID_VARIABLE`** — `{{orderId}}`; a collection variable slot because real order IDs are minted at runtime and cannot be hardcoded.
-- **`COLLECTION_TOOLS`** — `['bruno', 'insomnia', 'mockoon', 'postman']` (order is display order).
-- **`COLLECTION_NAME`** — `"Boilerplate API"`, the name shown in Bruno/Insomnia/Postman.
+- **`COLLECTION_TOOLS`** — the four target emitters, in canonical order: bruno, insomnia, mockoon, postman.
+- **`sections()`** — maps `SECTION_ORDER` (from `openapi-bundle.ts`) to per-module path lists via `sectionPaths`; drops modules that own no paths (e.g. `access`).
+- **`baseValues: ValueSources`** — the foundation's seed data: `byProperty` (credentials, locale, pagination defaults), `byOperation` (admin login and signup bodies), `byFormat`, `pathParam` (id resolution by URL prefix), and `tokens` (named seed facts for probes).
+- **`readCollectionValues(loaded)`** — narrows an imported module namespace to its `collectionValues` export; throws if absent.
+- **`loadModuleValues()`** — memoised directory scan of `scenarios/values/*.ts`; dynamically imports each file and extracts its values.
+- **`loadValues()`** — merges `baseValues` with every module's values; module `pathParam` handlers are consulted first, foundation is the fallback.
+- **`modulesDeclaringProbes(modulesRoot?)`** *(exported)* — returns the names of modules that contain a `probes.ts`, using `modulesWith` from `modules-on-disk.ts`.
+- **`loadProbes()`** — memoised; dynamically imports every discovered `probes.ts`, validates the `probes` array export, and returns `Record<string, Probe[]>`.
+- **`generate()`** — orchestrates a single `generateCollections` call with the loaded spec (`openapi.yaml`), sections, probes, values, and target list. Intentionally **not** memoised.
 
 ## Relationships
 
-- **`scripts/contracts/openapi-bundle.ts`** — Imports `SECTION_ORDER` and `sectionPaths` to build the `sections()` list; the same circular-import concern (module code → `@api/` client) that motivated splitting them into separate files also shapes this file's value sources.
-- **`scenarios/subjects.ts`** — Imports `SUBJECTS` and `SEED_PRODUCT_IDS`; all "real" values in `values` (ids, emails, passwords, soft-deleted product ids) come from here, never hardcoded.
-- **`scripts/modules-on-disk.ts`** — Imports `REPO_ROOT`, `MODULES_ROOT`, and `modulesWith` for the filesystem scan that discovers probe modules.
-- **`scripts/contracts/bundle-registry.ts`** — Reaches `collectionContent` via dynamic `import()`, so loading the registry never pulls in the seed values statically.
-- **`tests/cross-cutting/contract-bundles.test.ts`** — Integration tests exercising the full generation pipeline.
-- **`tests/unit/scripts/modules/new-module-needs-nothing.test.ts`** — Verifies that a new module with no `probes.ts` and no special values does not break the collection build.
+- **`scripts/contracts/openapi-bundle.ts`** — supplies `SECTION_ORDER` and `sectionPaths`, the single source of truth for module→path ownership.
+- **`scenarios/subjects.ts`** — supplies `SUBJECTS` (seed admin/user emails, passwords, ids) that populate `baseValues` and the token table.
+- **`scenarios/collection-values.ts`** — provides the `CollectionValues` type that every `scenarios/values/<module>.ts` file must export; this file casts to it via `readCollectionValues`.
+- **`scripts/modules-on-disk.ts`** — provides `REPO_ROOT`, `MODULES_ROOT`, and `modulesWith` for filesystem discovery.
+- **`tests/cross-cutting/contract-bundles.test.ts`** — exercises the full generation path end-to-end.
+- **`tests/unit/scripts/modules/new-module-needs-nothing.test.ts`** — verifies that adding a new module folder (with its values/probes files) is picked up automatically without editing this file.
 
 ## Notes
 
-- **Not memoized by design.** `generate()` is called fresh each time because `build-bundles.ts` writes `openapi.yaml` in phase 1 and generates in phase 2; a cached result would be stale.
-- **Probes are memoized.** The probe sources are static TypeScript files on disk and cannot change mid-run, unlike the contract.
-- **Dynamic `import()` of probes.** The target path is computed at runtime after the directory scan; both `tsx` and `ts-jest` resolve bare `.ts` paths for this.
-- **Order IDs are never literals.** `ORDER_ID_VARIABLE` (`{{orderId}}`) and `seedDeletedOrderId` (`{{deletedOrderId}}`) are collection-variable placeholders because real order IDs are minted by `scenarios/flows/` and differ every run.
-- **Postman is a separate emitter**, not a rename of Insomnia: Collection Format v2.1 splits URLs into parts and reads those rather than the full string, and the compatibility path is one-way.
-- **Generated files are ~1.9 MB of derived text** and are excluded from git to keep contract diffs clean.
+- **No memoisation on `generate()`.** The build script (`build-bundles.ts`) writes `openapi.yaml` in phase 1 and calls generation in phase 2; a cached result would reflect a contract that didn't yet exist.
+- **Discovery is directory-scan, not a registry.** A module that adds `scenarios/values/foo.ts` or `probes.ts` appears in the next run with zero changes to this file. Deleting a module removes it equally.
+- **Import-cycle constraint.** This file may only reference `SUBJECTS` and shape-level seed data. It cannot import a module's own fixtures (e.g. `scenarios/products.ts`) because those transitively import the generated `@api/` client — the same cycle that forced `openapi-bundle.ts` to stop importing `enabledModules`.
+- **Postman is a distinct emitter**, not a rename of Insomnia: Collection Format v2.1 splits URLs into parts and reads those rather than the combined string.
+- **Dynamic `import()` of `.ts` paths** is used for both values and probes; works under both `tsx` and `ts-jest`.

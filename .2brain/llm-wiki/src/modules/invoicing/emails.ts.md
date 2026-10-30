@@ -1,7 +1,7 @@
 ---
 source: src/modules/invoicing/emails.ts
-sha256: 1358c42acb97a5a8b659c692092272d661b56f266f160c47be43d532d1b1070a
-generated_at: 2026-10-15T10:38:20.548561+00:00
+sha256: 54ca097e40c65df4117dc22b6570f4c95071cdfdab83dd806becfc126b98998f
+generated_at: 2026-10-29T04:11:38.620861+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Builds the fully-formatted, localized view context (all labels, amounts, and dates as finished strings) that the EJS PDF template interpolates for invoices and credit notes. It performs no calculation beyond formatting: every tax figure is frozen onto the document at issue time. The file is named `emails.ts` to match the `@modules/orders` convention for "this file builds a document's copy," even though nothing here is mailed—the PDF is downloaded, never sent.
+Builds the finished, localized text content for invoicing documents (invoices and credit notes) that the PDF provider interpolates into an EJS template. All monetary figures are already frozen onto the document at issue time; this file only formats and assembles them into a render context. Despite the name (inherited from the orders module's convention), nothing here is mailed — the document is downloaded as a PDF.
 
 ## Key elements
 
-- **`TaxCategoryCode`** — union type `'S' | 'Z' | 'E'` for the three EN 16931 VAT category codes this boilerplate emits.
-- **`taxCategoryCode(taxRate, rateType)`** — maps a line's frozen rate + reason to the one-letter code: non-zero → `S`; zero with `rateType === 'exempt'` → `E`; zero otherwise → `Z`.
-- **`DocumentVatRow` / `DocumentTaxSummaryRow` / `DocumentVatBlock`** — interfaces describing the shape of the VAT table, rate-grouped rows, and the full block (columns, rows, shipping, totals, supplier identity) returned to the template.
-- **`buildMeta`, `buildBilling`, `buildVatBlock`** (internal) — format the number/date block, the billing address, and the full VAT table respectively. `buildVatBlock` reuses one `Intl.NumberFormat` instance per currency and derives per-line tax from the frozen rate-level totals via `lineTaxFromRateTotals`.
-- **`buildDocumentView(locale, document)`** (exported) — the single public entry point; assembles `locale`, `pageMetaTitle`, `title`, `reversalNotice`, `meta`, `billing`, and `vat` into a flat `Record<string, unknown>` for `templates/invoicing.document.ejs`.
+- **`TaxCategoryCode`** — type alias restricted to `'S' | 'Z' | 'E'` (EN 16931 standard, zero-rated, exempt).
+- **`taxCategoryCode(taxRate, rateType)`** — maps a line's frozen rate and reason to its one-letter category code. Non-zero → `S`; zero + `exempt` → `E`; zero otherwise → `Z`.
+- **`DocumentVatRow`** / **`DocumentTaxSummaryRow`** — row shapes for the per-line VAT table and the rate-grouped summary tables, respectively. All monetary fields are pre-formatted strings.
+- **`DocumentVatBlock`** — the full VAT table structure: column headers, line rows, optional shipping breakdown, per-rate summary, totals, and the seller's legal identity.
+- **`buildMeta`** *(private)* — number + long-form date label, timezone-aware via `Intl.DateTimeFormat`.
+- **`buildBilling`** *(private)* — frozen billing address as `fullName` + `lines[]`, or `undefined` for digital-only orders.
+- **`buildVatBlock`** *(private)* — the core formatter. Creates `Intl.NumberFormat` instances pinned to the document's ISO 4217 minor-unit exponent, distributes per-line tax from rate-level totals via `lineTaxFromRateTotals`, and assembles the full `DocumentVatBlock`.
+- **`buildDocumentView(locale, document)`** — the sole public entry point. Returns a `Record<string, unknown>` render context (`pageMetaTitle`, `title`, `meta`, `billing`, `vat`, optional `reversalNotice`, `buyerErasedNotice`) for the EJS template.
 
 ## Relationships
 
-- **`src/infrastructure/i18n/index.ts` / `context.ts`** — imports `translator` (the `t` factory) and the `TFunction` type; every user-facing label is resolved through i18next keys under `invoicing.document.*`.
-- **`src/modules/orders/index.ts` → `config.ts`** — provides `shopTimezone()` used to format the document date in the shop's own timezone.
-- **`src/modules/orders/index.ts` → `domain/tax.ts`** — provides `lineTaxFromRateTotals()`, which apportion the frozen per-rate VAT across individual lines so printed line amounts sum exactly to the frozen totals.
-- **`src/modules/invoicing/model.ts`** — supplies the `InvoiceLine` type (frozen `taxRate`, `rateType`, `unitPrice`, `quantity`, `title`).
-- **`src/modules/invoicing/providers/index.ts`** — supplies the `EInvoicingDocument` type that carries all frozen fields (lines, `taxSummary`, `shippingByRate`, seller, currency, kind, etc.).
-- **`src/modules/invoicing/providers/pdf.ts`** — consumes the object returned by `buildDocumentView` as the render context for the EJS template.
-- **`src/modules/invoicing/index.ts`** — barrel-re-exports this file's public symbols.
-- **`src/modules/invoicing/tests/unit/emails.test.ts`** — unit-tests `taxCategoryCode`, `buildDocumentView`, and the VAT-block formatting logic.
-- **`tests/unit/infrastructure/adapters/mailer-templates.test.ts`** — exercises the EJS template that interpolates the view this file produces.
+- **`src/domain-primitives/money.ts`** — imports `minorUnitExponent` to pin `Intl.NumberFormat` fraction digits to the ISO 4217 table rather than runtime CLDR data.
+- **`src/infrastructure/i18n/index.ts`** (and `context.ts`) — imports `translator` to obtain a `TFunction` scoped to the document's frozen locale.
+- **`src/modules/orders/index.ts`** → **`domain/tax.ts`** — imports `lineTaxFromRateTotals`, which distributes a rate's frozen VAT total across its constituent lines so printed lines sum to the frozen summary.
+- **`src/modules/invoicing/model.ts`** — imports `InvoiceLine` type (source of `taxRate`, `rateType`, `unitPrice`, `quantity`).
+- **`src/modules/invoicing/providers/index.ts`** — imports `EInvoicingDocument` type; the PDF provider in **`providers/pdf.ts`** is the consumer that calls `buildDocumentView` and feeds the result to the EJS template.
+- **`src/modules/invoicing/domain/index.ts`** → **`domain/tax-items.ts`** — imports `asTaxItems` to adapt invoice lines into the shape `lineTaxFromRateTotals` expects.
+- **`src/modules/invoicing/tests/unit/emails.test.ts`** — unit tests for `taxCategoryCode` and `buildDocumentView`.
+- **`tests/unit/infrastructure/adapters/mailer-templates.test.ts`** — integration-level tests that exercise the EJS templates this file feeds.
 
 ## Notes
 
-- **No reduced-rate or reverse-charge codes.** EN 16931 defines additional category codes (reduced rate, reverse charge, export, out-of-scope); this module deliberately supports only `S`, `Z`, `E`. Reduced-rate handling is out of scope—see `docs/modules/invoicing.md`.
-- **Unit price is printed net of VAT.** The frozen `unitPrice` is gross; `buildVatBlock` divides by `(1 + taxRate)` and formats with two extra decimal places beyond the currency's native precision (Art. 226(8) / BT-146 permits any precision).
-- **Per-line tax is derived, not re-rounded.** Each line's tax share is computed from the already-rounded rate-level total (minus that rate's shipping slice), so the printed lines always add up to the frozen summary.
-- **`billing` may be `undefined`.** Digital-only or pre-address-book orders carry no billing address; the template must handle the absent block.
-- **Credit notes share the exact same shape.** `buildDocumentView` branches only on `document.kind` for the title and the optional `reversalNotice`; the VAT block is structurally identical.
+- **Net unit price is printed with 2 extra decimal places** beyond the currency's own (e.g., 4 dp for EUR at 19.90 / 22%). The frozen `unitPrice` is gross; it is divided by `(1 + taxRate)` before formatting. EN 16931 BT-146 permits any precision.
+- **Per-line tax is never computed independently.** Each rate's VAT was rounded once on its whole taxable total and frozen in `taxSummary`. This file splits that total across lines via `lineTaxFromRateTotals` so printed lines sum exactly to the frozen summary (BR-CO-17).
+- **The `categoryCode` column appears only in the per-line table.** Rate-grouped summary tables (shipping, per-rate) omit it because a rate group can contain lines of different legal categories.
+- **Reduced-rate EN 16931 codes are intentionally out of scope.** Only `S`, `Z`, `E` are produced; a non-zero rate is always `S`.
+- **No figures are recomputed.** Every amount was reconciled by `orders/domain/tax.ts#orderTaxBreakdown` at issue time and frozen onto the document. This file is purely a formatter.

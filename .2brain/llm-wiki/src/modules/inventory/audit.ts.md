@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/audit.ts
-sha256: bd15c6221772fea8ae28626a0adfeeadc267760e98cd0810c677e51f3033c304
-generated_at: 2026-10-15T10:33:25.492004+00:00
+sha256: 078ecdeb73dc2f1cae03f078dccc224bc40d6bf615be4c954b1cc45a26986639
+generated_at: 2026-10-29T03:59:00.234585+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the inventory module's audit-action vocabulary and registers it into the app-wide `AuditActionMap` via TypeScript module augmentation. It exists so that every inventory-specific audit event is a typed, centralized constant rather than an ad-hoc string scattered across service files. The module doc comment records the design rationale: lifecycle transitions (reserve, commit, release, expire) are audited by their owning callers (checkout, payment, cancellation), so this module only owns actions that are consequences of an admin operation or an invariant failure local to inventory itself.
+Declares the inventory module's audit-action vocabulary and registers it into the app-wide `AuditActionMap` via TypeScript declaration merging. It exists so that inventory-specific audit events have a single, typed source of truth without introducing a cross-module shared enum (the rationale for the augmentation pattern is documented in `modules/account/audit.ts`).
 
 ## Key elements
 
-- **`inventoryAuditActions`** — `as const` object listing the five audit actions this module owns:
-  - `ADMIN_STOCK_RECEIVED` (`admin.stock.received`)
-  - `ADMIN_STOCK_ADJUSTED` (`admin.stock.adjusted`)
-  - `ADMIN_RESERVATIONS_SWEPT` (`admin.reservations.swept`)
-  - `ADMIN_COMMIT_ORPHANED` (`admin.commit.orphaned`)
-  - `ADMIN_PREORDER_LIMIT_SET` (`admin.preorder.limit.set`)
-- **`declare module '@infrastructure/observability/audit'`** — module augmentation that adds an `inventory` key to the global `AuditActionMap` interface, typed as the union of the five action string literals.
+- **`inventoryAuditActions`** — a `const` object listing the five actions this module owns: `admin.stock.received`, `admin.stock.adjusted`, `admin.reservations.swept`, `admin.commit.orphaned`, `admin.backorder.limit.set`.
+- **`declare module '@infrastructure/observability/audit'`** — augments the `AuditActionMap` interface so `inventory` resolves to the union of the above string literals, giving callers compile-time exhaustiveness.
 
 ## Relationships
 
-- **`src/modules/inventory/services/admin.ts`** — the primary consumer of the stock-received, stock-adjusted, and preorder-limit actions emitted during admin inventory operations.
-- **`src/modules/inventory/services/holds.ts`** — the caller whose `commitForOrder` path emits `ADMIN_COMMIT_ORPHANED` when no hold is found to claim (the one invariant-failure case owned here rather than by the caller).
-- **`src/modules/inventory/services/sweep.ts`** — emits `ADMIN_RESERVATIONS_SWEPT` after expiring stale reservations.
-- **`src/modules/inventory/tests/integration/service.test.ts`** — integration tests that assert the correct audit action strings are recorded for each of the above flows.
+- **`src/modules/inventory/services/admin.ts`** — emits `ADMIN_STOCK_RECEIVED`, `ADMIN_STOCK_ADJUSTED`, and `ADMIN_BACKORDER_LIMIT_SET` using the constants defined here.
+- **`src/modules/inventory/services/holds.ts`** — emits `ADMIN_COMMIT_ORPHANED` when `commitForOrder` finds no hold to claim; this is the one lifecycle outcome audited by the inventory module itself rather than by the upstream caller.
+- **`src/modules/inventory/services/sweep.ts`** — emits `ADMIN_RESERVATIONS_SWEPT` when it purges expired reservations.
+- **`src/modules/inventory/tests/integration/preorder.test.ts` / `service.test.ts`** — assert that the expected audit actions are emitted during checkout, payment, and cancellation flows.
 
 ## Notes
 
-- The augmentation pattern (rather than a shared enum) is deliberate and mirrors `modules/account/audit.ts`; see the doc comment reference for the rationale.
-- `ADMIN_COMMIT_ORPHANED` is the *only* lifecycle-adjacent action audited by this module. All other lifecycle transitions are audited by whichever service initiates them. Do not add lifecycle actions here without re-reading that comment.
-- Adding a new action requires updating both the `inventoryAuditActions` object and (implicitly) the augmented interface — TypeScript enforces this, so a forgotten `as const` entry or missing augmentation will surface at compile time.
+- The five actions are deliberately *not* lifecycle transitions (reserve, commit, release, expire). Those are audited by their originating callers (checkout, payment, cancellation) which already write a ledger row naming the order. The exception is `admin.commit.orphaned`, which represents an invariant failure local to this module and therefore has no other owner.
+- New actions should be added here, not in the service files, so the `AuditActionMap` union stays exhaustive and type-safe across the codebase.

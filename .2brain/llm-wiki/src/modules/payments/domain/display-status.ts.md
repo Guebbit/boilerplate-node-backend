@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/domain/display-status.ts
-sha256: 5501babb1b2a0e764977f3bd5b14f5035c163bad018590d21059066f5b348e2e
-generated_at: 2026-10-15T11:24:56.874151+00:00
+sha256: b6b566b772d2d30ad00488d190e6531b6eb5155e33356132d0b1c88a7199b18f
+generated_at: 2026-10-29T05:04:35.482955+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Derives the Shopify `displayFinancialStatus` label from a payment's stored status, refund records, and monetary amounts, and provides the inverse: a MongoDB query that selects payments matching a given label. The label function and its filter are written side-by-side because an integration suite asserts they agree in both directions.
+Computes the human-facing display label for a payment (Shopify's `displayFinancialStatus`) from its stored status and refund records, and provides the inverse MongoDB query for each label. The two must agree: the integration suite verifies every label in both directions.
 
 ## Key elements
 
-- **`DisplayStatusInput`** – Minimal read-model (status, amount, amountRefunded, currency, refunds array) needed to compute a label.
-- **`displayStatusOf(payment: DisplayStatusInput): PaymentDisplayStatus`** – The label function. Priority order: open refund → `refund_pending`; otherwise dispatches on stored `status` (succeeded, processing, cancelled, declined, everything-else) and, for `succeeded`, distinguishes fully vs. partially refunded by comparing `amountRefunded` to `amount` in minor units.
-- **`displayStatusFilter(label: PaymentDisplayStatus): Record<string, unknown>`** – Returns the pre-built Mongo filter for a label. Backed by the module-private `FILTERS` record.
-- **`HAS_OPEN_REFUND`, `SETTLED_REFUND`, `NO_OPEN_REFUND`** – Reusable Mongo query fragments (not exported) used to compose the `FILTERS` entries.
-- **`FILTERS`** – Module-private `Record<PaymentDisplayStatus, …>` mapping every label to its stored-field query.
+- **`DisplayStatusInput`** — interface defining the slice of payment data the label function reads (status, amounts, currency, refund records).
+- **`displayStatusOf(input)`** — returns a `PaymentDisplayStatus` label. An open refund always wins over the stored status; otherwise the label is derived from status + refund settlement + amount comparison.
+- **`displayStatusFilter(label)`** — returns the pre-built Mongo filter for a given label (the inverse of `displayStatusOf`).
+- **`FILTERS`** (module-private) — `Record<PaymentDisplayStatus, Record<string, unknown>>` holding all eight label→query pairs.
+- **`HAS_OPEN_REFUND` / `SETTLED_REFUND` / `NO_OPEN_REFUND`** (module-private) — reusable query fragments composed into the `FILTERS` entries.
 
 ## Relationships
 
-- **`./lifecycle.ts`** – Imports `OPEN_REFUND_STATUSES`; the set of refund statuses considered "open" is defined there and consumed by both the label function and the filters.
-- **`@types` (src/types/index.ts)** – Source of the `PaymentStatus`, `RefundStatus`, and `PaymentDisplayStatus` enums/types used throughout.
-- **`@shared-kernel/money.ts`** – Imports `toMinorUnits` so amount comparisons in `displayStatusOf` are currency-aware.
-- **`src/modules/payments/domain/index.ts`** – Barrel file; re-exports this module's public surface for other domain consumers.
-- **`src/modules/payments/presenter.ts`** – Call-site for `displayStatusOf` when shaping a payment for the UI.
-- **`src/modules/payments/services/list.ts`** – Call-site for `displayStatusFilter` when building the Mongo query behind the payments list endpoint.
-- **`src/modules/payments/tests/unit/display-status.test.ts`** – Unit tests covering `displayStatusOf` (and, per the file's docblock, the agreement between label and filter is checked by a separate integration suite).
+- **`./lifecycle`** — imports `OPEN_REFUND_STATUSES` and `isOpenRefund` to determine whether a refund is still in-flight.
+- **`@domain-primitives/money`** — imports `toMinorUnits` to compare refunded vs. total amounts in a currency-safe way.
+- **`@types`** — imports `PaymentDisplayStatus`, `RefundFailureReason`, `RefundStatus`, `PaymentStatus` enums/types.
+- **`domain/index.ts`** — barrel re-exports this module's public API.
+- **`presenter.ts` / `providers/index.ts` / `services/list.ts`** — downstream consumers that call `displayStatusOf` (to render a label) or `displayStatusFilter` (to query by label).
+- **`tests/unit/display-status.test.ts`** — unit tests for both the label computation and the filter output.
 
 ## Notes
 
-- **`amountRefunded` is not settlement-aware.** It increments the moment a refund is *opened*, so it can equal `amount` even while a refund is still pending. The code therefore guards with `NO_OPEN_REFUND` before comparing the two amounts.
-- **A fully refunded payment keeps stored status `succeeded`.** The "refunded" vs. "succeeded" distinction is purely derived; there is no stored `refunded` status.
-- **The `succeeded` filter uses `refunds: { $size: 0 }`** (no refund documents at all), whereas every other status filter uses `NO_OPEN_REFUND` (no *open* refund). This mirrors the label logic: a payment with settled refunds is never "succeeded."
-- **`incomplete` covers two stored statuses** (`requires_confirmation`, `requires_action`); it is the catch-all for any non-`declined` status that isn't explicitly handled.
-- **Label ↔ filter parity is a contractual invariant.** Adding a new branch to `displayStatusOf` without updating `FILTERS` (or vice-versa) will break the integration suite that cross-checks every label both ways.
+- **Label ↔ filter parity is a contract.** They are co-maintained in this file specifically so both directions stay in sync; the integration suite cross-checks them.
+- **`amountRefunded` counts a refund the moment it is opened.** The "fully refunded" branch (`amountRefunded >= amount`) is only evaluated after confirming no refund is still open; otherwise a merely *requested* refund would read as complete.
+- **A refunded payment's stored `status` remains `'succeeded'`.** The display label differentiates refunded / partially-refunded / succeeded purely via the refund records and amount comparison.
+- **Canceled refunds are not "open."** The `HAS_OPEN_REFUND` query explicitly excludes refunds whose `failureReason` is `RefundFailureReason.canceled`, and `isOpenRefund` in `lifecycle` applies the same rule in the in-memory path.
+- **`succeeded` label means "no settled refund, no open refund."** A payment whose only refunds were canceled reads as `succeeded`, identical to one that was never refunded.

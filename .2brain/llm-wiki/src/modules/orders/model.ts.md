@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/model.ts
-sha256: 6bc325ed89c8d3579f2a9e7c16554d819320c0faa26b0c217dd5c7b1006083ec
-generated_at: 2026-10-15T11:04:40.584960+00:00
+sha256: 59939da77fe6b6135b864eb9a84a5c2939cf0d4c6cb4e4f5da4e963de5b20bd3
+generated_at: 2026-10-29T04:43:02.675806+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Mongoose document interface and schema for the `Order` aggregate. It embeds a frozen product snapshot (not a catalogue reference), declares which fields are persisted versus derived at serialization time, and establishes the shared types (`FrozenOrderLineProduct`, `OrderDocumentItem`, `OrderDocument`) that every order read/write path depends on.
+Defines the Mongoose schema, document interface, and serialization transform for the order aggregate. It embeds a frozen product snapshot (locale-resolved, tax-rate-resolved) on each order line rather than referencing the live catalogue, and derives wire-only totals (`totalItems`, `totalQuantity`, `totalPrice`) at a single serialization point so they can be marked required in the contract without being stored.
 
 ## Key elements
 
-- **`FrozenOrderLineProduct`** — `ProductSnapshot` minus `taxClass`, plus the resolved numeric `taxRate` and an optional `preorder` flag. The schema stores the rate that was actually charged, never the tax class it came from.
-- **`OrderDocumentItem`** — A single embedded line: `{ product: FrozenOrderLineProduct, quantity, locale }`. `locale` records the language into which `title`/`description` were resolved at order-creation time; it lives on the item, not the product.
-- **`OrderReference`** — Minimal cross-module handle: `{ id, orderNumber, email }`.
-- **`ORDER_PENDING_EFFECTS` / `OrderPendingEffect`** — Currently `['refund']`; tracks cancel consequences the cancel itself could not guarantee (money side, since the event bus has no retry).
-- **`OrderDocument`** — The full Mongoose `Document` interface. Omits wire-only fields (`totalItems`, `totalQuantity`, `totalPrice`, `transferInstructions`) and re-typed fields (`userId?`, `status`, `items`, dates, `orderNumber`, `currency`, `anonymizeAfter`, `paidAt`, `withdrawUntil`, `paymentStatus`, `returnStatus`, `fulfillment`, `pendingEffects`).
-- **Imports from infrastructure** — `revisionPlugin` (revision tracking), `applySerialization` (single serialization point), `moneyPath`/`moneyPlugin` (decimal money handling).
-- **Imports from domain** — `sumLineItems`, `orderTotal`, `orderTaxBreakdown`, `isPayable`, `decryptSerializedOrder`, `fulfillmentStatusOf`, `paymentStatusOf`, `returnStatusOf`, and the stamped-status enums.
+- **`FrozenOrderLineProduct`** — `ProductSnapshot` minus `taxClass`, plus a resolved `taxRate: number` and optional `preorder` flag. Freezes the rate that was actually charged; never re-derives from a tax class.
+- **`OrderDocumentItem`** — shape of one embedded order line: the frozen product, `quantity`, optional backorder fields (`backorderedQuantity`, `promisedAt`, `promiseDated`), and `locale` (the language into which `title`/`description` were resolved at creation).
+- **`OrderReference`** — minimal cross-module identifier (`id`, `orderNumber`, `email`) for list composition without loading the full document.
+- **`OrderDocument`** — the full Mongoose document. Omits the wire's three totals (derived, not stored), re-types `userId` as `ObjectId?`, and adds persisted fields absent from the contract: `piiClockStartedAt`, `moneyReceivedAt`, `conformityUntil`, `conformityExtendedAt`, `paymentStatus`, `returnStatus`, `fulfillment`.
+- **`OrderModel`** — `Model<OrderDocument>` type alias for repository/service use.
+- **`orderAddressSchema`** — shared `_id: false` schema for `shippingAddress` and `billingAddress`.
+- **`orderLineProductSchema`** — the embedded subdocument schema for the product snapshot (narrower than the catalogue's `productSchema`; no `ref`).
+- **`applyOrderTransform`** (referenced in header comment) — the serialization hook that computes `totalItems`, `totalQuantity`, `totalPrice` from `items` on every response.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/money-field.ts`** — Provides `moneyPath` and `moneyPlugin`, applied to monetary schema fields so they round-trip as decimals.
-- **`src/infrastructure/persistence/revision-plugin.ts`** — Applied to the schema for audit/version tracking of order mutations.
-- **`src/infrastructure/persistence/serialize.ts`** — `applySerialization` is the single point where `OrderDocument` is transformed to the wire `Order` shape (deriving totals, `transferInstructions`, `paymentStatus`, `fulfillmentStatus`, `returnStatus`).
-- **`src/modules/cart/services/checkout.ts`** — Creates `OrderDocument` rows via the schema defined here at order-creation time.
-- **`src/modules/cart/services/reorder.ts`** — Reads an existing order's embedded snapshots to seed a new one.
-- **`src/modules/delivery/services/fulfill.ts`, `progress.ts`, `ship.ts`, `delivers.ts`** — Write `fulfillment` / `paidAt` / status transitions back onto the order document.
-- **`src/modules/delivery/services/holds.ts`** — Interacts with the `payBy` hold window and stock-release semantics the schema documents.
-- **`src/modules/delivery/services/actions.ts`, `notice.ts`, `notify.ts`, `ensure.ts`** — Read `fulfillment`, `paidAt`, and derived statuses from the order document to build buyer-facing data.
-- **`scenarios/flows/backdate.ts`** — Exercises the schema's `paidAt`/`withdrawUntil` semantics in integration scenarios.
+- **`@infrastructure/persistence/revision-plugin`** — `revisionPlugin` is applied to the order schema, giving it revision tracking.
+- **`@infrastructure/persistence/serialize`** — `applySerialization` is the mechanism through which `applyOrderTransform` is registered so totals are derived on read.
+- **`@infrastructure/persistence/money-field`** — `moneyPath` / `moneyPlugin` handle monetary field encoding within the schema.
+- **`src/modules/cart/services/checkout.ts`** — the order-creation path (`placeOrder`) that mints `orderNumber`, freezes `currency`, and writes the initial document.
+- **`src/modules/delivery/services/*`** (`act`, `actions`, `announce`, `deliver`, `ensure`, `found`, `fulfill`, `holds`, `lost`, `notice`) — read and write the `fulfillment?: FulfillmentSummary` field on the order document; `recordFulfillmentProgress` is the sole write path, executed inside the delivery act's transaction.
+- **`scenarios/flows/backdate.ts`** — exercises order backdating against this schema's frozen fields.
 
 ## Notes
 
-- **No `ref`, no `populate`.** The product is an embedded subdocument (`orderLineProductSchema`), intentionally narrower than the catalogue's `productSchema`. There is no ObjectId to join; an order keeps what was bought, not what the catalogue says today.
-- **Totals are never stored.** `totalItems`, `totalQuantity`, `totalPrice` exist only as derived output of `applyOrderTransform`. The schema has no fields for them.
-- **`paidAt` is a cross-module proxy.** Other modules (scope, remove) read `paidAt` to check "has this order been invoiced?" rather than importing the `invoicing` module, avoiding a circular dependency. A listener failure is the one documented gap.
-- **`orderNumber` and `currency` are write-once.** Neither is ever recomputed; config changes after creation must not rewrite historical orders.
-- **`anonymizeAfter` ≠ deletion.** The order row is never deleted; a reaper script scrubs PII (email, addresses, notes) once this timestamp elapses. `userId` is unset at erasure time, making it the one intentionally dangling FK.
-- **`locale` is per-item, not per-product.** It describes the resolution context of the whole line at purchase time, not a property of the product itself.
+- `product` on each item is an **embedded subdocument with no `ref`** — `populate()` is structurally impossible. This is intentional: purchase history must not shift when the catalogue or warehouse data changes.
+- `locale` lives on the **item**, not on the product snapshot, because it describes the resolution event for the whole line.
+- `paidAt` doubles as a cross-module proxy for "an invoice exists," avoiding an `orders → invoicing` import. The one documented gap is a failed `ORDER_STATUS_CHANGED` listener.
+- `totalItems`, `totalQuantity`, `totalPrice` are **never persisted**; declaring them on `OrderDocument` would falsely imply a stored field. They exist only via `applyOrderTransform` on the wire.
+- `orderNumber` is assigned once at creation (`allocateOrderNumber`) and never recomputed — a number minted later cannot claim the order's true position in the sequence.

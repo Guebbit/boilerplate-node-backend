@@ -1,7 +1,7 @@
 ---
 source: tests/support/setup-environment.ts
-sha256: bd6f3f43e44c08e6629bf302770de2569af38806dd8ed504002e4f95d96a396f
-generated_at: 2026-10-15T13:01:49.257247+00:00
+sha256: 89b7ac3ed6dc49796976746dfc9522d3605cd76b48c401d109e4e8010c6410cc
+generated_at: 2026-10-29T07:11:09.757633+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Jest `setupFiles` entry that runs **before** `setup.ts` and seeds `process.env` with permissive rate-limit budgets, shop identity, VAT rates, and other defaults so that test suites never trip production rate limiters or fail on missing configuration. It exists as a separate file (not inlined into `setup.ts`) because the config store snapshots `process.env` on first read, and `setup.ts`'s own imports (i18n, validation messages) may trigger that read; imports evaluate in order, so this file's writes land first.
+A side-effect-only module (no exports) that sets Jest-worker environment variables before any application code reads them. It exists to give test suites generous rate-limit budgets, a shop identity, and in-memory-only rate limiting so that contract/fuzz runs don't fail on 429s, missing payment methods, or Redis connectivity issues unrelated to the code under test. It is wired in via Jest `setupFiles` and imported **first** by `setup.ts`, guaranteeing its writes land before any module that snapshots `process.env` at import time.
 
 ## Key elements
 
-- **No exports.** The module is a pure side-effect script: a sequence of `process.env.X ??= '<literal>'` assignments.
-- **Rate-limit budget raises** (`NODE_RATE_LIMIT_MAX`, `NODE_AUTH_*`, `NODE_SUBMISSION_*`, `NODE_SIGNUP_*`, `NODE_RESET_*`, `NODE_UPLOAD_*`, `NODE_PAYMENT_*`, `NODE_INVOICING_*`, `NODE_ORDER_EXPORT_*`, `NODE_CHECKOUT_*`, `NODE_RETURNS_*`, `NODE_EXAMPLE_*`, `NODE_CART_MERGE_*`, `NODE_API_KEY_*`, `NODE_PASSWORD_CHECK_*`, `NODE_MFA_SEND_*`) — values of 10 000–100 000, well above any suite's request volume, but finite so a runaway loop still terminates.
-- **`NODE_RATE_LIMIT_WINDOW_MS`** — raised to 600 000 ms (10 min) so a suite's sub-second burst never rolls over a window mid-run.
-- **`NODE_RATE_LIMIT_REDIS_URL`** — set to `''` (empty string) to force in-memory limiting; a `.env` Redis URL would point at a compose hostname unresolvable in CI and would make every 429-asserting test fail for infra reasons.
-- **Shop identity & VAT** (`NODE_SHOP_*`, `NODE_VAT_RATE_*`) — concrete Italian shop details and two VAT rates so tax arithmetic in `products/tax.ts` uses real values rather than its internal fallback.
-- **Bank transfer** (`NODE_BANK_TRANSFER_*`) — beneficiary name and IBAN so `GET /payments/methods` exposes the method the `shop` scenario expects.
-- **`NODE_MFA_CHALLENGE_MAX`** — deliberately **not** set; `two-factor.test.ts` needs the production default (5) to assert that the challenge-kill logic fires.
+- **Rate-limit budget raises** — Every limiter budget (`NODE_*_RATE_LIMIT_MAX`, auth, submission, signup, reset, upload, payment, invoicing, checkout, returns, example, cart-merge, MFA send, API-key, password-check) is set with `??=` to a value well above what a single test run consumes (typically `1000`–`10000`).
+- **`NODE_RATE_LIMIT_WINDOW_MS`** — Raised from 60 000 ms to 600 000 ms so the window doesn't roll over mid-suite.
+- **`NODE_RATE_LIMIT_REDIS_URL`** — Set to `''` (blank) to force in-memory counting and avoid a compose hostname that can't resolve in CI.
+- **Shop identity & VAT** — `NODE_SHOP_*` and `NODE_VAT_RATE_*` provide a concrete Italian shop with 22 %/10 % VAT so tax-asserting tests read real values, not the code's internal fallback.
+- **Bank-transfer pair** — `NODE_BANK_TRANSFER_BENEFICIARY` / `_IBAN` so the `shop` scenario's `order.awaitingTransfer` guarantee resolves.
+- **Deliberately *not* raised** — `NODE_MFA_CHALLENGE_MAX` stays at its production default (5) because `two-factor.test.ts` asserts that tight limit directly.
 
 ## Relationships
 
-- **`tests/support/setup.ts`** — imports this module **first** (Jest `setupFiles` ordering). Without this ordering, `setup.ts`'s top-level imports of i18n and validation-message modules would trigger the config store's one-time `process.env` read before any write below has executed, and the seeds would be invisible to the rest of the suite.
+- **`tests/support/setup.ts`** — Imports this file as its first line (via Jest `setupFiles`). This ordering is load-bearing: `setup.ts` then pulls in i18n and validation-message modules that read config on import; if those ran first, the `??=` writes here would land after their env snapshot and be invisible.
 
 ## Notes
 
-- **`??=` everywhere.** A developer's real environment variable always wins; these are defaults, not overrides.
-- **Literals, not imports.** Budget values are hardcoded (e.g. `'100000'`) rather than imported from `rate-limit.ts` or other source modules, because importing those modules here would evaluate `buildRateLimiter()` before the corresponding env var is written, causing a read-before-write bug.
-- **Raised, never disabled.** Limits stay finite so a test that accidentally loops on a credentialed endpoint still receives a 429 and terminates; the limiter's own unit tests set a lower value explicitly via `withEnvironment`.
-- **Redis URL blank must be set before `dotenv/config` runs.** `src/app.ts` imports `dotenv/config`; a blank value written earlier takes precedence because `dotenv` does not overwrite existing keys.
-- **The file is intentionally non-modular.** It has no named exports, no conditionals, and no imports beyond `node:os`/`node:path` (which appear in the source header but are only used if the truncated tail adds `tmpdir` paths). Do not refactor it into a function or class without also re-ordering `setup.ts`.
+- All writes use `??=`, so a real CI/developer environment variable always wins.
+- Values are written as **literals**, not imported from `src/infrastructure/http/middlewares/rate-limit.ts`, because importing that module here would evaluate `buildRateLimiter()` before the env var it reads is set.
+- Budgets are *raised*, never set to `Infinity`/disabled, so a genuinely runaway loop in a test still terminates, and the limiters' own unit tests can still hit the limit by overriding to a lower value.
+- The file must remain the **first** import in the `setupFiles` chain; reordering it after any module that reads `process.env` silently breaks the guarantees.

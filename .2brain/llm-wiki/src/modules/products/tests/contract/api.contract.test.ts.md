@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/tests/contract/api.contract.test.ts
-sha256: 1eb94b07b3756836d0872d68a5e5e58954fa5a84ad259403827f457e15e1749d
-generated_at: 2026-10-15T11:46:39.003489+00:00
+sha256: 49a4627efc70ddcbfa580329382cd1c3d88f70e3722bc176dee42348f86542b8
+generated_at: 2026-10-29T05:31:02.945840+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the `/products` endpoints. They validate the **shape** of wire responses against `openapi.yaml` (including `additionalProperties: false`) and assert that every filter, pagination, sort, and search parameter the contract publishes is actually enforced. Behavioural assertions (which products a role may see) live in the unit/service suites; this file exists so that each contract branch is exercised and so that a field leaking into a payload or a limit being silently ignored is caught here.
+Contract tests for the `/products` and `/products/search` endpoints. Every response is automatically validated against `openapi.yaml` (including `additionalProperties: false`) via the side-effect import of `@tests/contract`. Beyond shape, the suite pins behavioural invariants that the OpenAPI spec alone cannot express—scope enforcement for anonymous callers, pagination/id/sort validation limits, and text-length guards—so that a contract branch going unexercised or a filter leaking past a caller's scope is caught in CI.
 
 ## Key elements
 
-- **`setupTestDb()`** — called at module scope; initialises the test database before any test runs.
-- **`describe('GET /products — the filters it now publishes')`** — exercises the `title` and `active` query filters and asserts a stranger cannot read past their visibility scope regardless of which filter is supplied.
-- **`describe('GET /products')`** — validates contract shape for anonymous/admin/empty/paginated responses; enforces `422` for out-of-range pagination (`page=0`, `page=abc`, `pageSize=500`); treats blank pagination as absent; tests the batch `?id=` filter (repeated values, cap of 100, empty string → 422, duplicate collapse, one malformed id → 422); rejects search text over 200 characters.
-- **`describe('POST /products/search')`** — validates contract shape; rejects `title`/`category`/`tag` over 200 chars; rejects bodies nested past the depth limit with `400`.
-- **`describe('sort …')`** — verifies single/multi-field sort, descending `-` prefix, case-insensitive text sort, cross-page ordering consistency, CSV (query) vs array (body) parsing, blank-sort-as-absent, whitelist enforcement (`422`), and that body sort items must each be a single clean token.
-- **`titlesOf`** (module-local helper) — extracts `body.data.items[].title` from a response for compact assertions.
+- **`setupTestDb()`** – initialises the in-memory database once before the suite runs.
+- **`describe('GET /products — the filters it now publishes')`** – verifies that `title` narrows results and that an anonymous caller requesting `active=false` still cannot see inactive rows (scope wins over filter).
+- **`describe('GET /products')`** – shape + validation tests: anonymous/admin auth, empty list, pagination bounds (422 for out-of-range), blank-as-absent, repeated `?id=` (batch), empty/duplicate/malformed `id`, and 200-char text limit.
+- **`describe('POST /products/search')`** – body-shape contract, 200-char limit on `title`/`category`/`tag` (both body and query), and a ~50 KB nested-JSON payload that must return 400 (depth guard) before cache-key construction.
+- **`describe('sort — …')`** – ordering, case-insensitive text sort, cross-page stability, body-array vs. CSV/repeated-key query syntax, blank-as-absent, and 422 for any field outside the sort whitelist or malformed token.
+- **`titlesOf`** – small local helper that maps a response body to an array of product titles for readable assertions.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** (`@tests/contract`) — imported for side effect; registers OpenAPI response validation so every `api()` call is automatically checked against `openapi.yaml`.
-- **`tests/support/setup-test-db.ts`** — provides `setupTestDb()` to create/tear down a per-file test database.
-- **`tests/support/http.ts`** — provides the `api()` supertest-style client and `authenticateAs(role)` for bearer-token setup.
-- **`tests/support/environment.ts`** — provides `withEnvironment` (imported, used for environment-scoped setup if needed).
-- **`src/modules/products/tests/factories.ts`** — provides `createProduct()` to seed deterministic fixtures.
-- **`src/modules/products/repository.ts`** — `productRepository` is imported; the tests indirectly exercise its query-building (filter merging, sort, pagination) through the HTTP layer.
+- **`tests/support/contract.ts`** – imported as a side-effect (`import '@tests/contract'`); installs the automatic OpenAPI response-shape assertion on every `api()` call.
+- **`tests/support/http.ts`** – provides `api()` (supertest-style request builder) and `authenticateAs(role)` for bearer-token auth.
+- **`tests/support/setup-test-db.ts`** – `setupTestDb()` resets/initialises the test database.
+- **`tests/support/environment.ts`** – `withEnvironmentOverrides` available for per-test config (imported; usage may be in truncated portion).
+- **`src/modules/products/tests/factories.ts`** – `createProduct` seeds test data with optional overrides (`title`, `active`, `price`).
+- **`src/modules/products/repository.ts`** – `productRepository` imported (likely used in truncated portion or for direct state verification).
+- **`src/modules/locales/index.ts`** / **`src/modules/locales/services/index.ts`** – `localeService` used to exercise locale-dependent response fields.
+- **`src/modules/locales/tests/factories.ts`** – `givenLocale` seeds locale fixtures.
+- **`src/infrastructure/i18n/index.ts`** / **`src/infrastructure/i18n/overrides.ts`** – `refreshLocaleOverrides`, `registerLocaleOverrideProvider`, `resetLocaleOverrides` for locale-override test setup.
 
 ## Notes
 
-- The stranger-scope test deliberately asserts **the guarantee** (unlisted rows are hidden) rather than **the mechanism** (merge-order vs. clause-contradiction), so it stays valid across backends.
-- Blank query-string values (`page=`, `pageSize=`, `sort=`) are treated as *absent*, not invalid — a form submitting an untouched field must not produce a `422`.
-- The 200-character text limit and the `pageSize`/`page` range come from the shared OpenAPI schema (`shared/contracts/openapi.root.yaml`); the tests pin the `422` response, not the specific limit value, so a schema change is caught by the contract layer, not here.
-- The nesting-depth guard returns **400** (not 422) because the body is rejected before it reaches parameter validation.
-- Body `sort` is an array where each element must be exactly one token (e.g. `-title`); a CSV string inside a single array item is a `422`. Query-string `sort` accepts both CSV and repeated keys.
+- **Invariant over implementation.** The anonymous-scope test (stranger + `active=false`) asserts *only* that inactive rows are absent, not *how* the backend achieves it. The comment explicitly notes the Node backend merges scope last (overwriting the filter) while the PHP twin ANDs both clauses (empty result); pinning either mechanism would couple the test to merge order.
+- **`@tests/contract` is a side-effect import.** No function is destructured from it; it monkey-patches or wraps the HTTP layer so that every `api()` response is schema-checked before the test's own assertions run. A 200 status in most tests implicitly means "shape matches `openapi.yaml`."
+- **Shared schema limits.** The 200-char text cap and pagination `minimum`/`maximum` come from `shared/contracts/openapi.root.yaml` via `$ref`; the tests here confirm the endpoint enforces them rather than silently rewriting out-of-range values.
+- **Sort token strictness (body).** In the POST body, each array item must be exactly one clean token (`-price`, `title`); a CSV string (`"-price,title"`), a padded value (`" price"`), or an empty string are all 422. The query string, by contrast, accepts both CSV and repeated-key syntax.

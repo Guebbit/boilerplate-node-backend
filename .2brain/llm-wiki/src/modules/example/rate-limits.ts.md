@@ -1,7 +1,7 @@
 ---
 source: src/modules/example/rate-limits.ts
-sha256: e26965a1b2bec0e7db3bca98c95a2aa89d26ff49144874547aed05ee9dc45151
-generated_at: 2026-10-14T15:43:37.103246+00:00
+sha256: 8d5d57054c43b946119611f5a1f91ed632bba541f7fca4d6df7dbb18a1f86e31
+generated_at: 2026-10-29T03:54:08.557435+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the "example" module's rate-limit budgets as typed data and converts them into Express middleware via the shared `buildRateLimiter` helper. It is an optional, self-contained capability file: deleting it (and its route mount) removes rate limiting from the module entirely.
+Declares the rate-limit budgets for the example module and turns them into Express middleware. Each budget defines how many times an authenticated account may invoke a given endpoint within a window; the actual numeric limits live in the generated file, and the middleware wiring is shared infrastructure.
 
 ## Key elements
 
-- **`CREATE_EXAMPLE_BUDGET`** — `RateLimitBudget` constant governing `POST /examples`. Limit: 30 per shared window (env override `NODE_EXAMPLE_RATE_LIMIT_MAX`). Keyed by authenticated account via `accountIdOf`. Audited; budget is spent only on successful creation.
-- **`createExampleLimiter`** — `RequestHandler` produced by `buildRateLimiter(CREATE_EXAMPLE_BUDGET)`; mounted on the route to enforce the budget.
-- **`exampleRateLimits`** — `readonly RateLimitBudget[]` listing every budget in this module; referenced by `module.ts`'s `rateLimits` field for manifest aggregation.
+- **`CREATE_EXAMPLE_BUDGET`** (internal) — The budget object for `POST /examples`. Combines the numeric values from `exampleRateLimitData.exampleCreate` with `keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT` and `keyGenerator: accountIdOf`, so the budget is tracked per account rather than per address.
+- **`createExampleLimiter`** (export, `RequestHandler`) — The ready-to-mount Express middleware produced by `buildRateLimiter(CREATE_EXAMPLE_BUDGET)`. Applied to the create route.
+- **`exampleRateLimits`** (export, `readonly RateLimitBudget[]`) — The module's full list of budgets. Re-exported into `module.ts`'s `rateLimits` field for manifest/tooling consumption.
 
 ## Relationships
 
-- **`src/infrastructure/http/middlewares/rate-limit.ts`** — Source of `buildRateLimiter`, `accountIdOf`, and `KEYED_BY_AUTHENTICATED_ACCOUNT`. This file is purely declarative; the actual counting/keying logic lives there.
-- **`src/modules/example/module.ts`** — Imports `exampleRateLimits` and lists it on the module manifest's `rateLimits` property.
-- **`src/modules/example/routes.ts`** — Imports `createExampleLimiter` and mounts it as middleware on the `POST /examples` route.
-- **`src/modules/example/tests/unit/manifest.test.ts`** — Exercises the module manifest, which in turn includes the budgets declared here.
-- **`src/types/rate-limit-budget.ts` / `src/types/index.ts`** — Define the `RateLimitBudget` type that both the budget constant and the `exampleRateLimits` array conform to.
+- **`src/infrastructure/http/middlewares/rate-limit.ts`** — Provides `buildRateLimiter`, `accountIdOf`, and `KEYED_BY_AUTHENTICATED_ACCOUNT`. This file is the sole consumer pattern for turning a `RateLimitBudget` into middleware.
+- **`src/modules/example/rate-limits.generated.ts`** — Supplies `exampleRateLimitData` (the numeric window/limit values). Regenerated; never hand-edited.
+- **`src/modules/example/module.ts`** — Imports `exampleRateLimits` and lists it under its `rateLimits` field.
+- **`src/modules/example/routes.ts`** — Applies `createExampleLimiter` as middleware on the `POST /examples` handler.
+- **`src/types/rate-limit-budget.ts` / `src/types/index.ts`** — Define the `RateLimitBudget` type used throughout.
+- **`src/modules/example/tests/unit/manifest.test.ts`** — Asserts that the budgets declared here match what the manifest expects.
 
 ## Notes
 
-- Keying is deliberately **per-account, not per-address**: the file's docstring explains that an address-keyed budget would let one noisy account starve other accounts behind the same address.
-- The budget is consumed **only on success** (`bounds` field documents this), so malformed or rejected requests do not spend quota.
-- `windowMs` is the string `'shared'`, not a number — resolution of that sentinel happens inside the infrastructure middleware.
-- To add a second budget in this module, append it to `exampleRateLimits`; `module.ts` picks up the array wholesale, so no further registration is needed.
+- Budgets are **keyed by authenticated account, not address**. A single account behind a shared address must not starve other accounts; the comment in the source makes this the deliberate choice.
+- The numeric values (window length, max requests) live in `rate-limits.generated.ts`. To change a limit, change the source of generation—do not edit the generated file or hardcode numbers here.
+- To remove rate-limiting from this module, delete this file, the corresponding mount in `routes.ts`, and the `rateLimits` entry in `module.ts`.

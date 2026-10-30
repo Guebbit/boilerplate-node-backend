@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/services/notify.ts
-sha256: 6137760e33c0605772da305f7a48bf604da73fed81c4f778d69d038f1407681c
-generated_at: 2026-10-14T15:31:11.944238+00:00
+sha256: f9bc3c66bc2f4663db9a4169d6c767d50996ee3c2f64a56c448a493493a9dcef
+generated_at: 2026-10-29T03:41:29.002378+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Sends best-effort buyer emails after a shipment transaction has already committed. Three events are covered — shipped ("on its way"), delivered ("arrived"), and a preorder delay notice. A failed email never undoes the underlying act; the shipment or notice is already a fact by the time this file runs.
+Email notification dispatchers for the delivery module. Each exported function maps a domain event (shipment shipped/delivered/lost, fulfillment delayed, hold noticed, tracking changed) to a buyer-facing email, composed from templates in `../emails` and queued via the mailer adapter. All functions are best-effort: a mail failure is logged and swallowed so it can never roll back the underlying act.
 
 ## Key elements
 
-- **`emailLines`** (private) — Maps a `ShipmentDocument`'s lines to a flat `{ title, quantity }[]` for embedding in email bodies.
-- **`notifyShipped(order, shipment, remainingUnits)`** — Enqueues the carrier/"on its way" email via `orderService.mailBuyer`, then writes an operator-facing `logger.info` line with tracking code.
-- **`notifyDelivered(orderId, shipment)`** — Re-fetches the order by id (to see the freshly-written `withdrawUntil`), then enqueues the "arrived" email. Includes the withdrawal deadline only when the order has reached `OrderStatus.delivered`.
-- **`notifyDelayed(order, delayed)`** — Enqueues the preorder-delay notice email, including agreed/expected dates, whether an answer is needed, and a frontend link to the order page.
+- **`emailLines(shipment)`** — internal helper; extracts `{ title, quantity }` from each line of a `ShipmentDocument`.
+- **`mailShipped(payload)`** — on `shipment.shipped`: loads the shipment, then emails the buyer the carrier, tracking code, and line items. Skips entirely if `remainingUnits` is `undefined` (digital fulfilment).
+- **`mailTrackingChanged(shipment, variant)`** — re-sends the shipped-style email when a tracking code is added or corrected. `variant` is a `TrackingVariant` (`"added" | "corrected"`) that changes subject/tone.
+- **`mailDelivered(payload)`** — on `shipment.delivered`: emails the buyer the arrival. If the order's status is now `OrderStatus.delivered`, also includes the `withdrawUntil` deadline (read fresh post-commit).
+- **`mailLost(lost)`** — on `shipment.lost`: emails reason, line items, still-owed units, optional `expectedAt`, staff message, and an order link. No opt-out switch.
+- **`mailDelayed(delayed)`** — on `fulfillment_order.delayed`: emails the agreed/expected dates, titles, and reason. No action required from the buyer.
+- **`mailHoldNoticed(held)`** — on `fulfillment_order.hold_noticed`: emails the hold notice and any staff message, with an order link.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/mailer.ts`** — Calls `enqueueEmail` for every email sent (fire-and-forget; promise is `void`-ed).
-- **`src/infrastructure/adapters/logger.ts`** — Uses `logger.info` for the operator log line in `notifyShipped`.
-- **`src/modules/delivery/emails.ts`** — Imports the three email template builders: `shipmentShippedEmail`, `shipmentDeliveredEmail`, `preorderDelayedEmail`.
-- **`src/modules/delivery/model.ts`** — Consumes the `ShipmentDocument` type.
-- **`src/modules/delivery/events.ts`** — Consumes the `FulfillmentOrderDelayed` event type.
-- **`src/modules/orders/index.ts`** — Imports `orderService` (for `mailBuyer`, `getById`) and `orderFrontendLink`.
-- **`src/modules/orders/model.ts`** — Consumes the `OrderDocument` type.
-- **`src/types/index.ts`** — Imports `OrderStatus` (used to gate the `withdrawUntil` field).
-- **Callers (graph neighbors):** `ship.ts`, `deliver.ts`, `fulfill.ts`, and `notice.ts` invoke these three notify functions after their respective commit steps. `fulfillment.test.ts` exercises the paths end-to-end.
+- **`@infrastructure/adapters/mailer`** — every notification function calls `enqueueEmail` to queue the outbound message.
+- **`@infrastructure/adapters/logger`** — all error/warn paths and the shipped-confirmation log line go through `logger`.
+- **`@modules/orders` (`orderService`)** — `mailBuyerOfOrder` resolves the buyer's email, locale, and display name before the callback composes the mail; `orderFrontendLink` builds the order-page URL embedded in lost/delayed/hold mails.
+- **`@modules/delivery/emails`** — provides the template-builder functions (`shipmentShippedEmail`, `shipmentDeliveredEmail`, `shipmentLostEmail`, `fulfillmentDelayedEmail`, `holdNoticeEmail`) and the `TrackingVariant` type.
+- **`@modules/delivery/repository`** — `shipmentRepository.findById` fetches the full `ShipmentDocument` needed for line items and tracking code.
+- **`@modules/delivery/events`** — source of `FulfillmentOrderDelayed` and `FulfillmentOrderHoldNoticed` payload types.
+- **`@modules/delivery/model`** — `ShipmentDocument` type used by `emailLines` and the shipped/delivered/lost handlers.
+- **`@kernel/events`** — `DomainEventMap` types the `shipment.shipped`, `shipment.delivered`, and `shipment.lost` payloads.
+- **`@types`** — `OrderStatus.delivered` check in `mailDelivered` to decide whether to include `withdrawUntil`.
+- **`services/tracking.ts`** — sibling service that saves tracking-code changes and then calls `mailTrackingChanged`.
+- **`tests/unit/fulfillment.test.ts` / `tests/unit/lost.test.ts`** — unit tests covering `mailDelayed`, `mailHoldNoticed`, and `mailLost`.
 
 ## Notes
 
-- All three exports are post-commit, best-effort: a mail failure is handled inside `orderService.mailBuyer` (log + fall back to the stored address) and does **not** propagate to the caller as a shipment error.
-- `notifyDelivered` re-reads the order via `getById` because the `order` object that existed before the deliver transaction lacks the `withdrawUntil` value written *in* that transaction.
-- `void enqueueEmail(...)` is intentional — the promise is not awaited so a mailer outage cannot block the response.
-- The `Stryker disable` comment on the logger line suppresses mutation testing for that specific statement (it is a side-effect-only log, not testable through return values).
+- **Fire-and-forget by design.** Every `.catch` block only logs; no error is re-thrown. `enqueueEmail` itself never rejects, so the `void` floating-promise ESLint suppressions are safe.
+- **Digital fulfilment short-circuit.** `mailShipped` returns early when `remainingUnits` is `undefined`; the arrival mail (`mailDelivered`) is the only notification the buyer receives for digital items.
+- **Post-commit read in `mailDelivered`.** `withdrawUntil` is read from the order *after* the delivery transaction has committed, so it reflects the freshly written deadline rather than a stale value.
+- **Stryker mutation-test guards.** `// Stryker disable all` / `// Stryker restore all` pairs wrap the error-logging branches so Stryker does not flag those intentional catch blocks as killed mutants.
+- **No idempotency key is visible here.** Deduplication (if any) is expected to live in the mailer adapter or event-bus layer, not in this file.

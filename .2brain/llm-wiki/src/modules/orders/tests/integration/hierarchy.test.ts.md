@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/integration/hierarchy.test.ts
-sha256: e3703f9fb4ef6f1c95eb0efca5b8d4391868ffc0d4eab6a1a23acdf43ad573a4
-generated_at: 2026-10-15T11:14:53.740172+00:00
+sha256: d4fce0ef2729d2e43af61b572584c14e6c2a31fcba6b2bcc887ad713229a9055
+generated_at: 2026-10-29T04:53:25.682403+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that verify the two-level permission model for order mutations: (1) a read-only role must not gain write access, and (2) an operator may only act on orders whose buyer is strictly lower in the role hierarchy. Every case is driven through `orderService` to exercise the real permission checks, not mocks.
+Integration tests that verify the order-cancellation and action-visibility rules driven by the caller's key set (e.g. `display:Order` vs. `update:Order`), ensuring that read-capable roles cannot cancel or pay, that operators can act on any buyer's order regardless of the buyer's role, and that own-order edge cases (self-service, offline payment) behave correctly. The suite exercises the service layer end-to-end against a real test database.
 
 ## Key elements
 
-- **`STAFF_ID`** – A valid-format ObjectId that references no real account; used as the `callerId` for all non-owner role scenarios.
-- **`orderOf(role, status?)`** – Creates a user, a product, and a pending (or given-status) order owned by that user.
-- **`statusOf(id)`** – Reads the stored order status from `orderRepository` to confirm a refused write left the record untouched.
-- **`refusalCode(result)`** – Asserts the result is a failure and returns the first error code for further matching.
-- **`actionsFor(orderId, role, callerId)`** – Fetches the order via `orderService.getById` → `withActions` and projects the six client-facing action booleans/arrays (`cancel`, `pay`, `recordPayment`, `transitions`, `start`, `override`).
-- **`describe('cancelById — the write's own scope')`** – Confirms warehouse/support (read-only) are refused 404 on both pending and paid orders, while customer/moderator/manager/admin (write-capable) succeed.
-- **`describe('what an order offers each caller')`** – Asserts the action surface each role sees: buyer gets `cancel`+`pay`, warehouse gets none, operator gets `cancel` only on a lower-rank buyer's order, admin gets `recordPayment` but never on their own order, etc.
-- **`describe('the rank rule on an order')`** – Table-driven (`it.each`) matrix of caller × buyer roles expecting `allowed` or `OUTRANKED`; also verifies the rule applies to `updateById`, `removeById`, `restoreById`, `overrideStatus`; confirms `SYSTEM_ACTOR` bypasses the rule; and confirms a detached buyer (via `orderRepository.detachUserId`) leaves the order open to any operator.
+- **`orderOf(role, status?)`** — Creates a buyer with the given role, a product, and a pending (or specified-status) order; returns the order document.
+- **`statusOf(id)`** — Reads the persisted `OrderStatus` for an order (asserts a refused cancel left it unchanged).
+- **`actionsFor(orderId, role, callerId)`** — Resolves the six action flags (`cancel`, `pay`, `recordPayment`, `process`, `override`) that `orderService.withActions` would expose to a client.
+- **`STAFF_ID`** — A valid ObjectId that holds no user account; used as the caller identity for operator-role tests.
+- **`describe('cancelOnRequestById — the write's own scope')`** — Verifies that `warehouse`/`support` (read-only key) get 404 on cancel, that no outbox refund event is written on refusal, that a customer can cancel their own order, and that `moderator`/`manager`/`admin` (write key) succeed on any customer's order.
+- **`describe('what an order offers each caller')`** — Checks the action flag matrix: buyer gets `cancel`+`pay` on pending; read-only roles get neither; operators get `cancel`/`process` on both customer and staff orders; `recordPayment` is admin-only and hidden once paid; a buyer's own `pay` is always offered.
+- **`describe('no rank on an order')`** — Confirms that caller role and buyer role are independent: every operator×buyer combination succeeds on cancel; an operator can update/remove/restore a staff member's order; an admin can handle their own order; audit rows carry `ownOrder: true` only when the caller is the buyer.
 
 ## Relationships
 
-- **`@modules/orders/services` (`orderService`)** – The system under test; all assertions target its public methods (`cancelById`, `getById`, `withActions`, `updateById`, `removeById`, `restoreById`, `overrideStatus`).
-- **`../../repository` (`orderRepository`)** – Used directly to verify persisted state after refused writes and to simulate a detached buyer (`detachUserId`).
-- **`@tests/setup-test-db`** – In-memory / test database setup called once at module load.
-- **`@tests/callers` (`callerContextAs`, `asRole`)** – Helpers that build the permission context and actor descriptor passed into service calls.
-- **`@modules/users/tests/factories` (`createUser`)** – Provisions test users with a given role.
-- **`@modules/products/tests/factories` (`createProduct`)** – Provisions a product for order items.
-- **`@modules/orders/tests/factories` (`createOrder`, `toOrderItem`)** – Provisions the order documents under test.
-- **`@types` (`OrderStatus`)** – Enum used for status parameters and assertions.
-- **`@infrastructure/http/response` (`ResponseReject`)** – Type used to extract `.errors[0].code` from a rejected result.
-- **`@kernel/permissions` (`SYSTEM_ACTOR`)** – The system-level actor that must bypass the rank rule.
+- **`src/modules/orders/services/index.ts`** — The system under test; all assertions call `orderService.cancelOnRequestById`, `getById`, `withActions`, `updateById`, `removeById`, `restoreById`.
+- **`src/modules/orders/services/cancel.ts`** — Imports `cancelForErasureById` (used internally by the service; present in the import list).
+- **`src/modules/orders/repository.ts`** — `orderRepository.findById` is the ground-truth status check after a refused cancel.
+- **`src/modules/orders/events.ts`** — `ORDER_CANCELLED` is the outbox event name used to assert no refund was enqueued.
+- **`src/kernel/outbox.ts`** — `outboxEventModel.countDocuments` verifies that a refused cancel writes zero outbox rows.
+- **`src/infrastructure/observability/audit.ts`** — Fully mocked via `jest.mock` → `auditPortMock()`; in the last test, `observePort(auditPort.emitAuditEvent)` is used to spy the emitted audit payload.
+- **`src/modules/orders/tests/factories.ts`** — Provides `createOrder`, `forceOrderStatus`, `toOrderItem` for fixture setup.
+- **`src/modules/users/tests/factories.ts`** — `createUser` builds buyer/staff accounts with a given role.
+- **`src/modules/products/tests/factories.ts`** — `createProduct` supplies the product referenced in order items.
+- **`src/types/index.ts`** — `OrderStatus` enum used for status parameters and assertions.
+- **`tests/support/callers.ts`** — `asRole` and `callerContextAs` build the caller identity/context objects passed to service methods.
+- **`tests/support/ports.ts`** — Supplies `auditPortMock()` (the jest mock factory) and `observePort` (audit spy helper).
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the in-memory/test database before all tests.
 
 ## Notes
 
-- `STAFF_ID` is intentionally a *real* ObjectId shape but points to no user; this ensures the test exercises the rank/role path, not an ownership short-circuit.
-- The file tests through the **service layer**, not HTTP routes, so middleware-level auth is out of scope here.
-- The rank rule is *strict*: a caller at the same rank as the buyer (e.g. admin cancelling admin's order) is refused with code `OUTRANKED`. The only exception is the caller acting on their *own* order, where ownership bypasses the rank check.
-- `SYSTEM_ACTOR` is passed without the four-argument caller context (just `id`), matching its special handling in the service.
-- The last visible test (`detachUserId`) verifies that once a buyer account is removed from an order, the rank rule no longer applies because there is no buyer rank to compare against.
+- The audit port is **replaced** (via `jest.mock` + `requireActual` indirection), not spied on, so no real audit writes hit the database. The comment in the file points to `tests/support/ports.ts` for the rationale.
+- `STAFF_ID` is intentionally a valid 24-hex ObjectId that matches no `users` row; this keeps role-based tests free of a real account while still passing ObjectId-shaped validation.
+- The "no rank" block encodes the project's rule that roles are flat bundles of keys—there is no hierarchy between `admin` and `moderator` once the required key is held; tests assert this explicitly by mixing caller/buyer role pairs.
+- A refused cancel is expected to return HTTP 404 (not 403), consistent with the codebase's "do not leak existence" convention.

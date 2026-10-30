@@ -1,7 +1,7 @@
 ---
 source: src/modules/observability/module.ts
-sha256: c4cb2d75373882c323e15cbddd0463bb0fd04b3db4a3dbd33fb27b2b6d02f92c
-generated_at: 2026-10-15T10:55:36.430484+00:00
+sha256: f308b5f17c2c6bda3ae857ad975e6ca64324635a123895cb240175516e5ee33d
+generated_at: 2026-10-29T04:35:41.113842+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module manifest for the **observability** module. It wires the operator-facing surface — health checks, metrics overview, live SSE stream, Prometheus scrape endpoint, and audit trail — into the kernel's module registry. It does no business logic itself; it declares *what* the module exposes (routes, config, locales) and *where* those live in sibling files.
+Module manifest for the operator-facing observability surface (health, metrics overview, SSE stream, Prometheus scrape endpoint, audit trail). It wires the router, config slice, and locales into the kernel's `AppModule` contract and registers the `dependency_up` gauge as a side-effect import. It owns no domain collection and records no personal data.
 
 ## Key elements
 
-- **`export default { … } satisfies AppModule`** — the manifest object consumed by the kernel. Declares:
-  - `name: 'observability'`, `basePath: '/observability'`
-  - `routes: router` (from `./routes`)
-  - `config: [observabilityConfig.slice]` (from `./config`)
-  - `locales` path
-  - `personalData: 'none'` — the module records no personal data
-- **`import './metrics'`** — side-effect import; registers the `dependency_up` gauge with the shared metrics registry at module load time.
-- **`import { router } from './routes'`** — pulls in the assembled Express router.
-- **`import { observabilityConfig } from './config'`** — pulls in the config slice (scrape-token gate, telemetry sinks).
-- **`import type { AppModule } from '@kernel/registry'`** — type-only import for the `satisfies` assertion.
+- **Default export (`AppModule`)** — declares `name: 'observability'`, mounts the router at `/observability`, exposes `observabilityConfig.slice` as the module's config, points `locales` at a `./locales` directory, and sets `personalData: 'none'`.
+- **`import './metrics'`** — side-effect import; at module load this registers the `dependency_up` gauge with the shared Prometheus registry.
+- **`router` (from `./routes`)** — the single Express router for all observability endpoints (health, metrics, SSE, scrape, audit). Auth style varies per route; see `routes.ts`.
+- **`observabilityConfig` (from `./config`)** — provides the scrape-token placeholder gate and telemetry-sink configuration.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — supplies the `AppModule` type; the default export is registered into the kernel's module table.
-- **`src/modules.ts`** — upstream barrel that re-exports this module's manifest so the kernel can discover it.
-- **`src/modules/observability/routes.ts`** — provides the `router` referenced in the manifest; defines all authenticated endpoints (health, metrics, SSE, Prometheus, audit).
-- **`src/modules/observability/config.ts`** — provides the `observabilityConfig` slice consumed at startup.
-- **`src/modules/observability/metrics.ts`** — imported purely for its side-effect (gauge registration); no value is used.
-
-`src/modules/observability/asyncapi.yaml` is a sibling schema artifact and is not imported by this file.
+- **`src/kernel/registry.ts`** — supplies the `AppModule` type that the default export satisfies; the kernel consumes this manifest to mount the router and resolve config.
+- **`src/modules.ts`** — top-level module registry; this manifest is one of the entries it assembles into the running application.
+- **`src/modules/observability/routes.ts`** — provides the `router` instance mounted at `/observability`.
+- **`src/modules/observability/config.ts`** — provides `observabilityConfig.slice`, consumed by the kernel's config-resolution step.
+- **`src/modules/observability/metrics.ts`** — imported for its side effect (gauge registration); not otherwise referenced at runtime.
+- **`src/modules/observability/asyncapi.yaml`** — API contract for the endpoints this module exposes; kept alongside for spec documentation.
+- **`audit-logs` module** (not in the graph list above but referenced in the doc comment) — supplies the `GET /observability/audit` handler; this module depends on it but owns no audit collection.
 
 ## Notes
 
-- **String-based metric reads (by design).** This module reads other domains' counters via `metricsRegistry.getSingleMetric('auth_login_total')` etc. — always by string, never by import. Renaming a counter in a domain module compiles cleanly but breaks observability silently. `metric-names.test.ts` guards against this.
-- **Side-effect import order matters.** The `import './metrics'` line must execute before any route handler fires; it is a load-time registration, not a lazy init.
-- **No event subscriptions, no seeds.** The manifest intentionally omits both; this module is read-only infrastructure.
-- **The `./index.ts` barrel** (not this file) republishes `./services` (health, job/dependency health, process reader, SSE stream) for potential sibling reuse. Nothing consumes that barrel today.
+- **String-based metric reads.** This module reads every domain's counters by string key off the shared registry (e.g. `metricsRegistry.getSingleMetric('auth_login_total')`) rather than by import. Renaming a counter in its source domain compiles cleanly but breaks reporting here silently. `metric-names.test.ts` exists specifically to guard against this.
+- **Barrel republishing.** The module's `./index.ts` re-exports `./services` (health, job/dependency health, process reader, SSE stream) for potential sibling consumption, though no sibling currently imports them.
+- **No event subscriptions or seeds.** The manifest deliberately omits `events` and `seeds` fields; this is a read-only, infrastructure-style module.
