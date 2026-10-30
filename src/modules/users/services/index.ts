@@ -41,6 +41,7 @@ import {
     restoreOwnAccount,
     eraseScheduledDeletion,
     eraseAgain,
+    restoreDeletionState,
     findDueScheduledDeletions
 } from './own-account';
 import {
@@ -134,6 +135,7 @@ export const userService = {
     restoreOwnAccount,
     eraseScheduledDeletion,
     eraseAgain,
+    restoreDeletionState,
     findDueScheduledDeletions,
     findByEmail,
     emailTaken,

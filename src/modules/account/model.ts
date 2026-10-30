@@ -200,7 +200,7 @@ export const verificationTokenModel = model<VerificationTokenDocument, Verificat
 );
 
 /** What a ledger row says happened to an account. */
-export const ERASURE_LEDGER_KINDS = ['erased', 'cancelled'] as const;
+export const ERASURE_LEDGER_KINDS = ['erased', 'scheduled', 'cancelled'] as const;
 
 /** One of {@link ERASURE_LEDGER_KINDS}. */
 export type ErasureLedgerKind = (typeof ERASURE_LEDGER_KINDS)[number];
@@ -213,10 +213,18 @@ export type ErasureLedgerKind = (typeof ERASURE_LEDGER_KINDS)[number];
 export interface ErasureLedgerDocument extends Document {
     /** The account. Not a reference: the user document is gone once the row says `erased`. */
     userId: Types.ObjectId;
-    /** `erased`: the account was hard-deleted. `cancelled`: its owner or staff stopped a scheduled deletion. */
+    /**
+     * `erased`: the account was hard-deleted. `scheduled`: its owner asked to delete it.
+     * `cancelled`: its owner or staff stopped a scheduled deletion.
+     */
     kind: ErasureLedgerKind;
     /** When it happened. A repeat erasure after a restore keeps the original date. */
     at: Date;
+    /**
+     * `scheduled` rows only: the erasure date the owner was promised. Stored, never derived, so a
+     * later change of the grace setting cannot move a date already given.
+     */
+    purgeAt?: Date;
     /** When the database deletes the row: `at` plus the ledger retention. */
     expiresAt: Date;
 }
@@ -234,6 +242,7 @@ export const erasureLedgerSchema = new Schema<ErasureLedgerDocument, ErasureLedg
         userId: { type: Schema.Types.ObjectId, required: true },
         kind: { type: String, enum: [...ERASURE_LEDGER_KINDS], required: true },
         at: { type: Date, required: true },
+        purgeAt: { type: Date },
         expiresAt: { type: Date, required: true }
     },
     { timestamps: false }

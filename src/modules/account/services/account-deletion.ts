@@ -28,7 +28,7 @@ import {
 } from '../emails';
 import { authAccountDeleteTotal } from '../metrics';
 import { ACCOUNT_RESTORE_TOKEN_TYPE } from '../token-types';
-import { recordCancellation } from './erasure-ledger';
+import { recordCancellation, recordSchedule } from './erasure-ledger';
 import { sendAccountMail } from './mail';
 import { revokeFor } from './revocation';
 import { issueToken, redeemLiveToken, refuseLink, removeTokens } from './tokens';
@@ -65,6 +65,7 @@ export const scheduleAccountDeletion = (
 
     return userService
         .scheduleOwnDeletion(user, requestedAt, purgeAt)
+        .then(() => recordSchedule(user.id, requestedAt, purgeAt))
         .then(() => revokeFor('deletion-scheduled', user.id))
         .then(() =>
             issueToken(

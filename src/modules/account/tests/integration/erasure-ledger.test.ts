@@ -16,7 +16,7 @@ import { createUser, eraseAsScheduled, userRepository } from '@modules/users/tes
 import { userService } from '@modules/users';
 import * as auditPort from '@infrastructure/observability/audit';
 import { accountService } from '../../services';
-import { appIsAnswering, reapplyErasures } from '../../services/erasure-ledger';
+import { appIsAnswering, reapplyErasures, recordSchedule } from '../../services/erasure-ledger';
 import { erasureLedgerModel } from '../../model';
 import { accountAuditActions } from '../../audit';
 import { plantToken } from '../factories';
@@ -78,9 +78,8 @@ describe('the ledger is written with the erasure', () => {
         expect(rows[0].at.getTime()).toBeGreaterThanOrEqual(before);
         // 220 days by default: past the oldest backup.
         expect(rows[0].expiresAt.getTime() - rows[0].at.getTime()).toBe(220 * DAY);
-        // Nothing but the five fields: no address, ip or agent.
+        // Nothing but these fields: no address, ip or agent.
         expect(Object.keys(rows[0]).toSorted()).toEqual([
-            '__v',
             '_id',
             'at',
             'expiresAt',
@@ -131,7 +130,7 @@ describe('the ledger is written with the erasure', () => {
 });
 
 describe('reapplyErasures', () => {
-    it('erases again exactly the erased rows since the snapshot, and skips a cancelled one', async () => {
+    it('erases again exactly the erased rows since the snapshot, and leaves an unlocked account as it is', async () => {
         const since = new Date(Date.now() - 10 * DAY);
         const recent = await createUser({ email: 'recent@example.com' });
         const old = await createUser({ email: 'old@example.com' });
@@ -152,7 +151,14 @@ describe('reapplyErasures', () => {
 
         const report = await reapplyErasures({ since });
 
-        expect(report).toEqual({ erased: 1, alreadyGone: 0, cancelledSeen: 1, failed: 0 });
+        expect(report).toEqual({
+            erased: 1,
+            alreadyGone: 0,
+            rescheduled: 0,
+            unscheduled: 0,
+            unchanged: 1,
+            failed: 0
+        });
         expect(await userRepository.findById(recent.id)).toBeNull();
         expect(await userRepository.findById(old.id)).not.toBeNull();
         expect(await userRepository.findById(cancelled.id)).not.toBeNull();
@@ -180,7 +186,14 @@ describe('reapplyErasures', () => {
         const first = await reapplyErasures({ since });
         const second = await reapplyErasures({ since });
 
-        expect(first).toEqual({ erased: 0, alreadyGone: 1, cancelledSeen: 0, failed: 0 });
+        expect(first).toEqual({
+            erased: 0,
+            alreadyGone: 1,
+            rescheduled: 0,
+            unscheduled: 0,
+            unchanged: 0,
+            failed: 0
+        });
         expect(second).toEqual(first);
     });
 
@@ -236,6 +249,130 @@ describe('reapplyErasures', () => {
         await reapplyErasures({ since: new Date(Date.now() - DAY) });
 
         expect(await ledger()).toEqual(before);
+    });
+});
+
+/** A ledger row as `recordSchedule` / `recordCancellation` write it. */
+const plantRow = (userId: string, kind: 'scheduled' | 'cancelled', at: Date, purgeAt?: Date) =>
+    erasureLedgerModel.create({
+        userId,
+        kind,
+        at,
+        ...(purgeAt ? { purgeAt } : {}),
+        expiresAt: new Date(at.getTime() + 220 * DAY)
+    });
+
+/** What the restored snapshot shows: the account locked by its owner. */
+const lockedInSnapshot = (email: string, purgeAt: Date) =>
+    createUser({
+        email,
+        deletedAt: new Date(Date.now() - 40 * DAY),
+        deletedBy: 'owner',
+        purgeAt
+    });
+
+const since = () => new Date(Date.now() - 10 * DAY);
+
+describe('reapplyErasures — deletion locks', () => {
+    it('clears a lock the owner cancelled after the snapshot, even when its purgeAt has passed', async () => {
+        const user = await lockedInSnapshot(
+            'cancelled-late@example.com',
+            new Date(Date.now() - DAY)
+        );
+        await plantRow(user.id, 'cancelled', new Date(Date.now() - 2 * DAY));
+
+        const report = await reapplyErasures({ since: since() });
+
+        expect(report.unscheduled).toBe(1);
+        const reloaded = await userRepository.findById(user.id);
+        expect(reloaded!.purgeAt).toBeUndefined();
+        expect(reloaded!.deletedBy).toBeUndefined();
+        expect(reloaded!.deletedAt).toBeUndefined();
+    });
+
+    it('locks an account the owner scheduled after the snapshot, at the stored purgeAt', async () => {
+        const user = await createUser({ email: 'asked-late@example.com' });
+        const requestedAt = new Date(Date.now() - 3 * DAY);
+        const stored = new Date(Date.now() + 5 * DAY);
+        await plantRow(user.id, 'scheduled', requestedAt, stored);
+
+        const report = await reapplyErasures({ since: since() });
+
+        expect(report.rescheduled).toBe(1);
+        const reloaded = await userRepository.findById(user.id);
+        expect(reloaded!.purgeAt).toEqual(stored);
+        expect(reloaded!.deletedBy).toBe('owner');
+        expect(reloaded!.deletedAt).toEqual(requestedAt);
+        // The request ended every session, so a restore must not bring old tokens back.
+        expect(reloaded!.tokensValidAfter).toEqual(requestedAt);
+    });
+
+    it('keeps an account scheduled when the owner cancelled and then asked again', async () => {
+        const user = await createUser({ email: 'asked-twice@example.com' });
+        const stored = new Date(Date.now() + 9 * DAY);
+        await plantRow(user.id, 'cancelled', new Date(Date.now() - 5 * DAY));
+        await plantRow(user.id, 'scheduled', new Date(Date.now() - 1 * DAY), stored);
+
+        await reapplyErasures({ since: since() });
+
+        const reloaded = await userRepository.findById(user.id);
+        expect(reloaded!.deletedBy).toBe('owner');
+        expect(reloaded!.purgeAt).toEqual(stored);
+    });
+
+    it('lets erased win over a later cancel or schedule', async () => {
+        const user = await createUser({ email: 'erased-wins@example.com' });
+        await eraseAsScheduled(user);
+        await restoreFromSnapshot(user.id, 'erased-wins@example.com');
+        await plantRow(user.id, 'cancelled', new Date(Date.now() + 1000));
+        await plantRow(
+            user.id,
+            'scheduled',
+            new Date(Date.now() + 2000),
+            new Date(Date.now() + DAY)
+        );
+
+        const report = await reapplyErasures({ since: since() });
+
+        expect(report.erased).toBe(1);
+        expect(await userRepository.findById(user.id)).toBeNull();
+    });
+
+    it('does nothing on a second run', async () => {
+        const late = await createUser({ email: 'second-run-a@example.com' });
+        await plantRow(
+            late.id,
+            'scheduled',
+            new Date(Date.now() - DAY),
+            new Date(Date.now() + DAY)
+        );
+        const kept = await lockedInSnapshot('second-run-b@example.com', new Date(Date.now() - DAY));
+        await plantRow(kept.id, 'cancelled', new Date(Date.now() - 2 * DAY));
+        await reapplyErasures({ since: since() });
+
+        const again = await reapplyErasures({ since: since() });
+
+        expect(again).toEqual(
+            expect.objectContaining({ rescheduled: 0, unscheduled: 0, failed: 0, unchanged: 2 })
+        );
+    });
+
+    it('stores the promised purgeAt when the owner schedules, and an older event never overwrites a newer one', async () => {
+        const user = await createUser({ email: 'promised@example.com', verifiedAt: new Date() });
+
+        const schedule = await accountService.scheduleAccountDeletion(user, testCallerContext);
+        // A stale write (an older request arriving late) must not move the stored date.
+        await recordSchedule(user.id, new Date(schedule.requestedAt.getTime() - DAY), new Date(0));
+
+        const rows = await rowsOf(user.id);
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toEqual(
+            expect.objectContaining({
+                kind: 'scheduled',
+                at: schedule.requestedAt,
+                purgeAt: schedule.purgeAt
+            })
+        );
     });
 });
 

@@ -298,9 +298,12 @@ transaction, kept `NODE_ERASURE_LEDGER_RETENTION_DAYS` (220 by default, above th
 keep knobs; raise it with them). Raise `BACKUP_KEEP_MONTHLY` and the ledger must outlive it, or a restore of the
 oldest snapshot brings back an account the ledger has forgotten.
 
-**`cancelled` rows** are not replayed, only counted. A restored snapshot may still show an account as scheduled
-for deletion that its owner cancelled afterwards, so the purge job would erase it. After the command, look at
-those accounts (the count is in its log line) before starting the stack.
+**Deletion locks follow the ledger too.** Besides `erased`, the ledger records `scheduled` (with the
+`purgeAt` the owner was promised, stored and never recomputed) and `cancelled`. For each account the command
+applies the latest event since `--since`: `erased` always wins; otherwise a later `scheduled` locks the account
+at the stored date (and ends its sessions), a later `cancelled` clears the lock even if `purgeAt` has passed,
+and cancel-then-ask-again stays scheduled. The log line counts `rescheduled`, `unscheduled` and `unchanged`.
+No manual check is needed before starting the stack.
 
 **Only if the ledger is lost** (the host, and the newest snapshot's copy): fall back to the audit events, which
 are shorter-lived (`auditlogs` keeps 90 days, `NODE_AUDIT_RETENTION_DAYS`; Loki 7 by default).

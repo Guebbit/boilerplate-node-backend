@@ -412,7 +412,7 @@ the snapshot was taken.
 | Must an erasure reach the backups at once? | No. The ICO accepts that a backup keeps the data until it ages out, **if** it is "beyond use": nobody reads it to serve the subject. The EDPB's 2025 enforcement report (Feb 2026, §4.2.6) asks for the same: do not alter backups where unwise, but keep track of erasure requests and comply with them on restored systems |
 | What keeps it "beyond use"?                | Backups are encrypted (restic, client side), reachable only through the restore path, and never queried for live work                                                                                                                                                                                                        |
 | What is promised after a restore?          | **Every erasure since the snapshot is re-applied before the app opens.** An erased account does not come back to life, not even for the minutes between a restore and a manual fix                                                                                                                                           |
-| Where does the list come from?             | The **erasure ledger**: one row `{ userId, at, kind }` per erased account, written in the erasure's own transaction and kept longer than the oldest backup (`NODE_ERASURE_LEDGER_RETENTION_DAYS`)                                                                                                                            |
+| Where does the list come from?             | The **erasure ledger**: one row `{ userId, at, kind }` per erased, scheduled or cancelled account, written in the erasure's own transaction and kept longer than the oldest backup (`NODE_ERASURE_LEDGER_RETENTION_DAYS`)                                                                                                    |
 | Who re-applies it, and how?                | A person, with `npm run ops:reapply-erasures -- --since <snapshot time>`, on the restored database with the app and cron stopped. Never on its own, never from a schedule                                                                                                                                                    |
 | What does the ledger hold?                 | Ids and dates only: no email, ip or user agent. A deletion record carries no content data (SDM Baustein 60)                                                                                                                                                                                                                  |
 
@@ -434,10 +434,11 @@ erase again **immediately, before use**) and a restoration log (ISO/IEC 27701). 
 `auditlogs` and Loki sources are shorter than the backups (90 days and 7 by default), which is why
 they are only the fallback for a lost host together with a lost newest snapshot.
 
-**Cancelled deletions.** A scheduled deletion that its owner (or staff) cancelled is noted as a
-`cancelled` row. The command never erases from one, and counts them in its report: a restored
-snapshot that still shows the account as scheduled would let the purge job erase an account the
-person had since restored, so the operator looks at those accounts before starting the stack.
+**Deletion locks.** The ledger also records `scheduled` (with the promised `purgeAt`, stored so a
+changed grace setting cannot move it) and `cancelled`. After a restore the latest event per account wins:
+`erased` always erases again; otherwise `scheduled` locks the account at the stored date and `cancelled`
+clears the lock (even a passed one); cancel, then ask again, stays scheduled. So the purge job never erases
+an account its owner kept, and an erasure asked for after the backup is not lost.
 
 **What a repeat erasure keeps.** The original erasure date: an order's PII scrub clock starts
 where it started the first time, instead of restarting at the restore.

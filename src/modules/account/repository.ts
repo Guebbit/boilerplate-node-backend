@@ -650,27 +650,51 @@ export type ErasureLedgerRow = Lean<ErasureLedgerDocument>;
 
 /**
  * Write (or move) the ledger row for an account and kind. An upsert that only ever moves `at`
- * forward (`$max`), so a repeat erasure after a restore, which carries the original date, finds
- * its row and changes nothing.
+ * forward, so a repeat erasure after a restore, which carries the original date, finds its row
+ * and changes nothing. `purgeAt` travels with the `at` it was written at: an older event never
+ * overwrites a newer one's date.
  *
  * @param userId - the account
  * @param kind - what happened to it
  * @param at - when
  * @param expiresAt - when the database forgets the row
- * @param session - joins the erasure's transaction; absent for a cancellation, which has none
+ * @param options - `purgeAt` for a `scheduled` row; `session` to join the erasure's transaction
  */
 const upsertErasureLedgerRow = (
     userId: string,
     kind: ErasureLedgerKind,
     at: Date,
     expiresAt: Date,
-    session?: ClientSession
+    options: { purgeAt?: Date; session?: ClientSession } = {}
 ): Promise<void> =>
     erasureLedgerModel
+        // Update pipeline (MongoDB 4.2+): the new `purgeAt` is kept only when this event is newer
+        // than the stored one. https://www.mongodb.com/docs/manual/tutorial/update-documents-with-aggregation-pipeline/
         .updateOne(
             { userId: toObjectId(userId), kind },
-            { $max: { at, expiresAt } },
-            { upsert: true, ...(session ? { session } : {}) }
+            [
+                {
+                    $set: {
+                        purgeAt: options.purgeAt
+                            ? {
+                                  $cond: [
+                                      { $gt: [at, { $ifNull: ['$at', new Date(0)] }] },
+                                      options.purgeAt,
+                                      '$purgeAt'
+                                  ]
+                              }
+                            : '$$REMOVE',
+                        at: { $max: ['$at', at] },
+                        expiresAt: { $max: ['$expiresAt', expiresAt] }
+                    }
+                }
+            ],
+            // `updatePipeline`: Mongoose refuses an array update unless asked.
+            {
+                upsert: true,
+                updatePipeline: true,
+                ...(options.session ? { session: options.session } : {})
+            }
         )
         .exec()
         .then(() => undefined);
