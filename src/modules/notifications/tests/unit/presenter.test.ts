@@ -112,6 +112,10 @@ describe('presentNotification, per code', () => {
             params: { ticketId: 't1', kind: 'contact', category: 'privacy' }
         },
         {
+            code: 'notifications.staff.ticket-overdue',
+            params: { ticketId: 't1', kind: 'contact', category: 'privacy' }
+        },
+        {
             code: 'notifications.staff.ticket-assigned',
             params: { ticketId: 't1', kind: 'dispute' }
         },

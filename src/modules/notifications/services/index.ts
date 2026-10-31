@@ -17,6 +17,7 @@ import {
     onPurchaseHoldPlaced,
     onWebhookSubscriptionAutoDisabled,
     onTicketOpened,
+    onTicketOverdue,
     onTicketAssigned,
     onReturnRequested,
     onOutboxEventDead
@@ -47,6 +48,7 @@ export const notificationsService = {
     onPurchaseHoldPlaced,
     onWebhookSubscriptionAutoDisabled,
     onTicketOpened,
+    onTicketOverdue,
     onTicketAssigned,
     onReturnRequested,
     onOutboxEventDead

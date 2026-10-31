@@ -31,6 +31,10 @@ const BODIES: Record<(typeof STAFF_NOTIFICATION_CODES)[number], StaffNoticeBody>
         code: 'notifications.staff.ticket-opened',
         params: { ticketId: 't1', kind: 'contact', category: 'cancellation' }
     },
+    'notifications.staff.ticket-overdue': {
+        code: 'notifications.staff.ticket-overdue',
+        params: { ticketId: 't1', kind: 'contact', category: 'cancellation' }
+    },
     'notifications.staff.ticket-assigned': {
         code: 'notifications.staff.ticket-assigned',
         params: { ticketId: 't1', kind: 'dispute' }
@@ -105,14 +109,24 @@ describe('STAFF_ROUTES', () => {
         expect(STAFF_ROUTES['notifications.staff.purchase-hold-placed'].email).toBe('now');
         expect(STAFF_ROUTES['notifications.staff.webhook-disabled'].email).toBe('none');
     });
+
+    it('mails an overdue ticket now, to the same per-notice sets as the opener', () => {
+        expect(STAFF_ROUTES['notifications.staff.ticket-overdue']).toMatchObject({
+            sets: STAFF_ROUTES['notifications.staff.ticket-opened'].sets,
+            email: 'now'
+        });
+    });
 });
 
 describe('staffLinkOf', () => {
-    it('points both ticket notices at the ticket page', () => {
+    it('points every ticket notice at the ticket page', () => {
         expect(staffLinkOf(BODIES['notifications.staff.ticket-opened'])).toEqual({
             template: 'tickets/{id}',
             parameters: { id: 't1' }
         });
+        expect(staffLinkOf(BODIES['notifications.staff.ticket-overdue']).template).toBe(
+            'tickets/{id}'
+        );
         expect(staffLinkOf(BODIES['notifications.staff.ticket-assigned']).template).toBe(
             'tickets/{id}'
         );

@@ -17,7 +17,7 @@ import {
 } from '@infrastructure/persistence/create-repository';
 import { TicketKind, TicketLinkType, TicketSource, TicketStatus } from '@types';
 import type { StoredTicket } from './presenter';
-import type { OwnTicketsFilter, TicketPatch } from './domain';
+import { OPEN_STATUSES, type OwnTicketsFilter, type TicketPatch } from './domain';
 
 /**
  * `status`, `category`, `kind` and `source` are deliberately absent from the search spec: each is
@@ -53,6 +53,12 @@ export interface TicketRepository extends Repository<TicketDocument, StoredTicke
     unassign: (id: string) => Promise<TicketDocument | null>;
     /** Append a note. `null`: no such ticket. */
     appendNote: (id: string, note: TicketNoteDocument) => Promise<TicketDocument | null>;
+    /**
+     * Claim ONE open ticket past its due date that was never reminded: stamp `overdueNotifiedAt`
+     * and return it. One conditional write, so two sweeps cannot claim the same ticket. `null`:
+     * nothing is left to claim.
+     */
+    claimOverdue: (now: Date) => Promise<TicketDocument | null>;
     /** Whether a system event already opened or touched a ticket (a redelivery). */
     sawEvent: (eventId: string) => Promise<boolean>;
     /** Insert a system ticket. Rejects with a duplicate-key error when its dedup key is open. */
@@ -153,6 +159,23 @@ export const ticketRepository: TicketRepository = {
     appendNote: (id, note) =>
         ticketModel
             .findOneAndUpdate({ _id: toObjectId(id) }, { $push: { notes: note } }, { new: true })
+            .exec(),
+
+    claimOverdue: (now) =>
+        // Mongoose: findOneAndUpdate with `new: true` returns the document AFTER the update; the
+        // filter and the stamp are one atomic step.
+        // https://mongoosejs.com/docs/api/model.html#Model.findOneAndUpdate()
+        ticketModel
+            .findOneAndUpdate(
+                {
+                    status: { $in: OPEN_STATUSES },
+                    dueAt: { $lt: now },
+                    overdueNotifiedAt: { $exists: false }
+                },
+                { $set: { overdueNotifiedAt: now } },
+                // Oldest deadline first, so a backlog is told in the order it went late.
+                { new: true, sort: { dueAt: 1 } }
+            )
             .exec(),
 
     sawEvent: (eventId) =>

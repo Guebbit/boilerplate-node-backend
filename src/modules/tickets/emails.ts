@@ -19,20 +19,23 @@ export interface ContactRequest {
     message: string;
     category?: string;
     createdAt?: string;
+    /** The reminder for a message nobody answered in time, not the first announcement. */
+    overdue?: boolean;
 }
 
-/** Operator-facing notification for a new contact request. */
+/** Operator-facing notification for a new contact request, or the reminder that it is overdue. */
 export const contactRequestEmail = (locale: string, contact: ContactRequest): EmailContent => {
     const t = translator(locale);
+    const wording = contact.overdue ? '-overdue' : '';
     return {
         template: 'tickets.contact',
         // The ticket's own subject is appended to the translated prefix, so an operator scanning
         // the mailbox reads what it is about without opening it.
-        subject: `${t('tickets.email-contact.subject')}: ${contact.subject}`,
+        subject: `${t(`tickets.email-contact.subject${wording}`)}: ${contact.subject}`,
         data: {
             locale,
             pageMetaTitle: t('tickets.email-contact.meta-title'),
-            title: t('tickets.email-contact.title'),
+            title: t(`tickets.email-contact.title${wording}`),
             labelName: t('tickets.email-contact.label-name'),
             labelEmail: t('tickets.email-contact.label-email'),
             labelSubject: t('tickets.email-contact.label-subject'),
