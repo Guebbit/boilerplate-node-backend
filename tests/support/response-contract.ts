@@ -134,18 +134,18 @@ const SESSION_ANSWERS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Whether a null sits inside a packed CASL rule's conditions of a session answer
+ * Whether a null is a packed permission rule's `deletedAt` condition on a session answer
  * (`account.abilities.tenant.0.2.deletedAt`). Anywhere else it is still refused.
  *
  * A rule's conditions are a Mongo query, where `null` is an OPERAND ("`deletedAt` is unset"), not a
- * value the response reports. Dropping it would change what the rule means on the client.
+ * value the response reports. `deletedAt` is the one field the permission rules use it on.
  *
  * @param operationId - the operation that answered
  * @param path - a dotted path from {@link nullPathsIn}
  */
 export const isPackedRuleOperand = (operationId: string, path: string): boolean =>
     SESSION_ANSWERS.has(operationId) &&
-    /^(account\.)?abilities\.(tenant|platform)\.\d+\.2\./.test(path);
+    /^(account\.)?abilities\.(tenant|platform)\.\d+\.2\.deletedAt$/.test(path);
 
 /**
  * Checks one captured response against `openapi.yaml`, throwing a plain `Error` on a mismatch.

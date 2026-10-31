@@ -489,7 +489,7 @@ operations:
         channel:
             $ref: '#/channels/notifications.deleted'
         description: >-
-            Pushed when the user deletes one (`DELETE /notifications/{id}`), empties the inbox (`DELETE /notifications`), or the cap trims the oldest, so a second tab stays in step with the first. `all` is true when the whole inbox went.
+            Pushed when the user deletes one (`DELETE /notifications/{id}`), empties the inbox (`DELETE /notifications`), or the cap trims the oldest, so a second tab stays in step with the first. `all` is true when the whole inbox went. A filtered delete (`DELETE /notifications?audience=`) sends `all: false` and the ids that left; it also removes staff rows the caller no longer sees, so a frame may name ids the tab never held.
         messages:
             - $ref: '#/channels/notifications.deleted/messages/NotificationsDeletedEvent'
     sseNotificationsRead:
@@ -1790,6 +1790,46 @@ components:
                     type: string
                     format: date-time
             additionalProperties: false
+        NotificationStaffTicketOverduePayload:
+            title: NotificationStaffTicketOverduePayload
+            type: object
+            required:
+                - id
+                - audience
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
+                code:
+                    type: string
+                    enum:
+                        - notifications.staff.ticket-overdue
+                params:
+                    $ref: '#/components/schemas/TicketOpenedParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
         NotificationStaffTicketAssignedPayload:
             title: NotificationStaffTicketAssignedPayload
             type: object
@@ -2637,6 +2677,7 @@ components:
                 - $ref: '#/components/schemas/NotificationStaffPurchaseHoldPlacedPayload'
                 - $ref: '#/components/schemas/NotificationStaffWebhookDisabledPayload'
                 - $ref: '#/components/schemas/NotificationStaffTicketOpenedPayload'
+                - $ref: '#/components/schemas/NotificationStaffTicketOverduePayload'
                 - $ref: '#/components/schemas/NotificationStaffTicketAssignedPayload'
                 - $ref: '#/components/schemas/NotificationStaffReturnRequestedPayload'
                 - $ref: '#/components/schemas/NotificationStaffOutboxDeadPayload'

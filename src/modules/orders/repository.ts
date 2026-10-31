@@ -645,18 +645,13 @@ const piiDueFilter = (cutoff: Date, window: PiiClaimWindow): QueryFilter<OrderDo
  *
  * @param userId - the erased account's id
  * @param session - the erasure's transaction
- * @param erasedAt - when the erasure counts from; now unless a restore is being repeated
  * @returns how many orders were detached
  */
-const detachUserId = (
-    userId: string,
-    session?: ClientSession,
-    erasedAt: Date = new Date()
-): Promise<number> =>
+const detachUserId = (userId: string, session?: ClientSession): Promise<number> =>
     orderModel
         .updateMany(
             { userId: toObjectId(userId) },
-            { $unset: { userId: 1 }, $min: { piiClockStartedAt: erasedAt } },
+            { $unset: { userId: 1 }, $min: { piiClockStartedAt: new Date() } },
             // No `updatedAt` bump: this is bookkeeping, not an edit.
             { timestamps: false, ...(session ? { session } : {}) }
         )
@@ -891,7 +886,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     findManyReferences: (ids: readonly string[]) => Promise<OrderReference[]>;
     findOpenUnpaidIdsOf: (userId: string, session?: ClientSession) => Promise<string[]>;
     findCancelledIdsOf: (userId: string) => Promise<{ paid: string[]; unpaid: string[] }>;
-    detachUserId: (userId: string, session?: ClientSession, erasedAt?: Date) => Promise<number>;
+    detachUserId: (userId: string, session?: ClientSession) => Promise<number>;
     startPiiClock: (userId: string) => Promise<number>;
     scrubDueForAnonymization: (cutoff: Date, window: PiiClaimWindow) => Promise<number>;
     incrementOrderNumberCounter: (year: number) => Promise<number>;

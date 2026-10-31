@@ -32,7 +32,8 @@ import {
  */
 const PUBLIC_SCOPE: Readonly<Record<string, unknown>> = {
     active: true,
-    deletedAt: { $exists: false }
+    // `null` matches a missing field too, and is how the permission rules spell it (one spelling).
+    deletedAt: null
 };
 
 /** What a sitemap needs of a public product: where it lives and when its content last changed. */

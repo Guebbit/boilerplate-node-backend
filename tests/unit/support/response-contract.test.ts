@@ -45,6 +45,13 @@ describe('isPackedRuleOperand', () => {
         expect(isPackedRuleOperand('listAuditLogs', `abilities.${rule}`)).toBe(false);
     });
 
+    it('refuses a null on any condition field but deletedAt', () => {
+        expect(isPackedRuleOperand('login', 'account.abilities.tenant.0.2.userId')).toBe(false);
+        expect(isPackedRuleOperand('login', 'account.abilities.tenant.0.2.deletedAt.x')).toBe(
+            false
+        );
+    });
+
     it('refuses a null outside the conditions of a packed rule, on a session answer', () => {
         expect(isPackedRuleOperand('login', 'account.abilities.grantableRoles.0')).toBe(false);
         expect(isPackedRuleOperand('login', 'account.imageUrl')).toBe(false);

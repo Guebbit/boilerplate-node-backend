@@ -52,6 +52,7 @@ flowchart LR
     stock_alerts -. "stock_alert.sent" .-> notifications
     tickets -. "ticket.assigned" .-> notifications
     tickets -. "ticket.opened" .-> notifications
+    tickets -. "ticket.overdue" .-> notifications
     webhooks -. "webhook.subscription_auto_disabled" .-> notifications
     wishlist -. "wishlist.items_removed" .-> notifications
 
@@ -179,12 +180,13 @@ flowchart LR
   (`NODE_NOTIFICATIONS_STAFF_TTL_DAYS`), so a flood of them cannot push a person's own messages out.
 - **Today's codes.** `notifications.staff.purchase-hold-placed` (mail `now`: abuse defence),
   `notifications.staff.webhook-disabled` (bell only), `notifications.staff.ticket-opened` (mail
-  `now`: a person waits) and `notifications.staff.ticket-assigned` (bell only, the assignee alone).
+  `now`: a person waits), `notifications.staff.ticket-overdue` (mail `now`, once, when that ticket
+  passes its due date unclosed; the same people) and `notifications.staff.ticket-assigned` (bell only, the assignee alone).
   `notifications.staff.return-requested` (bell only, the people who decide returns; a withdrawal is
   a right and is not announced) and `notifications.staff.outbox-dead` (bell only, administrators:
   the kernel's `outbox.event_dead` fact, a plain emit because an outbox row about the outbox could
   itself die).
-- **Ticket notices.** The two ticket codes name their sets per notice (`per-notice` in the route
+- **Ticket notices.** The ticket codes name their sets per notice (`per-notice` in the route
   table): the set of the opened ticket's kind. Params are the ticket id, its kind and a contact
   message's category, nothing the visitor typed. A contact message that finds no recipient with
   an address is handed to the tickets module's fallback mailbox
@@ -210,7 +212,9 @@ flowchart LR
 - **Appeared or grew** -> unread again, pushed to open tabs, and (for the codes below marked
   `digest`) listed in that person's one digest mail. **Fell or the same** -> quiet. **Zero** ->
   the row is removed. An unchanged re-run mails nothing.
-- **Mail is for what is overdue**, not for work in the normal course (B14).
+- **Mail is for what is overdue**, not for work in the normal course (B14). The ticket reminder
+  (`ticket-overdue`) is that rule applied to a single ticket: see
+  [the overdue reminder](./tickets.md#the-overdue-reminder).
 
 | Code                         | Who (set)             | Counts                                                                                                                                                                         | Mail   |
 | ---------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |

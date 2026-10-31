@@ -16,7 +16,7 @@ import type { DomainEventMap } from '@kernel/events';
 import { ticketModel } from '@modules/tickets/model';
 import { ticketRepository } from '@modules/tickets/repository';
 import { TICKET_OPENED } from '../../events';
-import { TicketKind, TicketResolution, TicketStatus } from '@types';
+import { RefundFailureReason, TicketKind, TicketResolution, TicketStatus } from '@types';
 import { enabledModules } from '../../../../modules';
 
 // The queue, not the mail: opening a ticket tells the staff who work it.
@@ -208,6 +208,11 @@ describe('what opens a ticket', () => {
             'a refusal the sweep will retry',
             'payment.refund_failed',
             { ...REFUND, failureReason: 'provider_unavailable', final: false }
+        ],
+        [
+            'a final refusal because the bank already took the money back',
+            'payment.refund_failed',
+            { ...REFUND, failureReason: RefundFailureReason.disputed, final: true }
         ],
         [
             'a delay shipping outside the rule',

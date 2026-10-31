@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { ACCEPTED_UPLOAD_TYPES } from '@api/upload-types';
 import { api, authenticateAs } from '@tests/http';
 import { emptyFileSandbox } from '@tests/file-sandbox';
 import { setupTestDb } from '@tests/setup-test-db';
@@ -114,10 +115,8 @@ describe('upload content validation', () => {
 
         expect(response.status).toBe(415);
         expect(response.body.errors[0].code).toBe('UNSUPPORTED_MEDIA_TYPE');
-        expect(response.body.errors[0].details.accepted).toEqual(
-            expect.arrayContaining(['image/png', 'image/jpeg'])
-        );
-        expect(response.body.errors[0].details.accepted).not.toContain('application/pdf');
+        // Exactly the contract's list: what `details.accepted` tells a client is what the spec says.
+        expect(response.body.errors[0].details.accepted).toEqual([...ACCEPTED_UPLOAD_TYPES]);
         expect(uploadedFiles()).toEqual([]);
     });
 

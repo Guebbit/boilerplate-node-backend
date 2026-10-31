@@ -235,6 +235,30 @@ export const onTicketOpened = (opened: DomainEventMap['ticket.opened']): Promise
             : undefined
     );
 
+/**
+ * An open ticket went overdue: the people the opener told hear of it once more, the same sets, the
+ * same fallback mailbox for a contact message nobody could be told of. The sweep claims a ticket
+ * once, so this runs once per ticket; the dedupe key is the second guard.
+ */
+export const onTicketOverdue = (overdue: DomainEventMap['ticket.overdue']): Promise<void> =>
+    notifyStaff({
+        tenantId: overdue.tenantId,
+        body: {
+            code: 'notifications.staff.ticket-overdue',
+            params: {
+                ticketId: overdue.ticketId,
+                kind: overdue.kind,
+                ...(overdue.category ? { category: overdue.category } : {})
+            }
+        },
+        sets: alertSetsOf(overdue),
+        dedupeKey: `ticket-overdue:${overdue.ticketId}`
+    }).then((told) =>
+        told === 0 && overdue.kind === 'contact'
+            ? ticketService.mailFallbackMailbox(overdue.ticketId, true)
+            : undefined
+    );
+
 /** A ticket was given to a colleague: the one who now holds it hears, and nobody else. */
 export const onTicketAssigned = (assigned: DomainEventMap['ticket.assigned']): Promise<void> =>
     notifyStaffMember(assigned.assigneeId, {

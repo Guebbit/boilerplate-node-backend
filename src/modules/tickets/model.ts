@@ -68,6 +68,8 @@ export interface TicketDocument
     /** The last system events that opened or touched it: what makes a redelivered event a no-op. */
     eventIds?: string[];
     dueAt?: Date;
+    /** When the one overdue reminder was claimed; absent until then, and never written twice. */
+    overdueNotifiedAt?: Date;
     lastSeenAt?: Date;
     closedAt?: Date;
     respondedAt?: Date;
@@ -163,6 +165,11 @@ export const ticketSchema = new Schema<TicketDocument, TicketModel>(
         dueAt: {
             type: Date
         },
+        // Stamped by the overdue sweep in the same write that claims the ticket: the stamp IS
+        // the "already reminded" memory. Internal, not on the wire.
+        overdueNotifiedAt: {
+            type: Date
+        },
         lastSeenAt: {
             type: Date
         },
@@ -249,7 +256,7 @@ ticketSchema.index({ closedAt: 1 }, { expireAfterSeconds: retentionDays * 24 * 6
  * same logic — see `./service` `search()`.
  */
 export const applyTicketTransform = applySerialization(ticketSchema, {
-    omit: ['openKey', 'eventIds'],
+    omit: ['openKey', 'eventIds', 'overdueNotifiedAt'],
     after: (serialized) => {
         // References and dates leave as the strings the wire declares, not as ObjectId and Date.
         for (const [key, value] of Object.entries(serialized)) {

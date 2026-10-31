@@ -268,10 +268,10 @@ The Database Tools spell TLS `--ssl --sslCAFile`, and the bundled `database` req
     npm run ops:reapply-erasures -- --since <the snapshot time, ISO> --snapshot <restic id> --by <your name>
     ```
 
-    It refuses to run while something answers at the app's address (`--app-url`, default
-    `http://127.0.0.1:$NODE_PORT`): a repeat erasure racing live traffic breaks consistency. It erases again each
-    account the ledger names since `--since`, keeping the original erasure date, and writes one restoration-log
-    audit row (`auth.erasures.reapplied`: who, which snapshot, the counts). Safe to repeat; it exits non-zero while
+    Step 1 is the guard: it does not check that the app and cron are stopped, and the purge job (which has no
+    HTTP port to probe) must not run beside it. It erases again each account the ledger names since `--since`,
+    keeping the original erasure date, and writes one restoration-log audit row (`auth.erasures.reapplied`: who,
+    which snapshot, the counts and ids). Safe to repeat; it exits non-zero while
     any account could not be erased.
 
 5. **Start the stack** and look: log in, open an order, fetch an image. Mail, stock alerts, the purge job
@@ -302,7 +302,7 @@ oldest snapshot brings back an account the ledger has forgotten.
 `purgeAt` the owner was promised, stored and never recomputed) and `cancelled`. For each account the command
 applies the latest event since `--since`: `erased` always wins; otherwise a later `scheduled` locks the account
 at the stored date (and ends its sessions), a later `cancelled` clears the lock even if `purgeAt` has passed,
-and cancel-then-ask-again stays scheduled. The log line counts `rescheduled`, `unscheduled` and `unchanged`.
+and cancel-then-ask-again stays scheduled. The log prints the counts and then the ids of every account in each outcome (`erased`, `alreadyGone`, `rescheduled`, `unscheduled`, `unchanged`, `failed`): the restored audit log lost the rows written after the snapshot, so these ids are the record.
 No manual check is needed before starting the stack.
 
 **Only if the ledger is lost** (the host, and the newest snapshot's copy): fall back to the audit events, which

@@ -1,12 +1,10 @@
 /**
  * @module
  * The erasure ledger: written inside the erasure transaction (and absent after a rollback), noted
- * on a cancelled deletion, and replayed by `reapplyErasures` on a restored database — erasing
- * again exactly the `erased` rows since the snapshot, never a `cancelled` one, never twice.
+ * on a schedule or a cancel, and replayed by `reapplyErasures` on a restored database — the latest
+ * event per account wins, erased beats everything, and a second run changes nothing.
  */
 
-import http from 'node:http';
-import type { AddressInfo } from 'node:net';
 import { setupTestDb } from '@tests/setup-test-db';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { testCallerContext } from '@tests/callers';
@@ -16,7 +14,10 @@ import { createUser, eraseAsScheduled, userRepository } from '@modules/users/tes
 import { userService } from '@modules/users';
 import * as auditPort from '@infrastructure/observability/audit';
 import { accountService } from '../../services';
-import { appIsAnswering, reapplyErasures, recordSchedule } from '../../services/erasure-ledger';
+import { countsOf, reapplyErasures, recordSchedule } from '../../services/erasure-ledger';
+import { handleRestoredByStaff, restoreAccount } from '../../services/account-deletion';
+import { erasureLedgerRepository } from '../../repository';
+import { systemCallerContext } from '@kernel/permissions';
 import { erasureLedgerModel } from '../../model';
 import { accountAuditActions } from '../../audit';
 import { plantToken } from '../factories';
@@ -151,14 +152,11 @@ describe('reapplyErasures', () => {
 
         const report = await reapplyErasures({ since });
 
-        expect(report).toEqual({
-            erased: 1,
-            alreadyGone: 0,
-            rescheduled: 0,
-            unscheduled: 0,
-            unchanged: 1,
-            failed: 0
-        });
+        expect(report.erased).toEqual([recent.id]);
+        expect(report.unchanged).toEqual([cancelled.id]);
+        expect(countsOf(report)).toEqual(
+            expect.objectContaining({ alreadyGone: 0, rescheduled: 0, unscheduled: 0, failed: 0 })
+        );
         expect(await userRepository.findById(recent.id)).toBeNull();
         expect(await userRepository.findById(old.id)).not.toBeNull();
         expect(await userRepository.findById(cancelled.id)).not.toBeNull();
@@ -178,6 +176,18 @@ describe('reapplyErasures', () => {
         expect(rows[0].at).toEqual(original);
     });
 
+    it('dates the row, and its expiry, by the original erasure when the row is written afresh', async () => {
+        const user = await createUser({ email: 'fresh-row@example.com' });
+        const original = new Date(Date.now() - 3 * DAY);
+
+        await userService.eraseAgain(user.id, original, systemCallerContext('User'));
+
+        const rows = await rowsOf(user.id);
+        expect(rows).toHaveLength(1);
+        expect(rows[0].at).toEqual(original);
+        expect(rows[0].expiresAt.getTime() - original.getTime()).toBe(220 * DAY);
+    });
+
     it('counts an account the restored database never held, and a second run changes nothing', async () => {
         const user = await createUser({ email: 'never-restored@example.com' });
         await eraseAsScheduled(user);
@@ -186,14 +196,10 @@ describe('reapplyErasures', () => {
         const first = await reapplyErasures({ since });
         const second = await reapplyErasures({ since });
 
-        expect(first).toEqual({
-            erased: 0,
-            alreadyGone: 1,
-            rescheduled: 0,
-            unscheduled: 0,
-            unchanged: 0,
-            failed: 0
-        });
+        expect(first.alreadyGone).toEqual([user.id]);
+        expect(countsOf(first)).toEqual(
+            expect.objectContaining({ erased: 0, rescheduled: 0, unscheduled: 0, failed: 0 })
+        );
         expect(second).toEqual(first);
     });
 
@@ -205,11 +211,11 @@ describe('reapplyErasures', () => {
         jest.spyOn(userService, 'eraseAgain').mockRejectedValueOnce(new Error('simulated'));
 
         const failed = await reapplyErasures({ since });
-        expect(failed.failed).toBe(1);
+        expect(failed.failed).toEqual([user.id]);
         expect(await userRepository.findById(user.id)).not.toBeNull();
 
         const retried = await reapplyErasures({ since });
-        expect(retried.erased).toBe(1);
+        expect(retried.erased).toEqual([user.id]);
         expect(await userRepository.findById(user.id)).toBeNull();
     });
 
@@ -233,8 +239,8 @@ describe('reapplyErasures', () => {
                 metadata: expect.objectContaining({
                     by: 'andrea',
                     snapshot: 'abc123',
-                    erased: 1,
-                    failed: 0
+                    erased: [user.id],
+                    failed: []
                 })
             })
         );
@@ -283,7 +289,7 @@ describe('reapplyErasures — deletion locks', () => {
 
         const report = await reapplyErasures({ since: since() });
 
-        expect(report.unscheduled).toBe(1);
+        expect(report.unscheduled).toEqual([user.id]);
         const reloaded = await userRepository.findById(user.id);
         expect(reloaded!.purgeAt).toBeUndefined();
         expect(reloaded!.deletedBy).toBeUndefined();
@@ -298,7 +304,7 @@ describe('reapplyErasures — deletion locks', () => {
 
         const report = await reapplyErasures({ since: since() });
 
-        expect(report.rescheduled).toBe(1);
+        expect(report.rescheduled).toEqual([user.id]);
         const reloaded = await userRepository.findById(user.id);
         expect(reloaded!.purgeAt).toEqual(stored);
         expect(reloaded!.deletedBy).toBe('owner');
@@ -334,8 +340,46 @@ describe('reapplyErasures — deletion locks', () => {
 
         const report = await reapplyErasures({ since: since() });
 
-        expect(report.erased).toBe(1);
+        expect(report.erased).toEqual([user.id]);
         expect(await userRepository.findById(user.id)).toBeNull();
+    });
+
+    it('does not lock an account the owner scheduled and cancelled after the snapshot', async () => {
+        const user = await createUser({ email: 'both-late@example.com' });
+        await plantRow(
+            user.id,
+            'scheduled',
+            new Date(Date.now() - 4 * DAY),
+            new Date(Date.now() + DAY)
+        );
+        await plantRow(user.id, 'cancelled', new Date(Date.now() - 2 * DAY));
+
+        const report = await reapplyErasures({ since: since() });
+
+        expect(report.unchanged).toEqual([user.id]);
+        expect((await userRepository.findById(user.id))!.purgeAt).toBeUndefined();
+    });
+
+    it('leaves a staff or reaper soft delete alone when clearing a lock', async () => {
+        const staff = await createUser({
+            email: 'staff-deleted@example.com',
+            deletedAt: new Date(Date.now() - 3 * DAY)
+        });
+        const reaper = await createUser({
+            email: 'reaper-deleted@example.com',
+            deletedAt: new Date(Date.now() - 3 * DAY),
+            deletedBy: 'reaper'
+        });
+        await plantRow(staff.id, 'cancelled', new Date(Date.now() - DAY));
+        await plantRow(reaper.id, 'cancelled', new Date(Date.now() - DAY));
+
+        const report = await reapplyErasures({ since: since() });
+
+        expect(report.unchanged.toSorted()).toEqual([staff.id, reaper.id].toSorted());
+        expect((await userRepository.findById(staff.id))!.deletedAt).toBeInstanceOf(Date);
+        const reaped = await userRepository.findById(reaper.id);
+        expect(reaped!.deletedAt).toBeInstanceOf(Date);
+        expect(reaped!.deletedBy).toBe('reaper');
     });
 
     it('does nothing on a second run', async () => {
@@ -352,7 +396,7 @@ describe('reapplyErasures — deletion locks', () => {
 
         const again = await reapplyErasures({ since: since() });
 
-        expect(again).toEqual(
+        expect(countsOf(again)).toEqual(
             expect.objectContaining({ rescheduled: 0, unscheduled: 0, failed: 0, unchanged: 2 })
         );
     });
@@ -376,28 +420,76 @@ describe('reapplyErasures — deletion locks', () => {
     });
 });
 
-describe('appIsAnswering', () => {
-    it('is true while something answers HTTP, whatever the status', async () => {
-        const server = http.createServer((_request, response) => {
-            response.statusCode = 503;
-            response.end();
+describe('the lock and its ledger row commit together', () => {
+    it('writes no lock when the ledger row fails (scheduling)', async () => {
+        const user = await createUser({
+            email: 'sched-rollback@example.com',
+            verifiedAt: new Date()
         });
-        await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-        const { port } = server.address() as AddressInfo;
+        jest.spyOn(erasureLedgerRepository, 'upsert').mockRejectedValueOnce(new Error('simulated'));
 
-        try {
-            expect(await appIsAnswering(`http://127.0.0.1:${port}`)).toBe(true);
-        } finally {
-            await new Promise((resolve) => server.close(resolve));
-        }
+        await expect(
+            accountService.scheduleAccountDeletion(user, testCallerContext)
+        ).rejects.toThrow('simulated');
+
+        const reloaded = await userRepository.findById(user.id);
+        expect(reloaded!.purgeAt).toBeUndefined();
+        expect(reloaded!.deletedBy).toBeUndefined();
+        expect(await rowsOf(user.id)).toEqual([]);
     });
 
-    it('is false when the connection is refused', async () => {
-        const server = http.createServer();
-        await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-        const { port } = server.address() as AddressInfo;
-        await new Promise((resolve) => server.close(resolve));
+    it('keeps the lock when the ledger row fails (owner cancel)', async () => {
+        const user = await lockedInSnapshot(
+            'cancel-rollback@example.com',
+            new Date(Date.now() + 5 * DAY)
+        );
+        jest.spyOn(erasureLedgerRepository, 'upsert').mockRejectedValueOnce(new Error('simulated'));
 
-        expect(await appIsAnswering(`http://127.0.0.1:${port}`)).toBe(false);
+        await expect(restoreAccount(user, 'sign-in', testCallerContext)).rejects.toThrow(
+            'simulated'
+        );
+
+        const reloaded = await userRepository.findById(user.id);
+        expect(reloaded!.deletedBy).toBe('owner');
+        expect(await rowsOf(user.id)).toEqual([]);
+    });
+
+    it('dates a staff cancel by the event, so a late retry does not re-date it', async () => {
+        const user = await createUser({
+            email: 'staff-cancel@example.com',
+            verifiedAt: new Date()
+        });
+        const cancelledAt = new Date(Date.now() - 2 * DAY);
+
+        await handleRestoredByStaff(user.id, cancelledAt);
+
+        const rows = await rowsOf(user.id);
+        expect(rows.map((row) => [row.kind, row.at])).toEqual([['cancelled', cancelledAt]]);
+    });
+});
+
+describe('restore doors take only the system caller', () => {
+    it('refuses restoreDeletionState and eraseAgain for any other caller', async () => {
+        const user = await createUser({ email: 'not-system@example.com' });
+
+        expect(() => userService.restoreDeletionState(user.id, null, testCallerContext)).toThrow(
+            'system caller'
+        );
+        expect(() => userService.eraseAgain(user.id, new Date(), testCallerContext)).toThrow(
+            'system caller'
+        );
+        expect(await userRepository.findById(user.id)).not.toBeNull();
+    });
+
+    it('audits a lock it changes, and only a change', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await lockedInSnapshot('audited@example.com', new Date(Date.now() + DAY));
+        const system = systemCallerContext('User');
+
+        await userService.restoreDeletionState(user.id, null, system);
+        await userService.restoreDeletionState(user.id, null, system);
+
+        const actions = auditSpy.mock.calls.map(([event]) => (event as { action: string }).action);
+        expect(actions.filter((a) => a === 'system.user.deletion_lock_restored')).toHaveLength(1);
     });
 });

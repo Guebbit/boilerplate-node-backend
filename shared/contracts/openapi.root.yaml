@@ -184,6 +184,14 @@ servers:
     - url: https://api.example.com
       description: Production
 
+# The upload types every `imageUpload` part accepts. The bundler writes them onto each multipart
+# body as `encoding.imageUpload.contentType` and then drops this key; `gen:api` reads them back
+# from there. Canonical spellings only: the BE's tolerated `image/jpg` alias is not API surface.
+x-image-upload-types:
+    - image/png
+    - image/jpeg
+    - image/webp
+
 # ---------- Responses the APPLICATION answers, on operations that never declare them. ----------
 #
 # Four things can answer before any route runs, or in place of one:
@@ -746,32 +754,23 @@ components:
                 or default URL rather than an upload — there is nothing to derive a thumbnail
                 from. Never accepted on a request body: the server is the only writer.
 
-        # ---------- On the `imageUpload` fields below (and why they carry no limits) ----------
+        # ---------- On the `imageUpload` fields below ----------
         #
-        # The six `*Multipart` request bodies each declare `imageUpload` as a bare
-        # `type: string, format: binary` — no `maxLength`, no `contentMediaType`. That is on
-        # purpose, and it is worth knowing why before someone "fixes" it.
+        # Every `*Multipart` request body declares `imageUpload` as a bare `type: string,
+        # format: binary`, and the bundler stamps `encoding.imageUpload.contentType` beside it
+        # from the root's `x-image-upload-types` (OpenAPI 3.1's per-part accepted types). No
+        # `maxLength` or `contentMediaType` on the property itself: `contentMediaType` is ignored in
+        # multipart, and orval's zod generator short-circuits `format: binary` to
+        # `zod.instanceof(File)` with no constant to read.
         #
-        # The real limits live in the backend, and only there:
-        #   - accepted mime types → src/infrastructure/http/middlewares/upload.ts's `fileFilter` (image/png, jpg, jpeg, webp)
-        #   - maximum size        → NODE_MAX_UPLOAD_BYTES, default 5 MB
-        # enforced twice: `fileFilter` rejects on the client's declared Content-Type before the
-        # bytes touch disk, then `identifyImageFile()` re-reads the actual magic bytes and answers
-        # 422 when the declaration lied. Nothing a client declares can substitute for either gate.
-        #
-        # Declaring the constraints here would document them but generate nothing to read:
-        #   - orval's zod generator short-circuits on `format: binary` straight to
-        #     `zod.instanceof(File)` and emits no length constant for it
-        #     (@orval/zod, the `case "string"` branch);
-        #   - the `zodSchemas` target in orval.config.ts has no `splitByContentType`, so only the
-        #     JSON body of each operation becomes a schema — the multipart bodies never do.
-        # So a `maxLength` added here would reach no generated artefact in either repo, while
-        # looking like it had.
-        #
-        # The frontend therefore restates both numbers in src/infrastructure/uploads.ts, which names
-        # storage.ts as the authority and explains the same thing at its own call site. If the
-        # backend's limits ever change, that file is what has to change with them — nothing will
-        # announce the drift.
+        # Where each limit lives:
+        #   - accepted types -> the contract (`x-image-upload-types`); BE `fileFilter` and the
+        #                       FE file picker both derive from the generated list
+        #   - byte signatures -> shared/rules/images.yaml (server internals; a client declaring a
+        #                       type cannot substitute for them)
+        #   - maximum size   -> NODE_MAX_UPLOAD_BYTES (default 5 MB), env on each side
+        # `fileFilter` answers 415 on a declared type outside the list, then the magic bytes are
+        # re-read and a lying declaration answers 422.
 
         PaginationMeta:
             type: object

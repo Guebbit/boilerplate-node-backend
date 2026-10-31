@@ -18,6 +18,10 @@ import {
 } from '@infrastructure/http/response';
 import type { CallerContext } from '@types';
 import { accessService } from '@modules/access';
+import { withTransaction } from '@infrastructure/runtime/database';
+import { recordAudit } from '@infrastructure/observability/audit';
+import { usersAuditActions } from '../audit';
+import type { ClientSession } from 'mongoose';
 import type { UserDocument } from '../model';
 import { update, type SaveHook } from './update';
 import { remove, erase } from './remove';
@@ -114,17 +118,28 @@ export const eraseInactive = (
  * @param user - the loaded account, the caller's own
  * @param requestedAt - when the owner asked; becomes `deletedAt`
  * @param purgeAt - when the erasure falls due, decided by the caller (the grace rule is `account`'s)
+ * @param alsoInTransaction - a write that must commit with the lock or not at all (`account`'s
+ *   erasure-ledger row)
  */
 export const scheduleOwnDeletion = (
     user: UserDocument,
     requestedAt: Date,
-    purgeAt: Date
+    purgeAt: Date,
+    alsoInTransaction?: InTransaction
 ): Promise<UserDocument> => {
     user.deletedAt = requestedAt;
     user.deletedBy = 'owner';
     user.purgeAt = purgeAt;
     markSessionsEnded(user, requestedAt);
-    return userRepository.save(user);
+    return withTransaction((session) =>
+        userRepository
+            .save(user, session)
+            .then((saved) =>
+                (alsoInTransaction ? alsoInTransaction(session) : Promise.resolve()).then(
+                    () => saved
+                )
+            )
+    );
 };
 
 /**
@@ -134,10 +149,20 @@ export const scheduleOwnDeletion = (
  *
  * @param user - the account to restore
  * @param now - the moment to judge `purgeAt` against
+ * @param alsoInTransaction - a write that must commit with the restore or not at all
  * @returns whether THIS call restored it; `false` once the purge is due, or if another restore won
  */
-export const restoreOwnAccount = (user: UserDocument, now: Date = new Date()): Promise<boolean> =>
-    userRepository.restoreScheduledDeletion(user.id, now);
+export const restoreOwnAccount = (
+    user: UserDocument,
+    now: Date = new Date(),
+    alsoInTransaction?: InTransaction
+): Promise<boolean> =>
+    withTransaction((session) =>
+        userRepository.restoreScheduledDeletion(user.id, now, session).then((restored) => {
+            if (!restored || !alsoInTransaction) return restored;
+            return alsoInTransaction(session).then(() => restored);
+        })
+    );
 
 /**
  * Hard-delete an account whose owner-scheduled grace has run out: the purge job's door. The first
@@ -165,6 +190,22 @@ export const eraseScheduledDeletion = (
 export const findDueScheduledDeletions = (now: Date = new Date()): Promise<UserDocument[]> =>
     userRepository.findScheduledDeletionsDue(now);
 
+/** A write another module needs to commit in the same transaction as a lock change. */
+type InTransaction = (session: ClientSession) => Promise<void>;
+
+/**
+ * Refuse any caller but the system one. The two restore doors below rewrite an account's fate from
+ * a ledger, which only `ops:reapply-erasures` may do; a published door that took any caller would
+ * let a sibling module set a `purgeAt` or erase an account.
+ *
+ * @param context - who is asking
+ * @throws {Error} when the caller is not the system
+ */
+const requireSystemCaller = (context: CallerContext): void => {
+    if (!context.caller.system)
+        throw new Error('Only the system caller may rewrite an account from the erasure ledger.');
+};
+
 /**
  * Erase an account again on a restored database, keeping the date it was first erased on. The
  * door `ops:reapply-erasures` uses: a restore brought the account back, the erasure ledger says
@@ -172,31 +213,48 @@ export const findDueScheduledDeletions = (now: Date = new Date()): Promise<UserD
  *
  * @param userId - the account the ledger names
  * @param erasedAt - the original erasure date, so the clocks the erasure starts do not restart
- * @param context - the operator's system context
+ * @param context - the operator's system context; any other caller is refused
  * @returns `null` when the restored database does not hold the account (nothing to erase)
  */
 export const eraseAgain = (
     userId: string,
     erasedAt: Date,
     context: CallerContext
-): Promise<Awaited<ReturnType<typeof erase>> | null> =>
-    userRepository
+): Promise<Awaited<ReturnType<typeof erase>> | null> => {
+    requireSystemCaller(context);
+    return userRepository
         .findById(userId)
         .then((user) => (user ? erase(user, context, undefined, erasedAt) : null));
+};
 
 /**
  * Put an account's owner-deletion lock back as the erasure ledger remembers it, on a restored
  * database: set it to the stored dates, or clear it. The door `ops:reapply-erasures` uses, since
- * {@link restoreOwnAccount} refuses once `purgeAt` has passed.
+ * {@link restoreOwnAccount} refuses once `purgeAt` has passed. Records the change in the audit trail.
  *
  * @param userId - the account the ledger names
  * @param schedule - the stored dates the owner was promised, or `null` for "cancelled"
+ * @param context - the operator's system context; any other caller is refused
  * @returns `null` when the database does not hold the account; else whether it changed
  */
 export const restoreDeletionState = (
     userId: string,
-    schedule: { requestedAt: Date; purgeAt: Date } | null
-): Promise<boolean | null> =>
-    userRepository
-        .findById(userId)
-        .then((user) => (user ? userRepository.setOwnerDeletionState(userId, schedule) : null));
+    schedule: { requestedAt: Date; purgeAt: Date } | null,
+    context: CallerContext
+): Promise<boolean | null> => {
+    requireSystemCaller(context);
+    return userRepository.findById(userId).then((user) => {
+        if (!user) return null;
+        return userRepository.setOwnerDeletionState(userId, schedule).then((changed) => {
+            if (changed)
+                recordAudit(context, {
+                    action: usersAuditActions.SYSTEM_USER_DELETION_LOCK_RESTORED,
+                    outcome: 'success',
+                    targetType: 'user',
+                    targetId: userId,
+                    metadata: { locked: schedule !== null }
+                });
+            return changed;
+        });
+    });
+};

@@ -29,6 +29,7 @@ import {
 } from '@modules/payments';
 import { USER_REVIEW_CLEARED, USER_REVIEW_FLAGGED } from '@modules/users';
 import { router } from './routes';
+import { ticketsJobs } from './jobs';
 import { systemTickets } from './services/system';
 import { ticketsRateLimits } from './rate-limits';
 import { ticketService } from './service';
@@ -41,6 +42,7 @@ export default {
     config: [ticketsConfig.slice],
     /** The contact-form budgets — see `./rate-limits.ts`. */
     rateLimits: ticketsRateLimits,
+    jobs: ticketsJobs,
     personalData: [
         {
             section: 'tickets',

@@ -9,6 +9,13 @@ dependsOn:
     - orders # subscribes to its event, an order cancelled
     - payments # subscribes to its refund and dispute events, and asks when a refund is due
     - users # the assignee's name, and whether a person exists to be given a ticket; its review-flag events
+jobs:
+    sweepTicketsOverdue:
+        name: sweep:tickets-overdue
+        schedule: 40 6 * * *
+        summary:
+            Tells the staff who work a ticket's kind, once, that an open ticket passed its due date;
+            a ticket closed before the sweep is skipped, and one already told is never told again.
 rateLimits:
     submissions:
         name: Contact submissions — per address

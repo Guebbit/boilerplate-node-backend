@@ -53,6 +53,13 @@ export const STAFF_ROUTES: Readonly<Record<StaffNotificationCode, StaffRoute>> =
         email: 'now',
         severity: NotificationSeverity.info
     },
+    // The same people as the opener, once, when the ticket passes its due date and nobody closed
+    // it: this is the "overdue" mail the digest's rule describes. Warning, since something is late.
+    'notifications.staff.ticket-overdue': {
+        sets: 'per-notice',
+        email: 'now',
+        severity: NotificationSeverity.warning
+    },
     // Told to the one person it was given to: the bell is enough, they are already working.
     'notifications.staff.ticket-assigned': {
         sets: 'per-notice',
@@ -206,6 +213,7 @@ export const staffLinkOf = (body: StaffNoticeBody): StaffLink => {
             };
         }
         case 'notifications.staff.ticket-opened':
+        case 'notifications.staff.ticket-overdue':
         case 'notifications.staff.ticket-assigned': {
             return { template: PAGES.ticket, parameters: { id: body.params.ticketId } };
         }
