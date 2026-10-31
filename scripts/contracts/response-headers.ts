@@ -2,7 +2,7 @@
  * @module
  * The response headers that no operation writes by hand, stamped onto the bundled `openapi.yaml`.
  *
- * Two steps, both run after the others in `./openapi-bundle` so an operation's OWN header always wins:
+ * Two steps, both run late in `./openapi-bundle`, after the steps that add an operation's own headers, so an operation's OWN header always wins:
  *
  * - {@link withAppLevelHeaders}: the headers every answer carries (`x-request-id`, `Cache-Control`,
  *   ...), listed once in the root's `x-app-level-headers`, onto every response.

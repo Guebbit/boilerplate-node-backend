@@ -4,8 +4,8 @@
  * `shared/rules/cookies.yaml`. Same shape as `generate-rate-limit-budgets.ts`: markers in the
  * page, prose around them untouched, `--check` in `complete`.
  *
- * Generated because a hand-kept cookie list is the one the GDPR page promises and the one that
- * drifted (a cookie was missing for weeks).
+ * Generated because a hand-kept cookie list is the one the GDPR page promises, and a missing row
+ * there is a missing disclosure.
  */
 
 import path from 'node:path';

@@ -5,8 +5,7 @@
  *
  * OpenAPI 3.1 names this per part: `encoding.<part>.contentType`. Nine request bodies share one
  * answer, so the root holds it as `x-image-upload-types` and this step writes it onto each,
- * instead of nine hand-copied strings that drift. Runs on the bundled document, like the other
- * post-bundle steps in `./openapi-bundle`.
+ * instead of nine hand-copied strings that drift. Runs on the bundled document, as a step in `./openapi-bundle`.
  *
  * Why the contract owns it: the list is API surface (a client must know what to send). The byte
  * signatures that verify it are server internals and stay in `shared/rules/images.yaml`.

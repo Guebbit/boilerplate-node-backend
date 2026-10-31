@@ -294,7 +294,7 @@ flowchart TD
 ```
 
 The list is the **erasure ledger** (`erasureledgers`): `{ userId, at, kind }`, written inside the erasure's own
-transaction, kept `NODE_ERASURE_LEDGER_RETENTION_DAYS` (220 by default, above the oldest backup with the default
+transaction (an owner's schedule and cancel too; a staff cancel reaches it a moment later, through the outbox), kept `NODE_ERASURE_LEDGER_RETENTION_DAYS` (220 by default, above the oldest backup with the default
 keep knobs; raise it with them). Raise `BACKUP_KEEP_MONTHLY` and the ledger must outlive it, or a restore of the
 oldest snapshot brings back an account the ledger has forgotten.
 
