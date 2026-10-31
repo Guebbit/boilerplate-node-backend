@@ -278,8 +278,7 @@ they were told about.
 
 - **An OAuth-only account has no password.** `users.password` is deliberately not `required`, and
   sign-in for such an account works only through a provider — until a password reset gives it one.
-  Its step-up is a code mailed to its verified address, so enabling a provider needs mail that
-  delivers: boot refuses the pair otherwise outside development and test
+  OAuth needs working mail: a password-less user's step-up is a mailed code
   ([how](./account-sessions.md#step-up-for-an-account-with-no-password)).
 - **The callback applies the account's second factor.** An account with `twoFactorEnabledAt` set gets
   the same login challenge `POST /account/login` would issue, not a session: the callback redirects
