@@ -39,5 +39,5 @@ staffPages:
     salesOrders: sales/orders
     salesPreorders: sales/preorders
     salesPayments: sales/payments
-    returns: returns
+    returns: sales/returns
     inventory: inventory
