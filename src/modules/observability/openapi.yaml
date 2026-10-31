@@ -277,10 +277,10 @@ components:
             required: [platform, cpuCount, loadAvg]
             properties:
                 platform: { type: string }
-                cpuCount: { type: integer }
+                cpuCount: { type: integer, minimum: 1 }
                 loadAvg:
                     type: array
-                    items: { type: number }
+                    items: { type: number, minimum: 0 }
 
         ObservabilityHealthJob:
             type: object

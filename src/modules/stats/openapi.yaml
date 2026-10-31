@@ -278,12 +278,15 @@ components:
             properties:
                 orders:
                     type: integer
+                    minimum: 0
                     description: Orders paid in the period, by `paidAt`.
                 unitsOrdered:
                     type: integer
+                    minimum: 0
                     description: Units on those orders.
                 unitsReversed:
                     type: integer
+                    minimum: 0
                     description: Units of returns received in the period. A cancellation is not counted, since it has no date.
                 netUnits:
                     type: integer
@@ -291,14 +294,17 @@ components:
                 grossSales:
                     type: number
                     format: double
+                    minimum: 0
                     description: Goods net of VAT on invoices issued in the period, before shipping, discounts and reversals.
                 discounts:
                     type: number
                     format: double
+                    minimum: 0
                     description: Always 0 until a discount exists.
                 reversals:
                     type: number
                     format: double
+                    minimum: 0
                     description: The goods part (net of VAT) of credit notes issued in the period.
                 netSales:
                     type: number
@@ -319,10 +325,12 @@ components:
                 refunds:
                     type: number
                     format: double
+                    minimum: 0
                     description: Credit notes issued in the period, VAT included.
                 averageOrderValue:
                     type: number
                     format: double
+                    minimum: 0
                     description: (`grossSales` minus `discounts`) divided by `orders`; 0 with no orders.
 
         SalesBucket:
@@ -378,8 +386,8 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 title: { type: string }
                 currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
-                unitsOrdered: { type: integer }
-                unitsReversed: { type: integer }
+                unitsOrdered: { type: integer, minimum: 0 }
+                unitsReversed: { type: integer, minimum: 0 }
                 netUnits: { type: integer }
                 netSales:
                     type: number
@@ -406,8 +414,8 @@ components:
             required: [start, unitsOrdered, unitsReversed]
             properties:
                 start: { type: string, format: date-time }
-                unitsOrdered: { type: integer }
-                unitsReversed: { type: integer }
+                unitsOrdered: { type: integer, minimum: 0 }
+                unitsReversed: { type: integer, minimum: 0 }
 
         ProductSeries:
             type: object
@@ -435,7 +443,7 @@ components:
             properties:
                 category: { type: string }
                 currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
-                unitsOrdered: { type: integer }
+                unitsOrdered: { type: integer, minimum: 0 }
                 netSales: { type: number, format: double }
 
         CategoryStats:
@@ -462,8 +470,8 @@ components:
                     enum: [card, bank_transfer, cash, other]
                 provider: { type: string }
                 currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
-                payments: { type: integer }
-                amount: { type: number, format: double }
+                payments: { type: integer, minimum: 0 }
+                amount: { type: number, format: double, minimum: 0 }
 
         PaymentMix:
             type: object
@@ -494,16 +502,16 @@ components:
                     required: [placed, cancelled, rate]
                     description: A cohort, meaning orders placed in the period that ended cancelled, not cancellations dated by when they happened.
                     properties:
-                        placed: { type: integer }
-                        cancelled: { type: integer }
+                        placed: { type: integer, minimum: 0 }
+                        cancelled: { type: integer, minimum: 0 }
                         rate: { type: number, format: double, minimum: 0, maximum: 1 }
                 returns:
                     type: object
                     additionalProperties: false
                     required: [unitsOrdered, unitsReturned, rate]
                     properties:
-                        unitsOrdered: { type: integer }
-                        unitsReturned: { type: integer }
+                        unitsOrdered: { type: integer, minimum: 0 }
+                        unitsReturned: { type: integer, minimum: 0 }
                         rate: { type: number, format: double, minimum: 0 }
                 refunds:
                     type: array
@@ -513,8 +521,8 @@ components:
                         required: [currency, invoiced, credited, rate]
                         properties:
                             currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
-                            invoiced: { type: number, format: double, description: 'Invoices issued in the period, VAT included.' }
-                            credited: { type: number, format: double, description: 'Credit notes issued in the period, VAT included.' }
+                            invoiced: { type: number, format: double, description: 'Invoices issued in the period, VAT included.', minimum: 0 }
+                            credited: { type: number, format: double, description: 'Credit notes issued in the period, VAT included.', minimum: 0 }
                             rate: { type: number, format: double, minimum: 0 }
 
         CustomerStats:
@@ -526,9 +534,9 @@ components:
                     $ref: '#/components/schemas/StatsPeriod'
                 limits:
                     $ref: '#/components/schemas/StatsLimits'
-                customers: { type: integer, description: 'Accounts with at least one paid order in the period.' }
-                newCustomers: { type: integer, description: 'Of those, accounts whose first paid order is in the period.' }
-                returningCustomers: { type: integer }
+                customers: { type: integer, description: 'Accounts with at least one paid order in the period.', minimum: 0 }
+                newCustomers: { type: integer, description: 'Of those, accounts whose first paid order is in the period.', minimum: 0 }
+                returningCustomers: { type: integer, minimum: 0 }
                 returningRate: { type: number, format: double, minimum: 0, maximum: 1 }
 
         PipelineStats:
@@ -544,11 +552,12 @@ components:
                         required: [currency, count, amount]
                         properties:
                             currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
-                            count: { type: integer }
-                            amount: { type: number, format: double }
+                            count: { type: integer, minimum: 0 }
+                            amount: { type: number, format: double, minimum: 0 }
                             nearestPayBy: { type: string, format: date-time }
                 paidNotShipped:
                     type: integer
+                    minimum: 0
                     description: Orders `paid` or `processing`, so not yet handed to a carrier.
 
         # The ceilings every period read enforces, carried on each period answer so a form can
@@ -560,8 +569,10 @@ components:
             properties:
                 maxRangeDays:
                     type: integer
+                    minimum: 1
                     description: The most calendar days one period may cover, both ends counted.
                 maxBuckets:
                     type: integer
+                    minimum: 1
                     description: The most buckets one series may hold, the first possibly starting before `from`.
 

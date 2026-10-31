@@ -1495,6 +1495,7 @@ components:
                     description: When this factor was armed. Absent while its enrollment is still pending confirmation.
                 resendAfter:
                     type: integer
+                    minimum: 0
                     description: Seconds between two deliveries of this method. Absent for device methods.
                 enrollable:
                     type: boolean
@@ -1523,6 +1524,7 @@ components:
                     description: 'What this account could still add. A method this deployment cannot reach at all is absent; one the account is not yet eligible for is present with `enrollable: false` and a `reason`.'
                 backupCodesRemaining:
                     type: integer
+                    minimum: 0
                     description: How many unused backup codes are left. Zero with `enabled` true is the state worth warning about — a lost device then means admin-assisted recovery.
 
         TwoFactorSetup:
@@ -1547,6 +1549,7 @@ components:
                     description: Masked destination the enrollment code just went to. Absent unless `delivers`.
                 resendAfter:
                     type: integer
+                    minimum: 0
                     description: Seconds before another code may be requested. Absent unless `delivers`.
                 expiresAt:
                     type: string
@@ -1566,6 +1569,7 @@ components:
                     description: Masked destination — enough for the user to recognise the mailbox, not enough to learn a new address from.
                 resendAfter:
                     type: integer
+                    minimum: 0
                     description: Seconds before another code may be requested. A client counts down from this rather than inventing its own cooldown, so it never disagrees with the rate limiter.
                 expiresAt:
                     type: string
@@ -1579,6 +1583,7 @@ components:
             properties:
                 resendAfter:
                     type: integer
+                    minimum: 0
                     description: Seconds before another verification email may be requested. A client counts down from this rather than inventing its own cooldown, so it never disagrees with the server.
 
         TwoFactorSetupRequest:
@@ -1628,6 +1633,7 @@ components:
                     description: One-time recovery codes, in the clear, shown exactly once and never retrievable again. Present ONLY when this was the first factor the account armed — they recover the account, not the method, so a second factor mints none.
                 backupCodesRemaining:
                     type: integer
+                    minimum: 0
                     description: How many unused backup codes the account now holds.
                 sessionToken:
                     type: string
@@ -1649,6 +1655,7 @@ components:
                     description: The account's new one-time recovery codes, in the clear, shown exactly once — the old set no longer verifies.
                 backupCodesRemaining:
                     type: integer
+                    minimum: 0
                     description: How many unused backup codes the account now holds — `BACKUP_CODE_COUNT`, fresh off a regenerate.
 
         LoginRequest:

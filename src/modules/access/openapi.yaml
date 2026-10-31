@@ -93,6 +93,7 @@ components:
                         most callers: an operator is not a super-member and holds no shop's keys.
                 version:
                     type: integer
+                    minimum: 1
                     description: |
                         The permission model's own version, bumped when the RULES change rather than
                         when a role does. A client caches these; this is what tells it the cache is
