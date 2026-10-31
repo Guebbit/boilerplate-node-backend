@@ -142,7 +142,9 @@ export default {
          * Staff cancelled an owner's scheduled deletion in `users`; the restore link this module
          * mailed is spent by that, and the owner is told it happened.
          */
-        onDomainEvent(USER_DELETION_CANCELLED, ({ userId }) => handleRestoredByStaff(userId));
+        onDomainEvent(USER_DELETION_CANCELLED, ({ userId, cancelledAt }) =>
+            handleRestoredByStaff(userId, new Date(cancelledAt))
+        );
         /*
          * Consent withdrawn: the analytics provider may hold what was captured under it. A
          * rejection fails the dispatch, so the outbox retries it and parks it `dead` (alerting).

@@ -666,38 +666,50 @@ const upsertErasureLedgerRow = (
     at: Date,
     expiresAt: Date,
     options: { purgeAt?: Date; session?: ClientSession } = {}
-): Promise<void> =>
-    erasureLedgerModel
-        // Update pipeline (MongoDB 4.2+): the new `purgeAt` is kept only when this event is newer
-        // than the stored one. https://www.mongodb.com/docs/manual/tutorial/update-documents-with-aggregation-pipeline/
-        .updateOne(
-            { userId: toObjectId(userId), kind },
-            [
-                {
-                    $set: {
-                        purgeAt: options.purgeAt
-                            ? {
-                                  $cond: [
-                                      { $gt: [at, { $ifNull: ['$at', new Date(0)] }] },
-                                      options.purgeAt,
-                                      '$purgeAt'
-                                  ]
-                              }
-                            : '$$REMOVE',
-                        at: { $max: ['$at', at] },
-                        expiresAt: { $max: ['$expiresAt', expiresAt] }
+): Promise<void> => {
+    const write = (): Promise<unknown> =>
+        erasureLedgerModel
+            // Update pipeline (MongoDB 4.2+): the new `purgeAt` is kept only when this event is
+            // newer than the stored one.
+            // https://www.mongodb.com/docs/manual/tutorial/update-documents-with-aggregation-pipeline/
+            .updateOne(
+                { userId: toObjectId(userId), kind },
+                [
+                    {
+                        $set: {
+                            purgeAt: options.purgeAt
+                                ? {
+                                      $cond: [
+                                          { $gt: [at, { $ifNull: ['$at', new Date(0)] }] },
+                                          options.purgeAt,
+                                          '$purgeAt'
+                                      ]
+                                  }
+                                : '$$REMOVE',
+                            at: { $max: ['$at', at] },
+                            expiresAt: { $max: ['$expiresAt', expiresAt] }
+                        }
                     }
+                ],
+                // `updatePipeline`: Mongoose refuses an array update unless asked.
+                {
+                    upsert: true,
+                    updatePipeline: true,
+                    ...(options.session ? { session: options.session } : {})
                 }
-            ],
-            // `updatePipeline`: Mongoose refuses an array update unless asked.
-            {
-                upsert: true,
-                updatePipeline: true,
-                ...(options.session ? { session: options.session } : {})
-            }
-        )
-        .exec()
+            )
+            .exec();
+
+    // Two upserts racing for the same (user, kind): the loser hits the unique index, and the same
+    // call is then a plain update. Inside a transaction a duplicate key aborts it, so there the
+    // driver's own transaction retry owns the race and this retry does not apply.
+    return write()
+        .catch((error: unknown) => {
+            if (!options.session && isDuplicateKey(error)) return write();
+            throw error;
+        })
         .then(() => undefined);
+};
 
 /**
  * Every ledger row dated at or after `since`, oldest first, so a repeat erasure replays in the

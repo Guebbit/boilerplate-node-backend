@@ -440,8 +440,9 @@ changed grace setting cannot move it) and `cancelled`. After a restore the lates
 clears the lock (even a passed one); cancel, then ask again, stays scheduled. So the purge job never erases
 an account its owner kept, and an erasure asked for after the backup is not lost.
 
-**What a repeat erasure keeps.** The original erasure date: an order's PII scrub clock starts
-where it started the first time, instead of restarting at the restore.
+**What a repeat erasure keeps.** The original erasure date, in the ledger row's own `at` and expiry. No other clock starts from an erasure: an order's PII scrub is driven by its delivery or payment dates (the `piiClockStartedAt` mark only says the scrub may run).
+
+**What a restore can leave behind.** A never-paid order's payment attempt can outlive its 30 days by up to one backup age: the erasure's cancel bumped its `updatedAt`, and it holds no `userId`.
 
 **Why not erase from the backups themselves.** restic repositories are immutable by design (and the
 second machine is append-only on purpose): rewriting history to remove one person would remove the
