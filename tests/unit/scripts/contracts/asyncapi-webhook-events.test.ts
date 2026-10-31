@@ -1,5 +1,9 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { parseDocument } from 'yaml';
 import {
+    localiseOpenApiReferences,
     webhookEventFragments,
     webhookEventNames,
     withWebhookEvents
@@ -50,5 +54,85 @@ describe('withWebhookEvents', () => {
         withWebhookEvents('observability', emptySection(), merge);
 
         expect(merge).not.toHaveBeenCalled();
+    });
+});
+
+describe('localiseOpenApiReferences', () => {
+    const folders: string[] = [];
+
+    afterEach(() => {
+        for (const folder of folders.splice(0)) rmSync(folder, { recursive: true, force: true });
+    });
+
+    /** Writes a module's `openapi.yaml` with the given schemas, returning its path. */
+    const restFile = (schemas: string): string => {
+        const folder = mkdtempSync(path.join(os.tmpdir(), 'localise-refs-'));
+        folders.push(folder);
+        const file = path.join(folder, 'openapi.yaml');
+        writeFileSync(file, `components:\n    schemas:\n${schemas}`);
+        return file;
+    };
+
+    const REASON = '        Reason:\n            type: string\n            enum: [a, b]\n';
+    const REF = "$ref: './openapi.yaml#/components/schemas/Reason'";
+
+    it('copies the referenced schema in before its first user, once, and points both refs at it', () => {
+        const fragment = parseDocument(
+            `components:\n    schemas:\n        First:\n            properties:\n                why:\n                    ${REF}\n        Second:\n            properties:\n                why:\n                    ${REF}\n`
+        );
+
+        localiseOpenApiReferences(fragment, restFile(REASON));
+
+        expect(fragment.toJS()).toEqual({
+            components: {
+                schemas: {
+                    Reason: { type: 'string', enum: ['a', 'b'], 'x-openapi-schema': 'Reason' },
+                    First: { properties: { why: { $ref: '#/components/schemas/Reason' } } },
+                    Second: { properties: { why: { $ref: '#/components/schemas/Reason' } } }
+                }
+            }
+        });
+        expect(Object.keys(fragment.toJS().components.schemas)).toEqual([
+            'Reason',
+            'First',
+            'Second'
+        ]);
+    });
+
+    it('does not read the REST file when nothing references it', () => {
+        const fragment = parseDocument(
+            'components:\n    schemas:\n        Only: { type: string }\n'
+        );
+
+        expect(() => localiseOpenApiReferences(fragment, '/nowhere/openapi.yaml')).not.toThrow();
+    });
+
+    it.each([
+        [
+            'a schema the REST file does not have',
+            '        Other: { type: string }\n',
+            /no self-contained schema Reason/
+        ],
+        [
+            'a schema that holds a $ref of its own',
+            "        Reason:\n            $ref: '#/components/schemas/Other'\n",
+            /no self-contained schema Reason/
+        ]
+    ])('refuses %s', (_label, rest, message) => {
+        const fragment = parseDocument(
+            `components:\n    schemas:\n        User:\n            properties:\n                why:\n                    ${REF}\n`
+        );
+
+        expect(() => localiseOpenApiReferences(fragment, restFile(rest))).toThrow(message);
+    });
+
+    it('refuses a fragment that declares the schema it also references', () => {
+        const fragment = parseDocument(
+            `components:\n    schemas:\n        Reason: { type: string }\n        User:\n            properties:\n                why:\n                    ${REF}\n`
+        );
+
+        expect(() => localiseOpenApiReferences(fragment, restFile(REASON))).toThrow(
+            /declares Reason itself/
+        );
     });
 });

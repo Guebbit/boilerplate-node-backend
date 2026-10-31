@@ -7,6 +7,8 @@
 # this module is registered. Delete the module and its events leave the contract with it.
 # Each event is the Standard Webhooks envelope `{ type, timestamp, data }`; the module's
 # `publicEvents` (`module.ts`) is what actually fires it.
+# A closed code in a payload `$ref`s this module's `./openapi.yaml` schema; the bundler copies
+# the schema in, so the REST and event contracts share one list.
 channels:
     return.requested:
         address: return.requested
@@ -103,26 +105,13 @@ components:
                 orderId:
                     $ref: '#/components/schemas/Id'
                 reason:
-                    type: string
-                    enum:
-                        - withdrawal
-                        - defective
-                        - wrong_item
-                        - other
-                    description: Why the goods come back.
+                    $ref: './openapi.yaml#/components/schemas/ReturnReason'
                 requestedAt:
                     type: string
                     format: date-time
                     description: When the buyer asked, or for a withdrawal when they stated it. Staff recording a phone call or a letter set the day it was made.
                 statedVia:
-                    type: string
-                    enum:
-                        - online
-                        - phone
-                        - email
-                        - letter
-                        - other
-                    description: How a withdrawal was stated. Present on a withdrawal only.
+                    $ref: './openapi.yaml#/components/schemas/ReturnStatementChannel'
             additionalProperties: false
         ReturnReceivedPayload:
             type: object
@@ -155,12 +144,7 @@ components:
                     $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
                 remedy:
-                    type: string
-                    enum:
-                        - refund
-                        - replace
-                        - repair
-                    description: What the buyer was given. Absent on a return born closed (a withdrawal before dispatch). `replace` and `repair` carry a `refundAmount` of 0.
+                    $ref: './openapi.yaml#/components/schemas/ReturnRemedy'
             additionalProperties: false
         ReturnRequestedEnvelope:
             type: object

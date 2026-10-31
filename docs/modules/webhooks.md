@@ -91,9 +91,9 @@ declares its own events in `src/modules/<module>/asyncapi.webhooks.yaml` (`deliv
 event shares: the `subscriberEndpoint` server, the `WebhookHeaders` schema and the `Id` scalar
 every fragment's resource ids `$ref` (a copy of the OpenAPI `Id`, since no AsyncAPI document can
 `$ref` an OpenAPI file). A closed code in a payload (a return reason, a refund failure reason, a
-dispute reason) is likewise an inline copy of its OpenAPI enum;
-`tests/cross-cutting/asyncapi-enum-twins.test.ts` keeps each copy equal to its twin. The bundler merges
-the fragments into the `webhooks` section while this module exists (see
+dispute reason) `$ref`s the owning module's own `openapi.yaml` schema, and the bundler copies that
+schema into the bundle ahead of the payloads that use it, so the REST and event contracts share one
+list. The bundler merges the fragments into the `webhooks` section while this module exists (see
 [Contract Fragmentation](../api/contract-fragmentation.md#module-owned-webhook-events)).
 
 Three things read the same files, so they cannot drift apart:

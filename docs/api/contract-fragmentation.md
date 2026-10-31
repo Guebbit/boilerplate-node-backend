@@ -448,6 +448,13 @@ and the headers schema every event shares; each event is declared by the module 
 `asyncapi-bundles.ts`. The same collision refusal applies, so two modules claiming one event name
 fail the bundle.
 
+A payload field with a closed set of values `$ref`s the owning module's own REST schema
+(`./openapi.yaml#/components/schemas/ReturnReason`) rather than copying its enum. The bundle has to
+stand alone, so `withWebhookEvents` copies each referenced schema into the fragment's
+`components.schemas`, just before the first schema that uses it (the Zod emitter declares in order),
+and points the ref at the copy. A text written next to such a `$ref` is ignored by AsyncAPI, so the
+enum's own description is the one that shows.
+
 ```mermaid
 flowchart LR
     W["webhooks/asyncapi.yaml<br/>server + Id + WebhookHeaders"] --> S["webhooks section"]
