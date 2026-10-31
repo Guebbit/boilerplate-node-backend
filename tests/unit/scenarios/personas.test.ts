@@ -22,18 +22,17 @@ describe('shared/scenarios/personas.yaml', () => {
         for (const membership of memberships) expect(definedRoles.has(membership)).toBe(true);
     });
 
-    it('arms an authenticator on exactly the seven accounts that hold a staff role', () => {
+    it('arms an authenticator on exactly the accounts that hold a staff role', () => {
         const armed = PERSONA_NAMES.filter((name) => personas.accounts[name].state.authenticator);
         const staff = PERSONA_NAMES.filter(
             (name) => personas.accounts[name].memberships.length > 0
         );
-        expect(armed).toHaveLength(7);
         expect(armed).toEqual(staff);
     });
 
     it('gives every account its own address and username', () => {
         const accounts = PERSONA_NAMES.map((name) => personas.accounts[name]);
-        expect(new Set(accounts.map(({ email }) => email)).size).toBe(13);
-        expect(new Set(accounts.map(({ username }) => username)).size).toBe(13);
+        expect(new Set(accounts.map(({ email }) => email)).size).toBe(accounts.length);
+        expect(new Set(accounts.map(({ username }) => username)).size).toBe(accounts.length);
     });
 });
