@@ -6,6 +6,7 @@
  */
 
 import type { DeletionPending, MfaChallenge } from '@types';
+import type { OAuthCallbackError } from './callback-errors';
 import { defineConfig } from '@infrastructure/config/define';
 import { text } from '@infrastructure/config/fields';
 import { isRelaxedIn } from '@infrastructure/config/define';
@@ -143,7 +144,7 @@ const oauthFrontendCallbackBase = (): string => `${siteConfig().NODE_FRONTEND_UR
  *   frontend answers it with a confirmation instead of a sign-in.
  */
 export const oauthFrontendCallbackUrl = (
-    errorCode?: string,
+    errorCode?: OAuthCallbackError,
     continueTo?: string,
     locale?: string,
     linked?: string

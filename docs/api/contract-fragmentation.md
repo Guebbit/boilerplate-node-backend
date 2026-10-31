@@ -235,6 +235,15 @@ only: it never boots the app, because the app imports files this same build gene
 `tests/cross-cutting/cache-policy-declared.test.ts` names the missing or stray operation when a
 router and its `x-cache` disagree. It checks which GETs are cached, not the value.
 
+### Client hints a fragment can put on an operation
+
+| key | on | what the client does with it |
+| --- | --- | --- |
+| `x-no-refresh: true` | an operation | a `401` there is a real credential failure, so the frontend never refreshes the token and replays it. The frontend's route table carries it as `noRefresh`. |
+| `x-redirect-query` | a `302` response | lists the schema of a query parameter on the redirect (`error` on the OAuth callback), inline. A `$ref` under an `x-` key is inlined by the bundler and its component pruned, so the set cannot be a shared schema; the frontend's generator emits it as `REDIRECT_QUERY_ENUMS`, and the backend keeps a twin constant held equal by a test. |
+
+Neither is wire data a server reads. The bundler passes both through untouched.
+
 ## Practical example: the `products` module
 
 `products` owns everything about itself, its slice of the contract included:

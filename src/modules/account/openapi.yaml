@@ -702,6 +702,7 @@ paths:
                 (`422`). Answers 429 once an address (or its network block) has sent too many wrong
                 tokens, like the other one-time-token confirms.
             operationId: restoreAccount
+            x-no-refresh: true
             security: []
             requestBody:
                 required: true
@@ -730,6 +731,7 @@ paths:
                 read from the httpOnly cookie the callback set. An unknown, expired or spent
                 challenge answers 401.
             operationId: loginRestore
+            x-no-refresh: true
             security: []
             requestBody:
                 required: true
@@ -767,6 +769,7 @@ paths:
                 `DeletionPending` claim check to submit to `POST /account/login/restore`: the
                 account is not restored, and no session exists, until that call.
             operationId: login
+            x-no-refresh: true
             security: []
             requestBody:
                 required: true
@@ -794,6 +797,7 @@ paths:
             summary: Complete a two-factor login
             description: The second step of a login for an account with two-factor authentication enabled — submits the challenge from `POST /account/login` and a 6-digit code (or an unused backup code). On success, starts the session exactly as `POST /account/login` does for an account with no second factor, `transport` included. For an account inside the grace of its own deletion the second factor passing answers a `DeletionPending` claim check instead of a session, so two-factor is asked once and `POST /account/login/restore` finishes.
             operationId: loginTwoFactor
+            x-no-refresh: true
             security: []
             requestBody:
                 required: true
@@ -822,6 +826,7 @@ paths:
             summary: Send a login code
             description: Delivers a fresh code for one armed delivered method, against a live challenge. Public like the rest of the login flow — the challenge token is the credential. Answers 429 while the previous code is still inside its cooldown, so a client that respects `resendAfter` never sees one; the cooldown exists because this endpoint sends mail on an unauthenticated caller's say-so.
             operationId: sendTwoFactorCode
+            x-no-refresh: true
             security: []
             requestBody:
                 required: true
@@ -1003,6 +1008,29 @@ paths:
             responses:
                 '302':
                     description: Redirect to the frontend, session cookies set on success
+                    # The failure codes the redirect's `?error=` query carries (absent on success). Inline,
+                    # not a component: the bundler inlines a `$ref` under an `x-` key and prunes the
+                    # component, so a shared schema would never reach the generated types. Backend
+                    # `oauth/callback-errors.ts` and the frontend's generated `REDIRECT_QUERY_ENUMS` both
+                    # read this list.
+                    x-redirect-query:
+                        error:
+                            type: string
+                            enum:
+                                - access_denied
+                                - provider_error
+                                - already_linked
+                                - link_expired
+                                - email_unverified
+                                - account_exists
+                                - account_unverified
+                            description: >-
+                                `access_denied`: the user declined consent. `provider_error`: the provider
+                                failed or answered something unusable. `already_linked`: that provider
+                                account belongs to another account. `link_expired`: the minutes a connect
+                                attempt lives ran out. `email_unverified`: the provider does not vouch for
+                                the address. `account_exists`: a verified-email match, so nothing was
+                                linked. `account_unverified`: the matching account never proved its address.
                     headers:
                         Location:
                             schema: { type: string }
@@ -1027,6 +1055,7 @@ paths:
             summary: Signup
             description: 'Registers a new user account. Takes no image — a stranger writes nothing to the store before registering; the signed-in caller sets an avatar with `PATCH /account`. Returns the newly created user profile on success, and signs the caller in — the refresh cookie is set here, so a client reaches a usable access token through `POST /account/refresh` rather than by calling `POST /account/login` again. The new account is an `unverified` audience until `POST /account/email-verification/confirm` proves the address — it browses freely and is stopped only at `checkout:Cart`. Signup takes no `transport`: a bearer client signs in with `POST /account/login` afterwards.'
             operationId: signup
+            x-no-refresh: true
             security: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/AntibotChallengeTokenHeader'
@@ -1066,6 +1095,7 @@ paths:
             tags: [Auth]
             summary: Request password reset
             operationId: requestPasswordReset
+            x-no-refresh: true
             description: Initiates the password-reset flow by sending a one-time reset token to the provided email address. The token should then be submitted to `/account/password/reset/confirm`.
             security: []
             parameters:
@@ -1089,6 +1119,7 @@ paths:
             tags: [Auth]
             summary: Confirm password reset
             operationId: confirmPasswordReset
+            x-no-refresh: true
             description: Completes the password-reset flow. Validates the one-time reset token issued by `/account/password/reset` and, if valid, updates the user's password to the supplied value.
             security: []
             requestBody:
