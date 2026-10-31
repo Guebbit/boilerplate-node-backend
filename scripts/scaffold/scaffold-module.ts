@@ -4,7 +4,7 @@
  * example module's core. Writes the folder, the docs page and the registry lines, then runs
  * `regenerate --no-sync` so the generated types exist for the first compile.
  *
- * What it will not decide, and prints instead: personal data, frontend pairing, rate limits, which
+ * What it will not decide, and prints instead: personal data, rate limits, which
  * roles hold the new permission keys. See docs/tools/module-scaffolder.md.
  */
 
@@ -19,7 +19,6 @@ const OPEN_DECISIONS = [
     'personalData is "none": change it if a record names a person (module.ts).',
     'Roles: only admin lists the new set; grant it in shared/authorization-roles.yaml.',
     'Rate limits: none declared; add a budget for any public or expensive route.',
-    'Frontend: no counterpart is generated; declare module.yaml#frontend if the name differs.',
     'Fill in the TODOs in module.yaml, module.ts and docs/modules/<name>.md.'
 ];
 

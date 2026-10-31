@@ -4,6 +4,3 @@ group: shop
 dependsOn:
     - products # the public catalogue is what a product page's address is built from
 noAudit: 'Read-only, public: it publishes addresses that are already public.'
-frontend:
-    counterparts: []
-    why: 'It has no screen: a search engine reads its files. The frontend only points at it, from its own robots.txt (`VITE_ROBOTS_INDEX`).'

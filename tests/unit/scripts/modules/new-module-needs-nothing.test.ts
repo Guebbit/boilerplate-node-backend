@@ -19,10 +19,7 @@ import {
     readCatalogue,
     renderModuleList
 } from '../../../../scripts/docs/module-catalogue';
-import {
-    frontendCounterparts,
-    readAllModuleDescriptors
-} from '../../../../scripts/docs/module-descriptor';
+import { readAllModuleDescriptors } from '../../../../scripts/docs/module-descriptor';
 
 import { routedModulesOf } from '@tests/routes';
 import { REPO_ROOT } from '../../../../scripts/modules-on-disk';
@@ -71,11 +68,10 @@ afterAll(() => {
 });
 
 describe('a module folder alone is enough', () => {
-    it('reads its descriptor, with the frontend counterpart defaulting to its own name', () => {
+    it('reads its descriptor', () => {
         const descriptors = readAllModuleDescriptors(modulesRoot());
 
         expect(Object.keys(descriptors)).toEqual(['feedback', 'widgets']);
-        expect(frontendCounterparts('widgets', descriptors.widgets)).toEqual(['widgets']);
         expect(descriptors.widgets.noAudit).toBeUndefined();
     });
 

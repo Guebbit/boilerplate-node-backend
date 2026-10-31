@@ -84,8 +84,7 @@ It prints these instead of guessing:
 - **Personal data.** `personalData: 'none'` until a record names a person.
 - **Roles.** Only `admin` (and `system`) list the new set.
 - **Rate limits.** None declared. Add a budget for any public or expensive route.
-- **Frontend.** Nothing is generated over there. Declare `module.yaml#frontend` if the paired
-  module has another name.
+- **Frontend.** Nothing is generated over there.
 - **The prose.** `module.yaml`, `module.ts` and the docs page carry `TODO`s for the parts only
   the author knows.
 
