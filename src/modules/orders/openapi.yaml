@@ -147,6 +147,9 @@ paths:
                 `NODE_ADMIN_ORDER_MAX_LINES` and `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`, and a body over
                 it answers `422` with `ORDER_LINE_LIMIT_EXCEEDED`.
             operationId: createOrder
+            x-error-codes:
+                '409': [IDEMPOTENCY_IN_FLIGHT, ORDER_INSUFFICIENT_STOCK, ORDER_PRODUCT_UNAVAILABLE]
+                '422': [IDEMPOTENCY_KEY_MISMATCH, ORDER_LINE_LIMIT_EXCEEDED]
             security:
                 - bearerAuth: []
             parameters:
@@ -178,6 +181,8 @@ paths:
             summary: Delete order
             description: Deletes the order identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record, which is only allowed for an order that is cancelled and was never paid (409 `ORDER_NOT_CANCELLED` while it is open, 409 `ORDER_INVOICED` once paid, 409 `ORDER_HAS_MONEY_HISTORY` once money was recorded after the cancel); a `true` from any source wins, so a `false` sent elsewhere does not cancel it. A soft delete hides a cancelled order from its buyer (409 `ORDER_NOT_CANCELLED` while it is open), is safe to repeat, and is undone with `POST /orders/{id}/restore`.
             operationId: deleteOrder
+            x-error-codes:
+                '409': [ORDER_HAS_MONEY_HISTORY, ORDER_INVOICED, ORDER_NOT_CANCELLED]
             x-alias-of: deleteOrderById
             security:
                 - bearerAuth: []
@@ -198,10 +203,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # A delete refused. `errors[].code` is `ORDER_NOT_CANCELLED` for an order still open
-                # (soft or hard: only a cancelled order may be deleted), and `ORDER_INVOICED` for a
-                # hard delete of an order that was paid, `ORDER_HAS_MONEY_HISTORY` for one that was
-                # handed money after its cancel.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
@@ -227,6 +228,8 @@ paths:
 
                 The response is never cached: `Cache-Control: private, no-store`.
             operationId: exportOrders
+            x-error-codes:
+                '422': [ORDER_EXPORT_TOO_LARGE]
             security:
                 - bearerAuth: []
             parameters:
@@ -298,7 +301,6 @@ paths:
                                 format: binary
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                # The result is larger than the cap. `errors[].code` is `ORDER_EXPORT_TOO_LARGE`.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 # `ordersExportLimiter` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
@@ -425,6 +427,8 @@ paths:
             summary: Delete order
             description: Deletes the order identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record, which is only allowed for an order that is cancelled and was never paid (409 `ORDER_NOT_CANCELLED` while it is open, 409 `ORDER_INVOICED` once paid, 409 `ORDER_HAS_MONEY_HISTORY` once money was recorded after the cancel). A soft delete hides a cancelled order from its buyer (409 `ORDER_NOT_CANCELLED` while it is open), is safe to repeat, and is undone with `POST /orders/{id}/restore`. Functionally equivalent to `DELETE /orders`.
             operationId: deleteOrderById
+            x-error-codes:
+                '409': [ORDER_HAS_MONEY_HISTORY, ORDER_INVOICED, ORDER_NOT_CANCELLED]
             security:
                 - bearerAuth: []
             parameters:
@@ -435,10 +439,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # A delete refused. `errors[].code` is `ORDER_NOT_CANCELLED` for an order still open
-                # (soft or hard: only a cancelled order may be deleted), and `ORDER_INVOICED` for a
-                # hard delete of an order that was paid, `ORDER_HAS_MONEY_HISTORY` for one that was
-                # handed money after its cancel.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
@@ -450,6 +450,8 @@ paths:
             summary: Restore order
             description: Undoes the soft delete of the order identified by `{id}`. Answers 409 `ORDER_NOT_DELETED` when the order is not soft-deleted, so a restore can never be mistaken for an ordinary read.
             operationId: restoreOrderById
+            x-error-codes:
+                '409': [ORDER_NOT_DELETED]
             security:
                 - bearerAuth: []
             parameters:
@@ -476,6 +478,8 @@ paths:
             summary: Permanently delete order
             description: Permanently removes the order identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /orders/{id}?hardDelete=true`, and only for an order that is cancelled and was never paid (409 `ORDER_NOT_CANCELLED` while it is open, 409 `ORDER_INVOICED` once paid).
             operationId: hardDeleteOrderById
+            x-error-codes:
+                '409': [ORDER_HAS_MONEY_HISTORY, ORDER_INVOICED, ORDER_NOT_CANCELLED]
             x-alias-of: deleteOrderById
             security:
                 - bearerAuth: []
@@ -486,10 +490,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # A delete refused. `errors[].code` is `ORDER_NOT_CANCELLED` for an order still open
-                # (soft or hard: only a cancelled order may be deleted), and `ORDER_INVOICED` for a
-                # hard delete of an order that was paid, `ORDER_HAS_MONEY_HISTORY` for one that was
-                # handed money after its cancel.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
@@ -514,6 +514,11 @@ paths:
                 `refunded`) and on `GET /payments/attention`. A provider that refuses it leaves the
                 refund open and retried; the cancel stays done.
             operationId: cancelOrderById
+            x-error-codes:
+                '401': [REAUTH_REQUIRED]
+                # A customer's own order cancels only while pending or paid; an operator's also while processing,
+                # until anything ships.
+                '409': [ORDER_NOT_CANCELLABLE]
             security:
                 - bearerAuth: []
             parameters:
@@ -534,9 +539,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # The order exists and is visible to the caller, but its status is past what THIS
-                # caller may cancel: a customer's own order only while pending or paid; an operator's
-                # also while processing, until anything ships. `errors[].code` is `ORDER_NOT_CANCELLABLE`.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
@@ -581,6 +583,9 @@ paths:
                 `address_corrected`, and an audit row naming who changed it, never what it says.
                 `OrderActions.correctAddress` says whether this would be accepted.
             operationId: correctOrderShippingAddress
+            x-error-codes:
+                '409': [ORDER_ADDRESS_LOCKED]
+                '422': [ORDER_SHIP_TO_COUNTRY_NOT_SUPPORTED]
             security:
                 - bearerAuth: []
             parameters:
@@ -601,7 +606,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # `errors[].code` is `ORDER_ADDRESS_LOCKED`.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
@@ -624,6 +628,8 @@ paths:
                 step-up gated, and a non-empty `reason` recorded on the order's timeline (`status_overridden`).
                 Webhooks still fire for this move; no shipped email does.
             operationId: overrideOrderStatus
+            x-error-codes:
+                '409': [ORDER_OVERRIDE_AWAITING_STOCK, ORDER_OVERRIDE_NOT_ALLOWED]
             security:
                 - bearerAuth: []
             parameters:
@@ -644,8 +650,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # `to` is not a legal forward override from the order's current status.
-                # `errors[].code` is `ORDER_OVERRIDE_NOT_ALLOWED`.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 

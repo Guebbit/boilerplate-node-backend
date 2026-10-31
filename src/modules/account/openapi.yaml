@@ -64,6 +64,8 @@ paths:
             summary: Replace own profile
             description: Replaces every writable field of the authenticated user's own profile — email, username, locale (RFC 9110 §9.3.4, an omitted optional field is cleared). The image is outside the representation — set by an upload, cleared by an explicit `imageUrl` null, kept when a PUT never mentions it. `analyticsConsent` is required — it has no cleared state, so a PUT always states it and consent is never reset or withdrawn by a forgotten field. Role, account state and password are out of scope — the first two belong to the admin `/users` endpoints, the password to `POST /account/password`. Changing the email does NOT take effect immediately — it is held as `pendingEmail` until `POST /account/email-change/confirm` proves the new address, and a notice carrying a 7-day one-time undo link (`POST /account/email-change/undo`) is sent to the OLD address the moment the change is requested. Changing the email needs a fresh session; an account with a second factor armed also needs an `otp` proof in it (`401 REAUTH_REQUIRED` with `details.methods`). Sending the CURRENT address, the address already PENDING, or any other value that resolves to no change is a no-op — it neither starts, restarts nor cancels anything; cancel an already-pending change with `DELETE /account/email-change`, or have its link mailed again with `POST /account/email-change/resend`.
             operationId: replaceAccount
+            x-error-codes:
+                '401': [REAUTH_REQUIRED]
             security:
                 - bearerAuth: []
             requestBody:
@@ -93,6 +95,8 @@ paths:
             summary: Update own profile
             description: Merges the given fields into the authenticated user's own profile — email, username, locale, image (RFC 7396, an omitted field is left unchanged, `null` clears an optional one). Role, account state and password are out of scope — the first two belong to the admin `/users` endpoints, the password to `POST /account/password`. Changing the email does NOT take effect immediately — it is held as `pendingEmail` until `POST /account/email-change/confirm` proves the new address, and a notice carrying a 7-day one-time undo link (`POST /account/email-change/undo`) is sent to the OLD address the moment the change is requested. Changing the email needs a fresh session; an account with a second factor armed also needs an `otp` proof in it (`401 REAUTH_REQUIRED` with `details.methods`). Sending the CURRENT address, or the address already PENDING, is a no-op — it neither starts, restarts nor cancels anything; cancel an already-pending change with `DELETE /account/email-change`, or have its link mailed again with `POST /account/email-change/resend`.
             operationId: updateAccount
+            x-error-codes:
+                '401': [REAUTH_REQUIRED]
             security:
                 - bearerAuth: []
             requestBody:
@@ -135,6 +139,8 @@ paths:
                 second factor armed also needs an `otp` proof in it (`401 REAUTH_REQUIRED` with
                 `details.methods`).
             operationId: requestAccountDelete
+            x-error-codes:
+                '401': [REAUTH_REQUIRED]
             security:
                 - bearerAuth: []
             responses:
@@ -184,6 +190,8 @@ paths:
             summary: Change password
             description: Changes the authenticated user's password. Unlike the reset flow this proves possession of the current password rather than of the mailbox, so it needs no email round-trip. Every session is revoked and every pending one-time link and login challenge is purged; the response carries a fresh access token for the calling session, and sets fresh session cookies. An account with a second factor armed also needs a fresh session that proved an `otp` (`401 REAUTH_REQUIRED` with `details.methods`); an account without one is asked nothing new.
             operationId: changePassword
+            x-error-codes:
+                '401': [REAUTH_REQUIRED]
             security:
                 - bearerAuth: []
             requestBody:
@@ -241,6 +249,8 @@ paths:
             summary: How this account can re-authenticate
             description: 'The ways THIS account can answer a `401 REAUTH_REQUIRED` challenge, in the order a client should offer them. An account with a password gets `password`; an account with none (it signed up through an OAuth provider) gets `email`, a code mailed to its verified address. Empty when the account has no password and this deployment cannot deliver mail, so a client shows a dead end instead of a form nobody can pass. The list is a server fact, not a client guess: the kernel that raises the challenge cannot see account data.'
             operationId: getReauthMethods
+            x-error-codes:
+                '401': [REAUTH_REQUIRED]
             security:
                 - bearerAuth: []
             responses:
@@ -257,6 +267,8 @@ paths:
             summary: Re-authenticate (step-up)
             description: Re-proves who the caller is to refresh how recently they authenticated, without ending the session — the answer to a `401 REAUTH_REQUIRED` challenge from a route gated by freshness (checkout, payments, deleting the account, changing the email, session management). The body is tagged by `method`, one of those `GET /account/reauth` lists, and may carry an `otp` code from an armed second factor. Re-mints the session and returns a fresh access token, same as `POST /account/password`. The new session carries ONLY what this call proved (`pwd` or `email`, plus `otp` when a code was given and verified). Proofs from the login are not carried over, so a password-only re-authentication no longer passes a route that demands `otp`. The refresh token the call was made with is retired.
             operationId: reauth
+            x-error-codes:
+                '401': [REAUTH_REQUIRED]
             security:
                 - bearerAuth: []
             requestBody:
@@ -522,6 +534,8 @@ paths:
             summary: Logout from all devices
             description: Logs out the authenticated user from ALL devices by deleting every session the account holds and clearing authentication cookies. Needs a fresh session (sensitive tier, `401 REAUTH_REQUIRED` when stale).
             operationId: logoutAll
+            x-error-codes:
+                '401': [REAUTH_REQUIRED]
             security:
                 - bearerAuth: []
             responses:
@@ -541,6 +555,8 @@ paths:
                 `Session-Passive: true` header: a poll or a keep-alive that is not the person
                 acting.
             operationId: touchSession
+            x-error-codes:
+                '401': [SESSION_IDLE]
             security:
                 - bearerAuth: []
             responses:
@@ -591,6 +607,8 @@ paths:
                 cookies of OTHER clients cannot be cleared from here; their next request simply fails.
                 Needs a fresh session (sensitive tier, `401 REAUTH_REQUIRED` when stale).
             operationId: revokeSession
+            x-error-codes:
+                '401': [REAUTH_REQUIRED]
             security:
                 - bearerAuth: []
             parameters:
@@ -881,6 +899,8 @@ paths:
                 Answers 404 for a provider this deployment never configured. A provider account that
                 already belongs to another account is refused at the callback (`?error=already_linked`).
             operationId: startOAuthLink
+            x-error-codes:
+                '401': [REAUTH_REQUIRED]
             security:
                 - bearerAuth: []
             parameters:
@@ -921,6 +941,8 @@ paths:
             description: >-
                 Removes the link between the account and `provider`, so that provider can no longer sign in to it, and mails the owner that a sign-in method was removed. Nothing re-links it by email match, so reconnecting is `POST /account/oauth/links/{provider}` from a signed-in session. Needs a fresh session (`401 REAUTH_REQUIRED`). There is no guard on removing the last sign-in method, by decision (forgot-password recovers an account that was left with none). Answers 404 when `provider` is not linked. A link is a line of the caller's links list, so the answer is that list as it now stands (200 + the links left).
             operationId: unlinkOAuthProvider
+            x-error-codes:
+                '401': [REAUTH_REQUIRED]
             security:
                 - bearerAuth: []
             parameters:
@@ -1055,6 +1077,11 @@ paths:
             summary: Signup
             description: 'Registers a new user account. Takes no image — a stranger writes nothing to the store before registering; the signed-in caller sets an avatar with `PATCH /account`. Returns the newly created user profile on success, and signs the caller in — the refresh cookie is set here, so a client reaches a usable access token through `POST /account/refresh` rather than by calling `POST /account/login` again. The new account is an `unverified` audience until `POST /account/email-verification/confirm` proves the address — it browses freely and is stopped only at `checkout:Cart`. Signup takes no `transport`: a bearer client signs in with `POST /account/login` afterwards.'
             operationId: signup
+            x-error-codes:
+                '403': [ANTIBOT_VERIFICATION_FAILED]
+                # The email is already registered.
+                '409': [IDEMPOTENCY_IN_FLIGHT]
+                '422': [IDEMPOTENCY_KEY_MISMATCH]
             x-no-refresh: true
             security: []
             parameters:
@@ -1082,8 +1109,6 @@ paths:
                 # Also answered when a human-challenge provider is active and the caller's
                 # token is missing or refused — a 403, see antibot/openapi.yaml.
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                # Signing up with an email that is already registered, or `Idempotency-Key` naming a
-                # request still in flight. A spent challenge token is a 403 `ANTIBOT_VERIFICATION_FAILED`.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 # Also answered when `Idempotency-Key` was already used with a different body.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -1153,6 +1178,8 @@ paths:
                 sign-in screen. A staff family signed in longer ago than
                 `NODE_SESSION_LIFETIME_STAFF` answers an ordinary 401 and is removed the same way.
             operationId: refreshToken
+            x-error-codes:
+                '401': [SESSION_IDLE]
             security: []
             responses:
                 '200':
@@ -1193,6 +1220,8 @@ paths:
                 Asking while one is `building` is not charged. Needs a fresh session (sensitive tier:
                 `401 REAUTH_REQUIRED`), as does downloading the file; reading the status does not.
             operationId: requestAccountExport
+            x-error-codes:
+                '401': [REAUTH_REQUIRED]
             security:
                 - bearerAuth: []
             responses:

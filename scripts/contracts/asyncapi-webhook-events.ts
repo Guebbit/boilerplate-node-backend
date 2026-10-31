@@ -15,7 +15,7 @@
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { parseDocument, type Document } from 'yaml';
+import { parse, parseDocument, type Document } from 'yaml';
 
 import { orderSections } from './section-order';
 import { MODULES_ROOT, modulesWith } from '../modules-on-disk';
@@ -40,6 +40,21 @@ export const webhookEventFragments = (): string[] => {
         path.join(MODULES_ROOT, name, FRAGMENT_FILE)
     );
 };
+
+/**
+ * The name of every webhook event any module ships: the channel keys of its fragment.
+ *
+ * What a subscription's `eventTypes` may name, so the REST contract fills its enum from here
+ * instead of copying the list. Fragment order, then channel order within each.
+ *
+ * @returns each event name once
+ */
+export const webhookEventNames = (): string[] =>
+    webhookEventFragments().flatMap((file) =>
+        // `yaml`'s `parse`: a plain object back, no custom tags in a fragment.
+        // https://eemeli.org/yaml/#parse-yaml-to-json-value
+        Object.keys((parse(readFileSync(file, 'utf8')) as { channels?: object }).channels ?? {})
+    );
 
 /**
  * Folds every module's fragment into the `webhooks` section's document; any other section passes

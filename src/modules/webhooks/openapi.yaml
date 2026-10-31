@@ -72,6 +72,8 @@ paths:
                 changes. It runs again on every delivery, since a subscription's DNS can change
                 after it is created.
             operationId: createWebhookSubscription
+            x-error-codes:
+                '409': [WEBHOOK_SUBSCRIPTION_LIMIT_REACHED]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -92,8 +94,6 @@ paths:
                                 $ref: '#/components/schemas/WebhookSubscriptionCreated'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                # The shop is at its subscription cap — `errors[].code` is
-                # `WEBHOOK_SUBSCRIPTION_LIMIT_REACHED`. Deleting one lets the same request through.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
@@ -210,6 +210,8 @@ paths:
                 `WEBHOOK_SUBSCRIPTION_ALREADY_ENABLED` when it is already on — the streak of a
                 healthy subscription is never reset by a repeated call.
             operationId: enableWebhookSubscription
+            x-error-codes:
+                '409': [WEBHOOK_SUBSCRIPTION_ALREADY_ENABLED]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -225,7 +227,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # `errors[].code` is `WEBHOOK_SUBSCRIPTION_ALREADY_ENABLED`.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
 
     /webhooks/subscriptions/{id}/disable:
@@ -238,6 +239,8 @@ paths:
                 while it is off, and an event that fires meanwhile is not queued for it. Refused with 409
                 `WEBHOOK_SUBSCRIPTION_ALREADY_DISABLED` when it is already off.
             operationId: disableWebhookSubscription
+            x-error-codes:
+                '409': [WEBHOOK_SUBSCRIPTION_ALREADY_DISABLED]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -253,7 +256,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # `errors[].code` is `WEBHOOK_SUBSCRIPTION_ALREADY_DISABLED`.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
 
     /webhooks/subscriptions/{id}/secrets:
@@ -386,6 +388,8 @@ paths:
                 most-requested support action, per the design doc. Refused while the subscription is
                 disabled (`actions.replay` is false): enable it first.
             operationId: replayWebhookDelivery
+            x-error-codes:
+                '409': [WEBHOOK_DELIVERY_IN_PROGRESS, WEBHOOK_SUBSCRIPTION_DISABLED]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -401,9 +405,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # A live worker (or another replay) already holds this row's delivery lease
-                # (`errors[].code` is `WEBHOOK_DELIVERY_IN_PROGRESS`), or the subscription is
-                # disabled (`WEBHOOK_SUBSCRIPTION_DISABLED`).
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
 
     /webhooks/events:
@@ -453,7 +454,8 @@ components:
                     type: string
                 eventTypes:
                     type: array
-                    items: { type: string }
+                    items:
+                        $ref: '#/components/schemas/WebhookEventFilter'
                     minItems: 1
                     description: Names from `GET /webhooks/events` this subscription receives, or `*` for every event.
                 enabled:
@@ -543,7 +545,8 @@ components:
                     type: string
                 eventTypes:
                     type: array
-                    items: { type: string }
+                    items:
+                        $ref: '#/components/schemas/WebhookEventFilter'
                     minItems: 1
                 enabled:
                     type: boolean
@@ -603,7 +606,7 @@ components:
                 eventId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 eventType:
-                    type: string
+                    $ref: '#/components/schemas/WebhookEventName'
                 attempt:
                     type: integer
                     minimum: 1
@@ -615,6 +618,7 @@ components:
                     maximum: 599
                 durationMs:
                     type: integer
+                    minimum: 0
                 error:
                     type: string
                 nextAttemptAt:
@@ -638,13 +642,28 @@ components:
                     type: boolean
                     description: Whether `POST /webhooks/deliveries/{id}/replay` would be accepted — false while the delivery's subscription is disabled or gone.
 
+        # The events the shop can fire: the channel names of every module's `asyncapi.webhooks.yaml`.
+        # Never written here — `x-enum-from` makes the bundler fill it (`scripts/contracts/fill-enum.ts`).
+        WebhookEventName:
+            type: string
+            x-enum-from: webhook-events
+            description: The name of one event a subscription can receive, as `GET /webhooks/events` lists it.
+
+        # What a subscription may filter on: one event name, or `*` for every event, present and future.
+        WebhookEventFilter:
+            type: string
+            x-enum-from: webhook-events
+            x-enum-also: ['*']
+            maxLength: 100
+            description: One event name from `GET /webhooks/events`, or `*` for every event.
+
         WebhookEventCatalogueEntry:
             type: object
             additionalProperties: false
             required: [name]
             properties:
                 name:
-                    type: string
+                    $ref: '#/components/schemas/WebhookEventName'
                 description:
                     type: string
 
@@ -665,7 +684,8 @@ components:
                     minLength: 1
                 eventTypes:
                     type: array
-                    items: { type: string, minLength: 1, maxLength: 100 }
+                    items:
+                        $ref: '#/components/schemas/WebhookEventFilter'
                     minItems: 1
                     description: A name from `GET /webhooks/events`, or `*` for every event. Any other name is a 422 naming `eventTypes`.
 
@@ -688,7 +708,8 @@ components:
                     minLength: 1
                 eventTypes:
                     type: array
-                    items: { type: string, minLength: 1, maxLength: 100 }
+                    items:
+                        $ref: '#/components/schemas/WebhookEventFilter'
                     minItems: 1
                     description: A name from `GET /webhooks/events`, or `*` for every event. Any other name is a 422 naming `eventTypes`.
 
@@ -709,7 +730,8 @@ components:
                     minLength: 1
                 eventTypes:
                     type: array
-                    items: { type: string, minLength: 1, maxLength: 100 }
+                    items:
+                        $ref: '#/components/schemas/WebhookEventFilter'
                     minItems: 1
                     description: A name from `GET /webhooks/events`, or `*` for every event. Any other name is a 422 naming `eventTypes`.
 

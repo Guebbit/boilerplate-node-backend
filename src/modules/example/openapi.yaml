@@ -66,6 +66,9 @@ paths:
             summary: Create an example
             description: Creates a draft example owned by the caller. Sending `Idempotency-Key` makes a retry safe, since the same key replays the first answer.
             operationId: createExample
+            x-error-codes:
+                '409': [IDEMPOTENCY_IN_FLIGHT]
+                '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
                 - bearerAuth: []
             parameters:
@@ -232,6 +235,8 @@ paths:
                 `Example.actions.publish`. Another person's example answers `404`, as every write here
                 does. Answers `409` `EXAMPLE_NOT_PUBLISHABLE` from any other status.
             operationId: publishExample
+            x-error-codes:
+                '409': [EXAMPLE_NOT_PUBLISHABLE]
             security:
                 - bearerAuth: []
             parameters:
@@ -246,8 +251,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # `errors[].code` is `EXAMPLE_NOT_PUBLISHABLE`: not a move from the current status, or a racing
-                # move landed first.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
 
     /examples/{id}/archive:
@@ -259,6 +262,8 @@ paths:
                 caller's `Example.actions.archive`. Another person's example answers `404`. Answers
                 `409` `EXAMPLE_NOT_ARCHIVABLE` from any other status.
             operationId: archiveExample
+            x-error-codes:
+                '409': [EXAMPLE_NOT_ARCHIVABLE]
             security:
                 - bearerAuth: []
             parameters:
@@ -273,8 +278,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # `errors[].code` is `EXAMPLE_NOT_ARCHIVABLE`: not a move from the current status, or a racing
-                # move landed first.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
 
     /examples/{id}/unarchive:
@@ -287,6 +290,8 @@ paths:
                 Another person's example answers `404`. Answers `409` `EXAMPLE_NOT_UNARCHIVABLE` from
                 any other status.
             operationId: unarchiveExample
+            x-error-codes:
+                '409': [EXAMPLE_NOT_UNARCHIVABLE]
             security:
                 - bearerAuth: []
             parameters:
@@ -301,8 +306,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # `errors[].code` is `EXAMPLE_NOT_UNARCHIVABLE`: not a move from the current status, or a racing
-                # move landed first.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
 
     # Its own route rather than a field on create and update: an upload travels as multipart, and

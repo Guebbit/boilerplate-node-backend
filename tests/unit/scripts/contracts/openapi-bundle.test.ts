@@ -10,6 +10,7 @@
 
 import { stringify as stringifyYaml, parse as parseYaml } from 'yaml';
 import {
+    checkOperationErrorCodes,
     withAppLevelResponses,
     withErrorCodes,
     withModuleStamps,
@@ -374,5 +375,47 @@ describe('withVersionedResources and an operation header of its own', () => {
             'Cache-Control',
             'ETag'
         ]);
+    });
+});
+
+/** A one-operation document listing `codes` on `POST /cart`. */
+const listing = (codes: Record<string, string[]>) =>
+    stringifyYaml({
+        openapi: '3.1.0',
+        paths: { '/cart': { post: { 'x-error-codes': codes, responses: {} } } }
+    });
+
+/** `checkOperationErrorCodes` — an operation's per-status code list must agree with the catalogue. */
+describe('checkOperationErrorCodes', () => {
+    const catalogue = {
+        CART_EMPTY: { status: 409, description: 'empty' },
+        CART_ADDRESS_REQUIRED: { status: 422, description: 'address' }
+    };
+
+    it('passes a list whose names exist under their catalogue status, and returns the document as it came', () => {
+        const yaml = listing({ '409': ['CART_EMPTY'], '422': ['CART_ADDRESS_REQUIRED'] });
+
+        expect(checkOperationErrorCodes(yaml, catalogue)).toBe(yaml);
+    });
+
+    it('refuses a name no fragment declares', () => {
+        expect(() =>
+            checkOperationErrorCodes(listing({ '409': ['CART_EMTPY'] }), catalogue)
+        ).toThrow(/POST \/cart lists CART_EMTPY under 409, which no fragment/);
+    });
+
+    it('refuses a name listed under a status the catalogue does not give it', () => {
+        expect(() =>
+            checkOperationErrorCodes(listing({ '422': ['CART_EMPTY'] }), catalogue)
+        ).toThrow(/CART_EMPTY under 422, but the catalogue gives it 409/);
+    });
+
+    it('leaves an operation with no list alone', () => {
+        const yaml = stringifyYaml({
+            openapi: '3.1.0',
+            paths: { '/a': { get: { responses: {} } } }
+        });
+
+        expect(checkOperationErrorCodes(yaml, catalogue)).toBe(yaml);
     });
 });

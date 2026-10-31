@@ -6,6 +6,7 @@
  * door — with the SSRF guard replaced, since its own table lives in `tests/fuzz/`.
  */
 
+import type { WebhookEventFilter } from '@types';
 import { setupTestDb } from '@tests/setup-test-db';
 import { callerAs } from '@tests/callers';
 import { setEnvironment } from '@tests/environment';
@@ -84,8 +85,17 @@ const auditedAs = (action: string) =>
         .map(([event]) => event)
         .filter((event) => event.action === action);
 
+/**
+ * Names the contract's enum refuses at the door, typed as filters so a test can hand them straight
+ * to the service and reach its own check. The one cast: `string[]` narrowed on purpose.
+ */
+const outsideTheEnum = (...names: string[]): WebhookEventFilter[] => names as WebhookEventFilter[];
+
 /** Create a subscription through the service and return it, or fail loudly. */
-const subscribe = async (url = 'https://hooks.example.com/a', eventTypes = ['*']) => {
+const subscribe = async (
+    url = 'https://hooks.example.com/a',
+    eventTypes: WebhookEventFilter[] = ['*']
+) => {
     const result = await create({ url, eventTypes }, context);
     if (!result.success || !result.data) throw new Error('setup failed: create was refused');
     return result.data.subscription;
@@ -219,7 +229,7 @@ describe('what a create refuses', () => {
         const result = await create(
             {
                 url: 'https://hooks.example.com/a',
-                eventTypes: ['order.created', 'nope.one', 'nope.two']
+                eventTypes: outsideTheEnum('order.created', 'nope.one', 'nope.two')
             },
             context
         );
@@ -338,7 +348,11 @@ describe('updating', () => {
     it('refuses event types outside the catalogue and leaves the row as it was', async () => {
         const created = await subscribe('https://hooks.example.com/a', ['order.created']);
 
-        const result = await update(String(created._id), { eventTypes: ['nope.one'] }, context);
+        const result = await update(
+            String(created._id),
+            { eventTypes: outsideTheEnum('nope.one') },
+            context
+        );
 
         expect(result.success).toBe(false);
         if (result.success) throw new Error('unreachable — asserted above');

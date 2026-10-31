@@ -165,6 +165,8 @@ paths:
             summary: Choose (or clear) the cart's shipping method
             description: Sets which shipping method (see `GET /delivery/methods`) the cart plans to ship by, ahead of checkout — priced and validated against the basket as it stands right now. `null` clears the choice. Checkout re-validates from scratch regardless of what this endpoint accepted, since the basket may change afterward. Returns the updated cart, including the priced `summary.shippingCost`/`summary.totalPrice`.
             operationId: setCartShippingMethod
+            x-error-codes:
+                '409': [CART_SHIPPING_METHOD_WEIGHT, CART_SHIPPING_NOT_APPLICABLE]
             security:
                 - bearerAuth: []
             requestBody:
@@ -184,9 +186,6 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # A named method that matches none of `GET /delivery/methods`'.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # A basket made entirely of `requiresShipping: false` products
-                # (`CART_SHIPPING_NOT_APPLICABLE`), or one whose weight falls outside the chosen
-                # method's `minWeight`/`maxWeight` range (`CART_SHIPPING_METHOD_WEIGHT`).
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
@@ -214,6 +213,14 @@ paths:
             summary: Checkout (place order from cart)
             description: Converts the authenticated user's current cart into a new order. Needs a critically fresh session (`401 REAUTH_REQUIRED`), asked after the verified-address key, so a caller who can never pass is refused first. The cart is cleared upon success. The request names the total the buyer was shown (`expectedTotal`); a checkout that would charge anything else is refused with 409 `CART_TOTAL_CHANGED` and the new total, before any stock is held. Optional order notes can be supplied in the request body. Answers 201 with the created order itself as the body — the same shape `POST /orders` answers — and its `Location`. The order's email is always the authenticated caller's own — checkout is account-bound; a future guest checkout would bring an `email` field back.
             operationId: checkout
+            x-error-codes:
+                '401': [REAUTH_REQUIRED]
+                '404': [CART_ADDRESS_NOT_FOUND]
+                # A stored shipping choice the basket no longer fits (gone digital-only, outgrown the method) is not a
+                # refusal here: it reads as no choice, as in `GET /cart`'s `shipping.selected`.
+                '409': [CART_ADDRESS_NOT_APPLICABLE, CART_CHANGED, CART_EMPTY, CART_INSUFFICIENT_STOCK, CART_OPEN_ORDER_LIMIT_REACHED, CART_PAYMENT_METHOD_NOT_AVAILABLE, CART_PURCHASE_HOLD, CART_TOTAL_CHANGED, IDEMPOTENCY_IN_FLIGHT]
+                # A `billingAddressId` that names none of the caller's addresses is the same 404 as `addressId`.
+                '422': [CART_ADDRESS_REQUIRED, CART_BILLING_ADDRESS_REQUIRED, CART_SHIPPING_METHOD_REQUIRED, CART_SHIP_TO_COUNTRY_NOT_SUPPORTED, IDEMPOTENCY_KEY_MISMATCH]
             security:
                 - bearerAuth: []
             parameters:
@@ -235,34 +242,8 @@ paths:
                                 $ref: '../orders/openapi.yaml#/components/schemas/Order'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                # An `addressId` that names none of the caller's saved addresses — the checkout
-                # refuses rather than shipping nowhere. `errors[].code` is `CART_ADDRESS_NOT_FOUND`.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # Checking out an empty cart (`CART_EMPTY`), insufficient stock
-                # (`CART_INSUFFICIENT_STOCK`, naming each short line but not the number
-                # left), a race with another checkout (`CART_CHANGED`), an
-                # `addressId` sent for a chosen method whose `requiresAddress` is false
-                # (`CART_ADDRESS_NOT_APPLICABLE`: that method ships to no address at all — and
-                # neither does an all-digital basket — so naming one is a client error, not a
-                # lookup that might resolve), a `paymentMethod` this
-                # deployment does not offer (`CART_PAYMENT_METHOD_NOT_AVAILABLE`), or the caller
-                # already has `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` unpaid orders, of any
-                # payment method (`CART_OPEN_ORDER_LIMIT_REACHED`, naming them in
-                # `details.orderIds`), or the account is under a purchase hold
-                # (`CART_PURCHASE_HOLD`, with `details.until`). A stored shipping choice the basket no
-                # longer fits (gone digital-only, lost its last physical line, outgrown the method)
-                # is not a refusal here: it reads as no choice, as in `GET /cart`'s `shipping.selected`.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
-                # A basket holding any `requiresShipping: true` line with no shipping method chosen
-                # on the cart (`CART_SHIPPING_METHOD_REQUIRED` — see `PUT /cart/shipping-method`),
-                # a chosen method whose `requiresAddress` is true with no `addressId` and no
-                # default address on file (`CART_ADDRESS_REQUIRED`) — nobody would know how or
-                # where to send the order — that method's resolved address naming a country
-                # outside `NODE_SHIP_TO_COUNTRIES` (`CART_SHIP_TO_COUNTRY_NOT_SUPPORTED`), or no
-                # billing address resolvable: none named, no shipping address to reuse (an
-                # all-digital or pickup basket) and no default on file
-                # (`CART_BILLING_ADDRESS_REQUIRED`). A `billingAddressId` that names none of the
-                # caller's addresses is the same 404 as `addressId`.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 # The per-account checkout budget (`NODE_CHECKOUT_RATE_LIMIT_MAX`, 10 per window).
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
@@ -289,6 +270,9 @@ paths:
                 retry with an `Idempotency-Key`: a lost answer replays instead of adding the same
                 quantities twice. The caller empties its local guest cart once this answers.
             operationId: mergeCart
+            x-error-codes:
+                '409': [IDEMPOTENCY_IN_FLIGHT]
+                '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
                 - bearerAuth: []
             parameters:
@@ -308,9 +292,7 @@ paths:
                                 $ref: '#/components/schemas/MergeCartResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                # `IDEMPOTENCY_IN_FLIGHT`: another request with this key is still running.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
-                # Also `IDEMPOTENCY_KEY_MISMATCH`: this key was used with a different body.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
     /cart/reorder:
@@ -319,6 +301,8 @@ paths:
             summary: Reorder (refill cart from a past order)
             description: Copies the lines of one of the authenticated user's own orders back into their cart — quantities from the order, added on top of what the cart already holds. The order stores product snapshots, so each line is re-resolved against the catalogue as it is today; products that have since been removed, deactivated or hidden are skipped, and the answer holds the cart as it now stands and ONE RESULT PER ORDER LINE, in the order's own order, by the same rule and in the same shape as `POST /cart/merge` (`requested`, `resulting`, `reason`, `availability`). A line that would pass the per-line ceiling (`NODE_CART_LINE_MAX`) is clamped to what room is left (`capped`), and adds nothing once there is none; an unavailable product is `removed`. Neither is a failure. Any signed-in account, staff included, reorders only its own orders — the cart being filled is the caller's.
             operationId: reorder
+            x-error-codes:
+                '409': [REORDER_UNAVAILABLE]
             security:
                 - bearerAuth: []
             requestBody:
@@ -339,8 +323,6 @@ paths:
                 # Well-formed order id that matches none of the caller's own orders. A malformed one is
                 # a 422 on `orderId`: the id is a body field, so it is an argument, not a URL.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # Every product on the order has left the public catalogue — nothing to add.
-                # `errors[].code` is `REORDER_UNAVAILABLE`.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 

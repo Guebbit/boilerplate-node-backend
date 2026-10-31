@@ -37,6 +37,8 @@ paths:
             summary: Add an address
             description: Adds an entry to the authenticated user's address book and answers the entry it created, with its `Location`. The first entry becomes the default automatically; a later entry claims the default slot only by sending `default true`, which demotes the previous holder — a different row, so a client showing the book refetches it.
             operationId: addAddress
+            x-error-codes:
+                '409': [ADDRESS_BOOK_LIMIT_REACHED]
             security:
                 - bearerAuth: []
             requestBody:
@@ -55,7 +57,6 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/Address'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                # The book is full (`ADDRESS_BOOK_LIMIT_REACHED`): one document cannot grow without bound.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 

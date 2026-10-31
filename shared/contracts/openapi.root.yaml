@@ -229,6 +229,21 @@ x-app-level-responses:
         response: ServiceUnavailable
         appliesTo: all
 
+# ---------- Headers the APPLICATION sets on every answer. ----------
+#
+# Set by middleware that runs before any route (`src/app/request-context.ts`, `routes.ts`, the locale
+# and cache layers), so no one operation owns them. Stamped by `scripts/contracts/response-headers.ts`
+# onto every response, each key the HTTP header and each value its `components/headers` entry. A
+# response that declares the same header itself (a `no-store` download, a `max-age` read) keeps its own.
+x-app-level-headers:
+    x-request-id: RequestId
+    Cache-Control: CacheControl
+    Content-Language: ContentLanguage
+    Vary: Vary
+    RateLimit-Policy: RateLimit-Policy
+    RateLimit: RateLimit
+    ETag: EntityTag
+
 tags:
     - name: System
       description: Public system endpoints (ping, liveness).
@@ -430,10 +445,63 @@ components:
             description: >-
                 The resource's current version as a strong entity-tag (RFC 9110 §8.8.3). Send it
                 back as `If-Match` on `PUT`, `PATCH` or `DELETE` to refuse the write if someone
-                else changed the resource in between. Opaque: compare it, never parse it. It
-                validates writes only — a read never answers `304` from it.
+                else changed the resource in between. Opaque: compare it, never parse it.
             schema:
                 type: string
+
+        EntityTag:
+            required: false
+            description: >-
+                The strong entity-tag Express computes for any answer that has a body (RFC 9110
+                section 8.8.3). A client may send it back as `If-None-Match` on a read the app lets
+                it keep, and a `GET` that declares `304` answers that way when it still matches. Only
+                a resource marked versioned promises it (the `ETag` header) and takes it as `If-Match`.
+            schema:
+                type: string
+
+        RequestId:
+            required: true
+            description: >-
+                The id this request is logged and audited under, a UUID the server mints (a trusted
+                ingress's own well-formed one is kept). Even a request the rate limiter refuses carries
+                it. Quote it in a bug report.
+            schema:
+                type: string
+
+        CacheControl:
+            required: true
+            description: >-
+                How a cache may keep the answer (RFC 9111 section 5.2). `no-store` unless the operation
+                says otherwise: a response is uncacheable by default, so a minted secret can never be
+                kept by a shared cache or a browser's disk. An operation that caches names its own policy.
+            schema:
+                type: string
+
+        ContentLanguage:
+            required: false
+            description: >-
+                The language the answer was written in (RFC 9110 section 8.5), chosen from the caller's
+                `Accept-Language` or its stored locale. Absent on an answer no locale was resolved for.
+            schema:
+                type: string
+
+        Vary:
+            required: false
+            description: >-
+                The request headers the answer depends on (RFC 9110 section 12.5.5), so a cache keeps
+                one copy per value: always `Origin`, plus `Accept-Language` where the locale picks the body.
+            schema:
+                type: string
+
+        Idempotent-Replay:
+            required: false
+            description: >-
+                `true` when this answer is the stored first answer replayed for a repeated
+                `Idempotency-Key`, not a fresh run: nothing was written a second time. Absent on a
+                first run. Sent on a replay only.
+            schema:
+                type: string
+                enum: ['true']
 
         RateLimit-Policy:
             required: false

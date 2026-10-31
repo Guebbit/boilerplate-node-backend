@@ -332,6 +332,8 @@ paths:
                 deactivate first, a client that wants a confirm step adds it. `actions.delete` on
                 the language says whether it would be accepted now.
             operationId: deleteLocale
+            x-error-codes:
+                '409': [LOCALE_LANGUAGE_IS_FALLBACK]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -357,6 +359,8 @@ paths:
                 endpoint answers a state it cannot move to, never a silent success.
                 `actions.activate` says whether it would be accepted.
             operationId: activateLocale
+            x-error-codes:
+                '409': [LOCALE_LANGUAGE_ALREADY_ACTIVE]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -389,6 +393,8 @@ paths:
                 `LOCALE_LANGUAGE_ALREADY_INACTIVE` when it is already off.
                 `actions.deactivate` says whether it would be accepted.
             operationId: deactivateLocale
+            x-error-codes:
+                '409': [LOCALE_LANGUAGE_ALREADY_INACTIVE, LOCALE_LANGUAGE_IS_FALLBACK]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []

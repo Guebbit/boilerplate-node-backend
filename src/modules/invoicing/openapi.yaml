@@ -48,6 +48,10 @@ paths:
                 the file: `Content-Disposition` carries `invoice-<invoice number>.pdf`, so a client
                 saves it under that name rather than inventing one.
             operationId: getOrderInvoice
+            x-error-codes:
+                # An unknown or inaccessible order answers the same status with `orders.not-found`: the client
+                # cannot tell the two apart by design (see `orders`' own `GET /orders/{id}`).
+                '404': [ORDER_INVOICE_NOT_ISSUED]
             security:
                 - bearerAuth: []
             parameters:
@@ -65,10 +69,6 @@ paths:
                                 type: string
                                 format: binary
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                # An order that exists but has never been invoiced. `errors[].code` is
-                # `ORDER_INVOICE_NOT_ISSUED`; a genuinely unknown/inaccessible order answers the
-                # same status with `orders.not-found` instead — the client cannot tell the two
-                # apart from the status code alone, by design (see `orders`' own `GET /orders/{id}`).
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # `invoicingLimiter` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
@@ -113,6 +113,9 @@ paths:
                 order, or sits on an order whose money the caller may not read (staff without
                 `display:Payment`) — all indistinguishable on purpose.
             operationId: getOrderCreditNote
+            x-error-codes:
+                # An unknown or inaccessible order answers `orders.not-found`.
+                '404': [ORDER_CREDIT_NOTE_NOT_ISSUED]
             security:
                 - bearerAuth: []
             parameters:
@@ -136,8 +139,6 @@ paths:
                                 type: string
                                 format: binary
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                # `errors[].code` is `ORDER_CREDIT_NOTE_NOT_ISSUED` for an order that exists but has
-                # no such credit note; `orders.not-found` for a genuinely unknown/inaccessible order.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 # See `GET /orders/{id}/invoice`: a full render queue answers 503 with `Retry-After`.

@@ -33,6 +33,9 @@ import { assembleRoot, readModuleFragments } from './root-assembly';
 import { withBrowserEvents } from './analytics-browser-events';
 import { withCookieAuth } from './cookie-auth';
 import { withImageUploadEncoding } from './image-upload-encoding';
+import { webhookEventNames } from './asyncapi-webhook-events';
+import { withFilledEnums } from './fill-enum';
+import { withAppLevelHeaders, withIdempotentReplay } from './response-headers';
 import { stageExportSchema } from './personal-data-assembly';
 import { pruneUnused } from './prune-unused';
 import { REPO_ROOT, MODULES_ROOT, modulesWith } from '../modules-on-disk';
@@ -157,6 +160,8 @@ interface Operation {
     responses?: Record<string, unknown>;
     /** The cache policy the fragment declares: `private-no-cache`, `revalidate`, `max-age: <s>` or `no-store`. */
     'x-cache'?: string;
+    /** The error codes this operation answers with, by HTTP status — see {@link checkOperationErrorCodes}. */
+    'x-error-codes'?: Record<string, string[]>;
 }
 
 /** One error code's declaration, as a fragment's `x-error-codes` map holds it. */
@@ -488,6 +493,66 @@ export const withErrorCodes = (
     return stringifyYaml(document_, { lineWidth: 0 });
 };
 
+/**
+ * Checks one status's code names against the catalogue.
+ *
+ * @param operation - `METHOD /path`, for the message
+ * @param status - the status key the names are listed under
+ * @param names - the code names listed
+ * @param errorCodes - the collected catalogue
+ * @throws Error when a name is unknown or the catalogue gives it another status
+ */
+const checkListedCodes = (
+    operation: string,
+    status: string,
+    names: readonly string[],
+    errorCodes: Record<string, ErrorCodeEntry>
+): void => {
+    for (const name of names) {
+        const entry = Object.hasOwn(errorCodes, name) ? errorCodes[name] : undefined;
+        if (entry === undefined)
+            throw new Error(
+                `[openapi] ${operation} lists ${name} under ${status}, which no fragment's x-error-codes declares.`
+            );
+        if (String(entry.status) !== status)
+            throw new Error(
+                `[openapi] ${operation} lists ${name} under ${status}, but the catalogue gives it ${String(entry.status)}.`
+            );
+    }
+};
+
+/**
+ * Refuses an operation's `x-error-codes` (status -> code names) that disagrees with the catalogue.
+ *
+ * Each name must exist in the collected catalogue ({@link collectErrorCodes}) and sit under the
+ * status the catalogue gives it, so a renamed or re-statused code fails the bundle instead of
+ * leaving a list that quietly says something false. The key stays in the published contract.
+ *
+ * @param bundled - the bundled OpenAPI document, as YAML text
+ * @param errorCodes - the collected catalogue
+ * @returns the document, unchanged
+ * @throws Error naming the operation and code when a name is unknown or sits under the wrong status
+ */
+export const checkOperationErrorCodes = (
+    bundled: string,
+    errorCodes: Record<string, ErrorCodeEntry>
+): string => {
+    const parsed: unknown = parseYaml(bundled);
+    if (!isBundledDocument(parsed))
+        throw new Error('[openapi] the bundled document did not parse to an object.');
+
+    for (const [route, pathItem] of Object.entries(parsed.paths ?? {}))
+        for (const method of OPERATION_METHODS) {
+            const listed = isOperation(pathItem[method])
+                ? pathItem[method]['x-error-codes']
+                : undefined;
+            for (const [status, names] of Object.entries(listed ?? {}))
+                checkListedCodes(`${method.toUpperCase()} ${route}`, status, names, errorCodes);
+        }
+
+    return bundled;
+};
+
 /** Every documented path, mapped to the module fragment that declared it. A `system` path is absent — it is written into the root document directly, so it belongs to no module. */
 const moduleOfPath = (): Record<string, string> => {
     const map: Record<string, string> = {};
@@ -633,25 +698,38 @@ const compile = (): string => {
      * viewers all read past them — the alternative is the one artefact in the repo that cannot say
      * what it is.
      */
+    const errorCodes = collectErrorCodes();
     compiled =
         MARKER +
         pruneUnused(
             withErrorCodes(
-                withModuleStamps(
-                    withVersionedResources(
-                        withNotModified(
-                            withAppLevelResponses(
-                                withCookieAuth(
-                                    withImageUploadEncoding(
-                                        withBrowserEvents(readFileSync(temporary, 'utf8'))
+                checkOperationErrorCodes(
+                    withModuleStamps(
+                        withIdempotentReplay(
+                            withAppLevelHeaders(
+                                withVersionedResources(
+                                    withNotModified(
+                                        withAppLevelResponses(
+                                            withCookieAuth(
+                                                withImageUploadEncoding(
+                                                    withFilledEnums(
+                                                        withBrowserEvents(
+                                                            readFileSync(temporary, 'utf8')
+                                                        ),
+                                                        { 'webhook-events': webhookEventNames() }
+                                                    )
+                                                )
+                                            )
+                                        )
                                     )
                                 )
                             )
-                        )
+                        ),
+                        moduleOfPath()
                     ),
-                    moduleOfPath()
+                    errorCodes
                 ),
-                collectErrorCodes()
+                errorCodes
             )
         );
     return compiled;

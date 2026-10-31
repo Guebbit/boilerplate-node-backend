@@ -143,6 +143,8 @@ paths:
             summary: Create a payment
             description: Freezes one of the caller's `pending` orders into a payment intent — the amount is taken from the order's own lines, so the intent cannot quote a different number than the order shows. Asking again refreshes the same intent (one payment per order is a database fact) and answers 200, so a retry needs no `Idempotency-Key` (a stored replay would hand back the first answer's `clientSecret` for as long as the ledger keeps it). The caller's intents and syncs share one budget per hour (429) — 201 says a payment was created, and a refresh created nothing (RFC 9110 §15.3.2). An order whose money already moved answers 409, and so does a deployment with no card payment provider (`PAYMENT_CARD_NOT_AVAILABLE`). The intent is the thing the card dialog confirms.
             operationId: createPayment
+            x-error-codes:
+                '409': [PAYMENT_CARD_NOT_AVAILABLE, PAYMENT_IN_FLIGHT, PAYMENT_ORDER_NOT_PAYABLE]
             security:
                 - bearerAuth: []
             requestBody:
@@ -169,9 +171,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # Not `pending`, or already paid (`PAYMENT_ORDER_NOT_PAYABLE`), or no card provider
-                # is configured (`PAYMENT_CARD_NOT_AVAILABLE`), or the provider opened a second
-                # intent for a payment that already holds one (`PAYMENT_IN_FLIGHT`).
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 # `paymentIntentLimiter`, one budget per account shared with `POST /payments/{id}/sync`.
@@ -315,6 +314,12 @@ paths:
                 valid-but-stale token answers 401 with `errors[].code` `REAUTH_REQUIRED`, and the
                 caller re-authenticates and retries the same request.
             operationId: createRefund
+            x-error-codes:
+                '400': [IDEMPOTENCY_KEY_REQUIRED]
+                '401': [REAUTH_REQUIRED]
+                # A provider refusal is not here: it answers 201 with the failed record.
+                '409': [IDEMPOTENCY_IN_FLIGHT, PAYMENT_DISPUTED, PAYMENT_NOT_REFUNDABLE]
+                '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
                 - bearerAuth: []
             parameters:
@@ -335,15 +340,10 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Refund'
-                # `IDEMPOTENCY_KEY_REQUIRED`: the `Idempotency-Key` header is missing.
                 '400': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/BadRequest' }
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # Nothing to return: the payment never succeeded, or all of it already went back
-                # (`PAYMENT_NOT_REFUNDABLE`), a chargeback is open on it (`PAYMENT_DISPUTED`) — or
-                # `Idempotency-Key` names a request still in flight.
-                # A provider refusal is not here: it answers 201 with the failed record.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
@@ -403,6 +403,10 @@ paths:
                 requirement as the refund itself: a valid-but-stale token answers 401 with
                 `errors[].code` `REAUTH_REQUIRED`. `Idempotency-Key` is optional.
             operationId: settleRefundByHand
+            x-error-codes:
+                '401': [REAUTH_REQUIRED]
+                '409': [IDEMPOTENCY_IN_FLIGHT, PAYMENT_REFUND_IN_FLIGHT, PAYMENT_REFUND_NOT_OPEN]
+                '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
                 - bearerAuth: []
             parameters:
@@ -428,8 +432,6 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # The payment, or a refund with that id on it, does not exist.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # Already settled (`PAYMENT_REFUND_NOT_OPEN`), a card refund with no final answer
-                # (`PAYMENT_REFUND_IN_FLIGHT`), or `Idempotency-Key` names a request still in flight.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
@@ -459,6 +461,10 @@ paths:
                 same fresh-session requirement as creating one: a valid-but-stale token answers 401
                 with `errors[].code` `REAUTH_REQUIRED`. `Idempotency-Key` is optional.
             operationId: cancelRefund
+            x-error-codes:
+                '401': [REAUTH_REQUIRED]
+                '409': [IDEMPOTENCY_IN_FLIGHT, PAYMENT_REFUND_IN_FLIGHT, PAYMENT_REFUND_NOT_OPEN]
+                '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
                 - bearerAuth: []
             parameters:
@@ -490,8 +496,6 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # The payment, or a refund with that id on it, does not exist.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # Not open (`PAYMENT_REFUND_NOT_OPEN`), a card refund with no final answer
-                # (`PAYMENT_REFUND_IN_FLIGHT`), or `Idempotency-Key` names a request still in flight.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
@@ -545,6 +549,10 @@ paths:
                 valid-but-stale token answers 401 with `errors[].code` `REAUTH_REQUIRED`, and the
                 caller re-authenticates and retries the same request.
             operationId: recordOrderPayment
+            x-error-codes:
+                '401': [REAUTH_REQUIRED]
+                '409': [IDEMPOTENCY_IN_FLIGHT, PAYMENT_IN_FLIGHT, PAYMENT_ORDER_NOT_PAYABLE]
+                '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
                 - bearerAuth: []
             parameters:
@@ -575,9 +583,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # Order not pending (`PAYMENT_ORDER_NOT_PAYABLE`), a card charge already in flight
-                # at the provider (`PAYMENT_IN_FLIGHT` — recording money too could charge twice),
-                # or `Idempotency-Key` names a request still in flight.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
@@ -618,6 +623,10 @@ paths:
                 with `errors[].code` `REAUTH_REQUIRED`, and the caller re-authenticates and retries
                 the same request.
             operationId: confirmPayment
+            x-error-codes:
+                '401': [REAUTH_REQUIRED]
+                '409': [IDEMPOTENCY_IN_FLIGHT, PAYMENT_DECLINED, PAYMENT_NOT_CONFIRMABLE, PAYMENT_ORDER_NOT_PAYABLE]
+                '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
                 - bearerAuth: []
             parameters:
@@ -642,10 +651,6 @@ paths:
                 # Also a missing or refused human-check token, after one decline.
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # Declined by the card issuer (`PAYMENT_DECLINED`), not awaiting confirmation
-                # (`PAYMENT_NOT_CONFIRMABLE`), the order slipped away between charge and
-                # write (`PAYMENT_ORDER_NOT_PAYABLE` — the charge was refunded on the spot), or
-                # `Idempotency-Key` names a request still in flight.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 # `paymentConfirmAttemptLimiter` and `paymentConfirmDeclineLimiter` both sit in
@@ -666,6 +671,9 @@ paths:
                 valid-but-stale token answers 401 with `errors[].code` `REAUTH_REQUIRED`, and the
                 caller re-authenticates and retries the same request.
             operationId: syncPayment
+            x-error-codes:
+                '401': [REAUTH_REQUIRED]
+                '409': [PAYMENT_DECLINED, PAYMENT_NOT_CONFIRMABLE]
             security:
                 - bearerAuth: []
             parameters:
@@ -680,8 +688,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # Declined (`PAYMENT_DECLINED`), or the payment never reached the provider
-                # (`PAYMENT_NOT_CONFIRMABLE`).
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 # `paymentIntentLimiter`, one budget per account shared with `POST /payments`.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }

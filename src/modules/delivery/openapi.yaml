@@ -372,6 +372,9 @@ paths:
                 The same key replays the first answer; a 409 means the first request is still running, a
                 422 means the key was reused with another body.
             operationId: shipFulfillmentOrder
+            x-error-codes:
+                '409': [DELIVERY_NOT_PHYSICAL, DELIVERY_NOT_SHIPPABLE, IDEMPOTENCY_IN_FLIGHT, ORDER_NOT_PROCESSING]
+                '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
                 - bearerAuth: []
             parameters:
@@ -414,6 +417,9 @@ paths:
                 `Idempotency-Key`, as for shipping (a 409 is the first request still running, a 422 the key
                 reused with another body).
             operationId: fulfillFulfillmentOrder
+            x-error-codes:
+                '409': [DELIVERY_NOT_DIGITAL, IDEMPOTENCY_IN_FLIGHT]
+                '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
                 - bearerAuth: []
             parameters:
@@ -444,6 +450,8 @@ paths:
                 in-progress one can be held (`DELIVERY_NOT_HOLDABLE`). `awaiting_stock` is never
                 a reason staff can give: only the allocation of stock sets it.
             operationId: holdFulfillmentOrder
+            x-error-codes:
+                '409': [DELIVERY_NOT_HOLDABLE]
             security:
                 - bearerAuth: []
             parameters:
@@ -477,6 +485,8 @@ paths:
                 (`DELIVERY_NOT_RELEASABLE`): a hand release would ship goods the ledger never counted
                 out, so only the stock arriving releases it.
             operationId: releaseFulfillmentOrder
+            x-error-codes:
+                '409': [DELIVERY_NOT_RELEASABLE]
             security:
                 - bearerAuth: []
             parameters:
@@ -522,6 +532,8 @@ paths:
             description: >-
                 Merges the given fields into the shipment — RFC 7396. Only the tracking code can change: added when the parcel left without one, or corrected. Allowed at any time after the shipment left, `shipped`, `delivered` or `lost`; a digital fulfilment never had a carrier and answers `DELIVERY_NOT_PHYSICAL` (409). The buyer is mailed only when the code really changed — an "added" notice for the first code, a "corrected" one for a replacement. The audit row records the code before and after.
             operationId: updateShipment
+            x-error-codes:
+                '409': [DELIVERY_NOT_PHYSICAL]
             security:
                 - bearerAuth: []
             parameters:
@@ -568,6 +580,8 @@ paths:
                 the top-up of the stock hold is given back and the owed fulfillment order is closed
                 with no refund (`cancelReason: found`). Otherwise `DELIVERY_LOST_SUPERSEDED` (409).
             operationId: deliverShipment
+            x-error-codes:
+                '409': [DELIVERY_LOST_SUPERSEDED, DELIVERY_NOT_DELIVERABLE]
             security:
                 - bearerAuth: []
             parameters:
@@ -607,6 +621,8 @@ paths:
                 original payment. An order that was `shipped` goes back to `processing`. The buyer is
                 mailed and gets an inbox row, always; `message` is the sentence they read.
             operationId: markShipmentLost
+            x-error-codes:
+                '409': [DELIVERY_NOT_LOSABLE]
             security:
                 - bearerAuth: []
             parameters:
