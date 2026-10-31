@@ -10,7 +10,6 @@ import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import type { DomainEventMap } from '@kernel/events';
 import { ticketService } from '../../service';
 import { ticketModel } from '@modules/tickets/model';
-import { ticketRepository } from '@modules/tickets/repository';
 import { backdateDue, closeDirectly, createRefundTicket } from '../factories';
 import { TICKET_OVERDUE } from '../../events';
 import { TicketStatus } from '@types';
@@ -102,7 +101,7 @@ describe('remindOverdue', () => {
         expect(heard.map((fact) => fact.ticketId)).toEqual([older, newer]);
     });
 
-    it('does not announce a reopened ticket again while its deadline is unchanged', async () => {
+    it('does not announce a reopened ticket again: the deadline and the stamp both stay', async () => {
         const id = await dueAgo(2);
         await ticketService.remindOverdue();
         await closeDirectly(id);
@@ -112,20 +111,5 @@ describe('remindOverdue', () => {
         );
 
         await expect(ticketService.remindOverdue()).resolves.toBe(0);
-    });
-
-    it('starts a fresh cycle when a move sets a new due date: the stamp goes in the same write', async () => {
-        const id = await dueAgo(2);
-        await ticketService.remindOverdue();
-
-        await ticketRepository.moveFrom(id, TicketStatus.new, {
-            set: { dueAt: new Date(Date.now() - HOUR_MS) },
-            unset: []
-        });
-        const moved = await ticketModel.findById(id).exec();
-        expect(moved?.overdueNotifiedAt).toBeUndefined();
-
-        await expect(ticketService.remindOverdue()).resolves.toBe(1);
-        expect(heard).toHaveLength(2);
     });
 });

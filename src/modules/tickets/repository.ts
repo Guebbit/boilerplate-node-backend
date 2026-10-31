@@ -96,16 +96,6 @@ export interface NewSystemTicket {
 /** Most recent system events remembered per ticket. */
 const REMEMBERED_EVENTS = 20;
 
-/**
- * The fields a patch unsets. A patch that sets a new `dueAt` also clears `overdueNotifiedAt`, in
- * the same write: a new deadline starts a fresh reminder cycle. No door sets `dueAt` today; this
- * is where the rule lives for the first one that does.
- *
- * @param patch - the transition's write
- */
-const unsetsOf = (patch: TicketPatch): string[] =>
-    'dueAt' in patch.set ? [...patch.unset, 'overdueNotifiedAt'] : patch.unset;
-
 /** Link types whose ticket goes with the person: the record IS the person's. */
 const LINKS_THAT_GO_WITH_THE_PERSON = [TicketLinkType.user, TicketLinkType.export];
 
@@ -121,8 +111,8 @@ export const ticketRepository: TicketRepository = {
                 { _id: toObjectId(id), status: from },
                 {
                     $set: patch.set,
-                    ...(unsetsOf(patch).length > 0
-                        ? { $unset: Object.fromEntries(unsetsOf(patch).map((key) => [key, 1])) }
+                    ...(patch.unset.length > 0
+                        ? { $unset: Object.fromEntries(patch.unset.map((key) => [key, 1])) }
                         : {})
                 },
                 { new: true }
