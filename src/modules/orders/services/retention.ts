@@ -21,14 +21,9 @@ import { clearTimelineActor } from './timeline';
  *
  * @param userId - the erased account's id
  * @param session - joins the detach to the hard-delete transaction calling this hook
- * @param erasedAt - the original erasure date, when a restore is being repeated
  */
-export const detachUserId = (
-    userId: string,
-    session: ClientSession,
-    erasedAt?: Date
-): Promise<void> =>
-    orderRepository.detachUserId(userId, session, erasedAt).then((detached) => {
+export const detachUserId = (userId: string, session: ClientSession): Promise<void> =>
+    orderRepository.detachUserId(userId, session).then((detached) => {
         if (detached > 0)
             // Stryker disable next-line all
             logger.info({ message: 'Detached orders from an erased account.', userId, detached });
@@ -119,16 +114,14 @@ const cancelUnpaidOrders = (orderIds: readonly string[]): Promise<void> =>
  *
  * @param userId - the erased account's id
  * @param session - joins the detach to the hard-delete transaction calling this hook
- * @param erasedAt - the original erasure date, when a restore is being repeated
  * @returns the cancel, for the caller to run after the commit; absent when there is nothing to cancel
  */
 export const eraseUserOrders = (
     userId: string,
-    session: ClientSession,
-    erasedAt?: Date
+    session: ClientSession
 ): Promise<AfterErase | undefined> =>
     orderRepository.findOpenUnpaidIdsOf(userId, session).then((orderIds) =>
-        detachUserId(userId, session, erasedAt)
+        detachUserId(userId, session)
             // Whatever the erased account did to ANY order (a staff member's changes, a
             // buyer's own cancel) loses its name; the rows stay.
             .then(() => clearTimelineActor(userId, session))

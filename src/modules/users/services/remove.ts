@@ -194,7 +194,11 @@ const restoreScheduled = (
             userRepository
                 .restoreScheduledDeletion(user.id, now, session)
                 .then((restored) => (restored ? user.id : null)),
-        (id) => ({ name: USER_DELETION_CANCELLED, payload: { userId: id }, aggregateId: id })
+        (id) => ({
+            name: USER_DELETION_CANCELLED,
+            payload: { userId: id, cancelledAt: now.toISOString() },
+            aggregateId: id
+        })
     ).then((id) => {
         if (id === null) return due;
 

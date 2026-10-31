@@ -400,26 +400,3 @@ describe('orders — order.redacted outbox event', () => {
         expect(await redactedIds()).toEqual(orders.map((order) => String(order._id)).toSorted());
     });
 });
-
-describe('orders — a repeat erasure after a restore', () => {
-    beforeEach(() => {
-        registerCheckoutModules();
-    });
-
-    afterEach(() => {
-        resetDomainEvents();
-    });
-
-    it('starts the PII clock at the original erasure date, not at the repeat', async () => {
-        const user = await createUser();
-        const product = await createProduct();
-        const order = await createOrder(user, [toOrderItem(product, 1)]);
-        const originalErasure = new Date(Date.now() - 40 * DAY);
-
-        await userService.eraseAgain(user.id, originalErasure, callerContextAs('admin'));
-
-        const reloaded = await orderRepository.findById(String(order._id));
-        expect(reloaded!.userId).toBeUndefined();
-        expect(reloaded!.piiClockStartedAt).toEqual(originalErasure);
-    });
-});

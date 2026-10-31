@@ -27,9 +27,10 @@ declare module '@kernel/events' {
         /**
          * Staff restored an account its owner had scheduled for erasure, committed with the write
          * that cleared the schedule. `account` owns the restore link and the mail, so it is the
-         * subscriber that drops the link and tells the owner.
+         * subscriber that drops the link and tells the owner. `cancelledAt` (ISO) is when it
+         * happened, not when the handler runs: the erasure ledger dates its row by it.
          */
-        'user.deletion-cancelled': { userId: string };
+        'user.deletion-cancelled': { userId: string; cancelledAt: string };
         /**
          * An account was hard-deleted, committed in the erasure transaction itself, so it exists
          * exactly when the erasure did. `users` is its own subscriber: it asks the analytics

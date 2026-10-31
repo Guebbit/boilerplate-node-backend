@@ -63,43 +63,47 @@ export const scheduleAccountDeletion = (
     const requestedAt = new Date();
     const purgeAt = deletionPurgeAt(requestedAt);
 
-    return userService
-        .scheduleOwnDeletion(user, requestedAt, purgeAt)
-        .then(() => recordSchedule(user.id, requestedAt, purgeAt))
-        .then(() => revokeFor('deletion-scheduled', user.id))
-        .then(() =>
-            issueToken(
-                user.id,
-                ACCOUNT_RESTORE_TOKEN_TYPE,
-                purgeAt.getTime() - requestedAt.getTime()
+    return (
+        userService
+            // The ledger row joins the lock's transaction: committed together, or neither.
+            .scheduleOwnDeletion(user, requestedAt, purgeAt, (session) =>
+                recordSchedule(user.id, requestedAt, purgeAt, session)
             )
-        )
-        .then((token) => {
-            recordAudit(context, {
-                action: accountAuditActions.AUTH_ACCOUNT_DELETE_SCHEDULED,
-                actorUserId: user.id,
-                outcome: 'success',
-                metadata: { purgeAt: purgeAt.toISOString() }
-            });
-            emitAnalyticsEvent({
-                ...buildAnalyticsBase(context),
-                distinctId: user.id,
-                event: accountAnalyticsEvents.ACCOUNT_DELETION_SCHEDULED
-            });
-            authAccountDeleteTotal.inc({ status: 'scheduled' });
+            .then(() => revokeFor('deletion-scheduled', user.id))
+            .then(() =>
+                issueToken(
+                    user.id,
+                    ACCOUNT_RESTORE_TOKEN_TYPE,
+                    purgeAt.getTime() - requestedAt.getTime()
+                )
+            )
+            .then((token) => {
+                recordAudit(context, {
+                    action: accountAuditActions.AUTH_ACCOUNT_DELETE_SCHEDULED,
+                    actorUserId: user.id,
+                    outcome: 'success',
+                    metadata: { purgeAt: purgeAt.toISOString() }
+                });
+                emitAnalyticsEvent({
+                    ...buildAnalyticsBase(context),
+                    distinctId: user.id,
+                    event: accountAnalyticsEvents.ACCOUNT_DELETION_SCHEDULED
+                });
+                authAccountDeleteTotal.inc({ status: 'scheduled' });
 
-            // The recipient's OWN language, the request's only as fallback; high priority, since a
-            // person is waiting on the link.
-            const mail = deletionScheduledEmail(
-                recipientLocale(user.locale, context),
-                greetableName(user, user.email),
-                token,
-                purgeAt
-            );
-            // eslint-disable-next-line @typescript-eslint/no-floating-promises -- sendAccountMail never rejects (enqueueEmail logs its own failure)
-            void sendAccountMail(user.email, mail);
-            return { requestedAt, purgeAt };
-        });
+                // The recipient's OWN language, the request's only as fallback; high priority, since a
+                // person is waiting on the link.
+                const mail = deletionScheduledEmail(
+                    recipientLocale(user.locale, context),
+                    greetableName(user, user.email),
+                    token,
+                    purgeAt
+                );
+                // eslint-disable-next-line @typescript-eslint/no-floating-promises -- sendAccountMail never rejects (enqueueEmail logs its own failure)
+                void sendAccountMail(user.email, mail);
+                return { requestedAt, purgeAt };
+            })
+    );
 };
 
 /**
@@ -118,16 +122,19 @@ export const restoreAccount = (
     via: RestoreVia,
     context: CallerContext
 ): Promise<boolean> =>
-    userService.restoreOwnAccount(user).then((restored) => {
-        if (!restored) return false;
+    // The ledger row joins the restore's transaction: committed together, or neither.
+    userService
+        .restoreOwnAccount(user, new Date(), (session) =>
+            recordCancellation(user.id, new Date(), session)
+        )
+        .then((restored) => {
+            if (!restored) return false;
 
-        return removeTokens(user.id, [ACCOUNT_RESTORE_TOKEN_TYPE])
-            .then(() => recordCancellation(user.id))
-            .then(() => {
+            return removeTokens(user.id, [ACCOUNT_RESTORE_TOKEN_TYPE]).then(() => {
                 announceRestored(user, via, context);
                 return true;
             });
-    });
+        });
 
 /**
  * The record of a restore: audit row, analytics event, metric and the mail. One place, so the
@@ -192,10 +199,11 @@ export const restoreAccountByLink = (
  * before the event is handled has nobody left to tell.
  *
  * @param userId - the restored account
+ * @param cancelledAt - when staff cancelled, from the event: a retried handler must not re-date it
  */
-export const handleRestoredByStaff = (userId: string): Promise<void> =>
+export const handleRestoredByStaff = (userId: string, cancelledAt: Date): Promise<void> =>
     removeTokens(userId, [ACCOUNT_RESTORE_TOKEN_TYPE])
-        .then(() => recordCancellation(userId))
+        .then(() => recordCancellation(userId, cancelledAt))
         .then(() => userService.getById(userId))
         .then((user) => {
             // The staff member is in `users`' own audit row; this trail records the cancellation.
