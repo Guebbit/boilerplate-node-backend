@@ -91,6 +91,12 @@ interface QueryFixture {
 
 const QUERY_FIXTURES: Partial<Record<string, QueryFixture>> = {
     'GET /audit': { request: adminQuery('/audit') },
+    'DELETE /notifications': {
+        request: async (query) => {
+            const { bearer } = await authenticateAs('admin');
+            return api().delete(`/notifications?${query}`).set('Authorization', bearer);
+        }
+    },
     'GET /observability/audit': { request: adminQuery('/observability/audit') },
     'GET /tickets': { request: adminQuery('/tickets') },
     'GET /examples': { request: adminQuery('/examples') },
