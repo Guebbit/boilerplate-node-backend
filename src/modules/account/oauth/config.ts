@@ -6,10 +6,14 @@
  */
 
 import type { DeletionPending, MfaChallenge } from '@types';
-import type { OAuthCallbackError } from './callback-errors';
+import { REDIRECT_QUERY_ENUMS } from '@api/redirect-query';
 import { defineConfig } from '@infrastructure/config/define';
 import { text } from '@infrastructure/config/fields';
 import { siteConfig } from '@infrastructure/http/config';
+
+/** What the frontend's callback page reads from `?error=`: the contract's `x-redirect-query` list. */
+export type OAuthCallbackError =
+    (typeof REDIRECT_QUERY_ENUMS)['completeOAuthLogin']['error'][number];
 
 /**
  * How long a provider's own HTTP calls (token exchange, and GitHub's profile/email follow-ups)

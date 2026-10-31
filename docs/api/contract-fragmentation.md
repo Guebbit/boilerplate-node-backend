@@ -240,7 +240,7 @@ router and its `x-cache` disagree. It checks which GETs are cached, not the valu
 | key | on | what the client does with it |
 | --- | --- | --- |
 | `x-no-refresh: true` | an operation | a `401` there is a real credential failure, so the frontend never refreshes the token and replays it. The frontend's route table carries it as `noRefresh`. |
-| `x-redirect-query` | a `302` response | lists the schema of a query parameter on the redirect (`error` on the OAuth callback), inline. A `$ref` under an `x-` key is inlined by the bundler and its component pruned, so the set cannot be a shared schema; the frontend's generator emits it as `REDIRECT_QUERY_ENUMS`, and the backend keeps a twin constant held equal by a test. |
+| `x-redirect-query` | a `302` response | lists the schema of a query parameter on the redirect (`error` on the OAuth callback), inline. A `$ref` under an `x-` key is inlined by the bundler and its component pruned, so the set cannot be a shared schema; both repos' generators emit it as `REDIRECT_QUERY_ENUMS` (the backend's is `api/redirect-query.ts`, from `scripts/contracts/generate-redirect-query.ts`). |
 
 Neither is wire data a server reads. The bundler passes both through untouched.
 

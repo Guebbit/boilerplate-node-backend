@@ -31,14 +31,14 @@ import {
     OAUTH_CONTINUE_COOKIE,
     OAUTH_LOCALE_COOKIE
 } from '../oauth/state';
-import type { OAuthCallbackError } from '../oauth/callback-errors';
 import { createMfaChallengeCookie } from '../oauth/mfa-redirect';
 import { createDeletionChallengeCookie } from '../oauth/deletion-redirect';
 import {
     oauthCallbackUrl,
     oauthFrontendCallbackUrl,
     oauthFrontendMfaCallbackUrl,
-    oauthFrontendDeletionCallbackUrl
+    oauthFrontendDeletionCallbackUrl,
+    type OAuthCallbackError
 } from '../oauth/config';
 import {
     accountService,
