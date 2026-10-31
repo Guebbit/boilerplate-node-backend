@@ -1,11 +1,13 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { parse, stringify } from 'yaml';
+import { stringify } from 'yaml';
 import {
     browserEventFragments,
     withBrowserEvents
 } from '../../../../scripts/contracts/analytics-browser-events';
+import type { OpenApiDocument } from '../../../../scripts/contracts/openapi-document';
+import { asStub } from '@tests/stub';
 
 /** The scratch directories this file made, removed after each case. */
 const made: string[] = [];
@@ -39,8 +41,8 @@ const eventSchema = (event: string) => ({
 });
 
 /** A bundle holding the placeholder `analytics` declares, plus one unrelated schema. */
-const bundle = (): string =>
-    stringify({
+const bundle = (): OpenApiDocument =>
+    asStub<OpenApiDocument>({
         components: {
             schemas: {
                 Other: { type: 'string' },
@@ -50,10 +52,11 @@ const bundle = (): string =>
         }
     });
 
-/** The parsed schemas of an assembled bundle. */
-const schemasOf = (text: string) =>
-    (parse(text) as { components: { schemas: Record<string, Record<string, unknown>> } }).components
-        .schemas;
+/** Folds the fragments into a document and returns its schemas. */
+const assembled = (document: OpenApiDocument, fragments: string[]) => {
+    withBrowserEvents(document, fragments);
+    return document.components?.schemas;
+};
 
 describe('browserEventFragments', () => {
     it('finds the products fragment on disk', () => {
@@ -63,14 +66,12 @@ describe('browserEventFragments', () => {
 
 describe('withBrowserEvents', () => {
     it('replaces the request schema with a oneOf discriminated on event', () => {
-        const schemas = schemasOf(
-            withBrowserEvents(bundle(), [
-                fragment({ AViewed: eventSchema('a_viewed') }),
-                fragment({ BSeen: eventSchema('b_seen') })
-            ])
-        );
+        const schemas = assembled(bundle(), [
+            fragment({ AViewed: eventSchema('a_viewed') }),
+            fragment({ BSeen: eventSchema('b_seen') })
+        ]);
 
-        expect(schemas.AnalyticsEventRequest).toEqual({
+        expect(schemas?.AnalyticsEventRequest).toEqual({
             oneOf: [
                 { $ref: '#/components/schemas/AViewed' },
                 { $ref: '#/components/schemas/BSeen' }
@@ -86,28 +87,35 @@ describe('withBrowserEvents', () => {
     });
 
     it('adds the schemas right after the request schema and makes root refs local', () => {
-        const schemas = schemasOf(
-            withBrowserEvents(bundle(), [fragment({ AViewed: eventSchema('a_viewed') })])
-        );
+        const schemas = assembled(bundle(), [fragment({ AViewed: eventSchema('a_viewed') })]);
 
-        expect(Object.keys(schemas)).toEqual(['Other', 'AnalyticsEventRequest', 'AViewed', 'Tail']);
-        expect((schemas.AViewed.properties as Record<string, unknown>).id).toEqual({
+        expect(Object.keys(schemas ?? {})).toEqual([
+            'Other',
+            'AnalyticsEventRequest',
+            'AViewed',
+            'Tail'
+        ]);
+        expect(schemas?.AViewed).toHaveProperty(['properties', 'id'], {
             $ref: '#/components/schemas/Id'
         });
     });
 
     it('leaves the placeholder alone when no module declares an event', () => {
-        const text = bundle();
+        const document = bundle();
 
-        expect(withBrowserEvents(text, [])).toBe(text);
+        withBrowserEvents(document, []);
+
+        expect(document).toEqual(bundle());
     });
 
     it('leaves a bundle without analytics alone', () => {
-        const text = stringify({ components: { schemas: { Other: { type: 'string' } } } });
+        const document = asStub<OpenApiDocument>({
+            components: { schemas: { Other: { type: 'string' } } }
+        });
 
-        expect(withBrowserEvents(text, [fragment({ AViewed: eventSchema('a_viewed') })])).toBe(
-            text
-        );
+        withBrowserEvents(document, [fragment({ AViewed: eventSchema('a_viewed') })]);
+
+        expect(document).toEqual({ components: { schemas: { Other: { type: 'string' } } } });
     });
 
     it('refuses an event name two schemas both declare', () => {

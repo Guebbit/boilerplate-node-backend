@@ -17,17 +17,13 @@
  * See: docs/api/contract-fragmentation.md
  */
 
-import { stringify as stringifyYaml } from 'yaml';
-import { parseOpenApi } from './openapi-document';
+import type { OpenApiDocument, Step } from './openapi-document';
 
 /** A JSON object, as far as this walk looks. */
 type Json = Record<string, unknown>;
 
-/** A bundled document, as far as this step reads it. */
-interface BundledDocument extends Json {
-    components?: Record<string, Record<string, unknown>>;
-    tags?: { name: string }[];
-}
+/** The document's components as plain records: the walk below is a generic JSON one. */
+type ComponentMap = Record<string, Record<string, unknown>>;
 
 /** The reference prefix every in-document component pointer starts with. */
 const COMPONENT_PREFIX = '#/components/';
@@ -78,8 +74,10 @@ const pointerOf = (kind: string, name: string): string => `${COMPONENT_PREFIX}${
  * Every component pointer reachable from outside `components`, following references through the
  * components they reach.
  */
-const reachable = (document: BundledDocument, found: Findings): void => {
-    const { components, ...rest } = document;
+const reachable = (document: OpenApiDocument, found: Findings): void => {
+    const { components: typed, ...rest } = document;
+    // Narrowing, not a conversion: every component kind is a record of named objects.
+    const components = typed as ComponentMap | undefined;
     collect(rest, found);
 
     const queue = [...found.refs];
@@ -92,19 +90,13 @@ const reachable = (document: BundledDocument, found: Findings): void => {
 };
 
 /**
- * The document without its unreferenced components and unused tags.
- *
- * @param bundled - the finished bundle, as YAML text
- * @returns the pruned bundle, as YAML text
- * @throws Error when the text is not a YAML object
+ * Drops the unreferenced components and unused tags from the document.
  */
-export const pruneUnused = (bundled: string): string => {
-    const document = parseOpenApi<BundledDocument>(bundled);
-
+export const pruneUnused: Step = (document) => {
     const found: Findings = { refs: new Set(), schemes: new Set(), tags: new Set() };
     reachable(document, found);
 
-    for (const [kind, entries] of Object.entries(document.components ?? {}))
+    for (const [kind, entries] of Object.entries((document.components ?? {}) as ComponentMap))
         for (const name of Object.keys(entries)) {
             const used =
                 kind === 'securitySchemes'
@@ -114,8 +106,4 @@ export const pruneUnused = (bundled: string): string => {
         }
 
     if (document.tags) document.tags = document.tags.filter(({ name }) => found.tags.has(name));
-
-    // `lineWidth: 0` turns off line folding, so diffs stay small.
-    // https://eemeli.org/yaml/#tostring-options
-    return stringifyYaml(document, { lineWidth: 0 });
 };

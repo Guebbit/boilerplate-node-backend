@@ -6,24 +6,16 @@
  * and what the step refuses, not any real operation.
  */
 
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { withImageUploadEncoding } from '../../../../scripts/contracts/image-upload-encoding';
-
-/** The shape the assertions read back out of the stamped document. */
-interface Stamped {
-    'x-image-upload-types'?: unknown;
-    paths: Record<
-        string,
-        Record<string, { requestBody: { content: Record<string, { encoding?: unknown }> } }>
-    >;
-}
+import type { OpenApiDocument } from '../../../../scripts/contracts/openapi-document';
+import { asStub } from '@tests/stub';
 
 /** The root list the happy-path cases declare. */
 const TYPES = { 'x-image-upload-types': ['image/png', 'image/webp'] };
 
 /** A bundled document with one upload body (by `$ref`), one inline upload body, and one plain multipart body. */
 const bundle = (root: Record<string, unknown>) =>
-    stringifyYaml({
+    asStub<OpenApiDocument>({
         openapi: '3.1.0',
         ...root,
         paths: {
@@ -69,12 +61,17 @@ const bundle = (root: Record<string, unknown>) =>
         }
     });
 
-/** The stamped result, parsed. */
-const stamped = (yaml: string) => parseYaml(withImageUploadEncoding(yaml)) as Stamped;
+/** Runs the step on a document and returns the document. */
+const stamped = (document: OpenApiDocument) => {
+    withImageUploadEncoding(document);
+    return document;
+};
 
 /** The `encoding` of one operation's multipart body. */
-const encodingOf = (result: Stamped, route: string, method: string) =>
-    result.paths[route]?.[method]?.requestBody.content['multipart/form-data']?.encoding;
+const encodingOf = (result: OpenApiDocument, route: string, method: 'post' | 'put') => {
+    const body = result.paths?.[route]?.[method]?.requestBody;
+    return body && 'content' in body ? body.content['multipart/form-data']?.encoding : undefined;
+};
 
 describe('withImageUploadEncoding', () => {
     it('stamps the types, comma-separated, onto a body whose schema is a $ref to an upload', () => {
@@ -94,7 +91,7 @@ describe('withImageUploadEncoding', () => {
     });
 
     it('drops the root key once spent', () => {
-        expect(stamped(bundle(TYPES))['x-image-upload-types']).toBeUndefined();
+        expect(stamped(bundle(TYPES))).not.toHaveProperty('x-image-upload-types');
     });
 
     it.each([
@@ -106,7 +103,7 @@ describe('withImageUploadEncoding', () => {
     });
 
     it('refuses a document in which no body carries an upload part', () => {
-        const none = stringifyYaml({
+        const none = asStub<OpenApiDocument>({
             openapi: '3.1.0',
             'x-image-upload-types': ['image/png'],
             paths: {}

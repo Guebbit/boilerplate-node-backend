@@ -1,4 +1,4 @@
-import { parse as parseYaml } from 'yaml';
+import { parseOpenApi } from '../../../../scripts/contracts/openapi-document';
 import { pruneUnused } from '../../../../scripts/contracts/prune-unused';
 
 /** A bundle with a used chain, orphans of every kind, and one tag nobody uses. */
@@ -43,19 +43,19 @@ components:
         Unused: { type: string }
 `;
 
-/** The pruned bundle, parsed. */
-const pruned = () =>
-    parseYaml(pruneUnused(BUNDLE)) as {
-        tags: { name: string }[];
-        components: Record<string, Record<string, unknown>>;
-    };
+/** The bundle after the step, read through the loose shape the assertions use. */
+const pruned = () => {
+    const document = parseOpenApi(BUNDLE);
+    pruneUnused(document);
+    return { tags: document.tags, components: document.components ?? {} };
+};
 
 describe('pruneUnused', () => {
     it('keeps what a path reaches, directly or through another component', () => {
         const { components } = pruned();
 
-        expect(Object.keys(components.schemas).toSorted()).toEqual(['Part', 'Thing']);
-        expect(Object.keys(components.parameters)).toEqual(['Page']);
+        expect(Object.keys(components.schemas ?? {}).toSorted()).toEqual(['Part', 'Thing']);
+        expect(Object.keys(components.parameters ?? {})).toEqual(['Page']);
     });
 
     it('drops a component only an unreferenced component points at', () => {
@@ -67,14 +67,10 @@ describe('pruneUnused', () => {
     });
 
     it('keeps a security scheme a requirement names, and drops one nothing names', () => {
-        expect(Object.keys(pruned().components.securitySchemes)).toEqual(['bearerAuth']);
+        expect(Object.keys(pruned().components.securitySchemes ?? {})).toEqual(['bearerAuth']);
     });
 
     it('drops a tag no operation uses', () => {
         expect(pruned().tags).toEqual([{ name: 'Used' }]);
-    });
-
-    it('refuses text that is not an object', () => {
-        expect(() => pruneUnused('- just\n- a list\n')).toThrow(/did not parse to an object/);
     });
 });

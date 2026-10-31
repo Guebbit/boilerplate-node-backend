@@ -15,9 +15,9 @@
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { parse as parseYaml } from 'yaml';
 import type { OpenAPIV3_1 } from 'openapi-types';
-import { parseOpenApi, type OpenApiDocument } from './openapi-document';
+import type { OpenApiDocument } from './openapi-document';
 
 import { orderSections } from './section-order';
 import { MODULES_ROOT, modulesWith } from '../modules-on-disk';
@@ -88,18 +88,18 @@ const eventNameOf = (name: string, schema: Schema): string => {
 /**
  * Adds every module's browser-event schemas and turns `AnalyticsEventRequest` into their `oneOf`.
  *
- * @param bundled - the bundled OpenAPI document, as YAML text
+ * Does nothing when `analytics` or every fragment is absent.
+ *
+ * @param document_ - the bundled OpenAPI document
  * @param fragments - the fragment files to fold in; defaults to those on disk
- * @returns the document with the events assembled, or unchanged when `analytics` or every fragment is absent
  * @throws {Error} when two fragments declare one schema or one event name
  */
 export const withBrowserEvents = (
-    bundled: string,
+    document_: OpenApiDocument,
     fragments: readonly string[] = browserEventFragments()
-): string => {
-    const document_ = parseOpenApi(bundled);
+): void => {
     const schemas = document_.components?.schemas;
-    if (!schemas || !(REQUEST_SCHEMA in schemas) || fragments.length === 0) return bundled;
+    if (!schemas || !(REQUEST_SCHEMA in schemas) || fragments.length === 0) return;
 
     const added: Record<string, Schema> = {};
     const mapping: Record<string, string> = {};
@@ -134,8 +134,4 @@ export const withBrowserEvents = (
                 : [[name, schema]]
         )
     );
-
-    // `lineWidth: 0` turns off line folding, so diffs stay small.
-    // https://eemeli.org/yaml/#tostring-options
-    return stringifyYaml(document_, { lineWidth: 0 });
 };

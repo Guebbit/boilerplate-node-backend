@@ -25,8 +25,37 @@ interface OperationExtensions {
     'x-error-codes'?: Record<string, string[]>;
 }
 
-/** An OpenAPI 3.1 document whose operations carry {@link OperationExtensions}. */
-export type OpenApiDocument = OpenAPIV3_1.Document<OperationExtensions>;
+/** One entry of the root's `x-app-level-responses` map — see the comment beside it there. */
+export interface AppLevelResponse {
+    response: string;
+    appliesTo: 'all' | 'requestBody' | 'requestBodyOrBodyless';
+}
+
+/** One error code's declaration, as a fragment's `x-error-codes` map holds it. */
+export interface ErrorCodeEntry {
+    status: number;
+    description: string;
+}
+
+/**
+ * The vendor keys on the root document. Some are instructions to a step, which spends them; the
+ * ones typed `unknown` are checked by the step that reads them.
+ */
+interface RootExtensions {
+    'x-app-level-responses'?: Record<string, AppLevelResponse>;
+    'x-app-level-headers'?: unknown;
+    'x-image-upload-types'?: unknown;
+    'x-error-codes'?: Record<string, ErrorCodeEntry>;
+}
+
+/** An OpenAPI 3.1 document, with the vendor keys the bundler steps read and write. */
+export type OpenApiDocument = OpenAPIV3_1.Document<OperationExtensions> & RootExtensions;
+
+/**
+ * One bundler step: edits the parsed document in place. The bundler parses once, runs the steps
+ * in order and stringifies once, so a step never touches text.
+ */
+export type Step = (document: OpenApiDocument) => void;
 
 /** An operation of {@link OpenApiDocument}. */
 export type Operation = OpenAPIV3_1.OperationObject<OperationExtensions>;
@@ -53,19 +82,17 @@ export const isHttpMethod = (key: string): key is OpenAPIV3.HttpMethods =>
  * bundle fails here with a clear message rather than as a `TypeError` several calls downstream.
  *
  * @param bundled - the bundled OpenAPI document, as YAML text
- * @returns the document, plus whichever root extension keys (`x-...`) the caller names in `TExtra`
+ * @returns the document
  * @throws Error if the text does not parse to an object
  */
-export const parseOpenApi = <TExtra extends object = object>(
-    bundled: string
-): OpenApiDocument & TExtra => {
+export const parseOpenApi = (bundled: string): OpenApiDocument => {
     // `yaml`: parse into a plain object graph, typed `unknown` until the guard below narrows it.
     // https://eemeli.org/yaml/#parse-yaml-to-json-value
     const parsed: unknown = parseYaml(bundled);
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
         throw new Error('[openapi] the bundled document did not parse to an object.');
     // The shape is the bundler's own output, checked structurally by the steps that read it.
-    return parsed as OpenApiDocument & TExtra;
+    return parsed as OpenApiDocument;
 };
 
 /**

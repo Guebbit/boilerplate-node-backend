@@ -13,16 +13,10 @@
  * See: docs/tools/image-processing.md
  */
 
-import { stringify as stringifyYaml } from 'yaml';
-import { operationsOf, parseOpenApi } from './openapi-document';
+import { operationsOf, type Step } from './openapi-document';
 
 /** The multipart part that carries an uploaded image. */
 const IMAGE_PART = 'imageUpload';
-
-/** The root's list of accepted upload types, which this step spends. */
-interface RootImageTypes {
-    'x-image-upload-types'?: unknown;
-}
 
 /** Narrows the root's list to a non-empty array of strings. */
 const isTypeList = (value: unknown): value is string[] =>
@@ -34,12 +28,9 @@ const isTypeList = (value: unknown): value is string[] =>
  * Stamp `encoding.imageUpload.contentType` onto every multipart body whose schema has an
  * `imageUpload` part, then spend the root key.
  *
- * @param bundled - the bundled OpenAPI document, as YAML
- * @returns the document with the accepted types declared on each upload body
  * @throws Error if the root declares no list, or no body carries an `imageUpload` part
  */
-export const withImageUploadEncoding = (bundled: string): string => {
-    const document_ = parseOpenApi<RootImageTypes>(bundled);
+export const withImageUploadEncoding: Step = (document_) => {
     const types = document_['x-image-upload-types'];
     if (!isTypeList(types))
         throw new Error('[openapi] the root declares no `x-image-upload-types` list.');
@@ -74,8 +65,4 @@ export const withImageUploadEncoding = (bundled: string): string => {
 
     // Spent: an instruction to this script, not part of the published contract.
     delete document_['x-image-upload-types'];
-
-    // `yaml`'s `stringify`; `lineWidth: 0` turns off line folding, so diffs stay small.
-    // https://eemeli.org/yaml/#tostring-options
-    return stringifyYaml(document_, { lineWidth: 0 });
 };

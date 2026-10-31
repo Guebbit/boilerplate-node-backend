@@ -14,8 +14,7 @@
  * See: docs/api/contract-fragmentation.md
  */
 
-import { stringify as stringifyYaml } from 'yaml';
-import { operationsOf, parseOpenApi, type Operation } from './openapi-document';
+import { operationsOf, type Operation, type Step } from './openapi-document';
 
 /** Methods that change nothing, so a cookie on one needs no origin check. */
 const SAFE_METHODS = new Set(['get', 'head', 'options']);
@@ -32,11 +31,8 @@ const takesBearer = (
  *
  * NEVER overwrites a `403`: an operation's own is more specific than the origin refusal.
  *
- * @param bundled - the bundled OpenAPI document, as YAML
- * @returns the document with the cookie alternative and the origin refusal declared
  */
-export const withCookieAuth = (bundled: string): string => {
-    const document_ = parseOpenApi(bundled);
+export const withCookieAuth: Step = (document_) => {
     for (const { method, operation } of operationsOf(document_)) {
         if (!takesBearer(operation.security)) continue;
         if (operation.security.every((alternative) => !('cookieAuth' in alternative)))
@@ -47,6 +43,4 @@ export const withCookieAuth = (bundled: string): string => {
                 '403': { $ref: '#/components/responses/Forbidden' }
             };
     }
-    // `lineWidth: 0`: no folding, so an unrelated edit never rewraps a description.
-    return stringifyYaml(document_, { lineWidth: 0 });
 };

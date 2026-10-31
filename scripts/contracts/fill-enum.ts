@@ -22,8 +22,7 @@
  * See: docs/api/contract-fragmentation.md
  */
 
-import { stringify as stringifyYaml } from 'yaml';
-import { parseOpenApi } from './openapi-document';
+import type { OpenApiDocument } from './openapi-document';
 
 /** The lists the bundler can fill from, by the name a fragment's `x-enum-from` gives. */
 export type EnumSources = Readonly<Record<string, readonly string[]>>;
@@ -99,18 +98,12 @@ const fillIn = (value: unknown, sources: EnumSources, where: string): number => 
 };
 
 /**
- * Fill every `x-enum-from` schema in the bundled document with its source's values.
+ * Fill every `x-enum-from` schema in the document with its source's values.
  *
- * @param bundled - the bundled OpenAPI document, as YAML text
+ * @param document_ - the bundled OpenAPI document
  * @param sources - every list the bundler can fill from, by name
- * @returns the document with each placeholder replaced by a real `enum`
  * @throws Error if a placeholder names an unknown or empty source, or conflicts with an `enum`
  */
-export const withFilledEnums = (bundled: string, sources: EnumSources): string => {
-    const document_ = parseOpenApi(bundled);
+export const withFilledEnums = (document_: OpenApiDocument, sources: EnumSources): void => {
     fillIn(document_, sources, '#');
-
-    // `lineWidth: 0` turns off line folding, so a rewrap never shows up as a diff.
-    // https://eemeli.org/yaml/#tostring-options
-    return stringifyYaml(document_, { lineWidth: 0 });
 };
