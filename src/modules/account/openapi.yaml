@@ -1242,6 +1242,7 @@ paths:
                 (`requireFreshAuth`), same as the request. `404` unless the export is `ready` and
                 within its retention. A `ready` export whose file is missing from the store answers
                 `404` too: the file honestly does not exist.
+            x-cache: no-store
             operationId: downloadAccountExport
             security:
                 - bearerAuth: []

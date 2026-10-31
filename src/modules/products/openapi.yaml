@@ -92,6 +92,10 @@ paths:
             responses:
                 '200':
                     description: Products page
+                    headers:
+                        Cache-Control:
+                            description: '`public, max-age=3600, stale-while-revalidate=60, stale-if-error=300` for a caller who reads what a guest reads, who shares one cached answer; `private, no-cache` for staff who see more (inactive products, stock counters, every language); `private, no-store` for a draft-language preview.'
+                            schema: { type: string }
                     content:
                         application/json:
                             schema:
