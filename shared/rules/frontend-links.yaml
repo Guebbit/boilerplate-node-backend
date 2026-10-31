@@ -3,7 +3,8 @@
 # which is why the frontend gets this file too (`sync:frontend`) and its tests walk the router
 # against it. `{token}` and `{id}` are filled in by the backend. A token rides in the URL FRAGMENT
 # (`#token=`), which a browser never sends to a server (RFC 3986 section 3.5).
-# An env var still overrides each one; the env var names stay per backend.
+# An env var still overrides each one under `links:`; the env var names stay per backend.
+# `staffPages:` has none: a staff screen is not a deployment's choice.
 links:
     verify: verify-email/confirm#token={token}
     reset: password-reset/confirm#token={token}
@@ -27,3 +28,16 @@ staticPages:
     - legal
     - contact
     - products
+
+# Staff screens a work-notice mail points at, as paths under `/<locale>/`. `{id}` is filled in by the
+# backend. Not env-overridable: the code-to-screen mapping stays in the notifications module.
+staffPages:
+    user: users/{id}
+    webhookSubscription: webhooks/subscriptions/{id}
+    ticket: tickets/{id}
+    return: returns/{id}
+    salesOrders: sales/orders
+    salesPreorders: sales/preorders
+    salesPayments: sales/payments
+    returns: returns
+    inventory: inventory
