@@ -186,3 +186,28 @@ describe('deliverWebhook — a port other than 443 is refused before any connect
         expect(result.success).toBe(false);
     });
 });
+
+describe('deliverWebhook — durationMs is measured on a monotonic clock', () => {
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    it('never reports a negative duration when the wall clock steps backwards mid-attempt', async () => {
+        mockDns(new Error('ENOTFOUND'));
+        // Each read of the wall clock is an hour earlier than the last: a step an NTP fix can make.
+        let wall = 1_700_000_000_000;
+        jest.spyOn(Date, 'now').mockImplementation(() => (wall -= 3_600_000));
+
+        const result = await deliverWebhook({
+            url: 'https://gone.example.test/hook',
+            secrets: ['whsec_test-secret'],
+            eventId: 'evt_clock_step_1',
+            payload: { a: 1 },
+            timeoutMs: 50
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.durationMs).toBeGreaterThanOrEqual(0);
+        expect(Number.isInteger(result.durationMs)).toBe(true);
+    });
+});
