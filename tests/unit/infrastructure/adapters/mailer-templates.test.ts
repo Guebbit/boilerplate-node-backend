@@ -354,6 +354,14 @@ describe('email templates render in every supported locale', () => {
         expect(Object.keys(contentFor('en')).toSorted()).toEqual(names.toSorted());
     });
 
+    // `enqueueEmail` never rejects, so a builder whose `template` differs from its map key fails
+    // silently in the worker; render() above resolves by key and would not see it.
+    it('has each builder publish the name it is registered under', () => {
+        const content = contentFor('en');
+
+        expect(names.filter((name) => content[name].template !== name)).toEqual([]);
+    });
+
     const cases = listSupportedLocales().flatMap((locale) =>
         names.map((name) => [name, locale] as const)
     );

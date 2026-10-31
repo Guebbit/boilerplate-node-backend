@@ -17,8 +17,8 @@
  * later by whoever trusted it.
  *
  * ── Why source text, and what makes that sound ────────────────────────────────────────────────
- * Every fact below is read from `metrics.ts` and from the controller, the way `outbox-names.test.ts`
- * reads the outbox: the question is what the code SAYS, and a spec that imported the modules to
+ * Every fact below is read from `metrics.ts` and from the controller, the way a source-text
+ * sweep does: the question is what the code SAYS, and a spec that imported the modules to
  * answer it would boot Mongoose and collect `products_low_stock_total`, which aggregates the
  * products collection. A name check does not get to open a database.
  *
