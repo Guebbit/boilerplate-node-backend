@@ -469,6 +469,15 @@ components:
             schema:
                 type: string
 
+        CacheControlNoStore:
+            required: true
+            description: >-
+                Always `no-store`: no cache, shared or private, may keep an error answer (RFC 9111
+                section 5.2.2.5). Every refusal sets it, whichever layer produced it.
+            schema:
+                type: string
+                enum: [no-store]
+
     responses:
         NoContent:
             description: Done. There is nothing to say, so the body is empty (RFC 9110 section 15.3.5).
@@ -491,6 +500,9 @@ components:
                 distinct from `ValidationError`, which is a well-formed request whose FIELDS are
                 wrong. Used where a caller is a machine rather than a form: an unverifiable webhook
                 signature is the case that needs it.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/CacheControlNoStore'
             content:
                 application/problem+json:
                     schema:
@@ -498,6 +510,8 @@ components:
         Unauthorized:
             description: Unauthorized
             headers:
+                Cache-Control:
+                    $ref: '#/components/headers/CacheControlNoStore'
                 WWW-Authenticate:
                     $ref: '#/components/headers/WWW-Authenticate'
             content:
@@ -506,18 +520,27 @@ components:
                         $ref: '#/components/schemas/Problem'
         Forbidden:
             description: Forbidden
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/CacheControlNoStore'
             content:
                 application/problem+json:
                     schema:
                         $ref: '#/components/schemas/Problem'
         NotFound:
             description: Resource not found
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/CacheControlNoStore'
             content:
                 application/problem+json:
                     schema:
                         $ref: '#/components/schemas/Problem'
         Conflict:
             description: The request conflicts with the current state of the resource
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/CacheControlNoStore'
             content:
                 application/problem+json:
                     schema:
@@ -527,12 +550,18 @@ components:
                 The request's `If-Match` no longer matches the stored resource: it was changed
                 (or removed) after the caller read it. Nothing was written. Read it again,
                 reapply the edit, and resend with the new `ETag`.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/CacheControlNoStore'
             content:
                 application/problem+json:
                     schema:
                         $ref: '#/components/schemas/Problem'
         ValidationError:
             description: Validation failed
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/CacheControlNoStore'
             content:
                 application/problem+json:
                     schema:
@@ -545,6 +574,9 @@ components:
                 body parser or the upload middleware, which is why it is declared for every
                 body-accepting operation rather than by hand. The other multipart limits (counts,
                 shapes) answer `400`.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/CacheControlNoStore'
             content:
                 application/problem+json:
                     schema:
@@ -555,6 +587,9 @@ components:
                 them), or its charset or encoding cannot be read. Refused before any route runs,
                 like `413` above. A request with no body is never judged. A `DELETE` that declares no
                 body refuses any body, and `details.accepted` is then empty.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/CacheControlNoStore'
             content:
                 application/problem+json:
                     schema:
@@ -562,6 +597,8 @@ components:
         TooManyRequests:
             description: The caller has spent a rate-limit budget and must wait. The wait is in the standard `RateLimit`/`Retry-After` headers, and — where the endpoint has a budget of its own to report, like a resend cooldown — in the error `details` too.
             headers:
+                Cache-Control:
+                    $ref: '#/components/headers/CacheControlNoStore'
                 Retry-After:
                     $ref: '#/components/headers/Retry-After'
                 RateLimit-Policy:
@@ -581,6 +618,8 @@ components:
                 not a promise — there is no queue depth or circuit-breaker state to compute a
                 real one from.
             headers:
+                Cache-Control:
+                    $ref: '#/components/headers/CacheControlNoStore'
                 Retry-After:
                     $ref: '#/components/headers/Retry-After'
             content:
@@ -589,6 +628,9 @@ components:
                         $ref: '#/components/schemas/Problem'
         InternalError:
             description: Internal server error
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/CacheControlNoStore'
             content:
                 application/problem+json:
                     schema:
@@ -1186,6 +1228,9 @@ paths:
                     description: Ready to receive traffic.
                 '503':
                     description: Booting, draining, or the database is unreachable.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/CacheControlNoStore'
 
     /.well-known/security.txt:
         get:

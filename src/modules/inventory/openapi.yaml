@@ -238,6 +238,9 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '409':
                     description: The correction would leave fewer units than are already reserved
+                    headers:
+                        Cache-Control:
+                            $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/CacheControlNoStore'
                     content:
                         application/problem+json:
                             schema:

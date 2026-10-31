@@ -89,6 +89,9 @@ paths:
                         No metrics token is configured. The endpoint denies by default rather
                         than opening: an unauthenticated metrics endpoint is not a state to arrive
                         at by forgetting an environment variable.
+                    headers:
+                        Cache-Control:
+                            $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/CacheControlNoStore'
                     content:
                         application/problem+json:
                             schema:
@@ -98,6 +101,9 @@ paths:
                     description: >-
                         The registry could not be read. Prometheus text, not a problem body: a scraper
                         parses the exposition format only.
+                    headers:
+                        Cache-Control:
+                            $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/CacheControlNoStore'
                     content:
                         text/plain:
                             schema:
