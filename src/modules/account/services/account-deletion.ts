@@ -121,11 +121,13 @@ export const restoreAccount = (
     user: UserDocument,
     via: RestoreVia,
     context: CallerContext
-): Promise<boolean> =>
+): Promise<boolean> => {
+    // One clock: the lock and the ledger row carry the same instant.
+    const restoredAt = new Date();
     // The ledger row joins the restore's transaction: committed together, or neither.
-    userService
-        .restoreOwnAccount(user, new Date(), (session) =>
-            recordCancellation(user.id, new Date(), session)
+    return userService
+        .restoreOwnAccount(user, restoredAt, (session) =>
+            recordCancellation(user.id, restoredAt, session)
         )
         .then((restored) => {
             if (!restored) return false;
@@ -135,6 +137,7 @@ export const restoreAccount = (
                 return true;
             });
         });
+};
 
 /**
  * The record of a restore: audit row, analytics event, metric and the mail. One place, so the

@@ -11,6 +11,7 @@
 
 import { NotificationSeverity } from '@types';
 import type { Caller } from '@types';
+import type { PermissionSetName } from '@api/permission-vocabulary';
 import { holdsSet } from '@kernel/ability';
 import { FRONTEND_LINK_RULES } from '@infrastructure/http/frontend-link';
 import { orderPagePath } from '@modules/orders';
@@ -23,7 +24,7 @@ export interface StaffRoute {
      * administrators only. `per-notice`: the producer names them (a ticket's set depends on its
      * kind), see {@link setsOfRoute}.
      */
-    sets: readonly string[] | 'per-notice';
+    sets: readonly PermissionSetName[] | 'per-notice';
     /**
      * `now`: one mail per recipient when the notice is first written. `digest`: a summary row,
      * mailed in the daily digest when it appears or grows. `none`: the bell only.

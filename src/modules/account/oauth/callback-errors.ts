@@ -3,7 +3,7 @@
  * The closed set of codes the OAuth callback puts in the frontend redirect's `?error=` query.
  *
  * Twin of `x-redirect-query` on `GET /account/oauth/{provider}/callback` in this module's
- * `openapi.yaml`; `tests/unit/oauth-callback-errors.test.ts` holds the two equal. It is not a
+ * `openapi.yaml`; `src/modules/account/tests/unit/oauth-callback-errors.test.ts` holds the two equal. It is not a
  * generated type because the bundler inlines a schema declared under an `x-` key and prunes it.
  */
 
