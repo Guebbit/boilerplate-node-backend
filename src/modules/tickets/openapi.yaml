@@ -96,9 +96,9 @@ paths:
                 - apiKeyAuth: []
             # Query only, and the DTO form of the same filters is `POST /tickets/search`. A body
             # on a GET has no defined semantics (RFC 9110 9.3.1) and the Fetch spec rejects it
-            # outright, so the paired frontend could never have sent one; worse, `setCache` keys
-            # on the declared query parameters, so a body-borne filter was invisible to the key
-            # and two different filters shared one entry for the cache's whole lifetime.
+            # outright, so a browser client cannot send one; worse, `setCache` keys on the
+            # declared query parameters, so a body-borne filter would be invisible to the key
+            # and two different filters would share one entry for the cache's whole lifetime.
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -442,7 +442,7 @@ components:
             enum: [new, in_progress, resolved, spam]
 
         # What the visitor says the message is about, so staff can triage without reading it first
-        # (Q-W2 of the withdrawal decision: an order page links to `/contact?category=cancellation`).
+        # (an order page links to `/contact?category=cancellation`).
         # `privacy` is the data-protection door (GDPR requests start here). A closed set, written
         # once, so the form, the inbox filter and the stored value cannot drift.
         TicketCategory:

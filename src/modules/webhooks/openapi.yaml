@@ -384,8 +384,7 @@ paths:
                 secret ring — not the ones this row was originally attempted with. Updates the same
                 row: `attempt` advances exactly like a real queued attempt would (one step forward
                 on a failure with backoff tiers left, unchanged on success or exhaustion), and
-                `status`/`responseCode`/`durationMs`/`error` reflect this replay. The single
-                most-requested support action, per the design doc. Refused while the subscription is
+                `status`/`responseCode`/`durationMs`/`error` reflect this replay. Refused while the subscription is
                 disabled (`actions.replay` is false): enable it first.
             operationId: replayWebhookDelivery
             x-error-codes:
