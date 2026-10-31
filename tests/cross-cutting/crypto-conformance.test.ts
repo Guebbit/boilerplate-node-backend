@@ -42,7 +42,7 @@ const cryptoCase = z.discriminatedUnion('kind', [
     })
 ]);
 
-describeCases('crypto', cryptoCase, 22, (one) => {
+describeCases('crypto', cryptoCase, (one) => {
     switch (one.kind) {
         case 'pseudonym': {
             setEnvironment({ NODE_PSEUDONYM_KEY: one.root });

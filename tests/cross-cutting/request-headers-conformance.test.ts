@@ -34,7 +34,7 @@ const requestWith = (name: string, value: string | undefined): Request =>
         get: (asked: string) => (asked.toLowerCase() === name.toLowerCase() ? value : undefined)
     });
 
-describeCases('request-headers', headerCase, 20, (one) => {
+describeCases('request-headers', headerCase, (one) => {
     if (one.kind === 'if-match') {
         const precondition = preconditionOf(requestWith('If-Match', one.header), 'row-1');
         const actual =

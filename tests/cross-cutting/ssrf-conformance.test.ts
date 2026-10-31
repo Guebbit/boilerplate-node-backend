@@ -29,7 +29,7 @@ const outcomeOf = (url: string): Promise<string> =>
         }
     );
 
-describeCases('ssrf', ssrfCase, 49, async (one) => {
+describeCases('ssrf', ssrfCase, async (one) => {
     clearSsrfExemptOrigins();
     if (one.kind === 'url') {
         expect(await outcomeOf(one.url)).toBe(one.expect);

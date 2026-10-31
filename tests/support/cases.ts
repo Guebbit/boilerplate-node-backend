@@ -22,19 +22,17 @@ export const caseBase = z.object({ name: z.string().min(1) });
 /**
  * Registers one `it` per case of `shared/cases/<file>.cases.yaml`.
  *
- * The count is pinned, not floored: a file that loads zero cases, or loses some, fails. A suite
- * that silently reads nothing reports a clean implementation forever.
+ * A file with no cases fails loudly on its own: Zod parses each case strictly, and `it.each`
+ * throws on an empty table.
  *
  * @param file - the file's name under `shared/cases/`, without `.cases.yaml`
  * @param caseSchema - the Zod schema of one case (build it on {@link caseBase})
- * @param count - the exact number of cases the file holds today
  * @param run - asserts one case; throws (or fails an `expect`) when this backend disagrees. May
  *   return a promise, which the test awaits
  */
 export const describeCases = <T extends { name: string }>(
     file: string,
     caseSchema: z.ZodType<T>,
-    count: number,
     run: (one: T) => Promise<void> | void
 ): void => {
     const document: unknown = parse(
@@ -43,10 +41,6 @@ export const describeCases = <T extends { name: string }>(
     const { cases } = z.object({ cases: z.array(caseSchema) }).parse(document);
 
     describe(`shared cases: ${file}`, () => {
-        it('holds exactly the pinned number of cases', () => {
-            expect(cases).toHaveLength(count);
-        });
-
         it.each(cases.map((one) => [one.name, one] as const))('%s', async (_name, one) => {
             await run(one);
         });

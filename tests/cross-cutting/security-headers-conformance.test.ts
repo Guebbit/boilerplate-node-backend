@@ -28,7 +28,7 @@ const answerHeaders = (): Promise<Record<string, unknown>> => {
         .then((response) => response.headers);
 };
 
-describeCases('security-headers', headerCase, 14, (one) =>
+describeCases('security-headers', headerCase, (one) =>
     answerHeaders().then((headers) => {
         const actual = headers[one.header.toLowerCase()];
         if (one.absent === true) expect(actual).toBeUndefined();

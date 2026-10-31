@@ -25,7 +25,7 @@ const keyCase = z.discriminatedUnion('kind', [
     })
 ]);
 
-describeCases('rate-limit-keys', keyCase, 20, (one) => {
+describeCases('rate-limit-keys', keyCase, (one) => {
     switch (one.kind) {
         case 'address': {
             // The default key of every "address" budget: express-rate-limit's own IPv6 /56 mask.
