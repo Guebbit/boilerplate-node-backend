@@ -5,7 +5,7 @@
  */
 
 import { DAY_MS } from '@domain-primitives/time';
-import { AUTOMATIC_PURCHASE_HOLD_MAX_DAYS, purchaseHoldUntil } from '../../domain';
+import { purchaseHoldUntil } from '../../domain';
 
 const NOW = new Date('2026-10-19T12:00:00.000Z');
 
@@ -58,10 +58,6 @@ describe('purchaseHoldUntil', () => {
 });
 
 describe('the 7-day cap on an automatic hold', () => {
-    it('is seven days', () => {
-        expect(AUTOMATIC_PURCHASE_HOLD_MAX_DAYS).toBe(7);
-    });
-
     it('ends no later than 7 days after now, however long the window is', () => {
         const until = purchaseHoldUntil([daysAgo(1), daysAgo(2), daysAgo(3)], 3, 90, NOW);
 
