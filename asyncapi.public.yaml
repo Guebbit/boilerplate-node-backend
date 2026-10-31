@@ -319,9 +319,9 @@ operations:
         action: send
         channel:
             $ref: '#/channels/order.cancelled'
-        summary: A cancel went through; stock is already back on the shelf.
+        summary: A cancel went through; stock is back on the shelf, except for `cause` lost.
         description: >-
-            The `order.cancelled` domain event, without its refund policy: whether the cancel owes the buyer money back is for `payments`, and a subscriber learns that money actually moved from `payment.refunded`. See `orders/events.ts`.
+            The `order.cancelled` domain event, without its refund policy: whether the cancel owes the buyer money back is for `payments`, and a subscriber learns that money actually moved from `payment.refunded`. `cause` says why. A `lost` parcel's units are not restocked: they were never on the shelf to come back to. See `orders/events.ts`.
         messages:
             - $ref: '#/channels/order.cancelled/messages/OrderCancelledEvent'
     webhookOrderRedacted:
@@ -817,6 +817,27 @@ components:
                 data:
                     $ref: '#/components/schemas/OrderIdPayload'
             additionalProperties: false
+        OrderCancelledPayload:
+            type: object
+            required:
+                - orderId
+                - cause
+            properties:
+                orderId:
+                    $ref: '#/components/schemas/Id'
+                cause:
+                    title: OrderCancelCause
+                    description: Why the order was cancelled.
+                    type: string
+                    enum:
+                        - customer
+                        - operator
+                        - withdrawal
+                        - reservation_expired
+                        - erasure
+                        - payment_mismatch
+                        - lost
+            additionalProperties: false
         OrderCancelledEnvelope:
             type: object
             required:
@@ -833,7 +854,7 @@ components:
                     type: string
                     format: date-time
                 data:
-                    $ref: '#/components/schemas/OrderIdPayload'
+                    $ref: '#/components/schemas/OrderCancelledPayload'
             additionalProperties: false
         OrderRedactedEnvelope:
             type: object
