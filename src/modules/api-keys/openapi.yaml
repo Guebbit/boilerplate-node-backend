@@ -71,6 +71,8 @@ paths:
                 key a person minted is revoked (and listed to them by mail) when they log out
                 everywhere, reset their password or report an email change as not theirs.
             operationId: mintApiKey
+            x-error-codes:
+                '401': [REAUTH_REQUIRED]
             security:
                 - bearerAuth: []
             requestBody:

@@ -12,6 +12,12 @@ import { addDays, formatDay, type CalendarDay } from '../domain/calendar';
 import { checkRange, previousOf, type RangeRefusal } from '../domain/range';
 import { shopTimezone } from '@modules/shop';
 
+/**
+ * A stats answer as a composer builds it: without `limits`, which the shared handler adds to every
+ * period answer (`controllers/respond.ts`) so no composer repeats them.
+ */
+export type WithoutLimits<T> = Omit<T, 'limits'>;
+
 /** A period the owners can be asked about. */
 export interface Period {
     /** The requested days, as the contract echoes them. */

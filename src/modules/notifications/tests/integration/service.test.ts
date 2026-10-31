@@ -10,6 +10,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { notificationsService } from '@modules/notifications/services';
 import { notificationRepository } from '@modules/notifications/repository';
+import { notificationModel } from '@modules/notifications/model';
 import { createNotification } from '@modules/notifications/tests/factories';
 import * as stream from '@modules/notifications/services/stream';
 import type { NewNotification } from '@modules/notifications/repository';
@@ -258,6 +259,82 @@ describe('notificationsDismissAll', () => {
             all: true,
             ids: []
         });
+    });
+});
+
+/** Every row id the user holds, whatever its audience. */
+const rowsOf = (userId: string) =>
+    notificationModel
+        .find({ userId })
+        .lean()
+        .exec()
+        .then((rows) => rows.map(({ _id }) => String(_id)));
+
+describe('notificationsDismissAll with an audience', () => {
+    it('deletes only that audience and leaves the other', async () => {
+        const user = await createUser({ email: 'user@example.com' });
+        const own = await createNotification({ userId: user.id });
+        await createNotification({ userId: user.id, staff: { tenantId: 'shop', sets: [] } });
+
+        await notificationsService.dismissAll(user.id, 'staff');
+
+        await expect(rowsOf(user.id)).resolves.toEqual([String(own._id)]);
+    });
+
+    it('deletes the own audience and keeps the work notices', async () => {
+        const user = await createUser({ email: 'user@example.com' });
+        await createNotification({ userId: user.id });
+        const work = await createNotification({
+            userId: user.id,
+            staff: { tenantId: 'shop', sets: [] }
+        });
+
+        await notificationsService.dismissAll(user.id, 'own');
+
+        await expect(rowsOf(user.id)).resolves.toEqual([String(work._id)]);
+    });
+
+    it('never touches another user’s rows', async () => {
+        const user = await createUser({ email: 'user@example.com' });
+        const other = await createUser({ email: 'other@example.com' });
+        await createNotification({ userId: user.id, staff: { tenantId: 'shop', sets: [] } });
+        const kept = await createNotification({
+            userId: other.id,
+            staff: { tenantId: 'shop', sets: [] }
+        });
+
+        await notificationsService.dismissAll(user.id, 'staff');
+
+        await expect(rowsOf(other.id)).resolves.toEqual([String(kept._id)]);
+    });
+
+    it('tells open tabs exactly which ids left, not “all”', async () => {
+        const user = await createUser();
+        await createNotification({ userId: user.id });
+        const work = await createNotification({
+            userId: user.id,
+            staff: { tenantId: 'shop', sets: [] }
+        });
+        const publish = jest.mocked(stream.publishToUser);
+
+        await notificationsService.dismissAll(user.id, 'staff');
+
+        expect(publish).toHaveBeenCalledWith(user.id, 'notifications.deleted', {
+            all: false,
+            ids: [String(work._id)]
+        });
+    });
+
+    it('succeeds, and says nothing, when that audience is already empty', async () => {
+        const user = await createUser();
+        await createNotification({ userId: user.id });
+        const publish = jest.mocked(stream.publishToUser);
+        publish.mockClear();
+
+        await expect(notificationsService.dismissAll(user.id, 'staff')).resolves.toMatchObject({
+            success: true
+        });
+        expect(publish).not.toHaveBeenCalled();
     });
 });
 

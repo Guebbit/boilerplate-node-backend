@@ -222,14 +222,14 @@ callback turns that into a generic `?error=provider_error`, and the caller's ret
 
 ## The endpoint surface, and how failure travels
 
-| Route                                   | Answers                                                     |
-| --------------------------------------- | ----------------------------------------------------------- |
-| `GET /account/oauth/providers`          | the configured names — a deployment with no keys lists none |
-| `GET /account/oauth/:provider`          | 302 to the consent screen, `state` cookie set               |
-| `GET /account/oauth/:provider/callback` | 302 back to the frontend, session cookies set               |
+| Route                                   | Answers                                       |
+| --------------------------------------- | --------------------------------------------- |
+| `GET /account/oauth/:provider`          | 302 to the consent screen, `state` cookie set |
+| `GET /account/oauth/:provider/callback` | 302 back to the frontend, session cookies set |
 
-All three are public, because this **is** how an unauthenticated caller signs in. The last two sit
-behind `credentialLimiters`; `GET /account/oauth/providers` is informational and has no limiter.
+Both are public, because this **is** how an unauthenticated caller signs in. Both sit behind
+`credentialLimiters`. Which providers exist is `oauthProviders` on [`GET /config`](../api/config.md):
+a deployment with no keys lists none.
 
 Only two failures answer with a body. Everything past the state check redirects to the frontend
 with `?error=<code>`, because by then the browser is mid-navigation and a JSON body has nowhere to
@@ -278,8 +278,7 @@ they were told about.
 
 - **An OAuth-only account has no password.** `users.password` is deliberately not `required`, and
   sign-in for such an account works only through a provider — until a password reset gives it one.
-  Its step-up is a code mailed to its verified address, so enabling a provider needs mail that
-  delivers: boot refuses the pair otherwise outside development and test
+  OAuth needs working mail: a password-less user's step-up is a mailed code
   ([how](./account-sessions.md#step-up-for-an-account-with-no-password)).
 - **The callback applies the account's second factor.** An account with `twoFactorEnabledAt` set gets
   the same login challenge `POST /account/login` would issue, not a session: the callback redirects

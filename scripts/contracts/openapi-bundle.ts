@@ -11,8 +11,8 @@
  * run after it, on the bundle: {@link withCookieAuth} adds `cookieAuth` to every operation that
  * takes a bearer, with the origin `403` on its unsafe methods; {@link withAppLevelResponses} merges the root's
  * `x-app-level-responses` (429, 500 and 503 for every operation; 400/413/415 for a body-carrying one, and 415 for a body-less write too) into every
- * operation that doesn't already declare its own; {@link withNotModified} adds the shared `304` to the
- * cached and revalidating reads; {@link withVersionedResources} hangs `ETag`,
+ * operation that doesn't already declare its own; {@link withNotModified} adds the shared `304` to every read that declares `x-cache`;
+ * {@link withVersionedResources} hangs `ETag`,
  * `If-Match` and 412 on every path marked `x-versioned`; {@link withModuleStamps} tags every operation
  * with the `x-module` its owning fragment names — never hand-written per operation; and
  * {@link withErrorCodes} publishes every fragment's own `x-error-codes` as one collected catalogue.
@@ -32,6 +32,10 @@ import { orderSections } from './section-order';
 import { assembleRoot, readModuleFragments } from './root-assembly';
 import { withBrowserEvents } from './analytics-browser-events';
 import { withCookieAuth } from './cookie-auth';
+import { withImageUploadEncoding } from './image-upload-encoding';
+import { webhookEventNames } from './asyncapi-webhook-events';
+import { withFilledEnums } from './fill-enum';
+import { withAppLevelHeaders, withIdempotentReplay } from './response-headers';
 import { stageExportSchema } from './personal-data-assembly';
 import { pruneUnused } from './prune-unused';
 import { REPO_ROOT, MODULES_ROOT, modulesWith } from '../modules-on-disk';
@@ -154,6 +158,10 @@ interface AppLevelResponse {
 interface Operation {
     requestBody?: unknown;
     responses?: Record<string, unknown>;
+    /** The cache policy the fragment declares: `private-no-cache`, `revalidate`, `max-age: <s>` or `no-store`. */
+    'x-cache'?: string;
+    /** The error codes this operation answers with, by HTTP status — see {@link checkOperationErrorCodes}. */
+    'x-error-codes'?: Record<string, string[]>;
 }
 
 /** One error code's declaration, as a fragment's `x-error-codes` map holds it. */
@@ -354,57 +362,52 @@ export const withVersionedResources = (bundled: string): string => {
     return stringifyYaml(parsed, { lineWidth: 0 });
 };
 
-/** What the route-listing process prints before its JSON; see `scripts/contracts/private-no-cache-routes.ts`. */
-const ROUTES_MARKER = 'PRIVATE_NO_CACHE_ROUTES=';
-
 /**
- * The OpenAPI paths of every GET that mounts `privateNoCache` or `setCache`, read back from the mounted routers.
- *
- * A child process, because the answer lives in the running app's router stack and the bundler
- * must not import the app. `NODE_CLUSTER_WORKERS=1` keeps the app's start-up logger quiet; the
- * marker finds the result among whatever else reaches stdout.
- *
- * @throws Error if the process fails or prints no result
+ * Declares `Cache-Control: no-store` on the `200` of a read whose fragment says `x-cache: no-store`.
+ * A `200` that is a `$ref`, absent, or already has the header is left as its fragment wrote it.
  */
-export const revalidatingReads = (): string[] => {
-    const output = execFileSync(
-        process.execPath,
-        [
-            path.join(REPO_ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'),
-            path.join(REPO_ROOT, 'scripts', 'contracts', 'private-no-cache-routes.ts')
-        ],
-        {
-            cwd: REPO_ROOT,
-            env: { ...process.env, NODE_CLUSTER_WORKERS: '1' },
-            encoding: 'utf8',
-            stdio: ['ignore', 'pipe', 'pipe']
+const withNoStoreHeader = (operation: Operation): void => {
+    const ok = operation.responses?.['200'];
+    if (typeof ok !== 'object' || ok === null || '$ref' in ok) return;
+    const headers = (ok as { headers?: Record<string, unknown> }).headers ?? {};
+    if ('Cache-Control' in headers) return;
+    Object.assign(ok, {
+        headers: {
+            ...headers,
+            'Cache-Control': {
+                description: '`no-store`: no cache, shared or private, may keep the answer.',
+                schema: { type: 'string' }
+            }
         }
-    );
-    const line = output.split('\n').find((each) => each.startsWith(ROUTES_MARKER));
-    if (line === undefined)
-        throw new Error('[openapi] the cached-read route listing printed no result.');
-    return JSON.parse(line.slice(ROUTES_MARKER.length)) as string[]; // we wrote this JSON ourselves
+    });
 };
 
 /**
- * Adds the shared `304` to each listed GET that the bundle documents.
+ * Stamps the cache answers on every GET whose fragment declares an `x-cache` policy.
  *
- * These reads answer `304` through Express's own ETag check, and no fragment says so: the bundler
- * adds it, from the routers, rather than 20-odd fragments repeating it. A listed path no fragment
- * documents (an example module that ships no contract) is skipped.
+ * `private-no-cache`, `revalidate` and `max-age: <s>` reads answer `304` through Express's own ETag
+ * check, and no fragment says so: the shared `304` is added here, rather than 29 operations
+ * repeating it. `no-store` gets no `304`, only the `Cache-Control: no-store` header on its `200`.
+ *
+ * Static on purpose: reading the mounted routers would boot the app, which needs files this very
+ * build generates. `tests/cross-cutting/cache-policy-declared.test.ts` holds the `304` family equal
+ * to the `privateNoCache` / `setCache` GETs the app really mounts.
  *
  * @param bundled - the bundled OpenAPI document, as YAML text
- * @param reads - OpenAPI paths of the `privateNoCache` and `setCache` GETs, from {@link revalidatingReads}
  * @throws Error if the bundled document does not parse to an object
  */
-export const withNotModified = (bundled: string, reads: readonly string[]): string => {
+export const withNotModified = (bundled: string): string => {
     const parsed: unknown = parseYaml(bundled);
     if (!isBundledDocument(parsed))
         throw new Error('[openapi] the bundled document did not parse to an object.');
 
-    for (const route of reads) {
-        const operation = parsed.paths?.[route]?.get;
-        if (!isOperation(operation)) continue;
+    for (const pathItem of Object.values(parsed.paths ?? {})) {
+        const operation = pathItem.get;
+        if (!isOperation(operation) || operation['x-cache'] === undefined) continue;
+        if (operation['x-cache'] === 'no-store') {
+            withNoStoreHeader(operation);
+            continue;
+        }
         operation.responses = {
             ...operation.responses,
             '304': { $ref: '#/components/responses/NotModified' }
@@ -488,6 +491,66 @@ export const withErrorCodes = (
     // `yaml`'s `stringify`; `lineWidth: 0` turns off line folding, so diffs stay small.
     // https://eemeli.org/yaml/#tostring-options
     return stringifyYaml(document_, { lineWidth: 0 });
+};
+
+/**
+ * Checks one status's code names against the catalogue.
+ *
+ * @param operation - `METHOD /path`, for the message
+ * @param status - the status key the names are listed under
+ * @param names - the code names listed
+ * @param errorCodes - the collected catalogue
+ * @throws Error when a name is unknown or the catalogue gives it another status
+ */
+const checkListedCodes = (
+    operation: string,
+    status: string,
+    names: readonly string[],
+    errorCodes: Record<string, ErrorCodeEntry>
+): void => {
+    for (const name of names) {
+        const entry = Object.hasOwn(errorCodes, name) ? errorCodes[name] : undefined;
+        if (entry === undefined)
+            throw new Error(
+                `[openapi] ${operation} lists ${name} under ${status}, which no fragment's x-error-codes declares.`
+            );
+        if (String(entry.status) !== status)
+            throw new Error(
+                `[openapi] ${operation} lists ${name} under ${status}, but the catalogue gives it ${String(entry.status)}.`
+            );
+    }
+};
+
+/**
+ * Refuses an operation's `x-error-codes` (status -> code names) that disagrees with the catalogue.
+ *
+ * Each name must exist in the collected catalogue ({@link collectErrorCodes}) and sit under the
+ * status the catalogue gives it, so a renamed or re-statused code fails the bundle instead of
+ * leaving a list that quietly says something false. The key stays in the published contract.
+ *
+ * @param bundled - the bundled OpenAPI document, as YAML text
+ * @param errorCodes - the collected catalogue
+ * @returns the document, unchanged
+ * @throws Error naming the operation and code when a name is unknown or sits under the wrong status
+ */
+export const checkOperationErrorCodes = (
+    bundled: string,
+    errorCodes: Record<string, ErrorCodeEntry>
+): string => {
+    const parsed: unknown = parseYaml(bundled);
+    if (!isBundledDocument(parsed))
+        throw new Error('[openapi] the bundled document did not parse to an object.');
+
+    for (const [route, pathItem] of Object.entries(parsed.paths ?? {}))
+        for (const method of OPERATION_METHODS) {
+            const listed = isOperation(pathItem[method])
+                ? pathItem[method]['x-error-codes']
+                : undefined;
+            for (const [status, names] of Object.entries(listed ?? {}))
+                checkListedCodes(`${method.toUpperCase()} ${route}`, status, names, errorCodes);
+        }
+
+    return bundled;
 };
 
 /** Every documented path, mapped to the module fragment that declared it. A `system` path is absent — it is written into the root document directly, so it belongs to no module. */
@@ -635,22 +698,38 @@ const compile = (): string => {
      * viewers all read past them — the alternative is the one artefact in the repo that cannot say
      * what it is.
      */
+    const errorCodes = collectErrorCodes();
     compiled =
         MARKER +
         pruneUnused(
             withErrorCodes(
-                withModuleStamps(
-                    withVersionedResources(
-                        withNotModified(
-                            withAppLevelResponses(
-                                withCookieAuth(withBrowserEvents(readFileSync(temporary, 'utf8')))
-                            ),
-                            revalidatingReads()
-                        )
+                checkOperationErrorCodes(
+                    withModuleStamps(
+                        withIdempotentReplay(
+                            withAppLevelHeaders(
+                                withVersionedResources(
+                                    withNotModified(
+                                        withAppLevelResponses(
+                                            withCookieAuth(
+                                                withImageUploadEncoding(
+                                                    withFilledEnums(
+                                                        withBrowserEvents(
+                                                            readFileSync(temporary, 'utf8')
+                                                        ),
+                                                        { 'webhook-events': webhookEventNames() }
+                                                    )
+                                                )
+                                            )
+                                        )
+                                    )
+                                )
+                            )
+                        ),
+                        moduleOfPath()
                     ),
-                    moduleOfPath()
+                    errorCodes
                 ),
-                collectErrorCodes()
+                errorCodes
             )
         );
     return compiled;

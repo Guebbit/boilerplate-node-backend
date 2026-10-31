@@ -52,6 +52,9 @@ paths:
                 account on the ticket (`subjectId`), so the account's data export and erasure
                 include it; an absent or expired token files it as anonymous.
             operationId: createContactTicket
+            x-error-codes:
+                '409': [IDEMPOTENCY_IN_FLIGHT]
+                '422': [IDEMPOTENCY_KEY_MISMATCH]
             security: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/AntibotChallengeTokenHeader'
@@ -80,6 +83,7 @@ paths:
                 # `contactLimiters` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
         get:
+            x-cache: private-no-cache
             tags: [Tickets]
             summary: List tickets
             description: >
@@ -205,6 +209,7 @@ paths:
 
     /tickets/{id}:
         get:
+            x-cache: private-no-cache
             tags: [Tickets]
             summary: Get a ticket
             description: >
@@ -253,6 +258,8 @@ paths:
                 the dedup key. No body. Needs `update:Ticket` and, for a system ticket, its route set.
                 The move is conditional on the status read, so a repeat answers 409.
             operationId: resolveTicket
+            x-error-codes:
+                '409': [TICKET_ALREADY_RESOLVED]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -268,7 +275,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # TICKET_ALREADY_RESOLVED
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
 
     /tickets/{id}/mark-spam:
@@ -280,6 +286,8 @@ paths:
                 as a resolve, without `respondedAt`. Also undoes a false resolve. No body. Needs
                 `update:Ticket` and, for a system ticket, its route set.
             operationId: markTicketSpam
+            x-error-codes:
+                '409': [TICKET_ALREADY_SPAM]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -295,7 +303,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # TICKET_ALREADY_SPAM
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
 
     /tickets/{id}/reopen:
@@ -310,6 +317,8 @@ paths:
                 409 `TICKET_SUPERSEDED` with `details.ticketId`. No body. Needs `update:Ticket` and,
                 for a system ticket, its route set.
             operationId: reopenTicket
+            x-error-codes:
+                '409': [TICKET_ALREADY_OPEN, TICKET_SUPERSEDED]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -325,7 +334,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # TICKET_ALREADY_OPEN or TICKET_SUPERSEDED
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
 
     /tickets/{id}/assignee:
@@ -337,6 +345,8 @@ paths:
                 becomes `in_progress`. The person must hold the permission set that works the ticket.
                 Replaces any earlier assignee. A closed ticket answers 409 `TICKET_NOT_OPEN`.
             operationId: assignTicket
+            x-error-codes:
+                '409': [TICKET_NOT_OPEN]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -401,7 +411,7 @@ paths:
                         schema:
                             $ref: '#/components/schemas/CreateTicketNoteRequest'
             responses:
-                '201':
+                '200':
                     description: The ticket with the note appended
                     content:
                         application/json:

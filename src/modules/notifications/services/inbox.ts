@@ -14,7 +14,7 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { NOTIFICATIONS_CHANNELS, type Notification } from '@types';
+import { NOTIFICATIONS_CHANNELS, type Notification, type NotificationAudience } from '@types';
 import { notificationsConfig } from '../config';
 import { presentNotification, presentNotifications, type NotificationsView } from '../presenter';
 import {
@@ -214,12 +214,29 @@ export const notificationDelete = (
         return generateSuccess(undefined, 200);
     });
 
-/** Empty the caller's inbox. Emptying an empty one is the state they asked for, so it succeeds. */
-export const notificationsDismissAll = (userId: string): Promise<ResponseSuccess<undefined>> =>
-    notificationRepository.deleteByUserId(userId).then(() => {
-        publishToUser(userId, NOTIFICATIONS_CHANNELS.DELETED, { all: true, ids: [] });
+/**
+ * Empty the caller's inbox, or one audience of it. Emptying an empty one is the state they asked
+ * for, so it succeeds. A filtered delete tells the stream the ids that left: `all: true` would
+ * wipe the other tab on screen too.
+ *
+ * @param audience - Only this group; the whole inbox when omitted.
+ */
+export const notificationsDismissAll = (
+    userId: string,
+    audience?: NotificationAudience
+): Promise<ResponseSuccess<undefined>> => {
+    if (audience === undefined)
+        return notificationRepository.deleteByUserId(userId).then(() => {
+            publishToUser(userId, NOTIFICATIONS_CHANNELS.DELETED, { all: true, ids: [] });
+            return generateSuccess(undefined, 200);
+        });
+
+    return notificationRepository.deleteByAudience(userId, audience).then((ids) => {
+        if (ids.length > 0)
+            publishToUser(userId, NOTIFICATIONS_CHANNELS.DELETED, { all: false, ids });
         return generateSuccess(undefined, 200);
     });
+};
 
 /** Mark every unread notification of the caller read, as of now. */
 export const notificationsReadAll = (userId: string): Promise<ResponseSuccess<undefined>> => {

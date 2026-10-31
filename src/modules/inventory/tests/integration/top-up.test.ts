@@ -13,7 +13,11 @@ import { testCallerContext } from '@tests/callers';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { createProduct } from '@modules/products/tests/factories';
 import { inventoryService } from '../../services';
-import { reservationRepository, stockLevelRepository } from '../../repository';
+import {
+    reservationRepository,
+    stockLevelRepository,
+    stockMovementRepository
+} from '../../repository';
 import { removeLevel } from '../factories';
 
 setupTestDb();
@@ -112,6 +116,41 @@ describe('reserveMoreForOrder', () => {
             { quantity: 1, kind: 'stock' },
             { quantity: 2, kind: 'backorder' }
         ]);
+    });
+
+    it('writes the owed units to the ledger as `owed`, apart from a preorder’s `backorder`', async () => {
+        const productId = await productWith(3);
+        const orderId = await shippedOrder(productId, 3);
+        await inventoryService.receive(productId, 1, undefined, testCallerContext);
+
+        await topUp(orderId, productId, 3);
+
+        const ledger = await stockMovementRepository.search({ productId });
+        const toppedUp = ledger.items.filter(({ reference }) => reference === orderId);
+        expect(toppedUp.map(({ reason, backorderedDelta }) => [reason, backorderedDelta])).toEqual(
+            expect.arrayContaining([['owed', 2]])
+        );
+        expect(toppedUp.some(({ reason }) => reason === 'backorder')).toBe(false);
+    });
+
+    it('lets an owed claim past the closed cap that refuses a new sale of the same product', async () => {
+        const productId = await productWith(3);
+        const orderId = await shippedOrder(productId, 3);
+
+        const taken = await topUp(orderId, productId, 3);
+        const ledger = await stockMovementRepository.search({ productId });
+        const owedRows = ledger.items.filter(({ reason }) => reason === 'owed');
+        const sale = await inventoryService.reserveForOrder(anOrderId(), [
+            { productId, quantity: 1, spill: true as const }
+        ]);
+
+        // The cap is 0: the shop owes these units, so the claim goes past it.
+        expect(taken).toEqual([{ productId, shelf: 0, owed: 3 }]);
+        expect(owedRows.map(({ backorderedDelta }) => backorderedDelta)).toEqual([3]);
+        expect(await levelOf(productId)).toMatchObject({ backordered: 3 });
+        // The same cap still refuses a new sale spilling into a preorder.
+        expect(sale).toMatchObject({ held: false, shortfalls: [{ productId, requested: 1 }] });
+        expect(await levelOf(productId)).toMatchObject({ backordered: 3 });
     });
 
     it('never takes a unit held for another order', async () => {

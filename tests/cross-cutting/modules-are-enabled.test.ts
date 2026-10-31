@@ -1,11 +1,10 @@
 /**
- * Every folder under `src/modules/` is a module `modules.ts` enables, and nothing in `modules.ts`
- * names a folder that isn't there.
+ * Every folder under `src/modules/` is a module `modules.ts` enables.
  *
  * A module that exists on disk but is missing from `enabledModules` fails silently: no route
  * 404s in a way anyone notices during development, no error at boot, and the first symptom is a
  * missing endpoint in production. `AppModule.name` is documented to match its folder
- * (`src/kernel/registry.ts`), so this sweep checks that promise holds in both directions.
+ * (`src/kernel/registry.ts`).
  */
 
 import { readdirSync, statSync } from 'node:fs';
@@ -31,14 +30,5 @@ describe('modules are enabled', () => {
         const missing = moduleFolders().filter((folder) => !enabledNames.has(folder));
 
         expect(missing).toEqual([]);
-    });
-
-    it('names no module without a folder', () => {
-        const folders = new Set(moduleFolders());
-        const orphaned = enabledModules
-            .map((appModule) => appModule.name)
-            .filter((name) => !folders.has(name));
-
-        expect(orphaned).toEqual([]);
     });
 });

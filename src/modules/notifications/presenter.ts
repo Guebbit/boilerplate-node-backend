@@ -45,6 +45,9 @@ const bodyOf = (notification: NotificationDocument): NotificationBody => {
         case 'notifications.staff.ticket-opened': {
             return { code: notification.code, params: notification.params };
         }
+        case 'notifications.staff.ticket-overdue': {
+            return { code: notification.code, params: notification.params };
+        }
         case 'notifications.staff.ticket-assigned': {
             return { code: notification.code, params: notification.params };
         }

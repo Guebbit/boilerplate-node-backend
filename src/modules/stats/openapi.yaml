@@ -11,6 +11,7 @@ tags:
 paths:
     /stats/sales:
         get:
+            x-cache: private-no-cache
             tags: [Stats]
             summary: Sales over time (staff)
             description: >-
@@ -41,6 +42,7 @@ paths:
 
     /stats/products:
         get:
+            x-cache: private-no-cache
             tags: [Stats]
             summary: Top products (staff)
             description: >-
@@ -71,6 +73,7 @@ paths:
 
     /stats/products/{productId}:
         get:
+            x-cache: private-no-cache
             tags: [Stats]
             summary: One product's sales over time (staff)
             description: >-
@@ -103,6 +106,7 @@ paths:
 
     /stats/categories:
         get:
+            x-cache: private-no-cache
             tags: [Stats]
             summary: Sales by category (staff)
             description: >-
@@ -128,6 +132,7 @@ paths:
 
     /stats/payments:
         get:
+            x-cache: private-no-cache
             tags: [Stats]
             summary: Payments mix (staff)
             description: >-
@@ -152,6 +157,7 @@ paths:
 
     /stats/operations:
         get:
+            x-cache: private-no-cache
             tags: [Stats]
             summary: Operations rates (staff)
             description: >-
@@ -177,6 +183,7 @@ paths:
 
     /stats/customers:
         get:
+            x-cache: private-no-cache
             tags: [Stats]
             summary: New and returning customers (staff)
             description: >-
@@ -202,6 +209,7 @@ paths:
 
     /stats/pipeline:
         get:
+            x-cache: private-no-cache
             tags: [Stats]
             summary: What is waiting right now (staff)
             description: >-
@@ -217,27 +225,6 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/PipelineStats'
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-
-    /stats/limits:
-        get:
-            tags: [Stats]
-            summary: How big a period may be (staff)
-            description: >-
-                The two ceilings every period read enforces, so a form can refuse a period before a
-                round trip does: the most calendar days (inclusive) and the most buckets one request
-                may cover. Needs `read:Stats`.
-            operationId: getStatsLimits
-            security:
-                - bearerAuth: []
-            responses:
-                '200':
-                    description: The ceilings
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/StatsLimits'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
 
@@ -291,12 +278,15 @@ components:
             properties:
                 orders:
                     type: integer
+                    minimum: 0
                     description: Orders paid in the period, by `paidAt`.
                 unitsOrdered:
                     type: integer
+                    minimum: 0
                     description: Units on those orders.
                 unitsReversed:
                     type: integer
+                    minimum: 0
                     description: Units of returns received in the period. A cancellation is not counted, since it has no date.
                 netUnits:
                     type: integer
@@ -304,14 +294,17 @@ components:
                 grossSales:
                     type: number
                     format: double
+                    minimum: 0
                     description: Goods net of VAT on invoices issued in the period, before shipping, discounts and reversals.
                 discounts:
                     type: number
                     format: double
+                    minimum: 0
                     description: Always 0 until a discount exists.
                 reversals:
                     type: number
                     format: double
+                    minimum: 0
                     description: The goods part (net of VAT) of credit notes issued in the period.
                 netSales:
                     type: number
@@ -332,10 +325,12 @@ components:
                 refunds:
                     type: number
                     format: double
+                    minimum: 0
                     description: Credit notes issued in the period, VAT included.
                 averageOrderValue:
                     type: number
                     format: double
+                    minimum: 0
                     description: (`grossSales` minus `discounts`) divided by `orders`; 0 with no orders.
 
         SalesBucket:
@@ -355,7 +350,7 @@ components:
             additionalProperties: false
             required: [currency, totals, previous, buckets]
             properties:
-                currency: { type: string }
+                currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
                 totals:
                     $ref: '#/components/schemas/SalesFigures'
                 previous:
@@ -371,10 +366,12 @@ components:
         SalesStats:
             type: object
             additionalProperties: false
-            required: [period, currencies]
+            required: [period, limits, currencies]
             properties:
                 period:
                     $ref: '#/components/schemas/StatsPeriod'
+                limits:
+                    $ref: '#/components/schemas/StatsLimits'
                 currencies:
                     type: array
                     items:
@@ -388,9 +385,9 @@ components:
                 productId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 title: { type: string }
-                currency: { type: string }
-                unitsOrdered: { type: integer }
-                unitsReversed: { type: integer }
+                currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
+                unitsOrdered: { type: integer, minimum: 0 }
+                unitsReversed: { type: integer, minimum: 0 }
                 netUnits: { type: integer }
                 netSales:
                     type: number
@@ -400,10 +397,12 @@ components:
         ProductStats:
             type: object
             additionalProperties: false
-            required: [period, products]
+            required: [period, limits, products]
             properties:
                 period:
                     $ref: '#/components/schemas/StatsPeriod'
+                limits:
+                    $ref: '#/components/schemas/StatsLimits'
                 products:
                     type: array
                     items:
@@ -415,16 +414,18 @@ components:
             required: [start, unitsOrdered, unitsReversed]
             properties:
                 start: { type: string, format: date-time }
-                unitsOrdered: { type: integer }
-                unitsReversed: { type: integer }
+                unitsOrdered: { type: integer, minimum: 0 }
+                unitsReversed: { type: integer, minimum: 0 }
 
         ProductSeries:
             type: object
             additionalProperties: false
-            required: [period, productId, buckets]
+            required: [period, limits, productId, buckets]
             properties:
                 period:
                     $ref: '#/components/schemas/StatsPeriod'
+                limits:
+                    $ref: '#/components/schemas/StatsLimits'
                 productId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 title:
@@ -441,17 +442,19 @@ components:
             required: [category, currency, unitsOrdered, netSales]
             properties:
                 category: { type: string }
-                currency: { type: string }
-                unitsOrdered: { type: integer }
+                currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
+                unitsOrdered: { type: integer, minimum: 0 }
                 netSales: { type: number, format: double }
 
         CategoryStats:
             type: object
             additionalProperties: false
-            required: [period, categories]
+            required: [period, limits, categories]
             properties:
                 period:
                     $ref: '#/components/schemas/StatsPeriod'
+                limits:
+                    $ref: '#/components/schemas/StatsLimits'
                 categories:
                     type: array
                     items:
@@ -466,17 +469,19 @@ components:
                     type: string
                     enum: [card, bank_transfer, cash, other]
                 provider: { type: string }
-                currency: { type: string }
-                payments: { type: integer }
-                amount: { type: number, format: double }
+                currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
+                payments: { type: integer, minimum: 0 }
+                amount: { type: number, format: double, minimum: 0 }
 
         PaymentMix:
             type: object
             additionalProperties: false
-            required: [period, rows]
+            required: [period, limits, rows]
             properties:
                 period:
                     $ref: '#/components/schemas/StatsPeriod'
+                limits:
+                    $ref: '#/components/schemas/StatsLimits'
                 rows:
                     type: array
                     items:
@@ -485,26 +490,28 @@ components:
         OperationsStats:
             type: object
             additionalProperties: false
-            required: [period, cancellation, returns, refunds]
+            required: [period, limits, cancellation, returns, refunds]
             properties:
                 period:
                     $ref: '#/components/schemas/StatsPeriod'
+                limits:
+                    $ref: '#/components/schemas/StatsLimits'
                 cancellation:
                     type: object
                     additionalProperties: false
                     required: [placed, cancelled, rate]
                     description: A cohort, meaning orders placed in the period that ended cancelled, not cancellations dated by when they happened.
                     properties:
-                        placed: { type: integer }
-                        cancelled: { type: integer }
+                        placed: { type: integer, minimum: 0 }
+                        cancelled: { type: integer, minimum: 0 }
                         rate: { type: number, format: double, minimum: 0, maximum: 1 }
                 returns:
                     type: object
                     additionalProperties: false
                     required: [unitsOrdered, unitsReturned, rate]
                     properties:
-                        unitsOrdered: { type: integer }
-                        unitsReturned: { type: integer }
+                        unitsOrdered: { type: integer, minimum: 0 }
+                        unitsReturned: { type: integer, minimum: 0 }
                         rate: { type: number, format: double, minimum: 0 }
                 refunds:
                     type: array
@@ -513,21 +520,23 @@ components:
                         additionalProperties: false
                         required: [currency, invoiced, credited, rate]
                         properties:
-                            currency: { type: string }
-                            invoiced: { type: number, format: double, description: 'Invoices issued in the period, VAT included.' }
-                            credited: { type: number, format: double, description: 'Credit notes issued in the period, VAT included.' }
+                            currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
+                            invoiced: { type: number, format: double, description: 'Invoices issued in the period, VAT included.', minimum: 0 }
+                            credited: { type: number, format: double, description: 'Credit notes issued in the period, VAT included.', minimum: 0 }
                             rate: { type: number, format: double, minimum: 0 }
 
         CustomerStats:
             type: object
             additionalProperties: false
-            required: [period, customers, newCustomers, returningCustomers, returningRate]
+            required: [period, limits, customers, newCustomers, returningCustomers, returningRate]
             properties:
                 period:
                     $ref: '#/components/schemas/StatsPeriod'
-                customers: { type: integer, description: 'Accounts with at least one paid order in the period.' }
-                newCustomers: { type: integer, description: 'Of those, accounts whose first paid order is in the period.' }
-                returningCustomers: { type: integer }
+                limits:
+                    $ref: '#/components/schemas/StatsLimits'
+                customers: { type: integer, description: 'Accounts with at least one paid order in the period.', minimum: 0 }
+                newCustomers: { type: integer, description: 'Of those, accounts whose first paid order is in the period.', minimum: 0 }
+                returningCustomers: { type: integer, minimum: 0 }
                 returningRate: { type: number, format: double, minimum: 0, maximum: 1 }
 
         PipelineStats:
@@ -542,14 +551,17 @@ components:
                         additionalProperties: false
                         required: [currency, count, amount]
                         properties:
-                            currency: { type: string }
-                            count: { type: integer }
-                            amount: { type: number, format: double }
+                            currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
+                            count: { type: integer, minimum: 0 }
+                            amount: { type: number, format: double, minimum: 0 }
                             nearestPayBy: { type: string, format: date-time }
                 paidNotShipped:
                     type: integer
+                    minimum: 0
                     description: Orders `paid` or `processing`, so not yet handed to a carrier.
 
+        # The ceilings every period read enforces, carried on each period answer so a form can
+        # refuse a period before a round trip does — no read of its own.
         StatsLimits:
             type: object
             additionalProperties: false
@@ -557,8 +569,10 @@ components:
             properties:
                 maxRangeDays:
                     type: integer
+                    minimum: 1
                     description: The most calendar days one period may cover, both ends counted.
                 maxBuckets:
                     type: integer
+                    minimum: 1
                     description: The most buckets one series may hold, the first possibly starting before `from`.
 

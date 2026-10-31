@@ -9,7 +9,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';
-import type { WebhookEventCatalogueEntry } from '@types';
+import type { WebhookEventCatalogueEntry, WebhookEventName } from '@types';
 import { ALL_EVENTS } from '../domain';
 
 /** `src/modules/`: a module's folder is its registry name (`AppModule.name`). */
@@ -37,7 +37,9 @@ const eventsOf = (moduleName: string): WebhookEventCatalogueEntry[] => {
     // `yaml.parse`: https://eemeli.org/yaml/#parse — a plain object back, no custom tags here.
     const document = parse(readFileSync(file, 'utf8')) as AsyncApiChannelsDocument;
     return Object.entries(document.channels ?? {}).map(([name, channel]) => ({
-        name,
+        // The contract's `WebhookEventName` enum is filled from these same channel keys at bundle
+        // time, so the compiler cannot see that a key read from disk is one of them.
+        name: name as WebhookEventName,
         description: channel.description
     }));
 };
@@ -63,6 +65,6 @@ export const listWebhookEventCatalogue = (): readonly WebhookEventCatalogueEntry
  * @returns the unknown names, in request order and without repeats; empty when the filter is fine
  */
 export const unknownEventTypes = (eventTypes: readonly string[]): string[] => {
-    const known = new Set(catalogue.map((event) => event.name));
+    const known = new Set<string>(catalogue.map((event) => event.name));
     return [...new Set(eventTypes)].filter((name) => name !== ALL_EVENTS && !known.has(name));
 };

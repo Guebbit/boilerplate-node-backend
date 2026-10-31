@@ -100,6 +100,8 @@ paths:
                 it is a shopper's step: staff and administrators are refused with `403`. Returns the updated
                 wishlist; read the cart for its own new state.
             operationId: moveWishlistItemToCart
+            x-error-codes:
+                '422': [CART_QUANTITY_LIMIT]
             security:
                 - bearerAuth: []
             parameters:
@@ -120,8 +122,6 @@ paths:
                 # whether a product may be in a basket is decided once, where every caller of the
                 # cart inherits it.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # Also the cart's answer: the product's existing cart line is already at the per-line
-                # ceiling (`NODE_CART_LINE_MAX`), so adding this one more would pass it. `errors[].code` is `CART_QUANTITY_LIMIT`.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
 components:

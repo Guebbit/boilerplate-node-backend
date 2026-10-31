@@ -325,6 +325,17 @@ a `'null'` type in any response schema, and `tests/support/response-contract.ts`
 response body that holds a `null` anywhere, free-form objects included (an audit row's `changes`, a
 timeline row's `data`). An unset side of an audit `{ from, to }` is the absent key.
 
+One exception: permission rule conditions on the session answers (a sign-in, `GET /account`, a
+refresh). A permission rule's conditions are a query, not a value; `null` there is the operand "has no
+value", and the only form allowed is `{ deletedAt: null }`. The client never evaluates a condition
+(`can()` takes a type name only); the rule travels as the server holds it. Any other `null`, and any
+other response carrying the same shape, is still refused.
+
+The same spelling is the house query rule for a soft delete: `deletedAt: null`, never
+`deletedAt: { $exists: false }`, so a permission rule and a repository filter read alike
+(`products`' `PUBLIC_SCOPE` follows it). The rule is limited to `deletedAt` and permission
+conditions: other fields legitimately ask `$exists` (`lockedUntil`, `supersededAt`, `trackingCode`).
+
 A stored `null` that means something (a product's `backorderLimit`: no cap) is mapped in the
 presenter, so the wire still says "absent". RFC 7396 §1 is why: a `GET` that served `"x": null`,
 written back by a `PATCH`, would delete `x`.
@@ -475,8 +486,11 @@ anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` 
   change, through Express's own ETag check: the `privateNoCache` reads (`orders`, `users`,
   `tickets`, `payments`, `returns`, `stats`: a private copy the browser revalidates) and every
   `setCache` read (`locales`, `products` `/facets` and `/:id`: the shared copy, revalidated once
-  `max-age` runs out or at once under `browserRevalidate`). The bundler declares that answer (the
-  shared `NotModified`: no body, an `ETag` header) on every such `GET`, so no fragment repeats it.
+  `max-age` runs out or at once under `browserRevalidate`). Each such `GET` carries
+  `x-cache` in its fragment, and the bundler declares the answer (the shared `NotModified`: no
+  body, an `ETag` header) on every operation that does, so no fragment repeats it.
+  `tests/cross-cutting/cache-policy-declared.test.ts` walks the mounted routers and holds them
+  equal to the `x-cache` operations, both ways.
   The sitemap streams its XML and carries no `ETag`, so it is not one of them.
 - **Browsers** may send `If-Match` and read `ETag` cross-origin: both are in the CORS allow and
   expose lists.

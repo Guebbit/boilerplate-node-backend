@@ -31,6 +31,16 @@ describe('contactRequestEmail', () => {
         expect(subject).not.toBe(REQUEST.subject);
     });
 
+    it('words the reminder for an overdue message differently from the first announcement', () => {
+        const first = contactRequestEmail('en', REQUEST);
+        const reminder = contactRequestEmail('en', { ...REQUEST, overdue: true });
+
+        expect(reminder.subject).toMatch(/^Overdue/);
+        expect(reminder.subject.endsWith(`: ${REQUEST.subject}`)).toBe(true);
+        expect(reminder.data.title).not.toBe(first.data.title);
+        expect(reminder.data.message).toBe(REQUEST.message);
+    });
+
     it('passes the sender"s details through unchanged', () => {
         // These are the reply-to details. Translating or reformatting any of them would be a
         // reply sent to the wrong address.

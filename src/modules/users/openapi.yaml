@@ -30,6 +30,7 @@ paths:
     # --------- Users ---------
     /users:
         get:
+            x-cache: private-no-cache
             tags: [Users]
             summary: List users (paginated)
             description: Returns a paginated list of user accounts.
@@ -103,6 +104,8 @@ paths:
             summary: Create user
             description: Creates a new user account with the supplied email and username, and mails the owner a link to choose their own password (the same email as "forgot your password", worded for "you have no password yet"). No caller can set another person's password, so the body has no password field. Optional image can be uploaded.
             operationId: createUser
+            x-error-codes:
+                '403': [ROLE_MANAGEMENT_REQUIRED]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -126,8 +129,7 @@ paths:
                                 $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/User'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                # 409: the address is taken. A `role` the caller may not hand out is a 403
-                # `ROLE_MANAGEMENT_REQUIRED`; one nothing declares is a 422 naming `role`.
+                # The address is taken.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 # `uploadLimiter` sits in front of this route — see routes.ts.
@@ -164,6 +166,7 @@ paths:
         x-versioned: [get, put, patch, delete]
         # Same as GET /users?id={id}
         get:
+            x-cache: private-no-cache
             tags: [Users]
             summary: User details
             description: Returns the full profile of the user identified by `{id}`. Functionally equivalent to `GET /users?id={id}`.
@@ -188,6 +191,8 @@ paths:
             summary: Replace user
             description: Replaces every writable field of the user identified by `{id}` in the path — RFC 9110 §9.3.4, an omitted optional field is cleared. The credentials (`email`, `password`) are outside the representation, since only their owner changes them, through `/account`. The image is outside it too — set by an upload, cleared by an explicit `imageUrl` null, kept when a PUT never mentions it.
             operationId: replaceUserById
+            x-error-codes:
+                '403': [ROLE_MANAGEMENT_REQUIRED]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -211,8 +216,6 @@ paths:
                                 $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/User'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                # A `role` the caller may not hand out is a 403 `ROLE_MANAGEMENT_REQUIRED`; one nothing
-                # declares (or an audience such as `customer`) is a 422 naming `role`.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # `uploadLimiter` sits in front of this route — see routes.ts.
@@ -222,6 +225,8 @@ paths:
             summary: Edit user
             description: Merges the given fields into the user identified by `{id}` in the path — RFC 7396, an omitted field is left unchanged, `null` clears an optional one. Optional image can be uploaded.
             operationId: updateUserById
+            x-error-codes:
+                '403': [ROLE_MANAGEMENT_REQUIRED]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -248,8 +253,6 @@ paths:
                                 $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/User'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                # A `role` the caller may not hand out is a 403 `ROLE_MANAGEMENT_REQUIRED`; one nothing
-                # declares (or an audience such as `customer`) is a 422 naming `role`.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # `uploadLimiter` sits in front of this route — see routes.ts.
@@ -284,6 +287,8 @@ paths:
                 answers 409 `CART_PURCHASE_HOLD` until that instant, or until `DELETE` lifts it. Clears the account's review flag: placing a hold is acting on it.
                 Audited as `admin.user.purchase_hold_set`.
             operationId: setUserPurchaseHold
+            x-error-codes:
+                '409': [CART_PURCHASE_HOLD]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -316,6 +321,8 @@ paths:
                 a hold nor a review flag answers 409 `USER_PURCHASE_HOLD_NOT_SET`. Audited as
                 `admin.user.purchase_hold_lifted` (`inForce` says whether the hold was still running).
             operationId: liftUserPurchaseHold
+            x-error-codes:
+                '409': [USER_PURCHASE_HOLD_NOT_SET]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -342,6 +349,8 @@ paths:
                 is active already. Needs `ban:User`, the key deactivating takes. Audited as
                 `admin.user.unbanned`.
             operationId: activateUserById
+            x-error-codes:
+                '409': [USER_ALREADY_ACTIVE]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -369,6 +378,8 @@ paths:
                 `USER_ALREADY_INACTIVE` when it is deactivated already. Needs `ban:User`. Audited as
                 `admin.user.banned`.
             operationId: deactivateUserById
+            x-error-codes:
+                '409': [USER_ALREADY_INACTIVE]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -394,6 +405,8 @@ paths:
             summary: Restore user
             description: Undoes the soft delete of the user identified by `{id}`, which includes an account whose owner asked to delete it and whose `purgeAt` has not passed (the owner is told by mail; the account is then no longer scheduled for erasure). Answers 409 `USER_NOT_DELETED` when the user is not soft-deleted, so a restore can never be mistaken for an ordinary read, and 409 `USER_ERASURE_DUE` past `purgeAt`.
             operationId: restoreUserById
+            x-error-codes:
+                '409': [USER_ERASURE_DUE, USER_NOT_DELETED]
             security:
                 - bearerAuth: []
             parameters:
@@ -591,7 +604,7 @@ components:
                     type: string
                     minLength: 3
                     maxLength: 50
-                # A name from `grantableRoles` (`GET /account/abilities`). A caller without
+                # A name from `grantableRoles` (`abilities` on `GET /account`). A caller without
                 # `assign:Role` gets `403 ROLE_MANAGEMENT_REQUIRED`; any other name is a `422`
                 # naming `role`.
                 role:
@@ -630,7 +643,6 @@ components:
                     type: boolean
                     default: true
                 imageUpload:
-                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional user profile image
@@ -688,7 +700,6 @@ components:
                     maxLength: 64
                     minLength: 1
                 imageUpload:
-                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional user profile image
@@ -753,7 +764,6 @@ components:
                     maxLength: 64
                     minLength: 1
                 imageUpload:
-                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional user profile image

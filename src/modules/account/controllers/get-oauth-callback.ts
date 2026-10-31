@@ -31,6 +31,7 @@ import {
     OAUTH_CONTINUE_COOKIE,
     OAUTH_LOCALE_COOKIE
 } from '../oauth/state';
+import type { OAuthCallbackError } from '../oauth/callback-errors';
 import { createMfaChallengeCookie } from '../oauth/mfa-redirect';
 import { createDeletionChallengeCookie } from '../oauth/deletion-redirect';
 import {
@@ -122,7 +123,7 @@ export const getOAuthCallback = (request: Request, response: Response) => {
 
     /** `recordFailureAndClear`, then fail towards the FRONTEND with `?error=<reason>` rather
      * than a JSON body — the browser is mid-navigation by the time any of this runs. */
-    const failToFrontend = (reason: string) => {
+    const failToFrontend = (reason: OAuthCallbackError) => {
         recordFailureAndClear(reason);
         response.redirect(302, oauthFrontendCallbackUrl(reason, undefined, savedLocale()));
     };

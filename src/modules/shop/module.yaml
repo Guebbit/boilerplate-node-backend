@@ -4,6 +4,3 @@ group: shop
 dependsOn:
     - account # termsVersion: which text of the Terms is in force, printed by GET /shop
 noAudit: "Reads the deployer's own configuration and writes nothing, so there is no subject an audit row could name."
-frontend:
-    counterparts: []
-    why: 'It has no screen of its own: the frontend shell reads `GET /shop` once into a store (`src/infrastructure/shop.ts`) that the price inputs, the address form and the legal pages draw on.'

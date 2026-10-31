@@ -68,8 +68,6 @@ import { getAccountExport, getAccountExportStatus } from './controllers/get-acco
 import { deleteAccount } from './controllers/delete-account';
 import { postAccountRestore } from './controllers/post-account-restore';
 import { postLoginRestore } from './controllers/post-login-restore';
-import { getOAuthProviders } from './controllers/get-oauth-providers';
-import { getSessionConfig } from './controllers/get-session-config';
 import { postSessionTouch } from './controllers/post-session-touch';
 import { getSession } from './controllers/get-session';
 import { getOAuthLinks } from './controllers/get-oauth-links';
@@ -79,7 +77,6 @@ import { getOAuthStart } from './controllers/get-oauth-start';
 import { getOAuthCallback } from './controllers/get-oauth-callback';
 import { noStore } from '@infrastructure/http/middlewares/cache';
 import { requireAllowedOrigin } from '@infrastructure/http/middlewares/origin';
-import { getMyAbilities } from './controllers/get-my-abilities';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 
 /**
@@ -258,20 +255,6 @@ router.post('/reauth', isAuth, sessionCredentialLimiters, postReauth);
 // since both spend the same mailbox.
 router.post('/reauth/methods/:method/send', isAuth, accountCodeSendLimiter, postReauthMethodSend);
 
-// GET /account/session-config — how this deployment keeps people signed in (`jwt` or `cookie`).
-// Public, like `GET /antibot/config`: a client reads it before it has a session.
-router.get('/session-config', getSessionConfig);
-
-/*
- * GET /account/abilities — the rules the server enforces, for a client to render from.
- *
- * No guard beyond the router-wide `router.use(getAuth)` above: a stranger has rules too (the
- * `guest` role), and a shop front that greys nothing out for a visitor is a shop front that lies
- * twice. Not mounted a second time here — `getAuth` already ran for every route on this router
- * and already stashed `request.authContext`; `getMyAbilities` reads that directly.
- */
-router.get('/abilities', getMyAbilities);
-
 // POST /account/refresh — create a new access token from the refresh cookie. A POST, since it
 // rotates the token (a state change a GET must not make), and origin-checked: the cookie alone
 // authenticates it, so a request from someone else's page must not act.
@@ -381,12 +364,8 @@ router.post(
 // around whichever factor is actually armed.
 router.post('/2fa/backup-codes', isAuth, requireFreshAuth('critical'), post2faBackupCodes);
 
-// GET /account/oauth/providers — which providers this deployment has credentials for. Public,
-// informational; registered ABOVE the `:provider` route below so it isn't swallowed by it.
-router.get('/oauth/providers', getOAuthProviders);
-
 // GET /account/oauth/links — the caller's connected providers. Registered ABOVE the `:provider`
-// route below, like `/oauth/providers`, so it is not swallowed by it.
+// route, so it is not swallowed by it.
 router.get('/oauth/links', isAuth, getOAuthLinks);
 
 // POST /account/oauth/links/:provider — connect a provider to the SIGNED-IN account. Sensitive

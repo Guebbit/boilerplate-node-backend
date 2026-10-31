@@ -48,14 +48,12 @@ import { StockMovementReason, type StockMovement } from '@types';
  * @param reason - the transition
  * @param quantity - how many units; signed only for `adjust`
  * @param kind - what the units are; a preorder claim is released against `backordered`, not `reserved`
- * @param uncapped - a claim the shop owes (a lost parcel) ignores the backorder cap
  * @returns the Mongo condition `applyDelta` must match for the transition to apply
  */
 const conditionFor = (
     reason: StockMovementReason,
     quantity: number,
-    kind: HoldKind,
-    uncapped: boolean
+    kind: HoldKind
 ): QueryFilter<StockLevelDocument> => {
     switch (reason) {
         case StockMovementReason.reserve: {
@@ -75,7 +73,6 @@ const conditionFor = (
         // the stored null, where `{ backorderLimit: null }` would also match an absent one, and
         // `$ifNull` below reads that absent field as zero, closed.
         case StockMovementReason.backorder: {
-            if (uncapped) return {};
             return {
                 $or: [
                     { backorderLimit: { $type: 'null' } },
@@ -89,6 +86,10 @@ const conditionFor = (
                     }
                 ]
             };
+        }
+        // A claim the shop owes (a lost parcel) ignores the cap: it is not a new sale.
+        case StockMovementReason.owed: {
+            return {};
         }
         // The arrived units must exist and the claim must be there to convert.
         case StockMovementReason.allocate: {
@@ -226,8 +227,7 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
         quantity: number,
         delta: CounterDelta,
         session?: ClientSession,
-        kind?: HoldKind,
-        uncapped?: boolean
+        kind?: HoldKind
     ) => Promise<boolean>;
     setBackorderLimit: (productId: string, backorderLimit: number | null) => Promise<boolean>;
     preorderBoard: (options: {
@@ -322,7 +322,6 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
      * @param delta - the columns `counterDeltaFor` computed for this transition
      * @param session - the caller's transaction, when the write belongs to one
      * @param kind - what the units are; `stock` unless the claim is a preorder's
-     * @param uncapped - the claim is owed (a lost parcel): the backorder cap does not apply
      * @returns whether the condition matched and the counters actually moved
      */
     applyDelta: (
@@ -331,14 +330,13 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
         quantity: number,
         delta,
         session?: ClientSession,
-        kind: HoldKind = 'stock',
-        uncapped = false
+        kind: HoldKind = 'stock'
     ) =>
         stockLevelModel
             .updateOne(
                 {
                     productId: toObjectId(productId),
-                    ...conditionFor(reason, quantity, kind, uncapped)
+                    ...conditionFor(reason, quantity, kind)
                 },
                 {
                     $inc: {

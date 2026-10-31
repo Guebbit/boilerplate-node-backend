@@ -384,7 +384,7 @@ describe('assignment and notes', () => {
         expect(response.status).toBe(422);
     });
 
-    it('appends a note with 201 and shows it on the ticket read', async () => {
+    it('appends a note with 200 and shows it on the ticket read', async () => {
         const { bearer } = await authenticateAs('admin');
         const id = await createContactTicket();
 
@@ -394,7 +394,7 @@ describe('assignment and notes', () => {
             .send({ body: 'Called back.' });
         const read = await api().get(`/tickets/${id}`).set('Authorization', bearer);
 
-        expect(noted.status).toBe(201);
+        expect(noted.status).toBe(200);
         expect(read.body.notes).toHaveLength(1);
         expect(read.body.notes[0]).toMatchObject({ body: 'Called back.' });
     });

@@ -16,6 +16,7 @@ import {
     maxAdminOrderLines,
     maxAdminOrderLineQuantity,
     orderFrontendLink,
+    orderPagePath,
     orderPiiDaysAfterGuarantee,
     orderPiiDaysUndelivered,
     withdrawalPeriodDays
@@ -125,6 +126,18 @@ describe('orderFrontendLink', () => {
         expect(orderFrontendLink({ locale: 'en', id: 'order 1/2' })).toBe(
             'http://localhost:8080/en/orders/order%201%2F2'
         );
+    });
+});
+
+describe('orderPagePath', () => {
+    it('fills and encodes the id in the default template', () => {
+        expect(orderPagePath('order 1/2')).toBe('orders/order%201%2F2');
+    });
+
+    it('follows the deployment override', () => {
+        setEnvironment({ NODE_FRONTEND_LINK_ORDER: 'my-orders/{id}/details' });
+
+        expect(orderPagePath('order-1')).toBe('my-orders/order-1/details');
     });
 });
 

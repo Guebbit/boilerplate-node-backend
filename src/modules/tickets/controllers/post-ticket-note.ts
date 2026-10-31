@@ -34,7 +34,7 @@ export const postTicketNote = (
         .addNote(id, body.body, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse<Ticket>(response, result.data, 201);
+            successResponse<Ticket>(response, result.data, 200);
         })
         .catch(catchAs(response, 'postTicketNote'));
 };

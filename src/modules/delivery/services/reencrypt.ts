@@ -8,11 +8,12 @@ import type { EncryptedField } from '@infrastructure/security/reencrypt';
 import { getPiiEncryptionKeyRing, piiBinding } from '@infrastructure/security/pii-encryption';
 import type { ShipmentDocument } from '../model';
 import { shipmentRepository } from '../repository';
-import { DESTINATION_FIELDS, destinationAad } from '../pii';
+import { POSTAL_ADDRESS_FIELDS } from '@domain-primitives/postal-address';
+import { destinationAad } from '../pii';
 
 /** The encrypted values of one shipment's `destination`, bound to the shipment's own `_id`. */
 const fieldsOf = (shipment: ShipmentDocument): EncryptedField[] =>
-    DESTINATION_FIELDS.flatMap((field) => {
+    POSTAL_ADDRESS_FIELDS.flatMap((field) => {
         const stored = shipment.destination?.[field];
         return stored === undefined
             ? []

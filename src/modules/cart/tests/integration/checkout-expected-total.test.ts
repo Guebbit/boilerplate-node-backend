@@ -131,6 +131,7 @@ describe('POST /cart/checkout and the total the buyer was shown', () => {
         { amount: -1, currency: 'EUR' },
         { amount: 20.5, currency: 'EUR' },
         { amount: 2000, currency: 'EURO' },
+        { amount: 2000, currency: 'eur' },
         { amount: 2000 }
     ])('answers 422 to a malformed total: %j', async (expectedTotal) => {
         const { bearer } = await shopperWith(10);

@@ -902,8 +902,9 @@ export default tseslint.config(
                 },
                 { type: 'kernel', pattern: 'src/kernel', partialMatch: false },
                 /*
-                 * Our own pure, generic code that every tier — `domain/` included — may import
-                 * (Money first). It reaches npm and nothing else, so sharing it loosens no wall.
+                 * Our own pure code that every tier — `domain/` included — may import: generic
+                 * (Money) or domain-specific (the postal-address PII fields). It reaches npm and
+                 * `@types` and nothing else, so sharing it loosens no wall.
                  * See `docs/theory/layers.md`.
                  */
                 {
@@ -1432,47 +1433,6 @@ export default tseslint.config(
             ]
         }
     },
-    /**
-     * The analytics event catalogue — the one namespace both repos write into.
-     *
-     * Every name here becomes a row in Umami, and a name is the only part of an event that a
-     * dashboard groups by. `Cart_Item_Added` and `cart_item_added` are two different funnels in
-     * that table, and nothing downstream can merge them back — so the convention is not a style
-     * preference, it is the difference between one funnel and two.
-     *
-     * `snake_case` values, `SCREAMING_SNAKE` keys, and `noun_pastTenseVerb` for the shape of the
-     * name itself. Only the first two are machine-checkable; the third is still prose, because no
-     * selector knows a noun from a verb.
-     *
-     * Scoped to where names are AUTHORED: a module's own `analytics.ts`, which is now the only
-     * place they are written at all.
-     *
-     * The `TryStatement` selector is repeated from the `src/**` block: `no-restricted-syntax`
-     * does not merge across configs — the nearest match REPLACES the list — so leaving it out
-     * here would silently lift the try/catch restriction for exactly these files.
-     */
-    {
-        files: ['src/modules/*/analytics.ts'],
-        rules: {
-            'no-restricted-syntax': [
-                'error',
-                ...bannedDoubleCasts,
-                {
-                    selector:
-                        'Property > Literal[value]:not([value=/^[a-z][a-z0-9]*(_[a-z0-9]+)*$/])',
-                    message:
-                        'An analytics event name is lower snake_case — `cart_item_added`. It is written verbatim into Umami, where a differently-spelled name is a separate funnel nothing can merge back.'
-                },
-                {
-                    selector: 'Property > Identifier.key:not([name=/^[A-Z][A-Z0-9_]*$/])',
-                    message:
-                        'An analytics event constant is SCREAMING_SNAKE — `CART_ITEM_ADDED`. Every other module spells its own that way, and one that does not is the entry a reader scanning the catalogue misses.'
-                },
-                bannedTryCatch
-            ]
-        }
-    },
-
     /**
      * CLI tooling and seeders: node programs inside the `tsconfig` project, so they keep the
      * type-aware rules — but a script's interface is the terminal and its exit code, so

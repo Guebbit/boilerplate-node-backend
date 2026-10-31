@@ -723,6 +723,21 @@ describe('POST /payments/{id}/refunds', () => {
 });
 
 describe('POST /payments/{id}/refunds — the operator', () => {
+    it('refuses a lower-case currency with a 422 naming `currency`: the code is upper case', async () => {
+        const { paymentId } = await paidOrder();
+        const { bearer: adminBearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .post(`/payments/${paymentId}/refunds`)
+            .set('Authorization', adminBearer)
+            .set('Idempotency-Key', freshKey())
+            .send({ currency: 'eur' });
+
+        expect(response.status).toBe(422);
+        expect(JSON.stringify(response.body.errors)).toContain('currency');
+        expect((await paymentRepository.findById(paymentId))!.refunds).toHaveLength(0);
+    });
+
     it('answers 201 with the refund record and where it lives, and the payment reads refunded', async () => {
         const { paymentId } = await paidOrder();
         const { bearer: adminBearer } = await authenticateAs('admin');

@@ -5,6 +5,7 @@
  * landing at the same instant.
  */
 
+import type { CreateWebhookSubscriptionRequest } from '@types';
 import { setupTestDb } from '@tests/setup-test-db';
 import { create } from '@modules/webhooks/services/subscriptions';
 import { webhookSubscriptionRepository } from '@modules/webhooks/repository';
@@ -16,7 +17,7 @@ setupTestDb();
 
 const context = { caller: callerAs('manager'), analyticsConsent: false };
 
-const subscriptionBody = (url: string) => ({
+const subscriptionBody = (url: string): CreateWebhookSubscriptionRequest => ({
     url,
     eventTypes: ['*']
 });

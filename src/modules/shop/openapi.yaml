@@ -104,7 +104,7 @@ components:
                 phone:
                     type: string
                 currency:
-                    type: string
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     description: ISO-4217 currency code (e.g. EUR) — the shop's one currency, the same one `Product.currency` reports.
                 shipToCountries:
                     type: array

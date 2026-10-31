@@ -23,6 +23,7 @@ import { OUTBOX_EVENT_DEAD } from '@kernel/outbox';
 import { RETURN_REQUESTED } from '@modules/returns';
 import { WEBHOOK_SUBSCRIPTION_AUTO_DISABLED } from '@modules/webhooks';
 import { DAY_MS } from '@domain-primitives/time';
+import type { ReturnReason } from '@types';
 import { enabledModules } from '../../../../modules';
 
 // The queue, not the copy.
@@ -184,7 +185,7 @@ describe('a webhook subscription auto-disabled', () => {
 });
 
 /** A `return.requested` fact; a withdrawal is a right, any other reason awaits a decision. */
-const returnRequested = (returnId: string, reason = 'defective') => ({
+const returnRequested = (returnId: string, reason: ReturnReason = 'defective') => ({
     returnId,
     orderId: '64b7f1a2c3d4e5f607182940',
     reason,

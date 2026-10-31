@@ -13,6 +13,6 @@ const versionCase = caseBase.extend({
     version: z.number().int().nonnegative()
 });
 
-describeCases('permission-model-version', versionCase, 5, (one) => {
+describeCases('permission-model-version', versionCase, (one) => {
     expect(permissionModelVersion(one.ids)).toBe(one.version);
 });

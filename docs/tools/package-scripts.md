@@ -97,18 +97,18 @@ Two stages, and they run in this order: **bundle** the committed documents from 
 fragments, then **generate** code from the bundles. Full cheat sheet in [Regenerating After a
 Change](../api/regenerating.md).
 
-| Script                   | Stage    | Job                                                                                                                                                           | Read more                                                  |
-| ------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `contracts:bundle`       | bundle   | rebuild the authored bundles (`openapi.yaml`, `asyncapi.yaml`, `asyncapi.public.yaml`) from their fragments; name a target to narrow it                       | [Contract Fragmentation](../api/contract-fragmentation.md) |
-| `gen:permission-actions` | generate | `api/permission-actions.ts` from `shared/authorization-keys.yaml`; `regenerate` runs it before the first bundle                                               | [Permission Actions](permission-actions.md)                |
-| `gen:api`                | generate | `rm -rf ./api`, then regenerate types + Zod schemas from `openapi.yaml` via orval, plus the error codes, the request content types and the permission actions | [OpenAPI Workflow](../api/openapi-workflow.md)             |
-| `gen:asyncapi`           | generate | regenerate `src/types/asyncapi.generated.ts` from `asyncapi.yaml`                                                                                             | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
-| `lint:openapi`           | verify   | lint the bundled `openapi.yaml` with Spectral                                                                                                                 | [OpenAPI Workflow](../api/openapi-workflow.md)             |
-| `lint:openapi:modules`   | verify   | lint each `src/modules/*/openapi.yaml` **on its own**, against `shared/contracts/spectral.modules.yaml`                                                       | [Contract Fragmentation](../api/contract-fragmentation.md) |
-| `lint:asyncapi`          | verify   | validate both bundles — `asyncapi.yaml` and `asyncapi.public.yaml`                                                                                            | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
-| `lint:asyncapi:modules`  | verify   | the same for each section document, against `shared/contracts/spectral.asyncapi.modules.yaml`                                                                 | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
-| `sync:frontend`          | generate | copy the shared documents into the paired frontend checkout, so the spec-identity check can go green                                                          | [Contract Fragmentation](../api/contract-fragmentation.md) |
-| `regenerate`             | generate | every generator, in dependency order, then the sync — the one command to run after changing a generator input; `-- --check` verifies                          | [Regenerating After a Change](../api/regenerating.md)      |
+| Script                      | Stage    | Job                                                                                                                                                           | Read more                                                  |
+| --------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `contracts:bundle`          | bundle   | rebuild the authored bundles (`openapi.yaml`, `asyncapi.yaml`, `asyncapi.public.yaml`) from their fragments; name a target to narrow it                       | [Contract Fragmentation](../api/contract-fragmentation.md) |
+| `gen:permission-vocabulary` | generate | `api/permission-vocabulary.ts` from `shared/authorization-keys.yaml`; `regenerate` runs it before the first bundle                                            | [Permission Vocabulary](permission-vocabulary.md)          |
+| `gen:api`                   | generate | `rm -rf ./api`, then regenerate types + Zod schemas from `openapi.yaml` via orval, plus the error codes, the request content types and the permission actions | [OpenAPI Workflow](../api/openapi-workflow.md)             |
+| `gen:asyncapi`              | generate | regenerate `src/types/asyncapi.generated.ts` from `asyncapi.yaml`                                                                                             | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
+| `lint:openapi`              | verify   | lint the bundled `openapi.yaml` with Spectral                                                                                                                 | [OpenAPI Workflow](../api/openapi-workflow.md)             |
+| `lint:openapi:modules`      | verify   | lint each `src/modules/*/openapi.yaml` **on its own**, against `shared/contracts/spectral.modules.yaml`                                                       | [Contract Fragmentation](../api/contract-fragmentation.md) |
+| `lint:asyncapi`             | verify   | validate both bundles — `asyncapi.yaml` and `asyncapi.public.yaml`                                                                                            | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
+| `lint:asyncapi:modules`     | verify   | the same for each section document, against `shared/contracts/spectral.asyncapi.modules.yaml`                                                                 | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
+| `sync:frontend`             | generate | copy the shared documents into the paired frontend checkout, so the spec-identity check can go green                                                          | [Contract Fragmentation](../api/contract-fragmentation.md) |
+| `regenerate`                | generate | every generator, in dependency order, then the sync — the one command to run after changing a generator input; `-- --check` verifies                          | [Regenerating After a Change](../api/regenerating.md)      |
 
 The `:modules` pair exists because each module's contract is a valid document on its own, so it can
 be linted where it is written rather than only after bundling.
@@ -179,8 +179,7 @@ scripts only resolve from inside a container — see
 It deliberately does **not** spell out a URI. One that includes the database name overrides
 `NODE_MONGODB_NAME` without saying so, and the script would seed a database nobody configured. It
 is also deliberately **one** wrapper rather than a `:host` twin per script: copies of one
-`cross-env` prefix drift apart. `tests/unit/scripts/db/host-scripts.test.ts` fails if a second
-hostname-redirecting script appears.
+`cross-env` prefix drift apart.
 
 ## Container scripts
 

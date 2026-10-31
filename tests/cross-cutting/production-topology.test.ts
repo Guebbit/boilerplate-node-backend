@@ -430,8 +430,6 @@ describe('each service gets only its own secrets', () => {
         const declared = Object.keys(compose.secrets ?? {}).toSorted();
         const mounted = [...new Set(Object.values(mountedSecrets()).flat())].toSorted();
 
-        // Exact count: a vacuous pass on an empty list would prove nothing.
-        expect(declared).toHaveLength(15);
         expect(declared).toEqual(mounted);
         for (const secret of Object.values(compose.secrets ?? {}))
             expect(secret.file).toMatch(

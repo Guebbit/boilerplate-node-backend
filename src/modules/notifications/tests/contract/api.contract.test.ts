@@ -17,6 +17,7 @@ import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { notificationsService } from '@modules/notifications/services';
 import { createNotification } from '@modules/notifications/tests/factories';
+import { notificationModel } from '@modules/notifications/model';
 
 setupTestDb();
 
@@ -143,6 +144,30 @@ describe('DELETE /notifications', () => {
 
         expect(response.status).toBe(204);
         expect(inbox.body.items).toEqual([]);
+    });
+});
+
+describe('DELETE /notifications?audience=', () => {
+    it('empties only that audience, and refuses an unknown one', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        await createNotification({ userId: user.id });
+        await createNotification({ userId: user.id, staff: { tenantId: 'shop', sets: [] } });
+
+        const refused = await api()
+            .delete('/notifications?audience=everyone')
+            .set('Authorization', bearer);
+        const response = await api()
+            .delete('/notifications?audience=own')
+            .set('Authorization', bearer);
+
+        expect(refused.status).toBe(422);
+        expect(response.status).toBe(204);
+        await expect(
+            notificationModel.countDocuments({ userId: user.id, audience: 'own' })
+        ).resolves.toBe(0);
+        await expect(
+            notificationModel.countDocuments({ userId: user.id, audience: 'staff' })
+        ).resolves.toBe(1);
     });
 });
 

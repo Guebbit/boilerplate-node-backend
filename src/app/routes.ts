@@ -1,9 +1,9 @@
 /**
  * @module
  * Route mounting. Modules mount themselves: each declares its `basePath` and router in its
- * manifest, and this install walks `enabledModules` without knowing a single domain name. The one
- * explicit import is `system-routes`, which is not a domain — it serves the root ping, which
- * belongs to nobody's business logic.
+ * manifest, and this install walks `enabledModules` without knowing a single domain name. The two
+ * explicit imports are `system-routes` (the root ping) and `config-routes` (`GET /config`), which
+ * belong to nobody's business logic.
  */
 
 import type { Express, Request, Response } from 'express';
@@ -13,6 +13,7 @@ import { methodNotAllowed } from '@infrastructure/http/middlewares/method-not-al
 import { OPERATION_ROUTES } from '@api/operation-routes';
 
 import { router as systemRoutes } from './system-routes';
+import { router as configRoutes } from './config-routes';
 
 /**
  * Mount every domain router, then the 404 catch-all.
@@ -63,6 +64,7 @@ export const installRoutes = (app: Express): void => {
      * REST API routes — domain-driven routing.
      */
     app.use('/', systemRoutes);
+    app.use('/', configRoutes);
 
     /**
      * 405 + `Allow` for a contract path asked with another method; anything else falls through

@@ -784,8 +784,8 @@ describe('an event filter must name events the catalogue lists', () => {
             .send(subscriptionBody({ eventTypes: ['order.paid', 'order.payd'] }));
 
         expect(response.status).toBe(422);
-        expect(response.body.errors[0].details).toEqual({ field: 'eventTypes' });
-        expect(response.body.errors[0].message).toContain('order.payd');
+        // The contract's enum refuses it before the service: the field names the offending item.
+        expect(response.body.errors[0].details).toEqual({ field: 'eventTypes.1' });
         expect(await webhookSubscriptionRepository.count({})).toBe(0);
     });
 
@@ -815,7 +815,7 @@ describe('an event filter must name events the catalogue lists', () => {
                 .send({ ...subscriptionBody({ eventTypes: ['not.an.event'] }), ...rest });
 
             expect(response.status).toBe(422);
-            expect(response.body.errors[0].details).toEqual({ field: 'eventTypes' });
+            expect(response.body.errors[0].details).toEqual({ field: 'eventTypes.0' });
             const stored = await webhookSubscriptionRepository.findById(id);
             expect(stored?.eventTypes).toEqual(['order.paid']);
         }

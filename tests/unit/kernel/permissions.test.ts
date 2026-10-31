@@ -122,6 +122,16 @@ describe('rolesDocumentSchema', () => {
         ).toBe(true);
     });
 
+    it('refuses an audience the code does not know, instead of dropping it', () => {
+        const result = rolesDocumentSchema.safeParse({
+            version: 1,
+            roles: [],
+            audience: { ...validAudience, visitor: validAudience.guest }
+        });
+
+        expect(result.success).toBe(false);
+    });
+
     it('refuses a role with no sets array', () => {
         const result = rolesDocumentSchema.safeParse({
             version: 1,

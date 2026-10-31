@@ -64,11 +64,11 @@ const STEPS: readonly Step[] = [
             'shared/authorization-keys.yaml, from one fragment per module — read by kernel/permissions.ts at boot, so this runs before anything below that boots the app to read docs off it'
     },
     {
-        name: 'gen:permission-actions',
-        command: ['npm', 'run', 'gen:permission-actions'],
+        name: 'gen:permission-vocabulary',
+        command: ['npm', 'run', 'gen:permission-vocabulary'],
         checks: false,
         because:
-            'api/permission-actions.ts, from shared/authorization-keys.yaml — kernel/permissions.ts imports it, and the bundler below loads the kernel, so it must exist before the first bundle on a clean checkout'
+            'api/permission-vocabulary.ts, from shared/authorization-keys.yaml — kernel/permissions.ts imports it, and the bundler below loads the kernel, so it must exist before the first bundle on a clean checkout'
     },
     {
         name: 'shared rules',

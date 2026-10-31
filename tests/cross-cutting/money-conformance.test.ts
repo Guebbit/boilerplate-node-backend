@@ -65,7 +65,7 @@ const moneyCase = z.discriminatedUnion('kind', [
 /** Brands an integer from the cases file as `Money`; the file holds minor units by definition. */
 const asMoney = (value: number): Money => value as Money;
 
-describeCases('money', moneyCase, 70, (one) => {
+describeCases('money', moneyCase, (one) => {
     switch (one.kind) {
         case 'exponent': {
             expect(minorUnitExponent(one.currency)).toBe(one.exponent);

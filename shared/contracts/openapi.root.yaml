@@ -184,6 +184,14 @@ servers:
     - url: https://api.example.com
       description: Production
 
+# The upload types every `imageUpload` part accepts. The bundler writes them onto each multipart
+# body as `encoding.imageUpload.contentType` and then drops this key; `gen:api` reads them back
+# from there. Canonical spellings only: the BE's tolerated `image/jpg` alias is not API surface.
+x-image-upload-types:
+    - image/png
+    - image/jpeg
+    - image/webp
+
 # ---------- Responses the APPLICATION answers, on operations that never declare them. ----------
 #
 # Four things can answer before any route runs, or in place of one:
@@ -220,6 +228,21 @@ x-app-level-responses:
     '503':
         response: ServiceUnavailable
         appliesTo: all
+
+# ---------- Headers the APPLICATION sets on every answer. ----------
+#
+# Set by middleware that runs before any route (`src/app/request-context.ts`, `routes.ts`, the locale
+# and cache layers), so no one operation owns them. Stamped by `scripts/contracts/response-headers.ts`
+# onto every response, each key the HTTP header and each value its `components/headers` entry. A
+# response that declares the same header itself (a `no-store` download, a `max-age` read) keeps its own.
+x-app-level-headers:
+    x-request-id: RequestId
+    Cache-Control: CacheControl
+    Content-Language: ContentLanguage
+    Vary: Vary
+    RateLimit-Policy: RateLimit-Policy
+    RateLimit: RateLimit
+    ETag: EntityTag
 
 tags:
     - name: System
@@ -302,7 +325,7 @@ components:
                 maxLength: 4096
             description: >
                 The token the active human-challenge provider issued to the client — see
-                `GET /antibot/config`. Absent when that provider is `none`.
+                `antibot` on `GET /config`. Absent when that provider is `none`.
 
         # Opt-in per route (see `src/infrastructure/http/middlewares/idempotency.ts`) — never
         # required at the contract level, since a caller not asking for replay protection must
@@ -422,10 +445,63 @@ components:
             description: >-
                 The resource's current version as a strong entity-tag (RFC 9110 §8.8.3). Send it
                 back as `If-Match` on `PUT`, `PATCH` or `DELETE` to refuse the write if someone
-                else changed the resource in between. Opaque: compare it, never parse it. It
-                validates writes only — a read never answers `304` from it.
+                else changed the resource in between. Opaque: compare it, never parse it.
             schema:
                 type: string
+
+        EntityTag:
+            required: false
+            description: >-
+                The strong entity-tag Express computes for any answer that has a body (RFC 9110
+                section 8.8.3). A client may send it back as `If-None-Match` on a read the app lets
+                it keep, and a `GET` that declares `304` answers that way when it still matches. Only
+                a resource marked versioned promises it (the `ETag` header) and takes it as `If-Match`.
+            schema:
+                type: string
+
+        RequestId:
+            required: true
+            description: >-
+                The id this request is logged and audited under, a UUID the server mints (a trusted
+                ingress's own well-formed one is kept). Even a request the rate limiter refuses carries
+                it. Quote it in a bug report.
+            schema:
+                type: string
+
+        CacheControl:
+            required: true
+            description: >-
+                How a cache may keep the answer (RFC 9111 section 5.2). `no-store` unless the operation
+                says otherwise: a response is uncacheable by default, so a minted secret can never be
+                kept by a shared cache or a browser's disk. An operation that caches names its own policy.
+            schema:
+                type: string
+
+        ContentLanguage:
+            required: false
+            description: >-
+                The language the answer was written in (RFC 9110 section 8.5), chosen from the caller's
+                `Accept-Language` or its stored locale. Absent on an answer no locale was resolved for.
+            schema:
+                type: string
+
+        Vary:
+            required: false
+            description: >-
+                The request headers the answer depends on (RFC 9110 section 12.5.5), so a cache keeps
+                one copy per value: always `Origin`, plus `Accept-Language` where the locale picks the body.
+            schema:
+                type: string
+
+        Idempotent-Replay:
+            required: false
+            description: >-
+                `true` when this answer is the stored first answer replayed for a repeated
+                `Idempotency-Key`, not a fresh run: nothing was written a second time. Absent on a
+                first run. Sent on a replay only.
+            schema:
+                type: string
+                enum: ['true']
 
         RateLimit-Policy:
             required: false
@@ -469,6 +545,15 @@ components:
             schema:
                 type: string
 
+        CacheControlNoStore:
+            required: true
+            description: >-
+                Always `no-store`: no cache, shared or private, may keep an error answer (RFC 9111
+                section 5.2.2.5). Every refusal sets it, whichever layer produced it.
+            schema:
+                type: string
+                enum: [no-store]
+
     responses:
         NoContent:
             description: Done. There is nothing to say, so the body is empty (RFC 9110 section 15.3.5).
@@ -491,6 +576,9 @@ components:
                 distinct from `ValidationError`, which is a well-formed request whose FIELDS are
                 wrong. Used where a caller is a machine rather than a form: an unverifiable webhook
                 signature is the case that needs it.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/CacheControlNoStore'
             content:
                 application/problem+json:
                     schema:
@@ -498,6 +586,8 @@ components:
         Unauthorized:
             description: Unauthorized
             headers:
+                Cache-Control:
+                    $ref: '#/components/headers/CacheControlNoStore'
                 WWW-Authenticate:
                     $ref: '#/components/headers/WWW-Authenticate'
             content:
@@ -506,18 +596,27 @@ components:
                         $ref: '#/components/schemas/Problem'
         Forbidden:
             description: Forbidden
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/CacheControlNoStore'
             content:
                 application/problem+json:
                     schema:
                         $ref: '#/components/schemas/Problem'
         NotFound:
             description: Resource not found
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/CacheControlNoStore'
             content:
                 application/problem+json:
                     schema:
                         $ref: '#/components/schemas/Problem'
         Conflict:
             description: The request conflicts with the current state of the resource
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/CacheControlNoStore'
             content:
                 application/problem+json:
                     schema:
@@ -527,12 +626,18 @@ components:
                 The request's `If-Match` no longer matches the stored resource: it was changed
                 (or removed) after the caller read it. Nothing was written. Read it again,
                 reapply the edit, and resend with the new `ETag`.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/CacheControlNoStore'
             content:
                 application/problem+json:
                     schema:
                         $ref: '#/components/schemas/Problem'
         ValidationError:
             description: Validation failed
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/CacheControlNoStore'
             content:
                 application/problem+json:
                     schema:
@@ -545,6 +650,9 @@ components:
                 body parser or the upload middleware, which is why it is declared for every
                 body-accepting operation rather than by hand. The other multipart limits (counts,
                 shapes) answer `400`.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/CacheControlNoStore'
             content:
                 application/problem+json:
                     schema:
@@ -555,6 +663,9 @@ components:
                 them), or its charset or encoding cannot be read. Refused before any route runs,
                 like `413` above. A request with no body is never judged. A `DELETE` that declares no
                 body refuses any body, and `details.accepted` is then empty.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/CacheControlNoStore'
             content:
                 application/problem+json:
                     schema:
@@ -562,6 +673,8 @@ components:
         TooManyRequests:
             description: The caller has spent a rate-limit budget and must wait. The wait is in the standard `RateLimit`/`Retry-After` headers, and — where the endpoint has a budget of its own to report, like a resend cooldown — in the error `details` too.
             headers:
+                Cache-Control:
+                    $ref: '#/components/headers/CacheControlNoStore'
                 Retry-After:
                     $ref: '#/components/headers/Retry-After'
                 RateLimit-Policy:
@@ -581,6 +694,8 @@ components:
                 not a promise — there is no queue depth or circuit-breaker state to compute a
                 real one from.
             headers:
+                Cache-Control:
+                    $ref: '#/components/headers/CacheControlNoStore'
                 Retry-After:
                     $ref: '#/components/headers/Retry-After'
             content:
@@ -589,6 +704,9 @@ components:
                         $ref: '#/components/schemas/Problem'
         InternalError:
             description: Internal server error
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/CacheControlNoStore'
             content:
                 application/problem+json:
                     schema:
@@ -622,6 +740,12 @@ components:
             minLength: 1
             maxLength: 200
             description: Free-text search string
+        CurrencyCode:
+            type: string
+            minLength: 3
+            maxLength: 3
+            pattern: '^[A-Z]{3}$'
+            description: ISO 4217 alphabetic currency code, upper case (e.g. `EUR`)
         Email:
             type: string
             maxLength: 254
@@ -698,32 +822,23 @@ components:
                 or default URL rather than an upload — there is nothing to derive a thumbnail
                 from. Never accepted on a request body: the server is the only writer.
 
-        # ---------- On the `imageUpload` fields below (and why they carry no limits) ----------
+        # ---------- On the `imageUpload` fields below ----------
         #
-        # The six `*Multipart` request bodies each declare `imageUpload` as a bare
-        # `type: string, format: binary` — no `maxLength`, no `contentMediaType`. That is on
-        # purpose, and it is worth knowing why before someone "fixes" it.
+        # Every `*Multipart` request body declares `imageUpload` as a bare `type: string,
+        # format: binary`, and the bundler stamps `encoding.imageUpload.contentType` beside it
+        # from the root's `x-image-upload-types` (OpenAPI 3.1's per-part accepted types). No
+        # `maxLength` or `contentMediaType` on the property itself: `contentMediaType` is ignored in
+        # multipart, and orval's zod generator short-circuits `format: binary` to
+        # `zod.instanceof(File)` with no constant to read.
         #
-        # The real limits live in the backend, and only there:
-        #   - accepted mime types → src/infrastructure/http/middlewares/upload.ts's `fileFilter` (image/png, jpg, jpeg, webp)
-        #   - maximum size        → NODE_MAX_UPLOAD_BYTES, default 5 MB
-        # enforced twice: `fileFilter` rejects on the client's declared Content-Type before the
-        # bytes touch disk, then `identifyImageFile()` re-reads the actual magic bytes and answers
-        # 422 when the declaration lied. Nothing a client declares can substitute for either gate.
-        #
-        # Declaring the constraints here would document them but generate nothing to read:
-        #   - orval's zod generator short-circuits on `format: binary` straight to
-        #     `zod.instanceof(File)` and emits no length constant for it
-        #     (@orval/zod, the `case "string"` branch);
-        #   - the `zodSchemas` target in orval.config.ts has no `splitByContentType`, so only the
-        #     JSON body of each operation becomes a schema — the multipart bodies never do.
-        # So a `maxLength` added here would reach no generated artefact in either repo, while
-        # looking like it had.
-        #
-        # The frontend therefore restates both numbers in src/infrastructure/uploads.ts, which names
-        # storage.ts as the authority and explains the same thing at its own call site. If the
-        # backend's limits ever change, that file is what has to change with them — nothing will
-        # announce the drift.
+        # Where each limit lives:
+        #   - accepted types -> the contract (`x-image-upload-types`); BE `fileFilter` and the
+        #                       FE file picker both derive from the generated list
+        #   - byte signatures -> shared/rules/images.yaml (server internals; a client declaring a
+        #                       type cannot substitute for them)
+        #   - maximum size   -> NODE_MAX_UPLOAD_BYTES (default 5 MB), env on each side
+        # `fileFilter` answers 415 on a declared type outside the list, then the magic bytes are
+        # re-read and a lying declaration answers 422.
 
         PaginationMeta:
             type: object
@@ -837,7 +952,7 @@ components:
                 # `unverified` and `customer` are computed per request, never stored or granted.
                 # A NAME rather than a key list: roles are data a deployment may edit, and
                 # publishing the keys would freeze each account at the permissions its role held on
-                # the day it was written. What a caller may DO is `GET /account/abilities`, which
+                # the day it was written. What a caller may DO is `abilities` on `GET /account`, which
                 # answers for the caller rather than about a row.
                 role:
                     type: string
@@ -850,7 +965,7 @@ components:
                 # absent until it is. Self-signup starts absent and confirms by email;
                 # admin-created and OAuth accounts start set because an operator or the provider
                 # already vouches for the address. Set, the account is a `customer`; absent, it is
-                # `unverified` and holds no `checkout:Cart` (see `GET /account/abilities`) — so
+                # `unverified` and holds no `checkout:Cart` (see `abilities` on `GET /account`) — so
                 # a client renders this as a banner, never as a wall of its own.
                 verifiedAt:
                     type: string
@@ -918,6 +1033,36 @@ components:
                 # on `/users`, and the data export carries it with the rest of the profile.
                 purchaseHold:
                     $ref: '#/components/schemas/PurchaseHold'
+
+        # What `GET /config` answers: three pieces, each owned by its own module.
+        Config:
+            type: object
+            additionalProperties: false
+            required: [session, oauthProviders, antibot]
+            properties:
+                session:
+                    $ref: '../../src/modules/account/openapi.yaml#/components/schemas/SessionConfig'
+                oauthProviders:
+                    type: array
+                    items: { type: string }
+                    description: Registry names this deployment holds OAuth credentials for, e.g. `["google", "github"]`. Empty when none are configured.
+                antibot:
+                    $ref: '../../src/modules/antibot/openapi.yaml#/components/schemas/AntibotConfig'
+
+        # What `GET /account` answers: the account as its holder sees it, plus what a client needs
+        # to render from it without a second call. A separate schema, not optional members on
+        # `Account`: `PUT`/`PATCH` replace an `Account`, and `abilities`/`activity` are not theirs to
+        # write. Lives here, beside `Account`, because the field list is shared by anchor.
+        AccountView:
+            type: object
+            additionalProperties: false
+            required: [id, email, username, abilities, activity]
+            properties:
+                <<: *accountProperties
+                abilities:
+                    $ref: '../../src/modules/access/openapi.yaml#/components/schemas/Abilities'
+                activity:
+                    $ref: '../../src/modules/account/openapi.yaml#/components/schemas/SessionActivity'
 
         # The account as STAFF see it on the `/users` reads and writes: every `Account` field, plus
         # what the caller may do to this row and the shop's own review flag. A separate schema rather
@@ -1092,6 +1237,35 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/HealthPing'
 
+    /config:
+        get:
+            tags: [System]
+            summary: What a client needs to boot, before it has a session
+            description: |
+                One public answer for the three things a client reads before anyone has signed in:
+                how the deployment keeps people signed in (`session`), which "Continue with..."
+                buttons to render (`oauthProviders`) and which human challenge a protected form
+                asks for (`antibot`). Each piece is owned by its own module and composed here, so
+                a client makes one call at start instead of three.
+
+                None of it is secret and none of it changes while the process runs, so it is
+                cached for a short while. `GET /shop` stays its own call: the shop is removable and
+                this answer must exist without it.
+            operationId: getConfig
+            security: []
+            responses:
+                '200':
+                    description: The deployment's public configuration
+                    headers:
+                        Cache-Control:
+                            description: A short public lifetime; the values only change with a restart.
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Config'
+
     /livez:
         get:
             tags: [System]
@@ -1127,6 +1301,9 @@ paths:
                     description: Ready to receive traffic.
                 '503':
                     description: Booting, draining, or the database is unreachable.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/CacheControlNoStore'
 
     /.well-known/security.txt:
         get:
@@ -1185,8 +1362,6 @@ paths:
         $ref: '../../src/modules/audit-logs/openapi.yaml#/paths/~1audit'
 
     # ---------- antibot ----------
-    /antibot/config:
-        $ref: '../../src/modules/antibot/openapi.yaml#/paths/~1antibot~1config'
     /antibot/challenge:
         $ref: '../../src/modules/antibot/openapi.yaml#/paths/~1antibot~1challenge'
 
@@ -1201,8 +1376,6 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change'
     /account/email-change/resend:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change~1resend'
-    /account/abilities:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1abilities'
     /account/password:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1password'
     /account/password/check:
@@ -1265,8 +1438,6 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1methods~1{method}~1remove'
     /account/2fa/backup-codes:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1backup-codes'
-    /account/oauth/providers:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1oauth~1providers'
     /account/oauth/links:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1oauth~1links'
     /account/oauth/links/{provider}:

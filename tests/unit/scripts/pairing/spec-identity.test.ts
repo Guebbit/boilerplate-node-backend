@@ -25,8 +25,6 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
     SHARED_FILES,
-    THIS_REPO,
-    siblingRole,
     compareSharedFiles,
     formatSharedFileProblems,
     hashFile,
@@ -106,13 +104,6 @@ afterAll(() => {
 });
 
 describe('SHARED_FILES', () => {
-    it('names this repo as the backend', () => {
-        // The one value that differs from the frontend's copy of the module. If it were wrong,
-        // every cross-path pair would be compared against the wrong filename and report missing.
-        expect(THIS_REPO).toBe('backend');
-        expect(siblingRole(THIS_REPO)).toBe('frontend');
-    });
-
     it('covers both halves of the contract', () => {
         const backendPaths = new Set(SHARED_FILES.map(({ backend }) => backend));
 

@@ -8,7 +8,7 @@ import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { catchAs } from '@infrastructure/http/controller';
 import type { SessionActivity } from '@types';
-import { idleLimitMilliseconds } from '../session/idle';
+import { activityOf } from '../session/account-view';
 
 /**
  * POST /account/sessions/current/touch
@@ -18,14 +18,6 @@ import { idleLimitMilliseconds } from '../session/idle';
 export const postSessionTouch = (request: Request, response: Response) =>
     Promise.resolve()
         .then(() => {
-            const limitMilliseconds = idleLimitMilliseconds(request.authContext!.roles);
-            successResponse<SessionActivity>(
-                response,
-                {
-                    lastActiveAt: new Date().toISOString(),
-                    ...(limitMilliseconds > 0 && { idleTimeoutSeconds: limitMilliseconds / 1000 })
-                },
-                200
-            );
+            successResponse<SessionActivity>(response, activityOf(request.authContext!), 200);
         })
         .catch(catchAs(response, 'postSessionTouch'));

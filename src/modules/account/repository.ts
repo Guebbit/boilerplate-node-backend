@@ -10,9 +10,12 @@ import { toObjectId, type Lean } from '@infrastructure/persistence/create-reposi
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import {
     accountExportModel,
+    erasureLedgerModel,
     sessionModel,
     verificationTokenModel,
     type AccountExportDocument,
+    type ErasureLedgerDocument,
+    type ErasureLedgerKind,
     type SessionDocument,
     type VerificationTokenDocument
 } from './model';
@@ -640,4 +643,92 @@ export const verificationTokenRepository: {
     lastSentAt: lastVerificationTokenSentAt,
     userIdsWithLive: userIdsWithLiveVerificationToken,
     removeAll: removeAllVerificationTokens
+};
+
+/** One ledger row as the services read it. */
+export type ErasureLedgerRow = Lean<ErasureLedgerDocument>;
+
+/**
+ * Write (or move) the ledger row for an account and kind. An upsert that only ever moves `at`
+ * forward, so a repeat erasure after a restore, which carries the original date, finds its row
+ * and changes nothing. `purgeAt` travels with the `at` it was written at: an older event never
+ * overwrites a newer one's date.
+ *
+ * @param userId - the account
+ * @param kind - what happened to it
+ * @param at - when
+ * @param expiresAt - when the database forgets the row
+ * @param options - `purgeAt` for a `scheduled` row; `session` to join the erasure's transaction
+ */
+const upsertErasureLedgerRow = (
+    userId: string,
+    kind: ErasureLedgerKind,
+    at: Date,
+    expiresAt: Date,
+    options: { purgeAt?: Date; session?: ClientSession } = {}
+): Promise<void> => {
+    const write = (): Promise<unknown> =>
+        erasureLedgerModel
+            // Update pipeline (MongoDB 4.2+): the new `purgeAt` is kept only when this event is
+            // newer than the stored one.
+            // https://www.mongodb.com/docs/manual/tutorial/update-documents-with-aggregation-pipeline/
+            .updateOne(
+                { userId: toObjectId(userId), kind },
+                [
+                    {
+                        $set: {
+                            purgeAt: options.purgeAt
+                                ? {
+                                      $cond: [
+                                          { $gt: [at, { $ifNull: ['$at', new Date(0)] }] },
+                                          options.purgeAt,
+                                          '$purgeAt'
+                                      ]
+                                  }
+                                : '$$REMOVE',
+                            at: { $max: ['$at', at] },
+                            expiresAt: { $max: ['$expiresAt', expiresAt] }
+                        }
+                    }
+                ],
+                // `updatePipeline`: Mongoose refuses an array update unless asked.
+                {
+                    upsert: true,
+                    updatePipeline: true,
+                    ...(options.session ? { session: options.session } : {})
+                }
+            )
+            .exec();
+
+    // Two upserts racing for the same (user, kind): the loser hits the unique index, and the same
+    // call is then a plain update. Inside a transaction a duplicate key aborts it, so there the
+    // driver's own transaction retry owns the race and this retry does not apply.
+    return write()
+        .catch((error: unknown) => {
+            if (!options.session && isDuplicateKey(error)) return write();
+            throw error;
+        })
+        .then(() => undefined);
+};
+
+/**
+ * Every ledger row dated at or after `since`, oldest first, so a repeat erasure replays in the
+ * order the erasures happened.
+ *
+ * @param since - the snapshot time the restore went back to
+ */
+const findErasureLedgerSince = (since: Date): Promise<ErasureLedgerRow[]> =>
+    erasureLedgerModel
+        .find({ at: { $gte: since } })
+        .sort({ at: 1, _id: 1 })
+        .lean<ErasureLedgerRow[]>()
+        .exec();
+
+/** Explicit annotation: same TS7056 reason as every other module's repository. */
+export const erasureLedgerRepository: {
+    upsert: typeof upsertErasureLedgerRow;
+    findSince: typeof findErasureLedgerSince;
+} = {
+    upsert: upsertErasureLedgerRow,
+    findSince: findErasureLedgerSince
 };

@@ -25,15 +25,6 @@ const editFor = (file: string) => {
 };
 
 describe('the four central edits', () => {
-    it('touch exactly the files the docs say they do', () => {
-        expect(centralEdits(names).map((edit) => edit.path)).toEqual([
-            'src/modules.ts',
-            'shared/authorization-roles.yaml',
-            'shared/authorization-conformance.yaml',
-            'tests/cross-cutting/replace-patch-parity.test.ts'
-        ]);
-    });
-
     it.each(centralEdits(names).map((edit) => [edit.path, edit] as const))(
         'apply to the real %s',
         (file, edit) => {

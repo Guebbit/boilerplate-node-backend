@@ -14,6 +14,7 @@ x-error-codes:
 paths:
     /products:
         get:
+            x-cache: "max-age: 3600"
             tags: [Products]
             summary: List products (paginated)
             description: Returns a paginated list of products. Staff holding `display:Locale` may preview a draft language here (see the API description's Language paragraph); that answer is never cached.
@@ -91,6 +92,10 @@ paths:
             responses:
                 '200':
                     description: Products page
+                    headers:
+                        Cache-Control:
+                            description: '`public, max-age=3600, stale-while-revalidate=60, stale-if-error=300` for a caller who reads what a guest reads, who shares one cached answer; `private, no-cache` for staff who see more (inactive products, stock counters, every language); `private, no-store` for a draft-language preview.'
+                            schema: { type: string }
                     content:
                         application/json:
                             schema:
@@ -167,6 +172,7 @@ paths:
 
     /products/facets:
         get:
+            x-cache: "max-age: 3600"
             tags: [Products]
             summary: Catalogue facets
             description: >-
@@ -191,6 +197,7 @@ paths:
         x-versioned: [get, put, patch, delete]
         # Same as /products/id={id}
         get:
+            x-cache: revalidate
             tags: [Products]
             summary: Product details
             description: >-
@@ -345,6 +352,8 @@ paths:
             summary: Restore product
             description: Undoes the soft delete of the product identified by `{id}`. Answers 409 when the product is not soft-deleted, so a restore can never be mistaken for an ordinary read.
             operationId: restoreProductById
+            x-error-codes:
+                '409': [PRODUCT_NOT_DELETED]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -360,7 +369,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # `PRODUCT_NOT_DELETED`: the product is not soft-deleted.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
 
     # Same as DELETE /products/{id}?hardDelete=true — the flag spelled in the path instead of
@@ -743,7 +751,6 @@ components:
                     minimum: 0
                     description: Grams. Absent counts as 0 for shipping-method filtering.
                 imageUpload:
-                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional product image
@@ -885,7 +892,6 @@ components:
                     minimum: 0
                     description: Grams. Absent counts as 0 for shipping-method filtering.
                 imageUpload:
-                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional product image
@@ -1029,7 +1035,6 @@ components:
                     minimum: 0
                     description: Grams. Absent counts as 0 for shipping-method filtering.
                 imageUpload:
-                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional product image
@@ -1149,7 +1154,7 @@ components:
                         derives the net amount and the VAT amount FROM this, at whatever rate
                         applies, rather than the other way around.
                 currency:
-                    type: string
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     readOnly: true
                     description: >-
                         ISO-4217 currency code (e.g. EUR) — this deployment's own

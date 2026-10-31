@@ -45,6 +45,7 @@ import * as reauth from './reauth';
 import * as reapInactive from './reap-inactive';
 import * as reencrypt from './reencrypt';
 import * as mail from './mail';
+import * as publicConfig from './public-config';
 
 export {
     PASSWORD_RESET_TOKEN_TYPE,
@@ -118,7 +119,9 @@ export const accountService = {
     unlinkOAuthProvider: oauth.unlinkOAuthProvider,
     reapInactiveAccounts: reapInactive.reapInactiveAccounts,
     reencryptTotpSecrets: reencrypt.reencryptTotpSecrets,
-    sendAccountMail: mail.sendAccountMail
+    sendAccountMail: mail.sendAccountMail,
+    sessionConfig: publicConfig.sessionConfig,
+    oauthProviders: publicConfig.oauthProviders
 };
 
 /**

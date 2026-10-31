@@ -172,6 +172,9 @@ paths:
             summary: Receive stock
             description: Units arrive from a supplier — `onHand` rises, `reserved` does not, so the delivery becomes available immediately. The only transition that can create units, and the reason a shop that has sold out can sell again. Send an `Idempotency-Key` — a retried receipt with the same key replays the first answer instead of counting the delivery twice.
             operationId: receiveStock
+            x-error-codes:
+                '409': [IDEMPOTENCY_IN_FLIGHT]
+                '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -209,6 +212,9 @@ paths:
             summary: Adjust stock
             description: A stocktake correction — signed, because shrinkage is the common case and it is negative. Refuses to take `onHand` below what is already reserved, because those units are promised to orders that exist — the fix for finding fewer units than were sold is to cancel orders, not to make availability negative. Send an `Idempotency-Key` — a retried correction with the same key replays the first answer instead of applying the delta twice.
             operationId: adjustStock
+            x-error-codes:
+                '409': [IDEMPOTENCY_IN_FLIGHT]
+                '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -238,6 +244,9 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '409':
                     description: The correction would leave fewer units than are already reserved
+                    headers:
+                        Cache-Control:
+                            $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/CacheControlNoStore'
                     content:
                         application/problem+json:
                             schema:
@@ -277,7 +286,7 @@ components:
         # `domain/transitions.ts`, which is the one place that mapping is written.
         StockMovementReason:
             type: string
-            enum: [reserve, ship, release, expire, receive, adjust, restock, backorder, allocate]
+            enum: [reserve, ship, release, expire, receive, adjust, restock, backorder, owed, allocate]
             description: |
                 * `reserve` — an order claimed units. `reserved` up, `onHand` unchanged.
                 * `ship` — the parcel left (or a digital order was fulfilled). Both down: the units are off the shelf.
@@ -287,6 +296,7 @@ components:
                 * `adjust` — a stocktake correction, signed. `onHand` moves either way.
                 * `restock` — returned goods were received back on the shelf. `onHand` up.
                 * `backorder` — an order claimed units that do not exist yet. `backordered` up; the shelf is untouched.
+                * `owed` — units a lost parcel's order is still owed that the shelf could not cover. `backordered` up, the shelf untouched, outside the preorder cap: the shop owes it, the allowance is for new sales.
                 * `allocate` — stock arrived for a paid preorder. `backordered` down, `reserved` up: the claim is now a real hold. Written in the receipt's own transaction, oldest payment first.
 
                 `release` and `expire` of a preorder claim give back the allowance (`backordered` down) instead of `reserved`.
@@ -407,7 +417,7 @@ components:
                 # ledger stores a signed delta anyway.
                 delta:
                     type: integer
-                    description: Signed. Negative is shrinkage or damage; positive is a miscount found in your favour.
+                    description: Signed and non-zero (0 is a 422 naming `delta`). Negative is shrinkage or damage; positive is a miscount found in your favour.
                 note:
                     type: string
                     maxLength: 1000

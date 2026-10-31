@@ -118,7 +118,7 @@ the relationship _kind_ and _reasoning_ stay in `module.ts`'s docblock instead o
 `postinstall` bundles the contracts before it generates `api/`, so on a clean checkout the bundler
 may not reach generated code. `.dependency-cruiser.bootstrap.cjs`, the third cruise in
 `npm run check`, starts at `scripts/contracts/build-bundles.ts` and fails if its static imports
-reach `api/` (bar `api/permission-actions.ts`, built first on purpose) or
+reach `api/` (bar `api/permission-vocabulary.ts`, built first on purpose) or
 `src/types/asyncapi.generated.ts`.
 
 It is its own config because it must not follow dynamic `import()`: that is how the client

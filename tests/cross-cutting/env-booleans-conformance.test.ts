@@ -13,6 +13,6 @@ const wordCase = caseBase.extend({
     expect: z.union([z.boolean(), z.literal('invalid')])
 });
 
-describeCases('env-booleans', wordCase, 25, (one) => {
+describeCases('env-booleans', wordCase, (one) => {
     expect(parseBooleanWord(one.word) ?? 'invalid').toBe(one.expect);
 });

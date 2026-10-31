@@ -53,6 +53,10 @@ export const notificationRepository: Repository<
     findOwned: (userId: string, id: string) => Promise<NotificationDocument | null>;
     deleteOwned: (userId: string, id: string) => Promise<boolean>;
     deleteByUserId: (userId: string, session?: ClientSession) => Promise<void>;
+    deleteByAudience: (
+        userId: string,
+        audience: NotificationDocument['audience']
+    ) => Promise<string[]>;
     markAllRead: (userId: string, readAt: Date) => Promise<void>;
     trimToNewest: (
         userId: string,
@@ -165,6 +169,20 @@ export const notificationRepository: Repository<
             .then(() => {
                 // explicit void return
             }),
+
+    /**
+     * Delete one audience of a user's inbox, answering the ids removed so the stream can tell an
+     * open tab exactly which rows left (the other audience stays on screen).
+     */
+    deleteByAudience: async (userId: string, audience: NotificationDocument['audience']) => {
+        const owner = { userId: toObjectId(userId), audience };
+        const rows = await notificationModel.find(owner).select('_id').lean().exec();
+        if (rows.length === 0) return [];
+
+        const ids = rows.map(({ _id }) => _id);
+        await notificationModel.deleteMany({ ...owner, _id: { $in: ids } }).exec();
+        return ids.map(String);
+    },
 
     /** Stamp every still-unread row of a user. Already-read rows keep their original `readAt`. */
     markAllRead: async (userId: string, readAt: Date) =>

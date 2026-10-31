@@ -11,13 +11,23 @@
 
 import type { Types } from 'mongoose';
 import { encryptPii, decryptPii } from '@infrastructure/security/pii-encryption';
+import type { PostalAddressField } from '@domain-primitives/postal-address';
 import type { InvoiceParty } from './model';
 
 /** Which collection a document lives in; part of the AAD, so an invoice's address cannot pose as a credit note's. */
 export type InvoiceDocumentKind = 'invoice' | 'credit-note';
 
-/** The party's fields, walked by both directions. */
-export const PARTY_FIELDS = ['fullName', 'street', 'city', 'zip', 'country'] as const;
+/**
+ * The party's fields, walked by both directions. Its own five, not the shared postal-address list:
+ * an invoice carries no phone, on purpose (data minimisation, GDPR Art. 5(1)(c)).
+ */
+export const PARTY_FIELDS = [
+    'fullName',
+    'street',
+    'city',
+    'zip',
+    'country'
+] as const satisfies readonly PostalAddressField[];
 
 /** The associated data binding one field of one document's address. */
 export const partyAad = (

@@ -16,6 +16,7 @@ import { readSessionCookie } from '@kernel/cookies';
 import { ERROR_CODES } from '@api/error-codes';
 import { t } from '@infrastructure/i18n';
 import { TokenRejection } from '../session/jwt';
+import { abilitiesOfUser } from '../session/account-view';
 
 /**
  * POST /account/refresh — `jwt` mode only (404 in `cookie` mode). Mints a new short-lived access
@@ -37,14 +38,21 @@ export const getRefreshToken = (request: Request, response: Response) => {
     return (
         accountService
             .refreshAccessToken(refreshToken, callerContextOf(request))
-            .then(({ accessToken, refreshToken: rotated, refreshMaxAgeMs }) => {
-                // The rotated value replaces the client's cookie in the SAME response —
-                // without this the client keeps presenting the now-superseded token, which
-                // its next refresh has to survive via the grace window rather than needing to.
-                createSessionCookie(response, rotated, refreshMaxAgeMs);
-                authRefreshTotal.inc({ status: 'success' });
-                successResponse<RefreshTokenResponse>(response, { token: accessToken });
-            })
+            .then(({ userId, accessToken, refreshToken: rotated, refreshMaxAgeMs }) =>
+                abilitiesOfUser(userId).then((abilities) => {
+                    // The account stopped authenticating between the rotation and this read.
+                    if (!abilities) throw new TokenRejection('revoked', 'User not found');
+                    // The rotated value replaces the client's cookie in the SAME response —
+                    // without this the client keeps presenting the now-superseded token, which
+                    // its next refresh has to survive via the grace window rather than needing to.
+                    createSessionCookie(response, rotated, refreshMaxAgeMs);
+                    authRefreshTotal.inc({ status: 'success' });
+                    successResponse<RefreshTokenResponse>(response, {
+                        token: accessToken,
+                        abilities
+                    });
+                })
+            )
             // Every refusal of the token is the same 401: an unknown, expired, revoked or replayed
             // token must not be told apart by a client. An outage is not a refusal: the client
             // treats 401 as a definitive sign-out, so it gets a retryable 503 instead.

@@ -26,7 +26,7 @@ import {
 } from '@modules/delivery';
 import { ORDER_PURCHASE_HOLD_PLACED } from '@modules/orders';
 import { RETURN_REQUESTED } from '@modules/returns';
-import { TICKET_ASSIGNED, TICKET_OPENED } from '@modules/tickets';
+import { TICKET_ASSIGNED, TICKET_OPENED, TICKET_OVERDUE } from '@modules/tickets';
 import { WEBHOOK_SUBSCRIPTION_AUTO_DISABLED } from '@modules/webhooks';
 import { WISHLIST_ITEMS_REMOVED } from '@modules/wishlist';
 import { STOCK_ALERT_SENT } from '@modules/stock-alerts';
@@ -74,6 +74,7 @@ export default {
         onDomainEvent(RETURN_REQUESTED, notificationsService.onReturnRequested);
         onDomainEvent(OUTBOX_EVENT_DEAD, notificationsService.onOutboxEventDead);
         onDomainEvent(TICKET_OPENED, notificationsService.onTicketOpened);
+        onDomainEvent(TICKET_OVERDUE, notificationsService.onTicketOverdue);
         onDomainEvent(TICKET_ASSIGNED, notificationsService.onTicketAssigned);
     },
     locales: path.join(__dirname, 'locales'),

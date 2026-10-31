@@ -53,6 +53,8 @@ paths:
                 URL of its own). Refused with `409 STOCK_ALERT_PRODUCT_BUYABLE` while the product can be
                 ordered now; a hidden or deleted product answers 404.
             operationId: createStockAlert
+            x-error-codes:
+                '409': [STOCK_ALERT_PRODUCT_BUYABLE]
             security:
                 - bearerAuth: []
             requestBody:

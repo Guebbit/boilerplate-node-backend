@@ -51,6 +51,8 @@
 12 2 * * * cd /app && node --import tsx scripts/ops/run-job.ts reap:returns
 # Answers waiting back-in-stock requests for a product that can be ordered again without any write announcing it, such as a preorder whose release date passed.
 35 * * * * cd /app && node --import tsx scripts/ops/run-job.ts sweep:stock-alerts
+# Tells the staff who work a ticket's kind, once, that an open ticket passed its due date; a ticket closed before the sweep is skipped, and one already told is never told again.
+40 6 * * * cd /app && node --import tsx scripts/ops/run-job.ts sweep:tickets-overdue
 # Reduces every expired purchase hold to the date that restarts the count of cancellations, dropping its note and who set it.
 12 2 * * * cd /app && node --import tsx scripts/ops/run-job.ts reap:purchase-holds
 # Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.

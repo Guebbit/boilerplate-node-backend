@@ -52,6 +52,7 @@ flowchart LR
     users -. "user.review_flagged" .-> tickets
     tickets -. "ticket.assigned" .-> notifications
     tickets -. "ticket.opened" .-> notifications
+    tickets -. "ticket.overdue" .-> notifications
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -203,21 +204,46 @@ carries the words and the time, never the author.
 ### Who is told
 
 A ticket never mails anyone itself. A new one (spam excluded) is announced as `ticket.opened`
-`{ ticketId, kind, routeSet, category? }`, and handing one to a colleague as `ticket.assigned`
-(taking your own announces nothing). [`notifications`](./notifications.md#work-notices-for-staff)
-hears both and does the telling, so a situation is one ticket kind or one notice code, never both
-(`tests/cross-cutting/ticket-kinds-are-not-notification-kinds.test.ts`).
+`{ ticketId, kind, routeSet, category? }`, handing one to a colleague as `ticket.assigned`
+(taking your own announces nothing), and an open one that passes its due date as `ticket.overdue`
+(same payload as `ticket.opened`, see [the overdue reminder](#the-overdue-reminder)).
+[`notifications`](./notifications.md#work-notices-for-staff) hears all three and does the telling,
+so a situation is one ticket kind or one notice code, never both.
 
 | Event             | Told                                                                                            | Mail                                                                                                                                                         |
 | ----------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `ticket.opened`   | everyone who works the kind (a contact message: `TicketManagement`, not the read-only managers) | a fixed phrase, the kind (a contact message also its category) and a link to the ticket. Never the visitor's name, address, subject, message or order number |
+| `ticket.overdue`  | the same people as `ticket.opened`, once                                                        | the same phrase, kind and link as the opener's, worded as a reminder                                                                                         |
 | `ticket.assigned` | the assignee only                                                                               | none (the bell)                                                                                                                                              |
 
 **The fallback mailbox.** `NODE_CONTACT_NOTIFY_EMAIL` (optional) is mailed only when a contact
 message finds nobody to tell: no staff member holding the set has an address that can act. It then
 carries the full message, the category and `Reply-To: <the visitor's bare address>`, because that
 mailbox is the whole inbox. With even one permitted recipient it hears nothing. It sits outside
-the retention TTL and outside `DELETE /tickets/{id}`: erasing a message there is done by hand.
+the retention TTL and outside `DELETE /tickets/{id}`: erasing a message there is done by hand. The
+overdue reminder reaches it by the same rule, worded as `Overdue contact request`.
+
+### The overdue reminder
+
+An open ticket (`new` or `in_progress`) past its `dueAt` is announced once as `ticket.overdue`, by
+the daily job `sweep:tickets-overdue` (06:40 UTC, ten minutes after the staff digest). The sweep
+lives here, not in the shop's openers, because every kind has the same clock.
+
+```mermaid
+flowchart LR
+    J["sweep:tickets-overdue"] --> C{"claim: open, past dueAt,<br/>no overdueNotifiedAt"}
+    C -->|stamp overdueNotifiedAt, one write| E["ticket.overdue"]
+    C -->|none left| Z["done"]
+    E --> N["notifications: the opener's sets,<br/>bell + mail"]
+```
+
+- **Once, never again.** The claim and the stamp (`overdueNotifiedAt`, internal, not on the wire)
+  are one conditional write, so overlapping sweeps cannot announce a ticket twice. A ticket is reminded once; a reopened ticket keeps that state. The cost is at-most-once: a crash between stamp
+  and event loses that one reminder.
+- **Closed first, nothing sent.** A resolved or spam ticket is never claimed.
+- **Same audience as the opener.** `notifications` tells the sets that work the kind (a contact
+  message: `TicketManagement`); a contact message nobody could be told of goes to the fallback
+  mailbox; any other kind with nobody to tell goes nowhere, exactly as at opening.
 
 ### The staff badge
 

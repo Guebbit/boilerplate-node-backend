@@ -22,7 +22,7 @@ const NOTES = {
 } as const;
 
 /**
- * Take one line: reserve the free shelf units, claim the rest uncapped. A product with no stock
+ * Take one line: reserve the free shelf units, claim the rest as `owed`, outside the preorder cap. A product with no stock
  * level (deleted) claims nothing: the loss is recorded elsewhere and there is nothing to count.
  *
  * @param orderId - the order
@@ -56,10 +56,10 @@ const takeOne = async (
     if (
         owed > 0 &&
         !(await applyTransition(
-            StockMovementReason.backorder,
+            StockMovementReason.owed,
             line.productId,
             owed,
-            { reference: orderId, note: NOTES.owed, uncapped: true },
+            { reference: orderId, note: NOTES.owed },
             session
         ))
     )

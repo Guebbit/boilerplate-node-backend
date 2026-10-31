@@ -38,6 +38,7 @@ x-personal-data:
 paths:
     /returns:
         get:
+            x-cache: private-no-cache
             tags: [Returns]
             summary: List returns (paginated)
             description: >-
@@ -128,6 +129,10 @@ paths:
                 buyer sends neither `requestedAt` nor `statedVia` (422): the server sets them. Sending
                 `Idempotency-Key` makes a retry safe.
             operationId: createReturn
+            x-error-codes:
+                '401': [REAUTH_REQUIRED]
+                '409': [IDEMPOTENCY_IN_FLIGHT, RETURN_NOTHING_TO_CANCEL, RETURN_ORDER_NOT_RETURNABLE, RETURN_WINDOW_CLOSED]
+                '422': [IDEMPOTENCY_KEY_MISMATCH, RETURN_CANCELLATION_INVALID, RETURN_LINES_INVALID, RETURN_STATEMENT_INVALID]
             security:
                 - bearerAuth: []
             parameters:
@@ -147,21 +152,18 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Return'
-                # Also `REAUTH_REQUIRED`: a staff `cancellation`, or any request carrying `statedVia`, from a session past the critical window.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # A staff `cancellation`, or a staff withdrawal before dispatch, by a caller without the keys it needs (`create:Refund`, `update:Order`).
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # Not the caller's order and no `update:Return` to act for the buyer, or no such order.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # `RETURN_ORDER_NOT_RETURNABLE`, `RETURN_WINDOW_CLOSED`, `RETURN_NOTHING_TO_CANCEL` — or
-                # `Idempotency-Key` names a request still in flight.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
-                # `RETURN_LINES_INVALID`, `RETURN_CANCELLATION_INVALID`, `RETURN_STATEMENT_INVALID`, or a malformed body.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
 
     /returns/options:
         get:
+            x-cache: private-no-cache
             tags: [Returns]
             summary: What an order can still send back or cancel
             description: >-
@@ -199,6 +201,7 @@ paths:
 
     /returns/{id}:
         get:
+            x-cache: private-no-cache
             tags: [Returns]
             summary: Get a return
             description: >-
@@ -228,6 +231,8 @@ paths:
                 back. The write is conditional on the return still being `requested`, so two staff
                 members deciding at once cannot both win — the second answers 409.
             operationId: approveReturn
+            x-error-codes:
+                '409': [RETURN_NOT_DECIDABLE]
             security:
                 - bearerAuth: []
             parameters:
@@ -242,7 +247,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # `RETURN_NOT_DECIDABLE`
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
 
     /returns/{id}/decline:
@@ -296,6 +300,8 @@ paths:
                 `RETURN_NOT_CLOSABLE`. Needs `receive:Return`, the key that receives the goods, which
                 carries a fresh-session requirement.
             operationId: closeReturn
+            x-error-codes:
+                '409': [RETURN_NOT_CLOSABLE]
             security:
                 - bearerAuth: []
             parameters:
@@ -316,7 +322,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # `RETURN_NOT_CLOSABLE`
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
@@ -342,6 +347,8 @@ paths:
                 refund may be owed. Receive it with a restock count of 0 instead. Needs
                 `update:Return`; no fresh session, since nothing moves.
             operationId: cancelReturn
+            x-error-codes:
+                '409': [RETURN_NOT_CANCELABLE]
             security:
                 - bearerAuth: []
             parameters:
@@ -362,7 +369,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # `RETURN_NOT_CANCELABLE`
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
@@ -402,6 +408,10 @@ paths:
                 session that has re-proved itself within the last few minutes — a valid-but-stale
                 token answers 401 with `errors[].code` `REAUTH_REQUIRED`.
             operationId: receiveReturn
+            x-error-codes:
+                '401': [REAUTH_REQUIRED]
+                '409': [DELIVERY_NOT_REOPENABLE, IDEMPOTENCY_IN_FLIGHT, RETURN_NOT_RECEIVABLE]
+                '422': [IDEMPOTENCY_KEY_MISMATCH, RETURN_DEDUCTION_INVALID, RETURN_REMEDY_INVALID, RETURN_RESTOCK_INVALID]
             security:
                 - bearerAuth: []
             parameters:
@@ -423,9 +433,7 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # `RETURN_NOT_RECEIVABLE`, `DELIVERY_NOT_REOPENABLE` — or `Idempotency-Key` names a request still in flight.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
-                # `RETURN_DEDUCTION_INVALID`, `RETURN_RESTOCK_INVALID`, `RETURN_REMEDY_INVALID`, or a malformed body.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
 components:
@@ -572,7 +580,7 @@ components:
                     type: string
                     description: The order's human number.
                 currency:
-                    type: string
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     description: ISO-4217 code of the order's own currency.
                 status:
                     $ref: '#/components/schemas/ReturnStatus'
@@ -872,7 +880,7 @@ components:
                 orderId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 currency:
-                    type: string
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     description: ISO-4217 code of the order's own currency.
                 reasons:
                     type: array

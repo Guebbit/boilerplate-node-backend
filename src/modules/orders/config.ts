@@ -95,15 +95,24 @@ export const orderEventTextRetentionDays = (): number =>
 export const orderExportMaxRows = (): number => ordersConfig().NODE_ORDER_EXPORT_MAX_ROWS;
 
 /**
+ * The path of an order's page on the paired frontend, under the language segment: the
+ * `NODE_FRONTEND_LINK_ORDER` template with the id filled in and URL-encoded. A bare path, not a
+ * URL: callers that already hold a path (the staff outbox notice) link through it.
+ * @param id - the order's id
+ * @returns the path, e.g. `orders/65f0`
+ */
+export const orderPagePath = (id: string): string =>
+    // A function replacer, so a `$&` in an id is text, not a replacement pattern.
+    ordersConfig().NODE_FRONTEND_LINK_ORDER.replaceAll('{id}', () => encodeURIComponent(id));
+
+/**
  * A link into the paired frontend's own order page. The default template is the frontend's own
- * route (`<paired-frontend>/src/modules/orders/routes.ts`); `{id}` is filled in by
- * `frontendLink`, never left for the frontend to parse out of the path itself.
+ * route (`<paired-frontend>/src/modules/orders/routes.ts`); the id is filled in by
+ * `orderPagePath`, never left for the frontend to parse out of the path itself.
  * @param parameters - `locale` the email is written in; `id` the order to link to
  */
 export const orderFrontendLink = (parameters: { locale: string; id: string }): string =>
-    frontendLink(ordersConfig().NODE_FRONTEND_LINK_ORDER, parameters.locale, {
-        id: parameters.id
-    });
+    frontendLink(orderPagePath(parameters.id), parameters.locale);
 
 /**
  * How many of a buyer's own cancellations, inside the window, pause their checkout. The minimum is

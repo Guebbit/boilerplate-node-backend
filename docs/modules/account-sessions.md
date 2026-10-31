@@ -31,7 +31,7 @@ One variable, `NODE_SESSION_MODE`, read through `session/config.ts`. Documented 
 - **Switching signs everyone out.** A row belongs to the mode that issued it: a `jwt` refresh token
   is no `ses_…` id and the reverse, and `GET /account/sessions` lists only the active mode's rows.
   The old rows age out by their own date.
-- **The frontend follows on its own.** It reads `GET /account/session-config` at boot and picks its
+- **The frontend follows on its own.** It reads `session` on `GET /config` at boot and picks its
   transport: the access-token interceptor in `jwt` mode, `credentials: 'include'` and no interceptor
   in `cookie` mode. The same answer carries each tier's lifetime (`lifetimeSeconds`) and the staff
   cap (`staffLifetimeSeconds`), so the cookie list prints the deployment's numbers, not its own.
@@ -270,9 +270,9 @@ management and the data export stay password-only (ASVS 5.0 §7.5.1).
   still proves the current password and nothing more.
 - **The undo.** An email change can be undone from the old address's link for 7 days, through
   a password change — see [Proving an address](./account.md#proving-an-address).
-- **Boot.** An enabled OAuth provider with no deliverable mail (`smtp` with a host) refuses to boot
-  outside `development` and `test`: those accounts would be locked out of checkout, payment and
-  self-deletion. The demo registers its fake provider in code, not through these variables.
+- **Mail.** An OAuth-only account passes step-up only through a mailed code, so a deployment that
+  enables a provider needs mail that delivers. The demo registers its fake provider in code, not
+  through the provider variables.
 
 ## `cookie` mode: one random id {#cookie-mode}
 

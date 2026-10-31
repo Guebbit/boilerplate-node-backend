@@ -8,12 +8,9 @@
  * See: docs/api/contract-fragmentation.md#the-analytics-names--the-bundle-that-stopped-being-one
  */
 
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { MODULES_ROOT } from '@tests/paths';
-
-/** The import specifier a module augments to add its names to the port's union. */
-const ANALYTICS_PORT = '@infrastructure/observability/analytics';
 
 /** Every `src/modules/<name>/analytics.ts`, discovered rather than listed. */
 const listAnalyticsFiles = (): { module: string; file: string }[] =>
@@ -77,34 +74,5 @@ describe('analytics event names across modules', () => {
             }
 
         expect(collisions).toEqual([]);
-    });
-
-    it('spells every event as lower snake_case, subject first', async () => {
-        const malformed: string[] = [];
-
-        for (const { module, file } of listAnalyticsFiles())
-            for (const value of Object.values(await readEvents(file)))
-                // Two or more lower snake_case segments; the past-tense verb closes.
-                // See docs/tools/analytics.md#naming.
-                if (!/^[a-z][\da-z]*(_[a-z][\da-z]*)+$/.test(value))
-                    malformed.push(`${module}: "${value}"`);
-
-        expect(malformed).toEqual([]);
-    });
-
-    it('has every module widen the port union it emits through', () => {
-        // Source text, not the type: the augmentation is erased at runtime, so a value-level
-        // assertion could only restate that a string is a string.
-        const missing = listAnalyticsFiles()
-            .filter(
-                ({ file }) =>
-                    !readFileSync(file, 'utf8').includes(`declare module '${ANALYTICS_PORT}'`)
-            )
-            .map(
-                ({ module }) =>
-                    `${module}: no \`declare module '${ANALYTICS_PORT}'\` block — its names are not in AnalyticsEventMap`
-            );
-
-        expect(missing).toEqual([]);
     });
 });

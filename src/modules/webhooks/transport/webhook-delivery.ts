@@ -89,6 +89,14 @@ const describeDeliveryError = (error: unknown): string => {
 };
 
 /**
+ * Whole milliseconds since `startedAt` (a `performance.now()` reading).
+ *
+ * Monotonic on purpose: `Date.now()` differences go negative when the wall clock steps, and the
+ * contract promises `durationMs >= 0`. Rounded because the contract says integer.
+ */
+const elapsedMs = (startedAt: number): number => Math.round(performance.now() - startedAt);
+
+/**
  * Sign, SSRF-check, POST, and time out — one attempt, always resolved.
  *
  * Chained rather than `async`/`await`: every step here is a `.then` away from the last, and moving
@@ -96,7 +104,7 @@ const describeDeliveryError = (error: unknown): string => {
  * becomes a rejection the trailing `.catch` already handles — no separate `try`/`catch` needed.
  */
 export const deliverWebhook = (attempt: WebhookDeliveryAttempt): Promise<WebhookDeliveryResult> => {
-    const startedAt = Date.now();
+    const startedAt = performance.now();
     const timeoutMs = attempt.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     // One signal for the whole attempt, DNS resolution included — see `ssrf-guard.ts`'s own
     // `signal` parameter docblock for why the resolver needs it too.
@@ -126,7 +134,7 @@ export const deliverWebhook = (attempt: WebhookDeliveryAttempt): Promise<Webhook
             // backing up on an endpoint that sends a body nobody asked for.
             response.resume();
             const statusCode = response.statusCode ?? 0;
-            const durationMs = Date.now() - startedAt;
+            const durationMs = elapsedMs(startedAt);
             if (statusCode >= 200 && statusCode < 300)
                 return { success: true, statusCode, durationMs };
 
@@ -143,7 +151,7 @@ export const deliverWebhook = (attempt: WebhookDeliveryAttempt): Promise<Webhook
         .catch(
             (error: unknown): WebhookDeliveryResult => ({
                 success: false,
-                durationMs: Date.now() - startedAt,
+                durationMs: elapsedMs(startedAt),
                 error: describeDeliveryError(error)
             })
         );

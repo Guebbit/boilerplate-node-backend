@@ -60,7 +60,7 @@ documents each choice at the line that makes it.
 Deleting this module removes the dashboard, not the measurements. The metrics keep being collected;
 nothing serves them.
 
-Its two frontend counterparts are the clearest asymmetry in the pairing table: `admin` renders the
+Its two frontend counterparts are the clearest asymmetry between the two repositories: `admin` renders the
 health and metrics reads, `realtime` consumes the stream. One backend module, two frontend ones.
 
 ## The pipeline

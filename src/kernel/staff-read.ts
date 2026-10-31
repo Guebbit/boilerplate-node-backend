@@ -10,13 +10,14 @@
 
 import type { Request } from 'express';
 import { heldRules } from '@kernel/ability';
+import type { PermissionRuleId } from '@kernel/permissions';
 import { callerContextOf } from '@infrastructure/http/request';
 import { recordAudit, type AuditAction } from '@infrastructure/observability/audit';
 
 /** What one staff read names. */
 export interface StaffReadTarget {
     /** The wide-read permission key whose holder is "staff" for this resource, e.g. `display:Order`. */
-    key: string;
+    key: PermissionRuleId;
     /** The `admin.<resource>.viewed` action to record. */
     action: AuditAction;
     /** The resource kind, e.g. `order`. */

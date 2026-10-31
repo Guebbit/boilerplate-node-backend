@@ -99,12 +99,17 @@ components:
                 - requestedAt
             properties:
                 returnId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 orderId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 reason:
                     type: string
-                    description: Why the goods come back — `withdrawal`, `defective`, `wrong_item` or `other`.
+                    enum:
+                        - withdrawal
+                        - defective
+                        - wrong_item
+                        - other
+                    description: Why the goods come back.
                 requestedAt:
                     type: string
                     format: date-time
@@ -126,9 +131,9 @@ components:
                 - orderId
             properties:
                 returnId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 orderId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
             additionalProperties: false
         ReturnClosedPayload:
             type: object
@@ -139,14 +144,15 @@ components:
                 - currency
             properties:
                 returnId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 orderId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 refundAmount:
                     type: number
+                    minimum: 0
                     description: What went back to the customer for this return, two decimal places.
                 currency:
-                    type: string
+                    $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
                 remedy:
                     type: string

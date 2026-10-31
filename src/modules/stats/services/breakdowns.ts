@@ -20,14 +20,17 @@ import type {
     ProductStats
 } from '@types';
 import { rateOf } from './figures';
-import type { Period } from './range';
+import type { Period, WithoutLimits } from './range';
 
 /**
  * The top products of a period, with the units that came back.
  * @param period - the resolved period
  * @param limit - how many products
  */
-export const getProductStats = (period: Period, limit: number): Promise<ProductStats> =>
+export const getProductStats = (
+    period: Period,
+    limit: number
+): Promise<WithoutLimits<ProductStats>> =>
     Promise.all([
         orderService.productTotals(period.window, limit),
         returnService.returnedByProduct(period.window)
@@ -54,7 +57,7 @@ export const getProductStats = (period: Period, limit: number): Promise<ProductS
  * Net sales per category.
  * @param period - the resolved period
  */
-export const getCategoryStats = (period: Period): Promise<CategoryStats> =>
+export const getCategoryStats = (period: Period): Promise<WithoutLimits<CategoryStats>> =>
     orderService.categoryTotals(period.window).then((rows) => ({
         period: period.echo,
         categories: rows.map((row) => ({
@@ -70,7 +73,10 @@ export const getCategoryStats = (period: Period): Promise<CategoryStats> =>
  * @param period - the resolved period
  * @param productId - the catalogue product
  */
-export const getProductSeries = (period: Period, productId: string): Promise<ProductSeries> =>
+export const getProductSeries = (
+    period: Period,
+    productId: string
+): Promise<WithoutLimits<ProductSeries>> =>
     Promise.all([
         orderService.productSeries(productId, period.window),
         returnService.returnedSeries(productId, period.window)
@@ -93,7 +99,7 @@ export const getProductSeries = (period: Period, productId: string): Promise<Pro
  * Payments that took money, by method and provider.
  * @param period - the resolved period
  */
-export const getPaymentMix = (period: Period): Promise<PaymentMix> =>
+export const getPaymentMix = (period: Period): Promise<WithoutLimits<PaymentMix>> =>
     paymentService.methodMix(period.window).then((rows) => ({
         period: period.echo,
         rows: rows.map((row) => ({
@@ -109,7 +115,7 @@ export const getPaymentMix = (period: Period): Promise<PaymentMix> =>
  * The three rates: cancellation (a cohort), returns, refunds.
  * @param period - the resolved period
  */
-export const getOperationsStats = (period: Period): Promise<OperationsStats> =>
+export const getOperationsStats = (period: Period): Promise<WithoutLimits<OperationsStats>> =>
     Promise.all([
         orderService.cancellationCohort(period.window),
         orderService.paidBuckets(period.window),
@@ -141,7 +147,7 @@ export const getOperationsStats = (period: Period): Promise<OperationsStats> =>
  * New and returning customers, by account.
  * @param period - the resolved period
  */
-export const getCustomerStats = (period: Period): Promise<CustomerStats> =>
+export const getCustomerStats = (period: Period): Promise<WithoutLimits<CustomerStats>> =>
     orderService.customerCounts(period.window).then(({ customers, newCustomers }) => ({
         period: period.echo,
         customers,
