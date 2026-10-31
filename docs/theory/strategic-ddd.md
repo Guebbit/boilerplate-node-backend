@@ -278,7 +278,7 @@ way a handle does. What it never publishes, no matter how convenient:
 
     **A step exactly one other module must call** cannot be hidden this way: it has to be published.
     The lint rule `local/friend-members` (see `eslint.config.ts`) is its door: it names the service
-    member and the module allowed to reach it (`userService.setPassword` from `account` only,
+    member and the module allowed to reach it (`userService.setPassword` and `userService.eraseAgain` from `account` only,
     `orderService.markPaid` from `payments` only), and refuses every other module. Tests and
     factories are left out, as they always are.
 

@@ -1356,7 +1356,7 @@ export default tseslint.config(
     /**
      * Friends-only service members: a write exactly one other module must call. The barrel has to
      * publish it (the friend sits in another module), so the barrel cannot be the door; this is.
-     * `account` writes `users`' credentials and the email-verification state, `payments` moves an
+     * `account` writes `users`' credentials, the email-verification state and the restore-runbook erasure (a system caller only), `payments` moves an
      * order to paid. Tests and factories reach them as they always did, so they are left out.
      * See `docs/theory/strategic-ddd.md` §5.
      */
@@ -1377,7 +1377,9 @@ export default tseslint.config(
                                 'persistTwoFactorWrite',
                                 'applyEmailChange',
                                 'markEmailVerified',
-                                'minimiseInactive'
+                                'minimiseInactive',
+                                'eraseAgain',
+                                'restoreDeletionState'
                             ],
                             friends: ['account']
                         },
