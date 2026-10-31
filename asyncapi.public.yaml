@@ -489,7 +489,7 @@ operations:
         channel:
             $ref: '#/channels/notifications.deleted'
         description: >-
-            Pushed when the user deletes one (`DELETE /notifications/{id}`), empties the inbox (`DELETE /notifications`), or the cap trims the oldest, so a second tab stays in step with the first. `all` is true when the whole inbox went.
+            Pushed when the user deletes one (`DELETE /notifications/{id}`), empties the inbox (`DELETE /notifications`), or the cap trims the oldest, so a second tab stays in step with the first. `all` is true when the whole inbox went. A filtered delete (`DELETE /notifications?audience=`) sends `all: false` and the ids that left; it also removes staff rows the caller no longer sees, so a frame may name ids the tab never held.
         messages:
             - $ref: '#/channels/notifications.deleted/messages/NotificationsDeletedEvent'
     sseNotificationsRead:

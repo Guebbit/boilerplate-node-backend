@@ -59,16 +59,27 @@ paths:
             description: >-
                 Permanently deletes every notification of the caller — a hard delete, like
                 `DELETE /notifications/{id}`, on the collection itself (as `DELETE /account/sessions`
-                and `DELETE /cart/items` are). Emptying an empty inbox is the state the caller asked
-                for, so it answers 204 too. `POST /notifications/read-all` stays an action: it moves
+                and `DELETE /cart/items` are). With `audience` it deletes only that group: a bell
+                with a Mine and a Work tab clears one tab in one call (the staff cap is 200 rows, more
+                than the global rate limit allows as single deletes). Without it, everything.
+                Emptying an empty inbox, or an empty group, is the state the caller asked for, so it
+                answers 204 too. `POST /notifications/read-all` stays an action: it moves
                 `readAt`, not membership.
             operationId: dismissAllNotifications
             security:
                 - bearerAuth: []
+            parameters:
+                - name: audience
+                  in: query
+                  required: false
+                  description: Delete only this group of the caller's notifications.
+                  schema:
+                      $ref: '#/components/schemas/NotificationAudience'
             responses:
                 '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
     # Mounted above `/{id}` in the router: Express matches in mount order, so the literal
     # segments below must not be read as an id.
