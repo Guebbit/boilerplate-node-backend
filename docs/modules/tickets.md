@@ -238,8 +238,9 @@ flowchart LR
 ```
 
 - **Once, never again.** The claim and the stamp (`overdueNotifiedAt`, internal, not on the wire)
-  are one conditional write, so overlapping sweeps cannot announce a ticket twice. A reopened
-  ticket keeps its stamp, as it keeps its `dueAt`. The cost is at-most-once: a crash between stamp
+  are one conditional write, so overlapping sweeps cannot announce a ticket twice. A write that sets a
+  new `dueAt` clears the stamp in the same update, so the ticket gets a fresh cycle (the SLA clock
+  restarts, as in Zendesk and Freshdesk); a reopen that leaves `dueAt` alone keeps the stamp. The cost is at-most-once: a crash between stamp
   and event loses that one reminder.
 - **Closed first, nothing sent.** A resolved or spam ticket is never claimed.
 - **Same audience as the opener.** `notifications` tells the sets that work the kind (a contact
