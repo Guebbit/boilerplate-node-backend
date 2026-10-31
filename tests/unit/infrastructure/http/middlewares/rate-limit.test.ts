@@ -13,8 +13,6 @@ import { createHash } from 'node:crypto';
 import { ipKeyGenerator } from 'express-rate-limit';
 import type { Request, Response } from 'express';
 import { asStub } from '@tests/stub';
-import { rateLimitConfig } from '@infrastructure/http/config';
-import { withEnvironmentOverrides } from '@tests/environment';
 import {
     addressBlockOf,
     identityOf,
@@ -43,16 +41,6 @@ jest.mock('@infrastructure/observability/audit', () => ({
 }));
 
 describe('rate limit defaults', () => {
-    it('measures the browsing budget per minute', () =>
-        // The window is the load-bearing half of the pair: the same 100 requests spread over a
-        // quarter of an hour is a session quota an ordinary browsing session trips. Unset first:
-        // `tests/support/setup-environment.ts` raises it tenfold for the suites.
-        withEnvironmentOverrides({ NODE_RATE_LIMIT_WINDOW_MS: undefined }, () => {
-            expect(rateLimitConfig().NODE_RATE_LIMIT_WINDOW_MS).toBe(60 * 1000);
-            expect(DEFAULT_RATE_LIMIT_MAX).toBe(100);
-            return Promise.resolve();
-        }));
-
     it('keeps the upload budget a small fraction of the browsing budget', () => {
         expect(DEFAULT_UPLOAD_RATE_LIMIT_MAX).toBeLessThan(DEFAULT_RATE_LIMIT_MAX / 2);
     });

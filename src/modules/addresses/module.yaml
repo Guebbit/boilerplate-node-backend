@@ -3,6 +3,3 @@ subdomain: supporting
 group: foundation
 dependsOn: []
 noAudit: "Edits the caller's own address book: your own data, no money, no stock, no identity beyond the caller."
-frontend:
-    counterparts: [account]
-    why: "The address book's own screen lives in the frontend's account module, alongside the profile, the same URL prefix `account` and `addresses` share on the backend."

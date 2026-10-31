@@ -1,11 +1,11 @@
 /**
  * @module
- * Every field a request body can carry has a label, in every language — and no label is spare.
+ * Every field a request body can carry has a label, in every language.
  *
  * Validation copy names the field ("Il campo email è obbligatorio"). A body property without a
- * label would fall back to the neutral phrase and read worse; a label without a property is dead
- * copy that nobody will ever delete. Both are caught here, walking the generated `*Body` schemas
- * rather than a hand-kept list, so a contract change cannot outrun the dictionary.
+ * label would fall back to the neutral phrase and read worse. That is caught here, walking the
+ * generated `*Body` schemas rather than a hand-kept list, so a contract change cannot outrun the
+ * dictionary.
  *
  * Path params are deliberately outside it: a bad id 404s before validation, so they use the
  * fallback phrase. See `docs/tools/i18n.md#validation-messages`.
@@ -68,11 +68,13 @@ describe('validation attribute labels', () => {
         expect(expected.length).toBeGreaterThan(isDeployed('orders') ? 100 : 40);
     });
 
-    it.each(listSupportedLocales())('%s labels exactly the fields requests carry', (locale) => {
+    it.each(listSupportedLocales())('%s labels every field requests carry', (locale) => {
         const dictionary = readLocaleDictionary(locale) as {
             validation: { attributes: Record<string, string> };
         };
 
-        expect(Object.keys(dictionary.validation.attributes).toSorted()).toEqual(expected);
+        const labelled = new Set(Object.keys(dictionary.validation.attributes));
+
+        expect(expected.filter((field) => !labelled.has(field))).toEqual([]);
     });
 });

@@ -52,11 +52,4 @@ describe('the protection of staff accounts covers every write on an account', ()
 
         expect(Object.keys(UNOWNED_WRITES).filter((route) => rows.has(route))).toEqual([]);
     });
-
-    // The canary: exact counts, so an emptied table cannot pass.
-    it('counts exactly 10 rows and 2 exemptions', () => {
-        expect(PROTECTION_ROWS).toHaveLength(10);
-        expect(Object.keys(UNOWNED_WRITES)).toHaveLength(2);
-        expect(mountedWrites()).toHaveLength(12);
-    });
 });

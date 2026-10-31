@@ -10,6 +10,6 @@ import { caseBase, describeCases } from '@tests/cases';
 /** One case: an address as submitted, and the mailbox it delivers to. */
 const mailboxCase = caseBase.extend({ email: z.string(), mailbox: z.string() });
 
-describeCases('normalize-email', mailboxCase, 16, (one) => {
+describeCases('normalize-email', mailboxCase, (one) => {
     expect(canonicalMailbox(one.email)).toBe(one.mailbox);
 });

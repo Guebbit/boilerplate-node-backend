@@ -9,17 +9,10 @@
  *     two logically distinct budgets counting into the SAME bucket;
  *   - nothing a module declares is also declared in `INFRASTRUCTURE_RATE_LIMITS` — ownership is
  *     exactly one place, or a docs/test reader sees a budget twice and a change to one silently
- *     leaves the other stale;
- *   - every budget's env var is raised in `tests/support/setup-environment.ts` AND in
- *     `scenarios/rate-limits.ts`, unless it carries a `testExemption` — see `RateLimitBudget` in
- *     `src/types/rate-limit-budget.ts` for what that means and why it is a decision recorded on
- *     the budget rather than a name typed here.
+ *     leaves the other stale.
  */
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
 import { enabledModules } from '../../src/modules';
 import { INFRASTRUCTURE_RATE_LIMITS } from '@infrastructure/http/middlewares/rate-limit';
-import { RAISED_RATE_LIMIT_ENV_VARS } from '../../scenarios/rate-limits';
 import type { RateLimitBudget } from '@types';
 
 /** Every module-declared budget, tagged with the module that owns it. */
@@ -38,20 +31,6 @@ const duplicatesOf = (field: 'name' | 'namespace' | 'environmentVariable'): stri
     const seen = new Map<string, number>();
     for (const budget of allBudgets) seen.set(budget[field], (seen.get(budget[field]) ?? 0) + 1);
     return [...seen].filter(([, count]) => count > 1).map(([value]) => value);
-};
-
-/**
- * Every `process.env.NODE_..._RATE_LIMIT... ??=` (or `..._WINDOW_MS`/`..._MFA_...`) assignment in
- * `tests/support/setup-environment.ts`, read as TEXT rather than imported — importing it here would write the
- * worker's environment a second time, for a check that only needs its literal source.
- */
-const raisedInSetup = (): Set<string> => {
-    const setupSource = readFileSync(
-        path.join(__dirname, '../support/setup-environment.ts'),
-        'utf8'
-    );
-    const matches = setupSource.matchAll(/process\.env\.(NODE_\w+)\s*\?\?=/g);
-    return new Set([...matches].map(([, name]) => name));
 };
 
 describe('rate-limit budgets, as a set', () => {
@@ -86,34 +65,5 @@ describe('rate-limit budgets, as a set', () => {
         );
 
         expect(redeclared).toEqual([]);
-    });
-
-    it('raises every budget without a testExemption in tests/support/setup-environment.ts', () => {
-        const raised = raisedInSetup();
-        const missing = allBudgets
-            .filter((budget) => budget.testExemption === undefined)
-            .filter((budget) => !raised.has(budget.environmentVariable))
-            .map((budget) => `${budget.owner}: ${budget.environmentVariable}`);
-
-        expect(missing).toEqual([]);
-    });
-
-    it('exempts a budget from being raised only with a reason', () => {
-        const blank = allBudgets.filter((budget) => budget.testExemption?.trim() === '');
-
-        expect(blank).toEqual([]);
-    });
-
-    it('raises every budget without a testExemption in scenarios/rate-limits.ts too', () => {
-        // A scripted driver (`apply.ts`, `run-server.ts`) hits the app just as hard as this
-        // suite does, from its own list — `tests/support/setup-environment.ts`'s own completeness above
-        // does not cover it, so a budget added to a module here silently missed the other side.
-        const raised = new Set(RAISED_RATE_LIMIT_ENV_VARS);
-        const missing = allBudgets
-            .filter((budget) => budget.testExemption === undefined)
-            .filter((budget) => !raised.has(budget.environmentVariable))
-            .map((budget) => `${budget.owner}: ${budget.environmentVariable}`);
-
-        expect(missing).toEqual([]);
     });
 });

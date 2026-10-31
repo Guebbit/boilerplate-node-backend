@@ -270,9 +270,9 @@ management and the data export stay password-only (ASVS 5.0 §7.5.1).
   still proves the current password and nothing more.
 - **The undo.** An email change can be undone from the old address's link for 7 days, through
   a password change — see [Proving an address](./account.md#proving-an-address).
-- **Boot.** An enabled OAuth provider with no deliverable mail (`smtp` with a host) refuses to boot
-  outside `development` and `test`: those accounts would be locked out of checkout, payment and
-  self-deletion. The demo registers its fake provider in code, not through these variables.
+- **Mail.** An OAuth-only account passes step-up only through a mailed code, so a deployment that
+  enables a provider needs mail that delivers. The demo registers its fake provider in code, not
+  through the provider variables.
 
 ## `cookie` mode: one random id {#cookie-mode}
 

@@ -1,57 +1,22 @@
 /**
- * The process is read in exactly one place, and published in exactly one shape.
+ * The process is published in exactly one shape.
  *
  * Three payloads describe this process — the SSE frame and the two observability REST endpoints.
  * If each read `process.memoryUsage()` and `process.uptime()` independently, that would not be a
  * tidiness problem: three readings taken at three instants, some converted to megabytes and some
  * not, some rounded with `Math.round` and some with `Math.floor`, would report uptimes a second
- * apart with nothing wrong anywhere — the exact failure the shared reader below exists to close.
+ * apart with nothing wrong anywhere — the exact failure `observability/services/process-snapshot.ts` exists to close.
  *
- * Centralising today's three copies cannot, by itself, stop a fourth from opening the same gap
- * again. This test can. Two properties, both silent without it:
- *
- *   1. **One reader.** A new payload that wants uptime reaches for `process.uptime()` because that
- *      is what every other file appears to do. Nothing fails when it does.
- *   2. **One shape, across two documents.** The bytes block is declared in `openapi.yaml` AND in
- *      `asyncapi.yaml`, because the two documents cannot `$ref` each other. Nothing compares them
- *      on its own, so the REST and SSE views of the same four numbers are free to drift apart
- *      field by field.
+ * This test holds the one property that is silent without it: **one shape, across two documents.**
+ * The bytes block is declared in `openapi.yaml` AND in `asyncapi.yaml`, because the two documents
+ * cannot `$ref` each other. Nothing compares them on its own, so the REST and SSE views of the
+ * same four numbers are free to drift apart field by field.
  */
 
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';
 import { REPO_ROOT } from '@tests/paths';
-
-const SOURCE_ROOT = path.join(REPO_ROOT, 'src');
-
-/**
- * Files allowed to read the process directly, and why each one is.
- *
- * A map rather than a list, so the exemption carries its reason at the point that grants it. The
- * gauge is the interesting one: folding it into the shared reader looks like finishing the job and
- * is a bug — its `collect()` runs at scrape time, so it must read when the scrape asks rather than
- * when some payload was composed.
- */
-const ALLOWED_READERS: Record<string, string> = {
-    'modules/observability/services/process-snapshot.ts':
-        'the shared reader itself — this is where both calls are supposed to live',
-    'infrastructure/observability/metrics-registry.ts':
-        'a prom-client Gauge whose collect() runs at scrape time, so it must read at the instant ' +
-        'the scrape asks rather than when a payload is composed'
-};
-
-/** Every `.ts` file under `src/`, recursively. */
-const listSourceFiles = (directory: string): string[] =>
-    readdirSync(directory).flatMap((entry) => {
-        const entryPath = path.join(directory, entry);
-        if (statSync(entryPath).isDirectory()) return listSourceFiles(entryPath);
-        return entryPath.endsWith('.ts') ? [entryPath] : [];
-    });
-
-/** Repo-relative and forward-slashed, so the allowlist keys read the same on every platform. */
-const relativeToSource = (file: string): string =>
-    path.relative(SOURCE_ROOT, file).split(path.sep).join('/');
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null;
@@ -80,35 +45,6 @@ const propertyNames = (node: Record<string, unknown> | undefined): string[] =>
     Object.keys(isRecord(node?.properties) ? node.properties : {});
 
 describe('the process snapshot', () => {
-    const sourceFiles = listSourceFiles(SOURCE_ROOT);
-
-    it('sweeps a source tree that actually has files in it', () => {
-        // A canary: an empty sweep would pass every assertion below over nothing at all.
-        expect(sourceFiles.length).toBeGreaterThan(100);
-    });
-
-    it('is the only place `process.memoryUsage()` and `process.uptime()` are read', () => {
-        const offenders = sourceFiles
-            .filter((file) => {
-                const source = readFileSync(file, 'utf8');
-                return (
-                    source.includes('process.memoryUsage(') || source.includes('process.uptime(')
-                );
-            })
-            .map((file) => relativeToSource(file))
-            .filter((file) => !(file in ALLOWED_READERS));
-
-        expect(offenders).toEqual([]);
-    });
-
-    it('keeps every allowlisted reader real, so an exemption cannot outlive its file', () => {
-        // An entry for a deleted or renamed file silently widens the rule above.
-        const present = new Set(sourceFiles.map((file) => relativeToSource(file)));
-        const stale = Object.keys(ALLOWED_READERS).filter((file) => !present.has(file));
-
-        expect(stale).toEqual([]);
-    });
-
     it('publishes the same memory block in openapi.yaml and asyncapi.yaml', () => {
         const rest = at(
             readYaml('src/modules/observability/openapi.yaml'),

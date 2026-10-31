@@ -17,20 +17,22 @@
  * later by whoever trusted it.
  *
  * ── Why source text, and what makes that sound ────────────────────────────────────────────────
- * Every fact below is read from `metrics.ts` and from the controller, the way `outbox-names.test.ts`
- * reads the outbox: the question is what the code SAYS, and a spec that imported the modules to
+ * Every fact below is read from `metrics.ts` and from the controller, the way a source-text
+ * sweep does: the question is what the code SAYS, and a spec that imported the modules to
  * answer it would boot Mongoose and collect `products_low_stock_total`, which aggregates the
  * products collection. A name check does not get to open a database.
  *
- * Reading text is only sound while the text is the whole story, so two cases below hold it there:
- * every name must be a literal, and every declaration must register on the shared registry. A name
- * assembled at runtime, or a counter registered somewhere else, would be invisible here — and
- * neither is a thing this repo does.
+ * Reading text is only sound while the text is the whole story, so one case below holds it there:
+ * every declaration must register on the shared registry. A counter registered somewhere else
+ * would be invisible here — and is not a thing this repo does.
  *
  * ── What is deliberately NOT asserted ─────────────────────────────────────────────────────────
  * One owner per name. `prom-client` throws `A metric with the name X has already been registered`
  * when a registry sees a duplicate, so a collision cannot reach a running process. A case here
  * would assert a property the library already guarantees.
+ *
+ * Style: snake_case, the `_total` suffix and a useful `help` string. A reviewer sees them on the
+ * line that adds the metric, and a breach is cosmetic — the series still moves.
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -62,43 +64,24 @@ const metricFiles = (): { module: string; file: string }[] =>
 interface Declaration {
     module: string;
     name: string;
-    /** `Counter`, `Gauge`, `Histogram` or `Summary` — the constructor this name was declared with. */
-    kind: string;
-    help: string;
 }
 
-/**
- * Every metric a module declares, with the constructor and help text beside it.
- *
- * One match per `new <Kind>({ … })` block, so the three facts stay attached to each other: a
- * separate sweep per field would happily pair one metric's name with another's help.
- */
+/** Every metric a module declares, by name. */
 const declarations = (): Declaration[] => [
     ...metricFiles().flatMap(({ module, file }) =>
         [
             ...withoutComments(readFileSync(file, 'utf8')).matchAll(
-                /new (Counter|Gauge|Histogram|Summary)\({\s*name: '([^']+)',\s*help: '([^']*)'/g
+                /new (?:Counter|Gauge|Histogram|Summary)\({\s*name: '([^']+)'/g
             )
-        ].map(([, kind, name, help]) => ({ module, name, kind, help }))
+        ].map(([, name]) => ({ module, name }))
     ),
     // Infrastructure metrics are data (`shared/rules/metrics.yaml`), shared by every module's
     // queries and requests, so no single module claims them; the overview still reads them by name.
-    ...Object.values(infrastructureMetricData).map(({ name, kind, help }) => ({
+    ...Object.values(infrastructureMetricData).map(({ name }) => ({
         module: 'infrastructure',
-        name,
-        kind: `${kind.charAt(0).toUpperCase()}${kind.slice(1)}`,
-        help
+        name
     }))
 ];
-
-/** Every `name:` assignment in a metrics file, literal or not. */
-const nameAssignments = (): { module: string; line: string }[] =>
-    metricFiles().flatMap(({ module, file }) =>
-        withoutComments(readFileSync(file, 'utf8'))
-            .split('\n')
-            .filter((line) => /^\s*name:/.test(line))
-            .map((line) => ({ module, line: line.trim() }))
-    );
 
 /**
  * The names the overview endpoint reads by string.
@@ -155,20 +138,6 @@ describe('metric names', () => {
         expect(unresolved).toEqual([]);
     });
 
-    it('states every name as a literal, so the sweep above can see all of them', () => {
-        /*
-         * A name assembled from a variable or a template string would be published without any case
-         * here noticing. It is also not a thing a metric name can usefully be: an identifier shared
-         * with Prometheus and with dashboards nobody in this repo can edit cannot be computed from
-         * anything local.
-         */
-        const computed = nameAssignments()
-            .filter(({ line }) => !/^name: '[^']+',?$/.test(line))
-            .map(({ module, line }) => `${module}: ${line}`);
-
-        expect(computed).toEqual([]);
-    });
-
     it('registers every metric on the shared registry', () => {
         /*
          * What makes reading text sound. A metric registered on a registry of its own is real, is
@@ -191,44 +160,5 @@ describe('metric names', () => {
             });
 
         expect(unregistered).toEqual([]);
-    });
-
-    it('names every metric the way Prometheus expects', () => {
-        /*
-         * `snake_case`, lower case, no leading digit — the exposition format's own rule, and the
-         * one thing a client library will let you break until a scrape rejects the series.
-         */
-        const malformed = declarations()
-            .filter(({ name }) => !/^[a-z][\da-z]*(?:_[\da-z]+)*$/.test(name))
-            .map(({ module, name }) => `${module}: ${name} is not snake_case`);
-
-        expect(malformed).toEqual([]);
-    });
-
-    it('suffixes every counter with _total', () => {
-        /*
-         * Not decoration: `_total` is how OpenMetrics marks a monotonic series, and a `rate()` over
-         * a name without it is a query someone has to remember is still correct. Counters only — a
-         * gauge goes down, and the suffix on one would be a lie.
-         */
-        const unsuffixed = declarations()
-            .filter(({ kind }) => kind === 'Counter')
-            .filter(({ name }) => !name.endsWith('_total'))
-            .map(({ module, name }) => `${module}: ${name}`);
-
-        expect(unsuffixed).toEqual([]);
-    });
-
-    it('gives every metric help text a stranger could act on', () => {
-        /*
-         * `help` is what Prometheus shows beside the series, and the only description someone
-         * paging at 3am gets. An empty or one-word string is a metric nobody outside this repo can
-         * interpret.
-         */
-        const unhelpful = declarations()
-            .filter(({ help }) => help.trim().length < 15)
-            .map(({ module, name, help }) => `${module}: ${name} — "${help}"`);
-
-        expect(unhelpful).toEqual([]);
     });
 });

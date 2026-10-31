@@ -13,6 +13,6 @@ const backoffCase = caseBase.extend({
     delayMs: z.number().int().positive()
 });
 
-describeCases('outbox-backoff', backoffCase, 7, (one) => {
+describeCases('outbox-backoff', backoffCase, (one) => {
     expect(outboxBackoffMs(one.failedAttempts)).toBe(one.delayMs);
 });

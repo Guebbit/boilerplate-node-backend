@@ -14,7 +14,7 @@ const redactionCase = caseBase.extend({
     expect: z.enum(['redact', 'keep'])
 });
 
-describeCases('log-redaction', redactionCase, 14, (one) => {
+describeCases('log-redaction', redactionCase, (one) => {
     const result = redactSensitiveFields({ [one.key]: 'value' }) as Record<string, unknown>;
 
     expect(result[one.key] === 'value' ? 'keep' : 'redact').toBe(one.expect);

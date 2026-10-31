@@ -316,8 +316,8 @@ deployed codebase, with nothing able to notice when they drift.
 
 A record with a lifecycle `status` therefore lists `actions` in `required`, on every read and write,
 list rows included; a read-only projection or a line of its parent is the exception, and
-`tests/cross-cutting/api-standards.test.ts` names each one with its reason. The same file keeps a
-presenter honest: it maps what a service decided and imports no ability, caller or service.
+`tests/cross-cutting/api-standards.test.ts` names each one with its reason. A presenter maps what
+a service decided and imports no ability, caller or service; review holds that line.
 
 The transition graph itself is not published in the contract, on purpose: no mature API does (Google
 AIP-216 names one verb per move; Shopify and Stripe describe the graph in prose and a diagram). A

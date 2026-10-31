@@ -1,7 +1,4 @@
-import {
-    frontendCounterparts,
-    moduleDescriptorSchema
-} from '../../../../scripts/docs/module-descriptor';
+import { moduleDescriptorSchema } from '../../../../scripts/docs/module-descriptor';
 
 /** The smallest descriptor the schema accepts. */
 const MINIMAL = { summary: 'A thing.', subdomain: 'generic', group: 'foundation', dependsOn: [] };
@@ -23,22 +20,5 @@ describe('moduleDescriptorSchema', () => {
 
     it('refuses a key it does not know, so a typo is not silently ignored', () => {
         expect(moduleDescriptorSchema.safeParse({ ...MINIMAL, noAudits: 'x' }).success).toBe(false);
-    });
-});
-
-describe('frontendCounterparts', () => {
-    it('is the module’s own name when the descriptor says nothing', () => {
-        expect(frontendCounterparts('cart', moduleDescriptorSchema.parse(MINIMAL))).toEqual([
-            'cart'
-        ]);
-    });
-
-    it('is the declared list otherwise, an empty one included', () => {
-        const declared = moduleDescriptorSchema.parse({
-            ...MINIMAL,
-            frontend: { counterparts: [], why: 'No screen.' }
-        });
-
-        expect(frontendCounterparts('access', declared)).toEqual([]);
     });
 });

@@ -19,7 +19,6 @@ import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { callerInScope } from '@kernel/permissions';
 import { resetDomainEvents } from '@kernel/events';
 import { registerModules } from '@kernel/registry';
-import { TICKET_OPENED } from '@modules/tickets';
 import { TicketCategory } from '@types';
 import { asSuccess } from '@tests/response';
 import { enabledModules } from '../../../../modules';
@@ -207,10 +206,6 @@ describe('a system ticket', () => {
         });
 
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
-    });
-
-    it('is announced on the bus by the opener under the same name the alert listens to', () => {
-        expect(TICKET_OPENED).toBe('ticket.opened');
     });
 });
 

@@ -5,7 +5,8 @@
 # `docker/crontab` from the whole set. What each job runs, its lease and what it needs booted stay
 # code (`src/app/jobs.ts`).
 #
-# Each entry is keyed by its `name` in camelCase. `schedule` is cron, in UTC.
+# Each entry is keyed by the handle the generated TypeScript exports it under (the camelCase of its
+# `name`, by convention). `schedule` is cron, in UTC.
 jobs:
     reapQuarantine:
         name: reap:quarantine

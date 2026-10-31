@@ -115,8 +115,8 @@ flowchart LR
 
 1. Write `shared/cases/<name>.cases.yaml`. Each case has a `name` (one sentence) and an `expect`.
    Put every `allow` next to the `deny` that bounds it.
-2. Write the test with `describeCases(file, caseSchema, count, run)`. The count is **pinned
-   exactly**: a file that loads zero cases, or loses some, fails.
+2. Write the test with `describeCases(file, caseSchema, run)`. A file with no cases fails on its
+   own (`it.each` throws on an empty table), and a malformed case fails the strict parse.
 3. A case that fails on this backend is a bug here. Fix it in the same change.
 
 ## 7 · Today

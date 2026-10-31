@@ -21,8 +21,4 @@ describe('matchesEventFilter', () => {
     it('is false against an empty filter', () => {
         expect(matchesEventFilter('order.paid', [])).toBe(false);
     });
-
-    it('the wildcard is exactly "*"', () => {
-        expect(ALL_EVENTS).toBe('*');
-    });
 });

@@ -207,8 +207,8 @@ A ticket never mails anyone itself. A new one (spam excluded) is announced as `t
 `{ ticketId, kind, routeSet, category? }`, handing one to a colleague as `ticket.assigned`
 (taking your own announces nothing), and an open one that passes its due date as `ticket.overdue`
 (same payload as `ticket.opened`, see [the overdue reminder](#the-overdue-reminder)).
-[`notifications`](./notifications.md#work-notices-for-staff) hears all three and does the telling, so a situation is one ticket kind or one notice code, never both
-(`tests/cross-cutting/ticket-kinds-are-not-notification-kinds.test.ts`).
+[`notifications`](./notifications.md#work-notices-for-staff) hears all three and does the telling,
+so a situation is one ticket kind or one notice code, never both.
 
 | Event             | Told                                                                                            | Mail                                                                                                                                                         |
 | ----------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |

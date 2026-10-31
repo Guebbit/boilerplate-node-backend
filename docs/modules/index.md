@@ -278,18 +278,13 @@ inside a module folder is, is [Modules (files)](../reference/src-modules.md).
 ## The two repositories
 
 Most domains exist on both sides under the same name. **A few do not**, and neither does the
-frontend's one extra module — an asymmetry that is real architecture rather than drift. It is
-declared where it belongs: a `frontend:` block in the backend module's own `module.yaml`.
+frontend's one extra module — an asymmetry that is real architecture rather than drift. The table is kept by hand; no check holds it to the code.
 
 | This repository | `boilerplate-vue-frontend` | Note                                                                                                                                                                                                                                           |
 | --------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `audit-logs`    | `observability`            | This module owns the trail and its own `GET /audit`; `observability` mounts a second, platform-scoped read (`GET /observability/audit`) over the same collection, and the screen that renders either is the frontend's `observability` module. |
-| `addresses`     | `account`                  | The frontend keeps the address book inside `account` rather than its own module — see the pairing test's own reason for it.                                                                                                                    |
+| `addresses`     | `account`                  | The frontend keeps the address book inside `account` rather than its own module — the address book is part of its account screens.                                                                                                             |
 | `access`        | none                       | Routeless: tenants and memberships back every other module's auth resolution, and no screen renders them directly.                                                                                                                             |
 | `antibot`       | none                       | No screen of its own — whichever form is guarded (signup, reset, contact) fetches the challenge inline.                                                                                                                                        |
 | `invoicing`     | `orders`                   | No screen of its own — `GET /orders/{id}/invoice` and `/credit-notes` are two buttons on the frontend's own order detail page.                                                                                                                 |
 | everything else | the same name              | —                                                                                                                                                                                                                                              |
-
-`tests/cross-cutting/frontend-pairing.test.ts` holds this to the code: a counterpart that is not
-simply the same name has to carry its reason, and with a paired checkout every name has to exist
-over there, in both directions. The gap cannot widen quietly.

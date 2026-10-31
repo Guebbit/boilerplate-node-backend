@@ -301,12 +301,7 @@ const challengeKey = (request: Request): string => {
 const MFA_CHALLENGE_BUDGET: RateLimitBudget = {
     ...accountRateLimitData.mfaChallenge,
     keyedBy: KEYED_BY_CHALLENGE,
-    keyGenerator: challengeKey,
-    // Deliberately NOT raised in `tests/support/setup-environment.ts` — see that file for why.
-    testExemption:
-        'two-factor.test.ts\'s "kills the challenge after too many wrong attempts" case fires 6 ' +
-        "concurrent guesses at ONE challenge specifically to prove this budget's tight production " +
-        'default still catches them regardless of how generous the credential budgets are.'
+    keyGenerator: challengeKey
 };
 
 /** The budget for `POST /account/login/2fa` — see {@link MFA_CHALLENGE_BUDGET}. */

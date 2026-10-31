@@ -27,20 +27,8 @@ export const jobDataSchema = z.strictObject({
 /** One job's data, once parsed. */
 export type JobData = z.infer<typeof jobDataSchema>;
 
-/**
- * The camelCase of a job name: `reap:inactive-accounts` becomes `reapInactiveAccounts`.
- *
- * @param name - a job's name
- */
-const camelCaseOf = (name: string): string =>
-    name.replaceAll(/[:-]([a-z0-9])/g, (_, letter: string) => letter.toUpperCase());
-
-/** A `jobs:` block: jobs keyed by their name in camelCase. */
-export const jobsBlockSchema = z
-    .record(z.string(), jobDataSchema)
-    .refine((block) => Object.entries(block).every(([key, job]) => key === camelCaseOf(job.name)), {
-        message: 'a job is keyed by its name in camelCase'
-    });
+/** A `jobs:` block: jobs keyed by the handle the generated TypeScript exports them under. */
+export const jobsBlockSchema = z.record(z.string(), jobDataSchema);
 
 /** Shape of `shared/rules/jobs.yaml`. */
 export const jobsSchema = z.strictObject({ jobs: jobsBlockSchema });

@@ -15,21 +15,8 @@ import { jobsBlockSchema } from '../../src/infrastructure/config/shared-rules/jo
 import { rateLimitsBlockSchema } from '../../src/infrastructure/config/shared-rules/rate-limits';
 
 /**
- * How a module's screen pairs with the paired frontend, when it is not simply "a frontend module of
- * the same name". Omitted for the ordinary case.
- */
-const frontendPairingSchema = z
-    .object({
-        /** Frontend module names that cover this domain. Empty means nothing over there does. */
-        counterparts: z.array(z.string()),
-        /** One sentence, present tense. Required whenever the counterpart is not the module's own name. */
-        why: z.string().min(1).optional()
-    })
-    .strict();
-
-/**
  * Everything a module says about itself outside its code. Every hand-kept table a new module used
- * to be entered in (the docs index, the audit exemptions, the frontend pairing) reads from here, so
+ * to be entered in (the docs index, the audit exemptions) reads from here, so
  * adding a module edits its own folder and `src/modules.ts` and nothing else.
  *
  * Strict: an extra key is a typo or a misunderstanding of what this file is for.
@@ -55,8 +42,6 @@ export const moduleDescriptorSchema = z
          * must not carry it.
          */
         noAudit: z.string().min(1).optional(),
-        /** Only where the frontend counterpart is not the module's own name. */
-        frontend: frontendPairingSchema.optional(),
         /**
          * The module's rate-limit budgets as data. `npm run regenerate` writes
          * `<module>/rate-limits.generated.ts` from it; `rate-limits.ts` adds the key and skip logic.
@@ -89,12 +74,3 @@ export const readAllModuleDescriptors = (modulesRoot: string): Record<string, Mo
             readModuleDescriptor(path.join(modulesRoot, name, 'module.yaml'))
         ])
     );
-
-/**
- * The frontend modules answering for this domain: the descriptor's own list, or the module's own
- * name when it says nothing.
- * @param name - the module folder name
- * @param descriptor - its parsed descriptor
- */
-export const frontendCounterparts = (name: string, descriptor: ModuleDescriptor): string[] =>
-    descriptor.frontend?.counterparts ?? [name];

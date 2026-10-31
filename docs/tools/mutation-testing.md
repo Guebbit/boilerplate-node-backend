@@ -244,7 +244,6 @@ and `bson`'s 17 MiB buffer makes each leftover file expensive. The cause and the
             "<rootDir>/src/modules/[^/]+/tests/contract/",
             "<rootDir>/tests/integration/journeys/",
             "<rootDir>/tests/cross-cutting/contract-bundles.test.ts",
-            "<rootDir>/tests/cross-cutting/outbox-names.test.ts",
             "<rootDir>/tests/cluster/",
             "<rootDir>/tests/broker/",
             "<rootDir>/tmp/",
@@ -269,9 +268,8 @@ lot in. See [Journeys](../reference/tests.md#tests-integration-journeys-one-user
 `.claude/worktrees/` are not suites at all: they hold Stryker's own sandboxes and other checkouts'
 copies of the tests, which jest would otherwise discover and run as if they were this tree's.
 
-The two `tests/cross-cutting/` entries are excluded for an unrelated, sandbox-specific reason — not cost, correctness:
+The `tests/cross-cutting/` entry is excluded for a sandbox-specific reason — not cost, correctness:
 
-- **`outbox-names.test.ts`** reads `emails.ts`' source text and regex-matches `template: '...'` as a plain string literal. Stryker's mutator rewrites every string literal in the files it mutates to `stryMutAct_9fa48(id) ? '' : (stryCov_9fa48(id), '...')`, which the regex no longer matches — so the dry run fails a check about mail naming before a single mutant runs, even though nothing about mail naming is actually broken. The sandboxed source just doesn't look like source any more.
 - **`contract-bundles.test.ts`** asserts each committed contract document is byte-identical to the sources it's built from. Stryker's sandbox prepends `// @ts-nocheck` to every file it copies (`disableTypeChecks`), so the sources it reads carry lines the committed bundle doesn't — the byte comparison can never hold. Turning `disableTypeChecks` off is the wrong fix: `ts-jest` runs with diagnostics on, so a type-breaking mutant would fail to _compile_, count as killed, and inflate the score with kills no assertion earned. Excluding the file costs nothing either way — it exercises committed files and `scripts/`, neither of which is in `mutate`.
 
 **The unit layer's cost depends on a naming rule, and that is the fragile part.** A file under
