@@ -23,23 +23,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writeOrCheck } from './generated-file';
-import { parse } from 'yaml';
+import { HTTP_METHODS, parseOpenApi } from './openapi-document';
 import { requiredPath } from '../cli';
-
-/** The slice of an OpenAPI operation this generator reads. */
-interface OperationObject {
-    requestBody?: { content?: Record<string, unknown> };
-    /** The module that owns the operation, stamped by the bundler; absent on system routes. */
-    'x-module'?: string;
-}
-
-/** The slice of the bundled document this generator reads. */
-interface OpenApiDocument {
-    paths: Record<string, Record<string, OperationObject | undefined>>;
-}
-
-/** Every method a path item can declare, upper-cased as the request line spells it. */
-const PATH_METHODS = ['get', 'put', 'post', 'delete', 'patch', 'head', 'options'] as const;
 
 /** The HTTP methods whose body the guard checks. `get` and `head` carry none by contract. */
 const BODY_METHODS = ['post', 'put', 'patch', 'delete'] as const;
@@ -53,11 +38,8 @@ const INPUT = path.resolve(ROOT, 'openapi.yaml');
 /** Absolute path of the file to generate, from `--out`. */
 const OUTPUT = requiredPath('out', ROOT);
 
-/**
- * The bundled contract, parsed. `parse` is the `yaml` package's YAML 1.2 loader; the `as` narrows
- * its `any` to the slice this file reads. https://eemeli.org/yaml/#yaml-parse
- */
-const document = parse(readFileSync(INPUT, 'utf8')) as OpenApiDocument;
+/** The bundled contract, parsed. */
+const document = parseOpenApi(readFileSync(INPUT, 'utf8'));
 
 /**
  * Compiles a contract path template into the text of a regex literal, so the guard never builds a
@@ -90,11 +72,12 @@ const compileTemplate = (template: string): { literal: string; parameterCount: n
  * @returns the rows as source text.
  */
 const renderRows = (): string[] =>
-    Object.entries(document.paths)
+    Object.entries(document.paths ?? {})
         .flatMap(([route, operations]) =>
             BODY_METHODS.flatMap((method) => {
-                const operation = operations[method];
-                const types = Object.keys(operation?.requestBody?.content ?? {});
+                const operation = operations?.[method];
+                const body = operation?.requestBody;
+                const types = Object.keys(body && 'content' in body ? body.content : {});
                 // A write with no declared body refuses any body (`types: []`): a gateway that
                 // strips a body must not turn a body-carrying request into a different one, and a
                 // `{"reason": …}` sent to a button endpoint must not vanish with a 200.
@@ -122,12 +105,12 @@ const renderRows = (): string[] =>
  * @returns the rows as source text.
  */
 const renderRouteRows = (): string[] =>
-    Object.entries(document.paths)
+    Object.entries(document.paths ?? {})
         .map(([route, operations]) => {
-            const methods = PATH_METHODS.filter((method) => operations[method]).map((method) =>
+            const methods = HTTP_METHODS.filter((method) => operations?.[method]).map((method) =>
                 method.toUpperCase()
             );
-            const owner = PATH_METHODS.map((method) => operations[method]?.['x-module']).find(
+            const owner = HTTP_METHODS.map((method) => operations?.[method]?.['x-module']).find(
                 (name) => name !== undefined
             );
             const { literal, parameterCount } = compileTemplate(route);

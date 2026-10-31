@@ -51,6 +51,13 @@ import { stageExportSchema } from './personal-data-assembly';
 import { pruneUnused } from './prune-unused';
 import { REPO_ROOT, MODULES_ROOT, modulesWith } from '../modules-on-disk';
 import { readOpenApiFragment } from './fragments';
+import {
+    isHttpMethod,
+    operationsOf,
+    parseOpenApi,
+    type Operation,
+    type OperationEntry
+} from './openapi-document';
 
 /**
  * The narrative order the contract has always had — what a caller meets first, then the path a
@@ -150,12 +157,6 @@ export const sectionPaths = (section: SectionName): string[] =>
               (match) => match[1]
           );
 
-/**
- * The HTTP methods an OpenAPI path item may hold. Everything else under a path — `parameters`,
- * `summary`, `$ref` — is not an operation and must not collect responses.
- */
-const OPERATION_METHODS = ['get', 'put', 'post', 'patch', 'delete', 'head', 'options', 'trace'];
-
 /** The methods a client may mistakenly send a body to: every state-changing one. */
 const WRITE_METHODS: ReadonlySet<string> = new Set(['post', 'put', 'patch', 'delete']);
 
@@ -165,61 +166,17 @@ interface AppLevelResponse {
     appliesTo: 'all' | 'requestBody' | 'requestBodyOrBodyless';
 }
 
-/** As much of an OpenAPI operation as this step reads. */
-interface Operation {
-    requestBody?: unknown;
-    responses?: Record<string, unknown>;
-    /** The cache policy the fragment declares: `private-no-cache`, `revalidate`, `max-age: <s>` or `no-store`. */
-    'x-cache'?: string;
-    /** The error codes this operation answers with, by HTTP status — see {@link checkOperationErrorCodes}. */
-    'x-error-codes'?: Record<string, string[]>;
-}
-
 /** One error code's declaration, as a fragment's `x-error-codes` map holds it. */
 interface ErrorCodeEntry {
     status: number;
     description: string;
 }
 
-/** The shape this step reads out of the bundled document, and writes back into. */
-interface BundledDocument {
+/** The root-level extension keys the steps below read and spend or publish. */
+interface RootExtensions {
     'x-app-level-responses'?: Record<string, AppLevelResponse>;
     'x-error-codes'?: Record<string, ErrorCodeEntry>;
-    paths?: Record<string, Record<string, unknown>>;
-    /** Only checked for presence — a sanity guard that the bundle still has the schema this catalogue documents. */
-    components?: { schemas?: { ErrorItem?: unknown } };
 }
-
-/**
- * Narrows a path-item entry to the fields this step reads. Only the keys in
- * {@link OPERATION_METHODS} are ever passed in, so all this rejects is a method the path item
- * does not declare.
- */
-const isOperation = (value: unknown): value is Operation =>
-    typeof value === 'object' && value !== null;
-
-/**
- * Narrows what `yaml`'s `parse` hands back — typed `unknown` since it accepts arbitrary YAML —
- * to the shape this step reads. A malformed bundle (not an object at all) fails here with a
- * clear message rather than surfacing as a `TypeError` several calls downstream.
- */
-const isBundledDocument = (value: unknown): value is BundledDocument =>
-    typeof value === 'object' && value !== null;
-
-/** An operation with the method it sits under, which only some app-level answers depend on. */
-interface MethodOperation {
-    method: string;
-    operation: Operation;
-}
-
-/** Every operation the bundle holds, flattened out of its paths. */
-const operationsOf = (document_: BundledDocument): MethodOperation[] =>
-    Object.values(document_.paths ?? {}).flatMap((pathItem) =>
-        OPERATION_METHODS.flatMap((method) => {
-            const entry = pathItem[method];
-            return isOperation(entry) ? [{ method, operation: entry }] : [];
-        })
-    );
 
 /**
  * Whether this app-level response applies to this operation.
@@ -233,7 +190,7 @@ const operationsOf = (document_: BundledDocument): MethodOperation[] =>
  */
 const appliesToOperation = (
     entry: AppLevelResponse,
-    { method, operation }: MethodOperation
+    { method, operation }: OperationEntry
 ): boolean =>
     entry.appliesTo === 'all' ||
     'requestBody' in operation ||
@@ -247,10 +204,10 @@ const appliesToOperation = (
  * this step fills gaps rather than flattening deliberate answers.
  */
 const withDefaults = (
-    target: MethodOperation,
+    target: OperationEntry,
     appLevel: Record<string, AppLevelResponse>
-): Record<string, unknown> => {
-    const responses: Record<string, unknown> = { ...target.operation.responses };
+): NonNullable<Operation['responses']> => {
+    const responses = { ...target.operation.responses };
 
     for (const [status, entry] of Object.entries(appLevel))
         if (!(status in responses) && appliesToOperation(entry, target))
@@ -270,13 +227,7 @@ const withDefaults = (
  * See: docs/api/contract-fragmentation.md
  */
 export const withAppLevelResponses = (bundled: string): string => {
-    // `yaml`: parse the bundled document into a plain object graph.
-    // https://eemeli.org/yaml/#parse-yaml-to-json-value
-    const parsed: unknown = parseYaml(bundled);
-    if (!isBundledDocument(parsed))
-        throw new Error('[openapi] the bundled document did not parse to an object.');
-
-    const document_ = parsed;
+    const document_ = parseOpenApi<RootExtensions>(bundled);
     const appLevel = document_['x-app-level-responses'];
 
     if (!appLevel) throw new Error('[openapi] the root declares no `x-app-level-responses`.');
@@ -302,8 +253,10 @@ const VERSIONED_READ_METHODS = new Set(['get']);
 /** The write verbs that take `If-Match` on a versioned path. */
 const VERSIONED_WRITE_METHODS = new Set(['put', 'patch', 'delete']);
 
-/** As much of a versioned path item as {@link withVersionedResources} reads. */
-type VersionedPathItem = Record<string, unknown> & { 'x-versioned'?: string[] };
+/** What {@link withVersionedResources} reads off a path item, beside its operations. */
+interface VersionedPathItem {
+    'x-versioned'?: string[];
+}
 
 /**
  * Adds the `ETag` header to an operation's inline `200`. A `200` that is a `$ref` cannot take one
@@ -311,13 +264,12 @@ type VersionedPathItem = Record<string, unknown> & { 'x-versioned'?: string[] };
  */
 const withEtagHeader = (operation: Operation, where: string): void => {
     const ok = operation.responses?.['200'];
-    if (typeof ok !== 'object' || ok === null || '$ref' in ok)
+    if (ok === undefined || '$ref' in ok)
         throw new Error(
             `[openapi] ${where}: an \`x-versioned\` operation needs an inline 200 to hang \`ETag\` on, not a $ref.`
         );
     // Merged, not replaced: the operation may already declare its own headers (`Cache-Control`).
-    const own = (ok as { headers?: Record<string, unknown> }).headers;
-    Object.assign(ok, { headers: { ...own, ETag: { $ref: '#/components/headers/ETag' } } });
+    ok.headers = { ...ok.headers, ETag: { $ref: '#/components/headers/ETag' } };
 };
 
 /**
@@ -325,9 +277,8 @@ const withEtagHeader = (operation: Operation, where: string): void => {
  * operation already declares for itself.
  */
 const withIfMatch = (operation: Operation): void => {
-    const withParameters = operation as Operation & { parameters?: unknown[] };
-    withParameters.parameters = [
-        ...(withParameters.parameters ?? []),
+    operation.parameters = [
+        ...(operation.parameters ?? []),
         { $ref: '#/components/parameters/IfMatchHeader' }
     ];
     operation.responses = {
@@ -347,16 +298,14 @@ const withIfMatch = (operation: Operation): void => {
  * @throws Error if a marker names a method the path item does not declare, or one that is neither read nor write
  */
 export const withVersionedResources = (bundled: string): string => {
-    // `yaml`'s YAML 1.2 loader; typed `unknown` until a guard narrows it.
-    const parsed: unknown = parseYaml(bundled);
-    if (!isBundledDocument(parsed))
-        throw new Error('[openapi] the bundled document did not parse to an object.');
+    const document_ = parseOpenApi(bundled);
 
-    for (const [route, item] of Object.entries(parsed.paths ?? {})) {
+    for (const [route, item] of Object.entries(document_.paths ?? {})) {
+        // `x-versioned` is a vendor key on the path item, which the OpenAPI types do not declare.
         const methods = (item as VersionedPathItem)['x-versioned'];
         for (const method of methods ?? []) {
-            const operation = item[method];
-            if (!isOperation(operation))
+            const operation = isHttpMethod(method) ? item?.[method] : undefined;
+            if (!operation)
                 throw new Error(
                     `[openapi] ${route}: x-versioned names ${method}, which it does not declare.`
                 );
@@ -370,7 +319,7 @@ export const withVersionedResources = (bundled: string): string => {
 
     // `lineWidth: 0` turns off line folding, so long descriptions stay one line and diffs stay small.
     // https://eemeli.org/yaml/#tostring-options
-    return stringifyYaml(parsed, { lineWidth: 0 });
+    return stringifyYaml(document_, { lineWidth: 0 });
 };
 
 /**
@@ -379,18 +328,16 @@ export const withVersionedResources = (bundled: string): string => {
  */
 const withNoStoreHeader = (operation: Operation): void => {
     const ok = operation.responses?.['200'];
-    if (typeof ok !== 'object' || ok === null || '$ref' in ok) return;
-    const headers = (ok as { headers?: Record<string, unknown> }).headers ?? {};
+    if (ok === undefined || '$ref' in ok) return;
+    const headers = ok.headers ?? {};
     if ('Cache-Control' in headers) return;
-    Object.assign(ok, {
-        headers: {
-            ...headers,
-            'Cache-Control': {
-                description: '`no-store`: no cache, shared or private, may keep the answer.',
-                schema: { type: 'string' }
-            }
+    ok.headers = {
+        ...headers,
+        'Cache-Control': {
+            description: '`no-store`: no cache, shared or private, may keep the answer.',
+            schema: { type: 'string' }
         }
-    });
+    };
 };
 
 /**
@@ -408,13 +355,11 @@ const withNoStoreHeader = (operation: Operation): void => {
  * @throws Error if the bundled document does not parse to an object
  */
 export const withNotModified = (bundled: string): string => {
-    const parsed: unknown = parseYaml(bundled);
-    if (!isBundledDocument(parsed))
-        throw new Error('[openapi] the bundled document did not parse to an object.');
+    const document_ = parseOpenApi(bundled);
 
-    for (const pathItem of Object.values(parsed.paths ?? {})) {
-        const operation = pathItem.get;
-        if (!isOperation(operation) || operation['x-cache'] === undefined) continue;
+    for (const pathItem of Object.values(document_.paths ?? {})) {
+        const operation = pathItem?.get;
+        if (operation?.['x-cache'] === undefined) continue;
         if (operation['x-cache'] === 'no-store') {
             withNoStoreHeader(operation);
             continue;
@@ -425,7 +370,7 @@ export const withNotModified = (bundled: string): string => {
         };
     }
 
-    return stringifyYaml(parsed, { lineWidth: 0 });
+    return stringifyYaml(document_, { lineWidth: 0 });
 };
 
 /** Narrows a fragment's `x-error-codes` entry to the shape this step requires. */
@@ -485,12 +430,7 @@ export const withErrorCodes = (
     bundled: string,
     errorCodes: Record<string, ErrorCodeEntry>
 ): string => {
-    // `yaml`'s YAML 1.2 loader; typed `unknown` until a guard narrows it.
-    const parsed: unknown = parseYaml(bundled);
-    if (!isBundledDocument(parsed))
-        throw new Error('[openapi] the bundled document did not parse to an object.');
-
-    const document_ = parsed;
+    const document_ = parseOpenApi<RootExtensions>(bundled);
     if (!document_.components?.schemas?.ErrorItem)
         throw new Error(
             '[openapi] the bundled document has no components.schemas.ErrorItem to publish x-error-codes alongside.'
@@ -548,18 +488,11 @@ export const checkOperationErrorCodes = (
     bundled: string,
     errorCodes: Record<string, ErrorCodeEntry>
 ): string => {
-    const parsed: unknown = parseYaml(bundled);
-    if (!isBundledDocument(parsed))
-        throw new Error('[openapi] the bundled document did not parse to an object.');
+    const document_ = parseOpenApi(bundled);
 
-    for (const [route, pathItem] of Object.entries(parsed.paths ?? {}))
-        for (const method of OPERATION_METHODS) {
-            const listed = isOperation(pathItem[method])
-                ? pathItem[method]['x-error-codes']
-                : undefined;
-            for (const [status, names] of Object.entries(listed ?? {}))
-                checkListedCodes(`${method.toUpperCase()} ${route}`, status, names, errorCodes);
-        }
+    for (const { route, method, operation } of operationsOf(document_))
+        for (const [status, names] of Object.entries(operation['x-error-codes'] ?? {}))
+            checkListedCodes(`${method.toUpperCase()} ${route}`, status, names, errorCodes);
 
     return bundled;
 };
@@ -586,26 +519,13 @@ const moduleOfPath = (): Record<string, string> => {
  * @throws Error if the bundled document does not parse to an object
  */
 export const withModuleStamps = (bundled: string, moduleByPath: Record<string, string>): string => {
-    // `yaml`: parse the bundled document into a plain object graph.
-    // https://eemeli.org/yaml/#parse-yaml-to-json-value
-    const parsed: unknown = parseYaml(bundled);
-    if (!isBundledDocument(parsed))
-        throw new Error('[openapi] the bundled document did not parse to an object.');
+    const document_ = parseOpenApi(bundled);
 
-    const document_ = parsed;
-
-    for (const [path, pathItem] of Object.entries(document_.paths ?? {})) {
+    for (const { route, operation } of operationsOf(document_)) {
         // `Object.hasOwn`, not a nullish check on the value: `Record<string, string>` promises a
         // value for every key, so an index access reads as always-present to TypeScript even
         // though a `system` path is never in this map at all — see `moduleOfPath`.
-        if (!Object.hasOwn(moduleByPath, path)) continue;
-        const moduleName = moduleByPath[path];
-
-        for (const method of OPERATION_METHODS) {
-            const operation = pathItem[method];
-            if (isOperation(operation))
-                (operation as Record<string, unknown>)['x-module'] = moduleName;
-        }
+        if (Object.hasOwn(moduleByPath, route)) operation['x-module'] = moduleByPath[route];
     }
 
     // `yaml`'s `stringify`; `lineWidth: 0` turns off line folding, so diffs stay small.

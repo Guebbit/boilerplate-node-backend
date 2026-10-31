@@ -14,34 +14,17 @@
  * See: docs/api/contract-fragmentation.md
  */
 
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { stringify as stringifyYaml } from 'yaml';
+import { operationsOf, parseOpenApi, type Operation } from './openapi-document';
 
 /** Methods that change nothing, so a cookie on one needs no origin check. */
 const SAFE_METHODS = new Set(['get', 'head', 'options']);
 
-/** Every method an OpenAPI path item may hold as an operation. */
-const OPERATION_METHODS = ['get', 'put', 'post', 'patch', 'delete', 'head', 'options', 'trace'];
-
-/** As much of an operation as this step reads and writes. */
-interface SecuredOperation {
-    security?: Record<string, unknown>[];
-    responses?: Record<string, unknown>;
-}
-
-/** The bundled document, as far as this step reads it. */
-interface Bundled {
-    paths?: Record<string, Record<string, unknown>>;
-}
-
 /** Whether a security requirement list names `bearerAuth` among its alternatives. */
 const takesBearer = (
-    security: SecuredOperation['security']
-): security is Record<string, unknown>[] =>
+    security: Operation['security']
+): security is NonNullable<Operation['security']> =>
     Array.isArray(security) && security.some((alternative) => 'bearerAuth' in alternative);
-
-/** Narrows a path-item entry to an operation; anything else under a path is not one. */
-const isOperation = (value: unknown): value is SecuredOperation =>
-    typeof value === 'object' && value !== null;
 
 /**
  * Add the `cookieAuth` alternative to every operation that takes `bearerAuth`, and a `403` to the
@@ -53,25 +36,17 @@ const isOperation = (value: unknown): value is SecuredOperation =>
  * @returns the document with the cookie alternative and the origin refusal declared
  */
 export const withCookieAuth = (bundled: string): string => {
-    // `yaml`: parse the bundled document into a plain object graph.
-    // https://eemeli.org/yaml/#parse-yaml-to-json-value
-    const document_ = parseYaml(bundled) as Bundled;
-
-    for (const [method, operation] of Object.values(document_.paths ?? {}).flatMap((item) =>
-        OPERATION_METHODS.map((name) => [name, item[name]] as const)
-    )) {
-        if (!isOperation(operation) || !takesBearer(operation.security)) continue;
-
+    const document_ = parseOpenApi(bundled);
+    for (const { method, operation } of operationsOf(document_)) {
+        if (!takesBearer(operation.security)) continue;
         if (operation.security.every((alternative) => !('cookieAuth' in alternative)))
             operation.security.push({ cookieAuth: [] });
-
         if (!SAFE_METHODS.has(method) && !(operation.responses && '403' in operation.responses))
             operation.responses = {
                 ...operation.responses,
                 '403': { $ref: '#/components/responses/Forbidden' }
             };
     }
-
     // `lineWidth: 0`: no folding, so an unrelated edit never rewraps a description.
     return stringifyYaml(document_, { lineWidth: 0 });
 };

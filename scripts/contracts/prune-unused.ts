@@ -17,7 +17,8 @@
  * See: docs/api/contract-fragmentation.md
  */
 
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { stringify as stringifyYaml } from 'yaml';
+import { parseOpenApi } from './openapi-document';
 
 /** A JSON object, as far as this walk looks. */
 type Json = Record<string, unknown>;
@@ -98,11 +99,7 @@ const reachable = (document: BundledDocument, found: Findings): void => {
  * @throws Error when the text is not a YAML object
  */
 export const pruneUnused = (bundled: string): string => {
-    // `yaml`'s YAML 1.2 loader; typed `unknown` until the guard narrows it.
-    const parsed: unknown = parseYaml(bundled);
-    if (!isObject(parsed))
-        throw new Error('[openapi] the bundled document did not parse to an object.');
-    const document: BundledDocument = parsed;
+    const document = parseOpenApi<BundledDocument>(bundled);
 
     const found: Findings = { refs: new Set(), schemes: new Set(), tags: new Set() };
     reachable(document, found);

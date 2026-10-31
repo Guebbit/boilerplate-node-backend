@@ -22,7 +22,8 @@
  * See: docs/api/contract-fragmentation.md
  */
 
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { stringify as stringifyYaml } from 'yaml';
+import { parseOpenApi } from './openapi-document';
 
 /** The lists the bundler can fill from, by the name a fragment's `x-enum-from` gives. */
 export type EnumSources = Readonly<Record<string, readonly string[]>>;
@@ -106,9 +107,7 @@ const fillIn = (value: unknown, sources: EnumSources, where: string): number => 
  * @throws Error if a placeholder names an unknown or empty source, or conflicts with an `enum`
  */
 export const withFilledEnums = (bundled: string, sources: EnumSources): string => {
-    // `yaml`: parse the bundled document into a plain object graph.
-    // https://eemeli.org/yaml/#parse-yaml-to-json-value
-    const document_: unknown = parseYaml(bundled);
+    const document_ = parseOpenApi(bundled);
     fillIn(document_, sources, '#');
 
     // `lineWidth: 0` turns off line folding, so a rewrap never shows up as a diff.

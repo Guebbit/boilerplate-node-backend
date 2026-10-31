@@ -13,28 +13,15 @@
  * See: docs/tools/image-processing.md
  */
 
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-
-/** Every method an OpenAPI path item may hold as an operation. */
-const OPERATION_METHODS = ['get', 'put', 'post', 'patch', 'delete', 'head', 'options', 'trace'];
+import { stringify as stringifyYaml } from 'yaml';
+import { operationsOf, parseOpenApi } from './openapi-document';
 
 /** The multipart part that carries an uploaded image. */
 const IMAGE_PART = 'imageUpload';
 
-/** As much of a media type object as this step reads and writes. */
-interface MediaType {
-    schema?: { $ref?: string; properties?: Record<string, unknown> };
-    encoding?: Record<string, { contentType?: string }>;
-}
-
-/** The bundled document, as far as this step reads and writes it. */
-interface Bundled {
+/** The root's list of accepted upload types, which this step spends. */
+interface RootImageTypes {
     'x-image-upload-types'?: unknown;
-    paths?: Record<
-        string,
-        Partial<Record<string, { requestBody?: { content?: Record<string, MediaType> } }>>
-    >;
-    components?: { schemas?: Record<string, { properties?: Record<string, unknown> }> };
 }
 
 /** Narrows the root's list to a non-empty array of strings. */
@@ -52,29 +39,36 @@ const isTypeList = (value: unknown): value is string[] =>
  * @throws Error if the root declares no list, or no body carries an `imageUpload` part
  */
 export const withImageUploadEncoding = (bundled: string): string => {
-    // `yaml`: parse the bundled document into a plain object graph.
-    // https://eemeli.org/yaml/#parse-yaml-to-json-value
-    const document_ = parseYaml(bundled) as Bundled;
+    const document_ = parseOpenApi<RootImageTypes>(bundled);
     const types = document_['x-image-upload-types'];
     if (!isTypeList(types))
         throw new Error('[openapi] the root declares no `x-image-upload-types` list.');
 
     // OAS 3.1 spells several accepted types as one comma-separated string.
     const contentType = types.join(', ');
+
     let stamped = 0;
-
-    for (const pathItem of Object.values(document_.paths ?? {}))
-        for (const method of OPERATION_METHODS) {
-            const media = pathItem[method]?.requestBody?.content?.['multipart/form-data'];
-            const reference = media?.schema?.$ref;
-            const schema = reference
-                ? document_.components?.schemas?.[reference.replace('#/components/schemas/', '')]
-                : media?.schema;
-            if (!media || !schema?.properties || !(IMAGE_PART in schema.properties)) continue;
-            media.encoding = { ...media.encoding, [IMAGE_PART]: { contentType } };
-            stamped += 1;
-        }
-
+    for (const { operation } of operationsOf(document_)) {
+        const body = operation.requestBody;
+        const media =
+            body !== undefined && 'content' in body
+                ? body.content['multipart/form-data']
+                : undefined;
+        const reference = media?.schema && '$ref' in media.schema ? media.schema.$ref : undefined;
+        const schema = reference
+            ? document_.components?.schemas?.[reference.replace('#/components/schemas/', '')]
+            : media?.schema;
+        if (
+            !media ||
+            !schema ||
+            !('properties' in schema) ||
+            !schema.properties ||
+            !(IMAGE_PART in schema.properties)
+        )
+            continue;
+        media.encoding = { ...media.encoding, [IMAGE_PART]: { contentType } };
+        stamped += 1;
+    }
     if (stamped === 0)
         throw new Error('[openapi] no multipart body carries an `imageUpload` part to stamp.');
 

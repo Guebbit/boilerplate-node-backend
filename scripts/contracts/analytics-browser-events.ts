@@ -16,6 +16,8 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import type { OpenAPIV3_1 } from 'openapi-types';
+import { parseOpenApi, type OpenApiDocument } from './openapi-document';
 
 import { orderSections } from './section-order';
 import { MODULES_ROOT, modulesWith } from '../modules-on-disk';
@@ -29,13 +31,8 @@ const REQUEST_SCHEMA = 'AnalyticsEventRequest';
 /** How a fragment spells a ref to the root file, and how the bundle spells the same target. */
 const ROOT_REF_PREFIX = '../../../shared/contracts/openapi.root.yaml#';
 
-/** A parsed schema object, as far as this step reads it. */
-type Schema = Record<string, unknown>;
-
-/** The parts of an OpenAPI document this step reads and writes. */
-interface OpenApiDocument {
-    components?: { schemas?: Record<string, Schema> };
-}
+/** A schema object of the document. */
+type Schema = OpenAPIV3_1.SchemaObject;
 
 /** Narrative order for the shop's modules; the rest follow alphabetically. */
 const FRAGMENT_ORDER: readonly string[] = ['products'];
@@ -79,8 +76,8 @@ const localiseReferences = (node: unknown): unknown => {
  * @throws {Error} when `event` is not a one-value enum
  */
 const eventNameOf = (name: string, schema: Schema): string => {
-    const values = ((schema.properties as Record<string, Schema> | undefined)?.event.enum ??
-        []) as unknown[];
+    const event = schema.properties?.event;
+    const values = event !== undefined && !('$ref' in event) ? (event.enum ?? []) : [];
     if (values.length !== 1 || typeof values[0] !== 'string')
         throw new Error(
             `[openapi] ${name} (browser events) must declare \`event\` as a one-value string enum.`
@@ -100,15 +97,14 @@ export const withBrowserEvents = (
     bundled: string,
     fragments: readonly string[] = browserEventFragments()
 ): string => {
-    // `yaml`'s YAML 1.2 loader; narrowed by the shape checks below.
-    const document_ = parseYaml(bundled) as OpenApiDocument;
+    const document_ = parseOpenApi(bundled);
     const schemas = document_.components?.schemas;
     if (!schemas || !(REQUEST_SCHEMA in schemas) || fragments.length === 0) return bundled;
 
     const added: Record<string, Schema> = {};
     const mapping: Record<string, string> = {};
     for (const file of fragments) {
-        const parsed = parseYaml(readFileSync(file, 'utf8')) as OpenApiDocument;
+        const parsed = parseYaml(readFileSync(file, 'utf8')) as OpenApiDocument; // a fragment is components only
         for (const [name, schema] of Object.entries(parsed.components?.schemas ?? {})) {
             const event = eventNameOf(name, schema);
             if (name in schemas || name in added || event in mapping)
@@ -123,7 +119,7 @@ export const withBrowserEvents = (
     // `!` is safe: `schemas` above was read off `components`, so it exists.
     // Rebuilt rather than assigned so the events sit right after the request schema they belong to.
     document_.components!.schemas = Object.fromEntries(
-        Object.entries(schemas).flatMap(([name, schema]) =>
+        Object.entries(schemas).flatMap<[string, Schema]>(([name, schema]) =>
             name === REQUEST_SCHEMA
                 ? [
                       [

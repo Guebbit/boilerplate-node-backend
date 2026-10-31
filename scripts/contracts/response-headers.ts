@@ -15,10 +15,14 @@
  * See: docs/api/contract-fragmentation.md
  */
 
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-
-/** Every method an OpenAPI path item may hold as an operation. */
-const OPERATION_METHODS = ['get', 'put', 'post', 'patch', 'delete', 'head', 'options', 'trace'];
+import type { OpenAPIV3_1 } from 'openapi-types';
+import { stringify as stringifyYaml } from 'yaml';
+import {
+    operationsOf,
+    parseOpenApi,
+    type Operation,
+    type OpenApiDocument
+} from './openapi-document';
 
 /** The response header an idempotent operation's 2xx declares, and the component that describes it. */
 const REPLAY_HEADER = 'Idempotent-Replay';
@@ -29,23 +33,9 @@ const IDEMPOTENCY_PARAMETERS: ReadonlySet<string> = new Set([
     '#/components/parameters/RequiredIdempotencyKeyHeader'
 ]);
 
-/** As much of a response object as these steps read and write. */
-interface ResponseObject {
-    $ref?: string;
-    headers?: Record<string, unknown>;
-}
-
-/** As much of an operation as these steps read. */
-interface OperationObject {
-    parameters?: { $ref?: string }[];
-    responses?: Record<string, ResponseObject>;
-}
-
-/** The bundled document, as far as these steps read and write it. */
-interface Bundled {
+/** The root's header map, which {@link withAppLevelHeaders} spends. */
+interface RootHeaders {
     'x-app-level-headers'?: unknown;
-    paths?: Record<string, Record<string, OperationObject | undefined>>;
-    components?: { responses?: Record<string, ResponseObject> };
 }
 
 /** Narrows the root's map to `{ <HTTP header name>: <components/headers key> }`. */
@@ -59,24 +49,17 @@ const isHeaderMap = (value: unknown): value is Record<string, string> =>
 const declares = (headers: Record<string, unknown>, name: string): boolean =>
     Object.keys(headers).some((own) => own.toLowerCase() === name.toLowerCase());
 
-/** Every operation the bundle holds. */
-const operationsOf = (document_: Bundled): OperationObject[] =>
-    Object.values(document_.paths ?? {}).flatMap((pathItem) =>
-        OPERATION_METHODS.flatMap((method) => {
-            const operation = pathItem[method];
-            return operation === undefined ? [] : [operation];
-        })
-    );
-
 /**
  * Every response written in place: each operation's inline answers, and the shared ones under
  * `components/responses`. A `$ref` response is skipped: its component is in this list already.
  */
-const inlineResponsesOf = (document_: Bundled): ResponseObject[] =>
+const inlineResponsesOf = (document_: OpenApiDocument): OpenAPIV3_1.ResponseObject[] =>
     [
-        ...operationsOf(document_).flatMap((operation) => Object.values(operation.responses ?? {})),
+        ...operationsOf(document_).flatMap(({ operation }) =>
+            Object.values(operation.responses ?? {})
+        ),
         ...Object.values(document_.components?.responses ?? {})
-    ].filter((response) => response.$ref === undefined);
+    ].filter((response): response is OpenAPIV3_1.ResponseObject => !('$ref' in response));
 
 /**
  * Stamp the root's `x-app-level-headers` onto every response, then spend the key.
@@ -89,11 +72,7 @@ const inlineResponsesOf = (document_: Bundled): ResponseObject[] =>
  * @throws Error if the root declares no map, or the document does not parse to an object
  */
 export const withAppLevelHeaders = (bundled: string): string => {
-    // `yaml`: parse the bundled document into a plain object graph.
-    // https://eemeli.org/yaml/#parse-yaml-to-json-value
-    const document_ = parseYaml(bundled) as Bundled | null;
-    if (typeof document_ !== 'object' || document_ === null)
-        throw new Error('[openapi] the bundled document did not parse to an object.');
+    const document_ = parseOpenApi<RootHeaders>(bundled);
 
     const headerMap = document_['x-app-level-headers'];
     if (!isHeaderMap(headerMap))
@@ -116,9 +95,9 @@ export const withAppLevelHeaders = (bundled: string): string => {
 };
 
 /** Whether the operation takes its `Idempotency-Key` through one of the shared parameters. */
-const takesIdempotencyKey = (operation: OperationObject): boolean =>
+const takesIdempotencyKey = (operation: Operation): boolean =>
     (operation.parameters ?? []).some(
-        (parameter) => parameter.$ref !== undefined && IDEMPOTENCY_PARAMETERS.has(parameter.$ref)
+        (parameter) => '$ref' in parameter && IDEMPOTENCY_PARAMETERS.has(parameter.$ref)
     );
 
 /**
@@ -128,10 +107,10 @@ const takesIdempotencyKey = (operation: OperationObject): boolean =>
  * @param target - the operation
  * @throws Error if a 2xx is a `$ref`
  */
-const declareReplay = (operation: string, target: OperationObject): void => {
+const declareReplay = (operation: string, target: Operation): void => {
     for (const [status, response] of Object.entries(target.responses ?? {})) {
         if (!status.startsWith('2')) continue;
-        if (response.$ref !== undefined)
+        if ('$ref' in response)
             throw new Error(
                 `[openapi] ${operation}: an idempotent operation needs an inline ${status} to hang \`${REPLAY_HEADER}\` on, not a $ref.`
             );
@@ -152,18 +131,11 @@ const declareReplay = (operation: string, target: OperationObject): void => {
  * @throws Error if an idempotent operation's 2xx is a `$ref`, which cannot take a header of its own
  */
 export const withIdempotentReplay = (bundled: string): string => {
-    // `yaml`: parse the bundled document into a plain object graph.
-    // https://eemeli.org/yaml/#parse-yaml-to-json-value
-    const document_ = parseYaml(bundled) as Bundled | null;
-    if (typeof document_ !== 'object' || document_ === null)
-        throw new Error('[openapi] the bundled document did not parse to an object.');
+    const document_ = parseOpenApi(bundled);
 
-    for (const [route, pathItem] of Object.entries(document_.paths ?? {}))
-        for (const method of OPERATION_METHODS) {
-            const operation = pathItem[method];
-            if (operation === undefined || !takesIdempotencyKey(operation)) continue;
+    for (const { route, method, operation } of operationsOf(document_))
+        if (takesIdempotencyKey(operation))
             declareReplay(`${method.toUpperCase()} ${route}`, operation);
-        }
 
     return stringifyYaml(document_, { lineWidth: 0 });
 };
