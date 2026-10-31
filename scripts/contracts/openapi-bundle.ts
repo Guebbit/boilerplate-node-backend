@@ -7,15 +7,26 @@
  * boundary, never by assuming a neighbour's text is concatenated above.
  *
  * Compiled by `redocly bundle` rather than concatenated, because the comments that matter are in
- * the MODULE files, which are authored, not in the bundle, which nobody reads by hand. Six steps
- * run after it, on the bundle: {@link withCookieAuth} adds `cookieAuth` to every operation that
- * takes a bearer, with the origin `403` on its unsafe methods; {@link withAppLevelResponses} merges the root's
- * `x-app-level-responses` (429, 500 and 503 for every operation; 400/413/415 for a body-carrying one, and 415 for a body-less write too) into every
- * operation that doesn't already declare its own; {@link withNotModified} adds the shared `304` to every read that declares `x-cache`;
- * {@link withVersionedResources} hangs `ETag`,
- * `If-Match` and 412 on every path marked `x-versioned`; {@link withModuleStamps} tags every operation
- * with the `x-module` its owning fragment names — never hand-written per operation; and
- * {@link withErrorCodes} publishes every fragment's own `x-error-codes` as one collected catalogue.
+ * the MODULE files, which are authored, not in the bundle, which nobody reads by hand. Thirteen
+ * steps run after it, on the bundle, in this order (the composition in `compile`):
+ *
+ * - {@link withBrowserEvents}: the analytics browser-event schemas.
+ * - {@link withFilledEnums}: an enum named by `x-enum-from`, filled from its source.
+ * - {@link withImageUploadEncoding}: the upload encoding on image-upload bodies.
+ * - {@link withCookieAuth}: `cookieAuth` on every operation that takes a bearer, with the origin
+ *   `403` on its unsafe methods.
+ * - {@link withAppLevelResponses}: the root's `x-app-level-responses` (429, 500 and 503 for every
+ *   operation; 400/413/415 for a body-carrying one, 415 for a body-less write too) into every
+ *   operation that doesn't declare its own.
+ * - {@link withNotModified}: the shared `304` on every read that declares `x-cache`.
+ * - {@link withVersionedResources}: `ETag`, `If-Match` and 412 on every path marked `x-versioned`.
+ * - {@link withAppLevelHeaders}: the headers every answer carries.
+ * - {@link withIdempotentReplay}: `Idempotent-Replay` on idempotent writes.
+ * - {@link withModuleStamps}: the `x-module` each operation's owning fragment names, never
+ *   hand-written per operation.
+ * - {@link checkOperationErrorCodes}: refuses an operation naming an error code nobody declares.
+ * - {@link withErrorCodes}: every fragment's own `x-error-codes`, published as one catalogue.
+ * - {@link pruneUnused}: drops the components nothing references any more.
  *
  * The root's path index and tag list are completed from the fragments on disk before redocly runs
  * ({@link assembleRoot}), so adding a module is its own `openapi.yaml` and deleting one is `rm -rf`.
