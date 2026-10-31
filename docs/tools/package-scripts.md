@@ -179,8 +179,7 @@ scripts only resolve from inside a container — see
 It deliberately does **not** spell out a URI. One that includes the database name overrides
 `NODE_MONGODB_NAME` without saying so, and the script would seed a database nobody configured. It
 is also deliberately **one** wrapper rather than a `:host` twin per script: copies of one
-`cross-env` prefix drift apart. `tests/unit/scripts/db/host-scripts.test.ts` fails if a second
-hostname-redirecting script appears.
+`cross-env` prefix drift apart.
 
 ## Container scripts
 
