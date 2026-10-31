@@ -18,8 +18,9 @@ export const ticketsJobs: readonly JobDeclaration[] = [
             ticketService.remindOverdue().then((announced) => {
                 logger.info({ message: 'Overdue ticket sweep done.', announced });
             }),
-        // The announcement is a mail to the staff, rendered from the translations.
-        needs: { i18n: true },
+        // The sweep only emits `ticket.overdue`: `notifications` hears it through its subscription,
+        // and the staff mail is rendered from the translations.
+        needs: { subscriptions: true, i18n: true },
         // A sweep that outruns its day would only re-claim nothing, but one at a time is simpler.
         lease: { ttlMs: 30 * 60 * 1000 }
     }
