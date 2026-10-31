@@ -13,6 +13,7 @@
 
 import type { Types } from 'mongoose';
 import { encryptPii, decryptPii } from '@infrastructure/security/pii-encryption';
+import { POSTAL_ADDRESS_FIELDS, type PostalAddressField } from '@domain-primitives/postal-address';
 import type { OrderAddress } from '@types';
 
 /** The two embedded addresses an order carries. */
@@ -28,13 +29,10 @@ interface OrderPiiFields {
     notes?: string | undefined;
 }
 
-/** The address fields, in one place so encrypt and decrypt walk the same list. */
-export const ADDRESS_FIELDS = ['fullName', 'street', 'city', 'zip', 'country', 'phone'] as const;
-
 /** The associated data binding one address field to one order. */
 export const addressAad = (
     path: OrderAddressPath,
-    field: (typeof ADDRESS_FIELDS)[number],
+    field: PostalAddressField,
     orderId: string
 ): string => `orders:${path}.${field}:${orderId}`;
 
@@ -47,10 +45,10 @@ export const notesAad = (orderId: string): string => `orders:notes:${orderId}`;
  */
 const mapAddress = <T extends OrderAddress>(
     address: T,
-    convert: (value: string, field: (typeof ADDRESS_FIELDS)[number]) => string
+    convert: (value: string, field: PostalAddressField) => string
 ): T => {
     const result: T = { ...address };
-    for (const field of ADDRESS_FIELDS) {
+    for (const field of POSTAL_ADDRESS_FIELDS) {
         const value = address[field];
         if (value !== undefined) result[field] = convert(value, field);
     }

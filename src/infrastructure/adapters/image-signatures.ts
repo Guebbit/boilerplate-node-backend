@@ -9,13 +9,13 @@
  */
 
 import { open } from 'node:fs/promises';
+import { ACCEPTED_UPLOAD_TYPES, type AcceptedUploadType } from '@api/upload-types';
 import { imageRuleData } from './images.generated';
 
 /**
  * One accepted image format: its real MIME type, any alias spelling a client may declare, the
- * exact bytes it must begin with, and the extension it's stored under. The single source of
- * truth for "what formats does this API accept" — `ACCEPTED_UPLOAD_MIMETYPES` in `http/middlewares/upload.ts`
- * derives from this list too, so adding a format is one entry here, not three.
+ * exact bytes it must begin with, and the extension it's stored under. It says how to RECOGNISE a
+ * format; which formats the API accepts is the contract's list (`@api/upload-types`).
  */
 interface ImageFormat {
     /** The real MIME type, e.g. `image/png`. */
@@ -39,10 +39,27 @@ interface ImageFormat {
  */
 const SUPPORTED_IMAGE_FORMATS: readonly ImageFormat[] = imageRuleData.formats;
 
-/** Every spelling a client may declare, across all supported formats — including aliases. */
-export const ACCEPTED_UPLOAD_MIMETYPES = new Set(
-    SUPPORTED_IMAGE_FORMATS.flatMap((format) => [format.mime, ...(format.aliases ?? [])])
-);
+/** The MIME types the signature table can recognise. */
+type SignedType = (typeof imageRuleData.formats)[number]['mime'];
+
+/** Resolves to `true` only when two unions name exactly the same members. */
+type SameMembers<TA, TB> = [TA] extends [TB] ? ([TB] extends [TA] ? true : false) : false;
+
+/**
+ * Compile-time proof that the signature table and the contract list the same types. A contract
+ * type with no signature, or a signature for a type the contract does not accept, makes this
+ * annotation fail `tsc`, so the two cannot drift apart in either direction.
+ */
+export const SIGNATURES_COVER_CONTRACT: SameMembers<AcceptedUploadType, SignedType> = true;
+
+/**
+ * Every spelling a client may declare: the contract's accepted types, plus the aliases the
+ * signature table tolerates (the non-IANA `image/jpg` is not API surface, so not in the contract).
+ */
+export const ACCEPTED_UPLOAD_MIMETYPES: ReadonlySet<string> = new Set([
+    ...ACCEPTED_UPLOAD_TYPES,
+    ...SUPPORTED_IMAGE_FORMATS.flatMap((format) => format.aliases ?? [])
+]);
 
 /** Alias spelling → canonical MIME type, built once from the format table. */
 const CANONICAL_MIME_BY_ALIAS = new Map(

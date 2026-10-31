@@ -36,12 +36,12 @@
  */
 import type { Router } from 'express';
 import { asStub } from '@tests/stub';
-import type { StepUpTier } from '@kernel/permissions';
+import type { PermissionAction, PermissionSubject, StepUpTier } from '@kernel/permissions';
 
 /** The action and subject a `requirePermission` guard asks for. */
 export interface PermissionAsk {
-    action: string;
-    subject: string;
+    action: PermissionAction;
+    subject: PermissionSubject;
 }
 
 /** Where a mocked factory records the call that produced a middleware. Internal: see finding 3. */

@@ -173,7 +173,7 @@ that, rebuilt by `postinstall`:
 | ----------------------------------------------------------------| ------------------------------------------------------------------------------------------------------- | ---------- |
 | `openapi.yaml`                                                  | spectral · orval · Prism · the frontend                                                                  | no — gitignored, rebuilt by `postinstall` |
 | `api/models/` · `api/schemas.zod.ts`                            | `@types` and the services that validate input                                                            | no — gitignored, rebuilt by `postinstall` |
-| `api/permission-actions.ts`                                     | `kernel/permissions.ts` — the action vocabulary, from `shared/authorization-keys.yaml` (see [Permission Actions](../tools/permission-actions.md)) | no — gitignored, rebuilt by `postinstall` |
+| `api/permission-vocabulary.ts`                                     | `kernel/permissions.ts` — the action vocabulary, from `shared/authorization-keys.yaml` (see [Permission Vocabulary](../tools/permission-vocabulary.md)) | no — gitignored, rebuilt by `postinstall` |
 | `src/types/asyncapi.generated.ts`                                | every SSE, domain-event and queue call site                                                              | no — gitignored, rebuilt by `postinstall` |
 | `asyncapi.yaml`                                                 | `gen:asyncapi` · `lint:asyncapi`                                                                         | yes |
 | `asyncapi.public.yaml`                                          | the frontend's whole realtime pipeline · `GET /webhooks/events`                                          | yes |

@@ -253,25 +253,62 @@ The drill proves the machinery. For a real incident:
 Both read the dump from restic: `restic dump <snapshot> mongodump.archive | mongorestore --archive ...`.
 The Database Tools spell TLS `--ssl --sslCAFile`, and the bundled `database` requires it.
 
-1. **Stop the writers.** `docker compose stop app cron`.
-2. **List the erasures since the snapshot, before restoring.** See below: this list lives in the
-   database you are about to replace.
-3. **Restore the database**, then the files (`restic restore <files snapshot> --target <dir>`, then copy
+1. **Stop the writers.** `docker compose stop app cron`. They stay stopped until step 5.
+2. **Restore the database**, then the files (`restic restore <files snapshot> --target <dir>`, then copy
    into the `uploads` volume and `storage/mail-spool`).
-4. **Start the stack** and look: log in, open an order, fetch an image.
-5. **Re-apply the erasures** from the list of step 2.
+3. **Put the newest erasure ledger back.** The restored copy only knows erasures from before the snapshot.
+    - **The live database still answers:** copy its `erasureledgers` collection over the restored one
+      (`mongodump --collection erasureledgers`, then `mongorestore --nsInclude="<db>.erasureledgers" --drop`).
+    - **The host is gone:** restore the **newest** snapshot's `erasureledgers` the same way
+      (`--nsInclude` cannot be combined with `--oplogReplay`, so this is its own `mongorestore` run after the
+      full restore of step 2).
+4. **Re-apply the erasures, before anything starts:**
+
+    ```sh
+    npm run ops:reapply-erasures -- --since <the snapshot time, ISO> --snapshot <restic id> --by <your name>
+    ```
+
+    Step 1 is the guard: it does not check that the app and cron are stopped, and the purge job (which has no
+    HTTP port to probe) must not run beside it. It erases again each account the ledger names since `--since`,
+    keeping the original erasure date, and writes one restoration-log audit row (`auth.erasures.reapplied`: who,
+    which snapshot, the counts and ids). Safe to repeat; it exits non-zero while
+    any account could not be erased.
+
+5. **Start the stack** and look: log in, open an order, fetch an image. Mail, stock alerts, the purge job
+   and webhooks only ever see the already-erased state.
 
 ### Erasures after a restore
 
-A backup kept for six months holds accounts erased since. GDPR's accepted standard (the ICO's and CNIL's
-guidance) lets a backup keep them until it ages out, **if** they stay "beyond use" and **every erasure is
-re-applied after a restore**. This repo's promise is exactly that: [Data retention](../theory/data-retention.md#backups-and-erasure).
+A backup kept for six months holds accounts erased since. GDPR's accepted standard (the ICO's guidance, the
+EDPB's 2025 enforcement report) lets a backup keep them until it ages out, **if** they stay "beyond use" and
+**every erasure is re-applied after a restore, before use** (SDM Baustein 60, M60.S10). This repo's promise is
+exactly that: [Data retention](../theory/data-retention.md#backups-and-erasure).
 
-The erasure events (`admin.user.erased`, `system.user.erased`, and `auth.account_delete.completed` for a
-self-deletion, which the purge job writes) are rows in `auditlogs`, **inside the database being restored**: the restored copy only
-knows erasures from before the snapshot. So take the list **first**:
+```mermaid
+flowchart TD
+    Stop["1. stop app and cron"] --> Restore["2. restore database and files"]
+    Restore --> Ledger["3. put the newest ledger back<br/><i>live DB, or newest snapshot</i>"]
+    Ledger --> Reapply["4. ops:reapply-erasures --since"]
+    Reapply -->|failed greater than 0| Reapply
+    Reapply --> Start["5. start the stack"]
+```
 
-- **The database still answers** (a bad migration, a corruption): query it by date, from the snapshot to now.
+The list is the **erasure ledger** (`erasureledgers`): `{ userId, at, kind }`, written inside the erasure's own
+transaction, kept `NODE_ERASURE_LEDGER_RETENTION_DAYS` (220 by default, above the oldest backup with the default
+keep knobs; raise it with them). Raise `BACKUP_KEEP_MONTHLY` and the ledger must outlive it, or a restore of the
+oldest snapshot brings back an account the ledger has forgotten.
+
+**Deletion locks follow the ledger too.** Besides `erased`, the ledger records `scheduled` (with the
+`purgeAt` the owner was promised, stored and never recomputed) and `cancelled`. For each account the command
+applies the latest event since `--since`: `erased` always wins; otherwise a later `scheduled` locks the account
+at the stored date (and ends its sessions), a later `cancelled` clears the lock even if `purgeAt` has passed,
+and cancel-then-ask-again stays scheduled. The log prints the counts and then the ids of every account in each outcome (`erased`, `alreadyGone`, `rescheduled`, `unscheduled`, `unchanged`, `failed`): the restored audit log lost the rows written after the snapshot, so these ids are the record.
+No manual check is needed before starting the stack.
+
+**Only if the ledger is lost** (the host, and the newest snapshot's copy): fall back to the audit events, which
+are shorter-lived (`auditlogs` keeps 90 days, `NODE_AUDIT_RETENTION_DAYS`; Loki 7 by default).
+
+- **The database still answers:**
 
     ```js
     db.auditlogs.find(
@@ -288,22 +325,13 @@ knows erasures from before the snapshot. So take the list **first**:
 
     The erased user is `targetId` for the admin and system events, `actorUserId` for a self-deletion.
 
-- **The database is gone** (the whole host): the same events were also logged as Winston lines in Loki
+- **The database is gone:** the same events were logged as Winston lines in Loki
   (`{service="api"} |= "user.erased"`), if the logs survived off the host.
 
-`auditlogs` keeps 90 days (`NODE_AUDIT_RETENTION_DAYS`) and backups up to six months: a snapshot older
-than 90 days needs Loki for the older part.
-
-After the restore, erase each listed user again (admin `DELETE /users/{id}?hardDelete=true`, a self-deletion
-the same way).
-
-**Scheduled deletions need the same care in both directions.** An account locked by `DELETE /account` carries
-a `purgeAt`, and the purge job erases it once that passes. Re-apply `auth.account_delete.scheduled` and
-`auth.account_delete.cancelled` since the snapshot too (`metadata.via` says how it was cancelled): a restored
-snapshot that still shows the account as scheduled would let the job erase an account the person had since
-restored, and one that shows it active would forget a deletion they had asked for. **If neither source survives**, write it in the incident log, as the
-[Art. 33 runbook](../theory/data-protection.md#breach-runbook-art-33-72-hours) already asks: the erasures
-that could not be re-applied, and why. There is no automatic re-application, on purpose.
+Then erase each listed user again (admin `DELETE /users/{id}?hardDelete=true`) **before step 5**. If no source
+survives, write it in the incident log, as the
+[Art. 33 runbook](../theory/data-protection.md#breach-runbook-art-33-72-hours) already asks: the erasures that
+could not be re-applied, and why.
 
 ## Uploaded images and the mail spool
 

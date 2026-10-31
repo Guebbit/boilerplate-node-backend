@@ -21,10 +21,14 @@ import { AbilityBuilder, createMongoAbility, subject, type MongoAbility } from '
 import type { Caller } from '@types';
 import {
     findRule,
+    isRuleId,
     IMPLIED_ACTIONS,
     PERMISSION_SETS,
     ruleId,
-    type DeclaredRule
+    type ActionOn,
+    type DeclaredRule,
+    type PermissionRuleId,
+    type PermissionSubject
 } from '@kernel/permissions';
 
 /** A caller's rules, in the form every authorization question is asked of. */
@@ -155,13 +159,19 @@ for (const [staff, plain] of Object.entries(IMPLIED_ACTIONS)) {
  * @param action - the action asked, e.g. `display`
  * @param subject - the CASL subject asked about, e.g. `Order`
  */
-export const holds = (caller: Caller, action: string, subject: string): boolean => {
+export const holds = <TSubject extends PermissionSubject>(
+    caller: Caller,
+    action: ActionOn<TSubject>,
+    subject: TSubject
+): boolean => {
     const held = heldRules(caller);
 
-    return (
-        held.has(ruleId(action, subject)) ||
-        (IMPLIED_BY.get(action) ?? []).some((staff) => held.has(ruleId(staff, subject)))
-    );
+    const heldAs = (asked: string): boolean => {
+        const id = ruleId(asked, subject);
+        return isRuleId(id) && held.has(id);
+    };
+
+    return heldAs(action) || (IMPLIED_BY.get(action) ?? []).some((staff) => heldAs(staff));
 };
 
 /**
@@ -188,7 +198,7 @@ export const holdsSet = (caller: Caller, setName: string): boolean => {
  * The ids of the literal rules a caller holds — what tells a caller holding `read:Order` from one
  * holding `display:Order`, and what the role-matrix docs generator reads.
  */
-export const heldRules = (caller: Caller): ReadonlySet<string> =>
+export const heldRules = (caller: Caller): ReadonlySet<PermissionRuleId> =>
     new Set(effectiveRules(caller).map((rule) => rule.id));
 
 /**

@@ -2,8 +2,10 @@
     "tickets": {
         "email-contact": {
             "subject": "New contact request",
+            "subject-overdue": "Overdue contact request",
             "meta-title": "New contact request",
             "title": "New contact request",
+            "title-overdue": "Overdue contact request: nobody has answered it yet",
             "label-name": "Name",
             "label-email": "Email",
             "label-subject": "Subject",

@@ -10,6 +10,7 @@
 
 import { Types } from 'mongoose';
 import type { DomainEventMap } from '@kernel/events';
+import type { PermissionSetName } from '@kernel/permissions';
 import type { NewNotification } from '../repository';
 import { notificationsCreate } from './inbox';
 import { ticketService } from '@modules/tickets';
@@ -195,6 +196,9 @@ export const onOutboxEventDead = ({
         dedupeKey: `outbox-dead:${eventId}`
     }).then(() => undefined);
 
+/** The set that works a contact message; a typo here would alert nobody. */
+const CONTACT_ALERT_SET: PermissionSetName = 'TicketManagement';
+
 /**
  * Who hears of a new ticket: the sets that WORK it. A contact message is read by those who may
  * read it (`TicketDisplay`, which includes managers) but worked by `TicketManagement`; alerting
@@ -203,7 +207,7 @@ export const onOutboxEventDead = ({
  * @param opened - the `ticket.opened` fact
  */
 const alertSetsOf = ({ kind, routeSet }: DomainEventMap['ticket.opened']): string[] =>
-    kind === 'contact' ? ['TicketManagement'] : [routeSet];
+    kind === 'contact' ? [CONTACT_ALERT_SET] : [routeSet];
 
 /**
  * A ticket was opened: everyone who works its kind hears of it once, by id and kind alone.
@@ -228,6 +232,30 @@ export const onTicketOpened = (opened: DomainEventMap['ticket.opened']): Promise
     }).then((told) =>
         told === 0 && opened.kind === 'contact'
             ? ticketService.mailFallbackMailbox(opened.ticketId)
+            : undefined
+    );
+
+/**
+ * An open ticket went overdue: the people the opener told hear of it once more, the same sets, the
+ * same fallback mailbox for a contact message nobody could be told of. The sweep claims a ticket
+ * once, so this runs once per ticket; the dedupe key is the second guard.
+ */
+export const onTicketOverdue = (overdue: DomainEventMap['ticket.overdue']): Promise<void> =>
+    notifyStaff({
+        tenantId: overdue.tenantId,
+        body: {
+            code: 'notifications.staff.ticket-overdue',
+            params: {
+                ticketId: overdue.ticketId,
+                kind: overdue.kind,
+                ...(overdue.category ? { category: overdue.category } : {})
+            }
+        },
+        sets: alertSetsOf(overdue),
+        dedupeKey: `ticket-overdue:${overdue.ticketId}`
+    }).then((told) =>
+        told === 0 && overdue.kind === 'contact'
+            ? ticketService.mailFallbackMailbox(overdue.ticketId, true)
             : undefined
     );
 

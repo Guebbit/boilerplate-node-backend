@@ -8,7 +8,7 @@
  * See: docs/modules/tickets.md
  */
 
-import { TicketKind } from '@types';
+import { RefundFailureReason, TicketKind } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
@@ -179,10 +179,14 @@ export const systemTickets = {
             openSystemTicket(refundOwedOpening(payload, attentionDueAt(new Date())), meta)
         ),
 
-    /** `payment.refund_failed`: only a refusal that ends the retrying is work for a person. */
+    /**
+     * `payment.refund_failed`: only a refusal that ends the retrying is work for a person.
+     * A `disputed` one is not: the bank already returned the money, and the dispute ticket
+     * carries that case.
+     */
     onRefundFailed: (payload: DomainEventMap['payment.refund_failed'], meta: DomainEventMeta) =>
         guarded('payment.refund_failed', () =>
-            payload.final
+            payload.final && payload.failureReason !== RefundFailureReason.disputed
                 ? paymentService
                       .refundDueAt(payload.paymentId, payload.refundId)
                       .then((dueAt) =>

@@ -37,14 +37,16 @@ import { personalDataSubjectOf } from './personal-data-subject';
  * racing on it fails with a confusing "sharded cluster" error that has nothing to do with
  * sharding.
  *
+ * @param erasedAt - the original erasure date, on a repeat erasure after a restore
  * @returns the work the erasers asked to run once this commits
  */
 const runErasureCascade = async (
     user: UserDocument,
-    session: ClientSession
+    session: ClientSession,
+    erasedAt?: Date
 ): Promise<AfterErase[]> => {
     const deferred: AfterErase[] = [];
-    const subject = personalDataSubjectOf(user);
+    const subject = personalDataSubjectOf(user, erasedAt);
     for (const erase of personalDataErasers()) {
         const afterErase = await erase(subject, session);
         if (afterErase) deferred.push(afterErase);
@@ -87,15 +89,17 @@ const runAfterErase = (userId: string, deferred: readonly AfterErase[]): Promise
  * @param claim - the first write of the transaction, when the erasure must be won against a
  * concurrent writer (the scheduled purge against a restore). Resolving `false` abandons the
  * erasure with 409 and nothing deleted.
+ * @param erasedAt - the original erasure date, only for a repeat erasure on a restored database
  */
 export const erase = (
     user: UserDocument,
     context?: CallerContext,
-    claim?: (session: ClientSession) => Promise<boolean>
+    claim?: (session: ClientSession) => Promise<boolean>,
+    erasedAt?: Date
 ): Promise<ResponseSuccess<undefined> | ResponseReject> =>
     withTransaction((session) =>
         (claim ? claim(session) : Promise.resolve(true)).then((won) =>
-            won ? runErasureCascade(user, session) : undefined
+            won ? runErasureCascade(user, session, erasedAt) : undefined
         )
     ).then((deferred) => {
         if (!deferred)
@@ -190,7 +194,11 @@ const restoreScheduled = (
             userRepository
                 .restoreScheduledDeletion(user.id, now, session)
                 .then((restored) => (restored ? user.id : null)),
-        (id) => ({ name: USER_DELETION_CANCELLED, payload: { userId: id }, aggregateId: id })
+        (id) => ({
+            name: USER_DELETION_CANCELLED,
+            payload: { userId: id, cancelledAt: now.toISOString() },
+            aggregateId: id
+        })
     ).then((id) => {
         if (id === null) return due;
 

@@ -16,6 +16,12 @@
                 "title": "Un nuovo ticket richiede qualcuno",
                 "summary": "È stato aperto un ticket e il tuo ruolo se ne occupa: {{what}}. Aprilo per vedere i dettagli e prenderlo in carico."
             },
+            "ticket-overdue": {
+                "subject": "Ticket in ritardo: {{what}}",
+                "meta-title": "Ticket in ritardo",
+                "title": "Un ticket è in ritardo",
+                "summary": "Un ticket di cui si occupa il tuo ruolo ha superato la scadenza ed è ancora aperto: {{what}}. Aprilo per vedere i dettagli e prenderlo in carico."
+            },
             "ticket-kind": {
                 "contact": "Messaggio di contatto",
                 "account_review": "Revisione account",

@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "cookies": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][A-Za-z0-9]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "setter": {
+            "type": "string",
+            "enum": [
+              "backend",
+              "frontend",
+              "library"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "cookie",
+              "localStorage",
+              "sessionStorage"
+            ]
+          },
+          "purpose": {
+            "type": "string",
+            "minLength": 1
+          },
+          "necessity": {
+            "type": "string",
+            "enum": [
+              "necessary",
+              "preference"
+            ]
+          },
+          "secret": {
+            "type": "boolean"
+          },
+          "maxAgeMs": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "lifetime": {
+            "type": "string",
+            "enum": [
+              "sessionTier",
+              "challenge"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "setter",
+          "kind",
+          "purpose",
+          "necessity",
+          "secret"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "cookies"
+  ],
+  "additionalProperties": false
+}

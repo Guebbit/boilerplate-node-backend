@@ -6,6 +6,7 @@
 
 import type { Request } from 'express';
 import { cookieOf } from '@infrastructure/http/cookies';
+import { cookieData } from '@infrastructure/http/cookies.generated';
 
 /**
  * The session cookie's name — the credential every session-cookie read site consumes. One neutral
@@ -14,7 +15,7 @@ import { cookieOf } from '@infrastructure/http/cookies';
  * `Path=/` and carries no `Domain`, so a sibling subdomain can neither set nor overwrite it.
  * https://developer.mozilla.org/docs/Web/HTTP/Cookies#cookie_prefixes
  */
-export const SESSION_COOKIE = '__Host-session';
+export const SESSION_COOKIE = cookieData.session.name;
 
 /**
  * `Authorization: Bearer <token>`, scheme word first. RFC 9110 §11.1 makes the scheme

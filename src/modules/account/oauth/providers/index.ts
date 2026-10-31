@@ -31,7 +31,7 @@ const registry = createProviderRegistry<OAuthProviderFactory>({
 export const registerOAuthProvider = (name: string, factory: OAuthProviderFactory): void =>
     registry.register(name, factory);
 
-/** The names `GET /account/oauth/providers` reports — a deployment with no keys set lists none. */
+/** The names `oauthProviders` on `GET /config` reports — a deployment with no keys set lists none. */
 export const enabledProviders = (): string[] =>
     registry.names().filter((name) => registry.resolve(name)?.() !== undefined);
 

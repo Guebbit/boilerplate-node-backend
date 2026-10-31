@@ -19,6 +19,11 @@ export const accountAuditActions = {
     AUTH_ACCOUNT_DELETE_SCHEDULED: 'auth.account_delete.scheduled',
     /** A scheduled deletion was cancelled — `metadata.via` is `link`, `sign-in` or `staff`. */
     AUTH_ACCOUNT_DELETE_CANCELLED: 'auth.account_delete.cancelled',
+    /**
+     * `ops:reapply-erasures` erased accounts again on a restored database: the restoration log
+     * (ISO/IEC 27701). `metadata` holds who restored, which snapshot and the counts.
+     */
+    AUTH_ERASURES_REAPPLIED: 'auth.erasures.reapplied',
     /** The purge job erased the account once its grace ran out. */
     AUTH_ACCOUNT_DELETE_COMPLETED: 'auth.account_delete.completed',
     AUTH_EMAIL_VERIFY_REQUESTED: 'auth.email_verify.requested',

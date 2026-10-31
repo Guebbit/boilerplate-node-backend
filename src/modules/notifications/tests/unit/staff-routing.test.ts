@@ -13,9 +13,14 @@ import {
     staffLinkOf,
     type StaffNoticeBody
 } from '@modules/notifications/staff-routing';
+import { orderPagePath } from '@modules/orders';
+import { FRONTEND_LINK_RULES } from '@infrastructure/http/frontend-link';
 import { callerAs } from '@tests/callers';
 import { translator } from '@infrastructure/i18n';
 import { TICKET_KINDS } from '@modules/tickets';
+
+/** The shared staff screen paths the links are compared against. */
+const PAGES = FRONTEND_LINK_RULES.staffPages;
 
 /** One valid body per work notice code. */
 const BODIES: Record<(typeof STAFF_NOTIFICATION_CODES)[number], StaffNoticeBody> = {
@@ -29,6 +34,10 @@ const BODIES: Record<(typeof STAFF_NOTIFICATION_CODES)[number], StaffNoticeBody>
     },
     'notifications.staff.ticket-opened': {
         code: 'notifications.staff.ticket-opened',
+        params: { ticketId: 't1', kind: 'contact', category: 'cancellation' }
+    },
+    'notifications.staff.ticket-overdue': {
+        code: 'notifications.staff.ticket-overdue',
         params: { ticketId: 't1', kind: 'contact', category: 'cancellation' }
     },
     'notifications.staff.ticket-assigned': {
@@ -105,26 +114,36 @@ describe('STAFF_ROUTES', () => {
         expect(STAFF_ROUTES['notifications.staff.purchase-hold-placed'].email).toBe('now');
         expect(STAFF_ROUTES['notifications.staff.webhook-disabled'].email).toBe('none');
     });
+
+    it('mails an overdue ticket now, to the same per-notice sets as the opener', () => {
+        expect(STAFF_ROUTES['notifications.staff.ticket-overdue']).toMatchObject({
+            sets: STAFF_ROUTES['notifications.staff.ticket-opened'].sets,
+            email: 'now'
+        });
+    });
 });
 
 describe('staffLinkOf', () => {
-    it('points both ticket notices at the ticket page', () => {
+    it('points every ticket notice at the ticket page', () => {
         expect(staffLinkOf(BODIES['notifications.staff.ticket-opened'])).toEqual({
-            template: 'tickets/{id}',
+            template: PAGES.ticket,
             parameters: { id: 't1' }
         });
-        expect(staffLinkOf(BODIES['notifications.staff.ticket-assigned']).template).toBe(
+        expect(staffLinkOf(BODIES['notifications.staff.ticket-overdue']).template).toBe(
             'tickets/{id}'
+        );
+        expect(staffLinkOf(BODIES['notifications.staff.ticket-assigned']).template).toBe(
+            PAGES.ticket
         );
     });
 
     it('points a hold at the buyer’s account and a disabled webhook at its subscription', () => {
         expect(staffLinkOf(BODIES['notifications.staff.purchase-hold-placed'])).toEqual({
-            template: 'users/{id}',
+            template: PAGES.user,
             parameters: { id: 'u1' }
         });
         expect(staffLinkOf(BODIES['notifications.staff.webhook-disabled'])).toEqual({
-            template: 'webhooks/subscriptions/{id}',
+            template: PAGES.webhookSubscription,
             parameters: { id: 's1' }
         });
     });
@@ -133,28 +152,48 @@ describe('staffLinkOf', () => {
 describe('staffLinkOf for the later notices', () => {
     it('points a return request at the return', () => {
         expect(staffLinkOf(BODIES['notifications.staff.return-requested'])).toEqual({
-            template: 'returns/{id}',
+            template: PAGES.return,
             parameters: { id: 'r1' }
         });
     });
 
     it('points a dead event at the order or account it was about, and at home when it names neither', () => {
         expect(staffLinkOf(BODIES['notifications.staff.outbox-dead'])).toEqual({
-            template: 'orders/{id}',
-            parameters: { id: 'o1' }
+            template: orderPagePath('o1'),
+            parameters: {}
         });
         expect(
             staffLinkOf({
                 code: 'notifications.staff.outbox-dead',
                 params: { eventName: 'user.registered', aggregateId: 'u1' }
             }).template
-        ).toBe('users/{id}');
+        ).toBe(PAGES.user);
         expect(
             staffLinkOf({
                 code: 'notifications.staff.outbox-dead',
                 params: { eventName: 'stock.moved', aggregateId: 'p1' }
             })
         ).toEqual({ template: '', parameters: {} });
+    });
+});
+
+describe('staffLinkOf for the summary rows', () => {
+    it.each([
+        ['notifications.staff.transfers-due', PAGES.salesOrders],
+        ['notifications.staff.preorders-late', PAGES.salesPreorders],
+        ['notifications.staff.delivery-holds-open', PAGES.salesOrders],
+        ['notifications.staff.withdrawals-awaiting-goods', PAGES.returns],
+        ['notifications.staff.returns-undecided', PAGES.returns],
+        ['notifications.staff.low-stock', PAGES.inventory],
+        ['notifications.staff.unshipped', PAGES.salesOrders],
+        ['notifications.staff.awaiting-tracking', PAGES.salesOrders],
+        ['notifications.staff.undelivered', PAGES.salesOrders],
+        ['notifications.staff.stale-refunds', PAGES.salesPayments]
+    ] as const)('points %s at its shared list screen', (code, path) => {
+        expect(staffLinkOf({ code, params: { count: 2 } })).toEqual({
+            template: path,
+            parameters: {}
+        });
     });
 });
 

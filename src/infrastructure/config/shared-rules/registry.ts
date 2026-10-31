@@ -9,6 +9,7 @@
 
 import type { z } from 'zod';
 import { auditActionsSchema } from './audit-actions';
+import { cookiesSchema } from './cookies';
 import { defaultsSchema } from './defaults';
 import { frontendLinksSchema } from './frontend-links';
 import type { GenerateSpec } from './generate-spec';
@@ -42,6 +43,21 @@ export const SHARED_RULES: Readonly<Record<string, SharedRuleEntry>> = {
                     field: 'actions',
                     description:
                         'The app-level audit actions: the guards emit them for requests refused before any domain saw them.'
+                }
+            ]
+        }
+    },
+    cookies: {
+        schema: cookiesSchema,
+        generate: {
+            out: 'src/infrastructure/http/cookies.generated.ts',
+            exports: [
+                {
+                    exportName: 'cookieData',
+                    shape: 'verbatim',
+                    field: 'cookies',
+                    description:
+                        'Every cookie the backend sets, by id: name, purpose, necessity, secret and lifetime.'
                 }
             ]
         }

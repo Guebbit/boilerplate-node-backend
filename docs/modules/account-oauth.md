@@ -222,14 +222,14 @@ callback turns that into a generic `?error=provider_error`, and the caller's ret
 
 ## The endpoint surface, and how failure travels
 
-| Route                                   | Answers                                                     |
-| --------------------------------------- | ----------------------------------------------------------- |
-| `GET /account/oauth/providers`          | the configured names — a deployment with no keys lists none |
-| `GET /account/oauth/:provider`          | 302 to the consent screen, `state` cookie set               |
-| `GET /account/oauth/:provider/callback` | 302 back to the frontend, session cookies set               |
+| Route                                   | Answers                                       |
+| --------------------------------------- | --------------------------------------------- |
+| `GET /account/oauth/:provider`          | 302 to the consent screen, `state` cookie set |
+| `GET /account/oauth/:provider/callback` | 302 back to the frontend, session cookies set |
 
-All three are public, because this **is** how an unauthenticated caller signs in. The last two sit
-behind `credentialLimiters`; `GET /account/oauth/providers` is informational and has no limiter.
+Both are public, because this **is** how an unauthenticated caller signs in. Both sit behind
+`credentialLimiters`. Which providers exist is `oauthProviders` on [`GET /config`](../api/config.md):
+a deployment with no keys lists none.
 
 Only two failures answer with a body. Everything past the state check redirects to the frontend
 with `?error=<code>`, because by then the browser is mid-navigation and a JSON body has nowhere to

@@ -251,7 +251,7 @@ flowchart LR
 - **The account keeps its customer powers and can enrol**, so nobody is locked out of the app that
   unlocks the role. `403 SECOND_FACTOR_ENROLLMENT_REQUIRED` is said only to a session that WOULD
   hold the rule once enrolled; anyone else gets the plain refusal.
-- **`GET /account/abilities` carries `secondFactorRequired`**, so a client shows an "enrol to use
+- **The `abilities` on `GET /account` carry `secondFactorRequired`**, so a client shows an "enrol to use
   your staff tools" prompt instead of a staff menu the server will refuse.
 - **Taking the app away revokes the keys the staff member minted** (`account.authenticator-removed`,
   announced from the same removal; `api-keys` revokes). A key also never holds more than its minter

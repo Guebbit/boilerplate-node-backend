@@ -2,8 +2,10 @@
     "tickets": {
         "email-contact": {
             "subject": "Nuova richiesta di contatto",
+            "subject-overdue": "Richiesta di contatto in ritardo",
             "meta-title": "Nuova richiesta di contatto",
             "title": "Nuova richiesta di contatto",
+            "title-overdue": "Richiesta di contatto in ritardo: nessuno ha ancora risposto",
             "label-name": "Nome",
             "label-email": "Email",
             "label-subject": "Oggetto",

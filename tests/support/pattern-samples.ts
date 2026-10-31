@@ -18,6 +18,9 @@ const PATTERN_SAMPLES: Record<string, string> = {
     '^[a-z]{2}(-[A-Za-z0-9]+)*$': 'it',
     // CountryCode — ISO 3166-1 alpha-2.
     '^[A-Z]{2}$': 'IT',
+    // CurrencyCode — ISO 4217 alphabetic; the shop's own currency, so a payload also passes the
+    // refund and checkout rules that compare it with the payment's.
+    '^[A-Z]{3}$': 'EUR',
     // Id — the shared resource identifier. An ObjectId-shaped sample, so a payload built from the
     // contract also names an id this backend would accept, not only one the contract does.
     '^[0-9A-Za-z_-]+$': '65dc8a99604c307b702b5ccc',

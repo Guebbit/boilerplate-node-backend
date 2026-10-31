@@ -50,6 +50,7 @@ import { inJurisdiction, jurisdictionScope, mayDelete } from './access';
 import { presentTicket, withView } from './presenter';
 import { assigneeNamesOf, viewerOf } from './views';
 import { workflow } from './services/workflow';
+import { remindOverdue } from './services/overdue';
 
 /** How long a contact message may wait before it is overdue, in milliseconds. */
 const contactSlaMs = (): number => ticketsConfig().NODE_TICKETS_CONTACT_SLA_HOURS * 3_600_000;
@@ -126,8 +127,9 @@ const create = (
  * `CallerContext`. A failed queue is logged, never raised: the ticket is already stored.
  *
  * @param ticketId - the contact ticket that found nobody to tell
+ * @param overdue - word it as the reminder that the message is late, not as a new one
  */
-const mailFallbackMailbox = (ticketId: string): Promise<void> => {
+const mailFallbackMailbox = (ticketId: string, overdue = false): Promise<void> => {
     const mailbox = ticketsConfig().NODE_CONTACT_NOTIFY_EMAIL;
     if (!mailbox) return Promise.resolve();
 
@@ -140,7 +142,8 @@ const mailFallbackMailbox = (ticketId: string): Promise<void> => {
             subject: ticket.subject,
             message: ticket.message,
             category: ticket.category,
-            createdAt: ticket.createdAt?.toISOString()
+            createdAt: ticket.createdAt?.toISOString(),
+            overdue
         });
 
         return enqueueEmail(
@@ -447,6 +450,7 @@ const eraseOwnTickets = async (
 export const ticketService = {
     create,
     mailFallbackMailbox,
+    remindOverdue,
     search,
     getById,
     removeById,

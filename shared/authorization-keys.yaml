@@ -68,7 +68,7 @@ version: 1
 #     rule every signed-in account holds. A subject with no own-rows rule keeps plain `read`.
 #
 # THIS LIST IS THE ONE HOME of the vocabulary: `npm run gen:api` turns it into
-# `api/permission-actions.ts` (and the frontend's copy), so no code types it a second time.
+# `api/permission-vocabulary.ts` (and the frontend's copy), so no code types it a second time.
 actions:
     - read
     - create

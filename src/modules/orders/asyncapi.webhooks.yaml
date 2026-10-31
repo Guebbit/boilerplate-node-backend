@@ -123,7 +123,7 @@ components:
                 - orderId
             properties:
                 orderId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
             additionalProperties: false
         OrderCreatedEnvelope:
             type: object

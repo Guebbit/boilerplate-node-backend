@@ -12,10 +12,11 @@
 
 import type { Request, Response } from 'express';
 import { cookieOf } from '@infrastructure/http/cookies';
+import { cookieData } from '@infrastructure/http/cookies.generated';
 import { hostCookieOptions } from '../session/cookies';
 
 /** The MFA challenge cookie — single-attempt, cleared once the challenge is spent. */
-const MFA_CHALLENGE_COOKIE = '__Host-oauth_mfa_challenge';
+const MFA_CHALLENGE_COOKIE = cookieData.oauthMfaChallenge.name;
 
 /**
  * Set the challenge cookie for one OAuth 2FA continuation. Its lifetime tracks the challenge's

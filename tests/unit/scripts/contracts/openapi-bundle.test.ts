@@ -309,38 +309,52 @@ describe('withVersionedResources', () => {
     });
 });
 
-/** `withNotModified` — the shared 304 on the listed reads, and only those. */
-const run304 = (reads: string[]) =>
+/** `withNotModified` — the shared 304 on the reads that declare `x-cache`, and only those. */
+const run304 = (cache: Record<string, string | undefined>) =>
     (
         parseYaml(
             withNotModified(
                 stringifyYaml({
                     openapi: '3.1.0',
                     paths: {
-                        '/things': { get: { responses: { '200': { description: 'ok' } } } },
+                        '/things': {
+                            get: {
+                                ...(cache['/things'] && { 'x-cache': cache['/things'] }),
+                                responses: { '200': { description: 'ok' } }
+                            }
+                        },
                         '/other': { get: { responses: { '200': { description: 'ok' } } } }
                     }
-                }),
-                reads
+                })
             )
         ) as { paths: Record<string, { get: { responses: Record<string, unknown> } }> }
     ).paths;
 
 describe('withNotModified', () => {
-    it('adds the shared 304 to a listed read and leaves its other answers', () => {
-        const paths = run304(['/things']);
+    it.each(['private-no-cache', 'revalidate', 'max-age: 3600'])(
+        'adds the shared 304 to a read declaring x-cache: %s, and leaves its other answers',
+        (policy) => {
+            const paths = run304({ '/things': policy });
 
-        expect(paths['/things']?.get.responses['304']).toEqual({
-            $ref: '#/components/responses/NotModified'
-        });
-        expect(paths['/things']?.get.responses['200']).toEqual({ description: 'ok' });
+            expect(paths['/things']?.get.responses['304']).toEqual({
+                $ref: '#/components/responses/NotModified'
+            });
+            expect(paths['/things']?.get.responses['200']).toEqual({ description: 'ok' });
+        }
+    );
+
+    it('gives no-store a Cache-Control header on its 200 and no 304', () => {
+        const paths = run304({ '/things': 'no-store' });
+        const responses = paths['/things']?.get.responses as Record<string, { headers?: object }>;
+
+        expect(responses['304']).toBeUndefined();
+        expect(responses['200']?.headers).toHaveProperty('Cache-Control');
     });
 
-    it('leaves an unlisted read alone, and skips a listed path nothing documents', () => {
-        const paths = run304(['/things', '/undocumented']);
+    it('leaves a read with no x-cache alone', () => {
+        const paths = run304({ '/things': 'revalidate' });
 
         expect(paths['/other']?.get.responses['304']).toBeUndefined();
-        expect(paths['/undocumented']).toBeUndefined();
     });
 });
 

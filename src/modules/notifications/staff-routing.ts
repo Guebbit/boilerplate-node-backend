@@ -12,6 +12,8 @@
 import { NotificationSeverity } from '@types';
 import type { Caller } from '@types';
 import { holdsSet } from '@kernel/ability';
+import { FRONTEND_LINK_RULES } from '@infrastructure/http/frontend-link';
+import { orderPagePath } from '@modules/orders';
 import type { NotificationBody, StaffNotificationCode, StaffSummaryCode } from './model';
 
 /** One work notice's routing: its audience, its mail class and how loud it is. */
@@ -50,6 +52,13 @@ export const STAFF_ROUTES: Readonly<Record<StaffNotificationCode, StaffRoute>> =
         sets: 'per-notice',
         email: 'now',
         severity: NotificationSeverity.info
+    },
+    // The same people as the opener, once, when the ticket passes its due date and nobody closed
+    // it: this is the "overdue" mail the digest's rule describes. Warning, since something is late.
+    'notifications.staff.ticket-overdue': {
+        sets: 'per-notice',
+        email: 'now',
+        severity: NotificationSeverity.warning
     },
     // Told to the one person it was given to: the bell is enough, they are already working.
     'notifications.staff.ticket-assigned': {
@@ -146,18 +155,21 @@ export interface StaffLink {
     parameters: Record<string, string>;
 }
 
+/** Where the staff screens live: the shared `staffPages` paths, in the frontend's own router. */
+const PAGES = FRONTEND_LINK_RULES.staffPages;
+
 /** The admin page that lists what each summary row counts. */
 const SUMMARY_PAGES: Readonly<Record<StaffSummaryCode, string>> = {
-    'notifications.staff.transfers-due': 'sales/orders',
-    'notifications.staff.preorders-late': 'sales/preorders',
-    'notifications.staff.delivery-holds-open': 'sales/orders',
-    'notifications.staff.withdrawals-awaiting-goods': 'returns',
-    'notifications.staff.returns-undecided': 'returns',
-    'notifications.staff.low-stock': 'inventory',
-    'notifications.staff.unshipped': 'sales/orders',
-    'notifications.staff.awaiting-tracking': 'sales/orders',
-    'notifications.staff.undelivered': 'sales/orders',
-    'notifications.staff.stale-refunds': 'sales/payments'
+    'notifications.staff.transfers-due': PAGES.salesOrders,
+    'notifications.staff.preorders-late': PAGES.salesPreorders,
+    'notifications.staff.delivery-holds-open': PAGES.salesOrders,
+    'notifications.staff.withdrawals-awaiting-goods': PAGES.returns,
+    'notifications.staff.returns-undecided': PAGES.returns,
+    'notifications.staff.low-stock': PAGES.inventory,
+    'notifications.staff.unshipped': PAGES.salesOrders,
+    'notifications.staff.awaiting-tracking': PAGES.salesOrders,
+    'notifications.staff.undelivered': PAGES.salesOrders,
+    'notifications.staff.stale-refunds': PAGES.salesPayments
 };
 
 /**
@@ -169,10 +181,18 @@ const SUMMARY_PAGES: Readonly<Record<StaffSummaryCode, string>> = {
  * @param aggregateId - what it was about
  */
 const outboxAggregateLink = (eventName: string, aggregateId: string): StaffLink => {
-    const template = { order: 'orders/{id}', user: 'users/{id}' }[eventName.split('.', 1).join('')];
-    return template === undefined
-        ? { template: '', parameters: {} }
-        : { template, parameters: { id: aggregateId } };
+    switch (eventName.split('.', 1).join('')) {
+        case 'order': {
+            // Already filled in: the order page's path honours `NODE_FRONTEND_LINK_ORDER`.
+            return { template: orderPagePath(aggregateId), parameters: {} };
+        }
+        case 'user': {
+            return { template: PAGES.user, parameters: { id: aggregateId } };
+        }
+        default: {
+            return { template: '', parameters: {} };
+        }
+    }
 };
 
 /**
@@ -184,20 +204,21 @@ const outboxAggregateLink = (eventName: string, aggregateId: string): StaffLink 
 export const staffLinkOf = (body: StaffNoticeBody): StaffLink => {
     switch (body.code) {
         case 'notifications.staff.purchase-hold-placed': {
-            return { template: 'users/{id}', parameters: { id: body.params.userId } };
+            return { template: PAGES.user, parameters: { id: body.params.userId } };
         }
         case 'notifications.staff.webhook-disabled': {
             return {
-                template: 'webhooks/subscriptions/{id}',
+                template: PAGES.webhookSubscription,
                 parameters: { id: body.params.subscriptionId }
             };
         }
         case 'notifications.staff.ticket-opened':
+        case 'notifications.staff.ticket-overdue':
         case 'notifications.staff.ticket-assigned': {
-            return { template: 'tickets/{id}', parameters: { id: body.params.ticketId } };
+            return { template: PAGES.ticket, parameters: { id: body.params.ticketId } };
         }
         case 'notifications.staff.return-requested': {
-            return { template: 'returns/{id}', parameters: { id: body.params.returnId } };
+            return { template: PAGES.return, parameters: { id: body.params.returnId } };
         }
         case 'notifications.staff.outbox-dead': {
             return outboxAggregateLink(body.params.eventName, body.params.aggregateId);

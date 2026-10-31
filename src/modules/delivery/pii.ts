@@ -11,23 +11,12 @@
 
 import type { Types } from 'mongoose';
 import { encryptPii, decryptPii } from '@infrastructure/security/pii-encryption';
+import { POSTAL_ADDRESS_FIELDS, type PostalAddressField } from '@domain-primitives/postal-address';
 import type { OrderAddress } from '@types';
 
-/** The address fields, in one place so encrypt and decrypt walk the same list. */
-export const DESTINATION_FIELDS = [
-    'fullName',
-    'street',
-    'city',
-    'zip',
-    'country',
-    'phone'
-] as const;
-
 /** The associated data binding one destination field to one shipment. */
-export const destinationAad = (
-    field: (typeof DESTINATION_FIELDS)[number],
-    shipmentId: string
-): string => `delivery:shipments.destination.${field}:${shipmentId}`;
+export const destinationAad = (field: PostalAddressField, shipmentId: string): string =>
+    `delivery:shipments.destination.${field}:${shipmentId}`;
 
 /**
  * Rewrites every present field of one address with `convert`, into a fresh plain object holding
@@ -37,10 +26,10 @@ export const destinationAad = (
  */
 const mapDestination = (
     address: OrderAddress,
-    convert: (value: string, field: (typeof DESTINATION_FIELDS)[number]) => string
+    convert: (value: string, field: PostalAddressField) => string
 ): OrderAddress => {
     const result: Partial<OrderAddress> = {};
-    for (const field of DESTINATION_FIELDS) {
+    for (const field of POSTAL_ADDRESS_FIELDS) {
         const value = address[field];
         if (value !== undefined) result[field] = convert(value, field);
     }

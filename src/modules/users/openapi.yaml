@@ -30,6 +30,7 @@ paths:
     # --------- Users ---------
     /users:
         get:
+            x-cache: private-no-cache
             tags: [Users]
             summary: List users (paginated)
             description: Returns a paginated list of user accounts.
@@ -164,6 +165,7 @@ paths:
         x-versioned: [get, put, patch, delete]
         # Same as GET /users?id={id}
         get:
+            x-cache: private-no-cache
             tags: [Users]
             summary: User details
             description: Returns the full profile of the user identified by `{id}`. Functionally equivalent to `GET /users?id={id}`.
@@ -591,7 +593,7 @@ components:
                     type: string
                     minLength: 3
                     maxLength: 50
-                # A name from `grantableRoles` (`GET /account/abilities`). A caller without
+                # A name from `grantableRoles` (`abilities` on `GET /account`). A caller without
                 # `assign:Role` gets `403 ROLE_MANAGEMENT_REQUIRED`; any other name is a `422`
                 # naming `role`.
                 role:
@@ -630,7 +632,6 @@ components:
                     type: boolean
                     default: true
                 imageUpload:
-                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional user profile image
@@ -688,7 +689,6 @@ components:
                     maxLength: 64
                     minLength: 1
                 imageUpload:
-                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional user profile image
@@ -753,7 +753,6 @@ components:
                     maxLength: 64
                     minLength: 1
                 imageUpload:
-                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional user profile image

@@ -91,6 +91,12 @@ interface QueryFixture {
 
 const QUERY_FIXTURES: Partial<Record<string, QueryFixture>> = {
     'GET /audit': { request: adminQuery('/audit') },
+    'DELETE /notifications': {
+        request: async (query) => {
+            const { bearer } = await authenticateAs('admin');
+            return api().delete(`/notifications?${query}`).set('Authorization', bearer);
+        }
+    },
     'GET /observability/audit': { request: adminQuery('/observability/audit') },
     'GET /tickets': { request: adminQuery('/tickets') },
     'GET /examples': { request: adminQuery('/examples') },
@@ -332,7 +338,10 @@ const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
         // A buyer's own return takes neither field: the server sets the date, and a channel belongs
         // to a withdrawal that staff record. The schema declares both for the staff path.
         requestedAt: () => undefined,
-        statedVia: () => undefined
+        statedVia: () => undefined,
+        // A preferred remedy is legal only beside a `defective` or `wrong_item` reason, which the
+        // schema cannot say; a generated pair that disagrees is a 422, not a schema refusal.
+        preferredRemedy: () => undefined
     },
     changePassword: {
         currentPassword: () => PLAIN_PASSWORD,

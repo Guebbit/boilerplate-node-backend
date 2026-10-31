@@ -31,7 +31,7 @@ One variable, `NODE_SESSION_MODE`, read through `session/config.ts`. Documented 
 - **Switching signs everyone out.** A row belongs to the mode that issued it: a `jwt` refresh token
   is no `ses_…` id and the reverse, and `GET /account/sessions` lists only the active mode's rows.
   The old rows age out by their own date.
-- **The frontend follows on its own.** It reads `GET /account/session-config` at boot and picks its
+- **The frontend follows on its own.** It reads `session` on `GET /config` at boot and picks its
   transport: the access-token interceptor in `jwt` mode, `credentials: 'include'` and no interceptor
   in `cookie` mode. The same answer carries each tier's lifetime (`lifetimeSeconds`) and the staff
   cap (`staffLifetimeSeconds`), so the cookie list prints the deployment's numbers, not its own.

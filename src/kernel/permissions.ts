@@ -32,7 +32,18 @@ import type {
     TenantCaller
 } from '@types';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
-import { PERMISSION_ACTIONS, type PermissionAction } from '@api/permission-actions';
+import {
+    AUTHORIZATION_SCOPES,
+    PERMISSION_ACTIONS,
+    PERMISSION_SET_NAMES,
+    PERMISSION_SUBJECTS as DECLARED_SUBJECTS,
+    STEP_UP_TIERS,
+    type PermissionAction,
+    type PermissionRuleId,
+    type PermissionSetName,
+    type PermissionSubject,
+    type StepUpTier
+} from '@api/permission-vocabulary';
 
 /**
  * The id of the rule that does `action` to `subject`: `display:Order`.
@@ -50,21 +61,23 @@ export const ruleId = (action: string, subject: string): string => `${action}:${
  * The action vocabulary a declared RULE may carry, generated from `shared/authorization-keys.yaml`'s
  * `actions:` so the type and the Zod schema below draw on the one list. `manage` is deliberately
  * absent: there is no wildcard of any kind, so nothing declares it as ITS action.
- * See docs/tools/permission-actions.md.
+ * See docs/tools/permission-vocabulary.md.
  */
-export type { PermissionAction } from '@api/permission-actions';
+export type {
+    ActionOn,
+    PermissionAction,
+    PermissionRuleId,
+    PermissionSetName,
+    PermissionSubject,
+    StepUpTier
+} from '@api/permission-vocabulary';
 
-/** The two scopes a rule or role may carry — kept here as a runtime array purely to validate the shared YAML against {@link AuthorizationScope} without duplicating the literal elsewhere. */
-const AUTHORIZATION_SCOPES = [
-    'tenant',
-    'platform'
-] as const satisfies readonly AuthorizationScope[];
-
-/** How recently a caller must have proved themselves to use a rule that demands it. */
-export type StepUpTier = 'critical' | 'sensitive';
-
-/** Runtime validator for {@link StepUpTier}, applied to the shared YAML's `stepUp` fields. */
-const stepUpTierSchema = z.enum(['critical', 'sensitive']);
+/**
+ * Runtime validator for {@link StepUpTier}, applied to the shared YAML's `stepUp` fields.
+ * Circular at runtime: the generated list IS the YAML's `stepUp:` keys, so it narrows the type
+ * and cannot refuse a tier the YAML declares.
+ */
+const stepUpTierSchema = z.enum(STEP_UP_TIERS);
 
 /**
  * One declared rule: an action on a subject, narrowed by its conditions.
@@ -76,7 +89,7 @@ const stepUpTierSchema = z.enum(['critical', 'sensitive']);
 export interface PermissionRule {
     /** The module that owns the rule; the one whose fragment declares it. */
     module: string;
-    subject: string;
+    subject: PermissionSubject;
     action: PermissionAction;
     scope: AuthorizationScope;
     description: string;
@@ -120,7 +133,8 @@ export interface PermissionRule {
 /** Runtime shape for one entry of `shared/authorization-keys.yaml`'s `rules` list. */
 const permissionRuleSchema = z.object({
     module: z.string(),
-    subject: z.string(),
+    // Circular at runtime (the list is the YAML's own subjects); it only narrows the type.
+    subject: z.enum(DECLARED_SUBJECTS),
     action: z.enum(PERMISSION_ACTIONS),
     scope: z.enum(AUTHORIZATION_SCOPES),
     description: z.string(),
@@ -136,7 +150,7 @@ const permissionRuleSchema = z.object({
  * not about an action.
  */
 export interface PermissionSet {
-    name: string;
+    name: PermissionSetName;
     module: string;
     description: string;
     /** The ids (`display:Order`) of the rules the set bundles. */
@@ -145,7 +159,8 @@ export interface PermissionSet {
 
 /** Runtime shape for one entry of `shared/authorization-keys.yaml`'s `sets` list. */
 const permissionSetSchema = z.object({
-    name: z.string(),
+    // Circular at runtime (the list is the YAML's own set names); it only narrows the type.
+    name: z.enum(PERMISSION_SET_NAMES),
     module: z.string(),
     description: z.string(),
     rules: z.array(z.string())
@@ -224,11 +239,13 @@ export const keysDocumentSchema = z.object({
 export const rolesDocumentSchema = z.object({
     version: z.number(),
     roles: z.array(presetRoleSchema),
-    audience: z.object({
-        guest: audienceRoleSchema,
-        unverified: audienceRoleSchema,
-        customer: audienceRoleSchema
-    })
+    // Built from AUDIENCE_NAMES and strict: an audience the code does not know is refused, not silently dropped.
+    audience: z.strictObject(
+        Object.fromEntries(AUDIENCE_NAMES.map((name) => [name, audienceRoleSchema])) as Record<
+            AudienceName,
+            typeof audienceRoleSchema
+        >
+    )
 });
 
 /** The repo-root `shared/` directory every authorization YAML file lives under. */
@@ -265,17 +282,19 @@ const rolesDocument = readShared('authorization-roles.yaml', rolesDocumentSchema
 /** A declared rule together with its id — what every lookup below hands back. */
 export interface DeclaredRule extends PermissionRule {
     /** `<action>:<subject>`, see {@link ruleId}. */
-    id: string;
+    id: PermissionRuleId;
 }
 
 /** Every declared rule, in the order the shared file lists them. */
 export const PERMISSION_RULES: readonly DeclaredRule[] = keysDocument.rules.map((rule) => ({
     ...rule,
-    id: ruleId(rule.action, rule.subject)
+    // A string until the pair is looked up: the generated id list is the YAML's own, so no schema
+    // could say more than this cast does. `tests/cross-cutting/permission-vocabulary.test.ts` pins it.
+    id: ruleId(rule.action, rule.subject) as PermissionRuleId
 }));
 
 /** Every declared rule, indexed by its id for {@link findRule}'s O(1) lookup. */
-const byId = new Map(PERMISSION_RULES.map((rule) => [rule.id, rule]));
+const byId = new Map<string, DeclaredRule>(PERMISSION_RULES.map((rule) => [rule.id, rule]));
 
 if (byId.size !== PERMISSION_RULES.length) {
     throw new Error(
@@ -287,7 +306,7 @@ if (byId.size !== PERMISSION_RULES.length) {
 export const PERMISSION_SETS: readonly PermissionSet[] = keysDocument.sets;
 
 /** Every declared set, indexed by name for {@link expandSets}. */
-const setsByName = new Map(PERMISSION_SETS.map((set) => [set.name, set]));
+const setsByName = new Map<string, PermissionSet>(PERMISSION_SETS.map((set) => [set.name, set]));
 
 for (const set of PERMISSION_SETS) {
     const undeclared = set.rules.filter((id) => !byId.has(id));
@@ -334,7 +353,7 @@ const expandSets = (owner: string, names: readonly string[]): string[] => [
 ];
 
 /**
- * A fingerprint of a permission-rule set, for `GET /account/abilities`' cache-busting `version`.
+ * A fingerprint of a permission-rule set, for the abilities' cache-busting `version`.
  *
  * A plain COUNT (the previous version of this) cannot tell "the same 40 rules" from "40 DIFFERENT
  * rules" — a rule rename or a rule-for-rule swap leaves the length untouched, so a client's cached
@@ -354,15 +373,6 @@ export const permissionModelVersion = (ids: readonly string[]): number => {
     const digest = createHash('sha256').update(ids.toSorted().join('\n')).digest();
     return digest.readUInt32BE(0);
 };
-
-/**
- * Every CASL subject a declared rule names, deduplicated and sorted — published on
- * `GET /account/abilities` so a client's `meta.can` rules can be typed against the real set
- * instead of an unchecked string.
- */
-export const PERMISSION_SUBJECTS: readonly string[] = [
-    ...new Set(PERMISSION_RULES.map((entry) => entry.subject))
-].toSorted();
 
 /** Every preset role, read once at import — fixed data, not a runtime-editable set; see this module's own docblock. */
 export const PRESET_ROLES: readonly PresetRole[] = rolesDocument.roles.map((role) => ({
@@ -469,6 +479,14 @@ export const anonymousCaller = (): Caller => ({
 
 /** A declared rule by id, or `undefined`. Wildcards are not declared rules and never resolve. */
 export const findRule = (id: string): DeclaredRule | undefined => byId.get(id);
+
+/**
+ * Narrows a stored or computed string to a declared rule id. For the data boundary: a database
+ * row or a joined string reaching the typed {@link heldRules} set, which refuses a plain `string`.
+ *
+ * @param id - any string
+ */
+export const isRuleId = (id: string): id is PermissionRuleId => byId.has(id);
 
 /**
  * Refuse a rule no module declares — on ASSIGNMENT and at route mount, not at check time.
@@ -617,11 +635,11 @@ export const staffRoleWithheld = (
  * it reaches a caller. Defaults to `tenant` for a subject nothing declares — the narrower of the
  * two, so an unknown subject is restricted rather than opened.
  */
-const scopeOfSubject = (subject: string): AuthorizationScope =>
+const scopeOfSubject = (subject: PermissionSubject): AuthorizationScope =>
     PERMISSION_RULES.find((entry) => entry.subject === subject)?.scope ?? 'tenant';
 
 /** The `Caller` an `AuthContext` becomes for a SUBJECT's rows — see {@link scopeOfSubject}. */
-export const callerForSubject = (context: AuthContext, subject: string): Caller =>
+export const callerForSubject = (context: AuthContext, subject: PermissionSubject): Caller =>
     callerInScope(context, scopeOfSubject(subject));
 
 /**
@@ -714,7 +732,7 @@ export const isSystemActor = (caller: AuthContext | undefined): boolean =>
  * @param subject - the entity being audited, e.g. `'User'` — picks tenant or platform scope the
  * same way {@link callerForSubject} does for the write itself
  */
-export const systemCallerContext = (subject: string): CallerContext => ({
+export const systemCallerContext = (subject: PermissionSubject): CallerContext => ({
     caller: callerForSubject(SYSTEM_ACTOR, subject),
     analyticsConsent: false
 });

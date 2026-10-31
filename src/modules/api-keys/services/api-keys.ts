@@ -60,7 +60,7 @@ const isMintable = (id: string, caller: Caller): boolean => {
         declared?.scope === 'tenant' &&
         declared.stepUp === undefined &&
         declared.credential !== false &&
-        heldRules(caller).has(id)
+        heldRules(caller).has(declared.id)
     );
 };
 

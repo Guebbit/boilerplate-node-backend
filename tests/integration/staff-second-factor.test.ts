@@ -38,12 +38,12 @@ describe('a staff role without an authenticator app', () => {
         expect(own.status).toBe(200);
     });
 
-    it('tells the client so on the abilities answer, and withholds the role’s rules', async () => {
+    it('tells the client so on the account answer, and withholds the role’s rules', async () => {
         const { bearer } = await unarmedStaff('manager');
 
-        const abilities = await api().get('/account/abilities').set('Authorization', bearer);
+        const account = await api().get('/account').set('Authorization', bearer);
 
-        expect(abilities.body.secondFactorRequired).toBe(true);
+        expect(account.body.abilities.secondFactorRequired).toBe(true);
     });
 
     it('is not told apart from a plain refusal when the rule is not the role’s anyway', async () => {
@@ -98,10 +98,10 @@ describe('a staff role without an authenticator app', () => {
         await forgetSessionEpoch(bearer);
 
         const staff = await api().get('/orders/export').set('Authorization', bearer);
-        const abilities = await api().get('/account/abilities').set('Authorization', bearer);
+        const account = await api().get('/account').set('Authorization', bearer);
 
         expect(staff.status).toBe(200);
-        expect(abilities.body.secondFactorRequired).toBe(false);
+        expect(account.body.abilities.secondFactorRequired).toBe(false);
     });
 });
 

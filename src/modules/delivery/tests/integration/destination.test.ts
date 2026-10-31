@@ -33,7 +33,8 @@ const FIRST = {
     street: '12 Analytical Engine Rd',
     city: 'Milano',
     zip: '20100',
-    country: 'IT'
+    country: 'IT',
+    phone: '+39 02 555 0100'
 };
 
 /** Where the rest is redirected to. */
@@ -72,6 +73,7 @@ describe('a shipment keeps where it went', () => {
         expect(shipped.success && shipped.data.destination).toMatchObject(FIRST);
         const raw = JSON.stringify(await shipmentModel.collection.findOne({ orderId: order._id }));
         expect(raw).not.toContain('Analytical');
+        expect(raw).not.toContain(FIRST.phone);
         expect(raw).toContain('destination');
     });
 
@@ -154,7 +156,7 @@ describe('rotating the PII key', () => {
             const first = await deliveryModule.reencrypt?.(false);
             const second = await deliveryModule.reencrypt?.(false);
 
-            expect(first?.rewritten).toBe(5);
+            expect(first?.rewritten).toBe(6);
             expect(second?.rewritten).toBe(0);
             const raw = await shipmentModel.findOne({ orderId: order._id }).exec();
             expect(keyVersionOf(raw!.destination!.city)).toBe('v2');

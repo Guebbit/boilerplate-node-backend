@@ -8,13 +8,14 @@ import type { EncryptedField } from '@infrastructure/security/reencrypt';
 import { getPiiEncryptionKeyRing, piiBinding } from '@infrastructure/security/pii-encryption';
 import type { OrderDocument } from '../model';
 import { orderRepository } from '../repository';
-import { ADDRESS_FIELDS, ADDRESS_PATHS, addressAad, notesAad } from '../pii';
+import { POSTAL_ADDRESS_FIELDS } from '@domain-primitives/postal-address';
+import { ADDRESS_PATHS, addressAad, notesAad } from '../pii';
 
 /** Every encrypted value one order holds, bound to its own `_id`. */
 const fieldsOf = (order: OrderDocument): EncryptedField[] => {
     const id = String(order._id);
     const addresses = ADDRESS_PATHS.flatMap((path) =>
-        ADDRESS_FIELDS.flatMap((field) => {
+        POSTAL_ADDRESS_FIELDS.flatMap((field) => {
             const stored = order[path]?.[field];
             return stored === undefined
                 ? []

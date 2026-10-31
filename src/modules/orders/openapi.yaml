@@ -43,6 +43,7 @@ x-personal-data:
 paths:
     /orders:
         get:
+            x-cache: private-no-cache
             tags: [Orders]
             summary: List orders (paginated)
             description: |
@@ -335,6 +336,7 @@ paths:
         x-versioned: [get, put, patch, delete]
         # Same as GET /orders?id={id}
         get:
+            x-cache: private-no-cache
             tags: [Orders]
             summary: Order details
             description: Returns the full details of the order identified by `{id}`. Functionally equivalent to `GET /orders?id={id}`.
@@ -540,6 +542,7 @@ paths:
 
     /orders/{id}/timeline:
         get:
+            x-cache: private-no-cache
             tags: [Orders]
             summary: The order's timeline
             description: >-
@@ -1413,7 +1416,7 @@ components:
                 # change to the shop's own setting must not rewrite what an old order actually
                 # charged.
                 currency:
-                    type: string
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     readOnly: true
                     description: ISO-4217 currency code this order was priced in (e.g. EUR).
                 # Both derived at serialization from the lines' frozen `taxRate` — never stored.
@@ -1626,7 +1629,7 @@ components:
                 # change to the shop's own setting must not rewrite what an old order actually
                 # charged.
                 currency:
-                    type: string
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     readOnly: true
                     description: ISO-4217 currency code this order was priced in (e.g. EUR).
                 # Both derived at serialization from the lines' frozen `taxRate` — never stored.

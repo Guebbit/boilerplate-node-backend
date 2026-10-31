@@ -48,7 +48,7 @@ layout and shared parts are declared in one file under `scripts/contracts/`.
 
 | Bundle                   | Verb          | What does it                                                             |
 | ------------------------ | ------------- | ------------------------------------------------------------------------ |
-| `openapi.yaml`           | **compiled**  | `redocly bundle` resolves `$ref` across whole documents, then the root's `x-app-level-responses` (429, 500 and 503 for every operation; 400/413/415 for a body-carrying one; 415 for a body-less write too — none of them any one module's business) is merged into every operation that doesn't already declare its own. A second step (`scripts/contracts/cookie-auth.ts`) adds `cookieAuth` as an alternative to every operation that takes `bearerAuth`, and the origin `403` to its unsafe methods |
+| `openapi.yaml`           | **compiled**  | `redocly bundle` resolves `$ref` across whole documents, then the root's `x-app-level-responses` (429, 500 and 503 for every operation; 400/413/415 for a body-carrying one; 415 for a body-less write too — none of them any one module's business) is merged into every operation that doesn't already declare its own. A step (`scripts/contracts/image-upload-encoding.ts`) stamps the root's `x-image-upload-types` onto every multipart `imageUpload` part as `encoding.imageUpload.contentType`. A second step (`scripts/contracts/cookie-auth.ts`) adds `cookieAuth` as an alternative to every operation that takes `bearerAuth`, and the origin `403` to its unsafe methods |
 | `asyncapi.yaml`          | **merged**    | `scripts/contracts/asyncapi-bundles.ts` copies five maps; `$ref`s stay untouched |
 | `asyncapi.public.yaml`   | **merged**    | the same merge over the shared sections only — one `SHARED_SECTIONS` list decides which |
 | the 4 client collections | **generated** | produced whole from `openapi.yaml` + the dataset, nothing on disk between; untracked |
@@ -194,7 +194,7 @@ hit them first:
   the order resource itself — fragmenting by `basePath` still splits the two files correctly.
 - **`access` has no HTTP surface of its own** — headless by design, the one module whose manifest
   declares no `mounts`. Its `openapi.yaml` is components only (`paths: {}`):
-  the abilities schemas `GET /account/abilities` returns, and the `roles` section of the data
+  the abilities schemas `GET /account` carries, and the `roles` section of the data
   export. A components-only fragment owns no folder in the client collections.
 
 Also note that `Auth` and `Account` are two tags over one `basePath`. **Fragment by `basePath`, not
@@ -212,6 +212,37 @@ Anything used by two or more modules — the error body (`Problem`), pagination 
 schemes — stays in the shared root fragment. **Duplicating a shared schema into two fragments is
 the failure mode to watch for**: the bundle will contain two definitions that drift apart silently,
 and nothing but a careful reading catches it.
+
+### Declaring a cached read: `x-cache`
+
+A `GET` that mounts `privateNoCache` or `setCache` says so in its own fragment, on the operation:
+
+```yaml
+/products/facets:
+    get:
+        x-cache: 'max-age: 3600'   # or `private-no-cache`, `revalidate`, `no-store`
+```
+
+- `private-no-cache`: the route mounts `privateNoCache`.
+- `revalidate`: `setCache` with `browserRevalidate`.
+- `max-age: <s>`: `setCache` without it, the browser keeps the answer for `<s>` seconds.
+- `no-store`: never cached (a PDF, an export). No `304`; the bundler declares
+  `Cache-Control: no-store` on the `200`. Declared only: no router middleware marks it, so the test
+  does not compare it with the routers.
+
+The bundler stamps the shared `304` on every operation that carries the key. It reads the contract
+only: it never boots the app, because the app imports files this same build generates.
+`tests/cross-cutting/cache-policy-declared.test.ts` names the missing or stray operation when a
+router and its `x-cache` disagree. It checks which GETs are cached, not the value.
+
+### Client hints a fragment can put on an operation
+
+| key | on | what the client does with it |
+| --- | --- | --- |
+| `x-no-refresh: true` | an operation | a `401` there is a real credential failure, so the frontend never refreshes the token and replays it. The frontend's route table carries it as `noRefresh`. |
+| `x-redirect-query` | a `302` response | lists the schema of a query parameter on the redirect (`error` on the OAuth callback), inline. A `$ref` under an `x-` key is inlined by the bundler and its component pruned, so the set cannot be a shared schema; the frontend's generator emits it as `REDIRECT_QUERY_ENUMS`, and the backend keeps a twin constant held equal by a test. |
+
+Neither is wire data a server reads. The bundler passes both through untouched.
 
 ## Practical example: the `products` module
 
@@ -419,7 +450,7 @@ fail the bundle.
 
 ```mermaid
 flowchart LR
-    W["webhooks/asyncapi.yaml<br/>server + WebhookHeaders"] --> S["webhooks section"]
+    W["webhooks/asyncapi.yaml<br/>server + Id + WebhookHeaders"] --> S["webhooks section"]
     D["delivery/asyncapi.webhooks.yaml"] --> S
     O["orders/asyncapi.webhooks.yaml"] --> S
     P["payments/asyncapi.webhooks.yaml"] --> S

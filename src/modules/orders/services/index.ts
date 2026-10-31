@@ -97,7 +97,7 @@ export type {
 } from './stats';
 // Config getters, re-exported here (not directly from `../index.ts`) because a module's public
 // barrel may only publish services/domain/events/emails/model — see `local/barrel-allowed-sources`.
-export { orderFrontendLink, withdrawalPeriodDays } from '../config';
+export { orderFrontendLink, orderPagePath, withdrawalPeriodDays } from '../config';
 
 /** The service's public surface — every controller and cross-module caller goes through this. */
 export const orderService = {

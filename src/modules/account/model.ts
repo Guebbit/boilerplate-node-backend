@@ -1,12 +1,13 @@
 /**
  * @module
- * The three collections this module owns.
+ * The four collections this module owns.
  *
  * `accountexports`:     one document per account that asked for its data. The row says whose export
  *                       it is and how far the build got; the file itself is in the private export
  *                       store (`@infrastructure/adapters/export-store`), named by `file`.
  * `sessions`:           one row per signed-in session (cookie mode) or per refresh token (jwt mode).
  * `verificationtokens`: one row per one-time link or challenge in flight.
+ * `erasureledgers`:     one row per account erased or cancelled, kept past the oldest backup.
  *
  * Never serialized to the wire as-is: the contract's shapes are built from these rows by hand, and
  * the token digests are stripped from `toJSON` regardless.
@@ -196,4 +197,68 @@ verificationTokenSchema.index(
 export const verificationTokenModel = model<VerificationTokenDocument, VerificationTokenModel>(
     'VerificationToken',
     verificationTokenSchema
+);
+
+/** What a ledger row says happened to an account. */
+export const ERASURE_LEDGER_KINDS = ['erased', 'scheduled', 'cancelled'] as const;
+
+/** One of {@link ERASURE_LEDGER_KINDS}. */
+export type ErasureLedgerKind = (typeof ERASURE_LEDGER_KINDS)[number];
+
+/**
+ * One row of the erasure ledger: who was erased (or had a scheduled deletion cancelled) and when.
+ * Nothing else is stored on purpose: no email, ip or user agent, since a deletion record must
+ * carry no content data (SDM Baustein 60).
+ */
+export interface ErasureLedgerDocument extends Document {
+    /** The account. Not a reference: the user document is gone once the row says `erased`. */
+    userId: Types.ObjectId;
+    /**
+     * `erased`: the account was hard-deleted. `scheduled`: its owner asked to delete it.
+     * `cancelled`: its owner or staff stopped a scheduled deletion.
+     */
+    kind: ErasureLedgerKind;
+    /** When it happened. A repeat erasure after a restore keeps the original date. */
+    at: Date;
+    /**
+     * `scheduled` rows only: the erasure date the owner was promised. Stored, never derived, so a
+     * later change of the grace setting cannot move a date already given.
+     */
+    purgeAt?: Date;
+    /** When the database deletes the row: `at` plus the ledger retention. */
+    expiresAt: Date;
+}
+
+/** Queries live in `./repository`. */
+export type ErasureLedgerModel = Model<ErasureLedgerDocument>;
+
+/**
+ * `erasureledgers`' schema. `unique` on `{ userId, kind }`: an account is erased once, and a repeat
+ * (a cancelled scheduled deletion asked twice, an erasure repeated after a restore) moves `at`
+ * instead of adding a row.
+ */
+export const erasureLedgerSchema = new Schema<ErasureLedgerDocument, ErasureLedgerModel>(
+    {
+        userId: { type: Schema.Types.ObjectId, required: true },
+        kind: { type: String, enum: [...ERASURE_LEDGER_KINDS], required: true },
+        at: { type: Date, required: true },
+        purgeAt: { type: Date },
+        expiresAt: { type: Date, required: true }
+    },
+    { timestamps: false }
+);
+
+erasureLedgerSchema.index({ userId: 1, kind: 1 }, { unique: true });
+
+// `ops:reapply-erasures`' read: every row since a snapshot.
+erasureLedgerSchema.index({ at: 1 });
+
+// The database deletes the row at its own `expiresAt`: a per-row date, so changing the retention
+// knob never needs an index rebuild.
+erasureLedgerSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+/** The compiled Mongoose model for `erasureledgers`. */
+export const erasureLedgerModel = model<ErasureLedgerDocument, ErasureLedgerModel>(
+    'ErasureLedger',
+    erasureLedgerSchema
 );

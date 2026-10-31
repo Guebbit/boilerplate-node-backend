@@ -383,7 +383,7 @@ operations:
             $ref: '#/channels/payment.refunded'
         summary: A refund on a payment settled.
         description: >-
-            One-to-one with the `payment.refunded` domain event — see `payments/services/refunds.ts`'s `settleRefund`. Fired once per refund, whether an operator asked for it directly, a cancel opened it, or the refund retry sweep completed it; never fired while a hand-paid refund waits for an operator to confirm it by hand. It may fire again for the same `refundId` after a `payment.refund_reversed`, once the money is returned another way and an operator marks the refund returned. A refund made in the provider's own dashboard is imported and announced here too, with `reason: external`.
+            One-to-one with the `payment.refunded` domain event — see `payments/services/refunds.ts`'s `settleRefund`. Fired once per refund, whether an operator asked for it directly, a cancel opened it, or the refund retry sweep completed it; never fired while a hand-paid refund waits for an operator to confirm it by hand. It may fire again for the same `refundId` after a `payment.refund_reversed`, once the money is returned another way and an operator marks the refund returned. A refund made in the provider's own dashboard is imported and announced here too.
         messages:
             - $ref: '#/channels/payment.refunded/messages/PaymentRefundedEvent'
     webhookPaymentRefundFailed:
@@ -489,7 +489,7 @@ operations:
         channel:
             $ref: '#/channels/notifications.deleted'
         description: >-
-            Pushed when the user deletes one (`DELETE /notifications/{id}`), empties the inbox (`DELETE /notifications`), or the cap trims the oldest, so a second tab stays in step with the first. `all` is true when the whole inbox went.
+            Pushed when the user deletes one (`DELETE /notifications/{id}`), empties the inbox (`DELETE /notifications`), or the cap trims the oldest, so a second tab stays in step with the first. `all` is true when the whole inbox went. A filtered delete (`DELETE /notifications?audience=`) sends `all: false` and the ids that left; it also removes staff rows the caller no longer sees, so a frame may name ids the tab never held.
         messages:
             - $ref: '#/channels/notifications.deleted/messages/NotificationsDeletedEvent'
     sseNotificationsRead:
@@ -737,6 +737,19 @@ components:
                             minimum: 0
                     additionalProperties: false
             additionalProperties: false
+        Id:
+            type: string
+            minLength: 1
+            maxLength: 64
+            pattern: '^[0-9A-Za-z_-]+$'
+            description: Resource identifier
+        # The OpenAPI `CurrencyCode` scalar, copied for the same reason as `Id`.
+        CurrencyCode:
+            type: string
+            minLength: 3
+            maxLength: 3
+            pattern: '^[A-Z]{3}$'
+            description: ISO 4217 alphabetic currency code, upper case (e.g. `EUR`)
         WebhookHeaders:
             type: object
             description: >-
@@ -747,14 +760,16 @@ components:
                 - webhook-signature
             properties:
                 webhook-id:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                     description: >-
                         Shared by every subscription this event fanned out to, and by every retry of one delivery — the id a subscriber dedupes on.
                 webhook-timestamp:
                     type: string
+                    pattern: '^[0-9]+$'
                     description: Unix seconds when this attempt was signed, folded into the signature.
                 webhook-signature:
                     type: string
+                    pattern: '^v1,[A-Za-z0-9+/]+={0,2}( v1,[A-Za-z0-9+/]+={0,2})*$'
                     description: 'One or more space-separated `v1,<base64 HMAC-SHA256>` values.'
         OrderIdPayload:
             type: object
@@ -762,7 +777,7 @@ components:
                 - orderId
             properties:
                 orderId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
             additionalProperties: false
         OrderCreatedEnvelope:
             type: object
@@ -847,11 +862,11 @@ components:
                 - lines
             properties:
                 orderId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 shipmentId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 fulfillmentOrderId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 lines:
                     type: array
                     description: What the shipment carries, per product.
@@ -862,9 +877,10 @@ components:
                             - quantity
                         properties:
                             productId:
-                                type: string
+                                $ref: '#/components/schemas/Id'
                             quantity:
                                 type: integer
+                                minimum: 1
                         additionalProperties: false
             additionalProperties: false
         ShipmentLostPayload:
@@ -877,11 +893,11 @@ components:
                 - reason
             properties:
                 orderId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 shipmentId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 fulfillmentOrderId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 lines:
                     type: array
                     description: What the lost shipment carried, per product.
@@ -892,9 +908,10 @@ components:
                             - quantity
                         properties:
                             productId:
-                                type: string
+                                $ref: '#/components/schemas/Id'
                             quantity:
                                 type: integer
+                                minimum: 1
                         additionalProperties: false
                 reason:
                     type: string
@@ -965,9 +982,9 @@ components:
                 - orderId
             properties:
                 paymentId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 orderId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
             additionalProperties: false
         PaymentRefundedPayload:
             type: object
@@ -979,18 +996,19 @@ components:
                 - currency
             properties:
                 paymentId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 orderId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 refundId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                     description: >-
                         The refund record this delivery is about. A payment can be refunded in parts, so one payment can raise this event more than once.
                 amount:
                     type: number
+                    minimum: 0
                     description: This refund's amount, two decimal places — the payment's own `amount` for a full refund.
                 currency:
-                    type: string
+                    $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
             additionalProperties: false
         PaymentRefundReversedPayload:
@@ -1004,21 +1022,31 @@ components:
                 - failureReason
             properties:
                 paymentId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 orderId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 refundId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 amount:
                     type: number
+                    minimum: 0
                     description: This refund's amount, two decimal places.
                 currency:
-                    type: string
+                    $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
                 failureReason:
                     type: string
-                    description: >-
-                        The closed code for why the provider took it back (`declined`, `expired_or_canceled_card`, `lost_or_stolen_card`, …); never the provider's wording.
+                    enum:
+                        - declined
+                        - insufficient_funds
+                        - expired_or_canceled_card
+                        - lost_or_stolen_card
+                        - provider_removed
+                        - provider_unavailable
+                        - unknown
+                        - canceled
+                        - disputed
+                    description: The closed code for why the provider took it back; never the provider's wording.
             additionalProperties: false
         PaymentRefundFailedPayload:
             type: object
@@ -1032,19 +1060,30 @@ components:
                 - final
             properties:
                 paymentId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 orderId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 refundId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 amount:
                     type: number
+                    minimum: 0
                     description: This refund's amount, two decimal places.
                 currency:
-                    type: string
+                    $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
                 failureReason:
                     type: string
+                    enum:
+                        - declined
+                        - insufficient_funds
+                        - expired_or_canceled_card
+                        - lost_or_stolen_card
+                        - provider_removed
+                        - provider_unavailable
+                        - unknown
+                        - canceled
+                        - disputed
                     description: The closed code for the refusal; never the provider's wording.
                 final:
                     type: boolean
@@ -1065,9 +1104,9 @@ components:
                 - fundsWithdrawn
             properties:
                 paymentId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 orderId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 disputeId:
                     type: string
                     description: The provider's dispute id.
@@ -1087,12 +1126,28 @@ components:
                         - closed
                 reason:
                     type: string
-                    description: The closed code for why the bank disputes the charge (`fraudulent`, `product_not_received`, …).
+                    enum:
+                        - bank_cannot_process
+                        - check_returned
+                        - credit_not_processed
+                        - customer_initiated
+                        - debit_not_authorized
+                        - duplicate
+                        - fraudulent
+                        - general
+                        - incorrect_account_details
+                        - insufficient_funds
+                        - product_not_received
+                        - product_unacceptable
+                        - subscription_canceled
+                        - unrecognized
+                    description: The closed code for why the bank disputes the charge.
                 amount:
                     type: number
+                    minimum: 0
                     description: The disputed amount, two decimal places.
                 currency:
-                    type: string
+                    $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
                 fundsWithdrawn:
                     type: boolean
@@ -1237,12 +1292,17 @@ components:
                 - requestedAt
             properties:
                 returnId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 orderId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 reason:
                     type: string
-                    description: Why the goods come back — `withdrawal`, `defective`, `wrong_item` or `other`.
+                    enum:
+                        - withdrawal
+                        - defective
+                        - wrong_item
+                        - other
+                    description: Why the goods come back.
                 requestedAt:
                     type: string
                     format: date-time
@@ -1264,9 +1324,9 @@ components:
                 - orderId
             properties:
                 returnId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 orderId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
             additionalProperties: false
         ReturnClosedPayload:
             type: object
@@ -1277,14 +1337,15 @@ components:
                 - currency
             properties:
                 returnId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 orderId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 refundAmount:
                     type: number
+                    minimum: 0
                     description: What went back to the customer for this return, two decimal places.
                 currency:
-                    type: string
+                    $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
                 remedy:
                     type: string
@@ -1355,7 +1416,7 @@ components:
                 - title
             properties:
                 exampleId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 title:
                     type: string
                     description: The fallback-language title.
@@ -1384,7 +1445,7 @@ components:
                 - userId
             properties:
                 userId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
             additionalProperties: false
         UserErasedEnvelope:
             type: object
@@ -1411,7 +1472,7 @@ components:
                 - changed
             properties:
                 userId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 changed:
                     type: array
                     minItems: 1
@@ -1470,6 +1531,7 @@ components:
                     type: string
                 requested:
                     type: integer
+                    minimum: 1
                 titles:
                     description: Locale → the product's name in it.
                     type: object
@@ -1711,6 +1773,46 @@ components:
                     type: string
                     enum:
                         - notifications.staff.ticket-opened
+                params:
+                    $ref: '#/components/schemas/TicketOpenedParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationStaffTicketOverduePayload:
+            title: NotificationStaffTicketOverduePayload
+            type: object
+            required:
+                - id
+                - audience
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
+                code:
+                    type: string
+                    enum:
+                        - notifications.staff.ticket-overdue
                 params:
                     $ref: '#/components/schemas/TicketOpenedParamsPayload'
                 severity:
@@ -2575,6 +2677,7 @@ components:
                 - $ref: '#/components/schemas/NotificationStaffPurchaseHoldPlacedPayload'
                 - $ref: '#/components/schemas/NotificationStaffWebhookDisabledPayload'
                 - $ref: '#/components/schemas/NotificationStaffTicketOpenedPayload'
+                - $ref: '#/components/schemas/NotificationStaffTicketOverduePayload'
                 - $ref: '#/components/schemas/NotificationStaffTicketAssignedPayload'
                 - $ref: '#/components/schemas/NotificationStaffReturnRequestedPayload'
                 - $ref: '#/components/schemas/NotificationStaffOutboxDeadPayload'
