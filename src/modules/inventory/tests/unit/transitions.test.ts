@@ -36,6 +36,7 @@ describe('counterDeltaFor', () => {
         [StockMovementReason.adjust, { onHandDelta: 3, reservedDelta: 0, backorderedDelta: 0 }],
         [StockMovementReason.restock, { onHandDelta: 3, reservedDelta: 0, backorderedDelta: 0 }],
         [StockMovementReason.backorder, { onHandDelta: 0, reservedDelta: 0, backorderedDelta: 3 }],
+        [StockMovementReason.owed, { onHandDelta: 0, reservedDelta: 0, backorderedDelta: 3 }],
         [StockMovementReason.allocate, { onHandDelta: 0, reservedDelta: 3, backorderedDelta: -3 }]
     ])('gives %s the contract-documented signed delta', (reason, expected) => {
         expect(counterDeltaFor(reason, 3)).toEqual(expected);

@@ -3,8 +3,8 @@
  * Inventory rules. Pure: data in, verdict out — no status codes, no i18n, no database. A product
  * carries two counters, `onHand` (units that exist) and `reserved` (units an open order has
  * claimed), and a third, `backordered`, for units that do not exist yet and are only promised.
- * Nine transitions move those counters, and this file is the one place that says what each does — a
- * tenth is one entry here plus one enum value in `openapi.yaml`. What a customer
+ * Ten transitions move those counters, and this file is the one place that says what each does — an
+ * eleventh is one entry here plus one enum value in `openapi.yaml`. What a customer
  * may actually buy from those two counters is `@modules/products`'s `availableStock`
  * (`src/modules/products/domain/stock.ts`), not this module's own concern.
  *
@@ -34,10 +34,10 @@ export interface CounterDelta {
 }
 
 /**
- * The nine transitions, as a total map from reason to what it does. `receive`, `adjust`, `ship`
+ * The ten transitions, as a total map from reason to what it does. `receive`, `adjust`, `ship`
  * and `restock` change how many units are on the shelf; `ship` moves both columns together so a
  * dispatch doesn't change availability; `release` and `expire` are the same arithmetic under
- * two names, kept separate because the ledger records which story it was.
+ * two names, as are `backorder` and `owed`, kept separate because the ledger records which story it was.
  * @param reason - which transition
  * @param quantity - how many units; signed only for `adjust`, positive for everything else
  * @param kind - what the units are; only `release`/`expire` read it, since a preorder claim
@@ -70,7 +70,9 @@ export const counterDeltaFor = (
         }
 
         // A preorder: the units do not exist yet, so only the allowance moves.
-        case StockMovementReason.backorder: {
+        // `owed` moves the same counters; the ledger records which story it was.
+        case StockMovementReason.backorder:
+        case StockMovementReason.owed: {
             return { onHandDelta: 0, reservedDelta: 0, backorderedDelta: quantity };
         }
 
