@@ -62,6 +62,13 @@ components:
             maxLength: 64
             pattern: '^[0-9A-Za-z_-]+$'
             description: Resource identifier
+        # The OpenAPI `CurrencyCode` scalar, copied for the same reason as `Id`.
+        CurrencyCode:
+            type: string
+            minLength: 3
+            maxLength: 3
+            pattern: '^[A-Z]{3}$'
+            description: ISO 4217 alphabetic currency code, upper case (e.g. `EUR`)
         WebhookHeaders:
             type: object
             description: >-

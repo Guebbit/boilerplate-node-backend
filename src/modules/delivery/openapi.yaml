@@ -651,7 +651,7 @@ components:
                     minimum: 0
                     description: Flat rate, in `currency`.
                 currency:
-                    type: string
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     description: ISO-4217 currency code (e.g. EUR) — this deployment's `NODE_DEFAULT_CURRENCY`.
                 freeAbove:
                     type: number

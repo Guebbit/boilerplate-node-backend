@@ -830,7 +830,7 @@ components:
                         a different amount or currency, the payment reads `succeeded` with what
                         ARRIVED here, its order is cancelled and the money is returned.
                 currency:
-                    type: string
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     description: ISO-4217 currency code (e.g. EUR)
                 amountRefunded:
                     type: number
@@ -960,7 +960,7 @@ components:
                     minimum: 0
                     description: The amount returned, in the payment's own `currency`.
                 currency:
-                    type: string
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     description: ISO-4217 currency code, copied from the payment.
                 status:
                     allOf:
@@ -1094,8 +1094,7 @@ components:
                     minimum: 0
                     description: The disputed amount, in `currency`.
                 currency:
-                    type: string
-                    maxLength: 3
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     description: ISO-4217 code, upper case.
                 evidenceDueBy:
                     type: string
@@ -1135,7 +1134,7 @@ components:
                     format: double
                     minimum: 0
                 currency:
-                    type: string
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode'
                 evidenceDueBy:
                     type: string
                     format: date-time
@@ -1264,7 +1263,7 @@ components:
                 orderId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 amount: { type: number, format: double, minimum: 0 }
-                currency: { type: string }
+                currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
                 status:
                     $ref: '#/components/schemas/RefundStatus'
                 reason:
@@ -1344,7 +1343,7 @@ components:
                         refunded successfully, in its currency. Above zero it is a refund-then-chargeback:
                         send the refund as evidence. Absent when nothing was refunded.
                 amount: { type: number, format: double, minimum: 0 }
-                currency: { type: string }
+                currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
                 failureReason:
                     $ref: '#/components/schemas/RefundFailureReason'
                 since:
@@ -1403,9 +1402,7 @@ components:
                         How much to return, a decimal in the payment's own currency. Absent means
                         everything still refundable.
                 currency:
-                    type: string
-                    maxLength: 3
-                    minLength: 1
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     description: >-
                         ISO-4217 code of `amount`. Optional; when sent it must equal the payment's
                         own currency, so an amount written in another unit is refused instead of
@@ -1597,7 +1594,7 @@ components:
                     format: double
                     minimum: 0
                 currency:
-                    type: string
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode'
                 amountRefunded:
                     type: number
                     format: double

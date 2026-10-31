@@ -228,7 +228,7 @@ components:
                     minimum: 0
                     description: This refund's amount, two decimal places — the payment's own `amount` for a full refund.
                 currency:
-                    type: string
+                    $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
             additionalProperties: false
         PaymentRefundReversedPayload:
@@ -252,7 +252,7 @@ components:
                     minimum: 0
                     description: This refund's amount, two decimal places.
                 currency:
-                    type: string
+                    $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
                 failureReason:
                     type: string
@@ -290,7 +290,7 @@ components:
                     minimum: 0
                     description: This refund's amount, two decimal places.
                 currency:
-                    type: string
+                    $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
                 failureReason:
                     type: string
@@ -368,7 +368,7 @@ components:
                     minimum: 0
                     description: The disputed amount, two decimal places.
                 currency:
-                    type: string
+                    $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
                 fundsWithdrawn:
                     type: boolean

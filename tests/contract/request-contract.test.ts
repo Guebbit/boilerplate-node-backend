@@ -332,7 +332,10 @@ const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
         // A buyer's own return takes neither field: the server sets the date, and a channel belongs
         // to a withdrawal that staff record. The schema declares both for the staff path.
         requestedAt: () => undefined,
-        statedVia: () => undefined
+        statedVia: () => undefined,
+        // A preferred remedy is legal only beside a `defective` or `wrong_item` reason, which the
+        // schema cannot say; a generated pair that disagrees is a 422, not a schema refusal.
+        preferredRemedy: () => undefined
     },
     changePassword: {
         currentPassword: () => PLAIN_PASSWORD,

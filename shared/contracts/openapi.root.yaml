@@ -664,6 +664,12 @@ components:
             minLength: 1
             maxLength: 200
             description: Free-text search string
+        CurrencyCode:
+            type: string
+            minLength: 3
+            maxLength: 3
+            pattern: '^[A-Z]{3}$'
+            description: ISO 4217 alphabetic currency code, upper case (e.g. `EUR`)
         Email:
             type: string
             maxLength: 254

@@ -575,7 +575,7 @@ components:
                     type: string
                     description: The order's human number.
                 currency:
-                    type: string
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     description: ISO-4217 code of the order's own currency.
                 status:
                     $ref: '#/components/schemas/ReturnStatus'
@@ -875,7 +875,7 @@ components:
                 orderId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 currency:
-                    type: string
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     description: ISO-4217 code of the order's own currency.
                 reasons:
                     type: array

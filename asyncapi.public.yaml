@@ -743,6 +743,13 @@ components:
             maxLength: 64
             pattern: '^[0-9A-Za-z_-]+$'
             description: Resource identifier
+        # The OpenAPI `CurrencyCode` scalar, copied for the same reason as `Id`.
+        CurrencyCode:
+            type: string
+            minLength: 3
+            maxLength: 3
+            pattern: '^[A-Z]{3}$'
+            description: ISO 4217 alphabetic currency code, upper case (e.g. `EUR`)
         WebhookHeaders:
             type: object
             description: >-
@@ -1001,7 +1008,7 @@ components:
                     minimum: 0
                     description: This refund's amount, two decimal places — the payment's own `amount` for a full refund.
                 currency:
-                    type: string
+                    $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
             additionalProperties: false
         PaymentRefundReversedPayload:
@@ -1025,7 +1032,7 @@ components:
                     minimum: 0
                     description: This refund's amount, two decimal places.
                 currency:
-                    type: string
+                    $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
                 failureReason:
                     type: string
@@ -1063,7 +1070,7 @@ components:
                     minimum: 0
                     description: This refund's amount, two decimal places.
                 currency:
-                    type: string
+                    $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
                 failureReason:
                     type: string
@@ -1140,7 +1147,7 @@ components:
                     minimum: 0
                     description: The disputed amount, two decimal places.
                 currency:
-                    type: string
+                    $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
                 fundsWithdrawn:
                     type: boolean
@@ -1338,7 +1345,7 @@ components:
                     minimum: 0
                     description: What went back to the customer for this return, two decimal places.
                 currency:
-                    type: string
+                    $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
                 remedy:
                     type: string

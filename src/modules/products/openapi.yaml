@@ -1152,7 +1152,7 @@ components:
                         derives the net amount and the VAT amount FROM this, at whatever rate
                         applies, rather than the other way around.
                 currency:
-                    type: string
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     readOnly: true
                     description: >-
                         ISO-4217 currency code (e.g. EUR) — this deployment's own

@@ -342,7 +342,7 @@ components:
             additionalProperties: false
             required: [currency, totals, previous, buckets]
             properties:
-                currency: { type: string }
+                currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
                 totals:
                     $ref: '#/components/schemas/SalesFigures'
                 previous:
@@ -377,7 +377,7 @@ components:
                 productId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 title: { type: string }
-                currency: { type: string }
+                currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
                 unitsOrdered: { type: integer }
                 unitsReversed: { type: integer }
                 netUnits: { type: integer }
@@ -434,7 +434,7 @@ components:
             required: [category, currency, unitsOrdered, netSales]
             properties:
                 category: { type: string }
-                currency: { type: string }
+                currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
                 unitsOrdered: { type: integer }
                 netSales: { type: number, format: double }
 
@@ -461,7 +461,7 @@ components:
                     type: string
                     enum: [card, bank_transfer, cash, other]
                 provider: { type: string }
-                currency: { type: string }
+                currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
                 payments: { type: integer }
                 amount: { type: number, format: double }
 
@@ -512,7 +512,7 @@ components:
                         additionalProperties: false
                         required: [currency, invoiced, credited, rate]
                         properties:
-                            currency: { type: string }
+                            currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
                             invoiced: { type: number, format: double, description: 'Invoices issued in the period, VAT included.' }
                             credited: { type: number, format: double, description: 'Credit notes issued in the period, VAT included.' }
                             rate: { type: number, format: double, minimum: 0 }
@@ -543,7 +543,7 @@ components:
                         additionalProperties: false
                         required: [currency, count, amount]
                         properties:
-                            currency: { type: string }
+                            currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
                             count: { type: integer }
                             amount: { type: number, format: double }
                             nearestPayBy: { type: string, format: date-time }

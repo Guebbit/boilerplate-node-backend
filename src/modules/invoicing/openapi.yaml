@@ -159,7 +159,7 @@ components:
                     type: string
                     format: date-time
                 currency:
-                    type: string
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     description: ISO-4217 currency code (e.g. EUR)
                 grandTotal:
                     type: number
@@ -195,7 +195,7 @@ components:
                     type: string
                     format: date-time
                 currency:
-                    type: string
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode'
                 grandTotal:
                     type: number
                     format: double

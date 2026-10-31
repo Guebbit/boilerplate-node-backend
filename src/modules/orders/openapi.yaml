@@ -1416,7 +1416,7 @@ components:
                 # change to the shop's own setting must not rewrite what an old order actually
                 # charged.
                 currency:
-                    type: string
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     readOnly: true
                     description: ISO-4217 currency code this order was priced in (e.g. EUR).
                 # Both derived at serialization from the lines' frozen `taxRate` — never stored.
@@ -1629,7 +1629,7 @@ components:
                 # change to the shop's own setting must not rewrite what an old order actually
                 # charged.
                 currency:
-                    type: string
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     readOnly: true
                     description: ISO-4217 currency code this order was priced in (e.g. EUR).
                 # Both derived at serialization from the lines' frozen `taxRate` — never stored.

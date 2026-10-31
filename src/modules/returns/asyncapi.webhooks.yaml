@@ -152,7 +152,7 @@ components:
                     minimum: 0
                     description: What went back to the customer for this return, two decimal places.
                 currency:
-                    type: string
+                    $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
                 remedy:
                     type: string

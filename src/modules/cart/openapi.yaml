@@ -518,9 +518,7 @@ components:
                     minimum: 0
                     description: The total in minor units of `currency` (EUR 71.00 is 7100).
                 currency:
-                    type: string
-                    minLength: 3
-                    maxLength: 3
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     description: The ISO-4217 code the total is priced in.
 
         CheckoutRequest:
@@ -614,7 +612,7 @@ components:
                     minimum: 0
                     description: itemsTotal + shippingCost
                 currency:
-                    type: string
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     description: ISO-4217 currency code (e.g. USD)
                 expectedTotal:
                     allOf: [{ $ref: '#/components/schemas/ExpectedTotal' }]
