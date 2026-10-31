@@ -552,6 +552,31 @@ components:
                     type: string
                     format: date-time
 
+        NotificationStaffTicketOverdue:
+            type: object
+            additionalProperties: false
+            description: An open ticket in a jurisdiction the caller works passed its due date; said once per ticket.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [notifications.staff.ticket-overdue]
+                params:
+                    $ref: '#/components/schemas/TicketOpenedParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
         NotificationStaffTicketAssigned:
             type: object
             additionalProperties: false
@@ -988,6 +1013,7 @@ components:
                 - $ref: '#/components/schemas/NotificationStaffPurchaseHoldPlaced'
                 - $ref: '#/components/schemas/NotificationStaffWebhookDisabled'
                 - $ref: '#/components/schemas/NotificationStaffTicketOpened'
+                - $ref: '#/components/schemas/NotificationStaffTicketOverdue'
                 - $ref: '#/components/schemas/NotificationStaffTicketAssigned'
                 - $ref: '#/components/schemas/NotificationStaffReturnRequested'
                 - $ref: '#/components/schemas/NotificationStaffOutboxDead'
@@ -1014,6 +1040,7 @@ components:
                     notifications.staff.purchase-hold-placed: '#/components/schemas/NotificationStaffPurchaseHoldPlaced'
                     notifications.staff.webhook-disabled: '#/components/schemas/NotificationStaffWebhookDisabled'
                     notifications.staff.ticket-opened: '#/components/schemas/NotificationStaffTicketOpened'
+                    notifications.staff.ticket-overdue: '#/components/schemas/NotificationStaffTicketOverdue'
                     notifications.staff.ticket-assigned: '#/components/schemas/NotificationStaffTicketAssigned'
                     notifications.staff.return-requested: '#/components/schemas/NotificationStaffReturnRequested'
                     notifications.staff.outbox-dead: '#/components/schemas/NotificationStaffOutboxDead'

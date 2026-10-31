@@ -7,9 +7,10 @@
 import { TICKET_KINDS } from '@modules/tickets';
 import { STAFF_NOTIFICATION_CODES } from '@modules/notifications/model';
 
-/** The two codes that ARE the ticket alerts: they name tickets, not a situation. */
+/** The codes that ARE the ticket alerts: they name tickets, not a situation. */
 const TICKET_ALERT_CODES = new Set([
     'notifications.staff.ticket-opened',
+    'notifications.staff.ticket-overdue',
     'notifications.staff.ticket-assigned'
 ]);
 

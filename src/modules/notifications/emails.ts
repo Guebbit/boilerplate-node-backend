@@ -45,6 +45,7 @@ const wordsOf = (
 ): Record<string, string> => {
     switch (body.code) {
         case 'notifications.staff.ticket-opened':
+        case 'notifications.staff.ticket-overdue':
         case 'notifications.staff.ticket-assigned': {
             return { what: ticketWhat(t, body.params) };
         }

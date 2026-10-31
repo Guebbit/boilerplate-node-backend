@@ -16,6 +16,12 @@
                 "title": "A new ticket needs someone",
                 "summary": "A ticket was opened and your role works this kind: {{what}}. Open it to see the details and take it."
             },
+            "ticket-overdue": {
+                "subject": "Overdue ticket: {{what}}",
+                "meta-title": "Overdue ticket",
+                "title": "A ticket is overdue",
+                "summary": "A ticket your role works passed its due date and is still open: {{what}}. Open it to see the details and take it."
+            },
             "ticket-kind": {
                 "contact": "Contact message",
                 "account_review": "Account review",
