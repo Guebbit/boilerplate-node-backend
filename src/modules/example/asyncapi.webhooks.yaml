@@ -44,7 +44,7 @@ components:
                 - title
             properties:
                 exampleId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 title:
                     type: string
                     description: The fallback-language title.

@@ -601,7 +601,7 @@ components:
                 subscriptionId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 eventId:
-                    type: string
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 eventType:
                     type: string
                 attempt:
@@ -611,6 +611,8 @@ components:
                     $ref: '#/components/schemas/WebhookDeliveryStatus'
                 responseCode:
                     type: integer
+                    minimum: 100
+                    maximum: 599
                 durationMs:
                     type: integer
                 error:

@@ -88,7 +88,11 @@ nothing calls back into any publishing module's business logic.
 **The public event catalogue is a contract, not an accident.** Each module that fires a webhook
 declares its own events in `src/modules/<module>/asyncapi.webhooks.yaml` (`delivery`, `orders`,
 `payments`, `returns`, `users`, and `example`, the one to copy). This module's `asyncapi.yaml` keeps only what every
-event shares: the `subscriberEndpoint` server and the `WebhookHeaders` schema. The bundler merges
+event shares: the `subscriberEndpoint` server, the `WebhookHeaders` schema and the `Id` scalar
+every fragment's resource ids `$ref` (a copy of the OpenAPI `Id`, since no AsyncAPI document can
+`$ref` an OpenAPI file). A closed code in a payload (a return reason, a refund failure reason, a
+dispute reason) is likewise an inline copy of its OpenAPI enum;
+`tests/cross-cutting/asyncapi-enum-twins.test.ts` keeps each copy equal to its twin. The bundler merges
 the fragments into the `webhooks` section while this module exists (see
 [Contract Fragmentation](../api/contract-fragmentation.md#module-owned-webhook-events)).
 

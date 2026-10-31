@@ -74,7 +74,7 @@ components:
                 - userId
             properties:
                 userId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
             additionalProperties: false
         UserErasedEnvelope:
             type: object
@@ -101,7 +101,7 @@ components:
                 - changed
             properties:
                 userId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 changed:
                     type: array
                     minItems: 1

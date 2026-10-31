@@ -95,7 +95,7 @@ operations:
             waits for an operator to confirm it by hand. It may fire again for the same `refundId`
             after a `payment.refund_reversed`, once the money is returned another way and an
             operator marks the refund returned. A refund made in the provider's own dashboard is
-            imported and announced here too, with `reason: external`.
+            imported and announced here too.
         messages:
             - $ref: '#/channels/payment.refunded/messages/PaymentRefundedEvent'
     webhookPaymentRefundFailed:
@@ -201,9 +201,9 @@ components:
                 - orderId
             properties:
                 paymentId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 orderId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
             additionalProperties: false
         PaymentRefundedPayload:
             type: object
@@ -215,16 +215,17 @@ components:
                 - currency
             properties:
                 paymentId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 orderId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 refundId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                     description: >-
                         The refund record this delivery is about. A payment can be refunded in
                         parts, so one payment can raise this event more than once.
                 amount:
                     type: number
+                    minimum: 0
                     description: This refund's amount, two decimal places — the payment's own `amount` for a full refund.
                 currency:
                     type: string
@@ -241,22 +242,31 @@ components:
                 - failureReason
             properties:
                 paymentId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 orderId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 refundId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 amount:
                     type: number
+                    minimum: 0
                     description: This refund's amount, two decimal places.
                 currency:
                     type: string
                     description: ISO-4217, e.g. `EUR`.
                 failureReason:
                     type: string
-                    description: >-
-                        The closed code for why the provider took it back (`declined`,
-                        `expired_or_canceled_card`, `lost_or_stolen_card`, …); never the provider's wording.
+                    enum:
+                        - declined
+                        - insufficient_funds
+                        - expired_or_canceled_card
+                        - lost_or_stolen_card
+                        - provider_removed
+                        - provider_unavailable
+                        - unknown
+                        - canceled
+                        - disputed
+                    description: The closed code for why the provider took it back; never the provider's wording.
             additionalProperties: false
         PaymentRefundFailedPayload:
             type: object
@@ -270,19 +280,30 @@ components:
                 - final
             properties:
                 paymentId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 orderId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 refundId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 amount:
                     type: number
+                    minimum: 0
                     description: This refund's amount, two decimal places.
                 currency:
                     type: string
                     description: ISO-4217, e.g. `EUR`.
                 failureReason:
                     type: string
+                    enum:
+                        - declined
+                        - insufficient_funds
+                        - expired_or_canceled_card
+                        - lost_or_stolen_card
+                        - provider_removed
+                        - provider_unavailable
+                        - unknown
+                        - canceled
+                        - disputed
                     description: The closed code for the refusal; never the provider's wording.
                 final:
                     type: boolean
@@ -304,9 +325,9 @@ components:
                 - fundsWithdrawn
             properties:
                 paymentId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 orderId:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                 disputeId:
                     type: string
                     description: The provider's dispute id.
@@ -326,9 +347,25 @@ components:
                         - closed
                 reason:
                     type: string
-                    description: The closed code for why the bank disputes the charge (`fraudulent`, `product_not_received`, …).
+                    enum:
+                        - bank_cannot_process
+                        - check_returned
+                        - credit_not_processed
+                        - customer_initiated
+                        - debit_not_authorized
+                        - duplicate
+                        - fraudulent
+                        - general
+                        - incorrect_account_details
+                        - insufficient_funds
+                        - product_not_received
+                        - product_unacceptable
+                        - subscription_canceled
+                        - unrecognized
+                    description: The closed code for why the bank disputes the charge.
                 amount:
                     type: number
+                    minimum: 0
                     description: The disputed amount, two decimal places.
                 currency:
                     type: string

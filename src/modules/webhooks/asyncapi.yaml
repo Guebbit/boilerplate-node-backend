@@ -54,6 +54,14 @@ servers:
                 description: Path of a subscription's configured URL.
 components:
     schemas:
+        # The OpenAPI `Id` scalar, copied: no AsyncAPI document can `$ref` an OpenAPI file. The
+        # webhook fragments reference it from here once merged; this section is its only owner.
+        Id:
+            type: string
+            minLength: 1
+            maxLength: 64
+            pattern: '^[0-9A-Za-z_-]+$'
+            description: Resource identifier
         WebhookHeaders:
             type: object
             description: >-
@@ -66,13 +74,15 @@ components:
                 - webhook-signature
             properties:
                 webhook-id:
-                    type: string
+                    $ref: '#/components/schemas/Id'
                     description: >-
                         Shared by every subscription this event fanned out to, and by every retry
                         of one delivery — the id a subscriber dedupes on.
                 webhook-timestamp:
                     type: string
+                    pattern: '^[0-9]+$'
                     description: Unix seconds when this attempt was signed, folded into the signature.
                 webhook-signature:
                     type: string
+                    pattern: '^v1,[A-Za-z0-9+/]+={0,2}( v1,[A-Za-z0-9+/]+={0,2})*$'
                     description: 'One or more space-separated `v1,<base64 HMAC-SHA256>` values.'

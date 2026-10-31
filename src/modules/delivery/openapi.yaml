@@ -1149,7 +1149,7 @@ components:
                 userId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 email:
-                    type: string
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
 
         PreorderFulfillmentOrder:
             type: object
