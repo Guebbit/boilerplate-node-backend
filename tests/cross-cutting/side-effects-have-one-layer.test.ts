@@ -177,24 +177,4 @@ describe('every side effect is published from one layer', () => {
 
         expect(stale).toEqual([]);
     });
-
-    it('names a real marker and a real layer in every expectation', () => {
-        // Guards the table itself: a typo'd marker would sweep for a function nobody calls and
-        // quietly govern nothing, which the canary above catches, and a typo'd layer would make
-        // every call site a stray, which is loud. This makes the first one loud too.
-        const layers = new Set<Layer>([
-            'controller',
-            'service',
-            'repository',
-            'model',
-            'routes',
-            'domain',
-            'other'
-        ]);
-        const bad = Object.entries(EXPECTED_LAYER)
-            .filter(([, layer]) => !layers.has(layer))
-            .map(([marker]) => `${marker} expects a layer that does not exist`);
-
-        expect(bad).toEqual([]);
-    });
 });

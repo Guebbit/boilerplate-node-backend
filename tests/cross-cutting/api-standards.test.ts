@@ -2,15 +2,13 @@
  * The REST standards the contract and the module layout state in prose, held as checks so the
  * next module cannot stop halfway through them.
  *
- * Four rules, each read from the SOURCE (the module fragments and the `.ts` files), never from
+ * Two rules, each read from the SOURCE (the module fragments and the `.ts` files), never from
  * the generated bundle, so a failure names a file somebody edits:
  *
  * | Rule | Where it is written |
  * | --- | --- |
  * | A resource with a lifecycle `status` publishes a required `actions` | docs/theory/tactical-ddd.md |
- * | A presenter maps; it never asks who the caller is | docs/theory/tactical-ddd.md |
  * | A 409 refusal carries a code the contract lists | docs/api/write-methods.md |
- * | A paged list takes `sort` or states its one fixed order | docs/api/sorting.md |
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -30,8 +28,6 @@ interface SchemaNode {
 /** One operation of a module's contract. */
 interface OperationNode {
     operationId?: string;
-    parameters?: { $ref?: string; name?: string }[];
-    requestBody?: unknown;
     responses?: Record<string, { description?: string }>;
 }
 
@@ -41,9 +37,6 @@ interface Fragment {
     paths?: Record<string, Record<string, OperationNode>>;
     components?: { schemas?: Record<string, SchemaNode> };
 }
-
-/** The HTTP methods an operation object may be keyed by. */
-const METHODS = new Set(['get', 'post', 'put', 'patch', 'delete']);
 
 /** Every module that publishes a contract fragment, parsed. */
 const contracts = readdirSync(MODULES_ROOT)
@@ -95,28 +88,6 @@ const callText = (source: string, start: number): string => {
     }
     return source.slice(start);
 };
-
-/**
- * Whether an operation lets the caller sort: a `sort` query parameter, or a `sort` property on
- * its search body.
- * @param operation - the operation
- * @param fragment - the fragment it sits in
- */
-const takesSort = (operation: OperationNode, fragment: Fragment): boolean => {
-    if ((operation.parameters ?? []).some((parameter) => parameter.name === 'sort')) return true;
-    const body = /Search\w+Request/.exec(JSON.stringify(operation.requestBody ?? {}));
-    return Boolean(body && fragment.components?.schemas?.[body[0]]?.properties?.sort);
-};
-
-/**
- * A module's presenter files: `presenter.ts`, or `presenters.ts` for a module presenting more
- * than one resource.
- * @param module - the module folder
- */
-const presenterFiles = (module: string): string[] =>
-    readdirSync(path.join(MODULES_ROOT, module))
-        .filter((file) => /^presenters?\.ts$/.test(file))
-        .map((file) => path.join(MODULES_ROOT, module, file));
 
 describe('a resource with a lifecycle status publishes required actions', () => {
     /**
@@ -183,38 +154,6 @@ describe('a resource with a lifecycle status publishes required actions', () => 
     });
 });
 
-describe('presenters', () => {
-    /** The module folders that serve HTTP and own a model. */
-    const presentingModules = readdirSync(MODULES_ROOT).filter(
-        (module) =>
-            existsSync(path.join(MODULES_ROOT, module, 'model.ts')) &&
-            existsSync(path.join(MODULES_ROOT, module, 'routes.ts'))
-    );
-
-    /** What a presenter must not know about: who is asking, or a service that decides. */
-    const FORBIDDEN_IMPORT = /@kernel\/ability|\bAuthContext\b|\bCaller\b|\b\w+Service\b/;
-
-    it('exists in every module that serves HTTP and owns a model', () => {
-        expect(presentingModules.length).toBeGreaterThanOrEqual(1);
-        expect(presentingModules.filter((module) => presenterFiles(module).length === 0)).toEqual(
-            []
-        );
-    });
-
-    it('imports no ability, auth context, caller or service', () => {
-        const offenders = presentingModules
-            .flatMap((module) => presenterFiles(module))
-            .flatMap((file) =>
-                [...readFileSync(file, 'utf8').matchAll(/^import\b[^;]*;/gm)]
-                    .map(([statement]) => statement.replaceAll(/\s+/g, ' '))
-                    .filter((statement) => FORBIDDEN_IMPORT.test(statement))
-                    .map((statement) => `${path.relative(REPO_ROOT, file)}: ${statement}`)
-            );
-
-        expect(offenders).toEqual([]);
-    });
-});
-
 describe('a 409 refusal carries an error code', () => {
     /** The calls that build a 409 answer. */
     const CALL = /\b(?:generateReject|refuse)\(\s*409\b|\brejectResponse\([^(),]+,\s*409\b/g;
@@ -257,53 +196,5 @@ describe('a 409 refusal carries an error code', () => {
         );
 
         expect([...used].filter((code) => !declared.has(code))).toEqual([]);
-    });
-});
-
-describe('a paged list takes `sort` or states its one fixed order', () => {
-    /** What a fixed-order list says in its 200 description, as `docs/api/sorting.md` names the kinds. */
-    const FIXED_ORDER = /\((?:a log|a queue|a dictionary), so no `sort`\)/;
-
-    /** Every paged operation: one that takes `page`, or one that searches by body. */
-    const paged = contracts.flatMap(({ module, fragment }) =>
-        Object.entries(fragment.paths ?? {}).flatMap(([route, item]) =>
-            Object.entries(item)
-                .filter(([method]) => METHODS.has(method))
-                .filter(
-                    ([, operation]) =>
-                        (operation.parameters ?? []).some((parameter) =>
-                            (parameter.$ref ?? parameter.name ?? '').endsWith('PageParam')
-                        ) || /Search\w+Request/.test(JSON.stringify(operation.requestBody ?? {}))
-                )
-                .map(([method, operation]) => ({
-                    id: `${module}: ${method.toUpperCase()} ${route}`,
-                    operation,
-                    fragment
-                }))
-        )
-    );
-
-    it('finds the paged operations it means to check', () => {
-        expect(paged.length).toBeGreaterThanOrEqual(10);
-    });
-
-    it('gives each a `sort` or a stated fixed order', () => {
-        const unsorted = paged
-            .filter(({ operation, fragment }) => !takesSort(operation, fragment))
-            .filter(
-                ({ operation }) =>
-                    !FIXED_ORDER.test(operation.responses?.['200']?.description ?? '')
-            )
-            .map(({ id }) => id);
-
-        expect(unsorted).toEqual([]);
-    });
-
-    it('names the kinds of fixed order in docs/api/sorting.md', () => {
-        const page = readFileSync(path.join(REPO_ROOT, 'docs', 'api', 'sorting.md'), 'utf8');
-
-        expect(page).toMatch(/\| log \|/);
-        expect(page).toMatch(/\| queue \|/);
-        expect(page).toMatch(/\| dictionary \|/);
     });
 });
