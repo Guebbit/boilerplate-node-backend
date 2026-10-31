@@ -1,7 +1,12 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { identifyImage, identifyImageFile } from '@infrastructure/adapters/image-signatures';
+import { ACCEPTED_UPLOAD_TYPES } from '@api/upload-types';
+import {
+    ACCEPTED_UPLOAD_MIMETYPES,
+    identifyImage,
+    identifyImageFile
+} from '@infrastructure/adapters/image-signatures';
 
 /**
  * Every `length` passed to a file handle's `read`, so a test can assert how much of a file was
@@ -185,5 +190,36 @@ describe('identifyImageFile', () => {
         // One read, and a header-sized one — not twenty megabytes.
         expect(mockReadLengths).toHaveLength(1);
         expect(mockReadLengths[0]).toBeLessThanOrEqual(64);
+    });
+});
+
+/**
+ * The accepted declared types come from the contract, not from the signature table: a type is
+ * accepted because the API says so, and recognised because the table has its bytes.
+ */
+describe('ACCEPTED_UPLOAD_MIMETYPES', () => {
+    it('holds every type the contract lists', () => {
+        for (const type of ACCEPTED_UPLOAD_TYPES)
+            expect(ACCEPTED_UPLOAD_MIMETYPES.has(type)).toBe(true);
+    });
+
+    it("tolerates the signature table's alias, which the contract does not list", () => {
+        expect(ACCEPTED_UPLOAD_MIMETYPES.has('image/jpg')).toBe(true);
+        expect(ACCEPTED_UPLOAD_TYPES).not.toContain('image/jpg');
+    });
+
+    it('holds nothing else', () => {
+        expect(ACCEPTED_UPLOAD_MIMETYPES.size).toBe(ACCEPTED_UPLOAD_TYPES.length + 1);
+    });
+
+    it('lists a type the signature table can identify, for every contract type', () => {
+        const samples: Record<string, Buffer> = {
+            'image/png': PNG,
+            'image/jpeg': JPEG,
+            'image/webp': WEBP
+        };
+        expect(
+            ACCEPTED_UPLOAD_TYPES.map((type) => identifyImage(samples[type] ?? Buffer.alloc(0)))
+        ).toEqual([...ACCEPTED_UPLOAD_TYPES]);
     });
 });

@@ -746,7 +746,6 @@ components:
                     minimum: 0
                     description: Grams. Absent counts as 0 for shipping-method filtering.
                 imageUpload:
-                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional product image
@@ -888,7 +887,6 @@ components:
                     minimum: 0
                     description: Grams. Absent counts as 0 for shipping-method filtering.
                 imageUpload:
-                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional product image
@@ -1032,7 +1030,6 @@ components:
                     minimum: 0
                     description: Grams. Absent counts as 0 for shipping-method filtering.
                 imageUpload:
-                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional product image
