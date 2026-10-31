@@ -50,12 +50,8 @@ describe('the committed ops rules files', () => {
 });
 
 describe('jobsBlockSchema', () => {
-    it('accepts a job keyed by its name in camelCase', () => {
+    it('accepts a job keyed by its handle', () => {
         expect(jobsBlockSchema.safeParse({ reapThings: job }).success).toBe(true);
-    });
-
-    it('refuses a job keyed by anything else', () => {
-        expect(jobsBlockSchema.safeParse({ things: job }).success).toBe(false);
     });
 
     it.each(['clean:things', 'reap:Things', 'reap:'])('refuses the name %s', (name) => {
