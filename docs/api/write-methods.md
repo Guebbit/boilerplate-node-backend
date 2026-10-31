@@ -327,8 +327,14 @@ timeline row's `data`). An unset side of an audit `{ from, to }` is the absent k
 
 One exception: permission rule conditions on the session answers (a sign-in, `GET /account`, a
 refresh). A permission rule's conditions are a query, not a value; `null` there is the operand "has no
-value" (`{ deletedAt: null }`), and the client evaluates it with CASL. Any other response carrying the
-same shape is still refused.
+value", and the only form allowed is `{ deletedAt: null }`. The client never evaluates a condition
+(`can()` takes a type name only); the rule travels as the server holds it. Any other `null`, and any
+other response carrying the same shape, is still refused.
+
+The same spelling is the house query rule for a soft delete: `deletedAt: null`, never
+`deletedAt: { $exists: false }`, so a permission rule and a repository filter read alike
+(`products`' `PUBLIC_SCOPE` follows it). The rule is limited to `deletedAt` and permission
+conditions: other fields legitimately ask `$exists` (`lockedUntil`, `supersededAt`, `trackingCode`).
 
 A stored `null` that means something (a product's `backorderLimit`: no cap) is mapped in the
 presenter, so the wire still says "absent". RFC 7396 §1 is why: a `GET` that served `"x": null`,
