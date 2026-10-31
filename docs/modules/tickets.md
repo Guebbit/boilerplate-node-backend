@@ -205,8 +205,7 @@ carries the words and the time, never the author.
 A ticket never mails anyone itself. A new one (spam excluded) is announced as `ticket.opened`
 `{ ticketId, kind, routeSet, category? }`, and handing one to a colleague as `ticket.assigned`
 (taking your own announces nothing). [`notifications`](./notifications.md#work-notices-for-staff)
-hears both and does the telling, so a situation is one ticket kind or one notice code, never both
-(`tests/cross-cutting/ticket-kinds-are-not-notification-kinds.test.ts`).
+hears both and does the telling, so a situation is one ticket kind or one notice code, never both.
 
 | Event             | Told                                                                                            | Mail                                                                                                                                                         |
 | ----------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |

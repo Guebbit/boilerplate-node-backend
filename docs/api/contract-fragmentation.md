@@ -347,9 +347,8 @@ The root file is the authority for the exact set. Everything else is owned: `Pro
 fields by `products`, the order schemas by `orders`, `CartItem` by `cart`, the password fields by
 `account`, the abilities schemas by `access`.
 
-**A `$ref` between two modules follows `module.yaml` `dependsOn`.**
-`tests/cross-cutting/contract-refs-follow-depends-on.test.ts` fails on a contract that reaches
-into a sibling it does not declare, so the dependency map and the contract say the same thing.
+**A `$ref` between two modules follows `module.yaml` `dependsOn`.** Nothing checks it: deleting
+the sibling fails the bundle on a dangling reference, which is how an undeclared one shows.
 
 **Duplicating a schema into two fragments is the failure to watch for** — the bundle would carry
 two definitions that drift apart silently, and the conflict flag above refuses the same name twice.
