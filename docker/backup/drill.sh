@@ -19,7 +19,7 @@ NET="$ID"
 TMP="$(mktemp -d)"
 IMAGE="${BACKUP_DRILL_IMAGE:-boilerplate-backup:drill}"
 # The same pinned images the compose files use.
-MONGO_IMAGE="$(sed -n -E "s/^ +image: (docker.io\/library\/mongo:8\.2\.12@sha256:[0-9a-f]+).*/\1/p" docker-compose.production.yml | head -1)"
+MONGO_IMAGE="$(sed -n -E "s/^ +image: (docker.io\/library\/mongo:[^@ ]+@sha256:[0-9a-f]+).*/\1/p" docker-compose.production.yml | head -1)"
 RCLONE_IMAGE="$(sed -n -E 's/^ +image: (docker.io\/rclone\/rclone:[^ ]+).*/\1/p' docker-compose.backup-server.yml | head -1)"
 GATUS_IMAGE="${BACKUP_DRILL_GATUS_IMAGE:-docker.io/twinproduction/gatus:v5.37.0}"
 PASS=0
