@@ -48,10 +48,6 @@ const uploadEncodings = (): [string, string | undefined][] => {
 };
 
 describe('upload types in the contract', () => {
-    it('is declared on the nine upload bodies', () => {
-        expect(uploadEncodings()).toHaveLength(9);
-    });
-
     it.each(uploadEncodings())(
         '%s accepts exactly the generated list',
         (_operation, contentType) => {

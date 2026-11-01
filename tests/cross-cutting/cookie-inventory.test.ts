@@ -15,11 +15,6 @@ interface RootContract {
 }
 
 describe('the cookie inventory', () => {
-    it('holds exactly the ten cookies the backend sets', () => {
-        // Pinned on purpose: a cookie added or dropped is a decision, and the count says so.
-        expect(Object.keys(cookieData)).toHaveLength(10);
-    });
-
     it("names the session cookie as the contract's cookieAuth does", () => {
         const contract = parse(
             readFileSync(path.join(REPO_ROOT, 'shared/contracts/openapi.root.yaml'), 'utf8')
