@@ -84,7 +84,7 @@ updates:
       ignore:
           - dependency-name: otel/opentelemetry-collector-contrib
           # mongo 8.3+ cannot boot on a kernel-7 runner (SERVER-136848): patch bumps only.
-          - dependency-name: mongo
+          - dependency-name: '*mongo'
             update-types:
                 - version-update:semver-minor
                 - version-update:semver-major
