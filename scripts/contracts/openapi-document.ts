@@ -73,6 +73,9 @@ export interface OperationEntry {
  */
 export const HTTP_METHODS: readonly OpenAPIV3.HttpMethods[] = Object.values(OpenAPIV3.HttpMethods);
 
+/** The methods a client may send a body to: every state-changing one. `get` and `head` carry none by contract. */
+export const WRITE_METHODS = ['post', 'put', 'patch', 'delete'] as const;
+
 /** Whether a path-item key names an HTTP method (as opposed to `parameters`, `summary`, ...). */
 export const isHttpMethod = (key: string): key is OpenAPIV3.HttpMethods =>
     Object.values<string>(OpenAPIV3.HttpMethods).includes(key);

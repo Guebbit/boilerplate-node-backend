@@ -13,12 +13,11 @@
  * See: docs/api/contract-fragmentation.md#module-owned-browser-events
  */
 
-import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { parse as parseYaml } from 'yaml';
 import type { OpenAPIV3_1 } from 'openapi-types';
 import type { OpenApiDocument } from './openapi-document';
 
+import { readOpenApiFragment } from './fragments';
 import { orderSections } from './section-order';
 import { MODULES_ROOT, modulesWith } from '../modules-on-disk';
 
@@ -104,9 +103,10 @@ export const withBrowserEvents = (
     const added: Record<string, Schema> = {};
     const mapping: Record<string, string> = {};
     for (const file of fragments) {
-        const parsed = parseYaml(readFileSync(file, 'utf8')) as OpenApiDocument; // a fragment is components only
+        const parsed = readOpenApiFragment(file); // a fragment is components only
         for (const [name, schema] of Object.entries(parsed.components?.schemas ?? {})) {
-            const event = eventNameOf(name, schema);
+            // A browser-event fragment's schemas are OpenAPI schema objects (the fragment type leaves them `unknown`).
+            const event = eventNameOf(name, schema as Schema);
             if (name in schemas || name in added || event in mapping)
                 throw new Error(
                     `[openapi] browser event ${name} (${event}) is declared twice — the second is ${file}.`

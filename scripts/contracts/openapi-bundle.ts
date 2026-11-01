@@ -38,7 +38,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { stringify as stringifyYaml } from 'yaml';
 import path from 'node:path';
 import { type CompiledBundle } from './bundle-kinds';
 import { orderSections } from './section-order';
@@ -54,6 +54,7 @@ import { pruneUnused } from './prune-unused';
 import { REPO_ROOT, MODULES_ROOT, modulesWith } from '../modules-on-disk';
 import { readOpenApiFragment } from './fragments';
 import {
+    WRITE_METHODS,
     isHttpMethod,
     operationsOf,
     parseOpenApi,
@@ -146,14 +147,10 @@ const PATH_LINE = /^ {4}(\/\S*):\s*$/gm;
  * operations and one `$ref` per module path — and only the first kind is the system section's. A
  * `$ref` entry is somebody else's path passing through.
  */
-const rootPaths = (): string[] => {
-    const document_ = parseYaml(readFileSync(ROOT_SPEC, 'utf8')) as {
-        paths: Record<string, Record<string, unknown>>;
-    };
-    return Object.entries(document_.paths)
+const rootPaths = (): string[] =>
+    Object.entries(readOpenApiFragment(ROOT_SPEC).paths ?? {})
         .filter(([, item]) => !('$ref' in item))
         .map(([url]) => url);
-};
 
 /** Every path a section declares, in the order it declares them. */
 export const sectionPaths = (section: SectionName): string[] =>
@@ -162,9 +159,6 @@ export const sectionPaths = (section: SectionName): string[] =>
         : [...readFileSync(moduleSpec(section), 'utf8').matchAll(PATH_LINE)].map(
               (match) => match[1]
           );
-
-/** The methods a client may mistakenly send a body to: every state-changing one. */
-const WRITE_METHODS: ReadonlySet<string> = new Set(['post', 'put', 'patch', 'delete']);
 
 /**
  * Whether this app-level response applies to this operation.
@@ -182,7 +176,9 @@ const appliesToOperation = (
 ): boolean =>
     entry.appliesTo === 'all' ||
     'requestBody' in operation ||
-    (entry.appliesTo === 'requestBodyOrBodyless' && WRITE_METHODS.has(method));
+    // `method` is a plain string here, so the tuple is widened to ask it.
+    (entry.appliesTo === 'requestBodyOrBodyless' &&
+        (WRITE_METHODS as readonly string[]).includes(method));
 
 /**
  * This operation's responses, plus every app-level one it does not already answer for itself.
