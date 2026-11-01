@@ -14,7 +14,6 @@ import type { Caller } from '@types';
 import type { PermissionSetName } from '@api/permission-vocabulary';
 import { holdsSet } from '@kernel/ability';
 import { FRONTEND_LINK_RULES } from '@infrastructure/http/frontend-link';
-import { orderPagePath } from '@modules/orders';
 import type { NotificationBody, StaffNotificationCode, StaffSummaryCode } from './model';
 
 /** One work notice's routing: its audience, its mail class and how loud it is. */
@@ -175,18 +174,15 @@ const SUMMARY_PAGES: Readonly<Record<StaffSummaryCode, string>> = {
 
 /**
  * The screen of the record a dead outbox event was about, read off the event name's first segment
- * (`order.paid` is about an order). An event of any other kind has no screen: the link is the
- * admin's home, never a guess.
+ * (`user.updated` is about a user). An event of any other kind has no screen: the link is the
+ * admin's home, never a guess. An order event has none either: the frontend builds that link
+ * itself, and only when the shop is there.
  *
  * @param eventName - the parked event
  * @param aggregateId - what it was about
  */
 const outboxAggregateLink = (eventName: string, aggregateId: string): StaffLink => {
     switch (eventName.split('.', 1).join('')) {
-        case 'order': {
-            // Already filled in: the order page's path honours `NODE_FRONTEND_LINK_ORDER`.
-            return { template: orderPagePath(aggregateId), parameters: {} };
-        }
         case 'user': {
             return { template: PAGES.user, parameters: { id: aggregateId } };
         }

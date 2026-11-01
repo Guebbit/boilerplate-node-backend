@@ -168,7 +168,7 @@ flowchart LR
   recipient's own language, with ids and dates only (no buyer address, no name).
 - **Links are shared data.** The staff screens a notice points at are the `staffPages:` block of
   `shared/rules/frontend-links.yaml`, which the frontend's router spec walks; the code-to-screen
-  mapping stays in `staff-routing.ts`. A dead event about an order links through `orders`' `orderPagePath`.
+  mapping stays in `staff-routing.ts`. A dead event links only when it is about a user; the frontend builds an order link itself.
 - **Once per situation.** Each row carries a `dedupeKey` (`<kind>:<entity>`) under a unique
   `{ userId, dedupeKey }` index, so a redelivered event writes nothing, pushes nothing and mails
   nothing a second time.

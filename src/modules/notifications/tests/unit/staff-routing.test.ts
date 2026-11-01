@@ -13,7 +13,6 @@ import {
     staffLinkOf,
     type StaffNoticeBody
 } from '@modules/notifications/staff-routing';
-import { orderPagePath } from '@modules/orders';
 import { FRONTEND_LINK_RULES } from '@infrastructure/http/frontend-link';
 import { callerAs } from '@tests/callers';
 import { translator } from '@infrastructure/i18n';
@@ -50,7 +49,7 @@ const BODIES: Record<(typeof STAFF_NOTIFICATION_CODES)[number], StaffNoticeBody>
     },
     'notifications.staff.outbox-dead': {
         code: 'notifications.staff.outbox-dead',
-        params: { eventName: 'order.paid', aggregateId: 'o1' }
+        params: { eventName: 'user.updated', aggregateId: 'u1' }
     },
     'notifications.staff.transfers-due': {
         code: 'notifications.staff.transfers-due',
@@ -157,21 +156,15 @@ describe('staffLinkOf for the later notices', () => {
         });
     });
 
-    it('points a dead event at the order or account it was about, and at home when it names neither', () => {
+    it('points a dead event at the account it was about, and at home when it names none', () => {
         expect(staffLinkOf(BODIES['notifications.staff.outbox-dead'])).toEqual({
-            template: orderPagePath('o1'),
-            parameters: {}
+            template: PAGES.user,
+            parameters: { id: 'u1' }
         });
         expect(
             staffLinkOf({
                 code: 'notifications.staff.outbox-dead',
-                params: { eventName: 'user.registered', aggregateId: 'u1' }
-            }).template
-        ).toBe(PAGES.user);
-        expect(
-            staffLinkOf({
-                code: 'notifications.staff.outbox-dead',
-                params: { eventName: 'stock.moved', aggregateId: 'p1' }
+                params: { eventName: 'order.created', aggregateId: 'o1' }
             })
         ).toEqual({ template: '', parameters: {} });
     });
