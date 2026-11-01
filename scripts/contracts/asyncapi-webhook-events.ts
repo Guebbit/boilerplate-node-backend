@@ -129,6 +129,7 @@ const restSchemaOf = (rest: OpenApiFragment, openapiFile: string, name: string):
  * @throws Error when a referenced schema is missing or holds a `$ref`, or the fragment declares the same name itself
  */
 export const localiseOpenApiReferences = (fragment: Document, openapiFile: string): void => {
+    // `true`: keep the node (not its plain value), so `isMap` can see it.
     const schemas = fragment.getIn(['components', 'schemas'], true);
     if (!isMap(schemas)) return;
 

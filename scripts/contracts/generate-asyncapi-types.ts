@@ -563,6 +563,7 @@ const zodSchemaBlocks = renderZodSchemas(
  * and the Zod schemas.
  *
  * @param modelBlocks - Modelina's rendered interfaces and unions
+ * @param restModels - the REST schemas the fragment references, rendered for the generated file
  * @returns the file's source text
  */
 const buildOutput = (modelBlocks: string[], restModels: string[]): string => {
