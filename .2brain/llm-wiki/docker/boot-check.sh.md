@@ -15,7 +15,7 @@ Integration smoke-test that boots a production Docker image against a real Mongo
 
 - **`cleanup()`** (trapped on `EXIT`) — removes the app container, Mongo container, the dedicated Docker network, and the temp secrets directory.
 - **Secret generation loop** — creates one random 48-byte base64 file per `NODE_*_FILE` variable the app expects (`token_access`, `token_refresh`, `totp`, `pii`, `webhook`, `pseudonym`, `metrics`).
-- **MongoDB container** — `docker.io/library/mongo:8.2.12` pinned to a specific `sha256` digest, on an isolated network.
+- **MongoDB container** — `docker.io/library/mongo:8` pinned to a specific `sha256` digest, on an isolated network.
 - **App container** — the image under test, started with `NODE_ENV=production`, full shop/secret env vars, and a read-only bind-mount of the secrets dir to `/run/secrets`.
 - **Liveness poll** — up to 45 × 2 s (≈ 90 s) retrying `curl /livez`; dumps `docker logs` on failure.
 - **Write-ownership check** — `docker exec … touch /app/src/.boot-check-write`; exits 1 if the `node` user succeeds.

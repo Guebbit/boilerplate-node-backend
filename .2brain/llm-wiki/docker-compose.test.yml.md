@@ -14,7 +14,7 @@ Composable gate stack that proves the external-service code path (`NODE_TEST_MON
 ## Key elements
 
 - **`name: boilerplate-node-backend-gate`** — explicit compose project name. Without it, Compose derives the name from the current directory, colliding with `docker-compose.yml` and causing container-name conflicts (shared `redis`/`database` names).
-- **`services.mongo`** — `mongo:8.2.12` (pinned by digest) running as a single-member replica set (`--replSet rs0`). No named volume (ephemeral scratch). The healthcheck performs `rs.initiate` with host `mongo:27017` (service name, not `localhost`) so the `gate` container can reach it.
+- **`services.mongo`** — `mongo:8` (pinned by digest) running as a single-member replica set (`--replSet rs0`). No named volume (ephemeral scratch). The healthcheck performs `rs.initiate` with host `mongo:27017` (service name, not `localhost`) so the `gate` container can reach it.
 - **`services.redis`** — `redis:7-alpine` (pinned by digest) with a `redis-cli ping` healthcheck.
 - **`services.gate`** — builds from `docker/Dockerfile`, sets `NODE_TEST_MONGO_URI`, `NODE_TEST_REDIS_URL`, and `JEST_WORKERS` (default 8), then runs `npm run complete`. `depends_on` both services with `condition: service_healthy`. No bind mounts (deliberate; see Notes).
 - **Invocation** — `npm run compose -- -f docker-compose.test.yml run --rm -T gate` (the `-T` flag is mandatory; see Notes).
