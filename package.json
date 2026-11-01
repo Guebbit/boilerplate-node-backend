@@ -218,6 +218,11 @@
         "node": ">=24.7",
         "npm": ">=11.16.0"
     },
+    "config": {
+        "mongodbMemoryServer": {
+            "version": "8.2.12"
+        }
+    },
     "allowScripts": {
         "mongodb-memory-server": true,
         "protobufjs": true,

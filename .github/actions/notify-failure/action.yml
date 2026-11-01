@@ -2,7 +2,8 @@ name: Notify on failure
 description: Open or update one tracking issue when a recurring workflow fails.
 
 # Opens or updates one tracking issue for a recurring nightly workflow's failure, instead of
-# adding a channel nobody watches. Used by `mutation.yml` and `audit.yml`.
+# adding a channel nobody watches. Used by `mutation.yml`, `audit.yml`, `image-scan.yml`,
+# `fuzz.yml` and `order-random.yml`.
 
 inputs:
     title:

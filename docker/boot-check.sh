@@ -33,7 +33,7 @@ chmod 755 "$secrets"
 chmod 644 "$secrets"/*
 
 docker network create "$network" >/dev/null
-docker run -d --name "$mongo" --network "$network" docker.io/library/mongo:8@sha256:d731d77bfd7afd66bd487bdf627b5bf7ce4c3602ec461d635977021db529ebbc >/dev/null
+docker run -d --name "$mongo" --network "$network" docker.io/library/mongo:8.2.12@sha256:e0ce8c35124d4a9f9785532d1f268f39e9728ffa1cb38f46fa482436424c4bd3 >/dev/null
 
 # No `--read-only` here, unlike the production compose: that flag alone would make the write check
 # below pass, and this check is about who OWNS the code, not about the mount.

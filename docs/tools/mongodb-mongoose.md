@@ -13,6 +13,14 @@ That means the persistence example is document-oriented, not SQL-oriented.
 | [Mongoose](https://mongoosejs.com/docs/)                                                   | schema, model, and query layer          |
 | [Mongoose `diffIndexes`](<https://mongoosejs.com/docs/api/model.html#Model.diffIndexes()>) | plans the stored-vs-declared difference |
 
+## Pinned server version
+
+MongoDB is pinned to exactly **8.2.12** everywhere: the compose images (by multi-arch index digest),
+the CI apt install (`.github/actions/setup`) and `config.mongodbMemoryServer.version` in
+`package.json`. 8.0 and 8.3.x refuse to start on Linux kernel 6.19 or newer
+([SERVER-136848](https://jira.mongodb.org/browse/SERVER-136848)), which current CI runners have.
+It moves back to the newest 8.x once that bug is fixed.
+
 ## Persistence visual
 
 ```mermaid
