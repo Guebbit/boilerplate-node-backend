@@ -779,7 +779,7 @@ paths:
                 in `jwt` mode the body carries a short-lived access token (`token`) to pass as a
                 Bearer token, and a refresh cookie is set; in `cookie` mode the session is an
                 HttpOnly `__Host-session` cookie and the body carries no credential — unless the
-                request asked for `transport: bearer`, which sets no cookie and returns the
+                request asked for `transport: bearer`, which sets no session cookie (the `__Host-device` cookie is still set) and returns the
                 `ses_…` id as `sessionToken` instead. When the account has two-factor
                 authentication enabled the response is a short-lived challenge to submit to
                 `POST /account/login/2fa` instead. When the account is inside the grace of its
@@ -1405,7 +1405,7 @@ components:
                     description: >-
                         The `ses_…` session id, to send back as `Authorization: Bearer ses_…`.
                         Present only for a `cookie`-mode login that asked for `transport: bearer`
-                        (or a re-proof by such a client); that login sets no cookie.
+                        (or a re-proof by such a client); that login sets no session cookie (the `__Host-device` cookie is still set).
                 account:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AccountView'
                     description: >-
