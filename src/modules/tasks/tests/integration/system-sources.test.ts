@@ -32,6 +32,9 @@ setupTestDb();
 const USER = new Types.ObjectId().toString();
 const PAYMENT = new Types.ObjectId().toString();
 
+/** An order that exists as an id: the system reads it back as an ObjectId to mail its buyer. */
+const ORDER = new Types.ObjectId().toString();
+
 let eventCounter = 0;
 
 /** A fresh outbox row id, as the relay would stamp one. */
@@ -75,14 +78,14 @@ const watchOpened = () => {
 
 const REFUND = {
     paymentId: PAYMENT,
-    orderId: 'ord1',
+    orderId: ORDER,
     refundId: 'ref1',
     amount: 10,
     currency: 'EUR'
 };
 const DISPUTE: DomainEventMap['payment.dispute_opened'] = {
     paymentId: PAYMENT,
-    orderId: 'ord1',
+    orderId: ORDER,
     disputeId: 'dp1',
     kind: 'chargeback',
     status: 'needs_response',
@@ -93,7 +96,7 @@ const DISPUTE: DomainEventMap['payment.dispute_opened'] = {
     evidenceDueBy: '2031-01-10T00:00:00.000Z'
 };
 const DELAY: DomainEventMap['fulfillment_order.delayed'] = {
-    orderId: 'ord1',
+    orderId: ORDER,
     fulfillmentOrderId: 'fo1',
     titles: ['Mug'],
     agreedAt: '2031-02-01T00:00:00.000Z',
@@ -138,7 +141,7 @@ describe('what opens a task', () => {
             () =>
                 emitDomainEvent(
                     'payment.amount_mismatch',
-                    { paymentId: PAYMENT, orderId: 'ord1' },
+                    { paymentId: PAYMENT, orderId: ORDER },
                     { eventId: nextEventId() }
                 ),
             TaskKind.amount_mismatch,
@@ -155,7 +158,7 @@ describe('what opens a task', () => {
             () =>
                 emitDomainEvent(
                     'inventory.hold_orphaned',
-                    { orderId: 'ord1' },
+                    { orderId: ORDER },
                     { eventId: nextEventId() }
                 ),
             TaskKind.paid_without_hold,
@@ -269,12 +272,12 @@ describe('what closes a task', () => {
             () =>
                 emitDomainEvent(
                     'inventory.hold_orphaned',
-                    { orderId: 'ord1' },
+                    { orderId: ORDER },
                     { eventId: nextEventId() }
                 ),
             () =>
                 emitDomainEvent('order.cancelled', {
-                    orderId: 'ord1',
+                    orderId: ORDER,
                     refund: true,
                     cause: 'operator'
                 })
@@ -284,12 +287,12 @@ describe('what closes a task', () => {
             () =>
                 emitDomainEvent(
                     'inventory.hold_orphaned',
-                    { orderId: 'ord1' },
+                    { orderId: ORDER },
                     { eventId: nextEventId() }
                 ),
             () =>
                 emitDomainEvent('shipment.shipped', {
-                    orderId: 'ord1',
+                    orderId: ORDER,
                     shipmentId: 's1',
                     fulfillmentOrderId: 'fo9',
                     lines: []
@@ -300,7 +303,7 @@ describe('what closes a task', () => {
             () => emitDomainEvent('fulfillment_order.delayed', DELAY, { eventId: nextEventId() }),
             () =>
                 emitDomainEvent('shipment.shipped', {
-                    orderId: 'ord1',
+                    orderId: ORDER,
                     shipmentId: 's1',
                     fulfillmentOrderId: 'fo1',
                     lines: []
@@ -311,7 +314,7 @@ describe('what closes a task', () => {
             () => emitDomainEvent('fulfillment_order.delayed', DELAY, { eventId: nextEventId() }),
             () =>
                 emitDomainEvent('fulfillment_order.cancelled', {
-                    orderId: 'ord1',
+                    orderId: ORDER,
                     fulfillmentOrderId: 'fo1'
                 })
         ],
@@ -339,12 +342,12 @@ describe('what closes a task', () => {
     it('leaves a mismatch for staff: no later event closes it', async () => {
         await emitDomainEvent(
             'payment.amount_mismatch',
-            { paymentId: PAYMENT, orderId: 'ord1' },
+            { paymentId: PAYMENT, orderId: ORDER },
             { eventId: nextEventId() }
         );
         await emitDomainEvent('payment.refunded', { ...REFUND, full: true });
         await emitDomainEvent('order.cancelled', {
-            orderId: 'ord1',
+            orderId: ORDER,
             refund: true,
             cause: 'operator'
         });
@@ -382,12 +385,12 @@ describe('dedup', () => {
 
         await emitDomainEvent(
             'inventory.hold_orphaned',
-            { orderId: 'ord1' },
+            { orderId: ORDER },
             { eventId: nextEventId() }
         );
         await emitDomainEvent(
             'inventory.hold_orphaned',
-            { orderId: 'ord1' },
+            { orderId: ORDER },
             { eventId: nextEventId() }
         );
 
@@ -433,12 +436,12 @@ describe('dedup', () => {
         await Promise.all([
             emitDomainEvent(
                 'inventory.hold_orphaned',
-                { orderId: 'ord1' },
+                { orderId: ORDER },
                 { eventId: nextEventId() }
             ),
             emitDomainEvent(
                 'inventory.hold_orphaned',
-                { orderId: 'ord1' },
+                { orderId: ORDER },
                 { eventId: nextEventId() }
             )
         ]);
@@ -451,7 +454,7 @@ describe('dedup', () => {
         for (let index = 0; index < 25; index++)
             await emitDomainEvent(
                 'inventory.hold_orphaned',
-                { orderId: 'ord1' },
+                { orderId: ORDER },
                 { eventId: nextEventId() }
             );
 
