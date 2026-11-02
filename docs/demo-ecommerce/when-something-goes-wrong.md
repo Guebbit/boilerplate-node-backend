@@ -184,7 +184,7 @@ reply. The order stays on the "needs attention" list.
 **What to do.**
 
 1. Write to the buyer again around day 7, from your own mailbox.
-2. Note each try on the order or in the ticket, so the next person sees it.
+2. Note each try on the order or in the task, so the next person sees it.
 3. Keep the refund open. If the refund pays a return or a withdrawal, the list shows how many days
    are left of the 14 the law gives you.
 

@@ -30,7 +30,7 @@ details document, as `application/problem+json`. One shape, one media type, what
 | `title` | the English RFC 9110 phrase for the status (`Not Found`, `Content Too Large`, `Unprocessable Content`) | names the status class, so it is never translated (§3.1.3) |
 | `status` | the HTTP status, from the same variable | survives a proxy that rewrites the status line (§3.1.2) |
 | `detail` | the translated sentence: the one error's `message`, or the status's generic text when there are several | what a person reads (§3.1.4) |
-| `instance` | `urn:uuid:` and the request id, the id `x-request-id` carries | names this occurrence in a support ticket. Never the URL: an OAuth callback's query holds `code` and `state` (§5) |
+| `instance` | `urn:uuid:` and the request id, the id `x-request-id` carries | names this occurrence in a support task. Never the URL: an OAuth callback's query holds `code` and `state` (§5) |
 | `errors` | the extension: `{ code, message, details? }` items, never empty | see [the errors extension](#the-errors-extension) |
 
 There is no `success` and no top-level `message` in an error body. A client tells a failure from a

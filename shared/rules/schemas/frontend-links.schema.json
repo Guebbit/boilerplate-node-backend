@@ -71,7 +71,7 @@
           "type": "string",
           "minLength": 1
         },
-        "ticket": {
+        "task": {
           "type": "string",
           "minLength": 1
         },
@@ -103,7 +103,7 @@
       "required": [
         "user",
         "webhookSubscription",
-        "ticket",
+        "task",
         "return",
         "salesOrders",
         "salesPreorders",

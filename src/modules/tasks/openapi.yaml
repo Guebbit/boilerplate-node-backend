@@ -1,0 +1,848 @@
+openapi: 3.1.0
+info:
+    title: tasks — module contract
+    version: '0.1.0'
+
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: Tasks
+      description: Situations someone must take and close — what visitors tell the shop, and what the system opens for staff.
+
+# The error codes this module answers, with the status each is sent with.
+x-error-codes:
+    TASK_ALREADY_RESOLVED: { status: 409, description: 'The task is already resolved.' }
+    TASK_ALREADY_SPAM: { status: 409, description: 'The task is already marked as spam.' }
+    TASK_ALREADY_OPEN: { status: 409, description: 'The task is already open (new or in progress), so there is nothing to reopen.' }
+    TASK_SUPERSEDED: { status: 409, description: 'A newer open task already covers the same situation, so this one cannot be reopened. `details.taskId` names the newer one.' }
+    TASK_NOT_OPEN: { status: 409, description: 'The task is closed; reopen it before assigning it.' }
+    TASK_ASSIGNEE_INVALID: { status: 422, description: 'The person does not exist, or does not hold the permission set that works this task.' }
+
+# This module's sections of the account data export (`POST /account/export`): the bundler
+# adds them to `AccountExportResponse`. Removing the module removes the sections.
+x-personal-data:
+    tasks:
+        required: true
+        schema:
+            type: array
+            description: >
+                The contact messages this person owns: what they sent while signed in, plus what
+                was sent under their verified email address. Staff notes are included without
+                their author. Always present, empty when there are none.
+            items:
+                $ref: '#/components/schemas/ExportTask'
+    systemTasks:
+        required: true
+        schema:
+            type: array
+            description: >
+                The tasks the system opened about this person (a refund owed, an account under
+                review, an export that failed). Every field except the staff who handled them.
+                Always present, empty when there are none.
+            items:
+                $ref: '#/components/schemas/ExportSystemTask'
+
+paths:
+    /tasks:
+        post:
+            tags: [Tasks]
+            summary: Submit contact request
+            description: >
+                Creates a contact task and notifies the support mailbox by email. Open to
+                anyone. A valid session bearer token, when one is sent, records the sender's
+                account on the task (`subjectId`), so the account's data export and erasure
+                include it; an absent or expired token files it as anonymous.
+            operationId: createContactTask
+            x-error-codes:
+                '409': [IDEMPOTENCY_IN_FLIGHT]
+                '422': [IDEMPOTENCY_KEY_MISMATCH]
+            security: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/AntibotChallengeTokenHeader'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateContactTaskRequest'
+            responses:
+                '201':
+                    description: Created task
+                    headers:
+                        Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Task'
+                # A human-challenge provider is active and the caller's token is missing or refused.
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                # `Idempotency-Key` names a request still in flight.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                # Also answered when `Idempotency-Key` was already used with a different body.
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                # `contactLimiters` sits in front of this route — see routes.ts.
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
+        get:
+            x-cache: private-no-cache
+            tags: [Tasks]
+            summary: List tasks
+            description: >
+                Returns the tasks the caller may work: every visitor message, and the system
+                tasks whose route set the caller holds (an administrator holds them all). Open
+                work first when sorted by `dueAt`.
+            operationId: listTasks
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            # Query only, and the DTO form of the same filters is `POST /tasks/search`. A body
+            # on a GET has no defined semantics (RFC 9110 9.3.1) and the Fetch spec rejects it
+            # outright, so a browser client cannot send one; worse, `setCache` keys on the
+            # declared query parameters, so a body-borne filter would be invisible to the key
+            # and two different filters would share one entry for the cache's whole lifetime.
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+                - name: sort
+                  in: query
+                  required: false
+                  # JSON:API grammar: `?sort=-price,title` — comma-separated, `-` for descending.
+                  style: form
+                  explode: false
+                  schema:
+                      $ref: '#/components/schemas/TaskSort'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/TextParam'
+                - name: email
+                  in: query
+                  required: false
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                - name: status
+                  in: query
+                  required: false
+                  schema:
+                      $ref: '#/components/schemas/TaskStatus'
+                - name: category
+                  in: query
+                  required: false
+                  schema:
+                      $ref: '#/components/schemas/TaskCategory'
+                - name: source
+                  in: query
+                  required: false
+                  schema:
+                      $ref: '#/components/schemas/TaskSource'
+                - name: kind
+                  in: query
+                  required: false
+                  schema:
+                      $ref: '#/components/schemas/TaskKind'
+                - name: assignee
+                  in: query
+                  required: false
+                  description: '`me`, `none` (unassigned) or a user id.'
+                  schema:
+                      $ref: '#/components/schemas/TaskAssigneeFilter'
+                - name: overdue
+                  in: query
+                  required: false
+                  description: Only open tasks whose `dueAt` has passed.
+                  schema:
+                      type: boolean
+            responses:
+                '200':
+                    description: Task list
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TasksResponse'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+
+    /tasks/search:
+        post:
+            tags: [Tasks]
+            summary: Search tasks (DTO-friendly)
+            description: Searches and filters tasks via a JSON request body. Functionally equivalent to `GET /tasks` with query parameters.
+            operationId: searchTasks
+            x-alias-of: listTasks
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SearchTasksRequest'
+            responses:
+                '200':
+                    description: Task search results
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TasksResponse'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+
+    /tasks/summary:
+        get:
+            tags: [Tasks]
+            summary: Counts for the staff badge
+            description: >
+                How much work the caller's jurisdiction holds: open tasks, the caller's own,
+                the overdue ones and the unassigned ones. Never cached: it is one person's view.
+            operationId: getTaskSummary
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            responses:
+                '200':
+                    description: The counts
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TaskSummary'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+
+    /tasks/{id}:
+        get:
+            x-cache: private-no-cache
+            tags: [Tasks]
+            summary: Get a task
+            description: >
+                One task with its notes, assignee and the earlier tasks about the same record.
+                A visitor task names a person, so staff reading it is audited. An unknown, malformed
+                or out-of-jurisdiction id is a 404.
+            operationId: getTask
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The task
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Task'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+        delete:
+            tags: [Tasks]
+            summary: Delete a task
+            description: Permanently removes the task identified by `{id}`. Needs `delete:Task` and, for a system task, the task's route set.
+            operationId: deleteTask
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+
+    /tasks/{id}/resolve:
+        post:
+            tags: [Tasks]
+            summary: Resolve a task
+            description: >
+                From `new`, `in_progress` or `spam` to `resolved`, with `resolution: staff`. Stamps
+                `closedAt` (kept when it was already closed) and `respondedAt` (once), and releases
+                the dedup key. No body. Needs `update:Task` and, for a system task, its route set.
+                The move is conditional on the status read, so a repeat answers 409.
+            operationId: resolveTask
+            x-error-codes:
+                '409': [TASK_ALREADY_RESOLVED]
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The task as it now stands
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Task'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+
+    /tasks/{id}/mark-spam:
+        post:
+            tags: [Tasks]
+            summary: Mark a task as spam
+            description: >
+                From `new`, `in_progress` or `resolved` to `spam`, with `resolution: spam`. Same stamps
+                as a resolve, without `respondedAt`. Also undoes a false resolve. No body. Needs
+                `update:Task` and, for a system task, its route set.
+            operationId: markTaskSpam
+            x-error-codes:
+                '409': [TASK_ALREADY_SPAM]
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The task as it now stands
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Task'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+
+    /tasks/{id}/reopen:
+        post:
+            tags: [Tasks]
+            summary: Reopen a task
+            description: >
+                From `resolved` or `spam` to `in_progress` when it has an assignee, else `new`. Clears
+                `closedAt` and `resolution` (the retention clock stops) and restores the dedup key
+                of a linked task. `dueAt` is kept: the deadline belongs to the situation, not to
+                the reopen. When a newer open task already covers the same situation the answer is
+                409 `TASK_SUPERSEDED` with `details.taskId`. No body. Needs `update:Task` and,
+                for a system task, its route set.
+            operationId: reopenTask
+            x-error-codes:
+                '409': [TASK_ALREADY_OPEN, TASK_SUPERSEDED]
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The task as it now stands
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Task'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+
+    /tasks/{id}/assignee:
+        put:
+            tags: [Tasks]
+            summary: Assign a task
+            description: >
+                Hands the task to one person (taking it is assigning yourself). A `new` task
+                becomes `in_progress`. The person must hold the permission set that works the task.
+                Replaces any earlier assignee. A closed task answers 409 `TASK_NOT_OPEN`.
+            operationId: assignTask
+            x-error-codes:
+                '409': [TASK_NOT_OPEN]
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AssignTaskRequest'
+            responses:
+                '200':
+                    description: The task as it now stands
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Task'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+        delete:
+            tags: [Tasks]
+            summary: Give a task back
+            description: Clears the assignee. An `in_progress` task goes back to `new`. Answers 200 whether or not anyone held it.
+            operationId: unassignTask
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The task as it now stands
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Task'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+    /tasks/{id}/notes:
+        post:
+            tags: [Tasks]
+            summary: Add a staff note
+            description: >
+                Appends a note to the staff thread: append-only, with its author and time. Notes are
+                written and read by staff, and the data subject's export carries them without the author.
+                Write each one as if the customer will read it.
+            operationId: createTaskNote
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateTaskNoteRequest'
+            responses:
+                '200':
+                    description: The task with the note appended
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Task'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+
+components:
+    schemas:
+        # The ONE sort grammar, shared with every list (docs/api/sorting.md). `-` sorts
+        # descending; earlier entries rank first; ties end on the id. Text fields sort
+        # case-insensitively.
+        TaskSort:
+            type: array
+            minItems: 1
+            maxItems: 3
+            items:
+                type: string
+                enum: [createdAt, -createdAt, dueAt, -dueAt, status, -status, email, -email]
+
+        # The closed set, written ONCE. READ-ONLY on a task: it moves only through the doors
+        # (`resolve`, `mark-spam`, `reopen`) and through assignment, never by writing the field.
+        TaskStatus:
+            type: string
+            enum: [new, in_progress, resolved, spam]
+
+        # What the visitor says the message is about, so staff can triage without reading it first
+        # (an order page links to `/contact?category=cancellation`).
+        # `privacy` is the data-protection door (GDPR requests start here). A closed set, written
+        # once, so the form, the inbox filter and the stored value cannot drift.
+        TaskCategory:
+            type: string
+            enum: [order, cancellation, return, payment, account, privacy, other]
+
+        # Who opened it.
+        TaskSource:
+            type: string
+            enum: [visitor, system]
+
+        # What the task is about. Each kind has one route set (the jurisdiction), frozen when it opens.
+        TaskKind:
+            type: string
+            enum:
+                [
+                    contact,
+                    account_review,
+                    manual_refund_owed,
+                    amount_mismatch,
+                    paid_without_hold,
+                    export_failed,
+                    consent_due,
+                    refund_refused,
+                    dispute
+                ]
+
+        # How a closed task was closed: by a person, by the situation clearing itself, or as spam.
+        TaskResolution:
+            type: string
+            enum: [staff, cleared, spam]
+
+        TaskLinkType:
+            type: string
+            enum: [order, user, payment, refund, fulfillment_order, export]
+
+        # `me`, `none`, or a user id.
+        TaskAssigneeFilter:
+            type: string
+            minLength: 2
+            maxLength: 24
+
+        TaskLink:
+            type: object
+            additionalProperties: false
+            required: [type, id]
+            description: The record a system task is about.
+            properties:
+                type:
+                    $ref: '#/components/schemas/TaskLinkType'
+                id:
+                    type: string
+
+        TaskNote:
+            type: object
+            additionalProperties: false
+            required: [body, at]
+            properties:
+                authorId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                    description: Absent once the author's account is erased.
+                body:
+                    type: string
+                at:
+                    type: string
+                    format: date-time
+
+        TaskRef:
+            type: object
+            additionalProperties: false
+            required: [id, status, createdAt]
+            description: An earlier task about the same record.
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                kind:
+                    $ref: '#/components/schemas/TaskKind'
+                status:
+                    $ref: '#/components/schemas/TaskStatus'
+                createdAt:
+                    type: string
+                    format: date-time
+
+        # Computed per CALLER, not stored — present on every response carrying a task, list rows included.
+        TaskActions:
+            type: object
+            additionalProperties: false
+            required: [resolve, markSpam, reopen, assign, unassign, note, delete]
+            description: >-
+                What the requesting caller may do to this task, decided by the server, so a client
+                renders its controls from this rather than re-implementing the lifecycle. Each needs
+                the right to work the task (and its route set, for a system task) and a status
+                the act can run from. `assign` covers taking it and assigning someone else.
+            properties:
+                resolve:
+                    type: boolean
+                    description: Whether `POST /tasks/{id}/resolve` would be accepted.
+                markSpam:
+                    type: boolean
+                    description: Whether `POST /tasks/{id}/mark-spam` would be accepted.
+                reopen:
+                    type: boolean
+                    description: Whether `POST /tasks/{id}/reopen` would be accepted.
+                assign:
+                    type: boolean
+                    description: Whether `PUT /tasks/{id}/assignee` would be accepted.
+                unassign:
+                    type: boolean
+                    description: Whether `DELETE /tasks/{id}/assignee` would change anything.
+                note:
+                    type: boolean
+                    description: Whether `POST /tasks/{id}/notes` would be accepted.
+                delete:
+                    type: boolean
+                    description: Whether `DELETE /tasks/{id}` would be accepted.
+
+        # ---------- tasks — the schemas only this module's paths reference. ----------
+        Task:
+            type: object
+            additionalProperties: false
+            required: [id, source, kind, subject, message, status, routeSet, notes, overdue, createdAt, actions]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                source:
+                    $ref: '#/components/schemas/TaskSource'
+                kind:
+                    $ref: '#/components/schemas/TaskKind'
+                name:
+                    type: string
+                subjectId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                    description: >
+                        The account the sender was signed in as; absent for an anonymous sender. On a
+                        system task, the account the situation is about.
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                    description: The sender's address. Present on a visitor task, absent on a system one.
+                subject:
+                    type: string
+                message:
+                    type: string
+                category:
+                    $ref: '#/components/schemas/TaskCategory'
+                orderNumber:
+                    type: string
+                    description: The order the visitor said this is about, as they typed it. Not checked against any order.
+                link:
+                    $ref: '#/components/schemas/TaskLink'
+                routeSet:
+                    type: string
+                    description: The permission set that works this task, frozen when it opened.
+                assigneeId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                assigneeName:
+                    type: string
+                    description: The assignee's username.
+                notes:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/TaskNote'
+                dueAt:
+                    type: string
+                    format: date-time
+                    description: When it falls overdue. Kept across a reopen.
+                overdue:
+                    type: boolean
+                    description: Open and past `dueAt`, computed at read time.
+                lastSeenAt:
+                    type: string
+                    format: date-time
+                seenCount:
+                    type: integer
+                    minimum: 1
+                status:
+                    $ref: '#/components/schemas/TaskStatus'
+                    readOnly: true
+                closedAt:
+                    type: string
+                    format: date-time
+                resolution:
+                    $ref: '#/components/schemas/TaskResolution'
+                respondedAt:
+                    type: string
+                    format: date-time
+                earlierTasks:
+                    type: array
+                    description: Present on `GET /tasks/{id}` only.
+                    items:
+                        $ref: '#/components/schemas/TaskRef'
+                actions:
+                    $ref: '#/components/schemas/TaskActions'
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        CreateContactTaskRequest:
+            type: object
+            additionalProperties: false
+            required: [email, subject, message]
+            properties:
+                name:
+                    type: string
+                    minLength: 1
+                    maxLength: 120
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                subject:
+                    type: string
+                    minLength: 1
+                    maxLength: 200
+                message:
+                    type: string
+                    minLength: 1
+                    maxLength: 5000
+                category:
+                    $ref: '#/components/schemas/TaskCategory'
+                orderNumber:
+                    type: string
+                    minLength: 1
+                    maxLength: 40
+                    description: The order the visitor says this is about, free text. Not checked against any order.
+                website:
+                    type: string
+                    maxLength: 200
+                    description: >
+                        Honeypot. Hidden in the form and always submitted empty by a real client; a
+                        non-empty value marks the submission as spam. Named for what a scraper
+                        expects to find. Never persisted and never returned — see
+                        `Task`, which does not declare it.
+
+        SearchTasksRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                page:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Page'
+                pageSize:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PageSize'
+                sort:
+                    $ref: '#/components/schemas/TaskSort'
+                text:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Text'
+                status:
+                    $ref: '#/components/schemas/TaskStatus'
+                category:
+                    $ref: '#/components/schemas/TaskCategory'
+                source:
+                    $ref: '#/components/schemas/TaskSource'
+                kind:
+                    $ref: '#/components/schemas/TaskKind'
+                assignee:
+                    $ref: '#/components/schemas/TaskAssigneeFilter'
+                overdue:
+                    type: boolean
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+
+        AssignTaskRequest:
+            type: object
+            additionalProperties: false
+            required: [userId]
+            properties:
+                userId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+
+        CreateTaskNoteRequest:
+            type: object
+            additionalProperties: false
+            required: [body]
+            properties:
+                body:
+                    type: string
+                    minLength: 1
+                    maxLength: 5000
+
+        TasksResponse:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Task'
+                meta:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
+
+        TaskSummary:
+            type: object
+            additionalProperties: false
+            required: [open, mine, overdue, unassigned]
+            description: Counts over the caller's jurisdiction.
+            properties:
+                open:
+                    type: integer
+                    minimum: 0
+                mine:
+                    type: integer
+                    minimum: 0
+                overdue:
+                    type: integer
+                    minimum: 0
+                unassigned:
+                    type: integer
+                    minimum: 0
+
+        # What the data subject's own copy of a staff note carries: the words and the time. The
+        # author stays out (the Pankki S ruling, C-579/21).
+        ExportTaskNote:
+            type: object
+            additionalProperties: false
+            required: [body, at]
+            properties:
+                body:
+                    type: string
+                at:
+                    type: string
+                    format: date-time
+
+        # Used by `POST /account/export` (`shared/contracts/openapi.root.yaml`). Staff notes are
+        # included WITHOUT their author: a note is an assessment of the person (CJEU C-434/16), and
+        # who wrote it is the colleague's data, not theirs. `toExportTask` in `service.ts` builds it.
+        ExportTask:
+            type: object
+            additionalProperties: false
+            required: [id, email, subject, message, status, notes]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                name:
+                    type: string
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                subject:
+                    type: string
+                message:
+                    type: string
+                category:
+                    $ref: '#/components/schemas/TaskCategory'
+                orderNumber:
+                    type: string
+                status:
+                    $ref: '#/components/schemas/TaskStatus'
+                notes:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ExportTaskNote'
+                respondedAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+
+        # A task the system opened about the person. Every field except the staff behind it
+        # (`assigneeId`, the notes' authors) and the dedup key.
+        ExportSystemTask:
+            type: object
+            additionalProperties: false
+            required: [id, kind, subject, message, status, routeSet, notes]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                kind:
+                    $ref: '#/components/schemas/TaskKind'
+                subject:
+                    type: string
+                message:
+                    type: string
+                link:
+                    $ref: '#/components/schemas/TaskLink'
+                routeSet:
+                    type: string
+                status:
+                    $ref: '#/components/schemas/TaskStatus'
+                resolution:
+                    $ref: '#/components/schemas/TaskResolution'
+                notes:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ExportTaskNote'
+                dueAt:
+                    type: string
+                    format: date-time
+                lastSeenAt:
+                    type: string
+                    format: date-time
+                seenCount:
+                    type: integer
+                    minimum: 1
+                respondedAt:
+                    type: string
+                    format: date-time
+                closedAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time

@@ -153,7 +153,7 @@ returns no previous value (the backorder limit), it reads first.
 | `admin.webhook_subscription.updated`         | event filter                                             | url, description                       |
 | `admin.user.updated`, `auth.profile.updated` | locale, analytics consent                                | username, email, phone, website, image |
 | `order.updated`                              |                                                          | email                                  |
-| `admin.ticket.status_updated`                | status                                                   | admin notes                            |
+| `admin.task.status_updated`                  | status                                                   | admin notes                            |
 | `admin.locale.updated`                       | name, native name, direction, active                     |                                        |
 | `admin.locale_entry.updated`                 |                                                          | value (the key rides along)            |
 | `admin.backorder.limit.set`                  | backorder limit                                          |                                        |

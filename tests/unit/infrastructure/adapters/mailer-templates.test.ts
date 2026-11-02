@@ -35,7 +35,7 @@ import {
     exportFailedEmail,
     exportReadyEmail
 } from '@modules/account/emails';
-import { contactRequestEmail } from '@modules/tickets/emails';
+import { contactRequestEmail } from '@modules/tasks/emails';
 import { examplePublishedEmail } from '@modules/example';
 import {
     orderConfirmEmail,
@@ -77,7 +77,7 @@ describe('the template collection', () => {
         'account.deleted',
         'account.deletion-scheduled',
         'account.restored',
-        'tickets.contact'
+        'tasks.contact'
     ])('resolves %s to a real file', (name) => {
         expect(() => templateFile(name)).not.toThrow();
     });
@@ -252,7 +252,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         { code: 'notifications.staff.stale-refunds', count: 1 }
     ]),
     'example.published': examplePublishedEmail(locale, 'Ada', 'A title'),
-    'tickets.contact': contactRequestEmail(locale, {
+    'tasks.contact': contactRequestEmail(locale, {
         name: 'Ada',
         email: 'ada@example.com',
         subject: 'A subject',

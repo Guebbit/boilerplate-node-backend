@@ -35,7 +35,7 @@ import shop from './modules/shop/module';
 import sitemap from './modules/sitemap/module';
 import stats from './modules/stats/module';
 import stockAlerts from './modules/stock-alerts/module';
-import tickets from './modules/tickets/module';
+import tasks from './modules/tasks/module';
 import users from './modules/users/module';
 import webhooks from './modules/webhooks/module';
 import wishlist from './modules/wishlist/module';
@@ -65,7 +65,7 @@ export const enabledModules: AppModule[] = [
     sitemap,
     stats,
     stockAlerts,
-    tickets,
+    tasks,
     users,
     webhooks,
     wishlist
@@ -119,7 +119,7 @@ export type ModuleName =
     | 'sitemap'
     | 'stats'
     | 'stock-alerts'
-    | 'tickets'
+    | 'tasks'
     | 'users'
     | 'webhooks'
     | 'wishlist';

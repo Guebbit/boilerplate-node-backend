@@ -34,7 +34,7 @@ staticPages:
 staffPages:
     user: users/{id}
     webhookSubscription: webhooks/subscriptions/{id}
-    ticket: tickets/{id}
+    task: tasks/{id}
     return: returns/{id}
     salesOrders: sales/orders
     salesPreorders: sales/preorders

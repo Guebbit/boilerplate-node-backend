@@ -73,7 +73,7 @@ roles:
           - ReturnDisplay
           - ReturnManagement
           - ReturnReceiving
-          - TicketDisplay
+          - TaskDisplay
           - WebhookDisplay
           - WebhookManagement
           - ExampleAuthoring
@@ -111,8 +111,8 @@ roles:
           and the moderator's, and it expects a freshly proved session. Touches customers' accounts
           only, and never a credential.
       sets:
-          - TicketDisplay
-          - TicketManagement
+          - TaskDisplay
+          - TaskManagement
           - UserDisplay
           - UserEditing
           # The fix this plan exists for: helping a customer with an order or a payment that is
@@ -203,8 +203,8 @@ roles:
           - ReturnDisplay
           - ReturnManagement
           - ReturnReceiving
-          - TicketDisplay
-          - TicketManagement
+          - TaskDisplay
+          - TaskManagement
           - LocaleDisplay
           - LocaleManagement
           - TranslationDisplay

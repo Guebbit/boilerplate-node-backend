@@ -42,8 +42,8 @@ export const frontendLinksSchema = z.strictObject({
         user: template,
         /** One webhook subscription. */
         webhookSubscription: template,
-        /** One ticket. */
-        ticket: template,
+        /** One task. */
+        task: template,
         /** One return. */
         return: template,
         /** The orders list. */

@@ -1,7 +1,7 @@
 /**
  * Looking up one of a module's declared {@link RateLimitBudget}s by name, in a unit suite that
  * pins the RELATIONSHIP between two budgets' numbers — see e.g.
- * `src/modules/account/tests/unit/rate-limits.test.ts` and its tickets/payments twins.
+ * `src/modules/account/tests/unit/rate-limits.test.ts` and its tasks/payments twins.
  */
 
 import type { RateLimitBudget } from '@types';

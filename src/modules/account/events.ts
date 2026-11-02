@@ -38,7 +38,7 @@ declare module '@kernel/events' {
 
         /**
          * A data export could not be built (GDPR Art. 12(3): the person is owed their file within
-         * a month), committed with the move of its row to `failed`. `tickets` opens the work from
+         * a month), committed with the move of its row to `failed`. `tasks` opens the work from
          * it. Internal only: no AsyncAPI channel carries it.
          */
         'account.export_failed': { userId: string; exportId: string };

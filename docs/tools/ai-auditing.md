@@ -2,7 +2,7 @@
 
 Every other instrument in this repo compares the system **to itself**: code to schema, mutant to
 suite, response to contract. That is what makes them deterministic, and it is also their ceiling.
-Stryker cannot read `docs/theory/domain-layer.md`. Schemathesis cannot read a ticket. CodeQL cannot
+Stryker cannot read `docs/theory/domain-layer.md`. Schemathesis cannot read a task. CodeQL cannot
 notice that the docs promise a rule the contract never encodes.
 
 **Prose ↔ code is the gap**, and it is the one place a language model beats a program rather than

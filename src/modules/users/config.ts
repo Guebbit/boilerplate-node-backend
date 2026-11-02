@@ -37,7 +37,7 @@ export const usersConfig = defineConfig({
 
 /**
  * A link into the paired frontend's contact page. `frontendLink` adds the origin and the locale;
- * the default template is the frontend's own route (`tickets/routes.ts`).
+ * the default template is the frontend's own route (`tasks/routes.ts`).
  *
  * @param locale - the language the mail is written in
  */

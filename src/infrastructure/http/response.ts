@@ -299,7 +299,7 @@ export interface ProblemDetails {
     status: number;
     /** The translated sentence a user may read: the one error's message, or the status's generic text. */
     detail: string;
-    /** `urn:uuid:<request id>` — names this occurrence in a support ticket; never the URL. */
+    /** `urn:uuid:<request id>` — names this occurrence in a support task; never the URL. */
     instance?: string;
     /** One item per failure; never empty. */
     errors: ResponseErrorItem[];

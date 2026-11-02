@@ -42,13 +42,13 @@ const bodyOf = (notification: NotificationDocument): NotificationBody => {
         case 'notifications.staff.webhook-disabled': {
             return { code: notification.code, params: notification.params };
         }
-        case 'notifications.staff.ticket-opened': {
+        case 'notifications.staff.task-opened': {
             return { code: notification.code, params: notification.params };
         }
-        case 'notifications.staff.ticket-overdue': {
+        case 'notifications.staff.task-overdue': {
             return { code: notification.code, params: notification.params };
         }
-        case 'notifications.staff.ticket-assigned': {
+        case 'notifications.staff.task-assigned': {
             return { code: notification.code, params: notification.params };
         }
         case 'notifications.staff.return-requested': {

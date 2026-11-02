@@ -865,10 +865,10 @@ Measured 2026-10-07, heap after each file of Stryker's initial run (`--dryRunOnl
 
 | Mutated file (related test files) | Heap cap | Neither fix              | Collection only                          | Both                             |
 | --------------------------------- | -------- | ------------------------ | ---------------------------------------- | -------------------------------- |
-| `tickets/model.ts` (124)          | 4 GB     | out of memory by file 23 | finished, 0.6–3.2 GB                     | —                                |
+| `tasks/model.ts` (124)            | 4 GB     | out of memory by file 23 | finished, 0.6–3.2 GB                     | —                                |
 | `users/model.ts` (205)            | 8 GB     | out of memory            | out of memory by file 27, +420 MB a file | finished, levels off near 4.4 GB |
 
-The first row hid the first cause: few of `tickets`'s test files run its model during a test, so few
+The first row hid the first cause: few of `tasks`'s test files run its model during a test, so few
 records were made. `users/model.ts` is exercised by nearly every test file, so nearly every file
 stayed. A plain `jest --runInBand` shows neither: there is no Stryker namespace, and with
 `--logHeapUsage` plus `--expose-gc` jest collects after each file itself.

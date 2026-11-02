@@ -10,19 +10,19 @@
                 "title": "A purchase hold was placed",
                 "summary": "A buyer cancelled or let expire several unpaid orders, so their checkout is paused until {{until}}. Every cancellation was processed normally; nothing is blocked except placing a new order. The pause ends by itself; place a manual hold on the account to keep it longer."
             },
-            "ticket-opened": {
-                "subject": "New ticket: {{what}}",
-                "meta-title": "New ticket",
-                "title": "A new ticket needs someone",
-                "summary": "A ticket was opened and your role works this kind: {{what}}. Open it to see the details and take it."
+            "task-opened": {
+                "subject": "New task: {{what}}",
+                "meta-title": "New task",
+                "title": "A new task needs someone",
+                "summary": "A task was opened and your role works this kind: {{what}}. Open it to see the details and take it."
             },
-            "ticket-overdue": {
-                "subject": "Overdue ticket: {{what}}",
-                "meta-title": "Overdue ticket",
-                "title": "A ticket is overdue",
-                "summary": "A ticket your role works passed its due date and is still open: {{what}}. Open it to see the details and take it."
+            "task-overdue": {
+                "subject": "Overdue task: {{what}}",
+                "meta-title": "Overdue task",
+                "title": "A task is overdue",
+                "summary": "A task your role works passed its due date and is still open: {{what}}. Open it to see the details and take it."
             },
-            "ticket-kind": {
+            "task-kind": {
                 "contact": "Contact message",
                 "account_review": "Account review",
                 "manual_refund_owed": "Refund owed by hand",
@@ -33,7 +33,7 @@
                 "refund_refused": "Refund refused",
                 "dispute": "Payment dispute"
             },
-            "ticket-category": {
+            "task-category": {
                 "order": "Order",
                 "cancellation": "Cancellation",
                 "return": "Return",

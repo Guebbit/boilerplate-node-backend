@@ -73,7 +73,7 @@ export interface FulfillmentOrderDocument extends Document {
     /**
      * The date the buyer holds now: starts as `agreedAt`, a later date from a notice replaces it,
      * a cleared date ("no date yet") removes it. What the next slip's consent reminder is
-     * measured against (`tickets`, 16 CFR 435.2); the buyer is never asked.
+     * measured against (`tasks`, 16 CFR 435.2); the buyer is never asked.
      */
     promisedAt?: Date;
     /** When it is now expected to ship. */

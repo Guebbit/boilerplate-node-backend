@@ -24,12 +24,12 @@ flowchart LR
     products["products"]
     returns["returns"]
     shop["shop"]
-    tickets["tickets"]
+    tasks["tasks"]
 
     cart --> delivery
     notifications --> delivery
     returns --> delivery
-    tickets --> delivery
+    tasks --> delivery
     delivery --> inventory
     delivery --> orders
     delivery --> products
@@ -44,9 +44,9 @@ flowchart LR
     delivery -. "fulfillment_order.delayed" .-> notifications
     delivery -. "fulfillment_order.hold_noticed" .-> notifications
     delivery -. "shipment.lost" .-> notifications
-    delivery -. "fulfillment_order.cancelled" .-> tickets
-    delivery -. "fulfillment_order.delayed" .-> tickets
-    delivery -. "shipment.shipped" .-> tickets
+    delivery -. "fulfillment_order.cancelled" .-> tasks
+    delivery -. "fulfillment_order.delayed" .-> tasks
+    delivery -. "shipment.shipped" .-> tasks
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -54,7 +54,7 @@ flowchart LR
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders,products core;
     class inventory,notifications,returns,shop supporting;
-    class tickets generic;
+    class tasks generic;
     class delivery centre;
 ```
 
@@ -360,11 +360,11 @@ own. Selling to **US** buyers adds the FTC's mail-order rule (16 CFR 435.2): for
 buyer's express OK is needed. Staff ask for it by email by hand, and cancel with a refund if there is
 no OK within 30 days. See [before you sell](../demo-ecommerce/before-you-sell.md).
 
-The reminder is a ticket: a delay to a ship-to country in `NODE_TICKETS_FTC_COUNTRIES` opens a
-`consent_due` ticket for the staff who hold `OrderEditing`, due 30 days after the agreed date (or on
+The reminder is a task: a delay to a ship-to country in `NODE_TICKETS_FTC_COUNTRIES` opens a
+`consent_due` task for the staff who hold `OrderEditing`, due 30 days after the agreed date (or on
 the date the buyer last held), and shipping or cancelling closes it. The human rule above is
 unchanged. `promisedAt` on the fulfillment order is the date the buyer holds now; the rule is in
-[tickets](tickets.md#system-tickets).
+[tasks](tasks.md#system-tasks).
 
 ### The preorder board
 

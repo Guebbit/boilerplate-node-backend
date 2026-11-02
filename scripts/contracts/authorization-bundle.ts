@@ -59,7 +59,7 @@ const PREFERRED_ORDER = [
     'inventory',
     'delivery',
     'returns',
-    'tickets',
+    'tasks',
     'locales',
     'core',
     'users',

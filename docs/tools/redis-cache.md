@@ -38,7 +38,7 @@ flowchart LR
 
 RFC 9111 §3.5: a shared cache must not store a response to an authenticated request unless the
 response says it may be shared. `orders`, and `users`' own directory search and item read, and
-`tickets` never belong here at all — each answer is specific to the caller (their own orders, an
+`tasks` never belong here at all — each answer is specific to the caller (their own orders, an
 admin's filtered queue), so a shared Redis entry is not an optimisation for them, only a store that
 keeps growing for no caller but the one who filled it. Those routes mount `privateNoCache`
 instead: `Cache-Control: private, no-cache` — the BROWSER may keep its own copy, but must always

@@ -46,13 +46,13 @@ declare module '@kernel/events' {
         /**
          * The shop's rule flagged an account for staff review without pausing it (paid
          * cancellations over the limit), committed with the flag. Emitted once per flag set; the
-         * automatic hold has its own staff notice and is not announced here. `tickets` opens
-         * the review ticket from it. Internal only: no AsyncAPI channel carries it.
+         * automatic hold has its own staff notice and is not announced here. `tasks` opens
+         * the review task from it. Internal only: no AsyncAPI channel carries it.
          */
         'user.review_flagged': { userId: string };
         /**
          * Staff acted on an account's review flag: they placed a hold or lifted it. Committed
-         * with the save. `tickets` closes the review ticket from it. Internal only.
+         * with the save. `tasks` closes the review task from it. Internal only.
          */
         'user.review_cleared': { userId: string };
     }

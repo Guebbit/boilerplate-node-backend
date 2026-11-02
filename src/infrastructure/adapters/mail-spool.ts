@@ -1,7 +1,7 @@
 /**
  * @module
  * The mail spool — the Claim Check pattern for an email attachment: the bytes go here, durably,
- * and the queue message carries only the ticket. `EmailJobPayload.request.attachments` is
+ * and the queue message carries only the task. `EmailJobPayload.request.attachments` is
  * `{ filename, key }[]`, never bytes and never a path — `mailer.ts#resolveAttachments` is the one
  * place a key becomes a path, resolved inside the spool root, so nothing a producer writes into a
  * queue message can ever name a file outside it.

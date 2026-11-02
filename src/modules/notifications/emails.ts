@@ -14,22 +14,22 @@ import type { StaffSummaryCode } from './model';
 import { staffLinkOf, type StaffNoticeBody } from './staff-routing';
 
 /**
- * The words a ticket mail names the ticket by: its kind, and for a contact message its category.
+ * The words a task mail names the task by: its kind, and for a contact message its category.
  * Both are closed codes, so the mail carries nothing the visitor typed.
  *
  * @param t - the recipient's translator
- * @param parameters - the ticket notice's params
+ * @param parameters - the task notice's params
  */
-const ticketWhat = (
+const taskWhat = (
     t: ReturnType<typeof translator>,
     parameters: { kind: string; category?: string }
 ): string => {
-    const kind = t(`notifications.staff-mail.ticket-kind.${parameters.kind}`);
+    const kind = t(`notifications.staff-mail.task-kind.${parameters.kind}`);
     if (parameters.kind !== 'contact') return kind;
     // "Uncategorised" when the visitor chose none: the mail must not look broken.
     const category = parameters.category
-        ? t(`notifications.staff-mail.ticket-category.${parameters.category}`)
-        : t('notifications.staff-mail.ticket-category.none');
+        ? t(`notifications.staff-mail.task-category.${parameters.category}`)
+        : t('notifications.staff-mail.task-category.none');
     return `${kind} · ${category}`;
 };
 
@@ -44,10 +44,10 @@ const wordsOf = (
     body: StaffNoticeBody
 ): Record<string, string> => {
     switch (body.code) {
-        case 'notifications.staff.ticket-opened':
-        case 'notifications.staff.ticket-overdue':
-        case 'notifications.staff.ticket-assigned': {
-            return { what: ticketWhat(t, body.params) };
+        case 'notifications.staff.task-opened':
+        case 'notifications.staff.task-overdue':
+        case 'notifications.staff.task-assigned': {
+            return { what: taskWhat(t, body.params) };
         }
         case 'notifications.staff.purchase-hold-placed':
         case 'notifications.staff.webhook-disabled':

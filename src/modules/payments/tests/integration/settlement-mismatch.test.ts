@@ -99,7 +99,7 @@ describe.each(MISMATCHES)('a provider success whose %s is not the one frozen', (
         expect(payment!.refunds).toHaveLength(1);
         // Nothing was paid: no announcement, no invoice, and the units are back on the shelf.
         expect(await outboxEventModel.countDocuments({ name: PAYMENT_SUCCEEDED })).toBe(0);
-        // One fact for `tickets`: a person must look at why, announced once.
+        // One fact for `tasks`: a person must look at why, announced once.
         const [mismatch, ...more] = await outboxEventModel
             .find({ name: PAYMENT_AMOUNT_MISMATCH })
             .lean()

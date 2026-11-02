@@ -67,7 +67,7 @@ export interface FulfillmentOrderDelayed {
     agreedAt: string;
     /**
      * The date the buyer held before this notice (ISO 8601); absent once an earlier notice told
-     * them there was no date yet. With `shipCountry`, what `tickets` decides a consent reminder on.
+     * them there was no date yet. With `shipCountry`, what `tasks` decides a consent reminder on.
      */
     promisedAt?: string;
     /** The country the order ships to (ISO 3166-1 alpha-2); absent for a pickup or digital order. */

@@ -498,39 +498,39 @@ components:
                 subscriptionId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
 
-        TicketOpenedParams:
+        TaskOpenedParams:
             type: object
             additionalProperties: false
-            required: [ticketId, kind]
+            required: [taskId, kind]
             description: >-
-                A ticket opened in the caller's jurisdiction. Ids and closed codes only: the ticket
+                A task opened in the caller's jurisdiction. Ids and closed codes only: the task
                 page has the rest, and no visitor text travels in a notice.
             properties:
-                ticketId:
+                taskId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 kind:
                     type: string
-                    description: The ticket's kind (`contact`, `account_review`, ...).
+                    description: The task's kind (`contact`, `account_review`, ...).
                 category:
                     type: string
-                    description: A contact ticket's category, when the visitor chose one.
+                    description: A contact task's category, when the visitor chose one.
 
-        TicketAssignedParams:
+        TaskAssignedParams:
             type: object
             additionalProperties: false
-            required: [ticketId, kind]
-            description: A ticket was given to the caller by someone else.
+            required: [taskId, kind]
+            description: A task was given to the caller by someone else.
             properties:
-                ticketId:
+                taskId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 kind:
                     type: string
-                    description: The ticket's kind.
+                    description: The task's kind.
 
-        NotificationStaffTicketOpened:
+        NotificationStaffTaskOpened:
             type: object
             additionalProperties: false
-            description: A ticket opened in a jurisdiction the caller works; whoever holds its permission set takes it.
+            description: A task opened in a jurisdiction the caller works; whoever holds its permission set takes it.
             required: [id, audience, code, params, severity, createdAt]
             properties:
                 id:
@@ -539,9 +539,9 @@ components:
                     $ref: '#/components/schemas/NotificationAudience'
                 code:
                     type: string
-                    enum: [notifications.staff.ticket-opened]
+                    enum: [notifications.staff.task-opened]
                 params:
-                    $ref: '#/components/schemas/TicketOpenedParams'
+                    $ref: '#/components/schemas/TaskOpenedParams'
                 severity:
                     $ref: '#/components/schemas/NotificationSeverity'
                 readAt:
@@ -552,10 +552,10 @@ components:
                     type: string
                     format: date-time
 
-        NotificationStaffTicketOverdue:
+        NotificationStaffTaskOverdue:
             type: object
             additionalProperties: false
-            description: An open ticket in a jurisdiction the caller works passed its due date; said once per ticket.
+            description: An open task in a jurisdiction the caller works passed its due date; said once per task.
             required: [id, audience, code, params, severity, createdAt]
             properties:
                 id:
@@ -564,9 +564,9 @@ components:
                     $ref: '#/components/schemas/NotificationAudience'
                 code:
                     type: string
-                    enum: [notifications.staff.ticket-overdue]
+                    enum: [notifications.staff.task-overdue]
                 params:
-                    $ref: '#/components/schemas/TicketOpenedParams'
+                    $ref: '#/components/schemas/TaskOpenedParams'
                 severity:
                     $ref: '#/components/schemas/NotificationSeverity'
                 readAt:
@@ -577,10 +577,10 @@ components:
                     type: string
                     format: date-time
 
-        NotificationStaffTicketAssigned:
+        NotificationStaffTaskAssigned:
             type: object
             additionalProperties: false
-            description: A colleague gave the caller a ticket.
+            description: A colleague gave the caller a task.
             required: [id, audience, code, params, severity, createdAt]
             properties:
                 id:
@@ -589,9 +589,9 @@ components:
                     $ref: '#/components/schemas/NotificationAudience'
                 code:
                     type: string
-                    enum: [notifications.staff.ticket-assigned]
+                    enum: [notifications.staff.task-assigned]
                 params:
-                    $ref: '#/components/schemas/TicketAssignedParams'
+                    $ref: '#/components/schemas/TaskAssignedParams'
                 severity:
                     $ref: '#/components/schemas/NotificationSeverity'
                 readAt:
@@ -1012,9 +1012,9 @@ components:
                 - $ref: '#/components/schemas/NotificationStockAlert'
                 - $ref: '#/components/schemas/NotificationStaffPurchaseHoldPlaced'
                 - $ref: '#/components/schemas/NotificationStaffWebhookDisabled'
-                - $ref: '#/components/schemas/NotificationStaffTicketOpened'
-                - $ref: '#/components/schemas/NotificationStaffTicketOverdue'
-                - $ref: '#/components/schemas/NotificationStaffTicketAssigned'
+                - $ref: '#/components/schemas/NotificationStaffTaskOpened'
+                - $ref: '#/components/schemas/NotificationStaffTaskOverdue'
+                - $ref: '#/components/schemas/NotificationStaffTaskAssigned'
                 - $ref: '#/components/schemas/NotificationStaffReturnRequested'
                 - $ref: '#/components/schemas/NotificationStaffOutboxDead'
                 - $ref: '#/components/schemas/NotificationStaffTransfersDue'
@@ -1039,9 +1039,9 @@ components:
                     notifications.stock-alert: '#/components/schemas/NotificationStockAlert'
                     notifications.staff.purchase-hold-placed: '#/components/schemas/NotificationStaffPurchaseHoldPlaced'
                     notifications.staff.webhook-disabled: '#/components/schemas/NotificationStaffWebhookDisabled'
-                    notifications.staff.ticket-opened: '#/components/schemas/NotificationStaffTicketOpened'
-                    notifications.staff.ticket-overdue: '#/components/schemas/NotificationStaffTicketOverdue'
-                    notifications.staff.ticket-assigned: '#/components/schemas/NotificationStaffTicketAssigned'
+                    notifications.staff.task-opened: '#/components/schemas/NotificationStaffTaskOpened'
+                    notifications.staff.task-overdue: '#/components/schemas/NotificationStaffTaskOverdue'
+                    notifications.staff.task-assigned: '#/components/schemas/NotificationStaffTaskAssigned'
                     notifications.staff.return-requested: '#/components/schemas/NotificationStaffReturnRequested'
                     notifications.staff.outbox-dead: '#/components/schemas/NotificationStaffOutboxDead'
                     notifications.staff.transfers-due: '#/components/schemas/NotificationStaffTransfersDue'

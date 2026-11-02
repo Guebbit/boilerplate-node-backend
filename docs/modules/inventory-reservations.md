@@ -236,8 +236,8 @@ The alarm **records** the fact and **pages**: the counter `inventory_commit_orph
 with it, which fires the `PaidOrderWithoutHold` alert (severity `critical`, see
 [Prometheus](../tools/prometheus.md)). A human checks the stock and decides ship or refund. The payment's
 own step also announces `inventory.hold_orphaned` in its transaction, which opens a `paid_without_hold`
-ticket for the warehouse ([tickets](./tickets.md#system-tickets)); it closes when the order is cancelled or
-ships. The shipping step alarms but opens no ticket: the goods already left.
+task for the warehouse ([tasks](./tasks.md#system-tasks)); it closes when the order is cancelled or
+ships. The shipping step alarms but opens no task: the goods already left.
 
 ::: info Where the page goes
 `critical` means email **and** the webhook. Until `ALERT_WEBHOOK_URL` is set, only the email reaches

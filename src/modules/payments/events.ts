@@ -90,7 +90,7 @@ declare module '@kernel/events' {
         /**
          * Staff voided a refund that must never be paid (`./services/refunds.ts`'s `cancelRefund`).
          * No money moved and none will: the record is closed and its share is refundable again.
-         * Nothing is credited and no webhook carries it; a staff ticket or attention row that
+         * Nothing is credited and no webhook carries it; a staff task or attention row that
          * waited on that refund closes on it.
          *
          * Delivered through the transactional outbox, written in the transaction that voids the
@@ -146,7 +146,7 @@ declare module '@kernel/events' {
         /**
          * The buyer's bank disputed a card payment, first reported (an inquiry or a chargeback).
          * It is not a refund: nothing is credited and the order does not change. The shop answers
-         * in the provider's dashboard before `evidenceDueBy`; a staff ticket opens on this.
+         * in the provider's dashboard before `evidenceDueBy`; a staff task opens on this.
          *
          * Delivered through the transactional outbox, written in the transaction that stores the
          * dispute: at-least-once, so a listener dedupes on `meta.eventId`.
@@ -167,7 +167,7 @@ declare module '@kernel/events' {
          * A refund of a hand-recorded payment opened, so the money is owed outside the app (cash,
          * a transfer): nothing here can send it, and a person has to. Written in the transaction
          * that opens the record; the refund closes on `payment.refunded` or
-         * `payment.refund_canceled`. Internal only: no AsyncAPI channel carries it; `tickets`
+         * `payment.refund_canceled`. Internal only: no AsyncAPI channel carries it; `tasks`
          * opens the work from it.
          *
          * Delivered through the transactional outbox: at-least-once, so a listener dedupes on

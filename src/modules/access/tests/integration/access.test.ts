@@ -118,9 +118,7 @@ describe('the invariants', () => {
         // The single most common way these systems fail: a role editor that lets a support agent
         // hand somebody the keys they do not have themselves.
         await expect(
-            accessService.assignRole('person-1', String(shop._id), 'tenant', 'admin', [
-                'read:Ticket'
-            ])
+            accessService.assignRole('person-1', String(shop._id), 'tenant', 'admin', ['read:Task'])
         ).rejects.toThrow(/privilege-escalation/);
     });
 
@@ -312,7 +310,7 @@ describe('auditing a role change', () => {
                 String(shop._id),
                 'tenant',
                 'admin',
-                ['read:Ticket'],
+                ['read:Task'],
                 testCallerContext
             )
         ).rejects.toThrow(AccessInvariantError);
@@ -421,7 +419,7 @@ describe('grantRefusalAudited', () => {
         const refusal = accessService.grantRefusalAudited(
             'tenant',
             'admin',
-            ['read:Ticket'],
+            ['read:Task'],
             callerContextAs('moderator')
         );
 
@@ -439,7 +437,7 @@ describe('grantRefusalAudited', () => {
         const refusal = accessService.grantRefusalAudited(
             'tenant',
             'no-such-role',
-            ['read:Ticket'],
+            ['read:Task'],
             callerContextAs('moderator')
         );
 
@@ -512,7 +510,7 @@ describe('assertCanGrant', () => {
     });
 
     it('throws the same refusal assignRole would, synchronously rather than as a rejection', () => {
-        expect(() => assertCanGrant('tenant', 'admin', ['read:Ticket'])).toThrow(
+        expect(() => assertCanGrant('tenant', 'admin', ['read:Task'])).toThrow(
             /privilege-escalation/
         );
     });

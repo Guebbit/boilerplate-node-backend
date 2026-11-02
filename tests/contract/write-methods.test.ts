@@ -44,7 +44,7 @@ const EMPTY_STRING_CASES: readonly WriteCase[] = [
     ['patch', `/users/${MISSING_ID}`, { username: 'ab' }],
     ['post', '/account/login/2fa', { challenge: '', code: '123456' }],
     ['post', '/account/password/reset/confirm', { token: '', password: 'Sup3r-secret-Passw0rd!' }],
-    ['post', '/tickets', { name: '', email: 'a@b.co', subject: 's', message: 'm' }],
+    ['post', '/tasks', { name: '', email: 'a@b.co', subject: 's', message: 'm' }],
     ['patch', `/products/${MISSING_ID}`, { tags: [''] }],
     ['patch', `/products/${MISSING_ID}`, { categories: [''] }],
     ['patch', `/webhooks/subscriptions/${MISSING_ID}`, { eventTypes: [''] }]
@@ -129,7 +129,7 @@ describe('stock writes replay under an Idempotency-Key', () => {
 /** One contact request under a fixed key, as a client retrying would send it. */
 const sendKeyedContact = () =>
     api()
-        .post('/tickets')
+        .post('/tasks')
         .set('Idempotency-Key', 'located-replay-1')
         .send({ email: 'ada@example.com', subject: 'Replay', message: 'Once only, please.' });
 
@@ -146,15 +146,15 @@ describe('a 201 names the new resource in Location', () => {
         expect(response.headers.location).toBe(`/users/${String(response.body.id)}`);
     });
 
-    it('sends /tickets/{id} for a contact request', async () => {
-        const response = await api().post('/tickets').send({
+    it('sends /tasks/{id} for a contact request', async () => {
+        const response = await api().post('/tasks').send({
             email: 'ada@example.com',
             subject: 'Located',
             message: 'Where did this land?'
         });
 
         expect(response.status).toBe(201);
-        expect(response.headers.location).toBe(`/tickets/${String(response.body.id)}`);
+        expect(response.headers.location).toBe(`/tasks/${String(response.body.id)}`);
     });
 
     it('replays the Location with the body when a create is retried under its Idempotency-Key', async () => {

@@ -98,7 +98,7 @@ const QUERY_FIXTURES: Partial<Record<string, QueryFixture>> = {
         }
     },
     'GET /observability/audit': { request: adminQuery('/observability/audit') },
-    'GET /tickets': { request: adminQuery('/tickets') },
+    'GET /tasks': { request: adminQuery('/tasks') },
     'GET /examples': { request: adminQuery('/examples') },
     'GET /orders': { request: adminQuery('/orders') },
     'GET /users': { request: adminQuery('/users') },
@@ -222,7 +222,7 @@ const STRICT_2XX = new Set([
     'createProduct',
     'createOrder',
     'addCartItem',
-    'createContactTicket',
+    'createContactTask',
     'signup'
 ]);
 

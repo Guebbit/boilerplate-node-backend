@@ -193,7 +193,7 @@ See `sweep:webhook-retries` (`src/modules/webhooks/jobs.ts`) for the pattern.
 The manifest is the whole contract between the domain and the application:
 
 ```ts
-// src/modules/tickets/module.ts (abridged)
+// src/modules/tasks/module.ts (abridged)
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
@@ -204,11 +204,11 @@ import { router } from './routes';
  * both directions.
  */
 export default {
-    name: 'tickets',
-    mounts: [{ basePath: '/tickets', routes: router }],
+    name: 'tasks',
+    mounts: [{ basePath: '/tasks', routes: router }],
     // REQUIRED, not optional — a module cannot compile without answering this. 'none' is the
     // explicit, reviewed answer for a module with nothing personal to export.
-    personalData: [{ section: 'tickets', collect: (subject) => findOwnTicketsForExport(subject) }],
+    personalData: [{ section: 'tasks', collect: (subject) => findOwnTasksForExport(subject) }],
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;
 ```
@@ -229,11 +229,11 @@ module with none is skipped rather than reported.
 
 ```ts
 // src/modules.ts
-import tickets from './modules/tickets/module';
+import tasks from './modules/tasks/module';
 
-export const enabledModules: AppModule[] = [account, auditLogs, cart /* … */, tickets];
+export const enabledModules: AppModule[] = [account, auditLogs, cart /* … */, tasks];
 
-export type ModuleName = 'account' | 'audit-logs' | 'cart' /* … */ | 'tickets';
+export type ModuleName = 'account' | 'audit-logs' | 'cart' /* … */ | 'tasks';
 ```
 
 The third edit is the `ModuleName` member: a table keyed on `ModuleName` (`scenarios/shop-modules.ts`)
@@ -296,7 +296,7 @@ follows is three parts:
 - **Related pages** — the siblings and the horizontal pages a reader will want next
 
 The code comes from `example`, which has no page by design (its file headers carry the explanation).
-Copy the page of a module shaped like yours instead — [`tickets`'s](../modules/tickets.md) is a good model — and
+Copy the page of a module shaped like yours instead — [`tasks`'s](../modules/tasks.md) is a good model — and
 replace it. Do not
 restate what the code already says — the routes are in `src/modules/<name>/routes.ts` and
 `openapi.yaml`, the fields are in `model.ts`, and a page repeating either goes stale the first time

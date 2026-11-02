@@ -1761,34 +1761,34 @@ components:
                     type: string
                     format: date-time
             additionalProperties: false
-        TicketOpenedParamsPayload:
-            title: TicketOpenedParamsPayload
+        TaskOpenedParamsPayload:
+            title: TaskOpenedParamsPayload
             type: object
             required:
-                - ticketId
+                - taskId
                 - kind
             properties:
-                ticketId:
+                taskId:
                     type: string
                 kind:
                     type: string
                 category:
                     type: string
             additionalProperties: false
-        TicketAssignedParamsPayload:
-            title: TicketAssignedParamsPayload
+        TaskAssignedParamsPayload:
+            title: TaskAssignedParamsPayload
             type: object
             required:
-                - ticketId
+                - taskId
                 - kind
             properties:
-                ticketId:
+                taskId:
                     type: string
                 kind:
                     type: string
             additionalProperties: false
-        NotificationStaffTicketOpenedPayload:
-            title: NotificationStaffTicketOpenedPayload
+        NotificationStaffTaskOpenedPayload:
+            title: NotificationStaffTaskOpenedPayload
             type: object
             required:
                 - id
@@ -1809,9 +1809,9 @@ components:
                 code:
                     type: string
                     enum:
-                        - notifications.staff.ticket-opened
+                        - notifications.staff.task-opened
                 params:
-                    $ref: '#/components/schemas/TicketOpenedParamsPayload'
+                    $ref: '#/components/schemas/TaskOpenedParamsPayload'
                 severity:
                     type: string
                     enum:
@@ -1827,8 +1827,8 @@ components:
                     type: string
                     format: date-time
             additionalProperties: false
-        NotificationStaffTicketOverduePayload:
-            title: NotificationStaffTicketOverduePayload
+        NotificationStaffTaskOverduePayload:
+            title: NotificationStaffTaskOverduePayload
             type: object
             required:
                 - id
@@ -1849,9 +1849,9 @@ components:
                 code:
                     type: string
                     enum:
-                        - notifications.staff.ticket-overdue
+                        - notifications.staff.task-overdue
                 params:
-                    $ref: '#/components/schemas/TicketOpenedParamsPayload'
+                    $ref: '#/components/schemas/TaskOpenedParamsPayload'
                 severity:
                     type: string
                     enum:
@@ -1867,8 +1867,8 @@ components:
                     type: string
                     format: date-time
             additionalProperties: false
-        NotificationStaffTicketAssignedPayload:
-            title: NotificationStaffTicketAssignedPayload
+        NotificationStaffTaskAssignedPayload:
+            title: NotificationStaffTaskAssignedPayload
             type: object
             required:
                 - id
@@ -1889,9 +1889,9 @@ components:
                 code:
                     type: string
                     enum:
-                        - notifications.staff.ticket-assigned
+                        - notifications.staff.task-assigned
                 params:
-                    $ref: '#/components/schemas/TicketAssignedParamsPayload'
+                    $ref: '#/components/schemas/TaskAssignedParamsPayload'
                 severity:
                     type: string
                     enum:
@@ -2713,9 +2713,9 @@ components:
                 - $ref: '#/components/schemas/NotificationStockAlertPayload'
                 - $ref: '#/components/schemas/NotificationStaffPurchaseHoldPlacedPayload'
                 - $ref: '#/components/schemas/NotificationStaffWebhookDisabledPayload'
-                - $ref: '#/components/schemas/NotificationStaffTicketOpenedPayload'
-                - $ref: '#/components/schemas/NotificationStaffTicketOverduePayload'
-                - $ref: '#/components/schemas/NotificationStaffTicketAssignedPayload'
+                - $ref: '#/components/schemas/NotificationStaffTaskOpenedPayload'
+                - $ref: '#/components/schemas/NotificationStaffTaskOverduePayload'
+                - $ref: '#/components/schemas/NotificationStaffTaskAssignedPayload'
                 - $ref: '#/components/schemas/NotificationStaffReturnRequestedPayload'
                 - $ref: '#/components/schemas/NotificationStaffOutboxDeadPayload'
                 - $ref: '#/components/schemas/NotificationStaffTransfersDuePayload'

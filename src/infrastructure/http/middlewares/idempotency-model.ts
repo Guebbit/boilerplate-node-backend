@@ -110,7 +110,7 @@ idempotencyRecordSchema.index(
 
 /*
  * TTL index — Mongo deletes attempts older than the retention window on its own. Same caveat as
- * every other TTL index in this repo (see `tickets/model.ts` and `persistence/lease.ts`):
+ * every other TTL index in this repo (see `tasks/model.ts` and `persistence/lease.ts`):
  * raising or lowering `NODE_IDEMPOTENCY_RETENTION_HOURS` and restarting FAILS THE BOOT, because
  * Mongo refuses to change an existing index's `expireAfterSeconds` in place. `npm run db:sync` is
  * what applies it, by dropping the index and rebuilding it.

@@ -1,7 +1,7 @@
 /**
  * @module
  * When a refund must be done: the legal deadline of a withdrawal or return refund, else the time a
- * person is given before it is "needs attention". `tickets` reads it to date the work it opens.
+ * person is given before it is "needs attention". `tasks` reads it to date the work it opens.
  *
  * See: docs/modules/payments.md
  */

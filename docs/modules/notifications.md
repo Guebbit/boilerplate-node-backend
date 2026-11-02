@@ -25,7 +25,7 @@ flowchart LR
     payments["payments"]
     returns["returns"]
     stock_alerts["stock-alerts"]
-    tickets["tickets"]
+    tasks["tasks"]
     users["users"]
     webhooks["webhooks"]
     wishlist["wishlist"]
@@ -38,7 +38,7 @@ flowchart LR
     notifications --> payments
     notifications --> returns
     notifications --> stock_alerts
-    notifications --> tickets
+    notifications --> tasks
     notifications --> users
     notifications --> webhooks
     notifications --> wishlist
@@ -50,9 +50,9 @@ flowchart LR
     orders -. "order.purchase_hold_placed" .-> notifications
     returns -. "return.requested" .-> notifications
     stock_alerts -. "stock_alert.sent" .-> notifications
-    tickets -. "ticket.assigned" .-> notifications
-    tickets -. "ticket.opened" .-> notifications
-    tickets -. "ticket.overdue" .-> notifications
+    tasks -. "task.assigned" .-> notifications
+    tasks -. "task.opened" .-> notifications
+    tasks -. "task.overdue" .-> notifications
     webhooks -. "webhook.subscription_auto_disabled" .-> notifications
     wishlist -. "wishlist.items_removed" .-> notifications
 
@@ -62,7 +62,7 @@ flowchart LR
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
     class delivery,inventory,payments,returns,stock_alerts,wishlist supporting;
-    class access,tickets,users,webhooks generic;
+    class access,tasks,users,webhooks generic;
     class notifications centre;
 ```
 
@@ -179,18 +179,18 @@ flowchart LR
 - **Retention.** Work notices have their own cap (`NODE_NOTIFICATIONS_STAFF_MAX_PER_USER`) and a TTL
   (`NODE_NOTIFICATIONS_STAFF_TTL_DAYS`), so a flood of them cannot push a person's own messages out.
 - **Today's codes.** `notifications.staff.purchase-hold-placed` (mail `now`: abuse defence),
-  `notifications.staff.webhook-disabled` (bell only), `notifications.staff.ticket-opened` (mail
-  `now`: a person waits), `notifications.staff.ticket-overdue` (mail `now`, once, when that ticket
-  passes its due date unclosed; the same people) and `notifications.staff.ticket-assigned` (bell only, the assignee alone).
+  `notifications.staff.webhook-disabled` (bell only), `notifications.staff.task-opened` (mail
+  `now`: a person waits), `notifications.staff.task-overdue` (mail `now`, once, when that task
+  passes its due date unclosed; the same people) and `notifications.staff.task-assigned` (bell only, the assignee alone).
   `notifications.staff.return-requested` (bell only, the people who decide returns; a withdrawal is
   a right and is not announced) and `notifications.staff.outbox-dead` (bell only, administrators:
   the kernel's `outbox.event_dead` fact, a plain emit because an outbox row about the outbox could
   itself die).
-- **Ticket notices.** The ticket codes name their sets per notice (`per-notice` in the route
-  table): the set of the opened ticket's kind. Params are the ticket id, its kind and a contact
+- **Task notices.** The task codes name their sets per notice (`per-notice` in the route
+  table): the set of the opened task's kind. Params are the task id, its kind and a contact
   message's category, nothing the visitor typed. A contact message that finds no recipient with
-  an address is handed to the tickets module's fallback mailbox
-  ([`tickets`](./tickets.md#who-is-told)).
+  an address is handed to the tasks module's fallback mailbox
+  ([`tasks`](./tasks.md#who-is-told)).
 
 ## The daily digest
 
@@ -212,9 +212,9 @@ flowchart LR
 - **Appeared or grew** -> unread again, pushed to open tabs, and (for the codes below marked
   `digest`) listed in that person's one digest mail. **Fell or the same** -> quiet. **Zero** ->
   the row is removed. An unchanged re-run mails nothing.
-- **Mail is for what is overdue**, not for work in the normal course (B14). The ticket reminder
-  (`ticket-overdue`) is that rule applied to a single ticket: see
-  [the overdue reminder](./tickets.md#the-overdue-reminder).
+- **Mail is for what is overdue**, not for work in the normal course (B14). The task reminder
+  (`task-overdue`) is that rule applied to a single task: see
+  [the overdue reminder](./tasks.md#the-overdue-reminder).
 
 | Code                         | Who (set)             | Counts                                                                                                                                                                         | Mail   |
 | ---------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
@@ -229,8 +229,8 @@ flowchart LR
 | `low-stock`                  | `InventoryManagement` | products at or under `NODE_LOW_STOCK_THRESHOLD`                                                                                                                                | bell   |
 | `preorders-late`             | `OrderEditing`        | waiting preorders and backorders past their date (weekly)                                                                                                                      | digest |
 
-A situation that is a ticket (`manual_refund_owed`, `amount_mismatch`, `refund_refused`, ...) has no
-notice code here: `ticket-opened` alerts it. That is why a refused refund has none.
+A situation that is a task (`manual_refund_owed`, `amount_mismatch`, `refund_refused`, ...) has no
+notice code here: `task-opened` alerts it. That is why a refused refund has none.
 
 ## What decides what
 

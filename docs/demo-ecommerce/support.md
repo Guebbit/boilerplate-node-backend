@@ -42,17 +42,17 @@ confirmed email address. Messages typed under an old or different address are no
 those in the inbox by hand.
 :::
 
-### Working a ticket
+### Working a task
 
-Open a ticket to see its notes, who has it and what else was asked about the same order. **Take** it
+Open a task to see its notes, who has it and what else was asked about the same order. **Take** it
 to put your name on it (it becomes _in progress_); **Resolve** it when it is done; **Mark as spam**
 when it is not a real message. Both can be undone with **Reopen**, which puts it back where it was
-(with you, if you had it). If **Reopen** says a newer ticket already covers the situation, that
-ticket is the one to work: the message names it. Every note is kept with the time it was written;
+(with you, if you had it). If **Reopen** says a newer task already covers the situation, that
+task is the one to work: the message names it. Every note is kept with the time it was written;
 write each as if the customer will read it, because their data export includes them (without your
-name). A ticket stays in the inbox for 24 months after it was closed, then goes.
+name). A task stays in the inbox for 24 months after it was closed, then goes.
 
-→ [`tickets`](../modules/tickets.md)
+→ [`tasks`](../modules/tasks.md)
 
 ## "I can't get in"
 
@@ -172,7 +172,7 @@ Support **cannot lift it**: that is `ban:User`, the [moderator's](./moderator.md
 on with the customer's address and what they told you; the moderator checks the account (it shows as
 "Needs review") and lifts the pause or keeps it. Tell the customer a person will look at it, and that
 it ends by itself within seven days at the latest. They may also object to it (GDPR Art. 21): say so in
-the same ticket.
+the same task.
 → [`orders`](../modules/orders.md#the-purchase-hold)
 
 ## Languages
@@ -264,7 +264,7 @@ Worth knowing before promising anything to a customer:
 
 | Word             | In plain terms                                                                                                        |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------- |
-| **Triage**       | Deciding what a new message is and who deals with it. → [`tickets`](../modules/tickets.md)                            |
+| **Triage**       | Deciding what a new message is and who deals with it. → [`tasks`](../modules/tasks.md)                                |
 | **Verified**     | Confirmed their email. Until then an account can shop but not check out.                                              |
 | **Session**      | One signed-in device. → [`account`](../modules/account.md)                                                            |
 | **Audit log**    | The 90-day record of staff actions, read by the moderator and the manager. → [`audit-logs`](../modules/audit-logs.md) |

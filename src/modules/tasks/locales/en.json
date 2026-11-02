@@ -1,0 +1,24 @@
+{
+    "tasks": {
+        "email-contact": {
+            "subject": "New contact request",
+            "subject-overdue": "Overdue contact request",
+            "meta-title": "New contact request",
+            "title": "New contact request",
+            "title-overdue": "Overdue contact request: nobody has answered it yet",
+            "label-name": "Name",
+            "label-email": "Email",
+            "label-subject": "Subject",
+            "label-message": "Message",
+            "label-category": "Category",
+            "label-created-at": "Created at",
+            "not-available": "N/A"
+        },
+        "already-resolved": "This task is already resolved.",
+        "already-spam": "This task is already marked as spam.",
+        "already-open": "This task is already open.",
+        "superseded": "A newer open task already covers this situation, so this one cannot be reopened.",
+        "not-open": "This task is closed. Reopen it first.",
+        "assignee-invalid": "That person cannot work this task."
+    }
+}

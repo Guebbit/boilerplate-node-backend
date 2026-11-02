@@ -64,7 +64,7 @@ reason: adding one fails that test once, which is the prompt to update this page
 
 | Surface  | Sources (highest first) | Used by                                                                                                               |
 | -------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `search` | body, query             | the endpoints with a `POST …/search` sibling (`example`, `orders`, `payments`, `tickets`, `products`, `users`)        |
+| `search` | body, query             | the endpoints with a `POST …/search` sibling (`example`, `orders`, `payments`, `tasks`, `products`, `users`)          |
 | `list`   | query                   | the GET-only collection reads, which have no such sibling                                                             |
 | `write`  | params, body            | the item writes whose id rides in the path and whose fields ride in the body                                          |
 | `create` | body                    | `createProduct`, `createUser`, and the PUT/PATCH factory's body, `updateProduct` included (its id is read apart)      |
@@ -110,7 +110,7 @@ declaring a body on its GET.
 | `PATCH /cart/items/:productId`                                          | `productId`                                     | params                                     | `requireId` (404 when malformed)                                                        |
 |                                                                         | `quantity`                                      | body                                       | Zod                                                                                     |
 | `DELETE /cart/items/:productId`                                         | `productId`                                     | params                                     | `requireId`: 404 when malformed                                                         |
-| `GET /tickets`, `POST /tickets/search`                                  | `page`, `pageSize`                              | body, query                                | merged, then the shared pagination schema                                               |
+| `GET /tasks`, `POST /tasks/search`                                      | `page`, `pageSize`                              | body, query                                | merged, then the shared pagination schema                                               |
 |                                                                         | `text`, `email`, `status`                       | body, query                                | merged, passed through as strings                                                       |
 | `GET /inventory/levels`                                                 | `page`, `pageSize`, `lowOnly`                   | query                                      | `lowOnly` decoded as a boolean, then Zod                                                |
 | `GET /inventory/movements`                                              | `productId`                                     | query                                      | first non-empty wins                                                                    |
@@ -122,7 +122,7 @@ declaring a body on its GET.
 
 Pagination has exactly two authorities, and they answer different questions. `@infrastructure/http/schemas`
 owns the **bounds** — `openapi.yaml` declares `minimum: 1` / `maximum: 100`, and every one of the
-search endpoints answers 422 for anything outside that, `GET /tickets` included.
+search endpoints answers 422 for anything outside that, `GET /tasks` included.
 `normalizePagination` (`@infrastructure/persistence/search`) owns the **defaults** — page 1, ten per page, or
 `NODE_SETTINGS_PAGINATION_PAGE_SIZE` — and it runs on every search, which is why a controller
 leaves an unspecified page absent rather than filling it in. Neither clamps: an out-of-range
@@ -235,7 +235,7 @@ body alone, so a stray `?id=` cannot name a different record than the body does.
 
 Every domain that deletes a persisted record offers the same three spellings, and offers them for
 the same reason: the shape is a property of the domain, not a decision three route files each make.
-Products, users and orders all do. Cart and tickets do not, and that is a decision rather than an
+Products, users and orders all do. Cart and tasks do not, and that is a decision rather than an
 omission — a cart line is session-scoped, so there is no record to keep, and `deleteCartItem`
 narrows its declaration to `['params']` to say so.
 

@@ -16,7 +16,7 @@ import {
 import { FRONTEND_LINK_RULES } from '@infrastructure/http/frontend-link';
 import { callerAs } from '@tests/callers';
 import { translator } from '@infrastructure/i18n';
-import { TICKET_KINDS } from '@modules/tickets';
+import { TASK_KINDS } from '@modules/tasks';
 
 /** The shared staff screen paths the links are compared against. */
 const PAGES = FRONTEND_LINK_RULES.staffPages;
@@ -31,17 +31,17 @@ const BODIES: Record<(typeof STAFF_NOTIFICATION_CODES)[number], StaffNoticeBody>
         code: 'notifications.staff.webhook-disabled',
         params: { subscriptionId: 's1' }
     },
-    'notifications.staff.ticket-opened': {
-        code: 'notifications.staff.ticket-opened',
-        params: { ticketId: 't1', kind: 'contact', category: 'cancellation' }
+    'notifications.staff.task-opened': {
+        code: 'notifications.staff.task-opened',
+        params: { taskId: 't1', kind: 'contact', category: 'cancellation' }
     },
-    'notifications.staff.ticket-overdue': {
-        code: 'notifications.staff.ticket-overdue',
-        params: { ticketId: 't1', kind: 'contact', category: 'cancellation' }
+    'notifications.staff.task-overdue': {
+        code: 'notifications.staff.task-overdue',
+        params: { taskId: 't1', kind: 'contact', category: 'cancellation' }
     },
-    'notifications.staff.ticket-assigned': {
-        code: 'notifications.staff.ticket-assigned',
-        params: { ticketId: 't1', kind: 'dispute' }
+    'notifications.staff.task-assigned': {
+        code: 'notifications.staff.task-assigned',
+        params: { taskId: 't1', kind: 'dispute' }
     },
     'notifications.staff.return-requested': {
         code: 'notifications.staff.return-requested',
@@ -114,26 +114,22 @@ describe('STAFF_ROUTES', () => {
         expect(STAFF_ROUTES['notifications.staff.webhook-disabled'].email).toBe('none');
     });
 
-    it('mails an overdue ticket now, to the same per-notice sets as the opener', () => {
-        expect(STAFF_ROUTES['notifications.staff.ticket-overdue']).toMatchObject({
-            sets: STAFF_ROUTES['notifications.staff.ticket-opened'].sets,
+    it('mails an overdue task now, to the same per-notice sets as the opener', () => {
+        expect(STAFF_ROUTES['notifications.staff.task-overdue']).toMatchObject({
+            sets: STAFF_ROUTES['notifications.staff.task-opened'].sets,
             email: 'now'
         });
     });
 });
 
 describe('staffLinkOf', () => {
-    it('points every ticket notice at the ticket page', () => {
-        expect(staffLinkOf(BODIES['notifications.staff.ticket-opened'])).toEqual({
-            template: PAGES.ticket,
+    it('points every task notice at the task page', () => {
+        expect(staffLinkOf(BODIES['notifications.staff.task-opened'])).toEqual({
+            template: PAGES.task,
             parameters: { id: 't1' }
         });
-        expect(staffLinkOf(BODIES['notifications.staff.ticket-overdue']).template).toBe(
-            'tickets/{id}'
-        );
-        expect(staffLinkOf(BODIES['notifications.staff.ticket-assigned']).template).toBe(
-            PAGES.ticket
-        );
+        expect(staffLinkOf(BODIES['notifications.staff.task-overdue']).template).toBe('tasks/{id}');
+        expect(staffLinkOf(BODIES['notifications.staff.task-assigned']).template).toBe(PAGES.task);
     });
 
     it('points a hold at the buyer’s account and a disabled webhook at its subscription', () => {
@@ -199,42 +195,42 @@ describe('staffNoticeEmail', () => {
 
             expect(mail.subject).not.toContain('notifications.staff-mail');
             expect(mail.data.summary).not.toContain('notifications.staff-mail');
-            expect(mail.data.link).toMatch(new RegExp(`/${locale}/(users/u1|tickets/t1)$`));
+            expect(mail.data.link).toMatch(new RegExp(`/${locale}/(users/u1|tasks/t1)$`));
         }
     });
 
     it.each(['en', 'it'])(
-        'names a contact ticket by its category in %s, never by its text',
+        'names a contact task by its category in %s, never by its text',
         (locale) => {
-            const mail = staffNoticeEmail(locale, BODIES['notifications.staff.ticket-opened']);
+            const mail = staffNoticeEmail(locale, BODIES['notifications.staff.task-opened']);
             const words = translator(locale);
 
             expect(mail.subject).toContain(
-                words('notifications.staff-mail.ticket-category.cancellation')
+                words('notifications.staff-mail.task-category.cancellation')
             );
-            expect(mail.data.link).toContain('/tickets/t1');
+            expect(mail.data.link).toContain('/tasks/t1');
         }
     );
 
     it.each(['en', 'it'])(
-        'labels a contact ticket with no category as uncategorised in %s',
+        'labels a contact task with no category as uncategorised in %s',
         (locale) => {
             const mail = staffNoticeEmail(locale, {
-                code: 'notifications.staff.ticket-opened',
-                params: { ticketId: 't2', kind: 'contact' }
+                code: 'notifications.staff.task-opened',
+                params: { taskId: 't2', kind: 'contact' }
             });
 
             expect(mail.subject).toContain(
-                translator(locale)('notifications.staff-mail.ticket-category.none')
+                translator(locale)('notifications.staff-mail.task-category.none')
             );
         }
     );
 
-    it('has a label in every language for every ticket kind and category', () => {
+    it('has a label in every language for every task kind and category', () => {
         for (const locale of ['en', 'it']) {
             const words = translator(locale);
-            for (const kind of TICKET_KINDS)
-                expect(words(`notifications.staff-mail.ticket-kind.${kind}`)).not.toContain(
+            for (const kind of TASK_KINDS)
+                expect(words(`notifications.staff-mail.task-kind.${kind}`)).not.toContain(
                     'notifications.staff-mail'
                 );
         }
@@ -253,12 +249,12 @@ describe('setsOfRoute', () => {
             'WebhookManagement'
         ]);
         expect(
-            setsOfRoute(STAFF_ROUTES['notifications.staff.ticket-opened'], ['PaymentRefunding'])
+            setsOfRoute(STAFF_ROUTES['notifications.staff.task-opened'], ['PaymentRefunding'])
         ).toEqual(['PaymentRefunding']);
     });
 
     it('keeps a per-notice route that was named nothing for administrators alone', () => {
-        expect(setsOfRoute(STAFF_ROUTES['notifications.staff.ticket-opened'])).toEqual([]);
+        expect(setsOfRoute(STAFF_ROUTES['notifications.staff.task-opened'])).toEqual([]);
     });
 });
 

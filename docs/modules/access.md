@@ -27,7 +27,7 @@ flowchart LR
     orders["orders"]
     payments["payments"]
     returns["returns"]
-    tickets["tickets"]
+    tasks["tasks"]
     users["users"]
 
     account --> access
@@ -37,7 +37,7 @@ flowchart LR
     orders --> access
     payments --> access
     returns --> access
-    tickets --> access
+    tasks --> access
     users --> access
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -46,7 +46,7 @@ flowchart LR
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class orders core;
     class notifications,payments,returns supporting;
-    class account,api_keys,audit_logs,tickets,users generic;
+    class account,api_keys,audit_logs,tasks,users generic;
     class access centre;
 ```
 

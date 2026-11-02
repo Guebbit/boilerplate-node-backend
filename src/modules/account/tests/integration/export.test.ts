@@ -305,7 +305,7 @@ describe('requestExport', () => {
     it('writes one JSON object: every section that answered, then exportedAt', async () => {
         setPersonalDataSections([
             ...basicSections(),
-            section('tickets', undefined),
+            section('tasks', undefined),
             section('orders', [])
         ]);
 
@@ -316,7 +316,7 @@ describe('requestExport', () => {
             string,
             unknown
         >;
-        // `tickets` resolved `undefined`: omitted, not null.
+        // `tasks` resolved `undefined`: omitted, not null.
         expect(Object.keys(document)).toEqual(['profile', 'cart', 'orders', 'exportedAt']);
         expect(document.profile).toEqual({ email: 'ada@example.com' });
         expect(new Date(document.exportedAt as string).toISOString()).toBe(document.exportedAt);
@@ -327,7 +327,7 @@ describe('requestExport', () => {
         setPersonalDataSections([
             section('profile', {}),
             {
-                section: 'tickets',
+                section: 'tasks',
                 collect: (subject) => {
                     seen.push(subject);
                     return Promise.resolve([]);

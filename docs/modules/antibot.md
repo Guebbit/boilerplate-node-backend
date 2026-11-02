@@ -4,7 +4,7 @@
 **Owns** — rung 3 of the anti-automation ladder: the human-challenge port, and the two endpoints
 a frontend uses: `antibot` on `GET /config` (which provider is active) and `GET /antibot/challenge`
 (the work a self-hosted provider issues).
-**Depends on** — nothing, and nothing depends on it. `account` and `tickets` reach
+**Depends on** — nothing, and nothing depends on it. `account` and `tasks` reach
 `infrastructure/adapters/antibot-providers` directly, through `humanChallengeGate` — a
 cross-cutting middleware, not an import of this module.
 **Breaks if you change** — the wire shape of `AntibotConfig`, which the paired frontend reads to
@@ -26,7 +26,7 @@ selects an implementation from the registry in `infrastructure/adapters/antibot-
 default `none` passes every caller and publishes nothing to render. The same selection answers two
 questions: what `antibot` on `GET /config` reports, and whether `humanChallengeGate` demands a token.
 It is mounted unconditionally in `account/routes.ts` on `/signup`/`/reset` and in
-`tickets/routes.ts` on `/contact`; on `/login` it sits behind `loginChallengeGate` instead, which
+`tasks/routes.ts` on `/contact`; on `/login` it sits behind `loginChallengeGate` instead, which
 only delegates to it once the per-account failure budget rung 1 tracks, or the caller's address-block budget, is at least half spent —
 never on an honest first attempt. Neither route imports this module; all of them import the adapter
 and the middleware directly, which is why the neighbourhood diagram above shows no edges at all.
@@ -100,6 +100,6 @@ Redis `SET NX` widens the claim across workers when it is reachable.
 
 - [Modules overview](./index.md) — the whole context map
 - [account](./account.md) — mounts the gate on `/signup` and `/reset`
-- [tickets](./tickets.md) — mounts the gate on `/contact`
+- [tasks](./tasks.md) — mounts the gate on `/contact`
 - [Security](../tools/security.md) — the rate-limit budgets this rung sits behind
 - [Web attack defences](../theory/defences/automation-and-abuse.md#the-ladder) — the whole ladder, and what each rung buys

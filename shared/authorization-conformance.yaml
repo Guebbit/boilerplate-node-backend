@@ -57,9 +57,9 @@ admin-permissions: &admin_permissions
     - read:Return
     - update:Return
     - receive:Return
-    - read:Ticket
-    - update:Ticket
-    - delete:Ticket
+    - read:Task
+    - update:Task
+    - delete:Task
     - read:Locale
     - display:Locale
     - create:Locale
@@ -467,16 +467,16 @@ cases:
     # =============================================================================================
 
     - name: read does not imply update
-      caller: { id: usr_4, scope: tenant, tenantId: shop_1, permissions: [read:Ticket] }
+      caller: { id: usr_4, scope: tenant, tenantId: shop_1, permissions: [read:Task] }
       action: update
-      subject: Ticket
+      subject: Task
       resource: { tenantId: shop_1 }
       expect: deny
 
     - name: there is no write rule, so update and delete are answered separately
-      caller: { id: usr_4, scope: tenant, tenantId: shop_1, permissions: [read:Ticket, update:Ticket] }
+      caller: { id: usr_4, scope: tenant, tenantId: shop_1, permissions: [read:Task, update:Task] }
       action: delete
-      subject: Ticket
+      subject: Task
       resource: { tenantId: shop_1 }
       expect: deny
 

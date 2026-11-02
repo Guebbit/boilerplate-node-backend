@@ -64,7 +64,7 @@ const MODULE_ORDER: readonly string[] = [
     'account',
     'addresses',
     'users',
-    'tickets',
+    'tasks',
     'products',
     'cart',
     'wishlist',

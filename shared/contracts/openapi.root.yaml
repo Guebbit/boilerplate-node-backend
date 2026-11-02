@@ -1459,25 +1459,25 @@ paths:
     /users/search:
         $ref: '../../src/modules/users/openapi.yaml#/paths/~1users~1search'
 
-    # ---------- tickets ----------
-    /tickets:
-        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets'
-    /tickets/search:
-        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1search'
-    /tickets/summary:
-        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1summary'
-    /tickets/{id}:
-        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1{id}'
-    /tickets/{id}/resolve:
-        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1{id}~1resolve'
-    /tickets/{id}/mark-spam:
-        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1{id}~1mark-spam'
-    /tickets/{id}/reopen:
-        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1{id}~1reopen'
-    /tickets/{id}/assignee:
-        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1{id}~1assignee'
-    /tickets/{id}/notes:
-        $ref: '../../src/modules/tickets/openapi.yaml#/paths/~1tickets~1{id}~1notes'
+    # ---------- tasks ----------
+    /tasks:
+        $ref: '../../src/modules/tasks/openapi.yaml#/paths/~1tasks'
+    /tasks/search:
+        $ref: '../../src/modules/tasks/openapi.yaml#/paths/~1tasks~1search'
+    /tasks/summary:
+        $ref: '../../src/modules/tasks/openapi.yaml#/paths/~1tasks~1summary'
+    /tasks/{id}:
+        $ref: '../../src/modules/tasks/openapi.yaml#/paths/~1tasks~1{id}'
+    /tasks/{id}/resolve:
+        $ref: '../../src/modules/tasks/openapi.yaml#/paths/~1tasks~1{id}~1resolve'
+    /tasks/{id}/mark-spam:
+        $ref: '../../src/modules/tasks/openapi.yaml#/paths/~1tasks~1{id}~1mark-spam'
+    /tasks/{id}/reopen:
+        $ref: '../../src/modules/tasks/openapi.yaml#/paths/~1tasks~1{id}~1reopen'
+    /tasks/{id}/assignee:
+        $ref: '../../src/modules/tasks/openapi.yaml#/paths/~1tasks~1{id}~1assignee'
+    /tasks/{id}/notes:
+        $ref: '../../src/modules/tasks/openapi.yaml#/paths/~1tasks~1{id}~1notes'
 
     # ---------- products ----------
     /products:

@@ -140,9 +140,9 @@ allowed", with 409 where Google says 400).
 
 - `POST /users/{id}/activate` on an active account: `USER_ALREADY_ACTIVE`; `deactivate` on a
   deactivated one: `USER_ALREADY_INACTIVE`.
-- `POST /tickets/{id}/resolve` on a resolved ticket: `TICKET_ALREADY_RESOLVED`; `mark-spam` on spam:
-  `TICKET_ALREADY_SPAM`; `reopen` on an open one: `TICKET_ALREADY_OPEN`. A reopen that finds a newer
-  open ticket on the same situation: `TICKET_SUPERSEDED`, with the newer ticket's id in `details`.
+- `POST /tasks/{id}/resolve` on a resolved task: `TASK_ALREADY_RESOLVED`; `mark-spam` on spam:
+  `TASK_ALREADY_SPAM`; `reopen` on an open one: `TASK_ALREADY_OPEN`. A reopen that finds a newer
+  open task on the same situation: `TASK_SUPERSEDED`, with the newer task's id in `details`.
 - `DELETE /users/{id}/purchase-hold` on an account with no hold and no review flag:
   `USER_PURCHASE_HOLD_NOT_SET`.
 - A retried `DELETE` leaves the same state (RFC 9110 §9.2.2). What is already gone answers 404, as
@@ -176,7 +176,7 @@ The item reads, and what each is scoped by:
 | `GET /webhooks/subscriptions/{id}`                     | the shop's own subscriptions                       |
 | `GET /payments/{id}`                                   | the payer's own, or `display:Payment`              |
 | `GET /payments/{id}/refunds/{refundId}`                | the payment's scope; a record it does not hold     |
-| `GET /tickets/{id}`                                   | `read:Ticket`, and for a system ticket its route set |
+| `GET /tasks/{id}`                                   | `read:Task`, and for a system task its route set |
 | `GET /api-keys/{id}`                                   | this shop's credentials, `read:ApiKey`             |
 | `GET /account/addresses/{addressId}`                   | the caller's own book                              |
 | `GET /account/sessions/{sessionId}`                    | the caller's own live sessions                     |
@@ -291,8 +291,8 @@ in the query or the `/hard` path and a body is refused instead of ignored.
 ## A known path with the wrong method
 
 A path the contract declares, asked with a method it does not give it, answers **405** with an
-`Allow` header (RFC 9110 §15.5.6) — never the catch-all's 404. `DELETE /tickets/{id}` is fine,
-`PATCH /tickets/{id}` is a 405 naming `DELETE, GET, HEAD`: a ticket's `status` is read-only and moves only through its doors.
+`Allow` header (RFC 9110 §15.5.6) — never the catch-all's 404. `DELETE /tasks/{id}` is fine,
+`PATCH /tasks/{id}` is a 405 naming `DELETE, GET, HEAD`: a task's `status` is read-only and moves only through its doors.
 
 - **`Allow` is sorted**, with HEAD beside GET. `OPTIONS` is never judged: the CORS layer answers
   a preflight before any route runs.
@@ -422,7 +422,7 @@ and the bundler adds the header parameter, the 412 and the response header from 
 | the caller's account | `GET /account` | `PUT`, `PATCH /account` |
 | example | `GET /examples/{id}` | `PUT`, `PATCH`, `DELETE /examples/{id}` |
 
-Not versioned: a resource with no item read to take a tag from (tickets, locales, an address
+Not versioned: a resource with no item read to take a tag from (tasks, locales, an address
 inside its book), a resource that has an item read but no `If-Match` (webhook subscriptions) and
 anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declared.
 
@@ -484,7 +484,7 @@ anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` 
   `304` from it.
 - **The cached reads are a separate case.** Two families answer `If-None-Match` with `304` on no
   change, through Express's own ETag check: the `privateNoCache` reads (`orders`, `users`,
-  `tickets`, `payments`, `returns`, `stats`: a private copy the browser revalidates) and every
+  `tasks`, `payments`, `returns`, `stats`: a private copy the browser revalidates) and every
   `setCache` read (`locales`, `products` `/facets` and `/:id`: the shared copy, revalidated once
   `max-age` runs out or at once under `browserRevalidate`). Each such `GET` carries
   `x-cache` in its fragment, and the bundler declares the answer (the shared `NotModified`: no

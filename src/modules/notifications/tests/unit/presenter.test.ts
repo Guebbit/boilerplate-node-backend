@@ -108,16 +108,16 @@ describe('presentNotification, per code', () => {
         },
         { code: 'notifications.staff.webhook-disabled', params: { subscriptionId: 's1' } },
         {
-            code: 'notifications.staff.ticket-opened',
-            params: { ticketId: 't1', kind: 'contact', category: 'privacy' }
+            code: 'notifications.staff.task-opened',
+            params: { taskId: 't1', kind: 'contact', category: 'privacy' }
         },
         {
-            code: 'notifications.staff.ticket-overdue',
-            params: { ticketId: 't1', kind: 'contact', category: 'privacy' }
+            code: 'notifications.staff.task-overdue',
+            params: { taskId: 't1', kind: 'contact', category: 'privacy' }
         },
         {
-            code: 'notifications.staff.ticket-assigned',
-            params: { ticketId: 't1', kind: 'dispute' }
+            code: 'notifications.staff.task-assigned',
+            params: { taskId: 't1', kind: 'dispute' }
         },
         {
             code: 'notifications.staff.return-requested',

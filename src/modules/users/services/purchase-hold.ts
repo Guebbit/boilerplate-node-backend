@@ -147,7 +147,7 @@ const notifyBuyer = (
 
 /**
  * Save the account after staff acted on it, and announce the review flag cleared in the same
- * transaction when it had one: the ticket that waits on the flag closes exactly when the flag does.
+ * transaction when it had one: the task that waits on the flag closes exactly when the flag does.
  *
  * @param user - the account, already changed in memory
  * @param wasFlagged - whether it carried the review flag before the change

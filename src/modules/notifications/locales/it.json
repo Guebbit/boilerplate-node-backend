@@ -10,19 +10,19 @@
                 "title": "È stato applicato un blocco acquisti",
                 "summary": "Un acquirente ha annullato o lasciato scadere diversi ordini non pagati, quindi il suo checkout è sospeso fino a {{until}}. Ogni annullamento è stato elaborato normalmente; è bloccato solo l'inserimento di un nuovo ordine. La sospensione termina da sola; applica un blocco manuale all'account per prolungarla."
             },
-            "ticket-opened": {
-                "subject": "Nuovo ticket: {{what}}",
-                "meta-title": "Nuovo ticket",
-                "title": "Un nuovo ticket richiede qualcuno",
-                "summary": "È stato aperto un ticket e il tuo ruolo se ne occupa: {{what}}. Aprilo per vedere i dettagli e prenderlo in carico."
+            "task-opened": {
+                "subject": "Nuovo task: {{what}}",
+                "meta-title": "Nuovo task",
+                "title": "Un nuovo task richiede qualcuno",
+                "summary": "È stato aperto un task e il tuo ruolo se ne occupa: {{what}}. Aprilo per vedere i dettagli e prenderlo in carico."
             },
-            "ticket-overdue": {
-                "subject": "Ticket in ritardo: {{what}}",
-                "meta-title": "Ticket in ritardo",
-                "title": "Un ticket è in ritardo",
-                "summary": "Un ticket di cui si occupa il tuo ruolo ha superato la scadenza ed è ancora aperto: {{what}}. Aprilo per vedere i dettagli e prenderlo in carico."
+            "task-overdue": {
+                "subject": "Task in ritardo: {{what}}",
+                "meta-title": "Task in ritardo",
+                "title": "Un task è in ritardo",
+                "summary": "Un task di cui si occupa il tuo ruolo ha superato la scadenza ed è ancora aperto: {{what}}. Aprilo per vedere i dettagli e prenderlo in carico."
             },
-            "ticket-kind": {
+            "task-kind": {
                 "contact": "Messaggio di contatto",
                 "account_review": "Revisione account",
                 "manual_refund_owed": "Rimborso da fare a mano",
@@ -33,7 +33,7 @@
                 "refund_refused": "Rimborso rifiutato",
                 "dispute": "Contestazione di pagamento"
             },
-            "ticket-category": {
+            "task-category": {
                 "order": "Ordine",
                 "cancellation": "Annullamento",
                 "return": "Reso",

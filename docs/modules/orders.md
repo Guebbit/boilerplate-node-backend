@@ -28,7 +28,7 @@ flowchart LR
     returns["returns"]
     shop["shop"]
     stats["stats"]
-    tickets["tickets"]
+    tasks["tasks"]
     users["users"]
 
     cart --> orders
@@ -38,7 +38,7 @@ flowchart LR
     payments --> orders
     returns --> orders
     stats --> orders
-    tickets --> orders
+    tasks --> orders
     orders --> access
     orders --> inventory
     orders --> products
@@ -53,7 +53,7 @@ flowchart LR
     orders -. "order.purchase_hold_placed" .-> notifications
     orders -. "order.cancelled" .-> payments
     orders -. "order.created" .-> payments
-    orders -. "order.cancelled" .-> tickets
+    orders -. "order.cancelled" .-> tasks
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -61,7 +61,7 @@ flowchart LR
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,products core;
     class delivery,inventory,invoicing,notifications,payments,returns,shop,stats supporting;
-    class access,tickets,users generic;
+    class access,tasks,users generic;
     class orders centre;
 ```
 

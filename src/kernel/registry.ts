@@ -230,7 +230,7 @@ export interface BrowserEventTarget {
 }
 
 /**
- * Who a data-subject export or erasure is about. `email` because one module (`tickets`: a contact
+ * Who a data-subject export or erasure is about. `email` because one module (`tasks`: a contact
  * message can predate the account) also matches its rows by address, not only by id.
  */
 export interface PersonalDataSubject {

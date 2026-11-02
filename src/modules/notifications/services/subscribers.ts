@@ -13,7 +13,7 @@ import type { DomainEventMap } from '@kernel/events';
 import type { PermissionSetName } from '@kernel/permissions';
 import type { NewNotification } from '../repository';
 import { notificationsCreate } from './inbox';
-import { ticketService } from '@modules/tickets';
+import { taskService } from '@modules/tasks';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { notifyStaff, notifyStaffMember } from './staff';
 
@@ -197,76 +197,76 @@ export const onOutboxEventDead = ({
     }).then(() => undefined);
 
 /** The set that works a contact message; a typo here would alert nobody. */
-const CONTACT_ALERT_SET: PermissionSetName = 'TicketManagement';
+const CONTACT_ALERT_SET: PermissionSetName = 'TaskManagement';
 
 /**
- * Who hears of a new ticket: the sets that WORK it. A contact message is read by those who may
- * read it (`TicketDisplay`, which includes managers) but worked by `TicketManagement`; alerting
+ * Who hears of a new task: the sets that WORK it. A contact message is read by those who may
+ * read it (`TaskDisplay`, which includes managers) but worked by `TaskManagement`; alerting
  * the readers too would tell people who cannot act on it.
  *
- * @param opened - the `ticket.opened` fact
+ * @param opened - the `task.opened` fact
  */
-const alertSetsOf = ({ kind, routeSet }: DomainEventMap['ticket.opened']): string[] =>
+const alertSetsOf = ({ kind, routeSet }: DomainEventMap['task.opened']): string[] =>
     kind === 'contact' ? [CONTACT_ALERT_SET] : [routeSet];
 
 /**
- * A ticket was opened: everyone who works its kind hears of it once, by id and kind alone.
+ * A task was opened: everyone who works its kind hears of it once, by id and kind alone.
  *
  * A contact message nobody could be told of (no staff with an address) goes to the fallback
  * mailbox instead, with the message in it: that mailbox is then the whole inbox. With even one
  * permitted recipient the mailbox hears nothing.
  */
-export const onTicketOpened = (opened: DomainEventMap['ticket.opened']): Promise<void> =>
+export const onTaskOpened = (opened: DomainEventMap['task.opened']): Promise<void> =>
     notifyStaff({
         tenantId: opened.tenantId,
         body: {
-            code: 'notifications.staff.ticket-opened',
+            code: 'notifications.staff.task-opened',
             params: {
-                ticketId: opened.ticketId,
+                taskId: opened.taskId,
                 kind: opened.kind,
                 ...(opened.category ? { category: opened.category } : {})
             }
         },
         sets: alertSetsOf(opened),
-        dedupeKey: `ticket-opened:${opened.ticketId}`
+        dedupeKey: `task-opened:${opened.taskId}`
     }).then((told) =>
         told === 0 && opened.kind === 'contact'
-            ? ticketService.mailFallbackMailbox(opened.ticketId)
+            ? taskService.mailFallbackMailbox(opened.taskId)
             : undefined
     );
 
 /**
- * An open ticket went overdue: the people the opener told hear of it once more, the same sets, the
- * same fallback mailbox for a contact message nobody could be told of. The sweep claims a ticket
- * once, so this runs once per ticket; the dedupe key is the second guard.
+ * An open task went overdue: the people the opener told hear of it once more, the same sets, the
+ * same fallback mailbox for a contact message nobody could be told of. The sweep claims a task
+ * once, so this runs once per task; the dedupe key is the second guard.
  */
-export const onTicketOverdue = (overdue: DomainEventMap['ticket.overdue']): Promise<void> =>
+export const onTaskOverdue = (overdue: DomainEventMap['task.overdue']): Promise<void> =>
     notifyStaff({
         tenantId: overdue.tenantId,
         body: {
-            code: 'notifications.staff.ticket-overdue',
+            code: 'notifications.staff.task-overdue',
             params: {
-                ticketId: overdue.ticketId,
+                taskId: overdue.taskId,
                 kind: overdue.kind,
                 ...(overdue.category ? { category: overdue.category } : {})
             }
         },
         sets: alertSetsOf(overdue),
-        dedupeKey: `ticket-overdue:${overdue.ticketId}`
+        dedupeKey: `task-overdue:${overdue.taskId}`
     }).then((told) =>
         told === 0 && overdue.kind === 'contact'
-            ? ticketService.mailFallbackMailbox(overdue.ticketId, true)
+            ? taskService.mailFallbackMailbox(overdue.taskId, true)
             : undefined
     );
 
-/** A ticket was given to a colleague: the one who now holds it hears, and nobody else. */
-export const onTicketAssigned = (assigned: DomainEventMap['ticket.assigned']): Promise<void> =>
+/** A task was given to a colleague: the one who now holds it hears, and nobody else. */
+export const onTaskAssigned = (assigned: DomainEventMap['task.assigned']): Promise<void> =>
     notifyStaffMember(assigned.assigneeId, {
         tenantId: assigned.tenantId,
         body: {
-            code: 'notifications.staff.ticket-assigned',
-            params: { ticketId: assigned.ticketId, kind: assigned.kind }
+            code: 'notifications.staff.task-assigned',
+            params: { taskId: assigned.taskId, kind: assigned.kind }
         },
         sets: [assigned.routeSet],
-        dedupeKey: `ticket-assigned:${assigned.ticketId}:${assigned.assignedAt}`
+        dedupeKey: `task-assigned:${assigned.taskId}:${assigned.assignedAt}`
     });

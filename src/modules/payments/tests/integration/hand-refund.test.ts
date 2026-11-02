@@ -89,7 +89,7 @@ describe('the operator refunding a cash payment', () => {
             targetId: orderId,
             metadata: { refundId: String(payment.refunds[0]._id), amount: 30, reason: 'goodwill' }
         });
-        // The same fact is announced for `tickets`, in the transaction that opened the record.
+        // The same fact is announced for `tasks`, in the transaction that opened the record.
         const [announced] = await outboxEventModel
             .find({ name: PAYMENT_REFUND_OWED_BY_HAND })
             .lean()

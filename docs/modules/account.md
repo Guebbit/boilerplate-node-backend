@@ -20,12 +20,12 @@ flowchart LR
     access["access"]
     api_keys["api-keys"]
     shop["shop"]
-    tickets["tickets"]
+    tasks["tasks"]
     users["users"]
 
     api_keys --> account
     shop --> account
-    tickets --> account
+    tasks --> account
     account --> access
     account --> users
     users -. "user.deactivated" .-> account
@@ -33,15 +33,15 @@ flowchart LR
     users -. "user.setup-requested" .-> account
     account -. "account.authenticator-removed" .-> api_keys
     account -. "account.sessions-revoked" .-> api_keys
-    account -. "account.export_failed" .-> tickets
-    account -. "account.export_ready" .-> tickets
+    account -. "account.export_failed" .-> tasks
+    account -. "account.export_ready" .-> tasks
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class shop supporting;
-    class access,api_keys,tickets,users generic;
+    class access,api_keys,tasks,users generic;
     class account centre;
 ```
 
@@ -307,7 +307,7 @@ flowchart LR
 ```
 
 A failed build announces `account.export_failed` in the same write that marks the row, and a ready one
-`account.export_ready`; [tickets](./tickets.md#system-tickets) opens a ticket for the first (the person is
+`account.export_ready`; [tasks](./tasks.md#system-tasks) opens a task for the first (the person is
 still owed the file within a month, GDPR Art. 12(3)) and closes it on the next ready export.
 
 Why the export lives in `account` and not in a `privacy` module: GDPR export, erasure and
@@ -337,7 +337,7 @@ Decisions rather than mechanics:
   by cursor on the `{ actorUserId, timestamp }` index: no count and no skip per page, which would make
   reading a long trail cost work quadratic in its length.
 - **The job carries the subject the request saw**, including whether the address had been proven. A
-  section that matches by address (`tickets`) answers only for a proven one, so the file says what
+  section that matches by address (`tasks`) answers only for a proven one, so the file says what
   the caller was entitled to when they asked, not what became true later.
 - **A failed build is a state.** The worker logs the error, marks the row `failed`, counts it in
   `account_export_failed_total` and mails the requester a short notice (`account.export-failed`: no

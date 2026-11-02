@@ -82,11 +82,11 @@ rules:
       applies_when: >
           Only if the app allows users to upload or publish content visible to other users or the
           public — e.g. product reviews, images, or other UGC. Unverified: check
-          src/modules/tickets/** and src/modules/products/** for any user-submitted content that is
+          src/modules/tasks/** and src/modules/products/** for any user-submitted content that is
           actually surfaced publicly before concluding either way.
       evidence:
           backend:
-              - src/modules/tickets/**
+              - src/modules/tasks/**
               - src/modules/products/** (review/UGC fields)
               - src/modules/example/** (a public page any signed-up account may publish)
               - any content-moderation or takedown route

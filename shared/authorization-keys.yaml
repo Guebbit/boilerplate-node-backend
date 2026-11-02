@@ -376,22 +376,22 @@ rules:
       # proves nothing about how recently its holder typed their password.
       stepUp: critical
 
-    # -- tickets ------------------------------------------------------------------------------
+    # -- tasks ------------------------------------------------------------------------------
     - action: read
-      subject: Ticket
-      module: tickets
+      subject: Task
+      module: tasks
       scope: tenant
-      description: Read tickets — contact messages, and the system tickets of a permission set the caller holds.
+      description: Read tasks — contact messages, and the system tasks of a permission set the caller holds.
     - action: update
-      subject: Ticket
-      module: tickets
+      subject: Task
+      module: tasks
       scope: tenant
-      description: Work a ticket — resolve, mark as spam, reopen, assign, add a note. A system ticket also needs the ticket's own permission set.
+      description: Work a task — resolve, mark as spam, reopen, assign, add a note. A system task also needs the task's own permission set.
     - action: delete
-      subject: Ticket
-      module: tickets
+      subject: Task
+      module: tasks
       scope: tenant
-      description: Remove a ticket. A system ticket also needs the ticket's own permission set.
+      description: Remove a task. A system task also needs the task's own permission set.
 
     # -- locales -------------------------------------------------------------------------------
     - action: read
@@ -769,17 +769,17 @@ sets:
       rules:
           - receive:Return
 
-    - name: TicketDisplay
-      module: tickets
-      description: Read tickets.
+    - name: TaskDisplay
+      module: tasks
+      description: Read tasks.
       rules:
-          - read:Ticket
-    - name: TicketManagement
-      module: tickets
-      description: Work a ticket, or remove it.
+          - read:Task
+    - name: TaskManagement
+      module: tasks
+      description: Work a task, or remove it.
       rules:
-          - update:Ticket
-          - delete:Ticket
+          - update:Task
+          - delete:Task
 
     - name: LocaleStorefront
       module: locales

@@ -91,7 +91,7 @@ export const notifyStaff = async (notice: StaffNotice): Promise<number> => {
 };
 
 /**
- * Tell one named member, if they can still act: the notice for the person a ticket was given to.
+ * Tell one named member, if they can still act: the notice for the person a task was given to.
  * Their jurisdiction is the notice's sets, read again at display time like any work notice.
  *
  * @param userId - who is told

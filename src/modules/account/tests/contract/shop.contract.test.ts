@@ -16,7 +16,7 @@ import { nullPathsIn } from '@tests/response-contract';
 import { accessService, DEPLOYMENT_TENANT_SLUG } from '@modules/access';
 import { giveAddress } from '@modules/addresses/tests/factories';
 import { createExample } from '@modules/example/tests/factories';
-import { createRefundTicket } from '@modules/tickets/tests/factories';
+import { createRefundTask } from '@modules/tasks/tests/factories';
 import { createNotification } from '@modules/notifications/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
@@ -106,7 +106,7 @@ describe('POST /account/export', () => {
             .set('Authorization', bearer)
             .send({ orderId: String(shipped._id), reason: 'withdrawal' });
         await createExample({ userId: user.id });
-        await createRefundTicket(user.id);
+        await createRefundTask(user.id);
         const held = await createOrder(user, [toOrderItem(product, 1)]);
         await forceOrderStatus(String(held._id), OrderStatus.processing);
         const [fulfillmentOrder] = await fulfillmentOrdersOf(String(held._id));
@@ -137,7 +137,7 @@ describe('POST /account/export', () => {
                 expiresAt: new Date(Date.now() + 7 * 24 * 3_600_000).toISOString()
             });
         await api()
-            .post('/tickets')
+            .post('/tasks')
             .set('Authorization', bearer)
             .send({ email: user.email, subject: 'Help', message: 'My parcel is late.' });
 
@@ -148,7 +148,7 @@ describe('POST /account/export', () => {
             .filter(([, rows]) => Array.isArray(rows) && rows.length === 0)
             .map(([section]) => section);
         // Sections this seed cannot fill (a returns flow, webhooks, invoicing, examples, translation
-        // work, a system ticket) stay named here, so a new empty one is noticed.
+        // work, a system task) stay named here, so a new empty one is noticed.
         expect(empty.toSorted()).toEqual(EXPECTED_EMPTY_SECTIONS);
         expect(nullPathsIn(response.data)).toEqual([]);
     });

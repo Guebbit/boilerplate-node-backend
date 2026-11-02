@@ -1,7 +1,7 @@
 /**
  * @module
  * What a hard delete (Art. 17) takes and what it must leave: the address book and the contact
- * tickets go with the account, while the records the law makes the shop keep — invoices, credit
+ * tasks go with the account, while the records the law makes the shop keep — invoices, credit
  * notes, returns — stay. `personal-data-erasure.test.ts` only checks that a hook is declared; this
  * runs the real cascade, so a future "erase everything" change that reaches a tax record fails here.
  *
@@ -18,7 +18,7 @@ import addressesModule from '@modules/addresses/module';
 import invoicingModule from '@modules/invoicing/module';
 import paymentsModule from '@modules/payments/module';
 import returnsModule from '@modules/returns/module';
-import ticketsModule from '@modules/tickets/module';
+import tasksModule from '@modules/tasks/module';
 import { paymentService } from '@modules/payments';
 import { createProduct } from '@modules/products/tests/factories';
 import { createUser, userRepository } from '@modules/users/tests/factories';
@@ -28,7 +28,7 @@ import { addressBookModel } from '@modules/addresses/model';
 import { giveAddress } from '@modules/addresses/tests/factories';
 import { invoiceModel, creditNoteModel } from '@modules/invoicing/model';
 import { returnModel } from '@modules/returns/model';
-import { ticketModel } from '@modules/tickets/model';
+import { taskModel } from '@modules/tasks/model';
 import { eventually } from '@tests/eventually';
 import mongoose from 'mongoose';
 import { TranslationOrigin } from '@types';
@@ -68,7 +68,7 @@ beforeEach(() => {
         paymentsModule,
         invoicingModule,
         returnsModule,
-        ticketsModule,
+        tasksModule,
         webhooksModule,
         localesModule,
         wishlistModule,
@@ -83,7 +83,7 @@ beforeEach(() => {
 afterEach(() => resetDomainEvents());
 
 describe('a hard delete of an account that has bought, been refunded and written in', () => {
-    it('takes the address book and the tickets and leaves every legal record', async () => {
+    it('takes the address book and the tasks and leaves every legal record', async () => {
         const user = await createUser({ email: 'ada@example.com', verifiedAt: new Date() });
         await giveAddress(user.id);
         const product = await createProduct({ price: 25 });
@@ -113,7 +113,7 @@ describe('a hard delete of an account that has bought, been refunded and written
             lines: [{ productId: product._id, quantity: 1, title: 'Shirt', unitPrice: 25 }],
             returnPostage: 'consumer'
         });
-        await ticketModel.create({
+        await taskModel.create({
             email: 'ada@example.com',
             subject: 'Hello',
             message: 'A question'
@@ -129,7 +129,7 @@ describe('a hard delete of an account that has bought, been refunded and written
         expect(await invoiceModel.countDocuments({ orderId })).toBe(1);
         expect(await creditNoteModel.countDocuments({ orderId })).toBe(1);
         expect(await returnModel.countDocuments({ orderId })).toBe(1);
-        expect(await ticketModel.countDocuments({ email: 'ada@example.com' })).toBe(0);
+        expect(await taskModel.countDocuments({ email: 'ada@example.com' })).toBe(0);
     });
 });
 
@@ -249,7 +249,7 @@ describe('a scheduled self-deletion that has run', () => {
             lines: [{ productId: product._id, quantity: 1, title: 'Shirt', unitPrice: 25 }],
             returnPostage: 'consumer'
         });
-        await ticketModel.create({ email, subject: 'Hello', message: 'A question' });
+        await taskModel.create({ email, subject: 'Hello', message: 'A question' });
         // The seeds landed: every home below names the account before the purge, so an empty
         // answer afterwards means the cascade worked, not that nothing was ever written.
         expect(await collectionsNaming([user.id.toLowerCase(), email])).toEqual(
@@ -264,7 +264,7 @@ describe('a scheduled self-deletion that has run', () => {
                 'payments',
                 'sessions',
                 'stockalerts',
-                'tickets',
+                'tasks',
                 'translations',
                 'verificationtokens',
                 'webhooksubscriptions',
@@ -274,7 +274,7 @@ describe('a scheduled self-deletion that has run', () => {
         const loaded = await userRepository.findById(user.id);
         await accountService.scheduleAccountDeletion(loaded!, testCallerContext);
         // The lock is reversible, so a restore must find the message: it goes at the purge only.
-        expect(await ticketModel.countDocuments({ email })).toBe(1);
+        expect(await taskModel.countDocuments({ email })).toBe(1);
         // The app clock reaches the date: the grace is the only thing that decides when.
         await userRepository.updateMany(
             { _id: user.id },

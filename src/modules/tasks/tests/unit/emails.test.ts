@@ -1,0 +1,100 @@
+/**
+ * @module
+ * The contact-request notification — the email an OPERATOR receives, not a customer. That
+ * audience is why the task's own subject is appended to the translated prefix (a mailbox scan
+ * reads what each message is about) and why a missing name falls back to translated copy HERE
+ * rather than in the template, which can't choose between a value and a placeholder.
+ */
+
+import { contactRequestEmail, type ContactRequest } from '@modules/tasks/emails';
+
+const REQUEST: ContactRequest = {
+    name: 'Ada Lovelace',
+    email: 'ada@example.com',
+    subject: 'The parcel never arrived',
+    message: 'It has been three weeks.',
+    createdAt: '2026-08-27T10:00:00.000Z'
+};
+
+describe('contactRequestEmail', () => {
+    it('names the contact template', () => {
+        expect(contactRequestEmail('en', REQUEST).template).toBe('tasks.contact');
+    });
+
+    it('puts the task"s own subject in the mail subject, after the prefix', () => {
+        const { subject } = contactRequestEmail('en', REQUEST);
+
+        // Both halves: the prefix marks it as a contact request among an operator's other mail,
+        // and the task subject is what makes one distinguishable from the next.
+        expect(subject).toContain(REQUEST.subject);
+        expect(subject.endsWith(`: ${REQUEST.subject}`)).toBe(true);
+        expect(subject).not.toBe(REQUEST.subject);
+    });
+
+    it('words the reminder for an overdue message differently from the first announcement', () => {
+        const first = contactRequestEmail('en', REQUEST);
+        const reminder = contactRequestEmail('en', { ...REQUEST, overdue: true });
+
+        expect(reminder.subject).toMatch(/^Overdue/);
+        expect(reminder.subject.endsWith(`: ${REQUEST.subject}`)).toBe(true);
+        expect(reminder.data.title).not.toBe(first.data.title);
+        expect(reminder.data.message).toBe(REQUEST.message);
+    });
+
+    it('passes the sender"s details through unchanged', () => {
+        // These are the reply-to details. Translating or reformatting any of them would be a
+        // reply sent to the wrong address.
+        const { data } = contactRequestEmail('en', REQUEST);
+
+        expect(data.name).toBe(REQUEST.name);
+        expect(data.email).toBe(REQUEST.email);
+        expect(data.subject).toBe(REQUEST.subject);
+        expect(data.message).toBe(REQUEST.message);
+        expect(data.createdAt).toBe(REQUEST.createdAt);
+    });
+
+    it('carries the category, or the translated placeholder when the sender chose none', () => {
+        expect(contactRequestEmail('en', { ...REQUEST, category: 'privacy' }).data.category).toBe(
+            'privacy'
+        );
+        expect(contactRequestEmail('en', REQUEST).data.category).not.toBeUndefined();
+        expect(contactRequestEmail('en', REQUEST).data.category).not.toMatch(/^tasks\./);
+    });
+
+    it('falls back to translated copy when the sender left no name', () => {
+        // `||`, not `??`: an empty string is as nameless as an absent field, and the form allows
+        // one. The fallback must be the translated placeholder, never a blank line.
+        const anonymous = contactRequestEmail('en', { ...REQUEST, name: undefined });
+        const blank = contactRequestEmail('en', { ...REQUEST, name: '' });
+
+        expect(anonymous.data.name).not.toBe('');
+        expect(anonymous.data.name).not.toBeUndefined();
+        expect(blank.data.name).toBe(anonymous.data.name);
+        expect(anonymous.data.name).not.toMatch(/^tasks\./);
+    });
+
+    it('labels every field, so the operator reads a form rather than five strings', () => {
+        const { data } = contactRequestEmail('en', REQUEST);
+
+        for (const key of [
+            'labelName',
+            'labelEmail',
+            'labelSubject',
+            'labelMessage',
+            'labelCategory',
+            'labelCreatedAt'
+        ]) {
+            expect(data[key]).not.toBe('');
+            expect(data[key]).not.toMatch(/^tasks\./);
+        }
+    });
+
+    it('carries the locale through and translates by it', () => {
+        const english = contactRequestEmail('en', REQUEST);
+        const italian = contactRequestEmail('it', REQUEST);
+
+        expect(english.data.locale).toBe('en');
+        expect(italian.data.locale).toBe('it');
+        expect(italian.data.title).not.toBe(english.data.title);
+    });
+});

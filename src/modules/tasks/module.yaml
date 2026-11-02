@@ -1,0 +1,45 @@
+summary: 'Situations someone must take and close: contact messages and system-opened tasks, routed to the staff who hold the matching permission set.'
+subdomain: generic
+group: shop
+dependsOn:
+    - access # the roles of a person a task may be assigned to
+    - account # subscribes to its events, a data export failed or became ready
+    - delivery # subscribes to its events, a shipment left and a delay was told to the buyer
+    - inventory # subscribes to its event, a paid order with no stock set aside
+    - orders # subscribes to its event, an order cancelled
+    - payments # subscribes to its refund and dispute events, and asks when a refund is due
+    - users # the assignee's name, and whether a person exists to be given a task; its review-flag events
+jobs:
+    sweepTasksOverdue:
+        name: sweep:tasks-overdue
+        schedule: 40 6 * * *
+        summary:
+            Tells the staff who work a task's kind, once, that an open task passed its due date;
+            a task closed before the sweep is skipped, and one already told is never told again.
+rateLimits:
+    submissions:
+        name: Contact submissions — per address
+        namespace: submissions
+        environmentVariable: NODE_SUBMISSION_RATE_LIMIT_MAX
+        defaultMax: 5
+        windowMs: shared
+        bounds:
+            Contact-form submissions from ONE address, spent by SUCCESS — a well-formed post is the
+            abuse being bounded, not a failed one.
+        audited: true
+    submissionIdentity:
+        name: Contact submissions — per email
+        namespace: submission-identity
+        environmentVariable: NODE_SUBMISSION_RATE_LIMIT_EMAIL_MAX
+        defaultMax: 5
+        windowMs: shared
+        bounds: Contact-form submissions naming ONE sender email, spent by success.
+        audited: true
+    submissionBlock:
+        name: Contact submissions — per address block
+        namespace: submission-block
+        environmentVariable: NODE_SUBMISSION_RATE_LIMIT_BLOCK_MAX
+        defaultMax: 20
+        windowMs: shared
+        bounds: Contact-form submissions from ONE address block, spent by success.
+        audited: true

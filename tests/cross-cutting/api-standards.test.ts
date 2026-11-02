@@ -101,8 +101,7 @@ describe('a resource with a lifecycle status publishes required actions', () => 
      * case below refuses an entry that has since published them.
      */
     const EXEMPT: Record<string, string> = {
-        'tickets.TicketRef':
-            'a pointer to an earlier ticket on the same record; its moves are on `Ticket`',
+        'tasks.TaskRef': 'a pointer to an earlier task on the same record; its moves are on `Task`',
         'delivery.PreorderFulfillmentOrder':
             'a read-only row of the preorder board; every move is on `FulfillmentOrder`, one id away',
         'payments.Refund':

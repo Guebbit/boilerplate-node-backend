@@ -44,7 +44,7 @@ declare module '@kernel/events' {
         /**
          * An order was paid and nothing was set aside for it: its hold never existed, or was given
          * up and the shelf could not cover it again. Written in the payment's own transaction.
-         * `tickets` opens the work from it and closes it when the order is cancelled or ships.
+         * `tasks` opens the work from it and closes it when the order is cancelled or ships.
          * Internal only: no AsyncAPI channel carries it.
          */
         'inventory.hold_orphaned': { orderId: string };

@@ -123,9 +123,9 @@ an unauthenticated client that has just failed to reach the API is exactly who n
 dictionary, so requiring a token would make it unavailable in the one case it exists for. Both
 responses are cached for an hour — the copy changes only on deploy.
 
-## Tickets
+## Tasks
 
-> The domain behind these routes: [`tickets`](../modules/tickets.md) · routes and middleware: `src/modules/tickets/routes.ts`
+> The domain behind these routes: [`tasks`](../modules/tasks.md) · routes and middleware: `src/modules/tasks/routes.ts`
 
 Contact form submissions from anonymous or authenticated users. Admins can list all submissions and update their status (e.g. mark as resolved). Submitting a contact form also triggers a confirmation email via the mail worker.
 

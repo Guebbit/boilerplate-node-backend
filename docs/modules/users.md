@@ -25,7 +25,7 @@ flowchart LR
     notifications["notifications"]
     orders["orders"]
     stock_alerts["stock-alerts"]
-    tickets["tickets"]
+    tasks["tasks"]
 
     account --> users
     api_keys --> users
@@ -34,13 +34,13 @@ flowchart LR
     notifications --> users
     orders --> users
     stock_alerts --> users
-    tickets --> users
+    tasks --> users
     users --> access
     users -. "user.deactivated" .-> account
     users -. "user.deletion-cancelled" .-> account
     users -. "user.setup-requested" .-> account
-    users -. "user.review_cleared" .-> tickets
-    users -. "user.review_flagged" .-> tickets
+    users -. "user.review_cleared" .-> tasks
+    users -. "user.review_flagged" .-> tasks
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -48,7 +48,7 @@ flowchart LR
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
     class notifications,stock_alerts supporting;
-    class access,account,api_keys,example,tickets generic;
+    class access,account,api_keys,example,tasks generic;
     class users centre;
 ```
 
@@ -269,7 +269,7 @@ in the same write as an automatic hold, or alone when only PAID cancellations re
 outlives the hold, so an unreviewed pause does not drop off the staff list when it ends by itself; it
 stays until a staff member acts. Placing a hold or lifting one clears it. Setting the flag alone (paid
 cancellations only) announces `user.review_flagged` and clearing it `user.review_cleared`, in the same
-transaction: [`tickets`](./tickets.md#system-tickets) opens and closes the review ticket from them. The
+transaction: [`tasks`](./tasks.md#system-tasks) opens and closes the review task from them. The
 automatic hold announces neither; it has its own staff notice. The `/users` reads show it
 (never `/account`); the data export carries it with the rest of the profile.
 
@@ -300,7 +300,7 @@ transaction as the row, so a failed erasure takes no role from an account that s
 
 Every erase hook receives the **subject** (`userId`, `email`, `emailVerified`, built once by
 `personalDataSubjectOf` from the stored account), not just the id: a module that also matches rows
-by address, as [`tickets`](./tickets.md) does, needs the address and whether it was proven. The
+by address, as [`tasks`](./tasks.md) does, needs the address and whether it was proven. The
 cascade still writes exactly one `user.erased` outbox row per erasure, inside the same transaction.
 
 A module's erase hook may hand back work to run once the transaction has committed (`AfterErase`):

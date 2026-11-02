@@ -183,10 +183,10 @@ silo (one organisation per stack) and every real use case is shop-level.
 **Which routes a credential may reach, and how that is kept honest.** Two identity guards, and a
 route mounts exactly one:
 
-| Guard                | Admits                              | For                                                                                                                                                                     |
-| -------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `isAuth`             | a human session only                | routes whose subject is the CALLER — cart, wishlist, addresses, `account/*`, and `orders`, whose customer views narrow their reads through `callerScope(authContext)`   |
-| `isAuthOrCredential` | a session OR an `sk_...` credential | routes whose subject is the TENANT'S DATA — `users`, `inventory`, `audit-logs`, `webhooks`, `tickets`'s operator half, and the write halves of `products` and `locales` |
+| Guard                | Admits                              | For                                                                                                                                                                   |
+| -------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `isAuth`             | a human session only                | routes whose subject is the CALLER — cart, wishlist, addresses, `account/*`, and `orders`, whose customer views narrow their reads through `callerScope(authContext)` |
+| `isAuthOrCredential` | a session OR an `sk_...` credential | routes whose subject is the TENANT'S DATA — `users`, `inventory`, `audit-logs`, `webhooks`, `tasks`'s operator half, and the write halves of `products` and `locales` |
 
 This is a split rather than one widened guard because a credential resolves to `request.caller`
 with NO `authContext`, and roughly a hundred reads across the modules assume one is present — many
@@ -391,7 +391,7 @@ Without it, two budgets keyed alike on one request — the account-keyed attempt
 on `POST /payments/:id/confirm` — were reported as one hit counted twice, though each counted once
 in its own namespace.
 
-**A third budget, the same shape as neither.** The contact budgets (`contactLimiters`: `submissionLimiter` per address, plus a per-email and a per-address-block budget) guard `tickets`'s
+**A third budget, the same shape as neither.** The contact budgets (`contactLimiters`: `submissionLimiter` per address, plus a per-email and a per-address-block budget) guard `tasks`'s
 `POST /contact` — a public write that causes an outbound email (signup and reset also do, under their own budgets; this one reaches the operator) — and it inverts the rule
 above: `skipSuccessfulRequests` is deliberately **off**. A credential attempt is abusive when it
 FAILS (a wrong guess); a contact-form submission is abusive when it SUCCEEDS (a bot posts a
@@ -500,9 +500,9 @@ See [shared rules](../theory/shared-rules.md#rule-data-the-twin-will-need-yaml--
 | Payment confirm declines per address block   | `payments`       | `NODE_PAYMENT_DECLINE_BLOCK_RATE_LIMIT_MAX` | 10      | 3600000ms                   | address block (IPv4 /24, IPv6 /48)                                                                                        | yes     | memory     |
 | Payment intents and syncs                    | `payments`       | `NODE_PAYMENT_INTENT_RATE_LIMIT_MAX`        | 30      | 3600000ms                   | the authenticated account                                                                                                 | yes     | memory     |
 | Returns and withdrawals opened               | `returns`        | `NODE_RETURNS_RATE_LIMIT_MAX`               | 20      | `NODE_RATE_LIMIT_WINDOW_MS` | the authenticated account                                                                                                 | yes     | memory     |
-| Contact submissions — per address            | `tickets`        | `NODE_SUBMISSION_RATE_LIMIT_MAX`            | 5       | `NODE_RATE_LIMIT_WINDOW_MS` | address (IPv6 /56)                                                                                                        | yes     | memory     |
-| Contact submissions — per email              | `tickets`        | `NODE_SUBMISSION_RATE_LIMIT_EMAIL_MAX`      | 5       | `NODE_RATE_LIMIT_WINDOW_MS` | the submitted email or username, normalised and pseudonymised (falls back to address block when absent)                   | yes     | memory     |
-| Contact submissions — per address block      | `tickets`        | `NODE_SUBMISSION_RATE_LIMIT_BLOCK_MAX`      | 20      | `NODE_RATE_LIMIT_WINDOW_MS` | address block (IPv4 /24, IPv6 /48)                                                                                        | yes     | memory     |
+| Contact submissions — per address            | `tasks`          | `NODE_SUBMISSION_RATE_LIMIT_MAX`            | 5       | `NODE_RATE_LIMIT_WINDOW_MS` | address (IPv6 /56)                                                                                                        | yes     | memory     |
+| Contact submissions — per email              | `tasks`          | `NODE_SUBMISSION_RATE_LIMIT_EMAIL_MAX`      | 5       | `NODE_RATE_LIMIT_WINDOW_MS` | the submitted email or username, normalised and pseudonymised (falls back to address block when absent)                   | yes     | memory     |
+| Contact submissions — per address block      | `tasks`          | `NODE_SUBMISSION_RATE_LIMIT_BLOCK_MAX`      | 20      | `NODE_RATE_LIMIT_WINDOW_MS` | address block (IPv4 /24, IPv6 /48)                                                                                        | yes     | memory     |
 | Browsing (global)                            | `infrastructure` | `NODE_RATE_LIMIT_MAX`                       | 100     | `NODE_RATE_LIMIT_WINDOW_MS` | address (IPv6 /56)                                                                                                        | no      | pass       |
 | Api-key requests                             | `infrastructure` | `NODE_API_KEY_RATE_LIMIT_MAX`               | 120     | `NODE_RATE_LIMIT_WINDOW_MS` | the api-key credential                                                                                                    | yes     | memory     |
 | Image uploads                                | `infrastructure` | `NODE_UPLOAD_RATE_LIMIT_MAX`                | 20      | `NODE_RATE_LIMIT_WINDOW_MS` | the uploader: the api-key credential, else the authenticated account (falls back to address block when neither resolved)  | yes     | memory     |

@@ -84,15 +84,15 @@ import type { CreateProductRequest, Product } from '@types';
 **Importing enum const objects** — orval generates enums as `as const` objects (not TypeScript enum declarations). Import the const object to use it with `z.enum()` or for runtime value checks:
 
 ```typescript
-import { TicketStatus } from '@types';
+import { TaskStatus } from '@types';
 
-z.enum(TicketStatus);
+z.enum(TaskStatus);
 
 // Need the list at runtime: Object.values(X). Never respell a contract enum.
-Object.values(TicketStatus);
+Object.values(TaskStatus);
 ```
 
-A shared enum is a named schema (`TicketStatus`) that every property `$ref`s, and the const keeps that name. An enum declared inline on a property is named schema name + property name, PascalCase. For example, `HealthPing.status` → `HealthPingStatus`.
+A shared enum is a named schema (`TaskStatus`) that every property `$ref`s, and the const keeps that name. An enum declared inline on a property is named schema name + property name, PascalCase. For example, `HealthPing.status` → `HealthPingStatus`.
 
 ## Commands used in this repo
 

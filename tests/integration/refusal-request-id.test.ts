@@ -1,7 +1,7 @@
 /**
  * A request the global rate limiter refuses still carries `x-request-id`, and is `no-store`. The id middleware is
  * mounted by `createApp` before `installSecurity` for exactly this: the access log sits after the
- * limiter, so the header is the only thing a refused caller (and a support ticket) has to quote.
+ * limiter, so the header is the only thing a refused caller (and a support task) has to quote.
  *
  * Drives the real limiter and the real id middleware in a minimal app, because the global budget
  * is fixed when its module loads — see `withReloadedRateLimits`.

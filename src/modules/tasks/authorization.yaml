@@ -1,0 +1,30 @@
+rules:
+    # -- tasks ------------------------------------------------------------------------------
+    - action: read
+      subject: Task
+      module: tasks
+      scope: tenant
+      description: Read tasks — contact messages, and the system tasks of a permission set the caller holds.
+    - action: update
+      subject: Task
+      module: tasks
+      scope: tenant
+      description: Work a task — resolve, mark as spam, reopen, assign, add a note. A system task also needs the task's own permission set.
+    - action: delete
+      subject: Task
+      module: tasks
+      scope: tenant
+      description: Remove a task. A system task also needs the task's own permission set.
+
+sets:
+    - name: TaskDisplay
+      module: tasks
+      description: Read tasks.
+      rules:
+          - read:Task
+    - name: TaskManagement
+      module: tasks
+      description: Work a task, or remove it.
+      rules:
+          - update:Task
+          - delete:Task

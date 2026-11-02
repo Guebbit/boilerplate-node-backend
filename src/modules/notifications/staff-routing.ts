@@ -20,7 +20,7 @@ import type { NotificationBody, StaffNotificationCode, StaffSummaryCode } from '
 export interface StaffRoute {
     /**
      * Permission sets whose holders are told, plus every unrestricted role. Empty means
-     * administrators only. `per-notice`: the producer names them (a ticket's set depends on its
+     * administrators only. `per-notice`: the producer names them (a task's set depends on its
      * kind), see {@link setsOfRoute}.
      */
     sets: readonly PermissionSetName[] | 'per-notice';
@@ -46,22 +46,22 @@ export const STAFF_ROUTES: Readonly<Record<StaffNotificationCode, StaffRoute>> =
         email: 'none',
         severity: NotificationSeverity.warning
     },
-    // A ticket opened: whoever works its kind takes it. Mailed now because a person waits on it
+    // A task opened: whoever works its kind takes it. Mailed now because a person waits on it
     // (a visitor's message, a refund owed, a legal clock).
-    'notifications.staff.ticket-opened': {
+    'notifications.staff.task-opened': {
         sets: 'per-notice',
         email: 'now',
         severity: NotificationSeverity.info
     },
-    // The same people as the opener, once, when the ticket passes its due date and nobody closed
+    // The same people as the opener, once, when the task passes its due date and nobody closed
     // it: this is the "overdue" mail the digest's rule describes. Warning, since something is late.
-    'notifications.staff.ticket-overdue': {
+    'notifications.staff.task-overdue': {
         sets: 'per-notice',
         email: 'now',
         severity: NotificationSeverity.warning
     },
     // Told to the one person it was given to: the bell is enough, they are already working.
-    'notifications.staff.ticket-assigned': {
+    'notifications.staff.task-assigned': {
         sets: 'per-notice',
         email: 'none',
         severity: NotificationSeverity.info
@@ -203,10 +203,10 @@ export const staffLinkOf = (body: StaffNoticeBody): StaffLink => {
                 parameters: { id: body.params.subscriptionId }
             };
         }
-        case 'notifications.staff.ticket-opened':
-        case 'notifications.staff.ticket-overdue':
-        case 'notifications.staff.ticket-assigned': {
-            return { template: PAGES.ticket, parameters: { id: body.params.ticketId } };
+        case 'notifications.staff.task-opened':
+        case 'notifications.staff.task-overdue':
+        case 'notifications.staff.task-assigned': {
+            return { template: PAGES.task, parameters: { id: body.params.taskId } };
         }
         case 'notifications.staff.return-requested': {
             return { template: PAGES.return, parameters: { id: body.params.returnId } };
