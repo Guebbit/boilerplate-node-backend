@@ -2,7 +2,7 @@
  * @module
  * The real doors into `account.sessions-revoked`: logout everywhere and a password reset, driven
  * over HTTP, each taking the keys the person minted with them. The event handling itself is covered
- * in `api-keys.test.ts`; this proves `account` actually emits it where the epoch moves.
+ * in `api-keys.contract.test.ts`; this proves `account` actually emits it where the epoch moves.
  */
 
 import { api } from '@tests/http';

@@ -1,7 +1,7 @@
 /**
  * @module
  * What the credential service answers, audits and mails — the listing, the expiry ceiling, the
- * wording of a refusal, the audit rows, and the mails' locale. `api-keys.test.ts` owns the
+ * wording of a refusal, the audit rows, and the mails' locale. `api-keys.contract.test.ts` owns the
  * permission-subset rules; the HTTP-level contract suite is not part of the mutation ruler, so
  * these pin the same outcomes at the service door.
  */
