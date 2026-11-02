@@ -23,11 +23,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writeOrCheck } from './generated-file';
-import { HTTP_METHODS, parseOpenApi } from './openapi-document';
+import { HTTP_METHODS, WRITE_METHODS, parseOpenApi } from './openapi-document';
 import { requiredPath } from '../cli';
-
-/** The HTTP methods whose body the guard checks. `get` and `head` carry none by contract. */
-const BODY_METHODS = ['post', 'put', 'patch', 'delete'] as const;
 
 /** The repo root. `import.meta.url` rather than `__dirname`: this script runs as ESM. */
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -74,7 +71,7 @@ const compileTemplate = (template: string): { literal: string; parameterCount: n
 const renderRows = (): string[] =>
     Object.entries(document.paths ?? {})
         .flatMap(([route, operations]) =>
-            BODY_METHODS.flatMap((method) => {
+            WRITE_METHODS.flatMap((method) => {
                 const operation = operations?.[method];
                 const body = operation?.requestBody;
                 const types = Object.keys(body && 'content' in body ? body.content : {});

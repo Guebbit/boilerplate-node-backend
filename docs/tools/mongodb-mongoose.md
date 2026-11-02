@@ -16,8 +16,9 @@ That means the persistence example is document-oriented, not SQL-oriented.
 ## Pinned server version
 
 MongoDB is pinned to exactly **8.2.12** everywhere: the compose images (by multi-arch index digest),
-the CI apt install (`.github/actions/setup`) and `config.mongodbMemoryServer.version` in
-`package.json`. 8.0 and 8.3.x refuse to start on Linux kernel 6.19 or newer
+`config.mongodbMemoryServer.version` in `package.json`, which the CI apt install
+(`.github/actions/setup`) reads. The boot check and the backup drill take their image from the
+production compose. 8.0 and 8.3.x refuse to start on Linux kernel 6.19 or newer
 ([SERVER-136848](https://jira.mongodb.org/browse/SERVER-136848)), which current CI runners have.
 It moves back to the newest 8.x once that bug is fixed.
 

@@ -14,6 +14,6 @@ describe('antibotService.config', () => {
             expect(() => {
                 pending = antibotService.config();
             }).not.toThrow();
-            return expect(pending).rejects.toThrow();
+            return expect(pending).rejects.toThrow(/NODE_ANTIBOT_PROVIDER|no-such-provider/);
         }));
 });

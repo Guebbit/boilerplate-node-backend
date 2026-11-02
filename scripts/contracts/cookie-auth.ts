@@ -30,7 +30,6 @@ const takesBearer = (
  * unsafe ones that do not already declare their own.
  *
  * NEVER overwrites a `403`: an operation's own is more specific than the origin refusal.
- *
  */
 export const withCookieAuth: Step = (document_) => {
     for (const { method, operation } of operationsOf(document_)) {

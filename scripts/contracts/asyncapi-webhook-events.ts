@@ -31,6 +31,7 @@ import {
     type Node
 } from 'yaml';
 
+import { readOpenApiFragment, type OpenApiFragment } from './fragments';
 import { orderSections } from './section-order';
 import { MODULES_ROOT, modulesWith } from '../modules-on-disk';
 
@@ -102,17 +103,12 @@ const localiseReferencesIn = (node: Node): string[] => {
     return [...names];
 };
 
-/** The REST contract's schemas, as a plain object, from a module's `openapi.yaml`. */
-interface RestSchemas {
-    components?: { schemas?: Record<string, unknown> };
-}
-
 /**
  * One REST schema, ready to sit among the fragment's own.
  *
  * @throws Error when the schema is missing or holds a `$ref` (the copy would point nowhere)
  */
-const restSchemaOf = (rest: RestSchemas, openapiFile: string, name: string): object => {
+const restSchemaOf = (rest: OpenApiFragment, openapiFile: string, name: string): object => {
     const source = rest.components?.schemas?.[name];
     if (typeof source !== 'object' || source === null || JSON.stringify(source).includes('"$ref"'))
         throw new Error(
@@ -133,6 +129,7 @@ const restSchemaOf = (rest: RestSchemas, openapiFile: string, name: string): obj
  * @throws Error when a referenced schema is missing or holds a `$ref`, or the fragment declares the same name itself
  */
 export const localiseOpenApiReferences = (fragment: Document, openapiFile: string): void => {
+    // `true`: keep the node (not its plain value), so `isMap` can see it.
     const schemas = fragment.getIn(['components', 'schemas'], true);
     if (!isMap(schemas)) return;
 
@@ -144,8 +141,7 @@ export const localiseOpenApiReferences = (fragment: Document, openapiFile: strin
         .filter(({ names }) => names.length > 0);
     if (users.length === 0) return;
 
-    // `yaml`'s `parse`: a plain object back, which `createNode` turns into AST nodes.
-    const rest = parse(readFileSync(openapiFile, 'utf8')) as RestSchemas;
+    const rest = readOpenApiFragment(openapiFile);
     const copied = new Set<string>();
     for (const { item, names } of users)
         for (const name of names.filter((candidate) => !copied.has(candidate))) {

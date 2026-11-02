@@ -181,16 +181,10 @@ const SUMMARY_PAGES: Readonly<Record<StaffSummaryCode, string>> = {
  * @param eventName - the parked event
  * @param aggregateId - what it was about
  */
-const outboxAggregateLink = (eventName: string, aggregateId: string): StaffLink => {
-    switch (eventName.split('.', 1).join('')) {
-        case 'user': {
-            return { template: PAGES.user, parameters: { id: aggregateId } };
-        }
-        default: {
-            return { template: '', parameters: {} };
-        }
-    }
-};
+const outboxAggregateLink = (eventName: string, aggregateId: string): StaffLink =>
+    eventName.split('.', 1).join('') === 'user'
+        ? { template: PAGES.user, parameters: { id: aggregateId } }
+        : { template: '', parameters: {} };
 
 /**
  * The frontend screen a notice points at: the account for a hold, the subscription for a disabled

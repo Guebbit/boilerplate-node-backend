@@ -13,6 +13,10 @@ import { sweepDueWebhookDeliveries } from './services/sweep';
 export const webhooksJobs: readonly JobDeclaration[] = [
     {
         ...webhooksJobData.sweepWebhookRetries,
+        // An inline send can auto-disable a subscription and emit
+        // `webhook.subscription_auto_disabled`: `notifications` hears it through its subscription,
+        // and the staff mail is rendered from the translations.
+        needs: { subscriptions: true, i18n: true },
         run: () => sweepDueWebhookDeliveries()
     }
 ];

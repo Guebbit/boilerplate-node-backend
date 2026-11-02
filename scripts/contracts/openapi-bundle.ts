@@ -9,26 +9,8 @@
  *
  * Compiled by `redocly bundle` rather than concatenated, because the comments that matter are in
  * the MODULE files, which are authored, not in the bundle, which nobody reads by hand. The bundle
- * is parsed once, thirteen steps edit that one object in this order (the list in `bundleSteps`),
- * and it is stringified once. A step is `(document) => void` and never touches text:
- *
- * - {@link withBrowserEvents}: the analytics browser-event schemas.
- * - {@link withFilledEnums}: an enum named by `x-enum-from`, filled from its source.
- * - {@link withImageUploadEncoding}: the upload encoding on image-upload bodies.
- * - {@link withCookieAuth}: `cookieAuth` on every operation that takes a bearer, with the origin
- *   `403` on its unsafe methods.
- * - {@link withAppLevelResponses}: the root's `x-app-level-responses` (429, 500 and 503 for every
- *   operation; 400/413/415 for a body-carrying one, 415 for a body-less write too) into every
- *   operation that doesn't declare its own.
- * - {@link withNotModified}: the shared `304` on every read that declares `x-cache`.
- * - {@link withVersionedResources}: `ETag`, `If-Match` and 412 on every path marked `x-versioned`.
- * - {@link withAppLevelHeaders}: the headers every answer carries.
- * - {@link withIdempotentReplay}: `Idempotent-Replay` on idempotent writes.
- * - {@link withModuleStamps}: the `x-module` each operation's owning fragment names, never
- *   hand-written per operation.
- * - {@link checkOperationErrorCodes}: refuses an operation naming an error code nobody declares.
- * - {@link withErrorCodes}: every fragment's own `x-error-codes`, published as one catalogue.
- * - {@link pruneUnused}: drops the components nothing references any more.
+ * is parsed once, each step in `bundleSteps` edits that one object in order, and it is stringified
+ * once. A step is `(document) => void` and never touches text.
  *
  * The root's path index and tag list are completed from the fragments on disk before redocly runs
  * ({@link assembleRoot}), so adding a module is its own `openapi.yaml` and deleting one is `rm -rf`.
@@ -38,7 +20,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { stringify as stringifyYaml } from 'yaml';
 import path from 'node:path';
 import { type CompiledBundle } from './bundle-kinds';
 import { orderSections } from './section-order';
@@ -54,6 +36,7 @@ import { pruneUnused } from './prune-unused';
 import { REPO_ROOT, MODULES_ROOT, modulesWith } from '../modules-on-disk';
 import { readOpenApiFragment } from './fragments';
 import {
+    WRITE_METHODS,
     isHttpMethod,
     operationsOf,
     parseOpenApi,
@@ -146,14 +129,10 @@ const PATH_LINE = /^ {4}(\/\S*):\s*$/gm;
  * operations and one `$ref` per module path — and only the first kind is the system section's. A
  * `$ref` entry is somebody else's path passing through.
  */
-const rootPaths = (): string[] => {
-    const document_ = parseYaml(readFileSync(ROOT_SPEC, 'utf8')) as {
-        paths: Record<string, Record<string, unknown>>;
-    };
-    return Object.entries(document_.paths)
+const rootPaths = (): string[] =>
+    Object.entries(readOpenApiFragment(ROOT_SPEC).paths ?? {})
         .filter(([, item]) => !('$ref' in item))
         .map(([url]) => url);
-};
 
 /** Every path a section declares, in the order it declares them. */
 export const sectionPaths = (section: SectionName): string[] =>
@@ -162,9 +141,6 @@ export const sectionPaths = (section: SectionName): string[] =>
         : [...readFileSync(moduleSpec(section), 'utf8').matchAll(PATH_LINE)].map(
               (match) => match[1]
           );
-
-/** The methods a client may mistakenly send a body to: every state-changing one. */
-const WRITE_METHODS: ReadonlySet<string> = new Set(['post', 'put', 'patch', 'delete']);
 
 /**
  * Whether this app-level response applies to this operation.
@@ -182,7 +158,9 @@ const appliesToOperation = (
 ): boolean =>
     entry.appliesTo === 'all' ||
     'requestBody' in operation ||
-    (entry.appliesTo === 'requestBodyOrBodyless' && WRITE_METHODS.has(method));
+    // `method` is a plain string here, so the tuple is widened to ask it.
+    (entry.appliesTo === 'requestBodyOrBodyless' &&
+        (WRITE_METHODS as readonly string[]).includes(method));
 
 /**
  * This operation's responses, plus every app-level one it does not already answer for itself.
@@ -322,7 +300,6 @@ const withNoStoreHeader = (operation: Operation): void => {
  * Static on purpose: reading the mounted routers would boot the app, which needs files this very
  * build generates. `tests/cross-cutting/cache-policy-declared.test.ts` holds the `304` family equal
  * to the `privateNoCache` / `setCache` GETs the app really mounts.
- *
  */
 export const withNotModified: Step = (document_) => {
     for (const pathItem of Object.values(document_.paths ?? {})) {
@@ -533,26 +510,39 @@ const MARKER =
  * @param errorCodes - the collected `x-error-codes` catalogue
  */
 const bundleSteps = (errorCodes: Record<string, ErrorCodeEntry>): readonly Step[] => [
+    // The analytics browser-event schemas.
     withBrowserEvents,
+    // An enum named by `x-enum-from`, filled from its source.
     (document_) => {
         withFilledEnums(document_, { 'webhook-events': webhookEventNames() });
     },
+    // The upload encoding on image-upload bodies.
     withImageUploadEncoding,
+    // `cookieAuth` on every bearer operation, with the origin `403` on its unsafe methods.
     withCookieAuth,
+    // The root's `x-app-level-responses` into every operation that doesn't declare its own.
     withAppLevelResponses,
+    // The shared `304` on every read that declares `x-cache`.
     withNotModified,
+    // `ETag`, `If-Match` and 412 on every path marked `x-versioned`.
     withVersionedResources,
+    // The headers every answer carries.
     withAppLevelHeaders,
+    // `Idempotent-Replay` on idempotent writes.
     withIdempotentReplay,
+    // The `x-module` each operation's owning fragment names, never hand-written.
     (document_) => {
         withModuleStamps(document_, moduleOfPath());
     },
+    // Refuses an operation naming an error code nobody declares.
     (document_) => {
         checkOperationErrorCodes(document_, errorCodes);
     },
+    // Every fragment's own `x-error-codes`, published as one catalogue.
     (document_) => {
         withErrorCodes(document_, errorCodes);
     },
+    // Drops the components nothing references any more.
     pruneUnused
 ];
 
