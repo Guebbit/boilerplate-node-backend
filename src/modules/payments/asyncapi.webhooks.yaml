@@ -7,6 +7,8 @@
 # this module is registered. Delete the module and its events leave the contract with it.
 # Each event is the Standard Webhooks envelope `{ type, timestamp, data }`; the module's
 # `publicEvents` (`module.ts`) is what actually fires it.
+# A closed code in a payload `$ref`s this module's `./openapi.yaml` schema; the bundler copies
+# the schema in, so the REST and event contracts share one list.
 channels:
     payment.succeeded:
         address: payment.succeeded
@@ -255,18 +257,7 @@ components:
                     $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
                 failureReason:
-                    type: string
-                    enum:
-                        - declined
-                        - insufficient_funds
-                        - expired_or_canceled_card
-                        - lost_or_stolen_card
-                        - provider_removed
-                        - provider_unavailable
-                        - unknown
-                        - canceled
-                        - disputed
-                    description: The closed code for why the provider took it back; never the provider's wording.
+                    $ref: './openapi.yaml#/components/schemas/RefundFailureReason'
             additionalProperties: false
         PaymentRefundFailedPayload:
             type: object
@@ -293,18 +284,7 @@ components:
                     $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
                 failureReason:
-                    type: string
-                    enum:
-                        - declined
-                        - insufficient_funds
-                        - expired_or_canceled_card
-                        - lost_or_stolen_card
-                        - provider_removed
-                        - provider_unavailable
-                        - unknown
-                        - canceled
-                        - disputed
-                    description: The closed code for the refusal; never the provider's wording.
+                    $ref: './openapi.yaml#/components/schemas/RefundFailureReason'
                 final:
                     type: boolean
                     description: >-
@@ -332,37 +312,11 @@ components:
                     type: string
                     description: The provider's dispute id.
                 kind:
-                    type: string
-                    enum:
-                        - inquiry
-                        - chargeback
+                    $ref: './openapi.yaml#/components/schemas/DisputeKind'
                 status:
-                    type: string
-                    enum:
-                        - needs_response
-                        - under_review
-                        - won
-                        - lost
-                        - accepted
-                        - closed
+                    $ref: './openapi.yaml#/components/schemas/DisputeStatus'
                 reason:
-                    type: string
-                    enum:
-                        - bank_cannot_process
-                        - check_returned
-                        - credit_not_processed
-                        - customer_initiated
-                        - debit_not_authorized
-                        - duplicate
-                        - fraudulent
-                        - general
-                        - incorrect_account_details
-                        - insufficient_funds
-                        - product_not_received
-                        - product_unacceptable
-                        - subscription_canceled
-                        - unrecognized
-                    description: The closed code for why the bank disputes the charge.
+                    $ref: './openapi.yaml#/components/schemas/DisputeReason'
                 amount:
                     type: number
                     minimum: 0

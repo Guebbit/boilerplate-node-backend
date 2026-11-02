@@ -40,9 +40,9 @@ components:
                 list. A request resolves to exactly one scope — the one the key it is asking about
                 declares — but a CLIENT renders screens from both at once: a shop's catalogue and
                 the installation's health dashboard sit in one navigation. Publishing only the
-                caller's tenant rules left every platform screen with no rule to grey out, so it
-                was gated on a tenant key that happened to correlate, which is exactly the
-                hand-maintained guess these rules exist to abolish.
+                caller's tenant rules would leave every platform screen with no rule to grey out,
+                so it would be gated on a tenant key that happens to correlate, which is exactly
+                the hand-maintained guess these rules exist to abolish.
 
                 The two lists never merge. A tenant rule can never satisfy a platform key and the
                 reverse is equally impossible (`shared/authorization-keys.yaml`'s one invariant),

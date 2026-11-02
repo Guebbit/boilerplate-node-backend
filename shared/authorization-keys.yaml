@@ -31,7 +31,7 @@
 #   a tenant rule can never be satisfied by a platform-scope caller, and a platform rule can never
 #   be satisfied by a tenant-scope caller.
 # A platform operator administers shared reference data and is not a super-member. Mapping that
-# person onto the old `admin` boolean was one line to write and a total confidentiality failure.
+# person onto a single `admin` boolean would be one line to write and a total confidentiality failure.
 
 version: 1
 
@@ -110,7 +110,7 @@ scopes:
 # On the rule and not the route because the rule is what the action IS: erasing somebody's account
 # deserves a fresh session wherever it is reached from, and a second route that reaches it would
 # otherwise have to remember. `amr` may also be named, so a future passkey tier is a line here
-# rather than a guard change — the reason `amr` was carried as a list rather than a boolean.
+# rather than a guard change — the reason `amr` is carried as a list rather than a boolean.
 #
 # `stepUp` below is each tier's window in seconds: how recent a sign-in must be. The environment
 # variables above override these defaults. Not read at boot: `npm run regenerate` writes
@@ -165,7 +165,7 @@ stepUp:
 # folder name is plural; the two differ on purpose: `display:Order` is a permission, `Order` is a
 # thing.
 #
-# Modules absent from this list have no rules, and that is a decision rather than an omission:
+# Modules absent from this list have no rules, and that is deliberate rather than an omission:
 # `wishlist` and `account` are *your own things*. What you may do with them follows from being
 # signed in, not from a role, and giving them rules would invite a role that grants access to
 # someone else's basket. `cart` is nearly the same — its exceptions are `update:Cart` and

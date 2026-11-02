@@ -7,8 +7,8 @@
  * `scenarios/support/doubles/` and is registered by the dev preload and by jest.
  *
  * Each transport answers one question production code needs without naming it: does mail sent
- * through you reach a person's inbox? (`delivers`.) A second factor that mails a code, and a
- * boot check for accounts with no password, ask that instead of comparing to a name.
+ * through you reach a person's inbox? (`delivers`.) A second factor that mails a code asks
+ * that instead of comparing to a name.
  *
  * Light on purpose: no `nodemailer` and no `ejs` here. The jest setup and the dev preload load
  * this file before the application, and `smtp` loads its sender on first use for that reason.

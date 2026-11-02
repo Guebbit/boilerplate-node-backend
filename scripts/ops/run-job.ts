@@ -22,25 +22,14 @@ import { logger } from '@infrastructure/adapters/logger';
 import { stopQueue } from '@infrastructure/adapters/queue';
 import { startJob, stopDatabase } from '@infrastructure/runtime/database';
 import { withLease } from '@infrastructure/persistence/lease';
-import { bootI18n } from '@infrastructure/i18n';
-import { registerModules, resolveJobs, type JobDeclaration } from '@kernel/registry';
+import { resolveJobs, type JobDeclaration } from '@kernel/registry';
 import { appJobs } from '../../src/app/jobs';
-import { enabledModules, enabledModuleDirectories } from '../../src/modules';
+import { enabledModules } from '../../src/modules';
+import { prepareJob } from './prepare-job';
 import { runScript } from '../run-script';
 
 /** Every job this build runs: the ones no module owns, then each enabled module's. */
 const allJobs = (): readonly JobDeclaration[] => [...appJobs, ...resolveJobs(enabledModules)];
-
-/**
- * Install what the job declared it needs: every module's event subscriptions (a sweep that works
- * by emitting an event is unheard without them) and the translations (a sweep that renders mail).
- *
- * @param job - the job about to run
- */
-const prepare = (job: JobDeclaration): Promise<unknown> => {
-    if (job.needs?.subscriptions) registerModules(enabledModules);
-    return job.needs?.i18n ? bootI18n(enabledModuleDirectories('locales')) : Promise.resolve();
-};
 
 /**
  * The work itself: under the lease when the job has one, plain otherwise.
@@ -64,11 +53,11 @@ const work = (job: JobDeclaration): Promise<void> => {
  */
 const execute = (job: JobDeclaration): Promise<void> =>
     job.connectFirst === false
-        ? prepare(job)
+        ? prepareJob(job)
               .then(() => work(job))
               .then(() => startJob())
         : startJob()
-              .then(() => prepare(job))
+              .then(() => prepareJob(job))
               .then(() => work(job));
 
 /** Resolve the job the command line names, or exit non-zero listing the ones there are. */

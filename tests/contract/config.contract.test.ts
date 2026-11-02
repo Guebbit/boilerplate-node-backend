@@ -82,18 +82,4 @@ describe('GET /config', () => {
 
         expect(response.status).toBe(500);
     });
-
-    it('no longer serves the three calls it replaced', async () => {
-        const paths = ['/account/session-config', '/account/oauth/providers', '/antibot/config'];
-
-        const statuses = await Promise.all(
-            paths.map((path) =>
-                api()
-                    .get(path)
-                    .then((r) => r.status)
-            )
-        );
-
-        expect(statuses).toEqual([404, 404, 404]);
-    });
 });

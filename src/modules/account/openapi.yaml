@@ -205,7 +205,7 @@ paths:
                     description: |
                         Password changed. The body normally carries a fresh access token for this
                         session, but is `{}` on the rare degraded success where the re-mint
-                        itself fails after the password write already committed — see B23 on
+                        itself fails after the password write already committed — see
                         `AuthTokens`.
                     content:
                         application/json:
@@ -939,7 +939,7 @@ paths:
             tags: [Auth]
             summary: Disconnect a linked sign-in provider
             description: >-
-                Removes the link between the account and `provider`, so that provider can no longer sign in to it, and mails the owner that a sign-in method was removed. Nothing re-links it by email match, so reconnecting is `POST /account/oauth/links/{provider}` from a signed-in session. Needs a fresh session (`401 REAUTH_REQUIRED`). There is no guard on removing the last sign-in method, by decision (forgot-password recovers an account that was left with none). Answers 404 when `provider` is not linked. A link is a line of the caller's links list, so the answer is that list as it now stands (200 + the links left).
+                Removes the link between the account and `provider`, so that provider can no longer sign in to it, and mails the owner that a sign-in method was removed. Nothing re-links it by email match, so reconnecting is `POST /account/oauth/links/{provider}` from a signed-in session. Needs a fresh session (`401 REAUTH_REQUIRED`). There is no guard on removing the last sign-in method, on purpose (forgot-password recovers an account that was left with none). Answers 404 when `provider` is not linked. A link is a line of the caller's links list, so the answer is that list as it now stands (200 + the links left).
             operationId: unlinkOAuthProvider
             x-error-codes:
                 '401': [REAUTH_REQUIRED]
@@ -1032,9 +1032,9 @@ paths:
                     description: Redirect to the frontend, session cookies set on success
                     # The failure codes the redirect's `?error=` query carries (absent on success). Inline,
                     # not a component: the bundler inlines a `$ref` under an `x-` key and prunes the
-                    # component, so a shared schema would never reach the generated types. Backend
-                    # `oauth/callback-errors.ts` and the frontend's generated `REDIRECT_QUERY_ENUMS` both
-                    # read this list.
+                    # component, so a shared schema would never reach the generated types. Both
+                    # repos' generated `REDIRECT_QUERY_ENUMS` (`api/redirect-query.ts` here) read this
+                    # list.
                     x-redirect-query:
                         error:
                             type: string

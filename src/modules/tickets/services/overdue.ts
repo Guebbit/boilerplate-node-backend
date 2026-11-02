@@ -20,8 +20,9 @@ import { ticketRepository } from '../repository';
  * price is at-most-once: a crash between the stamp and the event loses that one reminder.
  * A ticket closed (or spam-marked) before the sweep reaches it is not claimed at all.
  *
- * Tickets are told one after another: a backlog is a handful, and one failing announcement must
- * not hide the rest behind a parallel rejection.
+ * Tickets are told one after another: a backlog is a handful. A failing announcement rejects the
+ * sweep and stops it; that ticket is already stamped, so its reminder is lost, and the tickets
+ * not yet claimed wait for the next run.
  *
  * @param now - the clock; the sweep's single reading of "overdue"
  * @returns how many tickets were announced

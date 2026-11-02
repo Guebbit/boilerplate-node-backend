@@ -8,7 +8,8 @@
  * specific answer — not any particular operation's current responses.
  */
 
-import { stringify as stringifyYaml, parse as parseYaml } from 'yaml';
+import { asStub } from '@tests/stub';
+import type { OpenApiDocument } from '../../../../scripts/contracts/openapi-document';
 import {
     checkOperationErrorCodes,
     withAppLevelResponses,
@@ -20,7 +21,7 @@ import {
 
 /** A bundled document small enough to read in one glance, shaped exactly like `compile()` feeds in. */
 const bundle = (extra: Record<string, unknown>) =>
-    stringifyYaml({
+    asStub<OpenApiDocument>({
         openapi: '3.1.0',
         'x-app-level-responses': {
             '429': { response: 'TooManyRequests', appliesTo: 'all' },
@@ -30,12 +31,11 @@ const bundle = (extra: Record<string, unknown>) =>
         paths: extra
     });
 
-/** Parsed-back result, typed only as far as this file's assertions read into it. */
-const parsedResult = (yaml: string) =>
-    parseYaml(withAppLevelResponses(yaml)) as {
-        'x-app-level-responses'?: unknown;
-        paths: Record<string, Record<string, { responses: Record<string, unknown> }>>;
-    };
+/** Runs the step on the document and returns the document. */
+const parsedResult = (document: OpenApiDocument) => {
+    withAppLevelResponses(document);
+    return document;
+};
 
 describe('withAppLevelResponses', () => {
     it('merges the all-applicable response into an operation with no body', () => {
@@ -43,7 +43,7 @@ describe('withAppLevelResponses', () => {
             bundle({ '/health': { get: { responses: { '200': { description: 'ok' } } } } })
         );
 
-        const responses = result.paths['/health']?.get?.responses;
+        const responses = result.paths?.['/health']?.get?.responses;
         expect(responses).toHaveProperty('429');
         expect(responses).not.toHaveProperty('400');
     });
@@ -57,7 +57,7 @@ describe('withAppLevelResponses', () => {
             })
         );
 
-        const responses = result.paths['/widgets']?.post?.responses;
+        const responses = result.paths?.['/widgets']?.post?.responses;
         expect(responses).toHaveProperty('429');
         expect(responses).toHaveProperty('400');
     });
@@ -72,8 +72,8 @@ describe('withAppLevelResponses', () => {
             })
         );
 
-        expect(result.paths['/widgets/{id}']?.delete?.responses).toHaveProperty('415');
-        expect(result.paths['/widgets/{id}']?.get?.responses).not.toHaveProperty('415');
+        expect(result.paths?.['/widgets/{id}']?.delete?.responses).toHaveProperty('415');
+        expect(result.paths?.['/widgets/{id}']?.get?.responses).not.toHaveProperty('415');
     });
 
     it('never overwrites a response the operation already declares for itself', () => {
@@ -90,7 +90,7 @@ describe('withAppLevelResponses', () => {
             })
         );
 
-        expect(result.paths['/widgets']?.get?.responses['429']).toEqual({
+        expect(result.paths?.['/widgets']?.get?.responses?.['429']).toEqual({
             $ref: '#/components/responses/WidgetSpecificTooManyRequests'
         });
     });
@@ -107,7 +107,7 @@ describe('withAppLevelResponses', () => {
             })
         );
 
-        expect(result.paths['/widgets/{id}']?.parameters).toEqual([{ name: 'id', in: 'path' }]);
+        expect(result.paths?.['/widgets/{id}']?.parameters).toEqual([{ name: 'id', in: 'path' }]);
     });
 
     it('deletes the instruction key from the compiled document', () => {
@@ -117,20 +117,21 @@ describe('withAppLevelResponses', () => {
     });
 
     it('throws when the root declares no x-app-level-responses at all', () => {
-        expect(() => withAppLevelResponses(stringifyYaml({ openapi: '3.1.0', paths: {} }))).toThrow(
-            /x-app-level-responses/
-        );
+        expect(() =>
+            withAppLevelResponses(asStub<OpenApiDocument>({ openapi: '3.1.0', paths: {} }))
+        ).toThrow(/x-app-level-responses/);
     });
 });
 
 /** A bundled document small enough to read in one glance, for `withModuleStamps`' own tests. */
-const stampBundle = (paths: Record<string, unknown>) => stringifyYaml({ openapi: '3.1.0', paths });
+const stampBundle = (paths: Record<string, unknown>) =>
+    asStub<OpenApiDocument>({ openapi: '3.1.0', paths });
 
-/** Parsed-back result of stamping `stampBundle`'s output against a small map. */
-const stampedResult = (yaml: string, moduleByPath: Record<string, string>) =>
-    parseYaml(withModuleStamps(yaml, moduleByPath)) as {
-        paths: Record<string, Record<string, { 'x-module'?: string }>>;
-    };
+/** Stamps `stampBundle`'s document against a small map and returns it. */
+const stampedResult = (document: OpenApiDocument, moduleByPath: Record<string, string>) => {
+    withModuleStamps(document, moduleByPath);
+    return document;
+};
 
 /**
  * `withModuleStamps` — tags every operation with the `x-module` the map assigns its path to.
@@ -150,14 +151,14 @@ describe('withModuleStamps', () => {
             { '/products': 'products' }
         );
 
-        expect(result.paths['/products']?.get?.['x-module']).toBe('products');
-        expect(result.paths['/products']?.post?.['x-module']).toBe('products');
+        expect(result.paths?.['/products']?.get?.['x-module']).toBe('products');
+        expect(result.paths?.['/products']?.post?.['x-module']).toBe('products');
     });
 
     it('leaves a path the map does not mention unstamped — a `system` path, owned by no module', () => {
         const result = stampedResult(stampBundle({ '/': { get: { responses: {} } } }), {});
 
-        expect(result.paths['/']?.get).not.toHaveProperty('x-module');
+        expect(result.paths?.['/']?.get).not.toHaveProperty('x-module');
     });
 
     it('leaves a non-operation path-item field untouched', () => {
@@ -171,31 +172,25 @@ describe('withModuleStamps', () => {
             { '/products/{id}': 'products' }
         );
 
-        expect(result.paths['/products/{id}']?.parameters).toEqual([{ name: 'id', in: 'path' }]);
-    });
-
-    it('throws when the bundled document does not parse to an object', () => {
-        expect(() => withModuleStamps(stringifyYaml('not an object'), {})).toThrow(
-            /did not parse to an object/
-        );
+        expect(result.paths?.['/products/{id}']?.parameters).toEqual([{ name: 'id', in: 'path' }]);
     });
 });
 
 /** A bundled document small enough to read in one glance, for `withErrorCodes`' own tests. */
 const errorCodesBundle = () =>
-    stringifyYaml({
+    asStub<OpenApiDocument>({
         openapi: '3.1.0',
         components: { schemas: { ErrorItem: { type: 'object' } } }
     });
 
-/** Parsed-back result of publishing `errorCodesBundle`'s output against a small catalogue. */
+/** Publishes a small catalogue into `errorCodesBundle`'s document and returns it. */
 const errorCodesResult = (
-    yaml: string,
+    document: OpenApiDocument,
     errorCodes: Record<string, { status: number; description: string }>
-) =>
-    parseYaml(withErrorCodes(yaml, errorCodes)) as {
-        'x-error-codes'?: Record<string, unknown>;
-    };
+) => {
+    withErrorCodes(document, errorCodes);
+    return document;
+};
 
 /**
  * `withErrorCodes` — publishes the collected error-code catalogue as the bundled document's own
@@ -218,14 +213,11 @@ describe('withErrorCodes', () => {
 
     it('throws when the bundle has no ErrorItem schema to publish alongside', () => {
         expect(() =>
-            withErrorCodes(stringifyYaml({ openapi: '3.1.0', components: { schemas: {} } }), {})
+            withErrorCodes(
+                asStub<OpenApiDocument>({ openapi: '3.1.0', components: { schemas: {} } }),
+                {}
+            )
         ).toThrow(/ErrorItem/);
-    });
-
-    it('throws when the bundled document does not parse to an object', () => {
-        expect(() => withErrorCodes(stringifyYaml('not an object'), {})).toThrow(
-            /did not parse to an object/
-        );
     });
 });
 
@@ -244,27 +236,21 @@ const versionedPath = (marker: string[]) => ({
     }
 });
 
-interface Operation {
-    parameters?: unknown[];
-    responses: Record<string, { headers?: unknown }>;
-}
-
-/** Bundles `paths`, and reads back the one path every case is about. */
-const run = (paths: Record<string, unknown>) =>
-    (
-        parseYaml(withVersionedResources(stringifyYaml({ openapi: '3.1.0', paths }))) as {
-            paths: Record<string, Record<string, Operation>>;
-        }
-    ).paths['/widgets/{id}'];
+/** Runs the step on `paths`, and reads back the one path every case is about. */
+const run = (paths: Record<string, unknown>) => {
+    const document = asStub<OpenApiDocument>({ openapi: '3.1.0', paths });
+    withVersionedResources(document);
+    return document.paths?.['/widgets/{id}'];
+};
 
 describe('withVersionedResources', () => {
     it('adds ETag to a listed read and to a listed PATCH 200', () => {
         const item = run(versionedPath(['get', 'patch']));
 
-        expect(item?.get?.responses['200']?.headers).toEqual({
+        expect(item?.get?.responses?.['200']).toHaveProperty('headers', {
             ETag: { $ref: '#/components/headers/ETag' }
         });
-        expect(item?.patch?.responses['200']?.headers).toHaveProperty('ETag');
+        expect(item?.patch?.responses?.['200']).toHaveProperty(['headers', 'ETag']);
     });
 
     it("adds If-Match after the operation's own parameters, and the 412, to a listed write", () => {
@@ -281,7 +267,7 @@ describe('withVersionedResources', () => {
         const remove = run(versionedPath(['delete']))?.delete;
 
         expect(remove?.responses).toHaveProperty('412');
-        expect(remove?.responses['200']).not.toHaveProperty('headers');
+        expect(remove?.responses?.['200']).not.toHaveProperty('headers');
     });
 
     it('leaves an unlisted operation untouched', () => {
@@ -311,25 +297,22 @@ describe('withVersionedResources', () => {
 });
 
 /** `withNotModified` — the shared 304 on the reads that declare `x-cache`, and only those. */
-const run304 = (cache: Record<string, string | undefined>) =>
-    (
-        parseYaml(
-            withNotModified(
-                stringifyYaml({
-                    openapi: '3.1.0',
-                    paths: {
-                        '/things': {
-                            get: {
-                                ...(cache['/things'] && { 'x-cache': cache['/things'] }),
-                                responses: { '200': { description: 'ok' } }
-                            }
-                        },
-                        '/other': { get: { responses: { '200': { description: 'ok' } } } }
-                    }
-                })
-            )
-        ) as { paths: Record<string, { get: { responses: Record<string, unknown> } }> }
-    ).paths;
+const run304 = (cache: Record<string, string | undefined>) => {
+    const document = asStub<OpenApiDocument>({
+        openapi: '3.1.0',
+        paths: {
+            '/things': {
+                get: {
+                    ...(cache['/things'] && { 'x-cache': cache['/things'] }),
+                    responses: { '200': { description: 'ok' } }
+                }
+            },
+            '/other': { get: { responses: { '200': { description: 'ok' } } } }
+        }
+    });
+    withNotModified(document);
+    return document.paths ?? {};
+};
 
 describe('withNotModified', () => {
     it.each(['private-no-cache', 'revalidate', 'max-age: 3600'])(
@@ -337,25 +320,25 @@ describe('withNotModified', () => {
         (policy) => {
             const paths = run304({ '/things': policy });
 
-            expect(paths['/things']?.get.responses['304']).toEqual({
+            expect(paths['/things']?.get?.responses?.['304']).toEqual({
                 $ref: '#/components/responses/NotModified'
             });
-            expect(paths['/things']?.get.responses['200']).toEqual({ description: 'ok' });
+            expect(paths['/things']?.get?.responses?.['200']).toEqual({ description: 'ok' });
         }
     );
 
     it('gives no-store a Cache-Control header on its 200 and no 304', () => {
         const paths = run304({ '/things': 'no-store' });
-        const responses = paths['/things']?.get.responses as Record<string, { headers?: object }>;
+        const responses = paths['/things']?.get?.responses;
 
-        expect(responses['304']).toBeUndefined();
-        expect(responses['200']?.headers).toHaveProperty('Cache-Control');
+        expect(responses?.['304']).toBeUndefined();
+        expect(responses?.['200']).toHaveProperty(['headers', 'Cache-Control']);
     });
 
     it('leaves a read with no x-cache alone', () => {
         const paths = run304({ '/things': 'revalidate' });
 
-        expect(paths['/other']?.get.responses['304']).toBeUndefined();
+        expect(paths['/other']?.get?.responses?.['304']).toBeUndefined();
     });
 });
 
@@ -371,16 +354,16 @@ describe('withVersionedResources and an operation header of its own', () => {
             }
         });
 
-        expect(Object.keys(item?.get?.responses['200']?.headers as object).toSorted()).toEqual([
-            'Cache-Control',
-            'ETag'
-        ]);
+        expect(item?.get?.responses?.['200']).toHaveProperty('headers', {
+            'Cache-Control': {},
+            ETag: { $ref: '#/components/headers/ETag' }
+        });
     });
 });
 
 /** A one-operation document listing `codes` on `POST /cart`. */
 const listing = (codes: Record<string, string[]>) =>
-    stringifyYaml({
+    asStub<OpenApiDocument>({
         openapi: '3.1.0',
         paths: { '/cart': { post: { 'x-error-codes': codes, responses: {} } } }
     });
@@ -392,10 +375,13 @@ describe('checkOperationErrorCodes', () => {
         CART_ADDRESS_REQUIRED: { status: 422, description: 'address' }
     };
 
-    it('passes a list whose names exist under their catalogue status, and returns the document as it came', () => {
-        const yaml = listing({ '409': ['CART_EMPTY'], '422': ['CART_ADDRESS_REQUIRED'] });
+    it('passes a list whose names exist under their catalogue status, and leaves the document as it came', () => {
+        const document = listing({ '409': ['CART_EMPTY'], '422': ['CART_ADDRESS_REQUIRED'] });
 
-        expect(checkOperationErrorCodes(yaml, catalogue)).toBe(yaml);
+        expect(() => checkOperationErrorCodes(document, catalogue)).not.toThrow();
+        expect(document).toEqual(
+            listing({ '409': ['CART_EMPTY'], '422': ['CART_ADDRESS_REQUIRED'] })
+        );
     });
 
     it('refuses a name no fragment declares', () => {
@@ -411,11 +397,11 @@ describe('checkOperationErrorCodes', () => {
     });
 
     it('leaves an operation with no list alone', () => {
-        const yaml = stringifyYaml({
+        const document = asStub<OpenApiDocument>({
             openapi: '3.1.0',
             paths: { '/a': { get: { responses: {} } } }
         });
 
-        expect(checkOperationErrorCodes(yaml, catalogue)).toBe(yaml);
+        expect(() => checkOperationErrorCodes(document, catalogue)).not.toThrow();
     });
 });

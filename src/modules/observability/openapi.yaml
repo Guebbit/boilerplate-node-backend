@@ -332,10 +332,8 @@ components:
                         this process would not bring a downed Redis back.
                 environment: { type: string }
                 service: { type: string }
-                # Named for what it IS, not for what produces it here. It was `nodeVersion`,
-                # which the PHP implementation had to satisfy with `PHP_VERSION` — a field named
-                # for one runtime carrying another's number. The description it never had is half
-                # the reason nobody noticed.
+                # Named for what it IS, not for what produces it here: a field named for one
+                # runtime (`nodeVersion`) would carry another runtime's number in a twin backend.
                 runtimeVersion:
                     type: string
                     description: >-

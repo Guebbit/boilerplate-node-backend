@@ -106,7 +106,7 @@ export type { StaffContact } from './read';
  * named doors take an already-loaded document for the one caller that holds the record and the
  * right to change it: the owner (`updateOwnProfile`, `scheduleOwnDeletion`, `restoreOwnAccount`), the
  * scheduled purge (`eraseScheduledDeletion`) and the inactivity reaper (`softDeleteInactive`,
- * `eraseInactive`) and the restore runbook (`eraseAgain`). The raw `update` and `remove` beneath them are not here.
+ * `eraseInactive`) and the restore runbook (`eraseAgain`, `restoreDeletionState`, friend-only to `account`). The raw `update` and `remove` beneath them are not here.
  */
 export const userService = {
     userAuditChanges,

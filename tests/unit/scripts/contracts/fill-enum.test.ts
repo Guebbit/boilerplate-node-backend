@@ -6,38 +6,37 @@
  * fill rule and its refusals, not the webhook events that happen to use it today.
  */
 
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { withFilledEnums } from '../../../../scripts/contracts/fill-enum';
+import type { OpenApiDocument } from '../../../../scripts/contracts/openapi-document';
+import { asStub } from '@tests/stub';
 
 /** The sources the cases hand in. */
 const SOURCES = { colours: ['red', 'green'], none: [] };
 
 /** A document holding `schema` under a component and, nested, under a property. */
 const bundle = (schema: Record<string, unknown>) =>
-    stringifyYaml({
+    asStub<OpenApiDocument>({
         openapi: '3.1.0',
         components: {
             schemas: {
                 Colour: schema,
-                Holder: { type: 'object', properties: { colour: schema } }
+                Holder: { type: 'object', properties: { colour: structuredClone(schema) } }
             }
         }
     });
 
-/** Parsed-back schemas, typed only as far as the assertions read. */
-const filled = (yaml: string) =>
-    (
-        parseYaml(withFilledEnums(yaml, SOURCES)) as {
-            components: { schemas: Record<string, Record<string, unknown>> };
-        }
-    ).components.schemas;
+/** Fills a document in place and returns its schemas. */
+const filled = (document: OpenApiDocument) => {
+    withFilledEnums(document, SOURCES);
+    return document.components?.schemas;
+};
 
 describe('withFilledEnums', () => {
     it('writes the source into an enum, wherever the placeholder sits, and spends the markers', () => {
         const schemas = filled(bundle({ type: 'string', 'x-enum-from': 'colours' }));
 
-        expect(schemas.Colour).toEqual({ type: 'string', enum: ['red', 'green'] });
-        expect(schemas.Holder).toEqual({
+        expect(schemas?.Colour).toEqual({ type: 'string', enum: ['red', 'green'] });
+        expect(schemas?.Holder).toEqual({
             type: 'object',
             properties: { colour: { type: 'string', enum: ['red', 'green'] } }
         });
@@ -48,16 +47,21 @@ describe('withFilledEnums', () => {
             bundle({ type: 'string', 'x-enum-from': 'colours', 'x-enum-also': ['*'] })
         );
 
-        expect(schemas.Colour?.enum).toEqual(['red', 'green', '*']);
+        expect(schemas?.Colour).toHaveProperty('enum', ['red', 'green', '*']);
     });
 
     it('leaves a document with no placeholder as it was', () => {
-        const plain = stringifyYaml({
+        const plain = asStub<OpenApiDocument>({
             openapi: '3.1.0',
             components: { schemas: { A: { type: 'string' } } }
         });
 
-        expect(parseYaml(withFilledEnums(plain, SOURCES))).toEqual(parseYaml(plain));
+        withFilledEnums(plain, SOURCES);
+
+        expect(plain).toEqual({
+            openapi: '3.1.0',
+            components: { schemas: { A: { type: 'string' } } }
+        });
     });
 
     it.each([

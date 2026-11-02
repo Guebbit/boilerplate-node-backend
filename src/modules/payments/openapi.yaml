@@ -1000,6 +1000,7 @@ components:
                     description: The provider's id for the refund (Stripe's `re_…`). Staff only.
                 failureReason:
                     $ref: '#/components/schemas/RefundFailureReason'
+                    description: Staff only (`display:Payment`).
                 owedAnotherWay:
                     type: boolean
                     description: >-
@@ -1026,8 +1027,7 @@ components:
             type: string
             enum: [declined, insufficient_funds, expired_or_canceled_card, lost_or_stolen_card, provider_removed, provider_unavailable, unknown, canceled, disputed]
             description: >-
-                Why the provider last refused a refund, as a closed code. Staff only
-                (`display:Payment`). `unknown` is anything the provider's adapter did not
+                Why the provider last refused a refund, as a closed code. `unknown` is anything the provider's adapter did not
                 classify; the raw wording stays in the logs.
 
                 Money did NOT move for `declined`, `insufficient_funds`,
@@ -1279,6 +1279,7 @@ components:
                 providerRefundRef: { type: string }
                 failureReason:
                     $ref: '#/components/schemas/RefundFailureReason'
+                    description: Staff only (`display:Payment`).
                 settledAt: { type: string, format: date-time }
                 reversedAt: { type: string, format: date-time }
                 createdAt: { type: string, format: date-time }
@@ -1352,6 +1353,7 @@ components:
                 currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
                 failureReason:
                     $ref: '#/components/schemas/RefundFailureReason'
+                    description: Staff only (`display:Payment`).
                 since:
                     type: string
                     format: date-time

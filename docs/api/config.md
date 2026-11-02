@@ -1,7 +1,7 @@
 # `GET /config` — the boot answer
 
-One public call carries what a client needs before anyone has signed in. It replaced three:
-`GET /account/session-config`, `GET /account/oauth/providers` and `GET /antibot/config`.
+One public call carries what a client needs before anyone has signed in: the session settings, the
+sign-in providers and the antibot parameters.
 
 | Member           | Owner     | What it tells the client                                                         |
 | ---------------- | --------- | -------------------------------------------------------------------------------- |

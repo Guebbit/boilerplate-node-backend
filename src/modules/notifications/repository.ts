@@ -174,14 +174,22 @@ export const notificationRepository: Repository<
      * Delete one audience of a user's inbox, answering the ids removed so the stream can tell an
      * open tab exactly which rows left (the other audience stays on screen).
      */
-    deleteByAudience: async (userId: string, audience: NotificationDocument['audience']) => {
+    deleteByAudience: (userId: string, audience: NotificationDocument['audience']) => {
         const owner = { userId: toObjectId(userId), audience };
-        const rows = await notificationModel.find(owner).select('_id').lean().exec();
-        if (rows.length === 0) return [];
+        return notificationModel
+            .find(owner)
+            .select('_id')
+            .lean()
+            .exec()
+            .then((rows) => {
+                if (rows.length === 0) return [];
 
-        const ids = rows.map(({ _id }) => _id);
-        await notificationModel.deleteMany({ ...owner, _id: { $in: ids } }).exec();
-        return ids.map(String);
+                const ids = rows.map(({ _id }) => _id);
+                return notificationModel
+                    .deleteMany({ ...owner, _id: { $in: ids } })
+                    .exec()
+                    .then(() => ids.map(String));
+            });
     },
 
     /** Stamp every still-unread row of a user. Already-read rows keep their original `readAt`. */

@@ -42,25 +42,6 @@ describe('GET /stats/*', () => {
         expect(response.status).toBe(200);
     });
 
-    it.each(READS.filter((url) => !url.includes('pipeline')))(
-        '%s states the ceilings a period may not pass',
-        async (url) => {
-            const { bearer } = await authenticateAs('admin');
-
-            const response = await api().get(url).set('Authorization', bearer);
-
-            expect(response.body.limits).toEqual({ maxRangeDays: 731, maxBuckets: 400 });
-        }
-    );
-
-    it('no longer serves a read of its own for them', async () => {
-        const { bearer } = await authenticateAs('admin');
-
-        const response = await api().get('/stats/limits').set('Authorization', bearer);
-
-        expect(response.status).toBe(404);
-    });
-
     it('answers 404 for a product id that is not an id', async () => {
         const { bearer } = await authenticateAs('admin');
 

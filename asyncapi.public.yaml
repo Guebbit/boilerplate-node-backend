@@ -1032,6 +1032,24 @@ components:
                     $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
             additionalProperties: false
+        RefundFailureReason:
+            type: string
+            enum:
+                - declined
+                - insufficient_funds
+                - expired_or_canceled_card
+                - lost_or_stolen_card
+                - provider_removed
+                - provider_unavailable
+                - unknown
+                - canceled
+                - disputed
+            description: |-
+                Why the provider last refused a refund, as a closed code. `unknown` is anything the provider's adapter did not classify; the raw wording stays in the logs.
+                Money did NOT move for `declined`, `insufficient_funds`, `expired_or_canceled_card`, `lost_or_stolen_card` and `provider_removed` (the payment's provider is no longer installed, so nothing was asked): the refund may be marked returned by hand once the money went back another way. `declined`, `expired_or_canceled_card`, `lost_or_stolen_card` and `provider_removed` are final and are not retried; `insufficient_funds` (the shop's own provider balance is short) and the unclear `provider_unavailable` and `unknown` are retried with a growing delay. An unclear refusal may have gone through, so it is never offered for hand settlement.
+                `disputed`: the buyer's bank took the money back in a dispute (chargeback). It is final like the refusals above, and it is not offered for hand settlement while the chargeback is open: the bank already returned the money. Once the chargeback is lost for an amount that covers the refund, the refund may be marked returned (the bank paid the buyer); once the dispute is decided in the shop's favour the refund may only be canceled.
+                `canceled` is not a refusal: staff voided the refund (`POST /payments/{id}/refunds/{refundId}/cancel`). Nothing was sent, it is never retried and it can neither be settled by hand nor canceled again.
+            x-openapi-schema: RefundFailureReason
         PaymentRefundReversedPayload:
             type: object
             required:
@@ -1056,18 +1074,7 @@ components:
                     $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
                 failureReason:
-                    type: string
-                    enum:
-                        - declined
-                        - insufficient_funds
-                        - expired_or_canceled_card
-                        - lost_or_stolen_card
-                        - provider_removed
-                        - provider_unavailable
-                        - unknown
-                        - canceled
-                        - disputed
-                    description: The closed code for why the provider took it back; never the provider's wording.
+                    $ref: '#/components/schemas/RefundFailureReason'
             additionalProperties: false
         PaymentRefundFailedPayload:
             type: object
@@ -1094,23 +1101,49 @@ components:
                     $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
                 failureReason:
-                    type: string
-                    enum:
-                        - declined
-                        - insufficient_funds
-                        - expired_or_canceled_card
-                        - lost_or_stolen_card
-                        - provider_removed
-                        - provider_unavailable
-                        - unknown
-                        - canceled
-                        - disputed
-                    description: The closed code for the refusal; never the provider's wording.
+                    $ref: '#/components/schemas/RefundFailureReason'
                 final:
                     type: boolean
                     description: >-
                         `true` when the refusal ends the retrying: the money has to go back another way. `false` when the sweep retries it.
             additionalProperties: false
+        DisputeKind:
+            type: string
+            enum:
+                - inquiry
+                - chargeback
+            description: "`inquiry` — the bank asks for information before taking any money (Stripe's `warning_*` states); refunds stay allowed, and a full refund ends it. `chargeback` — the bank took the money back and the shop may send evidence."
+            x-openapi-schema: DisputeKind
+        DisputeStatus:
+            type: string
+            enum:
+                - needs_response
+                - under_review
+                - won
+                - lost
+                - accepted
+                - closed
+            description: "`needs_response` — waiting for the shop's evidence; `under_review` — evidence sent, the bank decides; `won` — decided for the shop (funds reinstated); `lost` — decided against it; `accepted` — the shop gave up and accepted the chargeback; `closed` — an inquiry that ended without a charge. `needs_response` and `under_review` are open. A closed dispute can still flip (a late win, a second chargeback)."
+            x-openapi-schema: DisputeStatus
+        DisputeReason:
+            type: string
+            enum:
+                - bank_cannot_process
+                - check_returned
+                - credit_not_processed
+                - customer_initiated
+                - debit_not_authorized
+                - duplicate
+                - fraudulent
+                - general
+                - incorrect_account_details
+                - insufficient_funds
+                - product_not_received
+                - product_unacceptable
+                - subscription_canceled
+                - unrecognized
+            description: Why the buyer's bank says the charge is disputed — Stripe's closed list, which an adapter for another provider maps its own codes onto.
+            x-openapi-schema: DisputeReason
         PaymentDisputePayload:
             type: object
             required:
@@ -1132,37 +1165,11 @@ components:
                     type: string
                     description: The provider's dispute id.
                 kind:
-                    type: string
-                    enum:
-                        - inquiry
-                        - chargeback
+                    $ref: '#/components/schemas/DisputeKind'
                 status:
-                    type: string
-                    enum:
-                        - needs_response
-                        - under_review
-                        - won
-                        - lost
-                        - accepted
-                        - closed
+                    $ref: '#/components/schemas/DisputeStatus'
                 reason:
-                    type: string
-                    enum:
-                        - bank_cannot_process
-                        - check_returned
-                        - credit_not_processed
-                        - customer_initiated
-                        - debit_not_authorized
-                        - duplicate
-                        - fraudulent
-                        - general
-                        - incorrect_account_details
-                        - insufficient_funds
-                        - product_not_received
-                        - product_unacceptable
-                        - subscription_canceled
-                        - unrecognized
-                    description: The closed code for why the bank disputes the charge.
+                    $ref: '#/components/schemas/DisputeReason'
                 amount:
                     type: number
                     minimum: 0
@@ -1304,6 +1311,25 @@ components:
                 data:
                     $ref: '#/components/schemas/PaymentDisputePayload'
             additionalProperties: false
+        ReturnReason:
+            type: string
+            enum:
+                - withdrawal
+                - defective
+                - wrong_item
+                - other
+            description: Why the goods come back. `withdrawal` is the EU right of withdrawal — the same object a faulty-goods return uses, with a legal deadline and an acknowledgement attached.
+            x-openapi-schema: ReturnReason
+        ReturnStatementChannel:
+            type: string
+            enum:
+                - online
+                - phone
+                - email
+                - letter
+                - other
+            description: How the buyer stated a withdrawal. `online` is the shop's own button; the rest are what staff record.
+            x-openapi-schema: ReturnStatementChannel
         ReturnRequestedPayload:
             type: object
             required:
@@ -1317,26 +1343,13 @@ components:
                 orderId:
                     $ref: '#/components/schemas/Id'
                 reason:
-                    type: string
-                    enum:
-                        - withdrawal
-                        - defective
-                        - wrong_item
-                        - other
-                    description: Why the goods come back.
+                    $ref: '#/components/schemas/ReturnReason'
                 requestedAt:
                     type: string
                     format: date-time
                     description: When the buyer asked, or for a withdrawal when they stated it. Staff recording a phone call or a letter set the day it was made.
                 statedVia:
-                    type: string
-                    enum:
-                        - online
-                        - phone
-                        - email
-                        - letter
-                        - other
-                    description: How a withdrawal was stated. Present on a withdrawal only.
+                    $ref: '#/components/schemas/ReturnStatementChannel'
             additionalProperties: false
         ReturnReceivedPayload:
             type: object
@@ -1349,6 +1362,14 @@ components:
                 orderId:
                     $ref: '#/components/schemas/Id'
             additionalProperties: false
+        ReturnRemedy:
+            type: string
+            enum:
+                - refund
+                - replace
+                - repair
+            description: 'What the buyer is given for a faulty or wrong item (Directive 2019/771 Art. 13): `repair` and `replace` come first and the buyer chooses; `refund` is the money back. Choosing `repair` extends the guarantee by 12 months (Directive 2024/1799). Only a `defective` or `wrong_item` return has a choice; every other reason is refunded.'
+            x-openapi-schema: ReturnRemedy
         ReturnClosedPayload:
             type: object
             required:
@@ -1369,12 +1390,7 @@ components:
                     $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
                 remedy:
-                    type: string
-                    enum:
-                        - refund
-                        - replace
-                        - repair
-                    description: What the buyer was given. Absent on a return born closed (a withdrawal before dispatch). `replace` and `repair` carry a `refundAmount` of 0.
+                    $ref: '#/components/schemas/ReturnRemedy'
             additionalProperties: false
         ReturnRequestedEnvelope:
             type: object

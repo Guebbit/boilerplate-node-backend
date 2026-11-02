@@ -80,9 +80,9 @@ rules:
 
     # --- operationId naming matches the HTTP verb ---
     #
-    # `replace*` means a full, idempotent replace; `update*` means a partial change — but nothing
-    # checked that the METHOD agreed, so D17d could (and did) change a verb behind an unchanged
-    # operationId with nothing to catch it. Each rule's `given` selects exactly the offenders: an
+    # `replace*` means a full, idempotent replace; `update*` means a partial change — and these
+    # rules check that the METHOD agrees, so a verb cannot change behind an unchanged
+    # operationId unnoticed. Each rule's `given` selects exactly the offenders: an
     # operationId matching the prefix, under any method but the right one, name not on the
     # allowlist — so a match here always means a real drift, not a rule bug.
     #

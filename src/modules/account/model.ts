@@ -7,7 +7,7 @@
  *                       store (`@infrastructure/adapters/export-store`), named by `file`.
  * `sessions`:           one row per signed-in session (cookie mode) or per refresh token (jwt mode).
  * `verificationtokens`: one row per one-time link or challenge in flight.
- * `erasureledgers`:     one row per account erased or cancelled, kept past the oldest backup.
+ * `erasureledgers`:     one row per account erased, scheduled for deletion or cancelled, kept past the oldest backup.
  *
  * Never serialized to the wire as-is: the contract's shapes are built from these rows by hand, and
  * the token digests are stripped from `toJSON` regardless.

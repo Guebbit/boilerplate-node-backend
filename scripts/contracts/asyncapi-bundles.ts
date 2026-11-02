@@ -233,8 +233,11 @@ const compile = (scope: AsyncScope): string => {
 
     /* `lineWidth: 0` because a contract line that wraps at a column is a diff nobody asked for:
      * re-flowing prose on an unrelated edit is exactly the noise the bundle check in `npm run check` would
-     * then report as staleness. */
-    const output = marker(sections) + document_.toString({ indent: 4, lineWidth: 0 });
+     * then report as staleness. `singleQuote` is for the schemas copied in from the REST contract
+     * (`asyncapi-webhook-events.ts`), which carry no authored quoting: without it they come out
+     * double-quoted, and the committed bundle must stay Prettier-clean. */
+    const output =
+        marker(sections) + document_.toString({ indent: 4, lineWidth: 0, singleQuote: true });
     compiled.set(scope, output);
     return output;
 };

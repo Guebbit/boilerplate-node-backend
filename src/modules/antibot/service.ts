@@ -25,12 +25,14 @@ const CHALLENGE_URL = '/antibot/challenge';
  */
 export const antibotService = {
     config: (): Promise<AntibotConfig> =>
-        Promise.resolve(resolveHumanChallengeProvider()).then((provider) => ({
-            provider: provider.name,
-            parameters: provider.publicParameters(CHALLENGE_URL),
-            rungs: {
-                identityBudgets: true,
-                emailPolicy: resolveEmailPolicy()
-            }
-        }))
+        Promise.resolve()
+            .then(resolveHumanChallengeProvider)
+            .then((provider) => ({
+                provider: provider.name,
+                parameters: provider.publicParameters(CHALLENGE_URL),
+                rungs: {
+                    identityBudgets: true,
+                    emailPolicy: resolveEmailPolicy()
+                }
+            }))
 };

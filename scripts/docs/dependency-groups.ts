@@ -189,7 +189,9 @@ export const DEV_GROUPS: DependencyGroup[] = [
         purpose:
             'OpenAPI/AsyncAPI linting, mocking, and generated client/type workflows. ' +
             '`@guebbit/openapi-runnable-collections` is the typed probe/collection descriptor ' +
-            'used only by `scripts/contracts/client-collections-bundle.ts`',
+            'used only by `scripts/contracts/client-collections-bundle.ts`. `openapi-types` is ' +
+            'the OpenAPI 3.1 document type and HTTP method list every bundler step shares ' +
+            '(`scripts/contracts/openapi-document.ts`)',
         readMore:
             '[OpenAPI Workflow](../api/openapi-workflow.md), ' +
             '[AsyncAPI Workflow](../api/asyncapi-workflow.md)',
@@ -198,6 +200,7 @@ export const DEV_GROUPS: DependencyGroup[] = [
             '@stoplight/*',
             '@redocly/cli',
             'orval',
+            'openapi-types',
             '@guebbit/openapi-runnable-collections'
         ]
     },
