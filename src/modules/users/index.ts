@@ -14,5 +14,7 @@ export * from './services';
 
 export * from './events';
 
+export * from './emails';
+
 /** The schema's Zod twin. */
 export type * from './model';
