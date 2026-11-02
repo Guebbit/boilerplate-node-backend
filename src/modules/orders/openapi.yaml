@@ -1572,7 +1572,7 @@ components:
         # `Order` as `POST /account/export` carries it: the buyer's data and not a screen, so no
         # `actions` block (what a caller may do next is a per-caller projection, never exported).
         # Restated flat, not `allOf` on `Order`: two closed siblings can never validate together,
-        # and the zod generator cannot compose them either. `tests/contract/export-schema-drift.test.ts`
+        # and the zod generator cannot compose them either. `src/modules/orders/tests/contract/export-schema-drift.contract.test.ts`
         # keeps the two property lists in step.
         ExportOrder:
             type: object
