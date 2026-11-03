@@ -65,9 +65,18 @@ export const startInProcessMongod = (databasePath: string | undefined): Promise<
     // `mongodb-memory-server`: starts a real, one-member `mongod` replica set against
     // `databasePath` (or a temp directory of its own choosing when omitted) and returns a handle
     // exposing its connection string and `stop()`. https://typegoose.github.io/mongodb-memory-server/
+    //
+    // `configSettings.heartbeatIntervalMillis`: the library hard-codes an election timeout of 500 ms
+    // against the server's default heartbeat of 2000 ms. Server 9.0 refuses that pair (8.2 did not),
+    // so the heartbeat drops below 500. The spread keeps the library's 500 as it is.
+    // https://github.com/typegoose/mongodb-memory-server/blob/master/packages/mongodb-memory-server-core/src/MongoMemoryReplSet.ts
     return Promise.race([
         MongoMemoryReplSet.create({
-            replSet: { count: 1, storageEngine: 'wiredTiger' },
+            replSet: {
+                count: 1,
+                storageEngine: 'wiredTiger',
+                configSettings: { heartbeatIntervalMillis: 250 }
+            },
             instanceOpts: databasePath ? [{ dbPath: databasePath }] : undefined
         }),
         timeout

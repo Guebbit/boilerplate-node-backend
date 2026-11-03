@@ -217,7 +217,7 @@ host's — fix it there.
 ## Encryption at rest
 
 `mongo-data` in `docker-compose.production.yml` is a plain Docker named volume. MongoDB Community
-Edition — the image this repo bundles, `docker.io/library/mongo:8.2.12` — has
+Edition — the image this repo bundles, `docker.io/library/mongo:9.0.4` — has
 [no native encrypted storage engine](https://www.mongodb.com/docs/manual/core/security-encryption-at-rest/);
 WiredTiger's own encryption option is Enterprise-only. That makes this a host job, not an app job:
 

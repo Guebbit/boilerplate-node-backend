@@ -220,7 +220,7 @@
     },
     "config": {
         "mongodbMemoryServer": {
-            "version": "8.2.12"
+            "version": "9.0.4"
         }
     },
     "allowScripts": {

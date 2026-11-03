@@ -48,7 +48,7 @@ runs:
           if: ${{ inputs.setup-mongod == 'true' }}
           shell: bash
           run: |
-              # The one pin: package.json's `config.mongodbMemoryServer.version` (e.g. 8.2.12).
+              # The one pin: package.json's `config.mongodbMemoryServer.version` (e.g. 9.0.4).
               version="$(jq -r '.config.mongodbMemoryServer.version' package.json)"
               series="${version%.*}"
 
@@ -60,12 +60,10 @@ runs:
 
               sudo apt-get update
               sudo apt-get install -y gnupg curl
-              # The apt repo is signed with the 8.0 key (there is no server-8.2.asc).
-              curl -fsSL https://pgp.mongodb.com/server-8.0.asc | gpg --dearmor | sudo tee /usr/share/keyrings/mongodb-server-8.0.gpg >/dev/null
-              # `noble` is spelled out, not `lsb_release -cs`: MongoDB publishes no repo for newer
-              # Ubuntu codenames, and the noble build runs on them. 8.2.x because 8.0 and 8.3.x
-              # refuse to start on kernel >= 6.19 (SERVER-136848), which runners now have.
-              echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/${series} multiverse" | sudo tee "/etc/apt/sources.list.d/mongodb-org-${series}.list"
+              # MongoDB signs its 9.x apt repo with https://pgp.mongodb.com/server-9.asc.
+              curl -fsSL https://pgp.mongodb.com/server-9.asc | gpg --dearmor | sudo tee /usr/share/keyrings/mongodb-server-9.gpg >/dev/null
+              # 9.0.4 carries SERVER-131779, so mongod boots on kernel >= 6.19 (GitHub runners).
+              echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-9.gpg ] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/${series} multiverse" | sudo tee "/etc/apt/sources.list.d/mongodb-org-${series}.list"
               sudo apt-get update
               sudo apt-get install -y "mongodb-org-server=${version}"
               echo "MONGOMS_SYSTEM_BINARY=$(command -v mongod)" >> "$GITHUB_ENV"

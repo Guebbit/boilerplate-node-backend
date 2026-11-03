@@ -15,12 +15,22 @@ That means the persistence example is document-oriented, not SQL-oriented.
 
 ## Pinned server version
 
-MongoDB is pinned to exactly **8.2.12** everywhere: the compose images (by multi-arch index digest),
+MongoDB is pinned to exactly **9.0.4** everywhere: the compose images (by multi-arch index digest),
 `config.mongodbMemoryServer.version` in `package.json`, which the CI apt install
 (`.github/actions/setup`) reads. The boot check and the backup drill take their image from the
-production compose. 8.0 and 8.3.x refuse to start on Linux kernel 6.19 or newer
-([SERVER-136848](https://jira.mongodb.org/browse/SERVER-136848)), which current CI runners have.
-It moves back to the newest 8.x once that bug is fixed.
+production compose.
+
+Why 9.0.4 and not an 8.x:
+
+- 8.0.30+, 8.3.9+ and 9.0 refuse to start on Linux kernels 6.19 to 7.0.13 (a tcmalloc/rseq kernel bug).
+- Ubuntu kernels read `7.0.0-N`, so the exemption for the fixed 7.0.14 misfires
+  ([SERVER-136848](https://jira.mongodb.org/browse/SERVER-136848), open) and they refuse too.
+- [SERVER-131779](https://jira.mongodb.org/browse/SERVER-131779) fixes that misread, in 9.0.4, 8.3.16 and 8.0.37.
+- 8.2 boots only because it has no refusal at all, and it is end of life since 2026-07-31.
+  9.0 is supported until 2031 ([lifecycles](https://www.mongodb.com/legal/support-policy/lifecycles)).
+
+Dependabot bumps the compose images like any other; the `mongo` line stays literal (no YAML anchor)
+so its rewrite sees it.
 
 ## Persistence visual
 
