@@ -41,7 +41,7 @@
 # ────────────────────────────────────────────────────────────────────────────────────────────────
 # `tag@sha256:digest`: the registry resolves the digest, the tag is only a label for people and for
 # Dependabot, which moves both together. https://docs.docker.com/reference/dockerfile/#from
-FROM docker.io/library/node:24.22.1-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS build
+FROM docker.io/library/node:26.12.1-alpine@sha256:40cd011b55415bc894e45b02fdd5a5dfde056921b7d23a64c74f80497af48797 AS build
 
 WORKDIR /app
 
@@ -85,7 +85,7 @@ RUN find src -type d -name tests -prune -exec rm -rf {} + \
 # ────────────────────────────────────────────────────────────────────────────────────────────────
 # Stage 2 — runtime: production dependencies, application source, and nothing else.
 # ────────────────────────────────────────────────────────────────────────────────────────────────
-FROM docker.io/library/node:24.22.1-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS runtime
+FROM docker.io/library/node:26.12.1-alpine@sha256:40cd011b55415bc894e45b02fdd5a5dfde056921b7d23a64c74f80497af48797 AS runtime
 
 # Chromium is OFF by default and it is a ~200 MB difference.
 #
