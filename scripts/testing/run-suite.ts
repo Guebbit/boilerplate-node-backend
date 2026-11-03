@@ -204,25 +204,6 @@ const perShard = filesPerShard(targetMb);
 /** How many files this layer's patterns actually match, right now. */
 const fileCount = countTestFiles();
 
-/** The raw `JEST_SHARDS` override, if the operator set one — clamped below before use. */
-const shardsOverride = environmentKnob('JEST_SHARDS');
-
-/**
- * How many sequential jest processes this layer needs.
- *
- * By default only a SERIALIZED layer is sharded. Per-file retention accumulates in whichever
- * process executes the files, and for a parallel layer that is a worker — which
- * `--workerIdleMemoryLimit` already recycles once it grows, so sharding it too would only pay a
- * fresh `mongod` boot per shard for a problem the recycling already solves. `JEST_SHARDS` still
- * overrides this for a parallel layer, for whoever needs that knob anyway — clamped to the layer's
- * own file count, since a shard beyond it would run empty and jest exits non-zero on that.
- */
-const shards = shardsOverride
-    ? clampShards(shardsOverride, fileCount)
-    : suite.serialized
-      ? shardCount(fileCount, perShard)
-      : 1;
-
 /** How many parallel workers a non-serialized layer gets; always 1 for a serialized one. */
 const workers = suite.serialized
     ? 1
@@ -232,33 +213,66 @@ const workers = suite.serialized
           override: environmentKnob('JEST_WORKERS')
       });
 
-/** `--workerIdleMemoryLimit` for a parallel layer's worker; meaningless (and unused) for a
- *  serialized one, which has no worker to recycle. */
+/**
+ * Whether this layer runs its files in band, in the jest process itself.
+ *
+ * A serialized layer always does. A layer narrowed to ONE worker does too, and must: jest takes
+ * its own implicit in-band path only while `workerIdleMemoryLimit` is undefined, and
+ * `jest.config.js` defines it unconditionally — so the `--runInBand` below is the only route there.
+ * Left as one worker under a recycle ceiling, a 419-file unit run reported nothing for 87 minutes.
+ */
+const inBand = suite.serialized || workers === 1;
+
+/** The raw `JEST_SHARDS` override, if the operator set one — clamped below before use. */
+const shardsOverride = environmentKnob('JEST_SHARDS');
+
+/**
+ * How many sequential jest processes this layer needs.
+ *
+ * Only an IN-BAND layer is sharded.
+ *
+ * Per-file retention accumulates in whichever process executes the files. For a parallel layer
+ * that is a worker, which `--workerIdleMemoryLimit` already recycles once it grows — sharding it
+ * too would pay a fresh `mongod` boot per shard for a problem the recycling already solves.
+ * In band there is no worker, so the shard boundary is the only reset there is.
+ *
+ * `JEST_SHARDS` still overrides this for a parallel layer, for whoever needs that knob anyway,
+ * clamped to the layer's own file count: a shard beyond it runs empty and jest exits non-zero.
+ */
+const shards = shardsOverride
+    ? clampShards(shardsOverride, fileCount)
+    : inBand
+      ? shardCount(fileCount, perShard)
+      : 1;
+
+/** `--workerIdleMemoryLimit` for a parallel layer's worker; meaningless (and unused) in band,
+ *  which has no worker to recycle. The `suite.serialized` test stays: it carries the narrowing
+ *  that makes `workerPeakMb` reachable. */
 const recycleLimitMb = Math.max(1024, suite.serialized ? 0 : suite.workerPeakMb);
 
 /**
  * `--max-old-space-size` for one spawned process.
  *
- * A serialized layer runs one in-band process and gets the shard target whole. A parallel layer
+ * An in-band layer runs one process and gets the shard target whole. A parallel layer
  * runs `workers` of these AT ONCE, so each gets only its share of the unclamped budget — handing
  * every worker the full {@link targetMb} would let `workers` of them jointly claim `workers` times
  * what the machine actually has. Floored at one above {@link recycleLimitMb} so the recycle limit
  * always fires before a worker would hit its own heap ceiling, never after.
  */
-const heapMb = suite.serialized
+const heapMb = inBand
     ? heapCapMb(targetMb)
     : Math.max(recycleLimitMb + 1, heapCapMb(budgetMb, workers));
 
 /**
  * The flags that bound ONE shard.
  *
- * `--workerIdleMemoryLimit` is deliberately absent for a serialized layer: with one worker jest
- * runs in band, where there is no worker to recycle and the flag is silently inert. The `1024`
- * floor inside {@link recycleLimitMb} keeps a small `workerPeakMb` from setting a limit so low jest
- * recycles a worker after nearly every file — the failure mode the module header's "WHY IN BAND"
- * section describes.
+ * `--runInBand` is what actually puts jest in band. `--workerIdleMemoryLimit` is not passed
+ * alongside it, because a run with no worker has nothing to recycle. The `1024` floor inside
+ * {@link recycleLimitMb} keeps a small `workerPeakMb` from setting a limit so low jest recycles a
+ * worker after nearly every file — the failure mode the module header's "WHY IN BAND" section
+ * describes.
  */
-const boundingFlags = suite.serialized
+const boundingFlags = inBand
     ? ['--runInBand']
     : [`--maxWorkers=${workers}`, `--workerIdleMemoryLimit=${recycleLimitMb}MB`];
 
@@ -301,7 +315,7 @@ const runShard = (shard: number): Promise<number> =>
 const main = async () => {
     console.log(
         `[test] ${suiteName}: ${fileCount} files in ${shards} shard(s) — ` +
-            `${suite.serialized ? 'in band' : `${workers} workers`}, ` +
+            `${suite.serialized ? 'in band' : inBand ? 'in band, narrowed to 1 worker' : `${workers} workers`}, ` +
             `heap=${heapMb} MB, ` +
             // Only meaningful where it decided something: an unsharded layer did not consult it.
             (shards > 1 ? `${perShard} files/shard, ` : '') +
