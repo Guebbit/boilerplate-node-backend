@@ -4,7 +4,7 @@
  * open too long, tracked parcels still without a code, and parcels shipped and never marked
  * arrived. Counts only, so the digest holds no shipment data.
  *
- * See: docs/modules/notifications.md#the-daily-digest
+ * See: docs/modules/shop-tasks.md#the-staff-digest
  */
 
 import { orderService } from '@modules/orders';

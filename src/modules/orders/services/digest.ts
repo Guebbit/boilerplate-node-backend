@@ -3,7 +3,7 @@
  * The two figures the daily staff digest reads off the orders: bank transfers about to lapse, and
  * paid orders nobody has shipped. Counts only, so the digest holds no order data.
  *
- * See: docs/modules/notifications.md#the-daily-digest
+ * See: docs/modules/shop-tasks.md#the-staff-digest
  */
 
 import { DAY_MS, HOUR_MS } from '@domain-primitives/time';

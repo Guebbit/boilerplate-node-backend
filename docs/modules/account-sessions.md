@@ -38,7 +38,7 @@ One variable, `NODE_SESSION_MODE`, read through `session/config.ts`. Documented 
 - **The staff idle timeout and lifetime cap apply in both modes**, judged from the session row's clocks. See [sessions](../theory/sessions.md#the-staff-idle-timeout).
 
 A client with no cookie jar logs in with `transport: "bearer"` in the body (`cookie` mode only;
-`jwt` mode ignores it): no cookie is set, and the response carries the id as `sessionToken`.
+`jwt` mode ignores it): no session cookie is set, and the response carries the id as `sessionToken`.
 
 ## The resolver, installed by `onRegistered`
 
