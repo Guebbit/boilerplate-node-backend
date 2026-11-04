@@ -10,6 +10,7 @@
  * So these assert the round trip — pack here, unpack there, ask both — rather than the shape.
  */
 
+import '@tests/contract';
 import { api, authenticateAs } from '@tests/http';
 import { unpackRules } from '@casl/ability/extra';
 import { createMongoAbility, subject, type MongoAbility } from '@casl/ability';

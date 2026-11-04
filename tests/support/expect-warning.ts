@@ -8,9 +8,13 @@
  * Started:  by `setup-fail-on-warning.ts` around every case; a case meets it only through
  *           {@link expectWarning}.
  *
+ * jest-fail-on-console is not used: it has no must-fire check and cannot see process warnings.
+ *
  * A case that spies on the console itself stands on top of this watcher and never reaches it,
  * so it keeps its own control of what it expects.
  */
+
+import { format } from 'node:util';
 
 /** What a declared warning is matched against: a substring, or a pattern. */
 export type WarningMatcher = string | RegExp;
@@ -42,7 +46,7 @@ const matches = (matcher: WarningMatcher, warning: string): boolean =>
  * @returns the arguments joined; an `Error` contributes its message
  */
 const textOf = (args: unknown[]): string =>
-    args.map((arg) => (arg instanceof Error ? arg.message : String(arg))).join(' ');
+    args.map((arg) => (arg instanceof Error ? arg.message : format(arg))).join(' ');
 
 /**
  * Watches one console and one process for warnings across a single case.
@@ -52,7 +56,7 @@ const textOf = (args: unknown[]): string =>
  */
 export const createWarningWatcher = (target: ConsoleTarget, emitter: WarningEmitter) => {
     /** Warnings seen since `start`. */
-    let seen: string[] = [];
+    let seen: { source: string; text: string }[] = [];
 
     /** Matchers the case declared. */
     let declared: WarningMatcher[] = [];
@@ -62,13 +66,13 @@ export const createWarningWatcher = (target: ConsoleTarget, emitter: WarningEmit
 
     /** Records a process warning as `Name: message`. */
     const onProcessWarning = (warning: Error): void => {
-        seen.push(`${warning.name}: ${warning.message}`);
+        seen.push({ source: warning.name, text: warning.message });
     };
 
     /** Wraps one console method: record the call, then pass it on so it still prints. */
     const wrap = (kind: (typeof WATCHED)[number], original: ConsoleTarget[typeof kind]) => {
         target[kind] = (...args: unknown[]) => {
-            seen.push(`console.${kind}: ${textOf(args)}`);
+            seen.push({ source: `console.${kind}`, text: textOf(args) });
             original.apply(target, args);
         };
     };
@@ -97,15 +101,16 @@ export const createWarningWatcher = (target: ConsoleTarget, emitter: WarningEmit
             if (originals) Object.assign(target, originals);
             originals = undefined;
 
-            const unexpected = seen.filter((warning) =>
-                declared.every((m) => !matches(m, warning))
-            );
-            const unfired = declared.filter((m) => seen.every((warning) => !matches(m, warning)));
+            // Matchers see the bare text; the source (`console.warn`, `DeprecationWarning`) is only for the report.
+            const unexpected = seen.filter(({ text }) => declared.every((m) => !matches(m, text)));
+            const unfired = declared.filter((m) => seen.every(({ text }) => !matches(m, text)));
             if (unexpected.length === 0 && unfired.length === 0) return;
 
             throw new Error(
                 [
-                    ...unexpected.map((warning) => `Unexpected warning: ${warning}`),
+                    ...unexpected.map(
+                        ({ source, text }) => `Unexpected warning: ${source}: ${text}`
+                    ),
                     ...unfired.map((m) => `Declared warning never fired: ${String(m)}`)
                 ].join('\n')
             );
