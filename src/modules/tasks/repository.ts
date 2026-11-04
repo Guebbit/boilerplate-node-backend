@@ -102,7 +102,7 @@ export const taskRepository: TaskRepository = {
     ...base,
 
     moveFrom: (id, from, patch) =>
-        // Mongoose: findOneAndUpdate with `new: true` returns the document AFTER the update.
+        // Mongoose: findOneAndUpdate with `returnDocument: 'after'` returns the document AFTER it.
         // https://mongoosejs.com/docs/api/model.html#Model.findOneAndUpdate()
         taskModel
             .findOneAndUpdate(
@@ -113,7 +113,7 @@ export const taskRepository: TaskRepository = {
                         ? { $unset: Object.fromEntries(patch.unset.map((key) => [key, 1])) }
                         : {})
                 },
-                { new: true }
+                { returnDocument: 'after' }
             )
             .exec(),
 
@@ -122,7 +122,7 @@ export const taskRepository: TaskRepository = {
             .findOneAndUpdate(
                 { _id: toObjectId(id), status: TaskStatus.new },
                 { $set: { assigneeId: toObjectId(userId), status: TaskStatus.in_progress } },
-                { new: true, session }
+                { returnDocument: 'after', session }
             )
             .exec()
             .then(
@@ -132,7 +132,7 @@ export const taskRepository: TaskRepository = {
                         .findOneAndUpdate(
                             { _id: toObjectId(id), status: TaskStatus.in_progress },
                             { $set: { assigneeId: toObjectId(userId) } },
-                            { new: true, session }
+                            { returnDocument: 'after', session }
                         )
                         .exec()
             ),
@@ -149,19 +149,23 @@ export const taskRepository: TaskRepository = {
                     .findOneAndUpdate(
                         { _id: toObjectId(id) },
                         { $unset: { assigneeId: 1 } },
-                        { new: true }
+                        { returnDocument: 'after' }
                     )
                     .exec()
             ),
 
     appendNote: (id, note) =>
         taskModel
-            .findOneAndUpdate({ _id: toObjectId(id) }, { $push: { notes: note } }, { new: true })
+            .findOneAndUpdate(
+                { _id: toObjectId(id) },
+                { $push: { notes: note } },
+                { returnDocument: 'after' }
+            )
             .exec(),
 
     claimOverdue: (now, session) =>
-        // Mongoose: findOneAndUpdate with `new: true` returns the document AFTER the update; the
-        // filter and the stamp are one atomic step.
+        // Mongoose: findOneAndUpdate with `returnDocument: 'after'` returns the document AFTER it.
+        // The filter and the stamp are one atomic step.
         // https://mongoosejs.com/docs/api/model.html#Model.findOneAndUpdate()
         taskModel
             .findOneAndUpdate(
@@ -172,7 +176,7 @@ export const taskRepository: TaskRepository = {
                 },
                 { $set: { overdueNotifiedAt: now } },
                 // Oldest deadline first, so a backlog is told in the order it went late.
-                { new: true, sort: { dueAt: 1 }, session }
+                { returnDocument: 'after', sort: { dueAt: 1 }, session }
             )
             .exec(),
 

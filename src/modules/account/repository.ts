@@ -76,7 +76,7 @@ const settleBuilding = (
         .findOneAndUpdate(
             { _id: toObjectId(id), status: 'building' },
             { $set: { status, expiresAt } },
-            { new: true, ...(session ? { session } : {}) }
+            { returnDocument: 'after', ...(session ? { session } : {}) }
         )
         .lean<AccountExportRow | null>()
         .exec();
