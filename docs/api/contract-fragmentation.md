@@ -443,7 +443,7 @@ internally. That file's header is the full argument. See also
 The `webhooks` section is the one section that is not complete on its own. Its file keeps the server
 and the headers schema every event shares; each event is declared by the module that fires it, in
 `src/modules/<module>/asyncapi.webhooks.yaml` (`delivery`, `orders`, `payments`, `returns`, `users`, `example`).
-`scripts/contracts/asyncapi-webhook-events.ts` finds those files on disk and
+`scripts/contracts/asyncapi-webhook-events.ts` lists the event names, and `asyncapi-section-fragments.ts` finds those files on disk and
 `withSectionFragments` folds them into the section before it joins the bundle: one call, in
 `asyncapi-bundles.ts`. The same collision refusal applies, so two modules claiming one event name
 fail the bundle.
@@ -478,20 +478,27 @@ a fragment named for the owner and the format:
 
 | File in the extender | Extends | Merged by |
 | --- | --- | --- |
-| `openapi.<owner>.yaml` | the owner's OpenAPI enums and `oneOf` unions | `scripts/contracts/openapi-extensions.ts` (a step in `bundleSteps`, after redocly, before `pruneUnused`) and `fill-enum.ts` |
-| `asyncapi.<section>.yaml` | the section's channels, messages, schemas and `oneOf` unions | `withSectionFragments` (`asyncapi-webhook-events.ts`), the generalised form of the webhook-event merge |
+| `openapi.<owner>.yaml` | the owner's OpenAPI enums and `oneOf` unions | `scripts/contracts/openapi-extensions.ts` (its schemas are staged into redocly's tree; the variants are appended in a step in `bundleSteps`, before `pruneUnused`) and `fill-enum.ts` |
+| `asyncapi.<section>.yaml` | the section's channels, messages, schemas and `oneOf` unions | `withSectionFragments` (`asyncapi-section-fragments.ts`), the generalised form of the webhook-event merge |
 
-The fragment's `x-extends` maps a schema name to what it appends:
+The fragment's `x-extends` maps a schema name to what it appends. Both formats read the map with
+`scripts/contracts/extends-map.ts`, so a map that is not string lists, an empty list, a repeated
+entry or an undeclared variant fails the bundle the same way on either side. In OpenAPI the owner
+(`<owner>` in the file name) must be a module with an `openapi.yaml` that declares every extended schema:
 
 - **Enum**: values. The owner keeps its written `enum` and adds `x-enum-from: <its own name>`; the
   appended values follow the written ones. The bundle fails on a duplicate value, and on a target
   that does not declare `x-enum-from`.
 - **Union**: schema names the fragment declares under `components.schemas`. Each is added to the
-  `oneOf`, and to the discriminator `mapping` under the value its `code.enum` holds. Refs into the
-  owner's file (`../notifications/openapi.yaml#/components/schemas/X`) are made local; a schema name
-  the bundle already holds is a collision and fails.
+  `oneOf`, and to the discriminator `mapping` under the value its `<propertyName>.enum` holds
+  (`propertyName` is the union's own `discriminator.propertyName`). The fragment is staged into
+  redocly's tree, so its refs (`../notifications/openapi.yaml#/components/schemas/X`) resolve like any
+  module's and a ref that answers nothing fails the bundle; a schema name the bundle already holds is
+  a collision and fails.
 - AsyncAPI payload enums use the existing way to share an enum: a `$ref` into a REST contract, copied
   in and stamped `x-openapi-schema`. A `../<module>/openapi.yaml#/...` ref reaches a sibling module's file.
+  A ref to an OPEN enum (one a module extends, marked `x-enum-from`) fails the bundle: the copy would be
+  the owner's raw file without the extenders' values. Write the payload's values out, or `$ref` a closed enum.
 
 Delete the extender and its fragment goes with it: the owner's contract falls back to its own values
 and variants. This is why the owner never names the extension.

@@ -34,6 +34,7 @@ import {
     checkExtensions,
     enumSourcesOf,
     extensionFragments,
+    withExtensionSchemas,
     withUnionExtensions
 } from './openapi-extensions';
 import { withAppLevelHeaders, withIdempotentReplay } from './response-headers';
@@ -486,13 +487,28 @@ const stageAssembledTree = (): string => {
 
     const stagedRoot = path.join(STAGING_DIR, 'shared', 'contracts', 'openapi.root.yaml');
     mkdirSync(path.dirname(stagedRoot), { recursive: true });
+    const extensions = extensionFragments();
     writeFileSync(
         stagedRoot,
-        assembleRoot(
-            readFileSync(ROOT_SPEC, 'utf8'),
-            readModuleFragments(path.join(REPO_ROOT, 'src', 'modules'), MODULE_ORDER)
+        withExtensionSchemas(
+            assembleRoot(
+                readFileSync(ROOT_SPEC, 'utf8'),
+                readModuleFragments(path.join(REPO_ROOT, 'src', 'modules'), MODULE_ORDER)
+            ),
+            extensions
         )
     );
+    // Same relative layout as the source, so a fragment's own refs land where they were written.
+    for (const fragment of extensions) {
+        const target = path.join(
+            STAGING_DIR,
+            'src',
+            'modules',
+            path.relative(MODULES_ROOT, fragment.file)
+        );
+        mkdirSync(path.dirname(target), { recursive: true });
+        copyFileSync(fragment.file, target);
+    }
 
     for (const section of MODULE_SECTIONS) {
         const target = path.join(STAGING_DIR, 'src', 'modules', section, 'openapi.yaml');

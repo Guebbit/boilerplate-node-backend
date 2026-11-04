@@ -10,13 +10,17 @@
  *     TaskKind: [manual_refund_owed]           # an enum: values appended
  *     Notification: [ShopNoticeLowStock]       # a oneOf: schema names appended
  * components:
- *     schemas: { ShopNoticeLowStock: {...} }   # refs into the owner's file are made local
+ *     schemas: { ShopNoticeLowStock: {...} }   # refs resolve like any module's, relative to the file
  * ```
  *
  * The owner opts in, by shape:
  * - an enum declares `x-enum-from: <its own name>` beside its written values (`./fill-enum`
  *   appends the extension's values after them);
  * - a union is a `oneOf`; each variant's discriminator value is read off its `code.enum`.
+ *
+ * The fragment's schemas reach the bundle through redocly, not a hand-made merge: each one is
+ * staged as a `$ref` from the root ({@link withExtensionSchemas}), so a bad `$ref` in the
+ * fragment fails the bundle like a bad one anywhere else, and its own `x-enum-from` is filled.
  *
  * Delete the extending module and its fragment goes with it: the owner's contract falls back to
  * its own values and variants. The owner never names the extension.
@@ -28,18 +32,17 @@
  * See: docs/api/contract-fragmentation.md#extending-another-modules-contract
  */
 
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { parse as parseYaml } from 'yaml';
+import { isMap, parse as parseYaml, parseDocument } from 'yaml';
 
+import { parseExtendsMap, requireDeclared } from './extends-map';
+import { readOpenApiFragment } from './fragments';
 import type { OpenApiDocument, Step } from './openapi-document';
 import { MODULES_ROOT } from '../modules-on-disk';
 
 /** `openapi.<owner>.yaml`: the owner is the module whose contract the file extends. */
 const FRAGMENT_NAME = /^openapi\.([a-z][a-z0-9-]*)\.yaml$/;
-
-/** A `$ref` into a components section, whatever file it names (redocly would have made it local). */
-const COMPONENT_REF = /^[^#]*#(\/components\/.+)$/;
 
 /** A JSON object, as far as this step reads it. */
 type Json = Record<string, unknown>;
@@ -62,14 +65,10 @@ export interface ExtensionFragment {
 const isObject = (value: unknown): value is Json =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/** Narrows `x-extends` values to lists of strings. */
-const isStringList = (value: unknown): value is string[] =>
-    Array.isArray(value) && value.every((item) => typeof item === 'string');
-
 /**
  * Parses one candidate file, or undefined when it is not an extension (no `x-extends`).
  *
- * @throws Error if `x-extends` is not a map of string lists
+ * @throws Error if `x-extends` is malformed (see {@link parseExtendsMap})
  */
 const readFragment = (
     module: string,
@@ -79,21 +78,32 @@ const readFragment = (
     // `yaml`'s YAML 1.2 loader; the guards below narrow its `any`.
     const parsed: unknown = parseYaml(readFileSync(file, 'utf8'));
     if (!isObject(parsed) || parsed['x-extends'] === undefined) return undefined;
-    const declared = parsed['x-extends'];
-    if (!isObject(declared) || Object.values(declared).some((list) => !isStringList(list)))
-        throw new Error(
-            `[openapi] ${file}: x-extends must map a schema name to a list of strings.`
-        );
+    const extendsSchemas = parseExtendsMap(parsed['x-extends'], `[openapi] ${file}`);
     const { components } = parsed;
     const schemas = isObject(components) && isObject(components.schemas) ? components.schemas : {};
     return {
         module,
         owner,
         file,
-        // Every value was checked to be a string list just above.
-        extendsSchemas: declared as Record<string, string[]>,
+        extendsSchemas,
         schemas
     };
+};
+
+/**
+ * Refuses a fragment whose owner module does not exist, or does not declare an extended schema.
+ *
+ * @throws Error naming the fragment and the missing owner or schema
+ */
+const requireOwner = (fragment: ExtensionFragment, modulesRoot: string): void => {
+    const where = `[openapi] ${fragment.file}`;
+    const ownerFile = path.join(modulesRoot, fragment.owner, 'openapi.yaml');
+    if (!existsSync(ownerFile))
+        throw new Error(`${where}: the owner module ${fragment.owner} ships no openapi.yaml.`);
+    const declared = readOpenApiFragment(ownerFile).components?.schemas ?? {};
+    for (const name of Object.keys(fragment.extendsSchemas))
+        if (!Object.hasOwn(declared, name))
+            throw new Error(`${where}: x-extends ${name} is not a schema of ${fragment.owner}.`);
 };
 
 /**
@@ -101,9 +111,10 @@ const readFragment = (
  *
  * @param modulesRoot - a `src/modules` directory (the real one, or a scratch tree)
  * @returns fragments ordered by module name, then file name
+ * @throws Error if a fragment is malformed or extends a module or schema that does not exist
  */
-export const extensionFragments = (modulesRoot: string = MODULES_ROOT): ExtensionFragment[] =>
-    readdirSync(modulesRoot, { withFileTypes: true })
+export const extensionFragments = (modulesRoot: string = MODULES_ROOT): ExtensionFragment[] => {
+    const found = readdirSync(modulesRoot, { withFileTypes: true })
         .filter((entry) => entry.isDirectory())
         .toSorted((a, b) => a.name.localeCompare(b.name))
         .flatMap((entry) =>
@@ -120,6 +131,9 @@ export const extensionFragments = (modulesRoot: string = MODULES_ROOT): Extensio
                     return fragment === undefined ? [] : [fragment];
                 })
         );
+    for (const fragment of found) requireOwner(fragment, modulesRoot);
+    return found;
+};
 
 /**
  * The values every fragment appends to each extended schema, for `withFilledEnums`.
@@ -169,39 +183,55 @@ export const checkExtensions =
             }
     };
 
-/** The discriminator value a variant carries: its `code.enum[0]`. */
-const codeOf = (variant: unknown, where: string): string => {
-    const code =
-        isObject(variant) && isObject(variant.properties) ? variant.properties.code : undefined;
-    const values: unknown = isObject(code) ? code.enum : undefined;
+/** The discriminator value a variant carries: its `<propertyName>.enum[0]`. */
+const discriminatorValueOf = (variant: unknown, property: string, where: string): string => {
+    const field =
+        isObject(variant) && isObject(variant.properties)
+            ? variant.properties[property]
+            : undefined;
+    const values: unknown = isObject(field) ? field.enum : undefined;
     const value: unknown = Array.isArray(values) ? values.at(0) : undefined;
     if (typeof value !== 'string')
-        throw new Error(`${where} has no properties.code.enum to read its discriminator from.`);
+        throw new Error(
+            `${where} has no properties.${property}.enum to read its discriminator from.`
+        );
     return value;
 };
 
-/** Points every `...#/components/...` ref inside the node at the bundle's own components. */
-const localise = (node: unknown): unknown => {
-    if (Array.isArray(node)) return node.map((item) => localise(item));
-    if (!isObject(node)) return node;
-    return Object.fromEntries(
-        Object.entries(node).map(([key, value]) => {
-            const local =
-                key === '$ref' && typeof value === 'string' ? COMPONENT_REF.exec(value) : null;
-            return [key, local ? `#${local[1]}` : localise(value)];
-        })
-    );
-};
-
-/** Adds the fragment's schemas to the document, refusing a name the document already holds. */
-const mergeSchemas = (schemas: Record<string, unknown>, fragment: ExtensionFragment): void => {
-    for (const [name, schema] of Object.entries(fragment.schemas)) {
-        if (Object.hasOwn(schemas, name))
-            throw new Error(
-                `[openapi] ${fragment.file}: schema ${name} already exists in the bundle.`
-            );
-        schemas[name] = localise(schema);
-    }
+/**
+ * The root text with every fragment schema added as a `$ref` to the staged copy of its file.
+ *
+ * Redocly then resolves the fragment's own refs, fills its `x-enum-from`, and fails the bundle on
+ * a ref that answers nothing, exactly as it does for any module's `openapi.yaml`.
+ *
+ * @param rootText - the assembled root document
+ * @param fragments - the discovered fragments
+ * @param modulesRoot - the `src/modules` the fragments were discovered under
+ * @returns the root text to stage; the fragments are staged at `src/modules/<module>/<file>`
+ * @throws Error if the root already declares a schema a fragment adds
+ */
+export const withExtensionSchemas = (
+    rootText: string,
+    fragments: readonly ExtensionFragment[],
+    modulesRoot: string = MODULES_ROOT
+): string => {
+    if (fragments.length === 0) return rootText;
+    // `yaml`'s Document API: edited in place, so the root keeps its shape.
+    // https://eemeli.org/yaml/#documents
+    const document = parseDocument(rootText);
+    const schemas = document.getIn(['components', 'schemas']);
+    for (const fragment of fragments)
+        for (const name of Object.keys(fragment.schemas)) {
+            if (isMap(schemas) && schemas.has(name))
+                throw new Error(
+                    `[openapi] ${fragment.file}: schema ${name} already exists in the root.`
+                );
+            const staged = path.relative(modulesRoot, fragment.file).split(path.sep).join('/');
+            document.setIn(['components', 'schemas', name], {
+                $ref: `../../src/modules/${staged}#/components/schemas/${name}`
+            });
+        }
+    return document.toString({ lineWidth: 0, indent: 4 });
 };
 
 /** Appends one fragment's variants to a union, and to its discriminator mapping if it has one. */
@@ -215,38 +245,54 @@ const appendVariants = (
     const discriminator = isObject(union.discriminator) ? union.discriminator : undefined;
     const mapping =
         discriminator && isObject(discriminator.mapping) ? discriminator.mapping : undefined;
+    const property =
+        typeof discriminator?.propertyName === 'string' ? discriminator.propertyName : undefined;
+    requireDeclared(names, fragment.schemas, `[openapi] ${fragment.file}`);
     for (const name of names) {
         const where = `[openapi] ${fragment.file}: variant ${name}`;
-        if (!Object.hasOwn(fragment.schemas, name))
-            throw new Error(`${where} is not declared in the fragment's components.`);
         const ref = `#/components/schemas/${name}`;
         oneOf.push({ $ref: ref });
-        if (mapping === undefined) continue;
-        const code = codeOf(schemas[name], where);
-        if (Object.hasOwn(mapping, code))
-            throw new Error(`${where} reuses the discriminator value ${code}.`);
-        mapping[code] = ref;
+        if (mapping === undefined || property === undefined) continue;
+        const value = discriminatorValueOf(schemas[name], property, where);
+        if (Object.hasOwn(mapping, value))
+            throw new Error(`${where} reuses the discriminator value ${value}.`);
+        mapping[value] = ref;
     }
 };
 
 /**
- * Merges every fragment's schemas into the bundle and appends its variants to the unions it
- * extends. Enum keys are left to `withFilledEnums`.
+ * Moves each fragment's schemas to the end of the schema map, in fragment order. Redocly places
+ * them where it first meets them; the end is where the contract has always listed an extension,
+ * and the generators declare in map order, so the order is part of the output.
+ */
+const moveToEnd = (schemas: Record<string, unknown>, fragments: readonly ExtensionFragment[]) => {
+    for (const fragment of fragments)
+        for (const name of Object.keys(fragment.schemas)) {
+            const schema = schemas[name];
+            // `delete`: the key must leave its place for the re-add to land last.
+            // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- the name is data from the fragment
+            delete schemas[name];
+            schemas[name] = schema;
+        }
+};
+
+/**
+ * Appends every fragment's variants to the unions it extends. The variants' schemas are already in
+ * the bundle ({@link withExtensionSchemas}); enum keys are left to `withFilledEnums`.
  *
  * @param fragments - the discovered fragments
  * @returns the step; runs after redocly and before `pruneUnused`, so the variants are reached
- * @throws Error on a schema-name collision, an undeclared variant or a reused discriminator value
+ * @throws Error on an undeclared variant or a reused discriminator value
  */
 export const withUnionExtensions =
     (fragments: readonly ExtensionFragment[]): Step =>
     (document_) => {
         const schemas = schemasOf(document_);
-        for (const fragment of fragments) {
-            mergeSchemas(schemas, fragment);
+        moveToEnd(schemas, fragments);
+        for (const fragment of fragments)
             for (const [name, variants] of Object.entries(fragment.extendsSchemas)) {
                 const union = schemas[name];
                 if (isObject(union) && Array.isArray(union.oneOf))
                     appendVariants(union, variants, schemas, fragment);
             }
-        }
     };
