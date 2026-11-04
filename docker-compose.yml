@@ -572,7 +572,7 @@ services:
     umami-db:
         logging: *container-logging
         profiles: ['analytics']
-        image: postgres:16-alpine
+        image: postgres:18-alpine
         restart: unless-stopped
         environment:
             POSTGRES_DB: '${UMAMI_DB_NAME:-umami}'
@@ -591,7 +591,7 @@ services:
     umami-init:
         logging: *container-logging
         profiles: ['analytics']
-        image: postgres:16-alpine
+        image: postgres:18-alpine
         restart: 'no'
         entrypoint: ['/bin/sh', '/umami-init.sh']
         environment:
