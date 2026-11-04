@@ -50,6 +50,20 @@ describe('withFilledEnums', () => {
         expect(schemas?.Colour).toHaveProperty('enum', ['red', 'green', '*']);
     });
 
+    it('appends the source after a hand-written enum, keeping the written values first', () => {
+        const schemas = filled(
+            bundle({ type: 'string', enum: ['blue'], 'x-enum-from': 'colours' })
+        );
+
+        expect(schemas?.Colour).toEqual({ type: 'string', enum: ['blue', 'red', 'green'] });
+    });
+
+    it('keeps a hand-written enum whole when nobody supplies the source (the extender is gone)', () => {
+        const schemas = filled(bundle({ type: 'string', enum: ['blue'], 'x-enum-from': 'shapes' }));
+
+        expect(schemas?.Colour).toEqual({ type: 'string', enum: ['blue'] });
+    });
+
     it('leaves a document with no placeholder as it was', () => {
         const plain = asStub<OpenApiDocument>({
             openapi: '3.1.0',
@@ -68,9 +82,14 @@ describe('withFilledEnums', () => {
         ['an unknown source', { 'x-enum-from': 'shapes' }, /names no known source \(shapes\)/],
         ['an empty source', { 'x-enum-from': 'none' }, /source none is empty/],
         [
-            'a hand-written enum beside it',
-            { 'x-enum-from': 'colours', enum: ['x'] },
-            /cannot both stand/
+            'a written value the source repeats',
+            { 'x-enum-from': 'colours', enum: ['red'] },
+            /the same value twice/
+        ],
+        [
+            'a written enum that is not strings',
+            { 'x-enum-from': 'colours', enum: [1] },
+            /must be a list of strings/
         ],
         [
             'a repeated value',
