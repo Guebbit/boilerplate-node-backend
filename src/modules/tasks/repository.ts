@@ -175,7 +175,8 @@ export const taskRepository: TaskRepository = {
                     overdueNotifiedAt: { $exists: false }
                 },
                 { $set: { overdueNotifiedAt: now } },
-                // Oldest deadline first, so a backlog is told in the order it went late.
+                // Oldest deadline first: the claim (and outbox write) order. Delivery order across
+                // tasks is not promised: each task is its own aggregate.
                 { returnDocument: 'after', sort: { dueAt: 1 }, session }
             )
             .exec(),

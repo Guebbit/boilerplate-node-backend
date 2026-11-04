@@ -1,15 +1,15 @@
 /**
  * @module
- * The overdue reminder: an open task past its due date is announced once, as `task.overdue`, through the outbox.
+ * The overdue reminder: an open task past its due date is announced once, as `task.overdue`,
+ * through the outbox.
  * The tasks engine owns the sweep because it owns the clock (`dueAt`) and the memory
  * (`overdueNotifiedAt`); who hears of it is `notifications`' business, the same as for the opener.
  *
  * See: docs/modules/tasks.md#the-overdue-reminder
  */
 
-import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { announceInTransaction } from '@kernel/outbox';
-import { TASK_OVERDUE } from '../events';
+import { TASK_OVERDUE, taskFactOf } from '../events';
 import { taskRepository } from '../repository';
 
 /**
@@ -23,14 +23,7 @@ const claimAndAnnounce = (now: Date): Promise<boolean> =>
         (session) => taskRepository.claimOverdue(now, session),
         (task) => ({
             name: TASK_OVERDUE,
-            payload: {
-                tenantId: DEPLOYMENT_TENANT_ID,
-                taskId: String(task._id),
-                kind: task.kind,
-                routeSet: task.routeSet,
-                ...(task.category ? { category: task.category } : {}),
-                ...(task.work ? { work: task.work } : {})
-            },
+            payload: taskFactOf(task),
             aggregateId: String(task._id)
         })
     ).then((task) => task !== null);
