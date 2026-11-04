@@ -3,7 +3,8 @@
 # It keeps every static check (type-check, lint, both spec lints, format, the contract-bundle, docs and
 # cross-repo checks) plus the unit and cross-cutting suites — nothing that starts `mongod`.
 #
-# Left out, so run the full `npm run complete` by hand before merging a lane and once on main after
+# Left out, apart from the staged files `test:staged` runs at the end, so run the full
+# `npm run complete` by hand before merging a lane and once on main after
 # each merge (CI still runs all of it):
 #
 # - `test:integration`, `test:contract` and `test:fuzz` — the database and HTTP layers, fuzz being
@@ -45,3 +46,8 @@ git add asyncapi.yaml asyncapi.public.yaml 'shared/rules/schemas/*.json' ':(glob
 
 npx lint-staged
 npm run complete:light:gates
+
+# Last, because it is the one step that starts `mongod`: every integration, contract or fuzz test
+# file this commit adds or changes, run by file. Light skips those layers, so a new one would
+# otherwise first run at merge time. See scripts/testing/run-staged-tests.ts.
+npm run test:staged

@@ -185,7 +185,8 @@ npm run complete     # build + all tests + lint + format check — several minut
 
 The pre-commit hook runs a faster subset permanently: eslint and prettier on the staged files, then
 `npm run complete:light:gates` (every other static check plus the unit and cross-cutting suites,
-nothing that needs `mongod`). Run the full `complete` yourself before merging a lane and once on main
+nothing that needs `mongod`), then `npm run test:staged`: the integration, contract and fuzz test
+files the commit adds or changes, run by file. Run the full `complete` yourself before merging a lane and once on main
 after; CI on push is authoritative. Its mutating twin, `npm run complete:fix`, fixes lint and formatting instead of reporting
 them.
 

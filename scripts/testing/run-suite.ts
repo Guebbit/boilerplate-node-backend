@@ -41,59 +41,7 @@ import {
     workerCount
 } from './machine-budget';
 import { REPO_ROOT } from '../modules-on-disk';
-
-/**
- * One test layer: the jest path patterns it matches, and whether its files may run side by side.
- *
- * `serialized` is a property of the layer, not the machine: these suites share one in-memory
- * mongod, so their files cannot run side by side regardless of how much memory is free.
- */
-type Suite =
-    | {
-          /** Path patterns handed to jest, in the same form each npm script passes them. */
-          readonly patterns: readonly string[];
-          /** One file at a time inside a shard: these suites share one in-memory mongod. */
-          readonly serialized: true;
-      }
-    | {
-          readonly patterns: readonly string[];
-          readonly serialized: false;
-          /** Measured peak cost of one parallel worker, MB — meaningless once `serialized`, so
-           *  the type only carries it for a layer that actually runs workers. */
-          readonly workerPeakMb: number;
-      };
-
-/**
- * The layers this runner knows, keyed by the name its npm script passes.
- *
- * `unit` and `cross-cutting` run in parallel; only their worker count comes from this file.
- * Exported so a `package.json` script needing several layers unsharded (the JSON
- * report, randomized order) can name them instead of hand-copying their jest patterns.
- */
-export const SUITES: Record<string, Suite> = {
-    unit: {
-        patterns: ['tests/unit', 'src/modules/.*/tests/unit'],
-        serialized: false,
-        workerPeakMb: 905
-    },
-    'cross-cutting': {
-        patterns: ['tests/cross-cutting'],
-        serialized: false,
-        workerPeakMb: 905
-    },
-    integration: {
-        patterns: ['tests/integration', 'src/modules/.*/tests/integration'],
-        serialized: true
-    },
-    contract: {
-        patterns: ['tests/contract', 'src/modules/.*/tests/contract'],
-        serialized: true
-    },
-    fuzz: {
-        patterns: ['tests/fuzz', 'src/modules/.*/tests/fuzz'],
-        serialized: true
-    }
-};
+import { SUITES } from './suites';
 
 /** True when invoked with `--unsharded`: run every named suite's patterns as one jest process,
  *  skipping the budget math below entirely — see the module header's "WHY --unsharded" section. */

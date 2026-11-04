@@ -377,7 +377,10 @@ Conventional Commits, enforced by commitlint on the `commit-msg` hook
   `refactor(testing):`.
 - The subject says what the change **does for the system**, not which files moved —
   `fix(rate-limit): log every refusal, since nothing downstream will`, not `update middleware`.
-- One logical change per commit. If the subject needs an "and", it is two commits.
+- One commit per work item: a plan item or a lane step ships as one commit, with its code, tests,
+  docs and the FE half together. Every commit pays a full light gate, so ten micro-commits cost ten.
+  - Split only when two pieces are unrelated: different modules changed for different reasons.
+  - A follow-up fix to the item you are still building is amended in, not a new commit.
 - Breaking change: `!` after the scope plus a `BREAKING CHANGE:` footer.
 - MUST stage explicit pathspecs. Never `git add -A` or `git add .`: another session may have
   untracked work in this worktree, and it is not yours to commit.
@@ -394,7 +397,8 @@ Conventional Commits, enforced by commitlint on the `commit-msg` hook
   conflict.
 - The pre-commit hook runs `regenerate --no-sync`, eslint + prettier on the staged files, then the
   light `complete:light:gates` (static checks + unit + cross-cutting; no integration, contract, fuzz
-  or `docs:build`). That is the permanent commit gate. Run `npm run complete` before merging a lane
+  or `docs:build`), then `test:staged`: every integration, contract or fuzz test file the commit adds
+  or changes, run by file. That is the permanent commit gate. Run `npm run complete` before merging a lane
   and once on main after; CI on push is authoritative.
 - Default: commit normally and let the hook run its light gate. Nothing more is required.
 - **NEVER** use `--no-verify` unless a `complete` (regular or `:fix`) has been run right before, on
