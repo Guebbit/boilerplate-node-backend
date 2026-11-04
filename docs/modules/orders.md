@@ -674,7 +674,8 @@ Every cancel and every refund leaves one written trace, and each has exactly one
 
 The analytics event follows the same split: only a hold that timed out reports
 `order_reservation_expired`. An erasure's cancel, which also has no request behind it, reports
-`order_cancelled` like any other.
+`order_cancelled` like any other, and so does a lost-parcel settlement (`markUndeliverable`, which
+reports from its `order.cancelled` listener because it writes inside `delivery`'s transaction).
 
 An anonymised order is never mailed: its email is a `.invalid` placeholder (`mailBuyer` skips it), so
 any mail to it would only bounce.

@@ -551,8 +551,8 @@ whole-order cancel closed; it counts as neither out nor arrived (`undelivered` l
 ### Cancelled and refunded after a loss
 
 The buyer may take the money instead of a second parcel: cancelling the open units refunds them
-(shipping included) and gives the stock back. What the order then ends as depends on whether anything
-ever arrived:
+(shipping included), and `returns` puts their stock back. The order's own `lost` cancel, below,
+restocks nothing. What the order then ends as depends on whether anything ever arrived:
 
 | What arrived                                  | The order ends | Why                                                                                       |
 | --------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------- |
@@ -564,7 +564,8 @@ merchant cancels it. We settle it for them, with `settleOrder` asking `orders`' 
 (cause `lost`, the system's, `refund: false` because the remainder cancel already refunded). Nothing
 else runs: no withdrawal or guarantee clock, no `delivered` row, no second refund, no second stock
 release, and no mail (the loss and the refund were already mailed). The `cancelled` row is the
-system's. The `order.cancelled` listeners treat `lost` as no purchase-hold count and no refund.
+system's. The `order.cancelled` listeners treat `lost` as no purchase-hold count and no refund, and
+`orders` counts it as an `order_cancelled` analytics event once the settlement commits.
 
 The move is its own lifecycle constant (`UNDELIVERABLE_EVENT`), not an actor on `cancelInFulfilment`:
 a `system` actor on `processing → cancelled` would let the three existing system cancels match orders
